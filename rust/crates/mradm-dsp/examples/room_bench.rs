@@ -13,6 +13,10 @@ use mradm_dsp::{
 };
 use std::{fs, path::Path, sync::Arc, time::Instant};
 
+#[cfg(feature = "room-profile")]
+#[path = "room_bench/trace.rs"]
+mod trace;
+
 // Read counters outside the measured process call. Native host/Scene benchmarks
 // provide these counters on macOS and Windows; this lightweight probe also runs
 // on a headless Linux validation host without building device dependencies.
@@ -58,7 +62,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if cfg!(debug_assertions) {
         return Err("Use Release for performance evidence".into());
     }
-    let arguments: Vec<_> = std::env::args().collect();
+    let mut arguments: Vec<_> = std::env::args().collect();
+    let tracing = arguments.last().is_some_and(|v| v == "--trace");
+    if tracing {
+        arguments.pop();
+        if !cfg!(feature = "room-profile") {
+            return Err("--trace requires a Release build with --features room-profile".into());
+        }
+    }
+    #[cfg(feature = "room-profile")]
+    let clock_read_ns = tracing.then(trace::enable_cpu_clock).flatten();
     let ticks = if cfg!(target_os = "linux") {
         std::process::Command::new("getconf")
             .arg("CLK_TCK")
@@ -70,9 +83,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
-    if arguments.len() < 2 {
+    if arguments.len() < 2 || arguments.len() > 6 {
         return Err(
-            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0]".into(),
+            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace]".into(),
         );
     }
     let file = Path::new(&arguments[1]);
@@ -156,6 +169,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let mut input = vec![0f32; frames];
             let mut output = vec![0f32; 2 * frames];
             let mut elapsed = Vec::with_capacity(blocks);
+            #[cfg(feature = "room-profile")]
+            let mut trace = tracing.then(|| trace::Trace::new(blocks, clock_read_ns));
             let mut peak = 0f32;
             let mut cpu_start = None;
             let mut rss_peak = 0u64;
@@ -202,6 +217,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     session.queue_room(next, revision)?;
                     preparation_seconds += prepare_start.elapsed().as_secs_f64();
                 }
+                #[cfg(feature = "room-profile")]
+                let trace_start = (block >= 32)
+                    .then(|| trace.as_ref().map(|_| trace::start(session.info().phase)))
+                    .flatten();
                 let start = Instant::now();
                 session.process(
                     frames,
@@ -213,6 +232,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 let duration = start.elapsed().as_secs_f64();
                 if block >= 32 {
                     elapsed.push(duration);
+                    #[cfg(feature = "room-profile")]
+                    if let (Some(trace), Some(before)) = (&mut trace, trace_start) {
+                        trace.finish(block - 32, before, session.info().phase, duration);
+                    }
                 }
                 if block % 64 == 0 {
                     rss_peak = rss_peak.max(process_counters(ticks).1.unwrap_or(0));
@@ -227,12 +250,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             rss_peak = rss_peak.max(counters.1.unwrap_or(0));
             let cpu = cpu_start.zip(counters.0).map(|(start, end)| end - start);
             let profile = mradm_dsp::room::profile::snapshot();
+            #[cfg(feature = "room-profile")]
+            let trace_report = trace.map(|trace| trace.report(deadline));
+            #[cfg(not(feature = "room-profile"))]
+            let trace_report: Option<serde_json::Value> = None;
             let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
             println!(
                 "{}",
                 serde_json::json!({"sources":sources,"continuous_pose":moving,"room_transition":switching,
                 "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
-                "profiling":cfg!(feature = "room-profile"), "stages":stages,
+                "profiling":cfg!(feature = "room-profile"), "stages":stages, "trace":trace_report,
                 "blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
                 "worker_wall_budget_percent":100.*total/(blocks as f64*deadline),
                 "cpu_seconds":cpu,"cpu_audio_budget_percent":cpu.map(|v|100.*v/(blocks as f64*deadline)),

@@ -1,0 +1,667 @@
+{
+  "schema": "mradm.room-tail-investigation",
+  "version": 1,
+  "baseline": "ROOM_INPUT_SPAN_OPTIMIZATION.json",
+  "source_sha256": {
+    "CMakeLists.txt": "759bbf0c3bd03e440c6ed849b9e3f5e32fba1ac8b40bb1e95e86e54f346a6ffb",
+    "rust/crates/mradm-dsp/Cargo.toml": "f08a2d624bec11a876c342b87cf88aee3c97dc7bcddbfa8a0240a27cc6e8dc7f",
+    "rust/crates/mradm-dsp/src/room/profile.rs": "1dd62ec03d2a16bfaa566aeae17253c84393f9d3dd091559465b0209de288d2e",
+    "rust/crates/mradm-dsp/src/room/session.rs": "8321231ae57d7d4cbf7474bd47f394e550ad3b192f627ac9215363fcadfd3cdf",
+    "rust/crates/mradm-dsp/examples/room_bench.rs": "ea19ef4f6f167df43798f7469ab5dccabdf9e2e2e0093ea9a3b66c7db0cf03e9",
+    "rust/crates/mradm-dsp/examples/room_bench/trace.rs": "d387ca19876d3ee869833d9e7aaaaa467c4c9b4850090480c1ef5e774e1bffee",
+    "rust/crates/mradm-dsp/tests/room_profile.rs": "2e656409a157a8e10f900a5e014846f942358f2e95d1e3771c5a60109ab00fb1"
+  },
+  "retained": [
+    "Opt-in room-trace feature and --trace benchmark argument",
+    "Per-worker wall/CPU counters, bounded preallocated call records, and voice batch/voice task stages",
+    "Diagnostic and production-disabled clock tests, including CTest registration"
+  ],
+  "additional_runtime_optimization_retained": false,
+  "configuration": {
+    "profile": "Release",
+    "sources": 32,
+    "sample_rate": 48000,
+    "call_frames": 512,
+    "deadline_ms": 10.666666666666666,
+    "pose_hz": 93.75,
+    "switch_period_calls": 469,
+    "comparison_repeats": 3,
+    "comparison_calls_per_scenario": 938,
+    "comparison_order": "Interleaved baseline/candidate, reversing every second repeat"
+  },
+  "experiments": [
+    {
+      "candidate": "tile128",
+      "platform": "macos",
+      "retained": false,
+      "workers": 8,
+      "binary_sha256": {
+        "baseline": "70717ba134d4c9155b4d51266fa14ac998850bc527c819357c43c7d33f9f3c50",
+        "tile128": "a2a88bd13c213b54c9eb5e87cf532c19bec921ba0ee5424145b4aa5db7e3f69b"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 0.7623529285714288,
+            "median_p99_ms": 1.553167,
+            "total_misses": 0,
+            "calls": 2814
+          },
+          "tile128": {
+            "median_mean_ms": 0.762149921108741,
+            "median_p99_ms": 1.3836670000000002,
+            "total_misses": 0,
+            "calls": 2814
+          }
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 2.273356625799577,
+            "median_p99_ms": 3.785583,
+            "total_misses": 1,
+            "calls": 2814
+          },
+          "tile128": {
+            "median_mean_ms": 2.312230198294241,
+            "median_p99_ms": 4.449416,
+            "total_misses": 5,
+            "calls": 2814
+          }
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 2.6838395788912606,
+            "median_p99_ms": 5.859167,
+            "total_misses": 3,
+            "calls": 2814
+          },
+          "tile128": {
+            "median_mean_ms": 2.6731812473347523,
+            "median_p99_ms": 5.129459000000001,
+            "total_misses": 9,
+            "calls": 2814
+          }
+        }
+      }
+    },
+    {
+      "candidate": "tile512",
+      "platform": "macos",
+      "retained": false,
+      "workers": 8,
+      "binary_sha256": {
+        "baseline": "70717ba134d4c9155b4d51266fa14ac998850bc527c819357c43c7d33f9f3c50",
+        "tile512": "41cd85437209d325a1ea1c001b95bc77508851112e3610cf92e52793f822cb46"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 0.7427723646055439,
+            "median_p99_ms": 1.3325,
+            "total_misses": 0,
+            "calls": 2814
+          },
+          "tile512": {
+            "median_mean_ms": 0.739060603411514,
+            "median_p99_ms": 1.371333,
+            "total_misses": 0,
+            "calls": 2814
+          }
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 2.2746781343283597,
+            "median_p99_ms": 4.005583,
+            "total_misses": 4,
+            "calls": 2814
+          },
+          "tile512": {
+            "median_mean_ms": 2.247680657782513,
+            "median_p99_ms": 3.096625,
+            "total_misses": 0,
+            "calls": 2814
+          }
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 2.5819010831556524,
+            "median_p99_ms": 4.205333,
+            "total_misses": 0,
+            "calls": 2814
+          },
+          "tile512": {
+            "median_mean_ms": 2.6539924307036276,
+            "median_p99_ms": 4.477374999999999,
+            "total_misses": 4,
+            "calls": 2814
+          }
+        }
+      }
+    },
+    {
+      "candidate": "tile512",
+      "platform": "linux",
+      "retained": false,
+      "workers": 32,
+      "binary_sha256": {
+        "baseline": "0ec5436f4bb00f6286850761c6b2967a7b9e1408cc264b8d7889f3c97805a54f",
+        "tile512": "ee298ac8ed552d4d918d228566916cfe50571a291eb77584532337a3ebf3014c"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 3.040612839019195,
+            "median_p99_ms": 4.953311,
+            "total_misses": 1,
+            "calls": 2814
+          },
+          "tile512": {
+            "median_mean_ms": 2.839601007462686,
+            "median_p99_ms": 4.981597,
+            "total_misses": 3,
+            "calls": 2814
+          }
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 5.747294563965884,
+            "median_p99_ms": 8.194259,
+            "total_misses": 3,
+            "calls": 2814
+          },
+          "tile512": {
+            "median_mean_ms": 5.784035437100213,
+            "median_p99_ms": 7.921773999999999,
+            "total_misses": 5,
+            "calls": 2814
+          }
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 6.815976900852876,
+            "median_p99_ms": 11.761759999999999,
+            "total_misses": 78,
+            "calls": 2814
+          },
+          "tile512": {
+            "median_mean_ms": 6.931804570362476,
+            "median_p99_ms": 12.218665,
+            "total_misses": 76,
+            "calls": 2814
+          }
+        }
+      }
+    },
+    {
+      "candidate": "group2",
+      "platform": "macos",
+      "retained": false,
+      "workers": 8,
+      "binary_sha256": {
+        "baseline": "70717ba134d4c9155b4d51266fa14ac998850bc527c819357c43c7d33f9f3c50",
+        "group2": "48262c4cfdd58d1ced36d8c52161bd176f7ae81d03c9c9e488b36591cc247bc0"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 0.6732266023454158,
+            "median_p99_ms": 1.116084,
+            "total_misses": 0,
+            "calls": 2814
+          },
+          "group2": {
+            "median_mean_ms": 0.6956674413646055,
+            "median_p99_ms": 1.161041,
+            "total_misses": 0,
+            "calls": 2814
+          }
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 1.9584928912579962,
+            "median_p99_ms": 2.61625,
+            "total_misses": 1,
+            "calls": 2814
+          },
+          "group2": {
+            "median_mean_ms": 2.165490659914711,
+            "median_p99_ms": 3.94425,
+            "total_misses": 2,
+            "calls": 2814
+          }
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 2.2955606545842215,
+            "median_p99_ms": 3.6685,
+            "total_misses": 5,
+            "calls": 2814
+          },
+          "group2": {
+            "median_mean_ms": 2.4673495149253712,
+            "median_p99_ms": 3.875125,
+            "total_misses": 0,
+            "calls": 2814
+          }
+        }
+      }
+    },
+    {
+      "candidate": "group2",
+      "platform": "linux",
+      "retained": false,
+      "workers": 32,
+      "binary_sha256": {
+        "baseline": "0ec5436f4bb00f6286850761c6b2967a7b9e1408cc264b8d7889f3c97805a54f",
+        "group2": "36deac481fe5b65de49b401c35bd2b69a939ab08aa2788b66abd3b16542e7fa0"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 2.9992113081023457,
+            "median_p99_ms": 4.846562,
+            "total_misses": 0,
+            "calls": 2814
+          },
+          "group2": {
+            "median_mean_ms": 4.072378023454157,
+            "median_p99_ms": 6.335477,
+            "total_misses": 2,
+            "calls": 2814
+          }
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 5.771765586353955,
+            "median_p99_ms": 8.008275000000001,
+            "total_misses": 9,
+            "calls": 2814
+          },
+          "group2": {
+            "median_mean_ms": 7.1996354946695105,
+            "median_p99_ms": 10.411650999999999,
+            "total_misses": 15,
+            "calls": 2814
+          }
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 6.88052871215351,
+            "median_p99_ms": 11.678313,
+            "total_misses": 64,
+            "calls": 2814
+          },
+          "group2": {
+            "median_mean_ms": 8.330414082089556,
+            "median_p99_ms": 13.497072000000001,
+            "total_misses": 300,
+            "calls": 2814
+          }
+        }
+      }
+    }
+  ],
+  "diagnostic_traces": {
+    "macos": [
+      {
+        "scenario": "static",
+        "calls": 1876,
+        "instrumented_mean_ms": 0.7038335756929635,
+        "instrumented_misses": 0,
+        "clock_read_mean_ns": 80.916,
+        "worst": {
+          "measured_block": 907,
+          "phase_before": 0,
+          "phase_after": 0,
+          "wall_ms": 2.1265419999999997,
+          "stages": {
+            "canonical_block": {
+              "wall_summed_ms": 2.040792,
+              "thread_cpu_summed_ms": 0.073583,
+              "calls": 2
+            },
+            "late_decoder": {
+              "wall_summed_ms": 1.281499,
+              "thread_cpu_summed_ms": 0.120541,
+              "calls": 2
+            },
+            "late_field": {
+              "wall_summed_ms": 0.233917,
+              "thread_cpu_summed_ms": 0.214875,
+              "calls": 2
+            },
+            "session_process": {
+              "wall_summed_ms": 2.126333,
+              "thread_cpu_summed_ms": 0.159,
+              "calls": 1
+            },
+            "voice_batch": {
+              "wall_summed_ms": 0.349334,
+              "thread_cpu_summed_ms": 0.327958,
+              "calls": 2
+            },
+            "voice_render": {
+              "wall_summed_ms": 1.779789,
+              "thread_cpu_summed_ms": 1.708752,
+              "calls": 64
+            },
+            "worker_execution": {
+              "wall_summed_ms": 1.95675,
+              "thread_cpu_summed_ms": 0.755666,
+              "calls": 2
+            },
+            "worker_roundtrip": {
+              "wall_summed_ms": 1.979375,
+              "thread_cpu_summed_ms": 0.012249,
+              "calls": 2
+            }
+          }
+        }
+      },
+      {
+        "scenario": "continuous_pose",
+        "calls": 1876,
+        "instrumented_mean_ms": 1.9790051226012784,
+        "instrumented_misses": 0,
+        "clock_read_mean_ns": 80.916,
+        "worst": {
+          "measured_block": 1519,
+          "phase_before": 0,
+          "phase_after": 0,
+          "wall_ms": 10.088333,
+          "stages": {
+            "canonical_block": {
+              "wall_summed_ms": 9.869083,
+              "thread_cpu_summed_ms": 0.161001,
+              "calls": 2
+            },
+            "late_decoder": {
+              "wall_summed_ms": 1.009793,
+              "thread_cpu_summed_ms": 0.855042,
+              "calls": 2
+            },
+            "late_field": {
+              "wall_summed_ms": 1.654583,
+              "thread_cpu_summed_ms": 0.478374,
+              "calls": 2
+            },
+            "session_process": {
+              "wall_summed_ms": 10.087708,
+              "thread_cpu_summed_ms": 0.379709,
+              "calls": 1
+            },
+            "voice_batch": {
+              "wall_summed_ms": 6.128166,
+              "thread_cpu_summed_ms": 5.386333,
+              "calls": 2
+            },
+            "voice_render": {
+              "wall_summed_ms": 20.597961,
+              "thread_cpu_summed_ms": 16.513253,
+              "calls": 64
+            },
+            "worker_execution": {
+              "wall_summed_ms": 9.611167,
+              "thread_cpu_summed_ms": 6.955042,
+              "calls": 2
+            },
+            "worker_roundtrip": {
+              "wall_summed_ms": 9.638334,
+              "thread_cpu_summed_ms": 0.013125,
+              "calls": 2
+            }
+          }
+        }
+      },
+      {
+        "scenario": "continuous_pose_and_room_switch",
+        "calls": 1876,
+        "instrumented_mean_ms": 2.270022127931768,
+        "instrumented_misses": 0,
+        "clock_read_mean_ns": 80.916,
+        "worst": {
+          "measured_block": 167,
+          "phase_before": 3,
+          "phase_after": 3,
+          "wall_ms": 9.587334,
+          "stages": {
+            "canonical_block": {
+              "wall_summed_ms": 9.435791,
+              "thread_cpu_summed_ms": 0.217041,
+              "calls": 2
+            },
+            "late_decoder": {
+              "wall_summed_ms": 0.675834,
+              "thread_cpu_summed_ms": 0.497083,
+              "calls": 2
+            },
+            "late_field": {
+              "wall_summed_ms": 1.617293,
+              "thread_cpu_summed_ms": 0.746667,
+              "calls": 4
+            },
+            "session_process": {
+              "wall_summed_ms": 9.586708,
+              "thread_cpu_summed_ms": 0.36775,
+              "calls": 1
+            },
+            "voice_batch": {
+              "wall_summed_ms": 6.540584,
+              "thread_cpu_summed_ms": 5.188958,
+              "calls": 2
+            },
+            "voice_render": {
+              "wall_summed_ms": 23.239243,
+              "thread_cpu_summed_ms": 17.456121,
+              "calls": 128
+            },
+            "worker_execution": {
+              "wall_summed_ms": 9.199792,
+              "thread_cpu_summed_ms": 6.774458,
+              "calls": 2
+            },
+            "worker_roundtrip": {
+              "wall_summed_ms": 9.228583,
+              "thread_cpu_summed_ms": 0.017667,
+              "calls": 2
+            }
+          }
+        }
+      }
+    ],
+    "linux": [
+      {
+        "scenario": "static",
+        "calls": 11250,
+        "instrumented_mean_ms": 2.95384044480001,
+        "instrumented_misses": 1,
+        "clock_read_mean_ns": 767.317,
+        "worst": {
+          "measured_block": 153,
+          "phase_before": 0,
+          "phase_after": 0,
+          "wall_ms": 11.483756,
+          "stages": {
+            "canonical_block": {
+              "wall_summed_ms": 10.720149,
+              "thread_cpu_summed_ms": 0.402316,
+              "calls": 2
+            },
+            "late_decoder": {
+              "wall_summed_ms": 0.245297,
+              "thread_cpu_summed_ms": 0.244872,
+              "calls": 2
+            },
+            "late_field": {
+              "wall_summed_ms": 0.330608,
+              "thread_cpu_summed_ms": 0.330752,
+              "calls": 2
+            },
+            "session_process": {
+              "wall_summed_ms": 11.482192,
+              "thread_cpu_summed_ms": 1.16448,
+              "calls": 1
+            },
+            "voice_batch": {
+              "wall_summed_ms": 9.353777,
+              "thread_cpu_summed_ms": 1.112206,
+              "calls": 2
+            },
+            "voice_render": {
+              "wall_summed_ms": 23.148647,
+              "thread_cpu_summed_ms": 14.807414,
+              "calls": 64
+            },
+            "worker_execution": {
+              "wall_summed_ms": 10.273052,
+              "thread_cpu_summed_ms": 2.030785,
+              "calls": 2
+            },
+            "worker_roundtrip": {
+              "wall_summed_ms": 10.337861,
+              "thread_cpu_summed_ms": 0.019809,
+              "calls": 2
+            }
+          }
+        }
+      },
+      {
+        "scenario": "continuous_pose",
+        "calls": 11250,
+        "instrumented_mean_ms": 5.8170911147555895,
+        "instrumented_misses": 8,
+        "clock_read_mean_ns": 767.317,
+        "worst": {
+          "measured_block": 7630,
+          "phase_before": 0,
+          "phase_after": 0,
+          "wall_ms": 21.654373,
+          "stages": {
+            "canonical_block": {
+              "wall_summed_ms": 20.884484,
+              "thread_cpu_summed_ms": 0.517119,
+              "calls": 2
+            },
+            "late_decoder": {
+              "wall_summed_ms": 1.112796,
+              "thread_cpu_summed_ms": 1.073265,
+              "calls": 2
+            },
+            "late_field": {
+              "wall_summed_ms": 16.230968,
+              "thread_cpu_summed_ms": 0.629702,
+              "calls": 2
+            },
+            "session_process": {
+              "wall_summed_ms": 21.652274,
+              "thread_cpu_summed_ms": 1.285091,
+              "calls": 1
+            },
+            "voice_batch": {
+              "wall_summed_ms": 2.649472,
+              "thread_cpu_summed_ms": 2.280766,
+              "calls": 2
+            },
+            "voice_render": {
+              "wall_summed_ms": 42.477463,
+              "thread_cpu_summed_ms": 42.485003,
+              "calls": 64
+            },
+            "worker_execution": {
+              "wall_summed_ms": 20.337482,
+              "thread_cpu_summed_ms": 4.325367,
+              "calls": 2
+            },
+            "worker_roundtrip": {
+              "wall_summed_ms": 20.394069,
+              "thread_cpu_summed_ms": 0.02791,
+              "calls": 2
+            }
+          }
+        }
+      },
+      {
+        "scenario": "continuous_pose_and_room_switch",
+        "calls": 11250,
+        "instrumented_mean_ms": 6.769907536977767,
+        "instrumented_misses": 146,
+        "clock_read_mean_ns": 767.317,
+        "worst": {
+          "measured_block": 4671,
+          "phase_before": 0,
+          "phase_after": 0,
+          "wall_ms": 15.550256000000001,
+          "stages": {
+            "canonical_block": {
+              "wall_summed_ms": 14.717699,
+              "thread_cpu_summed_ms": 1.915521,
+              "calls": 2
+            },
+            "late_decoder": {
+              "wall_summed_ms": 1.485079,
+              "thread_cpu_summed_ms": 1.317659,
+              "calls": 2
+            },
+            "late_field": {
+              "wall_summed_ms": 0.820726,
+              "thread_cpu_summed_ms": 0.812645,
+              "calls": 2
+            },
+            "session_process": {
+              "wall_summed_ms": 15.548401,
+              "thread_cpu_summed_ms": 2.745823,
+              "calls": 1
+            },
+            "voice_batch": {
+              "wall_summed_ms": 9.688122,
+              "thread_cpu_summed_ms": 3.925576,
+              "calls": 2
+            },
+            "voice_render": {
+              "wall_summed_ms": 90.360308,
+              "thread_cpu_summed_ms": 88.670653,
+              "calls": 64
+            },
+            "worker_execution": {
+              "wall_summed_ms": 12.766814,
+              "thread_cpu_summed_ms": 6.827286,
+              "calls": 2
+            },
+            "worker_roundtrip": {
+              "wall_summed_ms": 12.830208,
+              "thread_cpu_summed_ms": 0.027705,
+              "calls": 2
+            }
+          }
+        }
+      }
+    ]
+  },
+  "interpretation": [
+    "One instrumented Linux static slow call spent 9.354 ms of 11.484 ms in the voice batch; summed voice wall time exceeded summed voice CPU time by about 8.341 ms.",
+    "One instrumented Linux pose slow call spent 16.231 ms of 21.654 ms in the late-field stage. The driver CPU interval does not include other worker threads, so this does not identify the cause of the late-field delay.",
+    "For those calls, worker_roundtrip minus worker_execution was about 0.065/0.057 ms; most time was inside the owned worker job rather than its external handoff.",
+    "These instrumented calls are new observations, not causal identification of the prior four unprofiled misses."
+  ],
+  "limits": [
+    "Wall/CPU sums across parallel workers and nested stages cannot be added as exclusive CPU totals.",
+    "CPU clocks do not distinguish OS descheduling, blocking, or waiting for another worker on their own.",
+    "Diagnostics perturb timing and memory and are excluded from capacity acceptance.",
+    "The identical Linux baseline binary measured differently across sessions; only within-session interleaved comparisons are used for candidate decisions.",
+    "128/512-bin interpolation and two-item scheduling experiments did not provide stable overall benefit and were reverted.",
+    "No new real-device long-stability acceptance is claimed. Existing zero-deadline-miss acceptance remains unmet."
+  ],
+  "validation": {
+    "normal_replay_identical_on_macos_linux_windows": true,
+    "frames": 163398,
+    "frozen_pcm_sha256": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+    "screens_pcm_sha256": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910",
+    "normal_room_library_integration_and_no_alloc_tests_passed": true,
+    "production_disabled_clock_test_passed": true,
+    "diagnostic_counter_and_no_alloc_tests_passed": true,
+    "macos_windows_room_trace_ctest_passed": true,
+    "rustfmt_passed": true,
+    "clippy": "Exit 0; existing room style warnings remain, no warnings in the new diagnostic code."
+  },
+  "evidence_directory": "local/room-v1/optimization-20261011-round2"
+}

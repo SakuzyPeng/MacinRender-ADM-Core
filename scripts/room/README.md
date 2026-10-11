@@ -72,6 +72,24 @@ feature 启用固定大小的跨线程阶段计数器；普通构建不读计时
 与 `worker_execution` 的差包含排队、唤醒与交接；`session_process` 减 `canonical_block`
 包含输入控制、校验和状态查询。只在没有正在运行的 DSP 调用时 reset / snapshot。
 
+定位偶发慢调用时，使用 `room-trace` feature 构建 Release `room_bench` 并追加 `--trace`。
+它包含 `room-profile`，但关闭 HRIR / 响应 / 滤波器等内层算术计时，保留声源任务组、单个
+声源任务、晚场和线程交接阶段。计数按工作线程分开存放，以减少计数器自身的跨核争用。
+Linux 64 位和 macOS 同时记录执行线程 CPU 时间；其它平台的原生 CPU 时钟当前不可用，
+以 `thread_cpu_available=false` 明确标注。原生时钟封装只在诊断示例中，DSP crate 仍禁止 unsafe。
+
+沿用已有的 `--target-dir`、`--target` 和 Rust 构建参数，只增加 `--features room-trace`，然后运行：
+
+```sh
+"$ROOM_TRACE_BIN" "$ROOM_JSON" 11250 512 32 469 --trace > room-call-trace.jsonl
+```
+
+每轮预分配并触碰调用记录内存，运行后保留最慢 32 次调用的 block、切换阶段及墙钟 / CPU
+阶段计数。`--trace` 必须显式启用，普通 Release 构建会拒绝该参数。CPU 时间同样存在嵌套
+重叠；任务组驱动线程的 CPU 时间不包含其它线程，因此墙钟与驱动线程 CPU 的差不能直接
+等同于系统抢占。应结合 `voice_render` 等任务计数分析。诊断会改变时序与 RSS，结果只能用于
+定位；容量和设备通过结论必须来自无插桩运行。需要内层墙钟细分时，单独使用 `room-profile`。
+
 `room_stages ROOM_JSON [ITERATIONS=2000]` 输出单声源各阶段的平均耗时 JSON。
 `room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0]`
 可指定声源数，缺省遍历三种数量。切换周期为 0 时只切换一次，非零时交替切换两个已准备的房间，
@@ -79,7 +97,7 @@ feature 启用固定大小的跨线程阶段计数器；普通构建不读计时
 `preparation_outside_dsp_seconds`，不计入单次 DSP 期限；进程 CPU 仍包含这部分工作。
 这仍是内核压力测试，不模拟设备回调或异步准备线程。
 
-关闭 `room-profile` 并重新构建后才运行正式容量测试。例如，`ROOM_BIN` 指向现有 Release
+关闭 `room-profile` / `room-trace` 并重新构建后才运行正式容量测试。例如，`ROOM_BIN` 指向现有 Release
 可执行文件，`ROOM_JSON` 指向固定资源：
 
 ```sh

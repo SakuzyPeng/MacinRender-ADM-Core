@@ -513,6 +513,7 @@ fn render_voice(
     slot: &VoiceInput,
     block: &VoiceBlock,
 ) -> Result<()> {
+    let _profile = super::profile::Guard::new(super::profile::Stage::VoiceRender);
     voice.render(
         room,
         slot,
@@ -627,6 +628,7 @@ impl BlockJob {
         Ok(())
     }
     fn render_voices(&mut self) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::VoiceBatch);
         let mut current = self.current.lock().unwrap();
         let Some(incoming) = &self.incoming else {
             return current.render();
