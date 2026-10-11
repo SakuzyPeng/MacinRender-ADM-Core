@@ -161,6 +161,7 @@ fn description(prepared: &PreparedSet) -> Result<CString> {
         "sample_rate":48000,"latency_frames":mradm_dsp::room::BLOCK,
         "material_filter_guard_frames":room.profile.band_offset,
         "hrir_interpolation_guard_frames":room.hrir.data.guard,
+        "hrir_preprocessing_guard_frames":room.hrir.data.preprocessing_guard,
         "propagation_guard_frames":40,"alignment_guard_frames":room.profile.alignment_guard,
         "tail_frames":prepared.tail_frames(),"preroll_frames":prepared.preroll_frames(),
         "hrir_directions":room.hrir.data.directions.len(),"late_directions":room.profile.late_directions.len(),
