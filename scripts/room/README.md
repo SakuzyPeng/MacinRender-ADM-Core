@@ -94,3 +94,83 @@ python3 scripts/room/benchmark-linux.py "$ROOM_BIN" "$ROOM_JSON" /path/to/new-lo
 CPU 配额、允许的核心、限流/压力快照及子进程 CPU、缺页、上下文切换增量。
 输出目录必须不存在；不要同时运行构建或其他基准。系统/cgroup 计数也可能包含其他进程，
 不能直接把系统总量归因于 DSP，更不能把内核期限超时报告为设备欠载。
+
+## 全向声学检查与校正包
+
+`room_omni` 用理想全向单位脉冲接收器驱动同一房间内核，导出直达、早反射和晚场三个
+独立通道。它不使用个人 HRIR；全向接收器的 40 帧因果保护延迟写入探针元数据。完整响应
+参与分析，临时 PCM 每测完一个位置就删除。
+
+```sh
+cmake --build --preset release --target mr_adm_room_omni
+python3 scripts/room/check-acoustics.py --probe build/release/mr_adm_room_omni \
+  --room /path/reference/room.json --output /path/acoustic-report.json
+```
+
+缺省使用 `reference-positions.json` 的 22 个参考位置和 6 个补点。T20 按 EBU Tech 3276
+§2.3 的 −5 至 −25 dB 区间计算；T30、拟合 R² 和分析滤波器的衰减时间另行保留。
+采用十进制中心频率 `1000·10^(k/10)`，同时检查体积标称 Tm 与各点测得 Tm 的容差；
+160/200 Hz 边界保留既有的 0.05 s 更严限制。相邻频带差、15 ms 内 1–8 kHz 连续频带
+反射（含重合路径相干叠加）及 50 Hz–16 kHz 频响采用
+BS.1116-3 与 EBU 3276 规定的交集。报告同时给出资源完整性和独立的声学通过状态。
+测量限定在清单给定的几何/监听点，并预先采用固定的 `r / 2.1 m` 声源电平校准；原始未校准
+频响、分支能量也输出。频响使用全部参考位置共同的参考电平，不按各方向拟合或归一化增益。
+同时保留既有标准的逐曲线参考电平检查；这只是分析量，没有修改实际响应或声源增益。
+这些检查不包含真实房间、背景噪声、耳机或完整标准认证。
+
+`reference-corrected-v1.json` 是新资源 `reference-7x6x3.2-corrected-v1` 的制作定义。
+它要求冻结模板的精确晚场组件哈希；原冻结包保持原样。`template-orthogonal-mix-v1`
+对全部世界方向 FIR 使用一个共同的 Householder 正交变换，变换前后每个时刻的方向总能量
+相同（浮点误差单列），再施加共同的指数包络及全局晚场发送量。它保留所有采样点，既不
+针对声源方向/耳朵作增益归一化，也不削除反射路径。所有修改均在离线制作阶段，运行时
+仍使用现有 `hybrid-shoebox-v1`。
+
+```sh
+python3 scripts/room/generate-room.py --template-package /path/reference/room.json \
+  --definition scripts/room/reference-corrected-v1.json --output /path/reference-corrected-v1
+build/release/mradm room-check /path/reference-corrected-v1/room.json --hrir /path/reference/hrir.json
+python3 scripts/room/check-acoustics.py --probe build/release/mr_adm_room_omni \
+  --room /path/reference-corrected-v1/room.json --output /path/corrected-acoustics.json
+```
+
+完整分发需要绑定的 HRIR 时加 `--include-hrir`。生成一次后分发同一份资源字节；清单记录
+定义、工具、模板哈希以及 NumPy/SciPy 版本。既定条件下的结果见
+[校正包声学报告](../../docs/architecture/ROOM_CORRECTED_ACOUSTIC_VALIDATION.json)，其中包括
+所有 T20/T30、R²、频响和反射数据；不能外推到任意位置、距离或实际耳机。
+
+## 无 GUI 设备与 OSC 验收
+
+```sh
+cmake --build --preset release --target mr_adm_room_scene_benchmark
+build/release/mr_adm_room_scene_benchmark --list-devices
+python3 scripts/room/device-probe.py --probe build/release/mr_adm_room_scene_benchmark \
+  --room /path/reference/room.json --other-room /path/variant/room.json \
+  --device 'exact output device name or ID' --seconds 1800 --sources 32 --output /path/new-device-evidence
+```
+
+驱动器以 100 Hz 发送 PoseBridge v3 OSC 数据，探针使用实际接收器应用头姿，约每 5 秒切换
+一次房间。测试信号为确定性宽带噪声，会按会话音量实际播放；缺省 `--volume 0.1`，不改
+系统音量。名称/ID 必须唯一匹配当前设备，不会在选择失败时静默改用另一设备。
+`--device null` 可先检查调用链；它不构成真实设备验收。
+Windows 发送线程使用独立高精度等待定时器，采样时间按 10 ms 逻辑时钟递增，主机时间另行记录。
+接收包数须达到素材时长 × 100 Hz 的 99%，应用比例也须达到 99%，并且没有拒包、丢包或发送错误；
+仅把低频率收到的包全部应用不能通过。原生探针在素材结束后继续更新头姿、完成排尾，停止请求新房间。
+
+记录包括有效/预期输出帧、EOS、错误、欠载事件、每秒 RSS、控制调用及接收至应用时间分布、
+输出回调间隔和队列深度。录音、计数和时序缓冲在准备时分配并预触碰；音频回调只写入固定
+缓冲。后半段 RSS 斜率和完整时间序列均保留，需结合有界状态与零分配回归判断资源增长。
+欠载计数表示应用可观察到的输出回调供数不足；它不覆盖驱动未上报的硬件故障或模拟输出失真。
+
+可添加 `--capture 'BlackHole 16ch'` 指定虚拟输入，或在 Windows 添加 `--capture-loopback`
+使用所选 WASAPI 输出端点回环。每分钟保存一个一秒测量窗口，运行后执行：
+
+```sh
+python3 scripts/room/analyze-loopback.py /path/new-device-evidence/recordings \
+  --output /path/new-device-evidence/loopback-latency.json
+```
+
+分析要求足够的相关度和唯一相关峰。输出测量起点为输出回调 PCM，终点为输入回调 PCM；
+不包含传感器、OSC 接收、渲染计算及预渲染队列。时间戳来自回调入口，不是硬件采样/呈现
+时间；报告的不确定度下限包含输入/输出最大回调周期与一个样本，驱动时间戳约定、时钟漂移、
+重采样及调度误差仍未校准。虚拟回环、软件队列或内核 257 帧结果都不能作为传感器到耳机
+的物理延迟。回环设备若静音/电平为零，结果会缺少有效相关窗，不能算测量通过。

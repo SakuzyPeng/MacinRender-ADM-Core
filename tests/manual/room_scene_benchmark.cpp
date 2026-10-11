@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -23,10 +25,12 @@
 #endif
 #include <nlohmann/json.hpp>
 
+#include "adm/head_tracking.h"
 #include "adm/room.h"
 
 #include "live_room_renderer.h"
 #include "room_ffi.h"
+#include "room_probe_metrics.h"
 #include "room_worker_wait.h"
 #include "scene_output_session.h"
 #include "scene_stream_engine.h"
@@ -84,7 +88,7 @@ uint64_t rss() {
 }
 class Fixture {
   public:
-    Fixture(std::size_t sources, uint32_t frames) {
+    Fixture(std::size_t sources, uint32_t frames, bool broadband = false) : broadband_(broadband) {
         frame_.epoch_id = frame_.generation_id = 1;
         frame_.duration_samples = frames;
         for (std::size_t i = 0; i < sources; ++i) {
@@ -117,6 +121,17 @@ class Fixture {
         for (std::size_t source = 0; source < frame_.pcm.size(); ++source) {
             auto& pcm = frame_.pcm[source].samples;
             for (std::size_t i = 0; i < pcm.size(); ++i) {
+                if (broadband_) {
+                    // Fixed PCG hash noise avoids ambiguous periodic correlation
+                    // peaks in device loopback measurements. No mutable RNG state.
+                    const auto index = static_cast<std::uint32_t>(block * pcm.size() + i);
+                    const auto salt = static_cast<std::uint32_t>(source) * 3812015801U;
+                    const std::uint32_t state = ((index * 747796405U) + 2891336453U) ^ salt;
+                    const auto word = ((state >> ((state >> 28U) + 4U)) ^ state) * 277803737U;
+                    const auto bits = (word >> 22U) ^ word;
+                    pcm[i] = (static_cast<float>(bits >> 8U) - 8388608.F) / 4294967296.F;
+                    continue;
+                }
                 const auto word = ((block * pcm.size() + i) * 3943 + source * 7817) % 65521;
                 pcm[i] = (static_cast<float>(word) - 32760.F) / 16777216.F;
             }
@@ -129,6 +144,7 @@ class Fixture {
     std::vector<ElementDescriptor> elements_;
     std::vector<StateEntry> states_;
     Frame frame_;
+    bool broadband_;
 };
 RendererConfig renderer_config(const RoomConfig& room) {
     RendererConfig config;
@@ -238,17 +254,62 @@ void control_latency(const RoomConfig& room) {
               << '\n'
               << std::flush;
 }
-bool streaming(
-    const RoomConfig& first, const RoomConfig& next, unsigned seconds, bool cycles = false, unsigned sources = 32) {
+struct ProbeOptions {
+    std::string device_name;
+    std::string capture_name;
+    std::filesystem::path recordings;
+    bool loopback{false};
+    int osc_port{-1};
+    float volume{.1F};
+};
+AudioDeviceInfo select_device(const std::string& selection) {
+    std::vector<AudioDeviceInfo> matches;
+    std::ranges::copy_if(enumerate_output_devices(), std::back_inserter(matches), [&](const auto& info) {
+        return info.id == selection || info.name == selection;
+    });
+    if (matches.size() != 1) {
+        throw std::runtime_error("Output selection must match exactly one current device name or ID");
+    }
+    return matches.front();
+}
+// Keep preparation, bounded observation, and joined teardown together in this manual probe.
+// NOLINTNEXTLINE(readability-function-size)
+bool streaming(const RoomConfig& first,
+               const RoomConfig& next,
+               unsigned seconds,
+               bool cycles,
+               unsigned sources,
+               const ProbeOptions& options) {
     SceneStreamConfig config;
     config.renderer = renderer_config(first);
-    // Use the engine's existing default (capped at 2048 while head tracking).
     auto stream = std::shared_ptr<SceneStreamEngine>(take(SceneStreamEngine::create(config)));
-    SceneDeviceConfig device;
-    device.kind = SceneOutputKind::null_device;
-    auto output = take(SceneOutputSession::create(stream, device));
+    const bool real_device = !options.device_name.empty();
+    const auto selected = real_device ? select_device(options.device_name) : AudioDeviceInfo{};
+    const bool capture = options.loopback || !options.capture_name.empty();
+    if (capture && (!real_device || options.recordings.empty())) {
+        throw std::runtime_error("Capture requires --device and a new --recordings directory");
+    }
+    if (!options.recordings.empty() && !std::filesystem::create_directories(options.recordings)) {
+        throw std::runtime_error("Recordings directory must not already exist");
+    }
+    std::unique_ptr<OscHeadTrackingReceiver> receiver;
+    if (options.osc_port >= 0) {
+        receiver =
+            std::make_unique<OscHeadTrackingReceiver>(static_cast<std::uint16_t>(options.osc_port), "room-probe");
+        done(receiver->start());
+    }
+    const auto begin = Clock::now();
+    auto trace = std::make_shared<room_probe::OutputTrace>(begin, seconds, capture);
+    std::unique_ptr<room_probe::CaptureTap> tap;
+    if (capture) {
+        tap = std::make_unique<room_probe::CaptureTap>(
+            begin, seconds, options.capture_name, options.loopback ? selected.id : "");
+    }
+    auto device = std::make_unique<room_probe::MeasuredDevice>(make_miniaudio_device(!real_device, selected.id), trace);
+    auto output = take(SceneOutputSession::create_with_device(stream, std::move(device), true));
+    done(output->set_volume(options.volume));
     done(output->begin_epoch(1, 0));
-    Fixture fixture(sources, 512);
+    Fixture fixture(sources, 512, true);
     done(stream->configure_generation(1, 1, fixture.elements()));
     std::vector<ScenePcmPlaneView> planes;
     planes.reserve(fixture.frame().pcm.size());
@@ -256,31 +317,115 @@ bool streaming(
         return ScenePcmPlaneView{pcm.element_id, pcm.samples.data(), 512, 1, true};
     });
     auto control = stream->room_control();
-    const auto begin = Clock::now();
+    std::cout << nlohmann::json{{"case", "probe_ready"},
+                                {"device", real_device ? selected.name : "null"},
+                                {"osc_port", receiver ? receiver->snapshot().bound_port : 0},
+                                {"seconds", seconds},
+                                {"sample_rate", 48000},
+                                {"volume", options.volume}}
+                     .dump()
+              << '\n'
+              << std::flush;
     const double cpu_start = cpu_seconds();
+    std::atomic<bool> tracking_failed{false};
+    std::atomic<bool> material_ended{false};
+    std::string tracking_error;
+    std::vector<double> control_age_ms;
+    std::vector<double> control_call_ms;
+    const auto prepare_samples = [](std::vector<double>& values, std::size_t count) {
+        values.resize(count);
+        for (std::size_t i = 0; i < count; i += 512U) {
+            volatile double& value = values[i];
+            value = 0.;
+        }
+        values.clear();
+    };
+    prepare_samples(control_age_ms, static_cast<std::size_t>(seconds + 10) * 110U);
+    prepare_samples(control_call_ms, control_age_ms.capacity());
+    std::uint64_t requested = 0;
+    std::uint64_t poses_applied = 0;
     std::jthread tracking([&](const std::stop_token& stop) {
-        uint64_t requested = 0;
-        uint64_t tick = 0;
-        while (!stop.stop_requested()) {
-            const double time = std::chrono::duration<double>(Clock::now() - begin).count();
-            stream->set_listener_orientation({(static_cast<float>(tick % 1440) * .25F) - 180.F,
-                                              static_cast<float>(std::sin(time * .7) * 20.),
-                                              static_cast<float>(std::sin(time * .4) * 10.)});
-            if ((cycles || requested == 0) && time >= 2. + (static_cast<double>(requested) * 5.)) {
-                auto accepted = control->request(requested % 2 == 0 ? next : first);
-                if (accepted) {
-                    ++requested;
+        try {
+            const auto tracking_origin = Clock::now();
+            std::uint64_t tick = 0;
+            std::uint64_t sequence = 0;
+            const auto interval = receiver ? std::chrono::milliseconds(1) : std::chrono::milliseconds(10);
+            while (!stop.stop_requested()) {
+                const double time = std::chrono::duration<double>(Clock::now() - begin).count();
+                bool apply = true;
+                ListenerOrientation orientation{static_cast<float>(std::sin(time * .25) * 90.),
+                                                static_cast<float>(std::sin(time * .7) * 20.),
+                                                static_cast<float>(std::sin(time * .4) * 10.)};
+                if (receiver) {
+                    const auto pose = receiver->snapshot();
+                    if (pose.state == OscHeadTrackingState::failed) {
+                        throw std::runtime_error(receiver->last_error());
+                    }
+                    apply = pose.fresh && pose.sequence != sequence;
+                    if (apply) {
+                        sequence = pose.sequence;
+                        orientation = {pose.orientation.euler_deg[0],
+                                       pose.orientation.euler_deg[1],
+                                       pose.orientation.euler_deg[2]};
+                        control_age_ms.push_back(static_cast<double>(pose.age_ms));
+                    }
                 }
+                if (apply) {
+                    const auto start = Clock::now();
+                    stream->set_listener_orientation(orientation);
+                    control_call_ms.push_back(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+                    ++poses_applied;
+                }
+                if (!material_ended.load() && (cycles || requested == 0) &&
+                    time >= 2. + (static_cast<double>(requested) * 5.)) {
+                    const auto accepted = control->request(requested % 2 == 0 ? next : first);
+                    if (accepted) {
+                        ++requested;
+                    } else if (!material_ended.load()) {
+                        throw std::runtime_error(accepted.error().message);
+                    }
+                }
+                if (control->status().state == RoomSwitchState::failed) {
+                    throw std::runtime_error(control->status().message);
+                }
+                ++tick;
+#ifdef _WIN32
+                // Sleep(1) may sleep for a full Windows timer tick. Poll the
+                // latest OSC snapshot with the existing thread-owned timer.
+                const auto deadline = tracking_origin + interval * static_cast<std::int64_t>(tick);
+                while (Clock::now() < deadline && !stop.stop_requested()) {
+                    wait_room_worker(std::chrono::milliseconds(1));
+                }
+#else
+                std::this_thread::sleep_until(tracking_origin + interval * static_cast<std::int64_t>(tick));
+#endif
             }
-            ++tick;
-            std::this_thread::sleep_until(begin + std::chrono::milliseconds(tick * 10));
+        } catch (const std::exception& error) {
+            tracking_error = error.what();
+            tracking_failed.store(true);
         }
     });
     uint64_t peak_rss = rss();
     uint64_t last_underruns = 0;
     nlohmann::json underrun_events = nlohmann::json::array();
+    struct MemoryPoint {
+        double seconds;
+        std::uint64_t bytes;
+    };
+    std::vector<MemoryPoint> resident_samples(static_cast<std::size_t>(seconds + 10));
+    for (std::size_t i = 0; i < resident_samples.size(); i += 128U) {
+        volatile std::uint64_t& value = resident_samples[i].bytes;
+        value = 0;
+    }
+    resident_samples.clear();
+    std::vector<double> queued_ms;
+    prepare_samples(queued_ms, static_cast<std::size_t>(seconds + 10) * 2U);
+    auto next_observation = Clock::now();
     const uint64_t frames = static_cast<uint64_t>(seconds) * 48000;
     for (uint64_t sample = 0, block = 0; sample < frames; ++block) {
+        if (tracking_failed.load()) {
+            break;
+        }
         fixture.update(block);
         SceneFrameView frame;
         frame.epoch_id = frame.generation_id = 1;
@@ -299,17 +444,36 @@ bool streaming(
         if (block == 4) {
             output->play();
         }
-        if (block % 32 == 0) {
-            peak_rss = std::max(peak_rss, rss());
-        }
         const auto current = output->status();
+        if (current.failed || current.ended) {
+            throw std::runtime_error("Unexpected device/Scene failure or premature EOS");
+        }
         if (current.underruns != last_underruns) {
             last_underruns = current.underruns;
             underrun_events.push_back({{"seconds", std::chrono::duration<double>(Clock::now() - begin).count()},
                                        {"count", last_underruns},
                                        {"room_state", static_cast<unsigned>(control->status().state)}});
         }
+        if (Clock::now() >= next_observation) {
+            const double time = std::chrono::duration<double>(Clock::now() - begin).count();
+            const auto resident = rss();
+            peak_rss = std::max(peak_rss, resident);
+            resident_samples.push_back({time, resident});
+            queued_ms.push_back(static_cast<double>(current.queued_frames) / 48.);
+            std::cout << nlohmann::json{{"case", "device_progress"},
+                                        {"seconds", time},
+                                        {"rss_bytes", resident},
+                                        {"presented_frames", current.presented_frames},
+                                        {"underruns", current.underruns}}
+                             .dump()
+                      << '\n'
+                      << std::flush;
+            next_observation += std::chrono::seconds(1);
+        }
     }
+    // Continue tracking throughout the tail, but do not request a new room
+    // after EOS. Device setup time must not create a spurious final request.
+    material_ended.store(true);
     done(stream->signal_end(1, static_cast<int64_t>(frames)));
     const auto limit = Clock::now() + std::chrono::seconds(8);
     while (!output->status().ended && !output->status().failed && Clock::now() < limit) {
@@ -319,28 +483,66 @@ bool streaming(
     tracking.join();
     const auto status = output->status();
     const auto room = control->status();
+    const auto osc = receiver ? nlohmann::json::parse(receiver->snapshot_json()) : nlohmann::json(nullptr);
+    output.reset(); // Stop both callbacks before inspecting their owned trace data.
+    if (tap) {
+        tap->stop();
+    }
     const double elapsed = std::chrono::duration<double>(Clock::now() - begin).count();
-    std::cout << nlohmann::json{{"case", "Scene_streaming_null_device"},
-                                {"sources", sources},
-                                {"head_update_hz", 100},
-                                {"room_switch", true},
-                                {"repeated_room_switches", cycles},
-                                {"cpu_percent", 100. * (cpu_seconds() - cpu_start) / elapsed},
-                                {"wall_seconds", elapsed},
-                                {"rss_peak_bytes", peak_rss},
-                                {"presented_frames", status.presented_frames},
-                                {"expected_frames", frames + room.tail_frames},
-                                {"underruns", status.underruns},
-                                {"underrun_events", underrun_events},
-                                {"ended", status.ended},
-                                {"failed", status.failed},
-                                {"applied_revision", room.applied_revision}}
-                     .dump()
-              << '\n'
-              << std::flush;
-    return status.ended && !status.failed && status.underruns == 0 &&
-           status.presented_frames == frames + room.tail_frames && room.applied_revision != 0;
+    auto memory_samples = nlohmann::json::array();
+    std::ranges::transform(resident_samples, std::back_inserter(memory_samples), [](const auto& point) {
+        return nlohmann::json{{"seconds", point.seconds}, {"rss_bytes", point.bytes}};
+    });
+    nlohmann::json report{{"case", real_device ? "Scene_streaming_device" : "Scene_streaming_null_device"},
+                          {"device", real_device ? selected.name : "null"},
+                          {"sources", sources},
+                          {"requested_seconds", seconds},
+                          {"control_transport", receiver ? "OSC loopback UDP" : "direct API"},
+                          {"nominal_head_update_hz", 100},
+                          {"poses_applied", poses_applied},
+                          {"room_switch_requests", requested},
+                          {"repeated_room_switches", cycles},
+                          {"cpu_percent", 100. * (cpu_seconds() - cpu_start) / elapsed},
+                          {"wall_seconds", elapsed},
+                          {"rss_peak_bytes", peak_rss},
+                          {"memory_samples", memory_samples},
+                          {"presented_frames", status.presented_frames},
+                          {"consumed_frames", status.consumed_frames},
+                          {"expected_frames", frames + room.tail_frames},
+                          {"underruns", status.underruns},
+                          {"underrun_events", underrun_events},
+                          {"ended", status.ended},
+                          {"failed", status.failed || tracking_failed.load()},
+                          {"control_error", tracking_error},
+                          {"applied_revision", room.applied_revision},
+                          {"osc", osc},
+                          {"volume", options.volume},
+                          {"callback_interval", trace->intervals.report()},
+                          {"callback_pull_duration", trace->pull_duration.report()},
+                          {"control_call_duration_ms", room_probe::distribution(control_call_ms)},
+                          {"osc_receive_to_apply_ms", room_probe::distribution(control_age_ms)},
+                          {"osc_age_quantization_ms", 1},
+                          {"host_queued_audio_ms", room_probe::distribution(queued_ms)},
+                          {"clock_scope", "presented_frames is callback consumption, not a physical DAC clock"},
+                          {"latency_scope",
+                           "OSC receiver snapshot age to API apply and host queue depth; excludes sensor, kernel "
+                           "response, driver and headphone"}};
+    if (tap) {
+        report["output_recording"] = trace->recording.save(options.recordings, "output");
+        report["input_recording"] = tap->save(options.recordings);
+        report["recording_scope"] =
+            "output callback PCM to selected input callback; excludes sensor and pre-callback processing";
+        std::ofstream file(options.recordings / "recordings.json");
+        file << report.dump(2) << '\n';
+        if (!file) {
+            throw std::runtime_error("Cannot save capture metadata");
+        }
+    }
+    std::cout << report.dump() << '\n' << std::flush;
+    return status.ended && !status.failed && !tracking_failed.load() && status.underruns == 0 &&
+           status.presented_frames == frames + room.tail_frames && room.applied_revision != 0 && poses_applied != 0;
 }
+
 } // namespace
 int main(int argc, char** argv) {
 #ifndef NDEBUG
@@ -348,13 +550,24 @@ int main(int argc, char** argv) {
     return 2;
 #endif
     try {
+        if (argc == 2 && std::string_view(argv[1]) == "--list-devices") {
+            nlohmann::json devices = nlohmann::json::array();
+            std::ranges::transform(enumerate_output_devices(), std::back_inserter(devices), [](const auto& info) {
+                return nlohmann::json{{"id", info.id}, {"name", info.name}, {"default", info.is_default}};
+            });
+            std::cout << nlohmann::json{{"outputs", devices}, {"inputs", room_probe::CaptureTap::inputs()}}.dump(2)
+                      << '\n';
+            return 0;
+        }
         if (argc < 3) {
-            throw std::runtime_error("usage: room_scene_benchmark ROOM_JSON OTHER_ROOM_JSON [SECONDS=10] "
-                                     "[all|stream|stream-cycles|kernel|kernel-worker|latency] [STREAM_SOURCES=32]");
+            throw std::runtime_error(
+                "usage: room_scene_benchmark ROOM_JSON OTHER_ROOM_JSON [SECONDS=10] "
+                "[all|stream|stream-cycles|stream-device|kernel|kernel-worker|latency] [SOURCES=32] [--device NAME|ID] "
+                "[--osc-port PORT] [--capture NAME|--capture-loopback] [--recordings NEW_DIR] [--volume GAIN]");
         }
         const unsigned seconds = argc > 3 ? static_cast<unsigned>(std::stoul(argv[3])) : 10;
-        if (seconds < 5 || seconds > 120) {
-            throw std::runtime_error("seconds must be 5..120");
+        if (seconds < 5 || seconds > 3600) {
+            throw std::runtime_error("seconds must be 5..3600");
         }
         RoomConfig first{take(RoomProfile::load(argv[1])), {}, 1.5};
         RoomConfig next{take(RoomProfile::load(argv[2])), {}, 1.5};
@@ -363,21 +576,52 @@ int main(int argc, char** argv) {
         if (sources != 1 && sources != 16 && sources != 32) {
             throw std::runtime_error("stream sources must be 1, 16 or 32");
         }
+        ProbeOptions options;
+        for (int i = 6; i < argc; ++i) {
+            const std::string_view flag = argv[i];
+            if (flag == "--capture-loopback") {
+                options.loopback = true;
+                continue;
+            }
+            if (++i >= argc) {
+                throw std::runtime_error("Missing probe option value");
+            }
+            if (flag == "--device") {
+                options.device_name = argv[i];
+            } else if (flag == "--capture") {
+                options.capture_name = argv[i];
+            } else if (flag == "--recordings") {
+                options.recordings = argv[i];
+            } else if (flag == "--volume") {
+                options.volume = std::stof(argv[i]);
+            } else if (flag == "--osc-port") {
+                options.osc_port = std::stoi(argv[i]);
+            } else {
+                throw std::runtime_error("Unknown probe option");
+            }
+        }
+        if (!std::isfinite(options.volume) || options.volume <= 0.F || options.volume > 1.F || options.osc_port < -1 ||
+            options.osc_port > 65535 || (options.loopback && !options.capture_name.empty()) ||
+            (mode == "stream-device" && options.device_name.empty())) {
+            throw std::runtime_error("Invalid device probe options");
+        }
         if (mode == "all" || mode == "kernel" || mode == "kernel-worker") {
             kernel(first, next, seconds, mode == "kernel-worker" ? 512 : 256);
         }
         if (mode == "all" || mode == "latency") {
             control_latency(first);
         }
-        if (mode == "all" || mode == "stream" || mode == "stream-cycles") {
-            return streaming(first, next, seconds, mode == "stream-cycles", sources) ? 0 : 1;
+        if (mode == "all" || mode == "stream" || mode == "stream-cycles" || mode == "stream-device") {
+            return streaming(first, next, seconds, mode == "stream-cycles" || mode == "stream-device", sources, options)
+                       ? 0
+                       : 1;
         }
         if (mode != "kernel" && mode != "kernel-worker" && mode != "latency") {
             throw std::runtime_error("unknown benchmark mode");
         }
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << error.what() << '\n';
+        std::cerr << nlohmann::json{{"case", "probe_error"}, {"failed", true}, {"error", error.what()}}.dump() << '\n';
         return 1;
     }
 }

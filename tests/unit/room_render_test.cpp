@@ -397,7 +397,7 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bo
     plane.struct_size = sizeof(plane);
     plane.element_id = 7;
     plane.samples = samples.data();
-    plane.sample_count = samples.size();
+    plane.sample_count = static_cast<std::uint32_t>(samples.size());
     plane.stride = 1;
     plane.has_signal = 1;
     adm_scene_initial_state_t initial{};
@@ -418,7 +418,7 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bo
     frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
     frame.epoch_id = 1;
     frame.generation_id = 1;
-    frame.duration_samples = samples.size();
+    frame.duration_samples = static_cast<std::uint32_t>(samples.size());
     frame.pcm_count = 1;
     frame.pcm = &plane;
     frame.initial_state_count = 1;

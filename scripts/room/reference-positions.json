@@ -1,0 +1,204 @@
+{
+  "schema": "mradm.room-measurements",
+  "version": 1,
+  "provenance": "22 full-range reference directions plus the six supplemental positions from the frozen v1 validation. Original source and listener geometry retained.",
+  "level_calibration": "Fixed geometric source gain r/2.1 m for equal free-field direct level, set before measuring. No gain is fitted to any measured direction or frequency; raw uncalibrated levels and branch energies are also reported.",
+  "positions": [
+    {
+      "label": "M+060",
+      "azimuth": 60.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M-060",
+      "azimuth": -60.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M+000",
+      "azimuth": 0.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M+135",
+      "azimuth": 135.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M-135",
+      "azimuth": -135.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M+030",
+      "azimuth": 30.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M-030",
+      "azimuth": -30.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M+180",
+      "azimuth": 180.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M+090",
+      "azimuth": 90.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "M-090",
+      "azimuth": -90.0,
+      "elevation": 0.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U+045",
+      "azimuth": 45.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U-045",
+      "azimuth": -45.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U+000",
+      "azimuth": 0.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "T+000",
+      "azimuth": 0.0,
+      "elevation": 90.0,
+      "distance": 1.85,
+      "source_gain": 0.8809523809523809
+    },
+    {
+      "label": "U+135",
+      "azimuth": 135.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U-135",
+      "azimuth": -135.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U+090",
+      "azimuth": 90.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U-090",
+      "azimuth": -90.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "U+180",
+      "azimuth": 180.0,
+      "elevation": 30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "B+000",
+      "azimuth": 0.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "B+045",
+      "azimuth": 45.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "B-045",
+      "azimuth": -45.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "左下侧",
+      "azimuth": 90.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "右下侧",
+      "azimuth": -90.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "左后下方",
+      "azimuth": 135.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "右后下方",
+      "azimuth": -135.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "正后下方",
+      "azimuth": 180.0,
+      "elevation": -30.0,
+      "distance": 2.1,
+      "source_gain": 1.0
+    },
+    {
+      "label": "正下方",
+      "azimuth": 0.0,
+      "elevation": -90.0,
+      "distance": 1.05,
+      "source_gain": 0.5
+    }
+  ]
+}

@@ -869,6 +869,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_c_api_header_smoke tests/unit/c_api_header_smoke.c)
     target_include_directories(mr_adm_c_api_header_smoke PRIVATE include)
     target_compile_features(mr_adm_c_api_header_smoke PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(mr_adm_c_api_header_smoke PRIVATE /utf-8)
+    endif()
     mr_adm_core_apply_warnings(mr_adm_c_api_header_smoke)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
@@ -1080,20 +1083,26 @@ if(MR_ADM_CORE_BUILD_TESTS)
         if(_mr_room_python_status EQUAL 0)
             add_test(NAME mr_adm_room_hrir_prepare_tests COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -B
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_hrir_prepare_test.py")
+            add_test(NAME mr_adm_room_acoustic_tools_tests COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -B
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_acoustic_tools_test.py")
         else()
             message(STATUS "Room HRIR preparation tests need numpy/scipy/h5py in MR_ADM_ROOM_PREP_PYTHON")
         endif()
-        add_custom_target(mr_adm_room_hrir_check
-            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
-                --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp --no-default-features
-                --example room_hrir_check --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/room_hrir_check${CMAKE_EXECUTABLE_SUFFIX}"
-                "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_room_hrir_check${CMAKE_EXECUTABLE_SUFFIX}"
-            USES_TERMINAL)
+        foreach(_room_probe IN ITEMS room_hrir_check room_omni)
+            add_custom_target(mr_adm_${_room_probe}
+                COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+                    "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+                    --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp --no-default-features
+                    --example ${_room_probe} --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/${_room_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+                    "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_${_room_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+                USES_TERMINAL)
+        endforeach()
         add_test(NAME mr_adm_fft_benchmark_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
+        add_test(NAME mr_adm_room_device_probe_tests
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_device_probe_test.py")
         add_custom_target(mr_adm_phase2_tools
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/phase2_common.py"
                 --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
@@ -1252,7 +1261,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp)
     target_link_libraries(mr_adm_room_scene_benchmark PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json)
+        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json miniaudio)
     target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room)
     if(WIN32)
         target_link_libraries(mr_adm_room_scene_benchmark PRIVATE Psapi)
