@@ -1,0 +1,638 @@
+{
+  "schema": "mradm.room-acoustic-closeout",
+  "version": 1,
+  "frozen_reference": {
+    "changed": false,
+    "manifest_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+    "waveform_regression": "ROOM_FROZEN_REFERENCE_REGRESSION.json",
+    "maximum_relative_l2": 3.4903576027247285e-05,
+    "threshold_relative_l2": 0.0002,
+    "current_full_28_acoustic_passed": false,
+    "maximum_channel_spread_db": 2.683920845029178,
+    "positions": [
+      {
+        "label": "M+060",
+        "response_sha256": "db6fabffa600f1cfad532f3c00d10f4213a4e838be11e1de5f91918a575fb316",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M-060",
+        "response_sha256": "822c8dd5a50949e464f083ca888a267563c6ebccfcb851b5637307beab034e38",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M+000",
+        "response_sha256": "e193ba1ba1c91ae6c90228533ad364c8507d64e41350606b91bb2a51a5d3319c",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M+135",
+        "response_sha256": "87f7ce71b7533ca7ae7fd1ec115cd851608d7298d54ae1f5f211e65fbfd7e9cc",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M-135",
+        "response_sha256": "63aecce6cc810733434ad2bc87baac22c14933068d66127fd7794853d8ee08b3",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M+030",
+        "response_sha256": "36346486ff9d40657bed5570d1adc8c6491bf04a12c1f4dd679d91c013fa77ec",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M-030",
+        "response_sha256": "a1f324182439c0ae3ae8322671a403764bc1b08a75db991647848e7ff905c3c8",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M+180",
+        "response_sha256": "3ec23ef2f6fbcd2d1204737b45e250a14b37f03962bfba0745f7062a2293697d",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M+090",
+        "response_sha256": "300f2e5e664300551954645aeebeb502ed10c84d0ed270dd5a4bb15e6ba170e0",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "M-090",
+        "response_sha256": "ddfa7a7047a7a9b706f3418ba206544d0d6f0bdde76b3f9c915c7848297b73aa",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U+045",
+        "response_sha256": "e82772335ebaf80fc69c70979b740ee2f3114634bcd403aad7ee04748dec5b9e",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U-045",
+        "response_sha256": "d2785d1c6b536e3b7cbd7e92d0bda6e3841bf4c5c2a295ea950bc6e9ac8daf80",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U+000",
+        "response_sha256": "4b569bce96c8cd1263a3b420917cc7e27be3e99851cc850eb0c76983db6524f7",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "T+000",
+        "response_sha256": "c980b9f85e2451cbd1c067484b51c83ce5ab4bfb4bf3e25488379993a511cdab",
+        "passed": false,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": false
+      },
+      {
+        "label": "U+135",
+        "response_sha256": "7d8d7bde3feb86daab762c47d11237c34f0b83f55ae372a72ae96ccf17f798cd",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U-135",
+        "response_sha256": "40f770df40d836738527d07ec7b78347cc4701909891681a0e0960f05ba25869",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U+090",
+        "response_sha256": "8183e29cd4f81f85e64b00626afea56d1c14b3b298c2c67db811524184305f0d",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U-090",
+        "response_sha256": "27534c92d9e1dfc08cda49eb4b0acc35333c8967960fa553f0eb4e8af3e6ea47",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "U+180",
+        "response_sha256": "c9598aa37df2df1175aa8e07466935648f7ee11bc8e15d2eb1f274537b7ec38f",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "B+000",
+        "response_sha256": "68d1addf5cfcb310486027d4d89781466ae50aeab10dd214ed84f2ee9446dc64",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "B+045",
+        "response_sha256": "60383e2447853c833d2226bc502f1043a7c9f85c322ccb3ed59c8ac452b77fed",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "B-045",
+        "response_sha256": "6b6961bec4c9fe673ed73137ad5fd49e29aebbb5d8e2af90ab607eba58c23c49",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "左下侧",
+        "response_sha256": "990128ac0255c4f026ada441550a27710e8c29427b85793e46f13936303c2ba4",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "右下侧",
+        "response_sha256": "9802dcfc12a87b57b2d93f20de17091e2860537d4c45b62f555781fbd28f0664",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "左后下方",
+        "response_sha256": "8779af7e5e6f59aff167ff7dbf7dee6b16acede8a794a09e2f3b49a34c177efd",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "右后下方",
+        "response_sha256": "59a3e75744b7694b971f722af56c7281938c7733a5f9fde7e7a2631cde49757f",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "正后下方",
+        "response_sha256": "d5e67a5f2d8306e94d474f2c2c72f1d951ae921223236fefb09fbbd96ad2edab",
+        "passed": true,
+        "rt_passed": true,
+        "rt_failures": [],
+        "early_passed": true,
+        "frequency_passed": true
+      },
+      {
+        "label": "正下方",
+        "response_sha256": "e085e58179ca7ad79098d11393b56f0b35b69fdebfea2f56719d41a02fab8563",
+        "passed": false,
+        "rt_passed": false,
+        "rt_failures": [
+          {
+            "hz": 100.0,
+            "t20_seconds": 0.22538645869723115,
+            "lower_seconds": 0.22589241763811208,
+            "upper_seconds": 0.47590055411470356,
+            "fixed_mask_passed": false,
+            "measured_mean_mask_passed": true
+          },
+          {
+            "hz": 200.0,
+            "t20_seconds": 0.21277881197614057,
+            "lower_seconds": 0.22589241763811208,
+            "upper_seconds": 0.32589241763811205,
+            "fixed_mask_passed": false,
+            "measured_mean_mask_passed": false
+          },
+          {
+            "hz": 250.0,
+            "t20_seconds": 0.22263194621833562,
+            "lower_seconds": 0.22589241763811208,
+            "upper_seconds": 0.32589241763811205,
+            "fixed_mask_passed": false,
+            "measured_mean_mask_passed": true
+          },
+          {
+            "hz": 400.0,
+            "t20_seconds": 0.20392448181007225,
+            "lower_seconds": 0.22589241763811208,
+            "upper_seconds": 0.32589241763811205,
+            "fixed_mask_passed": false,
+            "measured_mean_mask_passed": false
+          },
+          {
+            "hz": 3150.0,
+            "t20_seconds": 0.31907715552774957,
+            "lower_seconds": 0.22589241763811208,
+            "upper_seconds": 0.32589241763811205,
+            "fixed_mask_passed": true,
+            "measured_mean_mask_passed": false
+          }
+        ],
+        "early_passed": true,
+        "frequency_passed": true
+      }
+    ]
+  },
+  "diagnosis": {
+    "schema": "mradm.room-nadir-diagnosis",
+    "version": 1,
+    "positions": [
+      {
+        "package": "frozen",
+        "position": "front",
+        "distance_m": 2.1,
+        "manifest_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+        "branch_sha256": {
+          "direct": "bcdadb1d72724f118a884e6a11ea2cc6d47bc03a7b7fa60aff552631f8dd031c",
+          "early": "c561bdf37ae70b261fc997fe51f5cd92e7ba7e15189e7360ba0cef98c9a7e9ca",
+          "late": "cecaf85e71442b2856ce8f8a2a1435b121083f4e4f81bde5036eba42a32978e8"
+        },
+        "branch_energy": [
+          1.0016356886056803,
+          0.006800436735990803,
+          0.24933161004979923
+        ],
+        "t20_seconds": {
+          "160.0": {
+            "direct_early": 0.1445000319799667,
+            "late_only": 0.4593594037310687,
+            "complete": 0.29191118503899105
+          },
+          "200.0": {
+            "direct_early": 0.1112853499216869,
+            "late_only": 0.30845755290495375,
+            "complete": 0.2987114214448629
+          },
+          "250.0": {
+            "direct_early": 0.0926734035582953,
+            "late_only": 0.31211800643724935,
+            "complete": 0.28225369183907995
+          },
+          "400.0": {
+            "direct_early": 0.06591228593137034,
+            "late_only": 0.4157900099964549,
+            "complete": 0.2799958225528425
+          }
+        }
+      },
+      {
+        "package": "frozen",
+        "position": "nadir",
+        "distance_m": 1.05,
+        "manifest_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+        "branch_sha256": {
+          "direct": "e0d88ca1531be00f6ef8ef83013f25c6e91f1a09838829bfd511cc64de3a79f0",
+          "early": "ed888bb639169431ce4369374adab7bf95eae0180c86625efb50889a3780c053",
+          "late": "acd8f6c9b5e59c02be89b36ef91338f98e95c95416166e2387a19d19a44e716c"
+        },
+        "branch_energy": [
+          3.923783193109149,
+          0.010406182248193613,
+          0.24138468162174853
+        ],
+        "t20_seconds": {
+          "160.0": {
+            "direct_early": 0.14425376575008184,
+            "late_only": 0.4592985824103271,
+            "complete": 0.23099821703002163
+          },
+          "200.0": {
+            "direct_early": 0.11834862216527244,
+            "late_only": 0.3084330670741055,
+            "complete": 0.21277881197614057
+          },
+          "250.0": {
+            "direct_early": 0.09653029591866022,
+            "late_only": 0.3121269030067783,
+            "complete": 0.22263194621833562
+          },
+          "400.0": {
+            "direct_early": 0.06193847440312671,
+            "late_only": 0.41579258657732726,
+            "complete": 0.20392448181007225
+          }
+        }
+      },
+      {
+        "package": "corrected",
+        "position": "front",
+        "distance_m": 2.1,
+        "manifest_sha256": "40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec",
+        "branch_sha256": {
+          "direct": "bcdadb1d72724f118a884e6a11ea2cc6d47bc03a7b7fa60aff552631f8dd031c",
+          "early": "c561bdf37ae70b261fc997fe51f5cd92e7ba7e15189e7360ba0cef98c9a7e9ca",
+          "late": "307940f2cec175b9200488e89bf2d6e0584932dc00fd2f61cbfad95741ccb3db"
+        },
+        "branch_energy": [
+          1.0016356886056803,
+          0.006800436735990803,
+          0.2135174664013478
+        ],
+        "t20_seconds": {
+          "160.0": {
+            "direct_early": 0.1445000319799667,
+            "late_only": 0.5185705660593403,
+            "complete": 0.29791755312610235
+          },
+          "200.0": {
+            "direct_early": 0.1112853499216869,
+            "late_only": 0.2971372161373133,
+            "complete": 0.2986768650474353
+          },
+          "250.0": {
+            "direct_early": 0.0926734035582953,
+            "late_only": 0.2970555575592792,
+            "complete": 0.30123082969642884
+          },
+          "400.0": {
+            "direct_early": 0.06591228593137034,
+            "late_only": 0.3641369794757686,
+            "complete": 0.2822654664844729
+          }
+        }
+      },
+      {
+        "package": "corrected",
+        "position": "nadir",
+        "distance_m": 1.05,
+        "manifest_sha256": "40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec",
+        "branch_sha256": {
+          "direct": "e0d88ca1531be00f6ef8ef83013f25c6e91f1a09838829bfd511cc64de3a79f0",
+          "early": "ed888bb639169431ce4369374adab7bf95eae0180c86625efb50889a3780c053",
+          "late": "b80c6a192e1feae2dc7b3f595e29dd0d34406478d6427cec0284f314c3e25519"
+        },
+        "branch_energy": [
+          3.923783193109149,
+          0.010406182248193613,
+          0.20697949001593194
+        ],
+        "t20_seconds": {
+          "160.0": {
+            "direct_early": 0.14425376575008184,
+            "late_only": 0.5186463178567052,
+            "complete": 0.27774856168457884
+          },
+          "200.0": {
+            "direct_early": 0.11834862216527244,
+            "late_only": 0.2971404998268439,
+            "complete": 0.23124927345561114
+          },
+          "250.0": {
+            "direct_early": 0.09653029591866022,
+            "late_only": 0.2970566331478218,
+            "complete": 0.24375556404420784
+          },
+          "400.0": {
+            "direct_early": 0.06193847440312671,
+            "late_only": 0.36412707234773534,
+            "complete": 0.24164747170875334
+          }
+        }
+      }
+    ],
+    "scope": "Branch isolation is diagnostic only; complete RIRs determine acceptance. Native ideal omni receiver, decimal third-octave T20."
+  },
+  "interpretation": "At nadir (1.05 m) the direct energy is about four times the 2.1 m front source, while late energy is similar. The -5..-25 dB full-response fit therefore includes more of the rapid direct/early decay; the late-only 200/250/400 Hz decays are nearly position invariant. No personal HRIR participates in the omni measurement. The correction changes the common late field and global send; direct/early branch bytes are identical for both diagnostic positions. Branch-only decay is diagnostic, not an acceptance substitute.",
+  "corrected": {
+    "id": "reference-7x6x3.2-corrected-v1",
+    "definition": "scripts/room/reference-corrected-v1.json",
+    "manifest_sha256": "40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec",
+    "room_identity": "e4a00597b298849cd921805f4111e9ba0af2bdd1184a2eddcd41443d23f58367",
+    "archive_name": "reference-corrected-exact-v1.tar.xz",
+    "archive_sha256": "5ee7283c04f94a609c745fb981d55a3c8e7b3448aed9dc6f3ba0a8da7b14b833",
+    "archive_bytes": 11928304,
+    "private_archive_contains_personal_hrir": true,
+    "binary_assets_committed": false,
+    "passed": true,
+    "full_report": "ROOM_CORRECTED_ACOUSTIC_VALIDATION.json",
+    "legacy_method_crosscheck": "ROOM_ACOUSTIC_REFERENCE_METHOD.json",
+    "maximum_channel_spread_db": 1.9855577169562786,
+    "channel_spread_limit_db": 2,
+    "macos_linux_all_28_response_bytes_identical": true,
+    "windows_responses": {
+      "schema": "mradm.room-corrected-three-platform",
+      "version": 1,
+      "passed": true,
+      "positions": [
+        {
+          "label": "M+060",
+          "response_sha256": "1694cca7e1cd6881ff45b84a71d3ad1c2303cf238c1a494b855c69ca908e4f2d",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M-060",
+          "response_sha256": "576f4db04aeda163d85172ae3656b0265d0a1025e873d8997e40fc84735af167",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M+000",
+          "response_sha256": "5172019f0a2b5d7d2248e67151944c6fb29a4b5dbd5806ba2ba78dce2c128870",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M+135",
+          "response_sha256": "7cae984f1034ec834696a19ccab80e6c1536f2f2d07db5fb70c3200885cf2c9b",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M-135",
+          "response_sha256": "9a95a719c1876e1a892f69465befac15147bd38e7a43ac14b16fbeaad556d446",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M+030",
+          "response_sha256": "4ad15867d5a93d1e13e800f3b26e081f69a49b7f11de9c255f3f84799b071d5a",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M-030",
+          "response_sha256": "f7a4161f6b3af31a05a5d0f0372b623a6b4b6f5cb63476f97a721eb42c0d01df",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M+180",
+          "response_sha256": "75ecdbce4dc01eced9d30c69b4186f3efda1838ec1c13d9132d0af08d6d937e2",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M+090",
+          "response_sha256": "4448a3c643254e04338c3d19daeab3ec8d105b8a37307d9ed9d34f27d60803e8",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "M-090",
+          "response_sha256": "705faeff0578f0f36890d80a1e7f620906f2a396a29c3a79143526bd364ea79a",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U+045",
+          "response_sha256": "edbcd4c9bd9e95579afe6dd56da4722c7b32672a295a1703c46345578c143ada",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U-045",
+          "response_sha256": "aeb54a7d912c4092cfec58be6b61650c13c940e2bed5ea832010f7655661101b",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U+000",
+          "response_sha256": "3c0e1fe119537714f839418b5b232898e517e43af46305bbe1482a33b00e39dd",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "T+000",
+          "response_sha256": "bc6db77c56018552e99fa2b34b6c53957261300aa196bc992d60c994284a1aae",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U+135",
+          "response_sha256": "8c2ff30c0fe7b567883377d5a58d7d64b18a88021b1e420725d35c5ced696e63",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U-135",
+          "response_sha256": "28b8213bfe246a1a3a7cd6d9d912fb0bfdba0adac9a413e46c0b2f95695084c4",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U+090",
+          "response_sha256": "ecef162659380d4f15bf071da4f875f486aef35a3c4c6f3aba2dd2e0e0740f5d",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U-090",
+          "response_sha256": "8de55e2c49dceccdfe408d3a4eebc8e94dc5928ed53b1ab3e601e059937ec687",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "U+180",
+          "response_sha256": "3bf29432702ab5a33b2de66a56dce59815f69b8366d0d4856dc17020c597caa2",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "B+000",
+          "response_sha256": "23006c35b6136e787a87c843d81763d7059d9bc81a82257a2b0d3bc5d2d19257",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "B+045",
+          "response_sha256": "4dc95901a1aa31a03e0f9762ec495d2eb3d6ebeb2c8295aee0c936a56a688b41",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "B-045",
+          "response_sha256": "feec3aaa766b780ee707049736cc0568a2a24b2f7c5c79ed79e49a0cecfd8b08",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "左下侧",
+          "response_sha256": "00dc301c334d34993756e022add7be3242add97ff621aa8a72e00eb3da08b48b",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "右下侧",
+          "response_sha256": "127f187fdfac57b051ddbac861edb6fe681165346a2d99728b5594769c4cc1cf",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "左后下方",
+          "response_sha256": "fce3875a9a1a531f9eca9476709c3c3d89ec629363ac4d2cb8ebf7250f52c36c",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "右后下方",
+          "response_sha256": "5922a01a73e30a1af1844ae78f49828aafac65bdfe3ace73ce39ff81ccb3d053",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "正后下方",
+          "response_sha256": "4ab7951353367fc16838ed120f62ebbaffcfe1a04588e9adb07067649e821a9f",
+          "identical_to_macos_linux": true
+        },
+        {
+          "label": "正下方",
+          "response_sha256": "9eb6640e1bbee4a00061a07ffc9872df67249c21a0ebb04546c05116285137d3",
+          "identical_to_macos_linux": true
+        }
+      ],
+      "probe_sha256": "f4aa51c05eefd7e5312d0fe7f8ed67a1d592445d0138818f97205936a2767f75"
+    },
+    "three_platform_all_28_response_bytes_identical": true
+  },
+  "scope": "Static ideal-omni model at the listed listener/sources and source gains; no physical room, background-noise, headphone or complete standards certification.",
+  "analysis_tool_sha256": "ade1ee9847dc5d7d330e16a6853498793bb010c0752e005e334a515a8283886b",
+  "positions_sha256": "6e5ff9a94e92d7b60abccf03a10e51d9c5401346175f497abaf67ffaa54d020b",
+  "policy": "Frozen package and 2e-4 waveform gate preserved. No per-source direction gain fitting or response tail trimming; the listed geometric r/2.1 source calibration is fixed before measurement. Acoustic gates are separate from resource load and device acceptance."
+}

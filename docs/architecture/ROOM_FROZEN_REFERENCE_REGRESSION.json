@@ -1,0 +1,488 @@
+{
+  "schema": "mradm.room-reference-validation",
+  "version": 1,
+  "passed": true,
+  "threshold_relative_l2": 0.0002,
+  "maximum_relative_l2": 3.4903576027247285e-05,
+  "probe_sha256": "14013f4f8f903dfa401e1ece06a5b7a31771688d95fc191843d6235f765eb137",
+  "room_manifest_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+  "probes": [
+    {
+      "id": 0,
+      "label": "M+060",
+      "relative_l2": 2.488628876985414e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        4.4499999523162845,
+        4.818653345108032,
+        1.2
+      ],
+      "prepare_seconds": 0.040935792,
+      "render_seconds": 0.124659625
+    },
+    {
+      "id": 1,
+      "label": "M-060",
+      "relative_l2": 1.788066903349839e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        4.4499999523162845,
+        1.1813466548919678,
+        1.2
+      ],
+      "prepare_seconds": 0.04024525,
+      "render_seconds": 0.1221995
+    },
+    {
+      "id": 2,
+      "label": "M+000",
+      "relative_l2": 1.974292164177168e-05,
+      "passed": true,
+      "distance_m": 2.0999999046325684,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        5.499999904632569,
+        3.0,
+        1.2
+      ],
+      "prepare_seconds": 0.040501208,
+      "render_seconds": 0.123106875
+    },
+    {
+      "id": 3,
+      "label": "M+135",
+      "relative_l2": 1.7779373638990692e-05,
+      "passed": true,
+      "distance_m": 2.099999938771922,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        1.9150758028030395,
+        4.4849241971969604,
+        1.2
+      ],
+      "prepare_seconds": 0.039698583,
+      "render_seconds": 0.123665542
+    },
+    {
+      "id": 4,
+      "label": "M-135",
+      "relative_l2": 7.680432482862732e-06,
+      "passed": true,
+      "distance_m": 2.099999938771922,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        1.9150758028030395,
+        1.5150758028030396,
+        1.2
+      ],
+      "prepare_seconds": 0.039905667,
+      "render_seconds": 0.124138292
+    },
+    {
+      "id": 5,
+      "label": "M+030",
+      "relative_l2": 3.6653605334122115e-06,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        5.218653345108033,
+        4.049999952316284,
+        1.2
+      ],
+      "prepare_seconds": 0.039356792,
+      "render_seconds": 0.121775542
+    },
+    {
+      "id": 6,
+      "label": "M-030",
+      "relative_l2": 2.5254632720378345e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        5.218653345108033,
+        1.9500000476837158,
+        1.2
+      ],
+      "prepare_seconds": 0.038749792,
+      "render_seconds": 0.125981625
+    },
+    {
+      "id": 7,
+      "label": "M+180",
+      "relative_l2": 2.082188413686146e-05,
+      "passed": true,
+      "distance_m": 2.0999999046325684,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        1.3000000953674316,
+        3.0000000000000004,
+        1.2
+      ],
+      "prepare_seconds": 0.039603792,
+      "render_seconds": 0.12342
+    },
+    {
+      "id": 8,
+      "label": "M+090",
+      "relative_l2": 6.715715501160674e-06,
+      "passed": true,
+      "distance_m": 2.0999999046325684,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        5.099999904632568,
+        1.2
+      ],
+      "prepare_seconds": 0.039592292,
+      "render_seconds": 0.123206875
+    },
+    {
+      "id": 9,
+      "label": "M-090",
+      "relative_l2": 2.9318942562466367e-05,
+      "passed": true,
+      "distance_m": 2.0999999046325684,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        0.9000000953674316,
+        1.2
+      ],
+      "prepare_seconds": 0.040332292,
+      "render_seconds": 0.122375458
+    },
+    {
+      "id": 10,
+      "label": "U+045",
+      "relative_l2": 1.5027902562702941e-05,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        4.685982131958008,
+        4.285982131958008,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.039700625,
+      "render_seconds": 0.124711458
+    },
+    {
+      "id": 11,
+      "label": "U-045",
+      "relative_l2": 1.4793445081000883e-05,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        4.685982131958008,
+        1.7140178680419922,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.040513125,
+      "render_seconds": 0.124295
+    },
+    {
+      "id": 12,
+      "label": "U+000",
+      "relative_l2": 1.8267459711490327e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        5.218653345108033,
+        3.0,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.040113541,
+      "render_seconds": 0.119985708
+    },
+    {
+      "id": 13,
+      "label": "T+000",
+      "relative_l2": 5.618657778783221e-06,
+      "passed": true,
+      "distance_m": 1.8500000000000003,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        3.0,
+        3.0500000000000003
+      ],
+      "prepare_seconds": 0.039915875,
+      "render_seconds": 0.124287834
+    },
+    {
+      "id": 14,
+      "label": "U+135",
+      "relative_l2": 6.00997236317751e-06,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        2.114017868041992,
+        4.285982131958008,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.038593167,
+      "render_seconds": 0.122215125
+    },
+    {
+      "id": 15,
+      "label": "U-135",
+      "relative_l2": 5.694461837854689e-06,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        2.114017868041992,
+        1.7140178680419922,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.038760875,
+      "render_seconds": 0.124054541
+    },
+    {
+      "id": 16,
+      "label": "U+090",
+      "relative_l2": 3.4903576027247285e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        4.818653345108032,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.039468541,
+      "render_seconds": 0.122738958
+    },
+    {
+      "id": 17,
+      "label": "U-090",
+      "relative_l2": 4.825933941731715e-06,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        1.1813466548919678,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.039705,
+      "render_seconds": 0.123035584
+    },
+    {
+      "id": 18,
+      "label": "U+180",
+      "relative_l2": 6.230598854485318e-06,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        1.5813466548919677,
+        3.0000000000000004,
+        2.2499999523162844
+      ],
+      "prepare_seconds": 0.040883,
+      "render_seconds": 0.1372935
+    },
+    {
+      "id": 19,
+      "label": "B+000",
+      "relative_l2": 1.756185728880697e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        5.218653345108033,
+        3.0,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.0403615,
+      "render_seconds": 0.12347375
+    },
+    {
+      "id": 20,
+      "label": "B+045",
+      "relative_l2": 1.695041083901815e-05,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        4.685982131958008,
+        4.285982131958008,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.040636459,
+      "render_seconds": 0.1221295
+    },
+    {
+      "id": 21,
+      "label": "B-045",
+      "relative_l2": 1.7129532407162087e-05,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        4.685982131958008,
+        1.7140178680419922,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.041131292,
+      "render_seconds": 0.123024625
+    },
+    {
+      "id": 22,
+      "label": "左下侧",
+      "relative_l2": 3.400978428601156e-05,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        4.818653345108032,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.040721666,
+      "render_seconds": 0.124609291
+    },
+    {
+      "id": 23,
+      "label": "右下侧",
+      "relative_l2": 5.52150490103863e-06,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        1.1813466548919678,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.040706833,
+      "render_seconds": 0.125733541
+    },
+    {
+      "id": 24,
+      "label": "左后下方",
+      "relative_l2": 7.003453732829281e-06,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        2.114017868041992,
+        4.285982131958008,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.040594125,
+      "render_seconds": 0.123830167
+    },
+    {
+      "id": 25,
+      "label": "右后下方",
+      "relative_l2": 7.749863159810027e-06,
+      "passed": true,
+      "distance_m": 2.0999999969749346,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        2.114017868041992,
+        1.7140178680419922,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.039135,
+      "render_seconds": 0.126808333
+    },
+    {
+      "id": 26,
+      "label": "正后下方",
+      "relative_l2": 6.166615165739223e-06,
+      "passed": true,
+      "distance_m": 2.099999973699246,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        1.5813466548919677,
+        3.0000000000000004,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.040937541,
+      "render_seconds": 0.119291458
+    },
+    {
+      "id": 27,
+      "label": "正下方",
+      "relative_l2": 6.899988311147383e-06,
+      "passed": true,
+      "distance_m": 1.0499999523162842,
+      "frames": 67066,
+      "hrir_bank_bytes": 47039744,
+      "material_filter_guard_frames": 256,
+      "position": [
+        3.4,
+        3.0,
+        0.15000004768371578
+      ],
+      "prepare_seconds": 0.040283542,
+      "render_seconds": 0.122335125
+    }
+  ],
+  "scope": "Static calibrated BRIR reconstruction; not a dynamic, realtime or full standards certification."
+}
