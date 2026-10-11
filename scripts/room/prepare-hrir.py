@@ -60,12 +60,14 @@ def positions(file, name, default=None):
     if values.ndim != 2 or values.shape[1] != 3:
         raise ValueError(f"{name} must have three coordinate columns")
     kind = text(dataset.attrs.get("Type", "cartesian")).lower()
-    units = text(dataset.attrs.get("Units", "metre")).lower()
-    if "met" not in units:
-        raise ValueError(f"{name} must use metres")
+    units = [unit.strip() for unit in text(dataset.attrs.get("Units", "metre")).lower().split(",")]
+    metres = {"metre", "meter", "metres", "meters", "m"}
     if kind == "cartesian":
+        if len(units) not in (1, 3) or any(unit not in metres for unit in units):
+            raise ValueError(f"{name} Cartesian coordinates must use metres")
         return values
-    if kind != "spherical" or "degree" not in units or np.any(values[:, 2] < 0):
+    if (kind != "spherical" or len(units) != 3 or any(unit not in {"degree", "degrees", "deg"} for unit in units[:2])
+            or units[2] not in metres or np.any(values[:, 2] < 0)):
         raise ValueError(f"Unsupported {name} coordinates/units")
     az, el = np.radians(values[:, :2]).T
     return np.column_stack((np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el))) * values[:, 2:]

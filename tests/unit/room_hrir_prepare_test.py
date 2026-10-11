@@ -129,6 +129,8 @@ class HrirPreparation(unittest.TestCase):
             "multiple radii": lambda f: f["SourcePosition"].__setitem__((0, 0), 2),
             "nonfinite PCM": lambda f: f["Data.IR"].__setitem__((0, 0, 0), np.nan),
             "complex PCM must not discard its imaginary component": complex_ir,
+            "unsupported length unit must not be treated as metres":
+                lambda f: f["SourcePosition"].attrs.__setitem__("Units", "centimetre"),
             "duplicate direction": lambda f: f["SourcePosition"].__setitem__(0, DIRECTIONS[1]),
             "ambiguous ears": lambda f: f["ReceiverPosition"].__setitem__((1, 1, 0), .08),
             "excessive support": lambda f: f.create_dataset("Data.Delay", data=[[-5000., 0]]),
