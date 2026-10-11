@@ -38,6 +38,7 @@ pub fn fixture() -> Arc<PreparedSet> {
         faces,
         delays: vec![[2., 4.]; 6],
         guard: 96,
+        preprocessing_guard: 0,
         output_taps: 192,
     });
     let mut phases = vec![0.; 1025 * 81];

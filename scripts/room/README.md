@@ -32,6 +32,34 @@ build/release/mradm render -i input.wav -o output.wav --renderer room-binaural \
 v1 动态切换保留相同的晚场世界方向基与算法保护延迟；生成器从模板继承这些组件。
 不兼容的包可创建独立会话，不能在现有会话内交叉淡化。
 
+## 从普通 SOFA 准备 HRIR
+
+`prepare-hrir.py` 独立读取 SimpleFreeFieldHRIR / 适用的 GeneralFIR，无需个人研究脚本。
+使用现有的 NumPy、SciPy、h5py 环境；只支持双耳、固定监听点、单半径且包围监听点的方向网格。
+多半径、变化的监听者、重复方向、网格孔洞、非有限值及超过 v1 完整 FIR 预算的输入会明确拒绝。
+不进行逐耳/逐方向归一化，也不按能量截短响应。非 48 kHz 数据离线重采样，FIR 系数按采样间隔
+补偿以保留传递增益；`Data.Delay` 的整数、分数及负值都保留。
+
+```sh
+cmake --build --preset release --target mr_adm_room_hrir_check
+python3 scripts/room/prepare-hrir.py /path/personal.sofa --output /path/new-hrir \
+  --check-executable build/release/mr_adm_room_hrir_check
+build/release/mradm room-check /path/room.json --hrir /path/new-hrir/hrir.json
+```
+
+耳序默认根据监听者坐标下的 `ReceiverPosition` 识别；含糊的数据须显式传 `--ear-order lr|rl`。
+`--faces` 可保留原始三角网格（N×3 的 JSON、NPY 或文本；`--faces-index-base 0|1`），否则生成
+确定顺序的凸包网格。输出目录必须不存在。工具记录源 SOFA 哈希、依赖版本、耳序和各保护延迟。
+重采样及 `Data.Delay` 带来的共同因果保护延迟为 `preprocessing_guard_samples`，运行时查询报告为
+`hrir_preprocessing_guard_frames`；它与 HRIR 插值、传播、材料和处理 FIFO 的延迟分别记账。
+
+原生 `room_hrir_check` 对全部测量节点执行实际 Rust HRIR 查询，验证幅度和时序重建，相对 L2
+门槛为 `2e-5`。传入 `--check-executable` 才会生成通过的 `node-validation.json`；仅成功打包
+不代表节点回归、声学或实时容量已通过。固定依赖版本生成一份资源后，将同一字节分发给各平台。
+
+Python 回归：`python3 -B tests/unit/room_hrir_prepare_test.py build/release/mr_adm_room_hrir_check`。
+CMake 可用 `MR_ADM_ROOM_PREP_PYTHON` 指定已有环境，避免另外创建依赖缓存。
+
 新增算法类型需要新的 `kind` 及对应 Rust 实现；不要只修改版本字符串伪装兼容。当前仅
 接受 `hybrid-shoebox-v1` 和 `delay-aligned-v1`。新算法必须实现不可变准备、会话处理、
 确定尾长、reset 与双实例切换契约，并提供各平台相同资源/事件的逐位回归。

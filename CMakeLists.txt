@@ -1071,6 +1071,25 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
         set_tests_properties(mr_adm_room_tests PROPERTIES TIMEOUT 120)
+        set(MR_ADM_ROOM_PREP_PYTHON "${Python3_EXECUTABLE}" CACHE FILEPATH
+            "Existing Python environment with numpy, scipy and h5py for room preparation tests")
+        execute_process(COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -c "import numpy, scipy, h5py"
+            RESULT_VARIABLE _mr_room_python_status OUTPUT_QUIET ERROR_QUIET)
+        if(_mr_room_python_status EQUAL 0)
+            add_test(NAME mr_adm_room_hrir_prepare_tests COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -B
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_hrir_prepare_test.py")
+        else()
+            message(STATUS "Room HRIR preparation tests need numpy/scipy/h5py in MR_ADM_ROOM_PREP_PYTHON")
+        endif()
+        add_custom_target(mr_adm_room_hrir_check
+            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+                --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp --no-default-features
+                --example room_hrir_check --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/room_hrir_check${CMAKE_EXECUTABLE_SUFFIX}"
+                "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_room_hrir_check${CMAKE_EXECUTABLE_SUFFIX}"
+            USES_TERMINAL)
         add_test(NAME mr_adm_fft_benchmark_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_custom_target(mr_adm_phase2_tools

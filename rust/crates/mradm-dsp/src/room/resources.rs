@@ -344,6 +344,7 @@ pub struct HrirData {
     pub faces: Vec<[u32; 3]>,
     pub delays: Vec<[f64; 2]>,
     pub guard: usize,
+    pub preprocessing_guard: usize,
     pub output_taps: usize,
 }
 
@@ -412,6 +413,11 @@ impl HrirData {
             faces: faces.as_chunks::<3>().0.to_vec(),
             delays: delays.as_chunks::<2>().0.to_vec(),
             guard,
+            preprocessing_guard: value
+                .get("preprocessing_guard_samples")
+                .map(|v| integer(v, 4096))
+                .transpose()?
+                .unwrap_or(0),
             output_taps,
         })
     }

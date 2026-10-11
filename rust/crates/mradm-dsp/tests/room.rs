@@ -30,6 +30,7 @@ fn shared_world_decoder_preserves_both_tails_under_changing_pose() {
         faces: data.faces.clone(),
         delays: data.delays.clone(),
         guard: data.guard,
+        preprocessing_guard: data.preprocessing_guard,
         output_taps: data.output_taps,
     };
     for (direction, response) in hrir.impulses.chunks_exact_mut(hrir.taps * 2).enumerate() {
