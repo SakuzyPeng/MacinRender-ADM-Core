@@ -129,6 +129,34 @@ void file_test(const std::filesystem::path& root, const mradm::RoomConfig& confi
     std::cout << "file/offline/FIFO/seek/window/tail passed\n";
 }
 
+void superseded_request_test(mradm::IRoomControl& control,
+                             const mradm::RoomConfig& config,
+                             const mradm::RoomConfig& other,
+                             const mradm::RoomConfig& incompatible,
+                             const auto& tick,
+                             const auto& wait) {
+    const auto retained = take(control.request(config));
+    wait([&](const auto& s) { return s.state == mradm::RoomSwitchState::transitioning; });
+    take(control.request(other));
+    // Pump preparation without advancing the transition: this must enter the
+    // kernel's pending slot, rather than starting another audible transition.
+    wait([&](const auto& s) { return s.state == mradm::RoomSwitchState::transitioning; }, false);
+    const auto failed_latest = take(control.request(incompatible));
+    wait(
+        [&](const auto& s) {
+            return s.state == mradm::RoomSwitchState::failed && s.requested_revision == failed_latest;
+        },
+        false);
+    wait([&](const auto& s) { return s.applied_revision == retained; });
+    for (int i = 0; i < 100; ++i) {
+        tick();
+    }
+    require(control.status().applied_revision == retained,
+            "failed newest request must not revive a superseded pending room");
+    const auto restored = take(control.request(other));
+    wait([&](const auto& s) { return s.state == mradm::RoomSwitchState::applied && s.applied_revision == restored; });
+}
+
 void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& config) {
     namespace live = mradm::live_scene;
     live::RendererConfig rendering;
@@ -136,10 +164,7 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
     rendering.output_layout = "binaural";
     rendering.room = config;
     auto renderer = take(live::create_live_room_renderer(rendering, {}));
-    live::ElementDescriptor description;
-    description.element_id = 7;
-    description.has_position = true;
-    const std::array elements{description};
+    const std::array elements{live::ElementDescriptor{.element_id = 7, .has_position = true}};
     ok(renderer->configure_generation(1, elements));
     auto control = renderer->room_control();
     live::Frame frame;
@@ -152,15 +177,16 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
     std::array<float, 512> output{};
     ok(renderer->render(frame, output));
     frame.initial_states.clear();
-    auto tick = [&] {
-        frame.media_sample_start += 256;
+    auto tick = [&](bool advance = true) {
+        frame.duration_samples = advance ? 256U : 0U;
+        frame.media_sample_start += frame.duration_samples;
         ok(renderer->render(frame, output));
         require(std::ranges::all_of(output, [](float v) { return std::isfinite(v); }), "switch finite output");
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     };
-    auto wait = [&](const auto& predicate) {
+    auto wait = [&](const auto& predicate, bool advance = true) {
         for (int i = 0; i < 2000; ++i) {
-            tick();
+            tick(advance);
             if (predicate(control->status())) {
                 return;
             }
@@ -187,6 +213,7 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
     const auto same = take(control->request(other));
     wait([&](const auto& s) { return s.state == mradm::RoomSwitchState::applied && s.applied_revision == same; });
     require(control->status().transition_sample == sample, "same current room does not restart transition");
+    superseded_request_test(*control, config, other, incompatible, tick, wait);
     (*renderer).reset();
     ok(renderer->configure_generation(2, elements));
     rendering.room = other;
@@ -204,6 +231,43 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
         frame.media_sample_start += 256;
     }
     std::cout << "background/failure/latest/same-room/reset passed\n";
+}
+
+void preparation_capacity_test(const std::filesystem::path& root, const mradm::RoomConfig& config) {
+    namespace live = mradm::live_scene;
+    live::RendererConfig rendering;
+    rendering.renderer = mradm::RendererSelection::room_binaural;
+    rendering.output_layout = "binaural";
+    rendering.room = config;
+    auto renderer = take(live::create_live_room_renderer(rendering, {}));
+    auto control = renderer->room_control();
+    const mradm::RoomConfig other{take(mradm::RoomProfile::load(root / "second.json")), {}, 1.5};
+    std::vector<live::ElementDescriptor> elements;
+    live::Frame frame;
+    frame.duration_samples = 256;
+    std::array<float, 512> output{};
+    // Cover both the zero-source session before its first frame and a later
+    // generation that adds sources while a room is being prepared.
+    for (std::uint64_t generation = 1; generation <= 2; ++generation) {
+        const auto request = take(control->request(generation == 1 ? other : config));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        live::ElementDescriptor description;
+        description.element_id = generation;
+        description.has_position = true;
+        elements.push_back(description);
+        ok(renderer->configure_generation(generation, elements));
+        frame.generation_id = generation;
+        frame.pcm.push_back({generation, true, std::vector<float>(256, 0.01F)});
+        for (int attempt = 0; attempt < 2000 && control->status().applied_revision != request; ++attempt) {
+            ok(renderer->render(frame, output));
+            frame.media_sample_start += 256;
+            require(control->status().state != mradm::RoomSwitchState::failed,
+                    "source growth must resize the candidate without failing the room switch");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        require(control->status().applied_revision == request, "resized room candidate must eventually apply");
+    }
+    std::cout << "preparation/source capacity growth passed\n";
 }
 
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
@@ -316,6 +380,7 @@ int main(int argc, char** argv) {
         require(!mradm::RoomProfile::load(root / "bad.json"), "corrupt hash rejected");
         file_test(root, {room, {}, 1.5});
         switching_test(root, {room, {}, 1.5});
+        preparation_capacity_test(root, {room, {}, 1.5});
         scene_test(root, 48000);
         scene_test(root, 44100);
         return 0;
