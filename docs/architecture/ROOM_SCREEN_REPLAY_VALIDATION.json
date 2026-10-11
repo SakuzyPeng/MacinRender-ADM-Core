@@ -1,0 +1,20 @@
+{
+  "schema": "mradm.room-comparison",
+  "version": 1,
+  "platforms": [
+    "macos-arm64",
+    "windows-x64",
+    "linux-x64"
+  ],
+  "missing_platforms": [],
+  "identical_for_compared": true,
+  "complete_pass": true,
+  "differing_checkpoints": {
+    "macos-arm64": [],
+    "windows-x64": [],
+    "linux-x64": []
+  },
+  "frames": 163398,
+  "pcm_sha256": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910",
+  "scope": "Prepared coefficients, HRIR/branch output, PCM and frame counts; room module only"
+}

@@ -14,9 +14,10 @@
     "frames": 163398,
     "checked_platforms": [
       "macos-arm64",
+      "windows-x64",
       "linux-x64"
     ],
-    "windows_final_state_pending": true
+    "windows_final_state_pending": false
   },
   "environment": {
     "cpu_max": "3200000 100000\n",

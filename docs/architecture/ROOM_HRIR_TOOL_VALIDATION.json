@@ -1,0 +1,113 @@
+{
+  "schema": "mradm.room-hrir-tool-validation",
+  "version": 1,
+  "synthetic_tests_passed": 8,
+  "cases": [
+    "fractional and negative Data.Delay",
+    "44.1/48/96 kHz conversion",
+    "ear ordering",
+    "listener coordinate frames",
+    "complete and incomplete meshes",
+    "nonfinite and invalid geometry",
+    "complex FIR rejection without silently discarding imaginary samples",
+    "unsupported coordinate units rejected instead of interpreting centimetres as metres"
+  ],
+  "real_banks": [
+    {
+      "source_rate_label": "44",
+      "manifest_sha256": "a63be8250ff457bb10bde7c5591ddb534d527780f0f48059192caebd688adbf7",
+      "node_validation": {
+        "hrir_hash": "5bb375e90cb672914d8fd6f0ac4ac11500ba547225b71bdbecfa386f3241e13c",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.3817490260194438e-07,
+        "nodes": 8802,
+        "passed": true,
+        "preprocessing_guard_frames": 11,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 3364
+      },
+      "source_sofa_sha256": "efffbf7f8e963c8162f24f44944ed6f8a44f5d3c546e76a4d74a650a0e3766d2"
+    },
+    {
+      "source_rate_label": "48",
+      "manifest_sha256": "5c5561024e876c2437588aa91056a1950964fe767eea8ae975e3f74bb7d212c5",
+      "node_validation": {
+        "hrir_hash": "a499680d3a1223a454e5e50ee22083e538c46a3dce7e539d97080fb91a8a2323",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.230680889471022e-07,
+        "nodes": 8802,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4498
+      },
+      "source_sofa_sha256": "9af7cb19531e52fb7ae8ec92621e6ab62b1d5fe584b3742be36699a0ddb0ccd4"
+    },
+    {
+      "source_rate_label": "96",
+      "manifest_sha256": "bacb5dab4bd485d254ff36cff39a16c57b195ff8f9cf81e9ece03078a2bba06c",
+      "node_validation": {
+        "hrir_hash": "974fa0423cc2080cd51b00fb710dc249e10f83c9b56ccc2540a4177eb8d531c9",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.3385937519966995e-07,
+        "nodes": 8802,
+        "passed": true,
+        "preprocessing_guard_frames": 10,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2441
+      },
+      "source_sofa_sha256": "49c46541517cd8c43927297fc9106b8a9aee7aec25c3a6ba6d144b6da2f98983"
+    }
+  ],
+  "linux_48khz_node_validation": {
+    "hrir_hash": "a499680d3a1223a454e5e50ee22083e538c46a3dce7e539d97080fb91a8a2323",
+    "interpolation_guard_frames": 96,
+    "maximum_relative_l2": 2.230680889471022e-07,
+    "nodes": 8802,
+    "passed": true,
+    "preprocessing_guard_frames": 0,
+    "schema": "mradm.hrir-node-validation",
+    "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+    "threshold_relative_l2": 2e-05,
+    "version": 1,
+    "worst_node": 4498
+  },
+  "windows_48khz_node_validation": {
+    "hrir_hash": "a499680d3a1223a454e5e50ee22083e538c46a3dce7e539d97080fb91a8a2323",
+    "interpolation_guard_frames": 96,
+    "maximum_relative_l2": 2.230680889471022e-07,
+    "nodes": 8802,
+    "passed": true,
+    "preprocessing_guard_frames": 0,
+    "schema": "mradm.hrir-node-validation",
+    "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+    "threshold_relative_l2": 2e-05,
+    "version": 1,
+    "worst_node": 4498
+  },
+  "passed": true,
+  "tool_sha256": "0536f3c65da9cad17fb48f60d9ad66790ad71cfc9b548180cac9fe2c4c7a2254",
+  "same_bytes_48khz_three_platform_load": true,
+  "final_tool_real_48khz_byte_identity": {
+    "all_generated_files_identical": true,
+    "files": {
+      "hrir-delays.f64": "f9258815ee4e3a2236a0a3aa35db1e9471c1bc439326ec0bb237dfea6ab854be",
+      "hrir-directions.f64": "27d123495cad9b8ec49f344b91a31a2ff5fe786addb025ef7ab47d4ba55d2936",
+      "hrir-faces.u32": "232e09351acd239601aa3007897b006f5c14b9886502d0625ecf6e3e211dd54e",
+      "hrir.f32": "72e6f3d451d486489e336b08dab54237c77a31d7ce0412e90c092c7ca816f543",
+      "hrir.json": "5c5561024e876c2437588aa91056a1950964fe767eea8ae975e3f74bb7d212c5",
+      "node-validation.json": "02c741dfc6113d7d50ea860d0fdff8aadbee806f6dfe58c04638b37b736162a5"
+    },
+    "tool_sha256": "0536f3c65da9cad17fb48f60d9ad66790ad71cfc9b548180cac9fe2c4c7a2254",
+    "scope": "Final type/unit guards leave the real 8802-node 48 kHz package byte-identical; temporary package removed."
+  }
+}

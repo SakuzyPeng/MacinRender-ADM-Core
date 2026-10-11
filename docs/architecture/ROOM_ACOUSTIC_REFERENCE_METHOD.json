@@ -1,0 +1,177 @@
+{
+  "schema": "mradm.room-legacy-acoustic-crosscheck",
+  "version": 1,
+  "passed": true,
+  "reference_script_sha256": "579194a8c8520ffb17f8d01a6d97f9759fe97e282087c67a7b59696f3d6ff812",
+  "scope": "Unmodified fit_decay/analyze functions and constants from the frozen reference script, isolated from unrelated imports. Native corrected omni RIRs; original thresholds, source gains and conservative160/200 boundary. Early reflection checks are in the main report.",
+  "positions": [
+    {
+      "label": "M+060",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.02399139778094822
+    },
+    {
+      "label": "M-060",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.023991400479268066
+    },
+    {
+      "label": "M+000",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.0007593119213394894
+    },
+    {
+      "label": "M+135",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.012925743767308262
+    },
+    {
+      "label": "M-135",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.012925741586546247
+    },
+    {
+      "label": "M+030",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.002590986488556213
+    },
+    {
+      "label": "M-030",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.00259098623929932
+    },
+    {
+      "label": "M+180",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.010964822805534236
+    },
+    {
+      "label": "M+090",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.0170919315434494
+    },
+    {
+      "label": "M-090",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.01709193277845822
+    },
+    {
+      "label": "U+045",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.016451763875442393
+    },
+    {
+      "label": "U-045",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.016451762343927256
+    },
+    {
+      "label": "U+000",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.00016012906502343993
+    },
+    {
+      "label": "T+000",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.021544038822104705
+    },
+    {
+      "label": "U+135",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.012097066315378935
+    },
+    {
+      "label": "U-135",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.012097066902854392
+    },
+    {
+      "label": "U+090",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.02052107962901134
+    },
+    {
+      "label": "U-090",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.020521083300490683
+    },
+    {
+      "label": "U+180",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.006986030524202047
+    },
+    {
+      "label": "B+000",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.008947867541517274
+    },
+    {
+      "label": "B+045",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.025970078011310127
+    },
+    {
+      "label": "B-045",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.025970075527035397
+    },
+    {
+      "label": "左下侧",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.03244714063350207
+    },
+    {
+      "label": "右下侧",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.032447140994526
+    },
+    {
+      "label": "左后下方",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.01791863843099545
+    },
+    {
+      "label": "右后下方",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.01791863753898154
+    },
+    {
+      "label": "正后下方",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.01495819268608195
+    },
+    {
+      "label": "正下方",
+      "passed": true,
+      "failures": {},
+      "boundary_160_200_difference": 0.046499288228987024
+    }
+  ]
+}
