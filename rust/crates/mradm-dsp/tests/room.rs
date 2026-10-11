@@ -17,6 +17,76 @@ mod common;
 use common::fixture;
 
 #[test]
+fn screen_warp_follows_authored_ramps_and_switches_at_the_event_sample() {
+    use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
+    let mut session = Session::new(fixture(), 1.5, true, true).unwrap();
+    let x = (libm::sin(29f64.to_radians()) * 2.) as f32;
+    let y = (libm::cos(29f64.to_radians()) * 2.) as f32;
+    session
+        .configure(&[RoomDescription {
+            id: 1,
+            position: [-x, y, 0.],
+            screens: RoomScreens {
+                enabled: 1,
+                reproduction: RoomScreenGeometry {
+                    width: 90.,
+                    ..RoomScreenGeometry::default()
+                },
+                ..RoomScreens::default()
+            },
+            ..RoomDescription::default()
+        }])
+        .unwrap();
+    let first = RoomCommand {
+        state: State {
+            position: [-x, y, 0.],
+            screen_reference: 1,
+            ..State::default()
+        },
+        ..RoomCommand::default()
+    };
+    let target = RoomCommand {
+        changed: 4,
+        duration: 1000,
+        state: State {
+            position: [x, y, 0.],
+            screen_reference: 1,
+            ..State::default()
+        },
+        ..RoomCommand::default()
+    };
+    let mut output = vec![0.; 1000];
+    session
+        .process(500, [None].into_iter(), &[first], &[target], &mut output)
+        .unwrap();
+    let mid = session.source_position(1).unwrap();
+    assert!(mid.direction[1].abs() < 1e-6);
+    assert!(
+        (mid.distance - f64::from(y) * 1.5).abs() < 1e-6,
+        "warp after interpolation, not interpolation between warped endpoints"
+    );
+    session
+        .process(500, [None].into_iter(), &[], &[], &mut output)
+        .unwrap();
+    let end = session.source_position(1).unwrap();
+    assert!((end.direction[0] + end.direction[1]).abs() < 1e-6);
+    let off = RoomCommand {
+        changed: 128,
+        duration: 1000,
+        state: State {
+            screen_reference: 0,
+            ..State::default()
+        },
+        ..RoomCommand::default()
+    };
+    session
+        .process(1, [None].into_iter(), &[], &[off], &mut output)
+        .unwrap();
+    let end = session.source_position(1).unwrap();
+    assert!((end.direction[1] + f64::from(x) / 2.).abs() < 1e-6);
+}
+
+#[test]
 fn shared_world_decoder_preserves_both_tails_under_changing_pose() {
     use mradm_dsp::room::{hrir::HrirBank, resources::HrirData, signal::WorldTail};
     let base = fixture();

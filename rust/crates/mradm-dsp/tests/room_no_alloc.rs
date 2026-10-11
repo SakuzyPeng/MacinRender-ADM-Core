@@ -1,7 +1,8 @@
 use mradm_dsp::room::{
     BLOCK,
-    control::RoomDescription,
+    control::{RoomCommand, RoomDescription, State},
     prepared::PreparedRoom,
+    screen::{RoomScreenGeometry, RoomScreens},
     session::{Instance, PreparedSet, Session},
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -69,10 +70,29 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
         .map(|id| RoomDescription {
             id,
             position: [0., 1., 0.],
+            screens: RoomScreens {
+                enabled: 1,
+                reproduction: RoomScreenGeometry {
+                    width: 90.,
+                    ..RoomScreenGeometry::default()
+                },
+                ..RoomScreens::default()
+            },
             ..RoomDescription::default()
         })
         .collect();
     session.configure(&descriptions).unwrap();
+    let initial: Vec<_> = (0..8)
+        .map(|element| RoomCommand {
+            element,
+            state: State {
+                position: [-0.5, 0.8, 0.2],
+                screen_reference: 1,
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
     let input = [0.01; BLOCK];
     let mut output = [0.; BLOCK * 2];
     let mut counts = [0; 512];
@@ -86,7 +106,7 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
             .process(
                 BLOCK,
                 (0..8).map(|_| Some(input.as_slice())),
-                &[],
+                if block == 0 { &initial } else { &[] },
                 &[],
                 &mut output,
             )

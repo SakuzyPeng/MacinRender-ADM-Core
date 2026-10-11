@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.46）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-10 的 v1.46）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.47）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-11 的 v1.47）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -91,6 +91,15 @@ C ABI 走 **两阶段稳定** 模型：
 - 修改 callback `adm_progress_cb` 形参或调用约定。
 - 修改宏 `ADM_API_VERSION_*` 的含义。
 - 删除导出函数（必须走 deprecation 流程，见下）。
+
+### v1.47（additive，房间屏幕映射）
+
+- 新增 `adm_render_options_set_screen_config_json` 与 `adm_create_scene_stream_with_room_ex`。
+  屏幕配置使用 `mradm.screen-config` v1 JSON，复制后由 options／会话持有；NULL 表示未配置。
+- 所有既有函数与公开 POD 布局保持不变，包括 Scene 嵌套结构和 `adm_room_config_t`。
+  制作／重放屏幕在会话创建时固定，换房及 epoch reset 保留配置；改变屏幕须创建新会话。
+- 当前仅房间后端应用配置。无重放屏幕时保持原输出；文件从 Programme 投影制作屏幕几何，
+  多 Programme 制作屏幕定义冲突时要求显式 reference 覆盖。原 XML 往返不受影响。
 
 ### v1.46（additive，房间模块）
 

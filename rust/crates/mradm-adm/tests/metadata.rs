@@ -25,6 +25,53 @@ fn snapshot(xml: &str) -> Snapshot {
     )
     .unwrap()
 }
+
+#[test]
+fn reference_screen_geometry_defaults_and_xml_roundtrip() {
+    let base = objects("", "<screenRef>1</screenRef>");
+    let make = |body: &str| {
+        base.replacen("<audioContentIDRef>",
+        &format!("<audioProgrammeReferenceScreen>{body}</audioProgrammeReferenceScreen><audioContentIDRef>"), 1)
+    };
+    let polar = make(
+        "<aspectRatio>2</aspectRatio><screenCentrePosition azimuth='10' elevation='5' distance='2'/><screenWidth azimuth='60'/>",
+    );
+    let scene = snapshot(&polar);
+    assert_eq!(scene.programmes[0].reference_screen, 1);
+    let screen = scene.programmes[0].screen_geometry;
+    assert_eq!(screen.cartesian, 0);
+    assert_eq!(screen.centre, [10., 5., 2.]);
+    assert_eq!(screen.aspect_ratio, 2.);
+    assert_eq!(screen.width, 60.);
+    assert_eq!(
+        Document::parse(&polar)
+            .unwrap()
+            .apply_patches(&[], 48000)
+            .unwrap(),
+        polar
+    );
+    let cartesian = snapshot(&make(
+        "<screenCentrePosition X='.1' Y='2' Z='.5'/><screenWidth X='3'/>",
+    ));
+    assert_eq!(cartesian.programmes[0].screen_geometry.cartesian, 1);
+    assert_eq!(
+        cartesian.programmes[0].screen_geometry.centre,
+        [0.1, 2., 0.5]
+    );
+    assert_eq!(cartesian.programmes[0].screen_geometry.width, 3.);
+    assert_eq!(
+        snapshot(&make("")).programmes[0].screen_geometry,
+        mradm_adm::records::AdmScreen::default()
+    );
+    for body in [
+        "<screenCentrePosition X='0' azimuth='0'/><screenWidth X='1'/>",
+        "<aspectRatio>0</aspectRatio>",
+        "<screenWidth azimuth='180'/>",
+        "<screenCentrePosition X='1'/>",
+    ] {
+        assert!(Snapshot::extract(&Document::parse(&make(body)).unwrap(), 48000, &[]).is_err());
+    }
+}
 #[test]
 fn imported_values_presence_entities_and_sample_rounding() {
     let x = objects(

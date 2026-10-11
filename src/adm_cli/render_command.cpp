@@ -361,6 +361,8 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
     render_cmd->add_option("--room", opts.room_path, "Room package room.json (room-binaural)");
     render_cmd->add_option("--room-hrir", opts.room_hrir_path, "Separate prepared personal HRIR manifest");
+    render_cmd->add_option(
+        "--screen-config", opts.screen_config_path, "Reference/reproduction screen JSON (room-binaural)");
     render_cmd
         ->add_option("--room-metres-per-unit", opts.room_metres_per_unit, "Room coordinate scale; default 1.5 m/unit")
         ->check(CLI::Range(0.01, 100.0));
@@ -516,6 +518,16 @@ int run_render_impl(const RenderCliOptions& opts) {
     SpdlogSink logs;
     std::stop_source stop_source;
     mradm::RenderRequest request = make_render_request(opts);
+    if (!opts.screen_config_path.empty()) {
+        const std::filesystem::path path{
+            std::u8string_view{reinterpret_cast<const char8_t*>(opts.screen_config_path.c_str())}};
+        auto screen = mradm::load_screen_config(path);
+        if (!screen) {
+            spdlog::error(screen.error().message);
+            return EXIT_FAILURE;
+        }
+        request.options.screens = *screen;
+    }
     if (!opts.room_path.empty()) {
         if (request.options.renderer != mradm::RendererSelection::room_binaural) {
             spdlog::error("--room requires --renderer room-binaural");

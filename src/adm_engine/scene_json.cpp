@@ -163,6 +163,13 @@ json programme_to_json(const SceneProgramme& p) {
     j["start_sample"] = p.start_sample;
     add_opt(j, "end_sample", p.end_sample);
     j["has_reference_screen"] = p.has_reference_screen;
+    if (p.reference_screen) {
+        const auto& screen = *p.reference_screen;
+        j["reference_screen"] = {{"coordinates", screen.cartesian ? "cartesian" : "polar"},
+                                 {"centre", screen.centre},
+                                 {"width", screen.width},
+                                 {"aspect_ratio", screen.aspect_ratio}};
+    }
     if (p.loudness.has_value()) {
         j["loudness"] = loudness_to_json(*p.loudness);
     }

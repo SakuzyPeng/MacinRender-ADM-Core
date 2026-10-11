@@ -167,15 +167,23 @@ AdmScene scene(const Parsed& p) {
     AdmScene output;
     const auto& view = p.view;
     for (const auto& v : std::span{view.programmes, view.programmes_len}) {
-        output.programmes.push_back({p.string(v.id),
-                                     p.string(v.name),
-                                     p.strings(v.content_ids),
-                                     p.optional_string(v.language),
-                                     p.strings(v.labels),
-                                     v.start,
-                                     optional(v.end_present, v.end),
-                                     loudness(p, v.loudness),
-                                     v.reference_screen != 0});
+        output.programmes.push_back(
+            {p.string(v.id),
+             p.string(v.name),
+             p.strings(v.content_ids),
+             p.optional_string(v.language),
+             p.strings(v.labels),
+             v.start,
+             optional(v.end_present, v.end),
+             loudness(p, v.loudness),
+             v.reference_screen != 0,
+             v.reference_screen != 0
+                 ? std::optional{ScreenGeometry{
+                       v.screen_geometry.cartesian != 0,
+                       v.screen_geometry.aspect_ratio,
+                       {v.screen_geometry.centre[0], v.screen_geometry.centre[1], v.screen_geometry.centre[2]},
+                       v.screen_geometry.width}}
+                 : std::nullopt});
     }
     for (const auto& v : std::span{view.contents, view.contents_len}) {
         output.contents.push_back({p.string(v.id),

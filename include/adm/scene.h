@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "adm/screen.h"
+
 namespace mradm {
 
 enum class SceneSourceKind {
@@ -292,8 +294,9 @@ struct SceneProgramme {
     // First LoudnessMetadata entry from the programme, if any.
     std::optional<SceneLoudnessMetadata> loudness;
     // True when the ADM document includes an audioProgrammeReferenceScreen element.
-    // The scene records presence only; its geometry is retained in the source XML.
+    // Geometry is also projected for screen-aware renderers; source XML is retained verbatim.
     bool has_reference_screen{false};
+    std::optional<ScreenGeometry> reference_screen;
 };
 
 struct AdmScene {

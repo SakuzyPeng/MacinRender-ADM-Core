@@ -34,8 +34,10 @@ MradmLiveBinauralState convert(const ObjectState& state) {
 
 class LiveRoomRenderer final : public ILiveSceneRenderer {
   public:
-    LiveRoomRenderer(std::shared_ptr<room_internal::Runtime> runtime, DiagnosticSink diagnostics)
-        : runtime_(std::move(runtime)), diagnostics_(std::move(diagnostics)) {
+    LiveRoomRenderer(std::shared_ptr<room_internal::Runtime> runtime,
+                     DiagnosticSink diagnostics,
+                     MradmRoomScreens screens)
+        : runtime_(std::move(runtime)), diagnostics_(std::move(diagnostics)), screens_(screens) {
         initial_.reserve(512);
         events_.reserve(4096);
     }
@@ -48,6 +50,7 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
             MradmRoomDescription description{};
             description.id = element.element_id;
             description.generation = generation_id;
+            description.screens = screens_;
             description.role = static_cast<std::uint32_t>(element.role);
             std::array<float, 3> position{element.x, element.y, element.z};
             if (!element.has_position && element.role == ElementRole::direct_speaker) {
@@ -109,6 +112,7 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
                 planes_[found->second] = {plane.samples.data(), plane.samples.size(), plane.has_signal ? 1U : 0U, 0};
             }
             for (const auto& initial : frame.initial_states) {
+                warn_screen(frame, initial.state, initial.element_id);
                 const auto found = indices_.find(initial.element_id);
                 if (found == indices_.end()) {
                     return make_error(ErrorCode::invalid_argument, "room-binaural 收到未知声源状态");
@@ -119,6 +123,7 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
                 initial_.push_back(command);
             }
             for (const auto& update : frame.updates) {
+                warn_screen(frame, update.state, update.element_id);
                 const auto found = indices_.find(update.element_id);
                 if (found == indices_.end()) {
                     return make_error(ErrorCode::invalid_argument, "room-binaural 收到未知声源控制");
@@ -131,16 +136,6 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
                 command.cleared = update.cleared_fields;
                 command.state = convert(update.state);
                 events_.push_back(command);
-                if (update.state.screen_reference && !warned_screen_ && diagnostics_) {
-                    diagnostics_({LogLevel::warning,
-                                  DiagnosticCode::semantic_degraded,
-                                  frame.epoch_id,
-                                  generation_,
-                                  update.element_id,
-                                  state_screen_reference,
-                                  "room-binaural 未实现屏幕映射，保留提交的物理位置"});
-                    warned_screen_ = true;
-                }
             }
         }
         return runtime_->process(frame.duration_samples, planes_, initial_, events_, output);
@@ -163,8 +158,22 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
     [[nodiscard]] std::uint32_t sample_rate() const noexcept override { return 48000; }
 
   private:
+    void warn_screen(const Frame& frame, const ObjectState& state, std::uint64_t element) {
+        if ((state.valid_fields & state_screen_reference) != 0 && state.screen_reference && screens_.enabled == 0 &&
+            !warned_screen_ && diagnostics_) {
+            diagnostics_({LogLevel::warning,
+                          DiagnosticCode::semantic_degraded,
+                          frame.epoch_id,
+                          generation_,
+                          element,
+                          state_screen_reference,
+                          "room-binaural 未配置重放屏幕，screenRef 保留原方向"});
+            warned_screen_ = true;
+        }
+    }
     std::shared_ptr<room_internal::Runtime> runtime_;
     DiagnosticSink diagnostics_;
+    MradmRoomScreens screens_;
     std::uint64_t generation_{0};
     std::unordered_map<std::uint64_t, std::uint32_t> indices_;
     std::vector<MradmRoomPlane> planes_;
@@ -177,6 +186,10 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
 } // namespace
 Result<std::unique_ptr<ILiveSceneRenderer>> create_live_room_renderer(const RendererConfig& config,
                                                                       DiagnosticSink diagnostics) {
+    auto screen_valid = validate_screen_config(config.screens);
+    if (!screen_valid) {
+        return tl::unexpected{screen_valid.error()};
+    }
     if (config.sample_rate != 48000 || config.output_layout != "binaural") {
         return make_error(ErrorCode::unsupported, "room-binaural v1 仅支持 48 kHz 双耳输出");
     }
@@ -192,6 +205,9 @@ Result<std::unique_ptr<ILiveSceneRenderer>> create_live_room_renderer(const Rend
     if (!runtime) {
         return tl::unexpected{runtime.error()};
     }
-    return std::unique_ptr<ILiveSceneRenderer>{new LiveRoomRenderer(*runtime, std::move(diagnostics))};
+    return std::unique_ptr<ILiveSceneRenderer>{new LiveRoomRenderer(
+        *runtime,
+        std::move(diagnostics),
+        room_internal::screens(config.screens, config.screens.reference.value_or(ScreenGeometry{})))};
 }
 } // namespace mradm::live_scene

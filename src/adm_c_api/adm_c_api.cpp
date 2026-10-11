@@ -2677,6 +2677,14 @@ adm_error_code_t adm_create_scene_stream_with_room(adm_context_t* context,
                                                    const adm_scene_stream_config_t* config,
                                                    const adm_room_config_t* room,
                                                    adm_scene_stream_t** out) noexcept {
+    return adm_create_scene_stream_with_room_ex(context, config, room, nullptr, out);
+}
+
+adm_error_code_t adm_create_scene_stream_with_room_ex(adm_context_t* context,
+                                                      const adm_scene_stream_config_t* config,
+                                                      const adm_room_config_t* room,
+                                                      const char* screen_json,
+                                                      adm_scene_stream_t** out) noexcept {
     if (out != nullptr) {
         *out = nullptr;
     }
@@ -2695,6 +2703,17 @@ adm_error_code_t adm_create_scene_stream_with_room(adm_context_t* context,
 
         mradm::realtime::SceneStreamConfig converted;
         converted.renderer = std::move(*renderer);
+        if (screen_json != nullptr) {
+            if (converted.renderer.renderer != mradm::RendererSelection::room_binaural) {
+                return ADM_ERROR_UNSUPPORTED;
+            }
+            auto screens = mradm::parse_screen_config_json(screen_json);
+            if (!screens) {
+                store_last_error(context, screens.error());
+                return map_error(screens.error().code);
+            }
+            converted.renderer.screens = *screens;
+        }
         if (room != nullptr || converted.renderer.renderer == mradm::RendererSelection::room_binaural) {
             auto room_config = to_room_config(room);
             if (!room_config) {
@@ -3383,6 +3402,26 @@ adm_error_code_t adm_room_inspect(adm_context_t* context, const adm_room_config_
         return ADM_ERROR_INTERNAL;
     }
 }
+adm_error_code_t adm_render_options_set_screen_config_json(adm_render_options_t* options, const char* json) noexcept {
+    if (options == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        if (json == nullptr) {
+            options->opts.screens = {};
+            return ADM_ERROR_OK;
+        }
+        auto screens = mradm::parse_screen_config_json(json);
+        if (!screens) {
+            return map_error(screens.error().code);
+        }
+        options->opts.screens = *screens;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t adm_render_options_set_room(adm_render_options_t* options, const adm_room_config_t* config) noexcept {
     if (options == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;

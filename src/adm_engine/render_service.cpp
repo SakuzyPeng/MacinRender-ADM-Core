@@ -795,6 +795,10 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.output_layout = output_layout;
     plan.sofa_path = request.options.sofa_path;
     plan.room = request.options.room;
+    plan.screens = request.options.screens;
+    if ((plan.screens.reference || plan.screens.reproduction) && sel != RendererSelection::room_binaural) {
+        return fail_with_report({ErrorCode::unsupported, "屏幕配置当前仅支持 room-binaural", {}});
+    }
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_geometry = request.options.speaker_geometry;

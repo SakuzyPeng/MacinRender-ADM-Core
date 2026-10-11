@@ -3,7 +3,7 @@
 pub use crate::live_binaural::State;
 use crate::{Error, Result};
 pub const FIELDS: u64 = (1 << 11) - 1;
-pub const GEOMETRY_FIELDS: u64 = 4 | 8 | 32 | 64 | 256 | 512 | 1024;
+pub const GEOMETRY_FIELDS: u64 = 4 | 8 | 32 | 64 | 128 | 256 | 512 | 1024;
 
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
@@ -14,6 +14,7 @@ pub struct RoomDescription {
     pub reserved: u32,
     pub position: [f32; 3],
     pub padding: u32,
+    pub screens: super::screen::RoomScreens,
 }
 impl RoomDescription {
     pub fn same_source(&self, other: &Self) -> bool {
@@ -197,7 +198,11 @@ impl Control {
                 self.start[field] = sample;
                 // Head lock is a reference-frame change; its audio transition is
                 // independent of positional metadata interpolation deadlines.
-                self.end[field] = if mask == 256 { sample } else { end };
+                self.end[field] = if mask == 128 || mask == 256 {
+                    sample
+                } else {
+                    end
+                };
             }
         }
         self.settled = self.end.iter().copied().max().unwrap_or(0);

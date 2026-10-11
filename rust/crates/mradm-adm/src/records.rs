@@ -66,6 +66,28 @@ pub struct Programme {
     pub end: u64,
     pub loudness: Loudness,
     pub reference_screen: u32,
+    pub screen_geometry: AdmScreen,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AdmScreen {
+    pub cartesian: u32,
+    pub reserved: u32,
+    pub aspect_ratio: f64,
+    pub centre: [f64; 3],
+    pub width: f64,
+}
+impl Default for AdmScreen {
+    fn default() -> Self {
+        Self {
+            cartesian: 0,
+            reserved: 0,
+            aspect_ratio: 1.78,
+            centre: [0., 0., 1.],
+            width: 58.,
+        }
+    }
 }
 
 #[repr(C)]

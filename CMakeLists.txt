@@ -149,6 +149,7 @@ target_sources(
     PRIVATE
         src/adm_core/direct_speakers_matrix.cpp
         src/adm_core/scene_math.cpp
+        src/adm_core/screen.cpp
         src/adm_core/semantic_policy.cpp
         "${MR_ADM_GENERATED_VERSION_CPP}"
     PUBLIC
@@ -166,6 +167,7 @@ target_sources(
             include/adm/options.h
             include/adm/progress.h
             include/adm/render.h
+            include/adm/screen.h
             include/adm/semantic_policy.h
             include/adm/version.h
 )

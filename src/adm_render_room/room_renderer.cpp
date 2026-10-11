@@ -393,6 +393,10 @@ class RoomRenderer final : public IRenderer {
 
 // NOLINTNEXTLINE(readability-function-size): validate and publish one immutable metadata/resource transaction.
 Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    auto screen_valid = validate_screen_config(plan.screens);
+    if (!screen_valid) {
+        return tl::unexpected{screen_valid.error()};
+    }
     if (plan.scene.info.sample_rate != 48000 || plan.output_layout != "binaural" || !plan.scene.hoa_tracks.empty()) {
         return make_error(ErrorCode::unsupported, "room-binaural v1 需要 48 kHz Objects/DirectSpeakers，输出为双耳");
     }
@@ -413,6 +417,14 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
     data->spread = plan.binaural_spread_mode != BinauralSpreadMode::none;
     bool screen_warned = false;
     for (const auto& object : plan.scene.objects) {
+        const bool screen_ref = std::ranges::any_of(object.tracks, [](const auto& track) {
+            return std::ranges::any_of(track.blocks, [](const auto& block) { return block.screen_ref; });
+        });
+        auto reference = screen_ref ? resolve_reference_screen(plan.scene, object.id, plan.screens)
+                                    : Result<ScreenGeometry>{ScreenGeometry{}};
+        if (!reference) {
+            return tl::unexpected{reference.error()};
+        }
         for (const auto& track : object.tracks) {
             if (track.blocks.empty() && track.ds_blocks.empty()) {
                 continue;
@@ -424,6 +436,7 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
             const auto source = static_cast<std::uint32_t>(data->descriptions.size());
             MradmRoomDescription description{};
             description.id = std::uint64_t{source} + 1;
+            description.screens = room_internal::screens(plan.screens, *reference);
             description.position[1] = 1;
             if (!track.ds_blocks.empty()) {
                 description.role = render_common::direct_speakers_block_is_lfe(track.ds_blocks[0]) ? 2U : 1U;
@@ -461,8 +474,8 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
                 state.max_distance = block.channel_lock_max_distance.value_or(0);
                 state.screen_reference = block.screen_ref ? 1U : 0U;
                 state.head_locked = block.head_locked ? 1U : 0U;
-                if (block.screen_ref && !screen_warned) {
-                    logs.log(LogLevel::warning, "room-binaural", "屏幕映射未实现，保留提交的物理位置");
+                if (block.screen_ref && !plan.screens.reproduction && !screen_warned) {
+                    logs.log(LogLevel::warning, "room-binaural", "未配置重放屏幕，screenRef 保留原方向");
                     screen_warned = true;
                 }
                 const auto next = i + 1 < track.blocks.size() ? track.blocks[i + 1].start_sample : data->frames;
@@ -529,6 +542,7 @@ CapabilityReport room_capabilities() {
     result.supports_channel_lock = true;
     result.supports_object_divergence = true;
     result.supports_diffuse = true;
+    result.supports_screen_ref = true;
     result.supports_render_window = true;
     result.hrtf_sources = {"prepared-hrir"};
     result.supported_layouts = {{"binaural", "Room binaural", 2, true, 0, true, true}};

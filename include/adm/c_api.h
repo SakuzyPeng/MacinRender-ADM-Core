@@ -205,7 +205,7 @@
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 46
+#define ADM_API_VERSION_MINOR 47
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1889,6 +1889,18 @@ adm_error_code_t adm_create_scene_stream_with_room(adm_context_t* context,
                                                    const adm_scene_stream_config_t* config,
                                                    const adm_room_config_t* room,
                                                    adm_scene_stream_t** out) ADM_API_NOEXCEPT;
+/* v1.47: mradm.screen-config v1 JSON is copied and validated. NULL clears the
+ * options screen configuration. Existing non-opaque structures retain their layout.
+ * No reproduction screen means unchanged positions. Room rendering only. */
+adm_error_code_t adm_render_options_set_screen_config_json(adm_render_options_t* options,
+                                                           const char* json) ADM_API_NOEXCEPT;
+/* Screen geometry is fixed for the session and survives epoch/room changes.
+ * NULL screen_json is identical to adm_create_scene_stream_with_room. */
+adm_error_code_t adm_create_scene_stream_with_room_ex(adm_context_t* context,
+                                                      const adm_scene_stream_config_t* config,
+                                                      const adm_room_config_t* room,
+                                                      const char* screen_json,
+                                                      adm_scene_stream_t** out) ADM_API_NOEXCEPT;
 /* out_request and out_error are required. Revision is nonzero on acceptance.
  * out_error owns any synchronous error text; use adm_free_string. Preparation
  * failures are reported asynchronously by the status JSON. */
