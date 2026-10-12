@@ -648,6 +648,49 @@ mod tests {
         assert!((delays[1] - 51.).abs() < 1e-10);
     }
     #[test]
+    fn hdf_filters_preserve_samples_coordinates_and_rate() {
+        let original = prepare(include_bytes!(
+            "../../../../../tests/fixtures/sofa/simple.sofa"
+        ))
+        .unwrap();
+        let expected: Vec<_> = original.impulses.iter().map(|v| v + 0.125).collect();
+        for (name, bytes) in [
+            (
+                "chunked",
+                &include_bytes!("../../../../../tests/fixtures/sofa/filters-chunked.sofa")[..],
+            ),
+            (
+                "shuffle",
+                &include_bytes!("../../../../../tests/fixtures/sofa/filters-shuffle.sofa")[..],
+            ),
+            (
+                "deflate",
+                &include_bytes!("../../../../../tests/fixtures/sofa/filters-deflate.sofa")[..],
+            ),
+            (
+                "shuffle-deflate",
+                &include_bytes!("../../../../../tests/fixtures/sofa/filters-shuffle-deflate.sofa")
+                    [..],
+            ),
+            (
+                "skipped",
+                &include_bytes!("../../../../../tests/fixtures/sofa/filters-skipped.sofa")[..],
+            ),
+        ] {
+            let data = prepare(bytes).unwrap_or_else(|error| panic!("{name}: {error}"));
+            assert_eq!(data.impulses, expected, "{name}");
+            assert_eq!(data.directions, original.directions, "{name}");
+            assert_eq!(data.taps, original.taps, "{name}");
+            assert_eq!(data.preprocessing_guard, 0, "{name}");
+        }
+        assert!(
+            prepare(include_bytes!(
+                "../../../../../tests/fixtures/sofa/filters-unsupported.sofa"
+            ))
+            .is_err()
+        );
+    }
+    #[test]
     fn native_loader_works_without_optional_binaural_sofa_feature() {
         let data = prepare(include_bytes!(
             "../../../../../tests/fixtures/sofa/simple.sofa"

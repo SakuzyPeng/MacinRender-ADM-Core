@@ -11,7 +11,9 @@ use arrayvec::ArrayVec;
 use bitflags::bitflags;
 
 use super::fractal_heap::{Attribute, DirectoryEntry, FractalHeap, fractal_heap_read};
-use super::ohdr_message::{HeaderMessage, HeaderMessageKind, collect_all_messages};
+use super::ohdr_message::{
+    HeaderMessage, HeaderMessageKind, collect_all_messages, message_data_layout,
+};
 
 use super::helpers::varint_size;
 use super::parser::Input;
@@ -151,11 +153,12 @@ bitflags! {
 struct OhdrVersion(u8);
 
 fn build_data_object_from_messages(
+    input: &mut Input,
     name: String,
     address: u64,
     flags: DataObjectFlags,
     messages: Vec<HeaderMessage>,
-) -> DataObject {
+) -> ModalResult<DataObject> {
     let mut data_object = DataObject {
         name,
         address,
@@ -175,13 +178,16 @@ fn build_data_object_from_messages(
         child_directories: Vec::new(),
     };
 
+    let mut layout_offset = None;
+    let mut filters = Vec::new();
     for message in messages {
         match message.kind {
             HeaderMessageKind::DataSpace(ds) => data_object.ds = ds,
             HeaderMessageKind::LinkInfo(li) => data_object.li = li,
             HeaderMessageKind::DataType(dt) => data_object.dt = dt,
             HeaderMessageKind::AttributeInfo(ai) => data_object.ai = ai,
-            HeaderMessageKind::DataLayout(data) => data_object.data = data,
+            HeaderMessageKind::DataLayout(offset) => layout_offset = Some(offset),
+            HeaderMessageKind::FilterPipeline(pipeline) => filters = pipeline,
             HeaderMessageKind::GroupInfo(gi) => data_object.gi = gi,
             HeaderMessageKind::Attribute(Some(attr)) => {
                 data_object.parsed_attributes.push(attr);
@@ -190,7 +196,15 @@ fn build_data_object_from_messages(
         }
     }
 
-    data_object
+    if let Some(offset) = layout_offset {
+        let cp = input.checkpoint();
+        input.input.reset_to_start();
+        take(offset).parse_next(input)?;
+        input.state.set_data_space(data_object.ds.clone());
+        data_object.data = message_data_layout(input, &filters)?;
+        input.reset(&cp);
+    }
+    Ok(data_object)
 }
 
 pub(crate) fn data_object(
@@ -249,7 +263,7 @@ pub(crate) fn data_object(
         take(4usize).parse_next(input)?;
         log::debug!("data_object: building from messages");
         let mut data_object =
-            build_data_object_from_messages(name.to_string(), address, flags, messages);
+            build_data_object_from_messages(input, name.to_string(), address, flags, messages)?;
         log::debug!(
             "data_object: built, ai.fractal_heap={:#x}, li.fractal_heap={:#x}",
             data_object.ai.fractal_heap_address,

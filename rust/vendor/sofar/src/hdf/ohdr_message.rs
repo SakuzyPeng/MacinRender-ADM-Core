@@ -38,6 +38,12 @@ bitflags! {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) enum Filter {
+    Deflate,
+    Shuffle(u32),
+}
+
+#[derive(Clone, Debug)]
 pub(crate) enum HeaderMessageKind {
     Nil,
     DataSpace(DataSpace),
@@ -45,9 +51,9 @@ pub(crate) enum HeaderMessageKind {
     DataType(DataType),
     DataFillOld,
     DataFill,
-    DataLayout(Vec<u8>),
+    DataLayout(usize),
     GroupInfo(GroupInfo),
-    FilterPipeline,
+    FilterPipeline(Vec<Filter>),
     Attribute(Option<Attribute>),
     Continue { offset: u64, length: u64 },
     AttributeInfo(AttributeInfo),
@@ -170,16 +176,19 @@ fn message_kind(
                 HeaderMessageKind::DataFill
             }
             8 => {
-                let data = message_data_layout.parse_next(input)?;
-                HeaderMessageKind::DataLayout(data)
+                // Header messages may appear in any order. Decode only after
+                // collecting the dataset's dimensions and filter pipeline.
+                let offset = input.current_token_start();
+                take(header_size).parse_next(input)?;
+                HeaderMessageKind::DataLayout(offset)
             }
             10 => {
                 let gi = message_group_info.parse_next(input)?;
                 HeaderMessageKind::GroupInfo(gi)
             }
             11 => {
-                message_filter_pipeline.parse_next(input)?;
-                HeaderMessageKind::FilterPipeline
+                let filters = message_filter_pipeline.parse_next(input)?;
+                HeaderMessageKind::FilterPipeline(filters)
             }
             12 => {
                 let attr = message_attribute.parse_next(input)?;
@@ -526,7 +535,7 @@ fn message_data_fill(input: &mut Input) -> ModalResult<()> {
     Ok(())
 }
 
-fn message_data_layout(input: &mut Input) -> ModalResult<Vec<u8>> {
+pub(crate) fn message_data_layout(input: &mut Input, filters: &[Filter]) -> ModalResult<Vec<u8>> {
     let size_of_offsets = input.state.size_of_offsets();
     let size_of_lengths = input.state.size_of_lengths();
 
@@ -622,7 +631,8 @@ fn message_data_layout(input: &mut Input) -> ModalResult<Vec<u8>> {
                 let cp = input.checkpoint();
                 input.input.reset_to_start();
                 let _skip = take(data_address as usize).parse_next(input)?;
-                let data = tree(data_size, data_space, data_layout_chunk).parse_next(input)?;
+                let data = tree(data_size, data_space, data_layout_chunk, filters.to_vec())
+                    .parse_next(input)?;
 
                 input.reset(&cp);
                 data
@@ -658,7 +668,7 @@ fn message_group_info(input: &mut Input) -> ModalResult<GroupInfo> {
     })
 }
 
-fn message_filter_pipeline(input: &mut Input) -> ModalResult<()> {
+fn message_filter_pipeline(input: &mut Input) -> ModalResult<Vec<Filter>> {
     let version = le_u8
         .verify(|v| matches!(v, 1..=2))
         .context(StrContext::Label("Filter pipeline version"))
@@ -666,59 +676,48 @@ fn message_filter_pipeline(input: &mut Input) -> ModalResult<()> {
         .parse_next(input)?;
 
     let filters = le_u8
-        .verify(|f| *f < 32)
+        .verify(|f| *f <= 2)
         .context(StrContext::Label("Filters number"))
-        .context(StrContext::Expected("< 32".into()))
+        .context(StrContext::Expected("at most shuffle and deflate".into()))
         .parse_next(input)?;
 
-    let mut filter_id = |input: &mut Input| -> ModalResult<u16> {
-        le_u16
-            .context(StrContext::Label("Filter identification value"))
-            .parse_next(input)
-    };
-
-    match version {
-        1 => {
-            let _reserved = take(6usize)
-                .verify(|s: &[u8]| !s.iter().any(|x| *x != 0))
-                .context(StrContext::Label("Filters pipeline v1, reserved value"))
-                .context(StrContext::Expected("0".into()))
-                .parse_next(input)?;
-
-            for _ in 0..filters {
-                let filter_id_value = filter_id.parse_next(input)?;
-                let name_len = le_u16.parse_next(input)?;
-                let _flags = le_u16.parse_next(input)?;
-                let values = le_u16.verify(|v| *v <= 0x1000).parse_next(input)?;
-
-                log::info!("  filter {filter_id_value} namelen {name_len} values {values}");
-
-                let skip = ((name_len - 1) & !7) + 8;
-                take(skip).parse_next(input)?;
-                repeat(values as usize, le_u32)
-                    .map(|()| ())
-                    .parse_next(input)?;
-                cond((values & 1) == 1, le_u32).parse_next(input)?;
-            }
-        }
-        2 => {
-            for _ in 0..filters {
-                let filter_id_value = filter_id.parse_next(input)?;
-                let _flags = le_u16.parse_next(input)?;
-                let values = le_u16.verify(|v| *v <= 0x1000).parse_next(input)?;
-
-                log::info!("  filter {filter_id_value}");
-                repeat(values as usize, le_u32)
-                    .map(|()| ())
-                    .parse_next(input)?;
-            }
-        }
-        _ => {
-            unreachable!();
-        }
+    if version == 1 {
+        take(6usize)
+            .verify(|s: &[u8]| s.iter().all(|x| *x == 0))
+            .parse_next(input)?;
     }
-
-    Ok(())
+    let mut pipeline = Vec::with_capacity(filters as usize);
+    for _ in 0..filters {
+        // Reject unsupported filters before interpreting any encoded samples.
+        let id = le_u16
+            .verify(|id| matches!(id, 1 | 2))
+            .context(StrContext::Label("Filter identification value"))
+            .parse_next(input)?;
+        // Version 2 omits the name length/name for built-in filters (< 256).
+        let name_len = if version == 1 {
+            le_u16.verify(|n| *n % 8 == 0).parse_next(input)?
+        } else {
+            0
+        };
+        let _flags = le_u16.verify(|f| *f & !1 == 0).parse_next(input)?;
+        let _values = le_u16.verify(|n| *n == 1).parse_next(input)?;
+        take(name_len as usize).parse_next(input)?;
+        let value = le_u32.parse_next(input)?;
+        if version == 1 {
+            le_u32.verify(|padding| *padding == 0).parse_next(input)?;
+        }
+        pipeline.push(match (id, value) {
+            (1, 0..=9) => Filter::Deflate,
+            (2, 1..=16) => Filter::Shuffle(value),
+            _ => return Err(ErrMode::Cut(winnow::error::ContextError::new())),
+        });
+    }
+    match pipeline.as_slice() {
+        [] | [Filter::Deflate] | [Filter::Shuffle(_)] | [Filter::Shuffle(_), Filter::Deflate] => {
+            Ok(pipeline)
+        }
+        _ => Err(ErrMode::Cut(winnow::error::ContextError::new())),
+    }
 }
 
 /// Parse OHDR Attribute message (type 0x0C).
