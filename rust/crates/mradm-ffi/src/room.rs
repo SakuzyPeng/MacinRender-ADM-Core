@@ -228,8 +228,36 @@ pub unsafe extern "C" fn mradm_room_profile_json(handle: *const RoomProfileHandl
     }
 }
 
+// Preparation-only cache: live sessions own the data. No disk cache or Python
+// process is needed, and an inactive SOFA bank can be reclaimed immediately.
+fn native_hrir(bytes: &[u8]) -> Result<Arc<HrirData>> {
+    type Cache = std::collections::BTreeMap<String, std::sync::Weak<HrirData>>;
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
+    let key = sha256(bytes);
+    let mut cache = CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .map_err(|_| Error::RenderFailed("SOFA preparation cache failed"))?;
+    cache.retain(|_, entry| entry.strong_count() != 0);
+    if let Some(data) = cache.get(&key).and_then(std::sync::Weak::upgrade) {
+        return Ok(data);
+    }
+    let data = Arc::new(mradm_dsp::room::sofa::prepare(bytes)?);
+    cache.insert(key, Arc::downgrade(&data));
+    Ok(data)
+}
+fn load_hrir(file: &Path) -> Result<Arc<HrirData>> {
+    let bytes = bounded_read(file, None, 256 * 1024 * 1024)?;
+    if bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
+        return native_hrir(&bytes);
+    }
+    let root = file.parent().unwrap_or(Path::new("."));
+    Ok(Arc::new(HrirData::parse(&bytes, |n, s| array(root, n, s))?))
+}
+
 /// `reuse` pins the existing listener HRIR across a room change. Optional sofa
-/// bytes are authenticated against the prepared bank rather than silently ignored.
+/// selects native preparation when no explicit HRIR bank is supplied. If both
+/// inputs are supplied, authenticate their binding as before.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_room_prepare(
     profile: *const RoomProfileHandle,
@@ -256,22 +284,23 @@ pub unsafe extern "C" fn mradm_room_prepare(
                 ));
             }
             (&*reuse).prepared.room.hrir.data.clone()
+        } else if hrir_length == 0 && sofa_length != 0 {
+            let bytes = bounded_read(&path(sofa_name, sofa_length)?, None, 256 * 1024 * 1024)?;
+            native_hrir(&bytes)?
         } else {
             let hrir_path = if hrir_length == 0 {
                 profile.root.join(&profile.profile.default_hrir)
             } else {
                 path(hrir_name, hrir_length)?
             };
-            let root = hrir_path.parent().unwrap_or(Path::new("."));
-            let bytes = bounded_read(&hrir_path, None, 1024 * 1024)?;
-            Arc::new(HrirData::parse(&bytes, |n, s| array(root, n, s))?)
+            load_hrir(&hrir_path)?
         };
         if sofa_length != 0 {
             let sofa_path = path(sofa_name, sofa_length)?;
             let bytes = bounded_read(&sofa_path, None, 256 * 1024 * 1024)?;
             if data.source_sofa_sha256.as_deref() != Some(sha256(&bytes).as_str()) {
                 return Err(Error::InvalidArgument(
-                    "SOFA does not match the prepared room HRIR bank; prepare/select a matching HRIR manifest",
+                    "所选 HRIR 包与 SOFA 不匹配；请清除 HRIR 覆盖以直接使用 SOFA",
                 ));
             }
         }
@@ -638,4 +667,20 @@ pub unsafe extern "C" fn mradm_room_session_retired(
             .map_or(ptr::null_mut(), Box::into_raw);
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod native_sofa_tests {
+    #[test]
+    fn live_banks_are_shared_and_inactive_banks_are_reclaimed() {
+        let bytes = include_bytes!("../../../../tests/fixtures/sofa/simple.sofa");
+        let first = super::native_hrir(bytes).unwrap();
+        let second = super::native_hrir(bytes).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&first, &second));
+        let weak = std::sync::Arc::downgrade(&first);
+        drop(first);
+        drop(second);
+        assert!(weak.upgrade().is_none());
+        assert!(super::native_hrir(b"not a SOFA").is_err());
+    }
 }

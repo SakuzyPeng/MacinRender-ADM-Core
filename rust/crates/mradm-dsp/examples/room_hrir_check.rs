@@ -20,10 +20,15 @@ fn read(root: &Path, name: &str, expected: usize) -> Result<Vec<u8>> {
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let argument = std::env::args()
         .nth(1)
-        .ok_or("usage: room_hrir_check HRIR_JSON")?;
+        .ok_or("usage: room_hrir_check SOFA_OR_HRIR_JSON")?;
     let path = Path::new(&argument);
     let root = path.parent().ok_or("missing parent")?;
-    let data = Arc::new(HrirData::parse(&fs::read(path)?, |n, s| read(root, n, s))?);
+    let bytes = fs::read(path)?;
+    let data = Arc::new(if bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
+        mradm_dsp::room::sofa::prepare(&bytes)?
+    } else {
+        HrirData::parse(&bytes, |n, s| read(root, n, s))?
+    });
     let bank = Arc::new(HrirBank::new(
         data.clone(),
         data.output_taps.next_power_of_two(),
@@ -58,14 +63,21 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
     }
     let passed = maximum <= 2e-5;
-    println!(
-        "{}",
-        serde_json::json!({"schema":"mradm.hrir-node-validation", "version":1,
+    let mut report = serde_json::json!({"schema":"mradm.hrir-node-validation", "version":1,
         "hrir_hash":data.identity, "nodes":data.directions.len(), "passed":passed,
         "maximum_relative_l2":maximum, "threshold_relative_l2":2e-5, "worst_node":worst_node,
         "preprocessing_guard_frames":data.preprocessing_guard, "interpolation_guard_frames":data.guard,
-        "scope":"Measured-node amplitude/time reconstruction; no acoustic or device certification."})
-    );
+        "scope":"Measured-node amplitude/time reconstruction; no acoustic or device certification."});
+    if bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
+        use mradm_dsp::room::resources::sha256;
+        report["native_preparation"] = serde_json::json!({
+            "source_sha256":data.source_sofa_sha256,"taps":data.taps,"output_taps":data.output_taps,
+            "impulses":sha256(&data.impulses.iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()),
+            "directions":sha256(&data.directions.iter().flatten().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()),
+            "delays":sha256(&data.delays.iter().flatten().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()),
+            "faces":sha256(&data.faces.iter().flatten().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>())});
+    }
+    println!("{report}");
     if !passed {
         return Err("HRIR node reconstruction exceeds tolerance".into());
     }

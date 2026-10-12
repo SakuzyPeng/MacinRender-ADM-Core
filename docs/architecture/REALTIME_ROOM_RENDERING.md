@@ -92,8 +92,11 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
   --room /path/to/room.json --room-hrir /path/to/hrir.json --room-metres-per-unit 1.5
 ```
 
-省略 `--room-hrir` 使用包内默认 HRIR。`--sofa` 若同时指定，只验证它与准备后的个人 HRIR
-来源哈希一致，不在运行时重新估计时延或替换 HRIR。距离比例范围为 0.01–100 m/unit。
+直接传 `--sofa personal.sofa` 会在创建会话时由原生 Rust 完成解析、48 kHz 完整支持重采样、
+时延处理、时延估计及网格准备，不需要 Python 或预先导出 `hrir.json`。`--room-hrir` 也接受
+SOFA，原 JSON 入口继续兼容。两者均省略才使用包内默认绑定；显式 HRIR 与 SOFA 同时指定时
+仍核对来源哈希。原生导入独立于其它双耳后端的 SOFA 可选构建开关；它不访问处理回调，
+数据以弱缓存复用于活动会话，不写磁盘缓存。距离比例范围为 0.01–100 m/unit。
 文件实时编辑支持 gain/mute、extent、diffuse、divergence 与 headLocked；这些控制仍作用于声源。
 
 `--screen-config screen.json` 为房间后端指定制作／重放屏幕，例如：
@@ -188,3 +191,6 @@ Windows 的房间 DSP 池和流式房间 worker 使用系统的 Audio MMCSS 任�
 逐位比较；是否满足实时容量以 Release 实测为准。实现依据为 Microsoft 的
 [MMCSS](https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service) 与
 [waitable timer API](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createwaitabletimerexw)。
+
+原生 SOFA 导入的三平台数值和三种渲染流程验证见
+[原生 SOFA 验证记录](ROOM_NATIVE_SOFA_VALIDATION.json)。

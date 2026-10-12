@@ -528,7 +528,8 @@ void adm_render_options_set_monitor_system_spatial(adm_render_options_t* opts, i
 adm_error_code_t adm_render_options_set_apac_container(adm_render_options_t* opts,
                                                        adm_apac_container_t container) ADM_API_NOEXCEPT;
 
-/* sofa_path: user SOFA HRIR file path for binaural rendering. NULL or "" = built-in KEMAR.
+/* sofa_path: user SOFA HRIR file path for binaural rendering. Room prepares SOFA natively
+ * before playback; NULL or "" uses the room package binding (other binaural: built-in KEMAR).
  * May return ADM_ERROR_INTERNAL on OOM. */
 adm_error_code_t adm_render_options_set_sofa_path(adm_render_options_t* opts, const char* sofa_path) ADM_API_NOEXCEPT;
 
@@ -1869,7 +1870,7 @@ typedef struct adm_room_config_t {
     uint32_t struct_size;
     uint32_t reserved;
     const adm_room_t* room;
-    const char* hrir_manifest; /* UTF-8; NULL selects the package default */
+    const char* hrir_manifest; /* UTF-8 SOFA or prepared HRIR JSON; NULL uses SOFA option/package default */
     double metres_per_unit;    /* [0.01, 100]; recommended/default scale = 1.5 */
 } adm_room_config_t;
 

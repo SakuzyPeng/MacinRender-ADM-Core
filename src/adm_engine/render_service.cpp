@@ -575,8 +575,7 @@ RenderResult RenderService::render(const RenderRequest& request,
                     std::nullopt,
                     {{LogLevel::error, msg}}};
         }
-        if (std::ranges::find(caps.hrtf_sources, "user-sofa") == caps.hrtf_sources.end() &&
-            sel != RendererSelection::room_binaural) {
+        if (std::ranges::find(caps.hrtf_sources, "user-sofa") == caps.hrtf_sources.end()) {
             const auto msg = fmt::format("renderer '{}' does not support user SOFA HRTFs", renderer_name(sel));
             return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }

@@ -76,4 +76,4 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="mradm-room-test-") as directory:
         root = Path(directory)
         fixture(root)
-        subprocess.run([sys.argv[1], str(root)], check=True)
+        subprocess.run([sys.argv[1], str(root), str(Path(__file__).resolve().parents[1] / "fixtures/sofa/simple.sofa")], check=True)
