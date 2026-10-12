@@ -818,90 +818,146 @@ fn many_directions(base: &Arc<PreparedSet>, name: &str, absorption: f64) -> Arc<
 
 #[test]
 fn single_late_pass_matches_field_merge_and_mark_segmented_decoding() {
-    use mradm_dsp::room::signal::WorldTail;
+    use mradm_dsp::room::{run_on_workers, signal::WorldTail};
+    use std::sync::Mutex;
+    /// One canonical block of late-pass input.
+    #[derive(Clone, Copy)]
+    struct LateBlock {
+        current: [f32; BLOCK],
+        next: [f32; BLOCK],
+        incoming: bool,
+        frames: usize,
+        marks: [bool; BLOCK],
+        poses: [[f32; 3]; BLOCK],
+    }
+
+    struct LatePass {
+        current: WorldTail,
+        next: WorldTail,
+        decoder: WorldTail,
+        output: [f32; 2 * BLOCK],
+        on_worker: bool,
+    }
+
+    impl LatePass {
+        fn new(first: &Arc<PreparedSet>, second: &Arc<PreparedSet>) -> Self {
+            Self {
+                current: WorldTail::new_field(first.room.clone()).unwrap(),
+                next: WorldTail::new_field(second.room.clone()).unwrap(),
+                decoder: WorldTail::new_decoder(first.room.clone()).unwrap(),
+                output: [0.; 2 * BLOCK],
+                on_worker: false,
+            }
+        }
+
+        fn render(&mut self, block: &LateBlock) -> mradm_dsp::Result<()> {
+            self.on_worker = std::thread::current()
+                .name()
+                .is_some_and(|name| name.starts_with("mradm-room-"));
+            self.current.begin_field(&block.current)?;
+            if block.incoming {
+                self.next.begin_field(&block.next)?;
+            }
+            self.decoder.render_world(
+                &self.current,
+                block.frames,
+                block.incoming.then_some(&self.next),
+                &block.marks,
+                &block.poses,
+                &mut self.output,
+            )
+        }
+    }
     let base = fixture();
     let first = many_directions(&base, "late-a", 0.94);
     let second = many_directions(&base, "late-b", 0.9);
-    let (a, b) = (first.room.clone(), second.room.clone());
-    let count = a.profile.late_directions.len();
-    let mut legacy_a = WorldTail::new_field(a.clone()).unwrap();
-    let mut legacy_b = WorldTail::new_field(b.clone()).unwrap();
-    let mut legacy = WorldTail::new_decoder(a.clone()).unwrap();
-    let mut field_a = WorldTail::new_field(a.clone()).unwrap();
-    let mut field_b = WorldTail::new_field(b).unwrap();
-    let mut decoder = WorldTail::new_decoder(a).unwrap();
+    let count = first.room.profile.late_directions.len();
+    assert!(count >= 8, "the pooled pass must take its parallel branch");
+    // Reference: the former field -> merge -> per-mark decoder chain, with
+    // every stage kept serial so it does not depend on worker scheduling.
+    let mut legacy_a = WorldTail::new_field(first.room.clone()).unwrap();
+    let mut legacy_b = WorldTail::new_field(second.room.clone()).unwrap();
+    let mut legacy = WorldTail::new_decoder(first.room.clone()).unwrap();
+    for tail in [&mut legacy_a, &mut legacy_b, &mut legacy] {
+        tail.set_parallel(false);
+    }
+    // The single pass on the test thread takes the serial branch; on a room
+    // worker it takes the parallel branch, as in session dispatch.
+    let mut serial = LatePass::new(&first, &second);
+    let pooled = Arc::new(Mutex::new(LatePass::new(&first, &second)));
     let mut world_a = vec![0.; count * BLOCK];
     let mut world_b = world_a.clone();
     let mut merged = world_a.clone();
     let mut expected = [0.; 2 * BLOCK];
-    let mut actual = expected;
     let mut pose = [0.; 3];
-    for block in 0..40 {
-        let mut input_a = [0.; BLOCK];
-        let mut input_b = input_a;
+    for index in 0..40 {
+        let mut block = LateBlock {
+            current: [0.; BLOCK],
+            next: [0.; BLOCK],
+            incoming: (10..30).contains(&index),
+            frames: match index {
+                20 => 0,
+                21 => 77,
+                _ => BLOCK,
+            },
+            marks: [false; BLOCK],
+            poses: [[0.; 3]; BLOCK],
+        };
         for i in 0..BLOCK {
-            input_a[i] = ((((block * BLOCK + i) * 37) % 193) as f32 - 96.) / 384.;
-            input_b[i] = ((((block * BLOCK + i) * 53) % 211) as f32 - 105.) / 512.;
+            block.current[i] = ((((index * BLOCK + i) * 37) % 193) as f32 - 96.) / 384.;
+            block.next[i] = ((((index * BLOCK + i) * 53) % 211) as f32 - 105.) / 512.;
         }
         // Marks every 64 samples; the pose changes only at some of them.
-        let mut marks = [false; BLOCK];
-        let mut poses = [[0.; 3]; BLOCK];
         for at in (0..BLOCK).step_by(64) {
-            marks[at] = true;
-            if (block + at / 64) % 3 == 0 {
-                pose = [block as f32 * 7. + at as f32 * 0.1 - 120., 11., -4.];
+            block.marks[at] = true;
+            if (index + at / 64) % 3 == 0 {
+                pose = [index as f32 * 7. + at as f32 * 0.1 - 120., 11., -4.];
             }
-            poses[at] = pose;
+            block.poses[at] = pose;
         }
-        let incoming = (10..30).contains(&block);
-        let frames = match block {
-            20 => 0,
-            21 => 77,
-            _ => BLOCK,
-        };
-        legacy_a.process_field(&input_a, &mut world_a).unwrap();
-        if incoming {
-            legacy_b.process_field(&input_b, &mut world_b).unwrap();
+        legacy_a
+            .process_field(&block.current, &mut world_a)
+            .unwrap();
+        if block.incoming {
+            legacy_b.process_field(&block.next, &mut world_b).unwrap();
         }
-        for (index, value) in merged.iter_mut().enumerate() {
-            *value = if index % BLOCK >= frames {
+        for (i, value) in merged.iter_mut().enumerate() {
+            *value = if i % BLOCK >= block.frames {
                 0.
             } else {
-                world_a[index]
+                world_a[i]
             };
-            if incoming {
-                *value += world_b[index];
+            if block.incoming {
+                *value += world_b[i];
             }
         }
         legacy.begin_world(&merged).unwrap();
         let mut begin = 0;
         while begin < BLOCK {
-            let end = (begin + 1..BLOCK).find(|i| marks[*i]).unwrap_or(BLOCK);
-            legacy.update(poses[begin]).unwrap();
+            let end = (begin + 1..BLOCK)
+                .find(|i| block.marks[*i])
+                .unwrap_or(BLOCK);
+            legacy.update(block.poses[begin]).unwrap();
             legacy
                 .render_range(begin, end - begin, &mut expected)
                 .unwrap();
             begin = end;
         }
-        field_a.begin_field(&input_a).unwrap();
-        if incoming {
-            field_b.begin_field(&input_b).unwrap();
+        serial.render(&block).unwrap();
+        let job = pooled.clone();
+        run_on_workers(move || job.lock().unwrap().render(&block)).unwrap();
+        let pooled = pooled.lock().unwrap();
+        assert!(!serial.on_worker && pooled.on_worker);
+        for (name, actual) in [("serial", &serial.output), ("parallel", &pooled.output)] {
+            let mismatch = expected
+                .iter()
+                .zip(actual)
+                .position(|(x, y)| x.to_bits() != y.to_bits());
+            assert!(
+                mismatch.is_none(),
+                "{name} block {index} differs at {mismatch:?}"
+            );
         }
-        decoder
-            .render_world(
-                &field_a,
-                frames,
-                incoming.then_some(&field_b),
-                &marks,
-                &poses,
-                &mut actual,
-            )
-            .unwrap();
-        let mismatch = expected
-            .iter()
-            .zip(&actual)
-            .position(|(x, y)| x.to_bits() != y.to_bits());
-        assert!(mismatch.is_none(), "block {block} differs at {mismatch:?}");
     }
     assert!(expected.iter().any(|v| v.abs() > 1e-6));
 }
