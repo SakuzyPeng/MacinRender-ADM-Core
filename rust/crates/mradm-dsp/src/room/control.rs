@@ -267,8 +267,10 @@ mod tests {
     #[test]
     fn settled_fast_path_preserves_independent_ramps_and_historical_queries() {
         let mut control = Control::new(State::default());
-        let mut state = State::default();
-        state.gain = 0.;
+        let mut state = State {
+            gain: 0.,
+            ..State::default()
+        };
         control
             .apply(
                 &RoomCommand {

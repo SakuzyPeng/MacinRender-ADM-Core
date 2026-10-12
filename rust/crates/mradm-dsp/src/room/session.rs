@@ -77,6 +77,8 @@ impl HeadSignal {
         self.previous = [1., 0., 0.];
         self.until = 0;
     }
+    // Explicit state and prepared scratch avoid allocations in the processing path.
+    #[allow(clippy::too_many_arguments)]
     fn update(
         &mut self,
         room: &PreparedRoom,
@@ -383,6 +385,8 @@ struct Voice {
 }
 
 impl Voice {
+    // Explicit state and prepared scratch avoid allocations in the processing path.
+    #[allow(clippy::too_many_arguments)]
     fn render(
         &mut self,
         room: &PreparedRoom,
@@ -716,8 +720,8 @@ impl InstanceOutput {
             let slot = &group.inputs[*index];
             if slot.description.role == 2 {
                 if excitation {
-                    for i in 0..BLOCK {
-                        self.lfe_input[i] += slot.world[i] * wet_gain[i];
+                    for (i, gain) in wet_gain.iter().enumerate() {
+                        self.lfe_input[i] += slot.world[i] * gain;
                     }
                 }
             } else {
@@ -835,6 +839,8 @@ impl Instance {
         voice.until = 0;
         voice.constrained = false;
     }
+    // Explicit state and prepared scratch avoid allocations in the processing path.
+    #[allow(clippy::too_many_arguments)]
     fn prepare_render(
         &mut self,
         slots: &[Slot],
@@ -1182,11 +1188,11 @@ impl Session {
         }
         // Reset is a preparation/control operation. A committed incoming room
         // becomes the sole configuration; an inaudible warmup is cancelled.
-        if self.phase >= 2 {
-            if let Some(incoming) = self.incoming.take() {
-                self.current = incoming;
-                self.applied_request = self.incoming_request;
-            }
+        if self.phase >= 2
+            && let Some(incoming) = self.incoming.take()
+        {
+            self.current = incoming;
+            self.applied_request = self.incoming_request;
         }
         self.incoming = None;
         self.pending = None;

@@ -138,7 +138,7 @@ fn render(
         if position == 7680 {
             session.queue_room(candidate.take().unwrap(), 1)?;
         }
-        if position % 512 == 0 {
+        if position.is_multiple_of(512) {
             let step = (position / 512) as f32;
             session.set_pose([step * 0.61 - 35., step * 0.12 - 10., step * 0.07])?;
         }

@@ -182,7 +182,9 @@ fn near_source_keeps_the_complete_material_filter_support() {
             .unwrap();
     let impulse = mradm_dsp::room::signal::impulse(room, position, [0.; 3]).unwrap();
     let dc = impulse
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|v| f64::from(v[0]))
         .sum::<f64>();
     assert!(
@@ -215,13 +217,20 @@ fn propagation_beyond_the_query_fft_does_not_wrap() {
     assert!(expected > room.fft_length as f64);
     let impulse = mradm_dsp::room::signal::impulse(room, position, [0.; 3]).unwrap();
     let peak = impulse
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .enumerate()
         .max_by(|(_, a), (_, b)| a[0].abs().total_cmp(&b[0].abs()))
         .unwrap()
         .0;
     assert!((peak as f64 - expected).abs() < 1.);
-    let gain: f64 = impulse.chunks_exact(2).map(|v| f64::from(v[0])).sum();
+    let gain: f64 = impulse
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|v| f64::from(v[0]))
+        .sum();
     assert!((gain - 2.1 / 15.).abs() < 1e-6, "long-delay gain {gain}");
 }
 
@@ -277,7 +286,7 @@ fn real_distance_propagation_and_room_boundary() {
             room_geometry::position(&room.profile, [0., radius, 0.], 1., [1., 0., 0.]).unwrap();
         assert!(!position.constrained);
         let impulse = signal::impulse(room.clone(), position, [0.; 3]).unwrap();
-        let left: Vec<_> = impulse.chunks_exact(2).map(|v| v[0]).collect();
+        let left: Vec<_> = impulse.as_chunks::<2>().0.iter().map(|v| v[0]).collect();
         let peak = left
             .iter()
             .enumerate()
@@ -370,7 +379,7 @@ fn removal_keeps_tail_and_lfe_remains_independent() {
     };
     let one = lfe(false, false);
     assert_eq!(one, lfe(true, true));
-    assert!(one.chunks_exact(2).all(|v| v[0] == v[1]));
+    assert!(one.as_chunks::<2>().0.iter().all(|v| v[0] == v[1]));
 }
 
 #[test]
@@ -1057,8 +1066,10 @@ fn finite_preroll_reproduces_a_continuously_moving_source() {
     }];
     full.configure(&descriptions).unwrap();
     seek.configure(&descriptions).unwrap();
-    let mut target = State::default();
-    target.position = [-0.7, 0.8, 0.2];
+    let target = State {
+        position: [-0.7, 0.8, 0.2],
+        ..State::default()
+    };
     let command = RoomCommand {
         changed: 4,
         duration: 16000,

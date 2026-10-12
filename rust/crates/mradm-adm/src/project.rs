@@ -47,13 +47,15 @@ impl Snapshot {
                 "Cartesian referenceScreen 需要 screenWidth X",
             ));
         }
-        let mut result = AdmScreen::default();
-        result.cartesian = u32::from(cartesian);
-        result.aspect_ratio = doc
-            .text(key, "aspectRatio")
-            .map(number)
-            .transpose()?
-            .unwrap_or(1.78);
+        let mut result = AdmScreen {
+            cartesian: u32::from(cartesian),
+            aspect_ratio: doc
+                .text(key, "aspectRatio")
+                .map(number)
+                .transpose()?
+                .unwrap_or(1.78),
+            ..AdmScreen::default()
+        };
         if cartesian {
             result.centre = [0., 1., 0.];
         }

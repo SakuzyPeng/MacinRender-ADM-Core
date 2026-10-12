@@ -209,6 +209,8 @@ impl Uniform {
             output,
         )
     }
+    // Split borrows keep FFT scratch separate from the retained input history.
+    #[allow(clippy::too_many_arguments)]
     fn render_parts(
         fft: &mut RealFft,
         sum: &mut [Complex32],
@@ -702,7 +704,12 @@ impl LongReader {
         if let (Some(tail), Some(filters), Some(input)) =
             (&mut self.tail, &self.filters.tail, &history.tail)
         {
-            for (channel, out) in output.chunks_exact_mut(super::BLOCK).enumerate() {
+            for (channel, out) in output
+                .as_chunks_mut::<{ super::BLOCK }>()
+                .0
+                .iter_mut()
+                .enumerate()
+            {
                 let begin = channel * 2048 + history.rendered_position;
                 for (value, addition) in
                     out.iter_mut().zip(&self.ready[begin..begin + super::BLOCK])
@@ -770,7 +777,12 @@ impl Long {
         self.head.push(input)?;
         self.head.render(&self.filters.head, output)?;
         if let (Some(tail), Some(filters)) = (&mut self.tail, &self.filters.tail) {
-            for (channel, out) in output.chunks_exact_mut(super::BLOCK).enumerate() {
+            for (channel, out) in output
+                .as_chunks_mut::<{ super::BLOCK }>()
+                .0
+                .iter_mut()
+                .enumerate()
+            {
                 let begin = channel * 2048 + self.position;
                 for (value, addition) in
                     out.iter_mut().zip(&self.ready[begin..begin + super::BLOCK])
