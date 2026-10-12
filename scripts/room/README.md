@@ -1,6 +1,6 @@
 # 房间包工具
 
-运行时只使用二进制组件，不需要 Python。生成阶段使用 NumPy、SciPy；冻结参考包转换另外
+房间运行时不需要 Python。个人 SOFA 由原生代码自动准备；房间预设制作脚本使用 NumPy、SciPy，冻结参考包转换另外
 需要 h5py、pyroomacoustics 及已有的连续 HRIR 代码。生成环境版本写入清单，跨平台验证
 必须分发同一份资源字节，而不是在三个平台分别随机生成资源。
 
@@ -32,7 +32,32 @@ build/release/mradm render -i input.wav -o output.wav --renderer room-binaural \
 v1 动态切换保留相同的晚场世界方向基与算法保护延迟；生成器从模板继承这些组件。
 不兼容的包可创建独立会话，不能在现有会话内交叉淡化。
 
-## 从普通 SOFA 准备 HRIR
+## 直接使用个人 SOFA
+
+`room-binaural` 会在创建会话时原生读取 SOFA、准备 48 kHz FIR、处理 `Data.Delay` 并构建
+插值网格。用户不需要运行 Python，也不需要生成 `hrir.json`。准备过程在播放前执行，
+活动数据完全保存在内存中；同一 SOFA 的活动会话共享准备数据，结束后可回收，不建立磁盘缓存。
+
+```sh
+build/release/mradm room-check /path/room.json --sofa /path/personal.sofa
+build/release/mradm render -i programme.wav -o binaural.wav --renderer room-binaural \
+  --room /path/room.json --sofa /path/personal.sofa
+```
+
+离线渲染、文件流式渲染和 Scene 流式渲染都支持该入口。C API 沿用
+`adm_render_options_set_sofa_path` 或 Scene 配置中的 `rendering.sofa_path`；既有公开结构和
+函数签名不变。房间专用原生导入在 `MR_ADM_ENABLE_SOFA=OFF` 的构建也可用，该选项继续控制
+其它双耳后端的可选 SOFA 支持。`--room-hrir`／`adm_room_config_t.hrir_manifest` 也接受 SOFA，
+并继续兼容原有 HRIR JSON 包。SOFA 单独指定时优先于房间默认绑定；如果同时显式指定 HRIR 包
+和 SOFA，两者仍须匹配来源哈希。换房保留当前 HRIR，换个人 SOFA 须创建新会话。
+
+原生入口支持双耳、固定监听点、单半径、完整方向覆盖的 SimpleFreeFieldHRIR／GeneralFIR。
+保留幅度和完整响应，支持不同采样率及以样本或秒声明的 `Data.Delay`；保护延迟单独报告。
+不完整几何、无法识别的左右耳、异常数据或不支持的 HDF5 编码会报错，不静默回退到默认 HRIR。
+
+### 可选的离线打包工具（开发／兼容用途）
+
+以下脚本用于复现或分发旧格式资源包，不是播放或导入 SOFA 的必要步骤。
 
 `prepare-hrir.py` 独立读取 SimpleFreeFieldHRIR / 适用的 GeneralFIR，无需个人研究脚本。
 使用现有的 NumPy、SciPy、h5py 环境；只支持双耳、固定监听点、单半径且包围监听点的方向网格。

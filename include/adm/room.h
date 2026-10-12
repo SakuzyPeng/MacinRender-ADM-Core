@@ -34,7 +34,7 @@ class RoomProfile final {
 // cppcheck-suppress-begin unusedStructMember
 struct RoomConfig {
     std::shared_ptr<const RoomProfile> profile;
-    std::filesystem::path hrir_manifest; // empty selects the package's default HRIR binding
+    std::filesystem::path hrir_manifest; // SOFA or prepared HRIR JSON; empty selects SOFA option/package default
     double metres_per_unit{1.5};
 };
 

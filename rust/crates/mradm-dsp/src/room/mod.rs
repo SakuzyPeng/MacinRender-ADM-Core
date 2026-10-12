@@ -10,6 +10,7 @@ pub mod resources;
 pub mod screen;
 pub mod session;
 pub mod signal;
+pub mod sofa;
 pub mod spatial;
 mod spectral;
 mod workers;

@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     std::string room_path;
     std::string room_hrir;
     room_check->add_option("manifest", room_path, "room.json")->required();
-    room_check->add_option("--hrir", room_hrir, "Separate prepared HRIR manifest");
+    room_check->add_option("--hrir,--sofa", room_hrir, "Personal SOFA or prepared HRIR manifest");
     app.require_subcommand(1);
 
     try {

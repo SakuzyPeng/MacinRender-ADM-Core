@@ -1,0 +1,454 @@
+{
+  "schema": "mradm.room-native-sofa-validation",
+  "version": 1,
+  "base_commit": "a966043",
+  "runtime_conversion": "Native Rust/HDF5, before processing; no Python process or generated HRIR package required",
+  "entry_points": [
+    "CLI --sofa",
+    "CLI --room-hrir / room-check --hrir or --sofa",
+    "RenderOptions sofa_path",
+    "Scene rendering.sofa_path",
+    "adm_room_config_t.hrir_manifest accepts SOFA or JSON"
+  ],
+  "compatibility": "Existing public C ABI signatures/POD layouts unchanged; prepared JSON remains supported; explicit JSON plus SOFA retains source-hash authentication",
+  "cache": "Weak in-memory cache keyed by source SHA-256; no persistent disk cache; current listener HRIR remains pinned while switching rooms",
+  "platform_reports_identical": true,
+  "cross_platform_cases": {
+    "simple": {
+      "macos": {
+        "hrir_hash": "0e17b5dad242edb4af8e6c058ac5bb5017f71b6fa425f84bc171e4753d5e483c",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.0369507698112685e-07,
+        "native_preparation": {
+          "delays": "51f7b7b8fbc1960ed00001ff0828364d4bee492f06449eee93c33edd94ccb2d2",
+          "directions": "9ec1d9141a5f994053ba6853a532d9bd97f84dc417be8382c07307a58aacbc66",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "1eaf5a3b75bb7cc88bc3dcbbe60dd636c5dd9dba8a26f29e7fe9888c0115199f",
+          "output_taps": 192,
+          "source_sha256": "03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d",
+          "taps": 16
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4
+      },
+      "windows": {
+        "hrir_hash": "0e17b5dad242edb4af8e6c058ac5bb5017f71b6fa425f84bc171e4753d5e483c",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.0369507698112685e-07,
+        "native_preparation": {
+          "delays": "51f7b7b8fbc1960ed00001ff0828364d4bee492f06449eee93c33edd94ccb2d2",
+          "directions": "9ec1d9141a5f994053ba6853a532d9bd97f84dc417be8382c07307a58aacbc66",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "1eaf5a3b75bb7cc88bc3dcbbe60dd636c5dd9dba8a26f29e7fe9888c0115199f",
+          "output_taps": 192,
+          "source_sha256": "03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d",
+          "taps": 16
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4
+      },
+      "linux": {
+        "hrir_hash": "0e17b5dad242edb4af8e6c058ac5bb5017f71b6fa425f84bc171e4753d5e483c",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.0369507698112685e-07,
+        "native_preparation": {
+          "delays": "51f7b7b8fbc1960ed00001ff0828364d4bee492f06449eee93c33edd94ccb2d2",
+          "directions": "9ec1d9141a5f994053ba6853a532d9bd97f84dc417be8382c07307a58aacbc66",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "1eaf5a3b75bb7cc88bc3dcbbe60dd636c5dd9dba8a26f29e7fe9888c0115199f",
+          "output_taps": 192,
+          "source_sha256": "03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d",
+          "taps": 16
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4
+      }
+    },
+    "room-delayed": {
+      "macos": {
+        "hrir_hash": "088c08efe6a43362b1fe3a4685bf5d68d43ff4f51c0b616378bed178e1e8d0a8",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 1.5950310921751898e-07,
+        "native_preparation": {
+          "delays": "130747cfd6a8df64f4a9b8ed5eac11903cd9dd6c407a615781d4b2762be47ba9",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "7384fce107d9efb0bb654b2a1e514c9dfd991066c618153febc0c9d06293d50e",
+          "output_taps": 320,
+          "source_sha256": "9e24285aca5d46aa0977a1d35647b08e30ee3a78d14ace9dd1db57fa80f73a06",
+          "taps": 123
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 52,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      },
+      "windows": {
+        "hrir_hash": "088c08efe6a43362b1fe3a4685bf5d68d43ff4f51c0b616378bed178e1e8d0a8",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 1.5950310921751898e-07,
+        "native_preparation": {
+          "delays": "130747cfd6a8df64f4a9b8ed5eac11903cd9dd6c407a615781d4b2762be47ba9",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "7384fce107d9efb0bb654b2a1e514c9dfd991066c618153febc0c9d06293d50e",
+          "output_taps": 320,
+          "source_sha256": "9e24285aca5d46aa0977a1d35647b08e30ee3a78d14ace9dd1db57fa80f73a06",
+          "taps": 123
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 52,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      },
+      "linux": {
+        "hrir_hash": "088c08efe6a43362b1fe3a4685bf5d68d43ff4f51c0b616378bed178e1e8d0a8",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 1.5950310921751898e-07,
+        "native_preparation": {
+          "delays": "130747cfd6a8df64f4a9b8ed5eac11903cd9dd6c407a615781d4b2762be47ba9",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "7384fce107d9efb0bb654b2a1e514c9dfd991066c618153febc0c9d06293d50e",
+          "output_taps": 320,
+          "source_sha256": "9e24285aca5d46aa0977a1d35647b08e30ee3a78d14ace9dd1db57fa80f73a06",
+          "taps": 123
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 52,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      }
+    },
+    "room-seconds": {
+      "macos": {
+        "hrir_hash": "f11e47bcb90193b3fba35bb9eb82338fec802c46dba181dbf51e0d6c6f3bb668",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 1.5950310921751898e-07,
+        "native_preparation": {
+          "delays": "130747cfd6a8df64f4a9b8ed5eac11903cd9dd6c407a615781d4b2762be47ba9",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "7384fce107d9efb0bb654b2a1e514c9dfd991066c618153febc0c9d06293d50e",
+          "output_taps": 320,
+          "source_sha256": "452adad748fb7fe58cbb3b273447960f555dddfa5810427b98368b73cb81202c",
+          "taps": 123
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 52,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      },
+      "windows": {
+        "hrir_hash": "f11e47bcb90193b3fba35bb9eb82338fec802c46dba181dbf51e0d6c6f3bb668",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 1.5950310921751898e-07,
+        "native_preparation": {
+          "delays": "130747cfd6a8df64f4a9b8ed5eac11903cd9dd6c407a615781d4b2762be47ba9",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "7384fce107d9efb0bb654b2a1e514c9dfd991066c618153febc0c9d06293d50e",
+          "output_taps": 320,
+          "source_sha256": "452adad748fb7fe58cbb3b273447960f555dddfa5810427b98368b73cb81202c",
+          "taps": 123
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 52,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      },
+      "linux": {
+        "hrir_hash": "f11e47bcb90193b3fba35bb9eb82338fec802c46dba181dbf51e0d6c6f3bb668",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 1.5950310921751898e-07,
+        "native_preparation": {
+          "delays": "130747cfd6a8df64f4a9b8ed5eac11903cd9dd6c407a615781d4b2762be47ba9",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "7384fce107d9efb0bb654b2a1e514c9dfd991066c618153febc0c9d06293d50e",
+          "output_taps": 320,
+          "source_sha256": "452adad748fb7fe58cbb3b273447960f555dddfa5810427b98368b73cb81202c",
+          "taps": 123
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 52,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      }
+    },
+    "room-96k": {
+      "macos": {
+        "hrir_hash": "c10a3e5ce6873e0c5de1fb4f5533216ec9f9b0d1939ab944bfcf34ed954fd7c5",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.075824549600142e-07,
+        "native_preparation": {
+          "delays": "7f154449689c56856f093a5dcd7063f002892a2d63780ad0be89100f8d5ebedd",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "82fa945333c0d247d5471ab5a5bb305c5f9f49c4fcd752bcb9d017933e3832fe",
+          "output_taps": 256,
+          "source_sha256": "769d37a16a3c6cd3ec7887eafc0f61c6998c823d0edb6bbc995a65003ba70488",
+          "taps": 111
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 51,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      },
+      "windows": {
+        "hrir_hash": "c10a3e5ce6873e0c5de1fb4f5533216ec9f9b0d1939ab944bfcf34ed954fd7c5",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.075824549600142e-07,
+        "native_preparation": {
+          "delays": "7f154449689c56856f093a5dcd7063f002892a2d63780ad0be89100f8d5ebedd",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "82fa945333c0d247d5471ab5a5bb305c5f9f49c4fcd752bcb9d017933e3832fe",
+          "output_taps": 256,
+          "source_sha256": "769d37a16a3c6cd3ec7887eafc0f61c6998c823d0edb6bbc995a65003ba70488",
+          "taps": 111
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 51,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      },
+      "linux": {
+        "hrir_hash": "c10a3e5ce6873e0c5de1fb4f5533216ec9f9b0d1939ab944bfcf34ed954fd7c5",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.075824549600142e-07,
+        "native_preparation": {
+          "delays": "7f154449689c56856f093a5dcd7063f002892a2d63780ad0be89100f8d5ebedd",
+          "directions": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+          "faces": "c2acae00fe5876ac5a568347ce8a47fef56919acf6a998643f8dad4e23b6d7df",
+          "impulses": "82fa945333c0d247d5471ab5a5bb305c5f9f49c4fcd752bcb9d017933e3832fe",
+          "output_taps": 256,
+          "source_sha256": "769d37a16a3c6cd3ec7887eafc0f61c6998c823d0edb6bbc995a65003ba70488",
+          "taps": 111
+        },
+        "nodes": 6,
+        "passed": true,
+        "preprocessing_guard_frames": 51,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 2
+      }
+    },
+    "d1-48": {
+      "macos": {
+        "hrir_hash": "0b09d0aa8f3df4b63061e4a7d726588526a6d3b22903fb7ec5c8a299390ad52d",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.230680889471022e-07,
+        "native_preparation": {
+          "delays": "d3ca13a88708769d8c2539f5e46b950aa957dd82f1e8ef0c455c38374f05f893",
+          "directions": "38f069f14a13be3ef299fa6e7add4ab3aec3698e260a9f133fe42106ad35c896",
+          "faces": "9b67b9dbc59e26cc0e1849da9e3cebb65e6bd292e7d0677b7be1ac2b49e16e8f",
+          "impulses": "72e6f3d451d486489e336b08dab54237c77a31d7ce0412e90c092c7ca816f543",
+          "output_taps": 448,
+          "source_sha256": "9af7cb19531e52fb7ae8ec92621e6ab62b1d5fe584b3742be36699a0ddb0ccd4",
+          "taps": 256
+        },
+        "nodes": 8802,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4498
+      },
+      "windows": {
+        "hrir_hash": "0b09d0aa8f3df4b63061e4a7d726588526a6d3b22903fb7ec5c8a299390ad52d",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.230680889471022e-07,
+        "native_preparation": {
+          "delays": "d3ca13a88708769d8c2539f5e46b950aa957dd82f1e8ef0c455c38374f05f893",
+          "directions": "38f069f14a13be3ef299fa6e7add4ab3aec3698e260a9f133fe42106ad35c896",
+          "faces": "9b67b9dbc59e26cc0e1849da9e3cebb65e6bd292e7d0677b7be1ac2b49e16e8f",
+          "impulses": "72e6f3d451d486489e336b08dab54237c77a31d7ce0412e90c092c7ca816f543",
+          "output_taps": 448,
+          "source_sha256": "9af7cb19531e52fb7ae8ec92621e6ab62b1d5fe584b3742be36699a0ddb0ccd4",
+          "taps": 256
+        },
+        "nodes": 8802,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4498
+      },
+      "linux": {
+        "hrir_hash": "0b09d0aa8f3df4b63061e4a7d726588526a6d3b22903fb7ec5c8a299390ad52d",
+        "interpolation_guard_frames": 96,
+        "maximum_relative_l2": 2.230680889471022e-07,
+        "native_preparation": {
+          "delays": "d3ca13a88708769d8c2539f5e46b950aa957dd82f1e8ef0c455c38374f05f893",
+          "directions": "38f069f14a13be3ef299fa6e7add4ab3aec3698e260a9f133fe42106ad35c896",
+          "faces": "9b67b9dbc59e26cc0e1849da9e3cebb65e6bd292e7d0677b7be1ac2b49e16e8f",
+          "impulses": "72e6f3d451d486489e336b08dab54237c77a31d7ce0412e90c092c7ca816f543",
+          "output_taps": 448,
+          "source_sha256": "9af7cb19531e52fb7ae8ec92621e6ab62b1d5fe584b3742be36699a0ddb0ccd4",
+          "taps": 256
+        },
+        "nodes": 8802,
+        "passed": true,
+        "preprocessing_guard_frames": 0,
+        "schema": "mradm.hrir-node-validation",
+        "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+        "threshold_relative_l2": 2e-05,
+        "version": 1,
+        "worst_node": 4498
+      }
+    }
+  },
+  "real_bank_other_rates_macos": {
+    "44": {
+      "hrir_hash": "6876ae0b0f1adfb7101eb1e61f19c7ef3b6901d55ede05c3612fd3de22dee376",
+      "interpolation_guard_frames": 96,
+      "maximum_relative_l2": 2.386327443293717e-07,
+      "native_preparation": {
+        "delays": "b5be6117542f095572721b50c658bfd4f107cf956cf16442b85c0e647120ee0c",
+        "directions": "38f069f14a13be3ef299fa6e7add4ab3aec3698e260a9f133fe42106ad35c896",
+        "faces": "9b67b9dbc59e26cc0e1849da9e3cebb65e6bd292e7d0677b7be1ac2b49e16e8f",
+        "impulses": "f81486e2b8c1589b783c276013fdc6341ed1a09d3ad6f6ae61a66e1aaa6b0c37",
+        "output_taps": 512,
+        "source_sha256": "efffbf7f8e963c8162f24f44944ed6f8a44f5d3c546e76a4d74a650a0e3766d2",
+        "taps": 300
+      },
+      "nodes": 8802,
+      "passed": true,
+      "preprocessing_guard_frames": 11,
+      "schema": "mradm.hrir-node-validation",
+      "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+      "threshold_relative_l2": 2e-05,
+      "version": 1,
+      "worst_node": 6597
+    },
+    "96": {
+      "hrir_hash": "3cd426960c80629faa8a90d0756a17810dfaed93acaa6387a4915e2cc1e21714",
+      "interpolation_guard_frames": 96,
+      "maximum_relative_l2": 2.3385937519966995e-07,
+      "native_preparation": {
+        "delays": "b3576aa7744f9a464c99e607ef99b7d0d0a924aedb5641bda9e00b773224f2b6",
+        "directions": "38f069f14a13be3ef299fa6e7add4ab3aec3698e260a9f133fe42106ad35c896",
+        "faces": "9b67b9dbc59e26cc0e1849da9e3cebb65e6bd292e7d0677b7be1ac2b49e16e8f",
+        "impulses": "f9177032338f96239af7a587f1a8a387a10ff21540e0b71c6567f0a22dfe7ac6",
+        "output_taps": 448,
+        "source_sha256": "49c46541517cd8c43927297fc9106b8a9aee7aec25c3a6ba6d144b6da2f98983",
+        "taps": 276
+      },
+      "nodes": 8802,
+      "passed": true,
+      "preprocessing_guard_frames": 10,
+      "schema": "mradm.hrir-node-validation",
+      "scope": "Measured-node amplitude/time reconstruction; no acoustic or device certification.",
+      "threshold_relative_l2": 2e-05,
+      "version": 1,
+      "worst_node": 2441
+    }
+  },
+  "verification": {
+    "macos_debug_ctest": {
+      "passed": 80,
+      "failed": 0
+    },
+    "windows_canonical_release_ctest": {
+      "passed": 77,
+      "failed": 0,
+      "optional_binaural_sofa_feature": false
+    },
+    "rust_native_import_tests": 4,
+    "rust_cache_ownership_test": true,
+    "rust_room_integration_and_no_alloc": true,
+    "c_api_exports": 154,
+    "private_ffi_functions": 250,
+    "private_ffi_structures": 82,
+    "rust_clippy_warnings_denied": true,
+    "cpp_changed_quality_files": 7,
+    "release_cli_render_with_real_personal_sofa": true,
+    "offline_file_streaming_bit_equality_with_missing_default_hrir_manifest": true,
+    "scene_c_api_sofa_48_and_44_1_khz_output_eos": true,
+    "frozen_legacy_package_replay": {
+      "frames": 163398,
+      "pcm_sha256": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+      "matches_frozen": true
+    },
+    "rust_dsp_lib_tests_without_optional_sofa": 54,
+    "rust_room_integration_tests": 17
+  },
+  "source_sha256": {
+    "include/adm/c_api.h": "4d602e90face1c865bad26650cbac43b92eeb474e465c12afa4274ebdad89b43",
+    "include/adm/room.h": "315eaf42d72bdb46856b999b029bd3eee67ef48b3c3871e2e9b72f3a77c92632",
+    "rust/crates/mradm-dsp/Cargo.toml": "beef496b8db45e0ff0b69e15c0a9c0be49dce189c0932d5087ec2e7dce4f6fb1",
+    "rust/crates/mradm-dsp/examples/room_hrir_check.rs": "c4044c0f7fbb48b7b40667270b033e8911830d978c8ce4db713abef15b4c0894",
+    "rust/crates/mradm-dsp/src/room/mod.rs": "ccbac252607f3f31bdc0d802c848b3598d1b92ca8b70fec1d93fcddf80066fcc",
+    "rust/crates/mradm-dsp/src/room/sofa.rs": "8fc1e89362eef525c63bf941be978b05365c1499eb6513c2b29936ce81878479",
+    "rust/crates/mradm-ffi/src/room.rs": "33640adfdbf31efbeba564053cf42b8fc775a63750603f33b91e132a67bc80cb",
+    "scripts/room/README.md": "3ab1060f6db653cc83c8db57522aaf9c76990fad3a13c5479559f9174b48e0dd",
+    "src/adm_cli/main.cpp": "343fbb1043214db8952532cc06ff64d7e2eea0e11f0fdd0777ba100a851c9ab0",
+    "src/adm_cli/render_command.cpp": "e56dc11d6df5fecf218b2c9a143496d442136b6eab9c5885d4e82a543cf6b6e4",
+    "src/adm_engine/render_service.cpp": "81f289588697e08c2b919a1fa18ce209e723412a5873109886e8aa28c7f2f89c",
+    "src/adm_render_room/room_renderer.cpp": "941c39ca706402e69fcf14e04676661097bbd22b86f686c244be6a9aa9eefc27",
+    "tests/fixtures/sofa/room-96k.sofa": "769d37a16a3c6cd3ec7887eafc0f61c6998c823d0edb6bbc995a65003ba70488",
+    "tests/fixtures/sofa/room-delayed.sofa": "9e24285aca5d46aa0977a1d35647b08e30ee3a78d14ace9dd1db57fa80f73a06",
+    "tests/fixtures/sofa/room-seconds.sofa": "452adad748fb7fe58cbb3b273447960f555dddfa5810427b98368b73cb81202c",
+    "tests/tools/make_room_sofa_fixtures.py": "746cc224fe5fe5125feff2281ef5044eef2f90be5e78f126318e3e381d84836a",
+    "tests/unit/room_fixture.py": "feaa5e76affa79dccbaa012778f32136b97f07bb96454a6d153a72e90658b74e",
+    "tests/unit/room_render_test.cpp": "f8502649bd8861ee93757f444bc5d8b93d1452309ebcb103c1b908bc4493262c"
+  },
+  "scope": "Binaural fixed-listener, single-radius FIR SOFA on supported HDF5 encodings. Preserves raw amplitude/full filter support, handles ear order/coordinates, resamples to 48 kHz and retains declared sample/second delays. No physical-acoustic certification or new realtime-capacity claim."
+}

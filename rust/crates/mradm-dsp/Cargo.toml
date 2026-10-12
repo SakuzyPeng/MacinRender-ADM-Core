@@ -17,7 +17,8 @@ sha2 = "=0.10.9"
 rayon = "=1.11.0"
 pulp = { version = "=0.22.3", default-features = false, features = ["std", "x86-v3"] }
 
-sofar = { version = "=0.3.0", default-features = false, optional = true }
+# Room always needs the native decoder; the sofa feature gates the other binaural path.
+sofar = { version = "=0.3.0", default-features = false }
 
 [features]
 diagnostics = []
@@ -26,4 +27,4 @@ room-profile = []
 # Coarse wall/CPU tracing avoids clocks inside arithmetic kernels.
 room-trace = ["room-profile"]
 default = ["sofa"]
-sofa = ["dep:sofar"]
+sofa = []

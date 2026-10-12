@@ -360,7 +360,9 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->check(CLI::IsMember({"mpeg4", "caf"}));
     render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
     render_cmd->add_option("--room", opts.room_path, "Room package room.json (room-binaural)");
-    render_cmd->add_option("--room-hrir", opts.room_hrir_path, "Separate prepared personal HRIR manifest");
+    render_cmd->add_option("--room-hrir",
+                           opts.room_hrir_path,
+                           "Personal SOFA or prepared HRIR manifest (optional; --sofa also prepares natively)");
     render_cmd->add_option(
         "--screen-config", opts.screen_config_path, "Reference/reproduction screen JSON (room-binaural)");
     render_cmd

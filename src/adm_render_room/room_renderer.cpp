@@ -544,7 +544,7 @@ CapabilityReport room_capabilities() {
     result.supports_diffuse = true;
     result.supports_screen_ref = true;
     result.supports_render_window = true;
-    result.hrtf_sources = {"prepared-hrir"};
+    result.hrtf_sources = {"user-sofa", "prepared-hrir"};
     result.supported_layouts = {{"binaural", "Room binaural", 2, true, 0, true, true}};
     result.modes = {{"hybrid-shoebox-v1", "Finite hybrid room", {"binaural"}, {48000}, true}};
     return result;

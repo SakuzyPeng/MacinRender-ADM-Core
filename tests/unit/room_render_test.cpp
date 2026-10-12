@@ -118,7 +118,9 @@ void screened_file_test(mradm::RenderPlan plan, const std::vector<float>& refere
     require(std::equal(output.begin(), output.end(), expected.begin() + 40222), "screen seek retains authored ramp");
 }
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
-void file_test(const std::filesystem::path& root, const mradm::RoomConfig& config) {
+void file_test(const std::filesystem::path& root,
+               const mradm::RoomConfig& config,
+               const std::filesystem::path& sofa = {}) {
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     mradm::RenderPlan plan;
@@ -126,6 +128,9 @@ void file_test(const std::filesystem::path& root, const mradm::RoomConfig& confi
     plan.output_path = utf8(root / "output.wav");
     plan.output_layout = "binaural";
     plan.room = config;
+    if (!sofa.empty()) {
+        plan.sofa_path = sofa;
+    }
     plan.scene.info.sample_rate = 48000;
     plan.scene.info.num_channels = 1;
     plan.scene.info.num_frames = 29011;
@@ -348,7 +353,10 @@ void preparation_capacity_test(const std::filesystem::path& root, const mradm::R
 }
 
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
-void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bool screen = false) {
+void scene_test(const std::filesystem::path& root,
+                std::uint32_t output_rate,
+                bool screen = false,
+                const std::filesystem::path& sofa = {}) {
     auto* context = adm_create_context();
     require(context != nullptr, "context");
     adm_room_t* room = nullptr;
@@ -358,6 +366,10 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bo
     room_config.struct_size = sizeof(room_config);
     room_config.room = room;
     room_config.metres_per_unit = 1.5;
+    const auto sofa_name = utf8(sofa);
+    if (!sofa.empty()) {
+        room_config.hrir_manifest = sofa_name.c_str();
+    }
     char* report = nullptr;
     require(adm_room_inspect(context, &room_config, &report) == ADM_ERROR_OK, "C room inspect");
     const auto inspection = nlohmann::json::parse(report);
@@ -372,6 +384,10 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bo
     config.output_sample_rate = output_rate;
     config.output_ring_frames = 32768;
     config.startup_watermark_frames = 1;
+    if (!sofa.empty()) {
+        room_config.hrir_manifest = nullptr;
+        config.rendering.sofa_path = sofa_name.c_str();
+    }
     adm_scene_stream_t* stream = nullptr;
     require(adm_create_scene_stream_with_room_ex(
                 context, &config, &room_config, screen ? k_screen_json : nullptr, &stream) == ADM_ERROR_OK,
@@ -465,7 +481,7 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bo
 } // namespace
 int main(int argc, char** argv) {
     try {
-        require(argc == 2, "fixture directory required");
+        require(argc == 3, "fixture directory and SOFA required");
         const std::filesystem::path root{argv[1]};
         auto room = take(mradm::RoomProfile::load(root / "room.json"));
         require(!mradm::RoomProfile::load(root / "bad.json"), "corrupt hash rejected");
@@ -476,6 +492,20 @@ int main(int argc, char** argv) {
         scene_test(root, 48000);
         scene_test(root, 44100);
         scene_test(root, 48000, true);
+        const std::filesystem::path sofa{argv[2]};
+        std::filesystem::rename(root / "hrir.json", root / "stored-hrir.json");
+        file_test(root, {room, {}, 1.5}, sofa);
+        scene_test(root, 48000, false, sofa);
+        scene_test(root, 44100, false, sofa.parent_path() / "room-delayed.sofa");
+        const auto info = nlohmann::json::parse(take(mradm::inspect_room({room, sofa, 1.5})));
+        require(info.at("hrir_directions") == 6, "direct SOFA inspection uses native preparation");
+        mradm::live_scene::RendererConfig conflicting;
+        conflicting.renderer = mradm::RendererSelection::room_binaural;
+        conflicting.output_layout = "binaural";
+        conflicting.sofa_path = sofa;
+        conflicting.room = {room, root / "stored-hrir.json", 1.5};
+        require(!mradm::live_scene::create_live_room_renderer(conflicting, {}),
+                "explicit prepared bank must still authenticate an accompanying SOFA");
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
