@@ -1,0 +1,407 @@
+{
+  "schema": "mradm.room-late-pass-optimization",
+  "version": 1,
+  "base_commit": "45c134d547d8f35d78edb80b74843b238584d45f",
+  "change": "One pose-segmented late pass per block (both room fields, drain merge and HRIR decoder per world direction); decoder split only at head-pose changes; one room-pool handoff per block for any source count.",
+  "source_sha256": {
+    "base": {
+      "rust/crates/mradm-dsp/src/room/session.rs": "6b6f56db68fffb845b2e41371824e36901546300621dc3a92ec3ffa8ebb45d49",
+      "rust/crates/mradm-dsp/src/room/signal.rs": "20edd17eb4b8cc5f99b383ea5ab80510a311a49916e85ca3153a7d0f281f02c0",
+      "rust/crates/mradm-dsp/src/room/workers.rs": "e8d2f21d95cb6464bf3f209eb656fd9e91f5876b624f33f494794080f198d595"
+    },
+    "candidate": {
+      "rust/crates/mradm-dsp/src/room/session.rs": "9abaf8e2a1aeea87b2b09ff97691458dbf0a08618dd7d42c188aa826e93f88b5",
+      "rust/crates/mradm-dsp/src/room/signal.rs": "a37c117a5a3d96ae9aef1fba2932bc6af78a6573586e4f44609f8c44864f5b17",
+      "rust/crates/mradm-dsp/src/room/workers.rs": "7f11edb2c2536c67a0c71fd992e606a3939309ace24dc924fb3f04674dc9cb49"
+    }
+  },
+  "probe_binary_sha256": {
+    "base": "3f4ec380af158698193aaf22e4bac3e83542dcd5e019991766200175722e039a",
+    "candidate": "8794bd36e1a438d689f92a2666be2443b90b6d909847c10e41d1de0514fbeaf5"
+  },
+  "probe": "Scratch Release binary calling mradm_dsp::room::session::Session directly; not part of the repository. Output hash is FNV-1a 64 over every output f32 bit pattern.",
+  "resources": {
+    "room": "resources/rooms/reference-7x6x3.2-corrected-v1 (manifest 40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec)",
+    "sofa": "SADIE II D2_48K_24bit_256tap_FIR_SOFA.sofa from sofacoustics.org (sha256 bb5980288fc5c990c821e02c5ddfa274759079b723973cd6ca47ac577243aa0c), prepared natively: 8802 nodes, 256 taps, output_taps 448. Public dummy-head data, not the private acceptance HRIR."
+  },
+  "environment": {
+    "platform": "Linux x86_64 cloud VM, 4 vCPU",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+    "kernel": "6.18.44",
+    "rust": "1.98.0",
+    "workers": "default (4) unless stated"
+  },
+  "bitwise_output_identity": {
+    "result": "identical",
+    "scenarios": {
+      "pose calls=120 sources=32 frames=512": {
+        "base": "b6dac30345aa0b91",
+        "new_4_workers": "b6dac30345aa0b91",
+        "new_1_worker": "b6dac30345aa0b91"
+      },
+      "pose+switch calls=420 sources=32 frames=512": {
+        "base": "d9986f7d26b19371",
+        "new_4_workers": "d9986f7d26b19371",
+        "new_1_worker": "d9986f7d26b19371"
+      },
+      "move-k8+pose calls=40 sources=32 frames=512": {
+        "base": "24250bf2b293cf27",
+        "new_4_workers": "24250bf2b293cf27",
+        "new_1_worker": "24250bf2b293cf27"
+      },
+      "move-k4+pose+lfe calls=120 sources=8 frames=384": {
+        "base": "5dd00062d49943cd",
+        "new_4_workers": "5dd00062d49943cd",
+        "new_1_worker": "5dd00062d49943cd"
+      },
+      "pose+switch+move-k2 calls=420 sources=3 frames=384": {
+        "base": "f1bb0d548519272b",
+        "new_4_workers": "f1bb0d548519272b",
+        "new_1_worker": "f1bb0d548519272b"
+      },
+      "move-k3+pose calls=120 sources=2 frames=256": {
+        "base": "f2474e97c70e6eae",
+        "new_4_workers": "f2474e97c70e6eae",
+        "new_1_worker": "f2474e97c70e6eae"
+      },
+      "pose calls=60 sources=1 frames=512": {
+        "base": "18a118f2ac322c89",
+        "new_4_workers": "18a118f2ac322c89",
+        "new_1_worker": "18a118f2ac322c89"
+      },
+      "static+lfe calls=60 sources=5 frames=512": {
+        "base": "74be3989f3f18f2a",
+        "new_4_workers": "74be3989f3f18f2a",
+        "new_1_worker": "74be3989f3f18f2a"
+      }
+    },
+    "note": "Scenarios cover head pose per call, room switch through warmup/fade/drain, staggered geometry ramps, mid-block pose marks (384/256-frame calls), 1-3 source sessions and an LFE source."
+  },
+  "tests": {
+    "cargo_test_mradm_dsp": "all passed; room integration tests 19 (17 existing + 2 new)",
+    "room_no_alloc": "passed",
+    "new_tests": [
+      "single_late_pass_matches_field_merge_and_mark_segmented_decoding",
+      "late_pass_ignores_control_marks_without_a_pose_change"
+    ],
+    "rustfmt_and_clippy_workspace_all_targets_deny_warnings": "passed"
+  },
+  "timing": {
+    "order": "3 rounds, base/candidate interleaved per round, no other load; an earlier contended run was discarded",
+    "call_frames": 512,
+    "scenarios": {
+      "static32": {
+        "description": "32 static sources, no pose change",
+        "calls_per_round": 632,
+        "warmup_calls_excluded": 32,
+        "base": {
+          "rounds": [
+            {
+              "mean_ms": 2.631,
+              "p99_ms": 6.319,
+              "max_ms": 9.375
+            },
+            {
+              "mean_ms": 2.5,
+              "p99_ms": 4.718,
+              "max_ms": 6.01
+            },
+            {
+              "mean_ms": 2.661,
+              "p99_ms": 5.974,
+              "max_ms": 21.638
+            }
+          ],
+          "median_round_mean_ms": 2.631,
+          "median_round_p99_ms": 5.974,
+          "pooled_p99_ms": 5.783,
+          "calls_over_10_667_ms": 2
+        },
+        "new": {
+          "rounds": [
+            {
+              "mean_ms": 2.557,
+              "p99_ms": 6.189,
+              "max_ms": 15.765
+            },
+            {
+              "mean_ms": 2.525,
+              "p99_ms": 5.422,
+              "max_ms": 15.675
+            },
+            {
+              "mean_ms": 2.488,
+              "p99_ms": 4.938,
+              "max_ms": 6.129
+            }
+          ],
+          "median_round_mean_ms": 2.525,
+          "median_round_p99_ms": 5.422,
+          "pooled_p99_ms": 5.587,
+          "calls_over_10_667_ms": 2
+        }
+      },
+      "pose32": {
+        "description": "32 sources, one pose change per call",
+        "calls_per_round": 632,
+        "warmup_calls_excluded": 32,
+        "base": {
+          "rounds": [
+            {
+              "mean_ms": 8.833,
+              "p99_ms": 13.566,
+              "max_ms": 21.042
+            },
+            {
+              "mean_ms": 8.687,
+              "p99_ms": 12.524,
+              "max_ms": 12.867
+            },
+            {
+              "mean_ms": 8.348,
+              "p99_ms": 13.466,
+              "max_ms": 21.162
+            }
+          ],
+          "median_round_mean_ms": 8.687,
+          "median_round_p99_ms": 13.466,
+          "pooled_p99_ms": 12.596,
+          "calls_over_10_667_ms": 123
+        },
+        "new": {
+          "rounds": [
+            {
+              "mean_ms": 8.496,
+              "p99_ms": 11.966,
+              "max_ms": 19.058
+            },
+            {
+              "mean_ms": 8.397,
+              "p99_ms": 12.11,
+              "max_ms": 14.594
+            },
+            {
+              "mean_ms": 8.607,
+              "p99_ms": 13.28,
+              "max_ms": 19.835
+            }
+          ],
+          "median_round_mean_ms": 8.496,
+          "median_round_p99_ms": 12.11,
+          "pooled_p99_ms": 12.66,
+          "calls_over_10_667_ms": 108
+        }
+      },
+      "switch32": {
+        "description": "32 sources, pose per call, room switch every 240 calls",
+        "calls_per_round": 632,
+        "warmup_calls_excluded": 32,
+        "base": {
+          "rounds": [
+            {
+              "mean_ms": 11.333,
+              "p99_ms": 19.513,
+              "max_ms": 29.906
+            },
+            {
+              "mean_ms": 11.863,
+              "p99_ms": 20.358,
+              "max_ms": 42.119
+            },
+            {
+              "mean_ms": 11.374,
+              "p99_ms": 19.389,
+              "max_ms": 22.706
+            }
+          ],
+          "median_round_mean_ms": 11.374,
+          "median_round_p99_ms": 19.513,
+          "pooled_p99_ms": 19.555,
+          "calls_over_10_667_ms": 973
+        },
+        "new": {
+          "rounds": [
+            {
+              "mean_ms": 11.99,
+              "p99_ms": 23.215,
+              "max_ms": 82.224
+            },
+            {
+              "mean_ms": 11.453,
+              "p99_ms": 18.486,
+              "max_ms": 24.692
+            },
+            {
+              "mean_ms": 11.311,
+              "p99_ms": 18.724,
+              "max_ms": 20.055
+            }
+          ],
+          "median_round_mean_ms": 11.453,
+          "median_round_p99_ms": 18.724,
+          "pooled_p99_ms": 21.321,
+          "calls_over_10_667_ms": 944
+        }
+      },
+      "movek4": {
+        "description": "32 sources, pose per call, every source ramps each call; events at 4 distinct offsets",
+        "calls_per_round": 132,
+        "warmup_calls_excluded": 32,
+        "base": {
+          "rounds": [
+            {
+              "mean_ms": 29.92,
+              "p99_ms": 38.098,
+              "max_ms": 38.098
+            },
+            {
+              "mean_ms": 33.131,
+              "p99_ms": 48.39,
+              "max_ms": 48.39
+            },
+            {
+              "mean_ms": 28.064,
+              "p99_ms": 37.864,
+              "max_ms": 37.864
+            }
+          ],
+          "median_round_mean_ms": 29.92,
+          "median_round_p99_ms": 38.098,
+          "pooled_p99_ms": 45.782,
+          "calls_over_10_667_ms": 300
+        },
+        "new": {
+          "rounds": [
+            {
+              "mean_ms": 28.037,
+              "p99_ms": 42.358,
+              "max_ms": 42.358
+            },
+            {
+              "mean_ms": 27.134,
+              "p99_ms": 35.668,
+              "max_ms": 35.668
+            },
+            {
+              "mean_ms": 27.918,
+              "p99_ms": 36.077,
+              "max_ms": 36.077
+            }
+          ],
+          "median_round_mean_ms": 27.918,
+          "median_round_p99_ms": 36.077,
+          "pooled_p99_ms": 36.077,
+          "calls_over_10_667_ms": 300
+        }
+      },
+      "movek4s8": {
+        "description": "8 sources, pose per call, every source ramps each call; events at 4 distinct offsets",
+        "calls_per_round": 332,
+        "warmup_calls_excluded": 32,
+        "base": {
+          "rounds": [
+            {
+              "mean_ms": 10.909,
+              "p99_ms": 32.036,
+              "max_ms": 39.23
+            },
+            {
+              "mean_ms": 10.778,
+              "p99_ms": 16.652,
+              "max_ms": 17.978
+            },
+            {
+              "mean_ms": 10.427,
+              "p99_ms": 18.336,
+              "max_ms": 26.063
+            }
+          ],
+          "median_round_mean_ms": 10.778,
+          "median_round_p99_ms": 18.336,
+          "pooled_p99_ms": 18.336,
+          "calls_over_10_667_ms": 375
+        },
+        "new": {
+          "rounds": [
+            {
+              "mean_ms": 9.231,
+              "p99_ms": 15.797,
+              "max_ms": 19.578
+            },
+            {
+              "mean_ms": 9.049,
+              "p99_ms": 16.038,
+              "max_ms": 21.98
+            },
+            {
+              "mean_ms": 9.315,
+              "p99_ms": 16.087,
+              "max_ms": 18.899
+            }
+          ],
+          "median_round_mean_ms": 9.231,
+          "median_round_p99_ms": 16.038,
+          "pooled_p99_ms": 15.999,
+          "calls_over_10_667_ms": 143
+        }
+      },
+      "pose1": {
+        "description": "1 source, one pose change per call",
+        "calls_per_round": 632,
+        "warmup_calls_excluded": 32,
+        "base": {
+          "rounds": [
+            {
+              "mean_ms": 2.667,
+              "p99_ms": 6.065,
+              "max_ms": 31.706
+            },
+            {
+              "mean_ms": 2.451,
+              "p99_ms": 4.801,
+              "max_ms": 5.148
+            },
+            {
+              "mean_ms": 2.342,
+              "p99_ms": 4.202,
+              "max_ms": 8.694
+            }
+          ],
+          "median_round_mean_ms": 2.451,
+          "median_round_p99_ms": 4.801,
+          "pooled_p99_ms": 5.147,
+          "calls_over_10_667_ms": 1
+        },
+        "new": {
+          "rounds": [
+            {
+              "mean_ms": 2.163,
+              "p99_ms": 4.897,
+              "max_ms": 6.015
+            },
+            {
+              "mean_ms": 2.058,
+              "p99_ms": 4.507,
+              "max_ms": 7.096
+            },
+            {
+              "mean_ms": 2.129,
+              "p99_ms": 4.06,
+              "max_ms": 8.149
+            }
+          ],
+          "median_round_mean_ms": 2.129,
+          "median_round_p99_ms": 4.507,
+          "pooled_p99_ms": 4.358,
+          "calls_over_10_667_ms": 0
+        }
+      }
+    }
+  },
+  "not_run": [
+    "Three-platform room_replay on the frozen package (requires the private acceptance HRIR)",
+    "C++ ctest",
+    "Desktop (macOS/Windows) or 32-worker Linux capacity runs",
+    "Device runs"
+  ]
+}
