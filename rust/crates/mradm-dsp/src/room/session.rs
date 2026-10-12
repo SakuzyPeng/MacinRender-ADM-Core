@@ -576,7 +576,6 @@ struct BlockJob {
     marks: [bool; BLOCK],
     poses: [[f32; 3]; BLOCK],
     late_decoder: WorldTail,
-    late_input: Vec<f32>,
     late_output: [f32; BLOCK * 2],
     output: [f32; BLOCK * 2],
 }
@@ -605,25 +604,21 @@ impl BlockJob {
                 self.output[2 * i + ear] = sample;
             }
         }
-        for (index, value) in self.late_input.iter_mut().enumerate() {
-            *value = if self.draining && index % BLOCK >= self.drain_remaining {
-                0.
-            } else {
-                current.late_output[index]
-            };
-            if let Some(next) = &incoming {
-                *value += next.late_output[index];
-            }
-        }
-        self.late_decoder.begin_world(&self.late_input)?;
-        let mut begin = 0;
-        while begin < BLOCK {
-            let end = (begin + 1..BLOCK).find(|i| self.marks[*i]).unwrap_or(BLOCK);
-            self.late_decoder.update(self.poses[begin])?;
-            self.late_decoder
-                .render_range(begin, end - begin, &mut self.late_output)?;
-            begin = end;
-        }
+        // Both room fields and the head-pose decoder share one direction pass.
+        // Source geometry marks do not split it; only pose changes retarget.
+        let current_frames = if self.draining {
+            self.drain_remaining.min(BLOCK)
+        } else {
+            BLOCK
+        };
+        self.late_decoder.render_world(
+            &current.field,
+            current_frames,
+            incoming.as_deref().map(|v| &v.field),
+            &self.marks,
+            &self.poses,
+            &mut self.late_output,
+        )?;
         for i in 0..BLOCK {
             for ear in 0..2 {
                 self.output[2 * i + ear] += self.late_output[ear * BLOCK + i];
@@ -699,7 +694,6 @@ struct InstanceOutput {
     send: [f32; BLOCK],
     lfe_input: [f32; BLOCK],
     lfe_output: [f32; BLOCK],
-    late_output: Vec<f32>,
     direct: [f32; 2 * BLOCK],
     wet: [f32; 2 * BLOCK],
 }
@@ -737,8 +731,7 @@ impl InstanceOutput {
             }
         }
         drop(profile);
-        self.field
-            .process_field(&self.send, &mut self.late_output)?;
+        self.field.begin_field(&self.send)?;
         self.lfe.process(&self.lfe_input, &mut self.lfe_output)?;
         for i in 0..BLOCK {
             for ear in 0..2 {
@@ -781,7 +774,6 @@ impl Instance {
                 send: [0.; BLOCK],
                 lfe_input: [0.; BLOCK],
                 lfe_output: [0.; BLOCK],
-                late_output: vec![0.; prepared.room.profile.late_directions.len() * BLOCK],
                 direct: [0.; 2 * BLOCK],
                 wet: [0.; 2 * BLOCK],
             })),
@@ -1009,7 +1001,6 @@ impl Session {
             marks: [false; BLOCK],
             poses: [[0.; 3]; BLOCK],
             late_decoder: WorldTail::new_decoder(prepared.room.clone())?,
-            late_input: vec![0.; prepared.room.profile.late_directions.len() * BLOCK],
             late_output: [0.; BLOCK * 2],
             output: [0.; BLOCK * 2],
         }));
@@ -1211,7 +1202,6 @@ impl Session {
         {
             let mut job = self.paired.lock().unwrap();
             job.late_decoder.reset();
-            job.late_input.fill(0.);
             job.late_output.fill(0.);
             job.output.fill(0.);
         }
@@ -1689,12 +1679,9 @@ impl Session {
             job.poses = self.poses;
         }
         // A single owned job covers voices, fixed-order reduction, the world
-        // field and its decoder. Nested stages stay on the same worker pool.
-        if self.slots.len() >= 4 {
-            self.current.prepared.workers.run(self.paired.clone())?;
-        } else {
-            self.paired.lock().unwrap().render()?;
-        }
+        // field and its decoder: one pool handoff per block for any source
+        // count. Nested stages stay on the same worker pool.
+        self.current.prepared.workers.run(self.paired.clone())?;
         self.fifo = self.paired.lock().unwrap().output;
         for index in &self.order {
             let slot = &mut self.slots[*index];

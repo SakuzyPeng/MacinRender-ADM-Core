@@ -228,6 +228,16 @@ enum TailKind {
     Field,
     Decoder,
 }
+/// A decoder subrange with one head pose. Splitting only where the pose
+/// changes is bit-identical to splitting at every control mark: an unchanged
+/// pose never retargets, and subranges keep Dynamic's per-sample order.
+#[derive(Clone, Copy)]
+struct Segment {
+    begin: usize,
+    end: usize,
+    changed: bool,
+    rotation: Rotation,
+}
 struct Decoders {
     room: Arc<PreparedRoom>,
     decoders: Vec<Decoder>,
@@ -241,6 +251,7 @@ struct Decoders {
     history: Option<SharedLongHistory>,
     parallel: bool,
     kind: TailKind,
+    segments: Vec<Segment>,
 }
 impl Decoders {
     fn render(&mut self) -> Result<()> {
@@ -329,6 +340,66 @@ impl super::workers::Work for Mutex<Decoders> {
         self.lock().unwrap().render()
     }
 }
+
+/// One world direction for one canonical block: the current and incoming room
+/// fields, the serial drain/switch merge, and every head-pose segment of its
+/// decoder. The per-direction arithmetic matches the former three-stage path.
+fn render_direction(
+    decoder: &mut Decoder,
+    direction: &[f64; 3],
+    current: (&mut Decoder, &SharedLongHistory, usize),
+    mut incoming: Option<(&mut Decoder, &SharedLongHistory)>,
+    segments: &[Segment],
+) -> Result<()> {
+    let (current, current_history, current_frames) = current;
+    {
+        let _profile = super::profile::Guard::new(super::profile::Stage::LateField);
+        current
+            .field
+            .as_mut()
+            .unwrap()
+            .render(current_history, &mut current.input)?;
+        if let Some((next, history)) = incoming.as_mut() {
+            next.field
+                .as_mut()
+                .unwrap()
+                .render(history, &mut next.input)?;
+        }
+    }
+    for (i, value) in decoder.input.iter_mut().enumerate() {
+        // A draining room contributes an exact zero after its final sample.
+        *value = if i >= current_frames {
+            0.
+        } else {
+            current.input[i]
+        };
+        if let Some((next, _)) = &incoming {
+            *value += next.input[i];
+        }
+    }
+    let Decoder {
+        convolution,
+        query,
+        face,
+        filter,
+        input,
+        output,
+        ..
+    } = decoder;
+    let convolution = convolution.as_mut().unwrap();
+    convolution.begin(input)?;
+    for segment in segments {
+        if segment.changed {
+            query
+                .as_mut()
+                .unwrap()
+                .query(segment.rotation.apply(*direction), face, filter)?;
+            convolution.set_target(filter)?;
+        }
+        convolution.render_range(segment.begin, segment.end - segment.begin, output)?;
+    }
+    Ok(())
+}
 pub struct WorldTail {
     group: Arc<Mutex<Decoders>>,
     workers: Arc<super::workers::Workers>,
@@ -395,6 +466,7 @@ impl WorldTail {
                 source: [0.; BLOCK],
                 parallel: true,
                 kind,
+                segments: Vec::with_capacity(BLOCK),
             })),
             workers: super::workers::shared()?,
         };
@@ -480,6 +552,157 @@ impl WorldTail {
         {
             out.copy_from_slice(&decoder.input);
         }
+        Ok(())
+    }
+    /// Field kind: advance the shared input history for this block. Its
+    /// directional FIRs are rendered by the decoder's `render_world` pass.
+    pub fn begin_field(&mut self, input: &[f32]) -> Result<()> {
+        let mut group = self.group.lock().unwrap();
+        if group.kind != TailKind::Field || input.len() != BLOCK {
+            return Err(Error::InvalidArgument("Invalid room field buffers"));
+        }
+        group.history.as_mut().unwrap().begin(input)
+    }
+    /// Decoder kind: one pass over world directions per canonical block. Each
+    /// direction renders the current (and incoming) field after `begin_field`,
+    /// keeps samples from `current_frames` onward at zero, and decodes each
+    /// head-pose segment. Outputs are reduced afterwards in direction order.
+    pub fn render_world(
+        &mut self,
+        current: &WorldTail,
+        current_frames: usize,
+        incoming: Option<&WorldTail>,
+        marks: &[bool; BLOCK],
+        poses: &[[f32; 3]; BLOCK],
+        output: &mut [f32],
+    ) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::LateDecoder);
+        // Never fall back to Rayon's global pool from a non-room thread.
+        let in_pool = self.workers.in_pool();
+        let mut world = self.group.lock().unwrap();
+        let mut current = current.group.lock().unwrap();
+        let mut incoming = incoming.map(|v| v.group.lock().unwrap());
+        let count = world.decoders.len();
+        if world.kind != TailKind::Decoder
+            || current.kind != TailKind::Field
+            || current.decoders.len() != count
+            || incoming
+                .as_ref()
+                .is_some_and(|v| v.kind != TailKind::Field || v.decoders.len() != count)
+            || output.len() != BLOCK * 2
+            || current_frames > BLOCK
+        {
+            return Err(Error::InvalidArgument("Invalid room world decoder pass"));
+        }
+        let Decoders {
+            room,
+            decoders,
+            orientation,
+            initialized,
+            segments,
+            ..
+        } = &mut *world;
+        // Same pose updates as one `update` per control mark.
+        segments.clear();
+        for (i, pose) in poses.iter().enumerate() {
+            if i != 0 && !marks[i] {
+                continue;
+            }
+            Rotation::new(*pose)?;
+            let changed = !*initialized || *orientation != *pose;
+            if changed {
+                *orientation = *pose;
+                *initialized = true;
+            }
+            if i == 0 || changed {
+                if let Some(last) = segments.last_mut() {
+                    last.end = i;
+                }
+                segments.push(Segment {
+                    begin: i,
+                    end: BLOCK,
+                    changed,
+                    rotation: Rotation::new(*orientation)?,
+                });
+            }
+        }
+        let segments = segments.as_slice();
+        let directions = &room.profile.late_directions;
+        let Decoders {
+            decoders: current_decoders,
+            history: current_history,
+            ..
+        } = &mut *current;
+        let current_history = current_history.as_ref().unwrap();
+        let parallel = in_pool && count >= 8;
+        if let Some(next) = incoming.as_deref_mut() {
+            let Decoders {
+                decoders: next_decoders,
+                history: next_history,
+                ..
+            } = next;
+            let next_history = next_history.as_ref().unwrap();
+            let task = |(((decoder, direction), current), next): (
+                ((&mut Decoder, &[f64; 3]), &mut Decoder),
+                &mut Decoder,
+            )| {
+                render_direction(
+                    decoder,
+                    direction,
+                    (current, current_history, current_frames),
+                    Some((next, next_history)),
+                    segments,
+                )
+            };
+            if parallel {
+                decoders
+                    .par_iter_mut()
+                    .zip(directions.par_iter())
+                    .zip(current_decoders.par_iter_mut())
+                    .zip(next_decoders.par_iter_mut())
+                    .try_for_each(task)?;
+            } else {
+                decoders
+                    .iter_mut()
+                    .zip(directions)
+                    .zip(current_decoders.iter_mut())
+                    .zip(next_decoders.iter_mut())
+                    .try_for_each(task)?;
+            }
+        } else {
+            let task =
+                |((decoder, direction), current): ((&mut Decoder, &[f64; 3]), &mut Decoder)| {
+                    render_direction(
+                        decoder,
+                        direction,
+                        (current, current_history, current_frames),
+                        None,
+                        segments,
+                    )
+                };
+            if parallel {
+                decoders
+                    .par_iter_mut()
+                    .zip(directions.par_iter())
+                    .zip(current_decoders.par_iter_mut())
+                    .try_for_each(task)?;
+            } else {
+                decoders
+                    .iter_mut()
+                    .zip(directions)
+                    .zip(current_decoders.iter_mut())
+                    .try_for_each(task)?;
+            }
+        }
+        // Direction order is independent of worker scheduling.
+        output.fill(0.);
+        for decoder in decoders.iter() {
+            for (destination, value) in output.iter_mut().zip(&decoder.output) {
+                *destination += *value;
+            }
+        }
+        world.begin = false;
+        world.changed = false;
         Ok(())
     }
     pub fn begin_world(&mut self, input: &[f32]) -> Result<()> {

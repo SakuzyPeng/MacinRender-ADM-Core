@@ -784,6 +784,216 @@ fn alternate(base: &Arc<PreparedSet>, name: &str, energy: f64) -> Arc<PreparedSe
     Arc::new(PreparedSet::new(room).unwrap())
 }
 
+/// Twelve world directions so the late pass takes its parallel branch.
+fn many_directions(base: &Arc<PreparedSet>, name: &str, absorption: f64) -> Arc<PreparedSet> {
+    let mut profile = (*base.room.profile).clone();
+    profile.identity = name.into();
+    profile.id = name.into();
+    profile.absorption = [[absorption; 8]; 6];
+    let t = (1. + 5f64.sqrt()) / 2.;
+    let mut directions = Vec::new();
+    for (a, b) in [(1., t), (-1., t), (1., -t), (-1., -t)] {
+        directions.extend([[0., a, b], [a, b, 0.], [b, 0., a]]);
+    }
+    for direction in &mut directions {
+        let length = geometry::norm(*direction);
+        *direction = direction.map(|v| v / length);
+    }
+    let taps = profile.late_taps;
+    profile.late = (0..directions.len())
+        .flat_map(|d| {
+            (0..taps).map(move |i| {
+                if i == 17 + d * 7 || i == 2200 + d * 5 {
+                    0.05
+                } else {
+                    0.
+                }
+            })
+        })
+        .collect();
+    profile.late_directions = directions;
+    let room = Arc::new(PreparedRoom::new(Arc::new(profile), base.room.hrir.clone()).unwrap());
+    Arc::new(PreparedSet::new(room).unwrap())
+}
+
+#[test]
+fn single_late_pass_matches_field_merge_and_mark_segmented_decoding() {
+    use mradm_dsp::room::signal::WorldTail;
+    let base = fixture();
+    let first = many_directions(&base, "late-a", 0.94);
+    let second = many_directions(&base, "late-b", 0.9);
+    let (a, b) = (first.room.clone(), second.room.clone());
+    let count = a.profile.late_directions.len();
+    let mut legacy_a = WorldTail::new_field(a.clone()).unwrap();
+    let mut legacy_b = WorldTail::new_field(b.clone()).unwrap();
+    let mut legacy = WorldTail::new_decoder(a.clone()).unwrap();
+    let mut field_a = WorldTail::new_field(a.clone()).unwrap();
+    let mut field_b = WorldTail::new_field(b).unwrap();
+    let mut decoder = WorldTail::new_decoder(a).unwrap();
+    let mut world_a = vec![0.; count * BLOCK];
+    let mut world_b = world_a.clone();
+    let mut merged = world_a.clone();
+    let mut expected = [0.; 2 * BLOCK];
+    let mut actual = expected;
+    let mut pose = [0.; 3];
+    for block in 0..40 {
+        let mut input_a = [0.; BLOCK];
+        let mut input_b = input_a;
+        for i in 0..BLOCK {
+            input_a[i] = ((((block * BLOCK + i) * 37) % 193) as f32 - 96.) / 384.;
+            input_b[i] = ((((block * BLOCK + i) * 53) % 211) as f32 - 105.) / 512.;
+        }
+        // Marks every 64 samples; the pose changes only at some of them.
+        let mut marks = [false; BLOCK];
+        let mut poses = [[0.; 3]; BLOCK];
+        for at in (0..BLOCK).step_by(64) {
+            marks[at] = true;
+            if (block + at / 64) % 3 == 0 {
+                pose = [block as f32 * 7. + at as f32 * 0.1 - 120., 11., -4.];
+            }
+            poses[at] = pose;
+        }
+        let incoming = (10..30).contains(&block);
+        let frames = match block {
+            20 => 0,
+            21 => 77,
+            _ => BLOCK,
+        };
+        legacy_a.process_field(&input_a, &mut world_a).unwrap();
+        if incoming {
+            legacy_b.process_field(&input_b, &mut world_b).unwrap();
+        }
+        for (index, value) in merged.iter_mut().enumerate() {
+            *value = if index % BLOCK >= frames {
+                0.
+            } else {
+                world_a[index]
+            };
+            if incoming {
+                *value += world_b[index];
+            }
+        }
+        legacy.begin_world(&merged).unwrap();
+        let mut begin = 0;
+        while begin < BLOCK {
+            let end = (begin + 1..BLOCK).find(|i| marks[*i]).unwrap_or(BLOCK);
+            legacy.update(poses[begin]).unwrap();
+            legacy
+                .render_range(begin, end - begin, &mut expected)
+                .unwrap();
+            begin = end;
+        }
+        field_a.begin_field(&input_a).unwrap();
+        if incoming {
+            field_b.begin_field(&input_b).unwrap();
+        }
+        decoder
+            .render_world(
+                &field_a,
+                frames,
+                incoming.then_some(&field_b),
+                &marks,
+                &poses,
+                &mut actual,
+            )
+            .unwrap();
+        let mismatch = expected
+            .iter()
+            .zip(&actual)
+            .position(|(x, y)| x.to_bits() != y.to_bits());
+        assert!(mismatch.is_none(), "block {block} differs at {mismatch:?}");
+    }
+    assert!(expected.iter().any(|v| v.abs() > 1e-6));
+}
+
+#[test]
+fn late_pass_ignores_control_marks_without_a_pose_change() {
+    let base = fixture();
+    let first = many_directions(&base, "late-a", 0.94);
+    let second = many_directions(&base, "late-b", 0.9);
+    let descriptions: Vec<_> = (0..5)
+        .map(|i| RoomDescription {
+            id: i + 1,
+            role: if i == 4 { 2 } else { 0 },
+            position: [i as f32 * 0.3 - 0.6, 1., 0.1],
+            ..RoomDescription::default()
+        })
+        .collect();
+    let initial: Vec<_> = descriptions
+        .iter()
+        .enumerate()
+        .map(|(i, d)| RoomCommand {
+            element: i as u32,
+            state: State {
+                position: d.position,
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
+    // Geometry commands that restate the current position still create
+    // session marks. Only pose changes may split or retarget the late pass.
+    let render = |restated: bool| {
+        let mut session = Session::new(first.clone(), 1.5, true, true).unwrap();
+        session.configure(&descriptions).unwrap();
+        let frames = 384;
+        let mut input = vec![0.; frames];
+        let mut block = vec![0.; frames * 2];
+        let mut output = Vec::new();
+        for call in 0..80 {
+            for (i, value) in input.iter_mut().enumerate() {
+                *value = ((((call * frames + i) * 37) % 193) as f32 - 96.) / 384.;
+            }
+            if call % 3 == 1 {
+                session
+                    .set_pose([call as f32 * 1.7 - 40., 5., -3.])
+                    .unwrap();
+            }
+            if call == 10 {
+                session
+                    .queue_room(Box::new(Instance::new(second.clone(), 5).unwrap()), 1)
+                    .unwrap();
+            }
+            let commands: Vec<_> = if restated {
+                (1..4)
+                    .map(|e| RoomCommand {
+                        element: e,
+                        offset: e * 97,
+                        changed: 4,
+                        ..initial[e as usize]
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            session
+                .process(
+                    frames,
+                    (0..5).map(|_| Some(input.as_slice())),
+                    if call == 0 { &initial } else { &[] },
+                    &commands,
+                    &mut block,
+                )
+                .unwrap();
+            output.extend_from_slice(&block);
+            drop(session.take_retired());
+        }
+        assert_eq!(session.info().applied_request, 1, "switch must complete");
+        output
+    };
+    let plain = render(false);
+    let restated = render(true);
+    let mismatch = plain
+        .iter()
+        .zip(&restated)
+        .position(|(a, b)| a.to_bits() != b.to_bits());
+    assert!(
+        mismatch.is_none(),
+        "late output first differs at {mismatch:?}"
+    );
+    assert!(plain.iter().any(|v| v.abs() > 1e-5));
+}
+
 #[test]
 fn shorter_room_keeps_the_head_locked_tail_after_switching() {
     let base = fixture();
