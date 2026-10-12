@@ -234,16 +234,27 @@ fn native_hrir(bytes: &[u8]) -> Result<Arc<HrirData>> {
     type Cache = std::collections::BTreeMap<String, std::sync::Weak<HrirData>>;
     static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
     let key = sha256(bytes);
-    let mut cache = CACHE
-        .get_or_init(Default::default)
+    let cache = CACHE.get_or_init(Default::default);
+    {
+        let mut entries = cache
+            .lock()
+            .map_err(|_| Error::RenderFailed("SOFA preparation cache failed"))?;
+        entries.retain(|_, entry| entry.strong_count() != 0);
+        if let Some(data) = entries.get(&key).and_then(std::sync::Weak::upgrade) {
+            return Ok(data);
+        }
+    }
+    // Parsing may unwind on malformed HDF5 in debug builds. The FFI boundary
+    // catches it; do not poison the cache needed by subsequent sessions.
+    let data = Arc::new(mradm_dsp::room::sofa::prepare(bytes)?);
+    let mut entries = cache
         .lock()
         .map_err(|_| Error::RenderFailed("SOFA preparation cache failed"))?;
-    cache.retain(|_, entry| entry.strong_count() != 0);
-    if let Some(data) = cache.get(&key).and_then(std::sync::Weak::upgrade) {
-        return Ok(data);
+    // Another preparation may have finished while the lock was released.
+    if let Some(existing) = entries.get(&key).and_then(std::sync::Weak::upgrade) {
+        return Ok(existing);
     }
-    let data = Arc::new(mradm_dsp::room::sofa::prepare(bytes)?);
-    cache.insert(key, Arc::downgrade(&data));
+    entries.insert(key, Arc::downgrade(&data));
     Ok(data)
 }
 fn load_hrir(file: &Path) -> Result<Arc<HrirData>> {
@@ -677,10 +688,38 @@ mod native_sofa_tests {
         let first = super::native_hrir(bytes).unwrap();
         let second = super::native_hrir(bytes).unwrap();
         assert!(std::sync::Arc::ptr_eq(&first, &second));
+        // Exercise the same panic boundary used by room_prepare. Some HDF5
+        // errors unwind in debug builds; none may disable later SOFA imports.
+        let mut message = [0; 128];
+        let status = super::boundary(message.as_mut_ptr(), message.len(), || {
+            super::native_hrir(&bytes[..bytes.len() - 1]).map(|_| ())
+        });
+        assert_ne!(status, 0);
+        let after_error = super::native_hrir(bytes).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&first, &after_error));
+        drop(after_error);
         let weak = std::sync::Arc::downgrade(&first);
         drop(first);
         drop(second);
         assert!(weak.upgrade().is_none());
         assert!(super::native_hrir(b"not a SOFA").is_err());
+    }
+    #[test]
+    fn concurrent_preparations_share_the_published_bank() {
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(4));
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    super::native_hrir(include_bytes!(
+                        "../../../../tests/fixtures/sofa/room-delayed.sofa"
+                    ))
+                    .unwrap()
+                })
+            })
+            .collect();
+        let data: Vec<_> = workers.into_iter().map(|w| w.join().unwrap()).collect();
+        assert!(data.iter().all(|d| std::sync::Arc::ptr_eq(d, &data[0])));
     }
 }

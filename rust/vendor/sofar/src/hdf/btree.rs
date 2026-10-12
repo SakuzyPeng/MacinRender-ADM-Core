@@ -1,10 +1,12 @@
 pub(crate) use super::{
     data_object::{DataLayout, DataSpace},
     helpers::varint_size,
+    ohdr_message::Filter,
     parser::Input,
 };
 
 use miniz_oxide::inflate::decompress_to_vec_zlib_with_limit;
+use std::borrow::Cow;
 use winnow::ModalResult;
 use winnow::Parser;
 use winnow::binary::{le_u8, le_u16, le_u32, le_u64};
@@ -22,6 +24,7 @@ pub(crate) fn tree(
     data_len: usize,
     data_space: DataSpace,
     data_layout: DataLayout,
+    filters: Vec<Filter>,
 ) -> impl FnMut(&mut Input) -> ModalResult<Vec<u8>> {
     move |input| {
         // Validate data_len to prevent excessive allocation from malformed files
@@ -70,6 +73,12 @@ pub(crate) fn tree(
         if elements == 0 || size == 0 || size > 0x10 {
             return Err(ErrMode::Cut(winnow::error::ContextError::new()));
         }
+        if filters
+            .iter()
+            .any(|f| matches!(f, Filter::Shuffle(width) if *width as usize != size))
+        {
+            return Err(ErrMode::Cut(winnow::error::ContextError::new()));
+        }
         // A legal chunk may cover the entire HRTF dataset. Bound its decoded
         // bytes, independently of how the writer partitions the measurements.
         let chunk_bytes = elements
@@ -84,11 +93,11 @@ pub(crate) fn tree(
                 let _key = varint_size(size_of_lengths).parse_next(input)?;
             } else {
                 let size_of_chunk = le_u32.parse_next(input)?;
-                let _filter_mask = le_u32
-                    .verify(|m| *m == 0)
+                let filter_mask = le_u32
+                    .verify(|m| *m >> filters.len() == 0)
                     .context(StrContext::Label("TREE filter mask"))
                     .context(StrContext::Expected(
-                        "all filters must be enabled (0)".into(),
+                        "only declared filters may be skipped".into(),
                     ))
                     .parse_next(input)?;
 
@@ -114,8 +123,23 @@ pub(crate) fn tree(
                 let chunk = take(size_of_chunk).parse_next(input)?;
                 let olen = chunk_bytes;
 
-                let output = decompress_to_vec_zlib_with_limit(chunk, olen)
-                    .map_err(|_err| ErrMode::assert(input, "Failed to inflate btree data"))?;
+                let enabled = |index: usize| filter_mask & (1 << index) == 0;
+                let deflated = filters
+                    .iter()
+                    .enumerate()
+                    .any(|(i, f)| enabled(i) && matches!(f, Filter::Deflate));
+                let shuffled = filters
+                    .iter()
+                    .enumerate()
+                    .any(|(i, f)| enabled(i) && matches!(f, Filter::Shuffle(_)));
+                let output =
+                    if deflated {
+                        Cow::Owned(decompress_to_vec_zlib_with_limit(chunk, olen).map_err(
+                            |_err| ErrMode::assert(input, "Failed to inflate btree data"),
+                        )?)
+                    } else {
+                        Cow::Borrowed(chunk)
+                    };
 
                 if output.len() != olen {
                     return Err(ErrMode::assert(input, "Invalid tree chunk length"));
@@ -138,8 +162,12 @@ pub(crate) fn tree(
                 match dimensionality {
                     1 => {
                         for i in 0..olen {
-                            let b = i / elements;
-                            let x = i % elements + start[0];
+                            let (b, x) = if shuffled {
+                                (i / elements, i % elements)
+                            } else {
+                                (i % size, i / size)
+                            };
+                            let x = x + start[0];
 
                             if x < sx {
                                 let j = x * size + b;
@@ -151,8 +179,11 @@ pub(crate) fn tree(
                     }
                     2 => {
                         for i in 0..olen {
-                            let b = i / elements;
-                            let mut x = i % elements;
+                            let (b, mut x) = if shuffled {
+                                (i / elements, i % elements)
+                            } else {
+                                (i % size, i / size)
+                            };
                             let y = x % dy + start[1];
                             x = x / dy + start[0];
 
@@ -166,8 +197,11 @@ pub(crate) fn tree(
                     }
                     3 => {
                         for i in 0..olen {
-                            let b = i / elements;
-                            let mut x = i % elements;
+                            let (b, mut x) = if shuffled {
+                                (i / elements, i % elements)
+                            } else {
+                                (i % size, i / size)
+                            };
                             let z = x % dz + start[2];
                             let y = (x / dz) % dy + start[1];
                             x = (x / dzy) + start[0];

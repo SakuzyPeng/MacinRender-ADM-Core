@@ -10,3 +10,12 @@ byte limit for each chunk. Invalid chunk dimensions return a parse error rather
 than triggering a debug assertion. This preserves support for legal single-chunk
 HRTF datasets; the workspace dataset tests cover equivalent single- and multi-chunk
 SOFA fixtures.
+
+Defer dataset decoding until the entire object header has been collected, so the
+filter pipeline and dataspace are available regardless of message order. Honor
+deflate and shuffle independently, including unfiltered chunks and per-chunk
+filter masks; reject unknown filters, unsupported orderings and mismatched shuffle
+widths. This prevents gzip-only data from being silently unshuffled. The workspace
+room SOFA tests compare exact samples across equivalent storage variants and
+reject an unsupported checksum filter. Filter metadata follows the
+[HDF5 file format specification](https://support.hdfgroup.org/documentation/hdf5/latest/_f_m_t2.html).
