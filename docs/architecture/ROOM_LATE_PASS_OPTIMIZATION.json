@@ -84,6 +84,7 @@
       "single_late_pass_matches_field_merge_and_mark_segmented_decoding",
       "late_pass_ignores_control_marks_without_a_pose_change"
     ],
+    "branch_coverage": "single_late_pass_matches_field_merge_and_mark_segmented_decoding runs render_world on the test thread (serial branch) and on a room worker via room::run_on_workers (parallel branch, 12 directions); both are compared bitwise with a fully serial legacy chain. Reversing direction pairing in the parallel branch only fails it; the session-level test alone does not catch that mutation.",
     "rustfmt_and_clippy_workspace_all_targets_deny_warnings": "passed"
   },
   "timing": {
