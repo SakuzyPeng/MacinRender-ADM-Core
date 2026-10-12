@@ -472,7 +472,12 @@ impl WorldTail {
             self.group.lock().unwrap().render()?;
         }
         let group = self.group.lock().unwrap();
-        for (out, decoder) in output.chunks_exact_mut(BLOCK).zip(&group.decoders) {
+        for (out, decoder) in output
+            .as_chunks_mut::<BLOCK>()
+            .0
+            .iter_mut()
+            .zip(&group.decoders)
+        {
             out.copy_from_slice(&decoder.input);
         }
         Ok(())
@@ -482,7 +487,11 @@ impl WorldTail {
         if group.kind != TailKind::Decoder || input.len() != group.decoders.len() * BLOCK {
             return Err(Error::InvalidArgument("Invalid room world decoder input"));
         }
-        for (decoder, input) in group.decoders.iter_mut().zip(input.chunks_exact(BLOCK)) {
+        for (decoder, input) in group
+            .decoders
+            .iter_mut()
+            .zip(input.as_chunks::<BLOCK>().0.iter())
+        {
             decoder.input.copy_from_slice(input);
         }
         group.begin = true;

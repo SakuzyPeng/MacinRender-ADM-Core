@@ -97,7 +97,11 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
     let mut output = [0.; BLOCK * 2];
     let mut counts = [0; 512];
     CHECK.store(true, Ordering::SeqCst);
-    for block in 0..512 {
+    for (block, count) in counts.iter_mut().enumerate() {
+        // Exercise idle/wake transitions as well as continuous queued work.
+        if block.is_multiple_of(16) {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
         if block == 64 {
             session.queue_room(candidate.take().unwrap(), 1).unwrap();
         }
@@ -111,7 +115,7 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
                 &mut output,
             )
             .unwrap();
-        counts[block] = ALLOCATIONS.load(Ordering::Relaxed);
+        *count = ALLOCATIONS.load(Ordering::Relaxed);
     }
     CHECK.store(false, Ordering::SeqCst);
     for i in 0..512 {
