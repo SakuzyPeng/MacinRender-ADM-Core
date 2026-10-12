@@ -99,6 +99,13 @@ cmake --build --preset release
 ./build/release/mradm render -i input.wav -o out.binaural.flac --renderer saf-binaural
 ```
 
+**房间双耳 → WAV**——先按[房间预设说明](resources/rooms/README.md)通过 Git LFS 获取资源，再直接选择个人 SOFA：
+
+```bash
+./build/release/mradm render -i input.wav -o out.room.wav --renderer room-binaural \
+  --room resources/rooms/reference-7x6x3.2-corrected-v1/room.json --sofa personal.sofa
+```
+
 **扬声器布局**——≤ 8 声道无高度布局用 FLAC，高度布局用 Opus MKA（要求 48 kHz；macOS 可用 APAC `.m4a`）：
 
 ```bash

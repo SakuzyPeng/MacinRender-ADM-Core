@@ -105,6 +105,13 @@ backend, output format and layout, option, and the semantic policy.
 ./build/release/mradm render -i input.wav -o out.binaural.flac --renderer saf-binaural
 ```
 
+**Room binaural → WAV** — fetch the [room presets](resources/rooms/README.md) with Git LFS, then select a personal SOFA directly:
+
+```bash
+./build/release/mradm render -i input.wav -o out.room.wav --renderer room-binaural \
+  --room resources/rooms/reference-7x6x3.2-corrected-v1/room.json --sofa personal.sofa
+```
+
 **Loudspeaker layouts** — FLAC for ≤ 8-channel layouts without height, Opus MKA for height layouts (48 kHz required;
 APAC `.m4a` on macOS):
 
