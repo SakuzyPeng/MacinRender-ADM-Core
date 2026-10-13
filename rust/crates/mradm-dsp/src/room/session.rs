@@ -15,6 +15,27 @@ use std::sync::{Arc, Mutex};
 
 pub const MAX_SOURCES: usize = 512;
 
+fn validate_reflection_grid(frames: u64) -> Result<u64> {
+    if frames.is_multiple_of(BLOCK as u64) && frames <= 65_536 {
+        Ok(frames)
+    } else {
+        Err(Error::InvalidArgument(
+            "Room reflection grid must be 0 or a multiple of 256 up to 65536",
+        ))
+    }
+}
+/// Preparation-only evaluation override for ADR 0020 (proposed). Unset keeps
+/// the ADR 0019 output; it is never read during processing.
+fn reflection_grid_from_environment() -> Result<u64> {
+    match std::env::var("MR_ADM_ROOM_REFLECTION_GRID") {
+        Ok(value) => validate_reflection_grid(value.parse().map_err(|_| {
+            Error::InvalidArgument("MR_ADM_ROOM_REFLECTION_GRID must be an integer")
+        })?),
+        Err(std::env::VarError::NotPresent) => Ok(0),
+        Err(_) => Err(Error::InvalidArgument("Invalid room reflection grid")),
+    }
+}
+
 pub struct PreparedSet {
     pub room: Arc<PreparedRoom>,
     pub lfe: Arc<LongFilters>,
@@ -153,6 +174,8 @@ struct Slot {
     /// This source's own update points in the current canonical block: its
     /// geometry events, initial command and live override changes (ADR 0019).
     marks: [bool; BLOCK],
+    /// Whether a geometry field is ramping at each state snapshot.
+    moving: [bool; BLOCK],
     active: bool,
     born: u64,
     retired_at: Option<u64>,
@@ -194,6 +217,7 @@ impl Slot {
             head: [0.; BLOCK],
             head_signal: HeadSignal::new(room)?,
             marks: [false; BLOCK],
+            moving: [false; BLOCK],
             active: true,
             born,
             retired_at: None,
@@ -306,23 +330,32 @@ impl Slot {
         if self.control.is_settled(sample) && self.live.is_settled(sample) {
             let state = self.input_state(sample);
             for (i, snapshot) in snapshots.iter().copied().enumerate() {
+                let snapshot = snapshot || self.marks[offset + i];
+                if snapshot {
+                    self.moving[offset + i] = false;
+                }
                 self.input_with_state(
                     input.map_or(0., |v| v[i]),
                     &state,
                     offset + i,
                     scene,
-                    snapshot || self.marks[offset + i],
+                    snapshot,
                 )?;
             }
         } else {
             for (i, snapshot) in snapshots.iter().copied().enumerate() {
-                let state = self.input_state(sample + i as u64);
+                let at = sample + i as u64;
+                let snapshot = snapshot || self.marks[offset + i];
+                if snapshot {
+                    self.moving[offset + i] = self.control.geometry_ramping(at);
+                }
+                let state = self.input_state(at);
                 self.input_with_state(
                     input.map_or(0., |v| v[i]),
                     &state,
                     offset + i,
                     scene,
-                    snapshot || self.marks[offset + i],
+                    snapshot,
                 )?;
             }
         }
@@ -400,6 +433,7 @@ impl Voice {
         marks: &[bool; BLOCK],
         poses: &[[f32; 3]; BLOCK],
         wet_gain: &[f32; BLOCK],
+        reflection_grid: u64,
         start: u64,
         metres: f64,
         scene: bool,
@@ -463,12 +497,18 @@ impl Voice {
                 &mut self.samples,
             )?;
             if prepare_filters {
+                // ADR 0020 (proposed, off by default): inside a geometry ramp,
+                // reflections update only on the absolute reflection grid.
+                let defer = reflection_grid != 0
+                    && slot.moving[begin]
+                    && !(start + begin as u64).is_multiple_of(reflection_grid);
                 self.emitter.update_sources(
                     position,
                     &self.samples[..n],
                     poses[begin],
                     moved,
                     true,
+                    defer,
                     &mut self.work,
                 )?;
             }
@@ -490,6 +530,7 @@ struct VoiceInput {
     description: RoomDescription,
     born: u64,
     marks: [bool; BLOCK],
+    moving: [bool; BLOCK],
     states: [State; BLOCK],
     directions: [[f64; 3]; BLOCK],
     world: [f32; BLOCK],
@@ -500,6 +541,7 @@ impl Default for VoiceInput {
             description: RoomDescription::default(),
             born: 0,
             marks: [false; BLOCK],
+            moving: [false; BLOCK],
             states: [State::default(); BLOCK],
             directions: [[1., 0., 0.]; BLOCK],
             world: [0.; BLOCK],
@@ -511,6 +553,7 @@ struct VoiceBlock {
     marks: [bool; BLOCK],
     poses: [[f32; 3]; BLOCK],
     wet_gain: [f32; BLOCK],
+    reflection_grid: u64,
     start: u64,
     metres: f64,
     scene: bool,
@@ -538,6 +581,7 @@ fn render_voice(
         &block.marks,
         &block.poses,
         &block.wet_gain,
+        block.reflection_grid,
         block.start,
         block.metres,
         block.scene,
@@ -853,6 +897,7 @@ impl Instance {
         marks: &[bool; BLOCK],
         poses: &[[f32; 3]; BLOCK],
         wet_gain: &[f32; BLOCK],
+        reflection_grid: u64,
         start: u64,
         metres: f64,
         scene: bool,
@@ -866,6 +911,7 @@ impl Instance {
                 input.description = slot.description;
                 input.born = slot.born;
                 input.marks = slot.marks;
+                input.moving = slot.moving;
                 input.states.copy_from_slice(&slot.states);
                 input.directions.copy_from_slice(&slot.directions);
                 input.world = slot.world;
@@ -874,6 +920,7 @@ impl Instance {
                 marks: *marks,
                 poses: *poses,
                 wet_gain: *wet_gain,
+                reflection_grid,
                 start,
                 metres,
                 scene,
@@ -934,6 +981,7 @@ pub struct Session {
     metres: f64,
     scene: bool,
     spread: bool,
+    reflection_grid: u64,
     head_work: ResponseWork,
     head_room: Arc<PreparedRoom>,
     head_samples: [WeightedPosition; MAX_SAMPLES],
@@ -1040,6 +1088,7 @@ impl Session {
             metres,
             scene,
             spread,
+            reflection_grid: reflection_grid_from_environment()?,
             head_work: ResponseWork::new(&prepared.room)?,
             head_room: prepared.room.clone(),
             head_samples: [WeightedPosition::default(); MAX_SAMPLES],
@@ -1238,6 +1287,17 @@ impl Session {
         slot.control.apply(command, sample)?;
         slot.track_direction(slot.spatial_state(slot.control.at(sample)));
         Ok(())
+    }
+    /// Evaluation switch for ADR 0020 (proposed): inside a geometry ramp,
+    /// reflections and the late send update only every `frames` absolute
+    /// samples; 0 keeps the ADR 0019 output. Configure before processing.
+    #[doc(hidden)]
+    pub fn set_reflection_grid(&mut self, frames: u64) -> Result<()> {
+        self.reflection_grid = validate_reflection_grid(frames)?;
+        Ok(())
+    }
+    pub fn reflection_grid(&self) -> u64 {
+        self.reflection_grid
     }
     pub fn set_pose(&mut self, pose: [f32; 3]) -> Result<()> {
         if pose.iter().any(|v| !v.is_finite()) {
@@ -1647,6 +1707,7 @@ impl Session {
             &self.marks,
             &self.poses,
             &old_gain,
+            self.reflection_grid,
             start,
             self.metres,
             self.scene,
@@ -1660,6 +1721,7 @@ impl Session {
                 &self.marks,
                 &self.poses,
                 &new_gain,
+                self.reflection_grid,
                 start,
                 self.metres,
                 self.scene,

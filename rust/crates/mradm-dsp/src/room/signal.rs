@@ -27,6 +27,8 @@ pub struct Emitter {
     pub position: Position,
     initialized: bool,
     early_initialized: bool,
+    /// Reflections and late send lag a direct-only update (ADR 0020).
+    early_stale: bool,
     render_direct: bool,
     orientation: [f32; 3],
 }
@@ -50,6 +52,7 @@ impl Emitter {
             position,
             initialized: false,
             early_initialized: false,
+            early_stale: false,
             render_direct: true,
             orientation: [0.; 3],
         })
@@ -66,6 +69,7 @@ impl Emitter {
         self.eq_shared = true;
         self.initialized = false;
         self.early_initialized = false;
+        self.early_stale = false;
         self.render_direct = true;
     }
 
@@ -84,6 +88,7 @@ impl Emitter {
             orientation,
             false,
             true,
+            false,
             work,
         )
     }
@@ -94,26 +99,66 @@ impl Emitter {
         orientation: [f32; 3],
         force: bool,
         early: bool,
+        defer_early: bool,
         work: &mut ResponseWork,
     ) -> Result<()> {
+        let taps = self.room.short_taps;
+        // ADR 0020 (proposed): an update that only moves the source may refresh
+        // the direct path alone. Reflections and the late send follow at the
+        // next full update; a pose change always updates every branch.
+        if defer_early
+            && early
+            && self.initialized
+            && self.early_initialized
+            && orientation == self.orientation
+        {
+            if !force && position.point == self.position.point {
+                return Ok(());
+            }
+            work.build_branches(
+                &self.room,
+                sources,
+                &Rotation::new(orientation)?,
+                self.render_direct,
+                false,
+            )?;
+            if self.render_direct {
+                self.direct
+                    .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
+            }
+            self.position = position;
+            self.early_stale = true;
+            return Ok(());
+        }
+        let early_stale = early && self.early_stale;
         if self.initialized
             && !force
             && position.point == self.position.point
             && orientation == self.orientation
             && (!early || self.early_initialized)
+            && !early_stale
         {
             return Ok(());
         }
-        let moved = force || !self.initialized || position.point != self.position.point;
+        // Only the deferred branches are out of date.
+        let direct = self.render_direct
+            && !(early_stale
+                && !force
+                && position.point == self.position.point
+                && orientation == self.orientation);
+        let moved =
+            force || !self.initialized || position.point != self.position.point || early_stale;
         work.build_branches(
             &self.room,
             sources,
             &Rotation::new(orientation)?,
-            self.render_direct,
+            direct,
             early,
         )?;
-        let taps = self.room.short_taps;
-        if self.render_direct {
+        if early {
+            self.early_stale = false;
+        }
+        if direct {
             self.direct
                 .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
         }

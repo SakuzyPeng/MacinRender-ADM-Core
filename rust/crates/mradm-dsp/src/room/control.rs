@@ -213,6 +213,13 @@ impl Control {
     pub(super) fn is_settled(&self, sample: u64) -> bool {
         sample >= self.settled
     }
+    /// Whether a geometry field is still interpolating at this sample. Jumps,
+    /// screenRef and headLocked changes take effect at once and never ramp.
+    #[inline]
+    pub(super) fn geometry_ramping(&self, sample: u64) -> bool {
+        sample < self.settled
+            && (0..11).any(|field| (1 << field) & GEOMETRY_FIELDS != 0 && sample < self.end[field])
+    }
     #[inline]
     pub fn at(&self, sample: u64) -> State {
         // Most PCM samples have no pending metadata ramps. This returns exactly
