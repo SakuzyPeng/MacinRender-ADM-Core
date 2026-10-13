@@ -70,6 +70,19 @@ pub struct FftPlanner<T: FftNum> {
 impl<T: FftNum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance.
     pub fn new() -> Self {
+        #[cfg(feature = "mradm-scalar-default")]
+        {
+            Self {
+                chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
+            }
+        }
+        #[cfg(not(feature = "mradm-scalar-default"))]
+        Self::new_native()
+    }
+
+    /// Explicit native SIMD dispatch. MacinRender keeps the default constructor
+    /// scalar so an opt-in realtime room cannot change another renderer's FFT.
+    pub fn new_native() -> Self {
         if let Ok(avx_planner) = FftPlannerAvx::new() {
             Self {
                 chosen_planner: ChosenFftPlanner::Avx(avx_planner),

@@ -1,8 +1,9 @@
 # 原生实时房间渲染
 
-状态：v1 功能已实现；房间三平台数值与参考波形回归通过，32 源实时容量已在所测 macOS / Windows
-桌面机器上通过。Linux 云主机的实时计算预算未通过；端到端设备延迟未测。
-证据、配置与边界见 [验证记录](REALTIME_ROOM_VALIDATION.md)。
+状态：v1 功能已实现，提供精确与实时两档；房间三平台数值与参考波形回归通过。
+实时容量按静态、头姿、换房和密集运动分别报告，档位本身不保证任意负载都满足截止时间。
+既有证据见 [验证记录](REALTIME_ROOM_VALIDATION.md)，档位对比见 [第一版档位验证](ROOM_QUALITY_V1.md)。
+端到端设备延迟未测。
 
 ## 契约
 
@@ -29,6 +30,35 @@ headLocked 分支加入同样的保护延迟。参考包为 256 帧（5.33 ms）
 `headLocked` 使用头部坐标的干声 HRIR，保持真实距离传播和 `2.1/r`，不经过世界旋转、房间 EQ 或反射。语义 LFE 输入保持独立，使用共用核，
 不附加 +10 dB、分频、低频重定向或 split-power。extent / divergence / diffuse
 仍为声源语义，不能把 diffuse 当作房间湿声旋钮。
+
+## 精确与实时档位
+
+默认 `exact` 保留现有标量 FFT、控制更新和跨平台数值基线。显式选择 `realtime` 时，
+房间实例启用原生 SIMD FFT，并在连续声源几何斜坡期间将早反射／晚场发送更新改为
+1024 帧周期（48 kHz 下约 21.33 ms），按声源 ID 错开相位。直达仍按原更新点处理；
+头姿、跳变、离散语义、字段清除等立即刷新。镜像阶数、所有有效路径和 FIR 支持不变。
+
+两档可同时使用；档位在会话创建时固定，换房和 epoch reset 保留它。实时档位保持
+同一二进制／CPU 能力下的分块位一致性，允许不同架构的 PCM 位差。seek 预热增加一个
+反射周期，处理 FIFO 与有限尾声不变。详见 [ADR 0020](../adr/0020-room-quality-tiers.md)；
+性能、波形误差和当前边界见 [第一版验证](ROOM_QUALITY_V1.md)。
+
+```sh
+build/release/mradm room-check /path/to/room.json --quality realtime
+build/release/mradm render -i programme.wav -o binaural.wav --renderer room-binaural \
+  --room /path/to/room.json --room-quality realtime
+```
+
+C++ 使用 `RoomConfig::quality = RoomQuality::realtime`。C ABI v1.48 提供：
+
+- 文件渲染／文件流式渲染：`adm_render_options_set_room_quality(options, ADM_ROOM_QUALITY_REALTIME)`；
+- 检查：`adm_room_inspect_with_quality(context, config, quality, out_json)`；
+- Scene 流式渲染：`adm_create_scene_stream_with_room_quality(context, scene, room, quality, screen_json, out)`。
+
+原有入口仍为精确档位，`adm_room_config_t` 大小不变。`set_room`／`clear_room` 保留 options
+选定的档位。检查 JSON 报告 `quality`、`processing_policy`、`fft_policy` 和
+`reflection_update_frames`，状态 JSON 报告档位与周期，能力 JSON 在 `qualities` 中列出两档。
+此档位名不表示所有主机都能满足实时预算，尤其频繁头姿仍可能触发全部声源反射重建。
 
 ## 资源与处理
 

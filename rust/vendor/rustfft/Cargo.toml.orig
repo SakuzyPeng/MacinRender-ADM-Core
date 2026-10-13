@@ -14,6 +14,7 @@ categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
 [features]
+mradm-scalar-default = []
 default = ["avx", "sse", "neon"]
 
 # On x86_64, the "avx" feature enables compilation of AVX-acclerated code.

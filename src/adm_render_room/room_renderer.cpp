@@ -547,6 +547,8 @@ CapabilityReport room_capabilities() {
     result.hrtf_sources = {"user-sofa", "prepared-hrir"};
     result.supported_layouts = {{"binaural", "Room binaural", 2, true, 0, true, true}};
     result.modes = {{"hybrid-shoebox-v1", "Finite hybrid room", {"binaural"}, {48000}, true}};
+    result.qualities = {{"exact", "精确", {"binaural"}, {48000}, true},
+                        {"realtime", "实时", {"binaural"}, {48000}, true}};
     return result;
 }
 std::unique_ptr<IRenderer> create_room_renderer() {

@@ -44,6 +44,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/ejmahler/RustFFT"
 
 [features]
+mradm-scalar-default = []
 avx = []
 default = [
     "avx",

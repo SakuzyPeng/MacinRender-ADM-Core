@@ -9,10 +9,10 @@ rust-version = "1.98"
 license = "MIT"
 
 [workspace.dependencies]
-# FFT stays on RustFFT's scalar planner: the SIMD backends (AVX/SSE/NEON) are picked at run time
-# and use different decompositions and FMA, so their results differ across platforms (ADR 0015).
+# The patched default planner remains scalar even with native kernels compiled.
+# Only the room realtime quality explicitly requests the native planner.
 realfft = { version = "=3.5.0", default-features = false }
-rustfft = { version = "=6.4.1", default-features = false }
+rustfft = { version = "=6.4.1", default-features = false, features = ["mradm-scalar-default", "avx", "sse", "neon"] }
 # libm-force routes every simba/nalgebra scalar function (SVD rotations, hypot, atan2, ...) through
 # the pure-Rust libm port instead of the platform C library (ADR 0017).
 nalgebra = { version = "=0.35.0", default-features = false, features = ["std", "libm-force"] }

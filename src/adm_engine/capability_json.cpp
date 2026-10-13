@@ -63,6 +63,17 @@ json backend_to_json(const char* renderer, const CapabilityReport& caps) {
                                   {"supports_realtime", mode.supports_realtime}});
         }
     }
+    if (!caps.qualities.empty()) {
+        j["default_quality"] = caps.qualities.front().id;
+        j["qualities"] = json::array();
+        for (const auto& quality : caps.qualities) {
+            j["qualities"].push_back({{"id", quality.id},
+                                      {"display_name", quality.display_name},
+                                      {"layouts", quality.layouts},
+                                      {"sample_rates", quality.sample_rates},
+                                      {"supports_realtime", quality.supports_realtime}});
+        }
+    }
     json layouts = json::array();
     for (const auto& layout : caps.supported_layouts) {
         // The 0+2+0 renderer path exists only for diagnostics and tests. Public

@@ -28,6 +28,9 @@ struct CapabilityReport {
     std::string backend_version;
     std::vector<Layout> supported_layouts;
     std::vector<Mode> modes;
+    // Optional processing qualities, separate from backend algorithms/modes.
+    // The first entry is the default for existing callers.
+    std::vector<Mode> qualities;
     bool supports_objects{false};
     bool supports_direct_speakers{false};
     bool supports_hoa{false};

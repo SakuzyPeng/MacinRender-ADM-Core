@@ -3,12 +3,14 @@ use super::{
     geometry::{self, Image, Position, Rotation, WeightedPosition},
     hrir::{FRACTIONAL_TAPS, FractionalBank, HrirBank, PHASES},
     partition::LongFilters,
+    quality::Quality,
     resources::{HrirData, RoomProfile},
 };
 use crate::{Complex32, Error, Result, fft::RealFft};
 use std::sync::Arc;
 
 pub struct PreparedRoom {
+    pub quality: Quality,
     pub profile: Arc<RoomProfile>,
     pub hrir: Arc<HrirBank>,
     pub decoder_hrir: Arc<HrirBank>,
@@ -65,6 +67,18 @@ impl PreparedRoom {
     }
 
     pub fn new(profile: Arc<RoomProfile>, hrir: Arc<HrirBank>) -> Result<Self> {
+        Self::with_quality(profile, hrir, Quality::Exact)
+    }
+    pub fn with_quality(
+        profile: Arc<RoomProfile>,
+        hrir: Arc<HrirBank>,
+        quality: Quality,
+    ) -> Result<Self> {
+        if hrir.policy != quality.fft() {
+            return Err(Error::InvalidArgument(
+                "Room and HRIR quality policies differ",
+            ));
+        }
         let (fft_length, short_taps, send_taps) = Self::required_fft(&profile, &hrir.data)?;
         if hrir.fft_length != fft_length {
             return Err(Error::InvalidArgument(
@@ -74,7 +88,7 @@ impl PreparedRoom {
         let images = geometry::images(profile.reflection_order);
         let bins = fft_length / 2 + 1;
         let mut material = vec![Complex32::default(); images.len() * bins];
-        let mut fft = RealFft::new(fft_length)?;
+        let mut fft = RealFft::with_policy(fft_length, quality.fft())?;
         let mut time = vec![0.; fft_length];
         for (index, image) in images.iter().enumerate() {
             let mut band_gain = [1f32; 8];
@@ -96,16 +110,21 @@ impl PreparedRoom {
             }
             fft.forward(&time, &mut material[index * bins..(index + 1) * bins])?;
         }
-        let propagation = FractionalBank::from_impulses(fft_length, &profile.propagation_phases)?;
-        let eq = LongFilters::prepare(1, &profile.eq)?;
+        let propagation = FractionalBank::from_impulses_with_policy(
+            fft_length,
+            &profile.propagation_phases,
+            quality.fft(),
+        )?;
+        let eq = LongFilters::with_policy(1, &profile.eq, quality.fft())?;
         let late = profile
             .late
             .chunks_exact(profile.late_taps)
-            .map(|direction| LongFilters::prepare(1, direction))
+            .map(|direction| LongFilters::with_policy(1, direction, quality.fft()))
             .collect::<Result<Vec<_>>>()?;
         let kernel_taps = hrir.data.output_taps + FRACTIONAL_TAPS + profile.band_taps - 2;
         let path_bucket_stride = (fft_length - kernel_taps + 1) / super::BLOCK * super::BLOCK;
         Ok(Self {
+            quality,
             profile,
             decoder_hrir: hrir.short.clone().unwrap_or_else(|| hrir.clone()),
             hrir,
@@ -134,6 +153,7 @@ impl PreparedRoom {
         let send = self.send_taps.div_ceil(super::BLOCK) * super::BLOCK;
         let hrir = self.hrir.data.output_taps.div_ceil(super::BLOCK) * super::BLOCK;
         super::FILTER_FADE
+            + self.quality.reflection_frames()
             + self.eq.history_frames()
             + short.max(send + self.late[0].history_frames() + hrir)
             + super::BLOCK
@@ -214,7 +234,10 @@ pub struct ResponseWork {
     pub early_support: usize,
     pub query_cache: Option<Arc<std::sync::Mutex<super::hrir::QueryCache>>>,
     decoder: super::hrir::TimeQuery,
-    cached_source: Option<WeightedPosition>,
+    // Path and transfer caches per branch: a direct-only update (ADR 0020)
+    // leaves the reflection entries for the next full update.
+    cached_direct: Option<WeightedPosition>,
+    cached_early: Option<WeightedPosition>,
     cached_paths: Vec<geometry::Path>,
     cached_transfers: Vec<f32>,
 }
@@ -223,7 +246,7 @@ impl ResponseWork {
     pub fn new(room: &PreparedRoom) -> Result<Self> {
         let bins = room.fft_length / 2 + 1;
         let mut result = Self {
-            fft: RealFft::new(room.fft_length)?,
+            fft: RealFft::with_policy(room.fft_length, room.quality.fft())?,
             query: vec![0.; room.hrir.stride() * 4],
             direct: vec![
                 0.;
@@ -243,7 +266,8 @@ impl ResponseWork {
             early_support: 1,
             query_cache: None,
             decoder: super::hrir::TimeQuery::new(room.decoder_hrir.clone())?,
-            cached_source: None,
+            cached_direct: None,
+            cached_early: None,
             cached_paths: vec![
                 geometry::Path {
                     direction: [1., 0., 0.],
@@ -307,15 +331,21 @@ impl ResponseWork {
         self.direct_support = 1;
         self.early_support = 1;
         let cache = sources.len() == 1;
-        if cache
-            && self.cached_source.is_none_or(|last| {
+        let stale = |last: Option<WeightedPosition>| {
+            last.is_none_or(|last| {
                 last.position.point != sources[0].position.point
                     || last.position.direction != sources[0].position.direction
                     || last.weight != sources[0].weight
             })
-        {
+        };
+        let fill_direct = cache && direct && stale(self.cached_direct);
+        let fill_early = cache && early && stale(self.cached_early);
+        if fill_direct || fill_early {
             let source = sources[0];
             for (index, image) in room.images.iter().copied().enumerate() {
+                if (image.order == 0 && !fill_direct) || (image.order != 0 && !fill_early) {
+                    continue;
+                }
                 let path = geometry::path(&room.profile, source.position, image);
                 self.cached_paths[index] = path;
                 if path.gain == 0. {
@@ -336,7 +366,12 @@ impl ResponseWork {
                     self.cached_transfers[index * stride * 2 + stride + band] = value.im;
                 }
             }
-            self.cached_source = Some(source);
+            if fill_direct {
+                self.cached_direct = Some(source);
+            }
+            if fill_early {
+                self.cached_early = Some(source);
+            }
         }
         for source in sources {
             for (index, image) in room.images.iter().copied().enumerate() {

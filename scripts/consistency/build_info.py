@@ -168,9 +168,12 @@ def collect(build):
         packages = {p['id']: p['name'] for p in metadata['packages']}
         record['rust.resolved_features'] = json.dumps({packages[n['id']]: sorted(n['features'])
             for n in metadata.get('resolve', {}).get('nodes', []) if packages.get(n['id'], '').startswith('mradm-')}, sort_keys=True)
-        # Resolved FFT features: any SIMD feature brings back run-time backend dispatch (ADR 0015).
+        # Native kernels are safe for exact paths only with the patched scalar-default policy.
         record['rust.fft_features'] = json.dumps({packages[n['id']]: sorted(n['features'])
             for n in metadata.get('resolve', {}).get('nodes', []) if packages.get(n['id']) in {'rustfft', 'realfft'}}, sort_keys=True)
+        fft = json.loads(record['rust.fft_features'])
+        if 'mradm-scalar-default' in fft.get('rustfft', []):
+            record['rust.fft_dispatch'] = 'scalar-default-native-room-opt-in-v1'
         record['rust.sofa_enabled'] = str(enabled(cache.get('MR_ADM_ENABLE_SOFA', 'OFF')))
         for package in metadata['packages']:
             if package['name'] in {'rustfft', 'realfft', 'nalgebra', 'sofar'}:

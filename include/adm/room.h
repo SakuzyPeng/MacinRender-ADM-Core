@@ -30,12 +30,25 @@ class RoomProfile final {
     void* handle_;
 };
 
+// Fixed for a session. Existing callers retain the deterministic exact path.
+enum class RoomQuality : std::uint32_t { exact = 0, realtime = 1 };
+[[nodiscard]] constexpr const char* room_quality_name(RoomQuality quality) {
+    switch (quality) {
+    case RoomQuality::exact:
+        return "exact";
+    case RoomQuality::realtime:
+        return "realtime";
+    }
+    return "unknown";
+}
+
 // Public snapshots are consumed in other translation units and language bindings.
 // cppcheck-suppress-begin unusedStructMember
 struct RoomConfig {
     std::shared_ptr<const RoomProfile> profile;
     std::filesystem::path hrir_manifest; // SOFA or prepared HRIR JSON; empty selects SOFA option/package default
     double metres_per_unit{1.5};
+    RoomQuality quality{RoomQuality::exact};
 };
 
 enum class RoomSwitchState : std::uint32_t { applied, preparing, transitioning, draining, failed };
@@ -50,6 +63,8 @@ struct RoomStatus {
     std::uint64_t material_filter_guard_frames{0};
     std::uint32_t constrained_sources{0};
     std::string message;
+    RoomQuality quality{RoomQuality::exact};
+    std::uint32_t reflection_update_frames{0};
 };
 struct RoomSourcePosition {
     std::uint64_t element_id{0};

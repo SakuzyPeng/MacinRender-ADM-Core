@@ -27,6 +27,8 @@ pub struct Emitter {
     pub position: Position,
     initialized: bool,
     early_initialized: bool,
+    /// Reflections and late send lag a direct-only update (ADR 0020).
+    early_stale: bool,
     render_direct: bool,
     orientation: [f32; 3],
 }
@@ -37,11 +39,17 @@ impl Emitter {
             direct_eq: Long::new(room.eq.clone())?,
             wet_eq: Long::new(room.eq.clone())?,
             eq_shared: true,
-            direct_history: InputHistory::new(room.short_taps.max(room.send_taps))?,
-            wet_history: InputHistory::new(room.short_taps.max(room.send_taps))?,
-            direct: Dynamic::reader(2, room.short_taps)?,
-            early: Dynamic::reader(2, room.short_taps)?,
-            send: Dynamic::reader(1, room.send_taps)?,
+            direct_history: InputHistory::with_policy(
+                room.short_taps.max(room.send_taps),
+                room.quality.fft(),
+            )?,
+            wet_history: InputHistory::with_policy(
+                room.short_taps.max(room.send_taps),
+                room.quality.fft(),
+            )?,
+            direct: Dynamic::reader_with_policy(2, room.short_taps, room.quality.fft())?,
+            early: Dynamic::reader_with_policy(2, room.short_taps, room.quality.fft())?,
+            send: Dynamic::reader_with_policy(1, room.send_taps, room.quality.fft())?,
             send_impulse: vec![0.; room.send_taps],
             direct_input: [0.; BLOCK],
             wet_input: [0.; BLOCK],
@@ -50,6 +58,7 @@ impl Emitter {
             position,
             initialized: false,
             early_initialized: false,
+            early_stale: false,
             render_direct: true,
             orientation: [0.; 3],
         })
@@ -66,6 +75,7 @@ impl Emitter {
         self.eq_shared = true;
         self.initialized = false;
         self.early_initialized = false;
+        self.early_stale = false;
         self.render_direct = true;
     }
 
@@ -84,9 +94,11 @@ impl Emitter {
             orientation,
             false,
             true,
+            false,
             work,
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn update_sources(
         &mut self,
         position: Position,
@@ -94,26 +106,66 @@ impl Emitter {
         orientation: [f32; 3],
         force: bool,
         early: bool,
+        defer_early: bool,
         work: &mut ResponseWork,
     ) -> Result<()> {
+        let taps = self.room.short_taps;
+        // ADR 0020: an update that only moves the source may refresh
+        // the direct path alone. Reflections and the late send follow at the
+        // next full update; a pose change always updates every branch.
+        if defer_early
+            && early
+            && self.initialized
+            && self.early_initialized
+            && orientation == self.orientation
+        {
+            if !force && position.point == self.position.point {
+                return Ok(());
+            }
+            work.build_branches(
+                &self.room,
+                sources,
+                &Rotation::new(orientation)?,
+                self.render_direct,
+                false,
+            )?;
+            if self.render_direct {
+                self.direct
+                    .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
+            }
+            self.position = position;
+            self.early_stale = true;
+            return Ok(());
+        }
+        let early_stale = early && self.early_stale;
         if self.initialized
             && !force
             && position.point == self.position.point
             && orientation == self.orientation
             && (!early || self.early_initialized)
+            && !early_stale
         {
             return Ok(());
         }
-        let moved = force || !self.initialized || position.point != self.position.point;
+        // Only the deferred branches are out of date.
+        let direct = self.render_direct
+            && !(early_stale
+                && !force
+                && position.point == self.position.point
+                && orientation == self.orientation);
+        let moved =
+            force || !self.initialized || position.point != self.position.point || early_stale;
         work.build_branches(
             &self.room,
             sources,
             &Rotation::new(orientation)?,
-            self.render_direct,
+            direct,
             early,
         )?;
-        let taps = self.room.short_taps;
-        if self.render_direct {
+        if early {
+            self.early_stale = false;
+        }
+        if direct {
             self.direct
                 .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
         }
@@ -420,7 +472,11 @@ impl WorldTail {
             .map(|index| {
                 Ok(Decoder {
                     convolution: if kind != TailKind::Field {
-                        Some(Dynamic::new(2, room.hrir.data.output_taps)?)
+                        Some(Dynamic::with_policy(
+                            2,
+                            room.hrir.data.output_taps,
+                            room.quality.fft(),
+                        )?)
                     } else {
                         None
                     },

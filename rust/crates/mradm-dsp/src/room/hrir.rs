@@ -4,7 +4,7 @@
 use super::{resources::HrirData, spectral::PlanarBank};
 use crate::{
     Complex32, Error, Result,
-    fft::RealFft,
+    fft::{FftPolicy, RealFft},
     geometry::{Vec3, dot, inverse_columns, norm, scale},
 };
 use std::sync::Arc;
@@ -23,6 +23,9 @@ impl FractionalBank {
         super::resources::hash_complex(&self.spectra)
     }
     pub fn normalized(fft_length: usize) -> Result<Self> {
+        Self::normalized_with_policy(fft_length, FftPolicy::Exact)
+    }
+    pub fn normalized_with_policy(fft_length: usize, policy: FftPolicy) -> Result<Self> {
         let mut impulses = vec![0.; (PHASES + 1) * FRACTIONAL_TAPS];
         for phase in 0..=PHASES {
             let fraction = phase as f64 / PHASES as f64;
@@ -42,17 +45,24 @@ impl FractionalBank {
                 impulses[phase * FRACTIONAL_TAPS + i] = (value / sum) as f32;
             }
         }
-        let mut bank = Self::from_impulses(fft_length, &impulses)?;
+        let mut bank = Self::from_impulses_with_policy(fft_length, &impulses, policy)?;
         bank.planar = Some(PlanarBank::new(&bank.spectra, fft_length / 2 + 1));
         Ok(bank)
     }
     pub fn from_impulses(fft_length: usize, impulses: &[f32]) -> Result<Self> {
+        Self::from_impulses_with_policy(fft_length, impulses, FftPolicy::Exact)
+    }
+    pub fn from_impulses_with_policy(
+        fft_length: usize,
+        impulses: &[f32],
+        policy: FftPolicy,
+    ) -> Result<Self> {
         if impulses.len() != (PHASES + 1) * FRACTIONAL_TAPS || fft_length < FRACTIONAL_TAPS {
             return Err(Error::InvalidArgument(
                 "Invalid room fractional-delay table",
             ));
         }
-        let mut fft = RealFft::new(fft_length)?;
+        let mut fft = RealFft::with_policy(fft_length, policy)?;
         let bins = fft.bins();
         let mut time = vec![0.; fft_length];
         let mut spectra = vec![Complex32::default(); (PHASES + 1) * bins];
@@ -97,6 +107,7 @@ struct Node {
 }
 
 pub struct HrirBank {
+    pub policy: FftPolicy,
     pub data: Arc<HrirData>,
     pub fft_length: usize,
     fractions: PlanarBank,
@@ -114,6 +125,7 @@ pub struct HrirBank {
 /// exact direction/FFT key reuses the same HRIR evaluation across room models;
 /// a miss computes the full response. There is no angular quantization.
 pub struct QueryCache {
+    policy: FftPolicy,
     fft_length: usize,
     stride: usize,
     keys: Vec<Option<[u64; 3]>>,
@@ -124,6 +136,7 @@ impl QueryCache {
     pub fn new(bank: &HrirBank, count: usize) -> Self {
         let count = count.min(32);
         let mut result = Self {
+            policy: bank.policy,
             fft_length: bank.fft_length,
             stride: bank.stride() * 4,
             keys: vec![None; count],
@@ -141,7 +154,8 @@ impl QueryCache {
         face: &mut usize,
         out: &mut [f32],
     ) -> Result<()> {
-        if self.fft_length != bank.fft_length || self.keys.is_empty() {
+        if self.policy != bank.policy || self.fft_length != bank.fft_length || self.keys.is_empty()
+        {
             return bank.query(direction, face, out);
         }
         let key = direction.map(f64::to_bits);
@@ -168,7 +182,7 @@ pub struct TimeQuery {
 impl TimeQuery {
     pub fn new(bank: Arc<HrirBank>) -> Result<Self> {
         Ok(Self {
-            fft: RealFft::new(bank.fft_length)?,
+            fft: RealFft::with_policy(bank.fft_length, bank.policy)?,
             spectrum: vec![Complex32::default(); bank.fft_length + 2],
             planar: vec![0.; bank.spectra.stride() * 4],
             time: vec![0.; bank.fft_length],
@@ -210,6 +224,9 @@ impl HrirBank {
             "bvh":hash_f64(self.nodes.iter().flat_map(|n|n.low.into_iter().chain(n.high)))})
     }
     pub fn new(data: Arc<HrirData>, fft_length: usize) -> Result<Self> {
+        Self::with_policy(data, fft_length, FftPolicy::Exact)
+    }
+    pub fn with_policy(data: Arc<HrirData>, fft_length: usize, policy: FftPolicy) -> Result<Self> {
         if fft_length < data.output_taps || fft_length > 32768 {
             return Err(Error::InvalidArgument("Invalid room HRIR FFT support"));
         }
@@ -247,8 +264,10 @@ impl HrirBank {
         }
         // Queries consume only the planar rows. Drop the duplicate complex table
         // after preparation; PlanarBank fingerprints retain its original ordering.
-        let fractions = FractionalBank::normalized(fft_length)?.planar.unwrap();
-        let mut fft = RealFft::new(fft_length)?;
+        let fractions = FractionalBank::normalized_with_policy(fft_length, policy)?
+            .planar
+            .unwrap();
+        let mut fft = RealFft::with_policy(fft_length, policy)?;
         let bins = fft.bins();
         let length = data
             .directions
@@ -329,11 +348,16 @@ impl HrirBank {
         }
         let short_length = data.output_taps.next_power_of_two();
         let short = if short_length < fft_length {
-            Some(Arc::new(Self::new(data.clone(), short_length)?))
+            Some(Arc::new(Self::with_policy(
+                data.clone(),
+                short_length,
+                policy,
+            )?))
         } else {
             None
         };
         let mut result = Self {
+            policy,
             data,
             fft_length,
             fractions,

@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.47）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-11 的 v1.47）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.48）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-13 的 v1.48）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -91,6 +91,17 @@ C ABI 走 **两阶段稳定** 模型：
 - 修改 callback `adm_progress_cb` 形参或调用约定。
 - 修改宏 `ADM_API_VERSION_*` 的含义。
 - 删除导出函数（必须走 deprecation 流程，见下）。
+
+### v1.48（additive，房间精确／实时档位）
+
+- 新增 `adm_room_quality_t`（`EXACT=0`、`REALTIME=1`）、
+  `adm_render_options_set_room_quality`、`adm_room_inspect_with_quality` 和
+  `adm_create_scene_stream_with_room_quality`。旧入口仍默认精确档位。
+- 档位在会话创建时固定；房间切换和 epoch reset 保留档位。无效枚举返回
+  `INVALID_ARGUMENT`；非房间 Scene 后端不接受实时房间档位。
+- 仅扩展 opaque options 内部状态；`adm_room_config_t` 仍为 32 字节（64 位平台），
+  所有既有函数和公开 POD 布局不变。检查与状态 JSON 增加档位和反射更新周期。
+- 数值契约与使用方式见 [ADR 0020](0020-room-quality-tiers.md)。
 
 ### v1.47（additive，房间屏幕映射）
 

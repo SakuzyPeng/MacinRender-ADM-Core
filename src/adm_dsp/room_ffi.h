@@ -98,6 +98,16 @@ int mradm_room_prepare(const void* profile,
                        void** out,
                        char* message,
                        size_t capacity);
+int mradm_room_prepare_quality(const void* profile,
+                               const char* hrir,
+                               size_t hrir_length,
+                               const char* sofa,
+                               size_t sofa_length,
+                               const void* reuse,
+                               uint32_t quality,
+                               void** out,
+                               char* message,
+                               size_t capacity);
 void mradm_room_prepared_destroy(void* handle);
 const char* mradm_room_prepared_json(const void* handle);
 int mradm_room_prepared_info(const void* handle, MradmRoomPreparedInfo* out);
