@@ -150,6 +150,9 @@ struct Slot {
     world: [f32; BLOCK],
     head: [f32; BLOCK],
     head_signal: HeadSignal,
+    /// This source's own update points in the current canonical block: its
+    /// geometry events, initial command and live override changes (ADR 0019).
+    marks: [bool; BLOCK],
     active: bool,
     born: u64,
     retired_at: Option<u64>,
@@ -190,6 +193,7 @@ impl Slot {
             world: [0.; BLOCK],
             head: [0.; BLOCK],
             head_signal: HeadSignal::new(room)?,
+            marks: [false; BLOCK],
             active: true,
             born,
             retired_at: None,
@@ -207,6 +211,7 @@ impl Slot {
         self.diffuse.reset();
         self.live.initialize(self.live_target);
         self.head_signal.reset();
+        self.marks.fill(false);
         self.world.fill(0.);
         self.head.fill(0.);
         self.lock_initialized = false;
@@ -296,7 +301,8 @@ impl Slot {
     ) -> Result<()> {
         // The caller ends spans at every command and canonical block boundary.
         // Stable controls and screen geometry can be combined once; active
-        // ramps still evaluate at every sample exactly as before.
+        // ramps still evaluate at every sample exactly as before. States are
+        // kept at the session's update points and at this source's own.
         if self.control.is_settled(sample) && self.live.is_settled(sample) {
             let state = self.input_state(sample);
             for (i, snapshot) in snapshots.iter().copied().enumerate() {
@@ -305,7 +311,7 @@ impl Slot {
                     &state,
                     offset + i,
                     scene,
-                    snapshot,
+                    snapshot || self.marks[offset + i],
                 )?;
             }
         } else {
@@ -316,7 +322,7 @@ impl Slot {
                     &state,
                     offset + i,
                     scene,
-                    snapshot,
+                    snapshot || self.marks[offset + i],
                 )?;
             }
         }
@@ -391,7 +397,7 @@ impl Voice {
         &mut self,
         room: &PreparedRoom,
         slot: &VoiceInput,
-        boundaries: &[usize],
+        marks: &[bool; BLOCK],
         poses: &[[f32; 3]; BLOCK],
         wet_gain: &[f32; BLOCK],
         start: u64,
@@ -424,11 +430,18 @@ impl Voice {
             wet_gain,
             excitation,
         )?;
-        for segment in boundaries.windows(2) {
-            let (begin, end) = (segment[0], segment[1]);
+        // Update points: the session's (block start, pose changes, source set
+        // and end of input) and this source's own events. Another source's
+        // events never resample this source's ramp (ADR 0019).
+        let marked = |i: usize| marks[i] || slot.marks[i];
+        let mut end = (0..BLOCK).find(|i| marked(*i)).unwrap_or(BLOCK);
+        while end < BLOCK {
+            let begin = end;
+            end = (begin + 1..BLOCK).find(|i| marked(*i)).unwrap_or(BLOCK);
             if start + (begin as u64) < slot.born {
                 continue;
             }
+            let _profile = super::profile::Guard::new(super::profile::Stage::VoiceSegment);
             let shape = Shape::from_state(
                 slot.states[begin],
                 slot.description.position,
@@ -476,6 +489,7 @@ impl Voice {
 struct VoiceInput {
     description: RoomDescription,
     born: u64,
+    marks: [bool; BLOCK],
     states: [State; BLOCK],
     directions: [[f64; 3]; BLOCK],
     world: [f32; BLOCK],
@@ -485,6 +499,7 @@ impl Default for VoiceInput {
         Self {
             description: RoomDescription::default(),
             born: 0,
+            marks: [false; BLOCK],
             states: [State::default(); BLOCK],
             directions: [[1., 0., 0.]; BLOCK],
             world: [0.; BLOCK],
@@ -493,8 +508,7 @@ impl Default for VoiceInput {
 }
 #[derive(Clone, Copy)]
 struct VoiceBlock {
-    boundaries: [usize; BLOCK + 1],
-    count: usize,
+    marks: [bool; BLOCK],
     poses: [[f32; 3]; BLOCK],
     wet_gain: [f32; BLOCK],
     start: u64,
@@ -521,7 +535,7 @@ fn render_voice(
     voice.render(
         room,
         slot,
-        &block.boundaries[..=block.count],
+        &block.marks,
         &block.poses,
         &block.wet_gain,
         block.start,
@@ -846,27 +860,18 @@ impl Instance {
         excitation: bool,
         prepare_filters: bool,
     ) -> Result<()> {
-        let mut boundaries = [0usize; BLOCK + 1];
-        let mut count = 0;
-        for (i, mark) in marks.iter().enumerate() {
-            if *mark {
-                boundaries[count] = i;
-                count += 1;
-            }
-        }
-        boundaries[count] = BLOCK;
         {
             let mut group = self.group.lock().unwrap();
             for (input, slot) in group.inputs.iter_mut().zip(slots) {
                 input.description = slot.description;
                 input.born = slot.born;
+                input.marks = slot.marks;
                 input.states.copy_from_slice(&slot.states);
                 input.directions.copy_from_slice(&slot.directions);
                 input.world = slot.world;
             }
             group.block = Some(VoiceBlock {
-                boundaries,
-                count,
+                marks: *marks,
                 poses: *poses,
                 wet_gain: *wet_gain,
                 start,
@@ -918,7 +923,10 @@ pub struct Session {
     clock: u64,
     fill: usize,
     fifo: [f32; BLOCK * 2],
+    /// Update points for every source: block start, pose changes, the source
+    /// set and end of input. Sources add their own events (`Slot::marks`).
     marks: [bool; BLOCK],
+    /// The same without pose changes, for head-locked dry paths.
     geometry_marks: [bool; BLOCK],
     poses: [[f32; 3]; BLOCK],
     pose: [f32; 3],
@@ -950,6 +958,7 @@ impl Session {
             if target == slot.live_target {
                 continue;
             }
+            slot.marks[self.fill] = true;
             if self.ended.is_some() {
                 slot.live_target = target;
                 continue;
@@ -978,8 +987,6 @@ impl Session {
             }
             slot.live_target = target;
         }
-        self.marks[self.fill] = true;
-        self.geometry_marks[self.fill] = true;
         Ok(())
     }
     pub fn new(prepared: Arc<PreparedSet>, metres: f64, scene: bool, spread: bool) -> Result<Self> {
@@ -1534,25 +1541,19 @@ impl Session {
             previous = command.offset;
         }
         for command in initial {
-            self.slots[self.active[command.element as usize]]
-                .control
-                .initialize(command.state);
-        }
-        if !initial.is_empty() {
-            self.marks[self.fill] = true;
-            self.geometry_marks[self.fill] = true;
+            let slot = &mut self.slots[self.active[command.element as usize]];
+            slot.control.initialize(command.state);
+            slot.marks[self.fill] = true;
         }
         let mut event = 0;
         let mut frame = 0;
         while frame < frames {
             while event < events.len() && events[event].offset as usize == frame {
                 let command = &events[event];
-                self.slots[self.active[command.element as usize]]
-                    .control
-                    .apply(command, self.clock)?;
+                let slot = &mut self.slots[self.active[command.element as usize]];
+                slot.control.apply(command, self.clock)?;
                 if (command.changed | command.cleared) & control::GEOMETRY_FIELDS != 0 {
-                    self.marks[self.fill] = true;
-                    self.geometry_marks[self.fill] = true;
+                    slot.marks[self.fill] = true;
                 }
                 event += 1;
             }
@@ -1563,9 +1564,6 @@ impl Session {
                 self.marks[self.fill] = true;
                 self.pose_changed = false;
             }
-            if self.marks[self.fill] {
-                self.poses[self.fill] = self.pose;
-            }
             // No control event or DSP block boundary lies inside this span.
             // Finish each source's contiguous input while its control/delay
             // state is hot, preserving that source's exact sample order.
@@ -1573,6 +1571,9 @@ impl Session {
             let count = (BLOCK - self.fill)
                 .min(frames - frame)
                 .min(next_event - frame);
+            // The pose only changes between calls. Each source samples it at
+            // its own update points, not only at the session's.
+            self.poses[self.fill..self.fill + count].fill(self.pose);
             for slot in &mut self.slots {
                 if !slot.active {
                     slot.input_span(
@@ -1603,6 +1604,9 @@ impl Session {
                 self.fill = 0;
                 self.marks.fill(false);
                 self.geometry_marks.fill(false);
+                for slot in &mut self.slots {
+                    slot.marks.fill(false);
+                }
             }
         }
         if self
@@ -1700,8 +1704,9 @@ impl Session {
             slot.head_signal.convolution.begin(&slot.head)?;
             let mut begin = 0;
             while begin < BLOCK {
+                // Pose changes are not update points for head-locked dry paths.
                 let end = (begin + 1..BLOCK)
-                    .find(|i| self.geometry_marks[*i])
+                    .find(|i| self.geometry_marks[*i] || slot.marks[*i])
                     .unwrap_or(BLOCK);
                 if start + begin as u64 >= slot.born {
                     let shape = Shape::from_state(

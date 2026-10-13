@@ -4,7 +4,7 @@ use mradm_dsp::{
     Error, Result, geometry,
     room::{
         BLOCK,
-        control::RoomDescription,
+        control::{RoomCommand, RoomDescription, State},
         hrir::HrirBank,
         prepared::PreparedRoom,
         resources::{HrirData, RoomProfile},
@@ -139,25 +139,38 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         if only_sources.is_some_and(|n| n != sources) {
             continue;
         }
-        for (moving, switching) in [(false, false), (true, false), (true, true)] {
+        // The last scenario ramps every source with its own event offset, as
+        // dense ADM automation does; per-source update grids bound its cost.
+        for (moving, switching, ramps) in [
+            (false, false, false),
+            (true, false, false),
+            (true, true, false),
+            (true, false, true),
+        ] {
             let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
+            let around = |i: usize, turn: f32| {
+                let v = geometry::portable_direction(
+                    i as f32 * 360. / sources as f32 + turn,
+                    (i % 3) as f32 * 15. - 15.,
+                );
+                [
+                    (-v[1] * 1.4) as f32,
+                    (v[0] * 1.4) as f32,
+                    (v[2] * 1.4) as f32,
+                ]
+            };
             let descriptions: Vec<_> = (0..sources)
-                .map(|i| {
-                    let v = geometry::portable_direction(
-                        i as f32 * 360. / sources as f32,
-                        (i % 3) as f32 * 15. - 15.,
-                    );
-                    RoomDescription {
-                        id: i as u64 + 1,
-                        position: [
-                            (-v[1] * 1.4) as f32,
-                            (v[0] * 1.4) as f32,
-                            (v[2] * 1.4) as f32,
-                        ],
-                        ..RoomDescription::default()
-                    }
+                .map(|i| RoomDescription {
+                    id: i as u64 + 1,
+                    position: around(i, 0.),
+                    ..RoomDescription::default()
                 })
                 .collect();
+            let offsets: Vec<_> = (0..sources).map(|i| (i * 131 + 17) % frames).collect();
+            let mut distinct = offsets.clone();
+            distinct.sort_unstable();
+            distinct.dedup();
+            let mut commands = Vec::with_capacity(sources);
             session.configure(&descriptions)?;
             let mut candidate = if switching {
                 Some(Box::new(Instance::new(other.clone(), sources)?))
@@ -190,6 +203,22 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         block as f32 * 0.05,
                         block as f32 * 0.02,
                     ])?;
+                }
+                commands.clear();
+                if ramps {
+                    // Each call ramps every source to its next position over the call.
+                    commands.extend((0..sources).map(|i| RoomCommand {
+                        element: i as u32,
+                        offset: offsets[i] as u32,
+                        duration: frames as u32,
+                        changed: 4,
+                        state: State {
+                            position: around(i, (block + 1) as f32 * 0.5),
+                            ..State::default()
+                        },
+                        ..RoomCommand::default()
+                    }));
+                    commands.sort_by_key(|c| c.offset);
                 }
                 if switching
                     && (block == 64
@@ -226,7 +255,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     frames,
                     (0..sources).map(|_| Some(input.as_slice())),
                     &[],
-                    &[],
+                    &commands,
                     &mut output,
                 )?;
                 let duration = start.elapsed().as_secs_f64();
@@ -254,10 +283,20 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let trace_report = trace.map(|trace| trace.report(deadline));
             #[cfg(not(feature = "room-profile"))]
             let trace_report: Option<serde_json::Value> = None;
+            let segments = cfg!(feature = "room-profile").then(|| {
+                let index = mradm_dsp::room::profile::NAMES
+                    .iter()
+                    .position(|name| *name == "voice_segment")
+                    .unwrap();
+                profile[index].0
+            });
             let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
             println!(
                 "{}",
                 serde_json::json!({"sources":sources,"continuous_pose":moving,"room_transition":switching,
+                "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
+                "voice_segments":segments,
+                "voice_segments_per_source_block":segments.map(|v|v as f64/(sources*blocks*frames/BLOCK) as f64),
                 "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
                 "profiling":cfg!(feature = "room-profile"), "stages":stages, "trace":trace_report,
                 "blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
