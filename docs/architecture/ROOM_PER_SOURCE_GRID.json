@@ -458,5 +458,15 @@
     "macOS / Windows builds and tests",
     "32-worker Linux or desktop capacity runs",
     "device runs"
-  ]
+  ],
+  "maintainer_room_bench_source_ramps": {
+    "scenario": "room_bench continuous_pose + source_ramps, 32 sources, 32 distinct event offsets per 512-frame call",
+    "calls": 2814,
+    "calls_over_10.667ms": {
+      "macos": 16,
+      "windows": 2804,
+      "linux": 2814
+    },
+    "source": "Reported by the maintainer; machine details and per-call timings are in the maintainer's runs, not reproduced here."
+  }
 }
