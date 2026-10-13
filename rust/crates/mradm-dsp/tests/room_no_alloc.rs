@@ -93,6 +93,31 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
             ..RoomCommand::default()
         })
         .collect();
+    // Every source ramps with its own event offset, so voices and head-locked
+    // paths segment on per-source update points (ADR 0019).
+    let events: Vec<Vec<RoomCommand>> = (0..512)
+        .map(|block| {
+            let mut commands: Vec<_> = (0..8u32)
+                .map(|element| RoomCommand {
+                    element,
+                    offset: (element * 37 + 11) % BLOCK as u32,
+                    duration: BLOCK as u32,
+                    changed: 4,
+                    state: State {
+                        position: if (block + element as usize).is_multiple_of(2) {
+                            [-0.5, 0.8, 0.2]
+                        } else {
+                            [0.4, 0.9, -0.1]
+                        },
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                })
+                .collect();
+            commands.sort_by_key(|c| c.offset);
+            commands
+        })
+        .collect();
     let input = [0.01; BLOCK];
     let mut output = [0.; BLOCK * 2];
     let mut counts = [0; 512];
@@ -111,7 +136,7 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
                 BLOCK,
                 (0..8).map(|_| Some(input.as_slice())),
                 if block == 0 { &initial } else { &[] },
-                &[],
+                &events[block],
                 &mut output,
             )
             .unwrap();

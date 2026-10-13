@@ -139,6 +139,10 @@ impl Workers {
         result.warm()?;
         Ok(result)
     }
+    /// Whether the caller already runs on a room DSP worker.
+    pub fn in_pool(&self) -> bool {
+        self._pool.current_thread_index().is_some()
+    }
     pub fn warm(&self) -> Result<()> {
         self.run(self.noop.clone())
     }

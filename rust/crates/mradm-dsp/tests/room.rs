@@ -784,6 +784,496 @@ fn alternate(base: &Arc<PreparedSet>, name: &str, energy: f64) -> Arc<PreparedSe
     Arc::new(PreparedSet::new(room).unwrap())
 }
 
+/// Twelve world directions so the late pass takes its parallel branch.
+fn many_directions(base: &Arc<PreparedSet>, name: &str, absorption: f64) -> Arc<PreparedSet> {
+    let mut profile = (*base.room.profile).clone();
+    profile.identity = name.into();
+    profile.id = name.into();
+    profile.absorption = [[absorption; 8]; 6];
+    let t = (1. + 5f64.sqrt()) / 2.;
+    let mut directions = Vec::new();
+    for (a, b) in [(1., t), (-1., t), (1., -t), (-1., -t)] {
+        directions.extend([[0., a, b], [a, b, 0.], [b, 0., a]]);
+    }
+    for direction in &mut directions {
+        let length = geometry::norm(*direction);
+        *direction = direction.map(|v| v / length);
+    }
+    let taps = profile.late_taps;
+    profile.late = (0..directions.len())
+        .flat_map(|d| {
+            (0..taps).map(move |i| {
+                if i == 17 + d * 7 || i == 2200 + d * 5 {
+                    0.05
+                } else {
+                    0.
+                }
+            })
+        })
+        .collect();
+    profile.late_directions = directions;
+    let room = Arc::new(PreparedRoom::new(Arc::new(profile), base.room.hrir.clone()).unwrap());
+    Arc::new(PreparedSet::new(room).unwrap())
+}
+
+#[test]
+fn single_late_pass_matches_field_merge_and_mark_segmented_decoding() {
+    use mradm_dsp::room::{run_on_workers, signal::WorldTail};
+    use std::sync::Mutex;
+    /// One canonical block of late-pass input.
+    #[derive(Clone, Copy)]
+    struct LateBlock {
+        current: [f32; BLOCK],
+        next: [f32; BLOCK],
+        incoming: bool,
+        frames: usize,
+        marks: [bool; BLOCK],
+        poses: [[f32; 3]; BLOCK],
+    }
+
+    struct LatePass {
+        current: WorldTail,
+        next: WorldTail,
+        decoder: WorldTail,
+        output: [f32; 2 * BLOCK],
+        on_worker: bool,
+    }
+
+    impl LatePass {
+        fn new(first: &Arc<PreparedSet>, second: &Arc<PreparedSet>) -> Self {
+            Self {
+                current: WorldTail::new_field(first.room.clone()).unwrap(),
+                next: WorldTail::new_field(second.room.clone()).unwrap(),
+                decoder: WorldTail::new_decoder(first.room.clone()).unwrap(),
+                output: [0.; 2 * BLOCK],
+                on_worker: false,
+            }
+        }
+
+        fn render(&mut self, block: &LateBlock) -> mradm_dsp::Result<()> {
+            self.on_worker = std::thread::current()
+                .name()
+                .is_some_and(|name| name.starts_with("mradm-room-"));
+            self.current.begin_field(&block.current)?;
+            if block.incoming {
+                self.next.begin_field(&block.next)?;
+            }
+            self.decoder.render_world(
+                &self.current,
+                block.frames,
+                block.incoming.then_some(&self.next),
+                &block.marks,
+                &block.poses,
+                &mut self.output,
+            )
+        }
+    }
+    let base = fixture();
+    let first = many_directions(&base, "late-a", 0.94);
+    let second = many_directions(&base, "late-b", 0.9);
+    let count = first.room.profile.late_directions.len();
+    assert!(count >= 8, "the pooled pass must take its parallel branch");
+    // Reference: the former field -> merge -> per-mark decoder chain, with
+    // every stage kept serial so it does not depend on worker scheduling.
+    let mut legacy_a = WorldTail::new_field(first.room.clone()).unwrap();
+    let mut legacy_b = WorldTail::new_field(second.room.clone()).unwrap();
+    let mut legacy = WorldTail::new_decoder(first.room.clone()).unwrap();
+    for tail in [&mut legacy_a, &mut legacy_b, &mut legacy] {
+        tail.set_parallel(false);
+    }
+    // The single pass on the test thread takes the serial branch; on a room
+    // worker it takes the parallel branch, as in session dispatch.
+    let mut serial = LatePass::new(&first, &second);
+    let pooled = Arc::new(Mutex::new(LatePass::new(&first, &second)));
+    let mut world_a = vec![0.; count * BLOCK];
+    let mut world_b = world_a.clone();
+    let mut merged = world_a.clone();
+    let mut expected = [0.; 2 * BLOCK];
+    let mut pose = [0.; 3];
+    for index in 0..40 {
+        let mut block = LateBlock {
+            current: [0.; BLOCK],
+            next: [0.; BLOCK],
+            incoming: (10..30).contains(&index),
+            frames: match index {
+                20 => 0,
+                21 => 77,
+                _ => BLOCK,
+            },
+            marks: [false; BLOCK],
+            poses: [[0.; 3]; BLOCK],
+        };
+        for i in 0..BLOCK {
+            block.current[i] = ((((index * BLOCK + i) * 37) % 193) as f32 - 96.) / 384.;
+            block.next[i] = ((((index * BLOCK + i) * 53) % 211) as f32 - 105.) / 512.;
+        }
+        // Marks every 64 samples; the pose changes only at some of them.
+        for at in (0..BLOCK).step_by(64) {
+            block.marks[at] = true;
+            if (index + at / 64) % 3 == 0 {
+                pose = [index as f32 * 7. + at as f32 * 0.1 - 120., 11., -4.];
+            }
+            block.poses[at] = pose;
+        }
+        legacy_a
+            .process_field(&block.current, &mut world_a)
+            .unwrap();
+        if block.incoming {
+            legacy_b.process_field(&block.next, &mut world_b).unwrap();
+        }
+        for (i, value) in merged.iter_mut().enumerate() {
+            *value = if i % BLOCK >= block.frames {
+                0.
+            } else {
+                world_a[i]
+            };
+            if block.incoming {
+                *value += world_b[i];
+            }
+        }
+        legacy.begin_world(&merged).unwrap();
+        let mut begin = 0;
+        while begin < BLOCK {
+            let end = (begin + 1..BLOCK)
+                .find(|i| block.marks[*i])
+                .unwrap_or(BLOCK);
+            legacy.update(block.poses[begin]).unwrap();
+            legacy
+                .render_range(begin, end - begin, &mut expected)
+                .unwrap();
+            begin = end;
+        }
+        serial.render(&block).unwrap();
+        let job = pooled.clone();
+        run_on_workers(move || job.lock().unwrap().render(&block)).unwrap();
+        let pooled = pooled.lock().unwrap();
+        assert!(!serial.on_worker && pooled.on_worker);
+        for (name, actual) in [("serial", &serial.output), ("parallel", &pooled.output)] {
+            let mismatch = expected
+                .iter()
+                .zip(actual)
+                .position(|(x, y)| x.to_bits() != y.to_bits());
+            assert!(
+                mismatch.is_none(),
+                "{name} block {index} differs at {mismatch:?}"
+            );
+        }
+    }
+    assert!(expected.iter().any(|v| v.abs() > 1e-6));
+}
+
+#[test]
+fn late_pass_ignores_control_marks_without_a_pose_change() {
+    let base = fixture();
+    let first = many_directions(&base, "late-a", 0.94);
+    let second = many_directions(&base, "late-b", 0.9);
+    let descriptions: Vec<_> = (0..5)
+        .map(|i| RoomDescription {
+            id: i + 1,
+            role: if i == 4 { 2 } else { 0 },
+            position: [i as f32 * 0.3 - 0.6, 1., 0.1],
+            ..RoomDescription::default()
+        })
+        .collect();
+    let initial: Vec<_> = descriptions
+        .iter()
+        .enumerate()
+        .map(|(i, d)| RoomCommand {
+            element: i as u32,
+            state: State {
+                position: d.position,
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
+    // Geometry commands that restate the current position still create
+    // session marks. Only pose changes may split or retarget the late pass.
+    let render = |restated: bool| {
+        let mut session = Session::new(first.clone(), 1.5, true, true).unwrap();
+        session.configure(&descriptions).unwrap();
+        let frames = 384;
+        let mut input = vec![0.; frames];
+        let mut block = vec![0.; frames * 2];
+        let mut output = Vec::new();
+        for call in 0..80 {
+            for (i, value) in input.iter_mut().enumerate() {
+                *value = ((((call * frames + i) * 37) % 193) as f32 - 96.) / 384.;
+            }
+            if call % 3 == 1 {
+                session
+                    .set_pose([call as f32 * 1.7 - 40., 5., -3.])
+                    .unwrap();
+            }
+            if call == 10 {
+                session
+                    .queue_room(Box::new(Instance::new(second.clone(), 5).unwrap()), 1)
+                    .unwrap();
+            }
+            let commands: Vec<_> = if restated {
+                (1..4)
+                    .map(|e| RoomCommand {
+                        element: e,
+                        offset: e * 97,
+                        changed: 4,
+                        ..initial[e as usize]
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            session
+                .process(
+                    frames,
+                    (0..5).map(|_| Some(input.as_slice())),
+                    if call == 0 { &initial } else { &[] },
+                    &commands,
+                    &mut block,
+                )
+                .unwrap();
+            output.extend_from_slice(&block);
+            drop(session.take_retired());
+        }
+        assert_eq!(session.info().applied_request, 1, "switch must complete");
+        output
+    };
+    let plain = render(false);
+    let restated = render(true);
+    let mismatch = plain
+        .iter()
+        .zip(&restated)
+        .position(|(a, b)| a.to_bits() != b.to_bits());
+    assert!(
+        mismatch.is_none(),
+        "late output first differs at {mismatch:?}"
+    );
+    assert!(plain.iter().any(|v| v.abs() > 1e-5));
+}
+
+/// A position `radius` metres away at azimuth / elevation in degrees.
+fn around(azimuth: f32, elevation: f32, radius: f64) -> [f32; 3] {
+    let v = geometry::portable_direction(azimuth, elevation);
+    [
+        (-v[1] * radius) as f32,
+        (v[0] * radius) as f32,
+        (v[2] * radius) as f32,
+    ]
+}
+
+#[test]
+fn a_source_ramp_ignores_other_sources_update_points() {
+    use mradm_dsp::room::control::RoomOverride;
+    // ADR 0019: a source is resampled only at block starts, pose changes and
+    // its own events. Restating other sources' controls is a no-op for them
+    // and must not resample a ramp in the world or head-locked branch.
+    let prepared = fixture();
+    let next = alternate(&prepared, "per-source-next", 0.7);
+    let descriptions: Vec<_> = (0..4)
+        .map(|i| RoomDescription {
+            id: i + 1,
+            role: if i == 3 { 2 } else { 0 },
+            position: around(i as f32 * 70. - 100., 10., 1.2),
+            ..RoomDescription::default()
+        })
+        .collect();
+    let initial: Vec<_> = descriptions
+        .iter()
+        .enumerate()
+        .map(|(i, d)| RoomCommand {
+            element: i as u32,
+            state: State {
+                position: d.position,
+                head_locked: u32::from(i == 1),
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
+    let neutral = [RoomOverride {
+        gain_db: -1.5,
+        mute: 0,
+        extent: [1.; 3],
+        diffuse: 1.,
+        divergence: 1.,
+        has_head: 0,
+        head: 0,
+        reserved: 0,
+    }; 4];
+    let render = |restated: bool| {
+        let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        session.configure(&descriptions).unwrap();
+        session.set_overrides(&neutral).unwrap();
+        let frames = 384;
+        let mut input = vec![0.; frames];
+        let mut block = vec![0.; frames * 2];
+        let mut output = Vec::new();
+        for call in 0..80 {
+            for (i, value) in input.iter_mut().enumerate() {
+                *value = ((((call * frames + i) * 37) % 193) as f32 - 96.) / 384.;
+            }
+            session
+                .set_pose([call as f32 * 2.3 - 30., 4., -2.])
+                .unwrap();
+            if call == 10 {
+                session
+                    .queue_room(Box::new(Instance::new(next.clone(), 4).unwrap()), 1)
+                    .unwrap();
+            }
+            if restated && call % 5 == 2 {
+                // Between calls the FIFO is mid-block (384 is not a block multiple).
+                session.set_overrides(&neutral).unwrap();
+            }
+            // Sources 0 (world) and 1 (head-locked) ramp continuously with
+            // their own events at offsets that are not block starts.
+            let mut commands: Vec<_> = [(0u32, 0u32), (1, 100)]
+                .into_iter()
+                .map(|(element, offset)| RoomCommand {
+                    element,
+                    offset,
+                    duration: frames as u32,
+                    changed: 4,
+                    state: State {
+                        position: around(
+                            element as f32 * 90. + call as f32 * 9.,
+                            5.,
+                            1.1 + call as f64 * 0.01,
+                        ),
+                        head_locked: element,
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                })
+                .collect();
+            if restated {
+                for (element, offset) in [(2u32, 37u32), (3, 211), (2, 300)] {
+                    commands.push(RoomCommand {
+                        element,
+                        offset,
+                        changed: 4,
+                        ..initial[element as usize]
+                    });
+                }
+            }
+            commands.sort_by_key(|c| c.offset);
+            session
+                .process(
+                    frames,
+                    (0..4).map(|_| Some(input.as_slice())),
+                    if call == 0 { &initial } else { &[] },
+                    &commands,
+                    &mut block,
+                )
+                .unwrap();
+            output.extend_from_slice(&block);
+            drop(session.take_retired());
+        }
+        assert_eq!(session.info().applied_request, 1, "switch must complete");
+        output
+    };
+    let quiet = render(false);
+    let restated = render(true);
+    let mismatch = quiet
+        .iter()
+        .zip(&restated)
+        .position(|(a, b)| a.to_bits() != b.to_bits());
+    assert!(mismatch.is_none(), "output first differs at {mismatch:?}");
+    assert!(quiet.iter().any(|v| v.abs() > 1e-5));
+}
+
+#[test]
+fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
+    // Every source ramps with its own event offset: 32 distinct offsets per
+    // 512 frames. A session-wide update grid exceeded the 16 targets per
+    // 10 ms of each dynamic filter here; per-source grids keep it bounded.
+    let prepared = fixture();
+    let sources = 32;
+    let descriptions: Vec<_> = (0..sources)
+        .map(|i| RoomDescription {
+            id: i as u64 + 1,
+            position: around(i as f32 * 11.25, (i % 3) as f32 * 15. - 15., 1.4),
+            ..RoomDescription::default()
+        })
+        .collect();
+    let mut events = Vec::new();
+    for call in 0..12 {
+        for source in 0..sources {
+            let sample = call * 512 + (source * 131 + 17) % 512;
+            events.push((
+                sample,
+                RoomCommand {
+                    element: source as u32,
+                    duration: 512,
+                    changed: 4,
+                    state: State {
+                        position: around(
+                            source as f32 * 11.25 + (call + 1) as f32 * 3.,
+                            (source % 3) as f32 * 15. - 15.,
+                            1.4,
+                        ),
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                },
+            ));
+        }
+    }
+    events.sort_by_key(|e| e.0);
+    let total = 12 * 512 + 1024;
+    let render = |chunks: &[usize]| {
+        let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        session.configure(&descriptions).unwrap();
+        let mut input = vec![0.; 4096];
+        let mut block = vec![0.; 8192];
+        let mut commands = Vec::new();
+        let mut output = Vec::new();
+        let (mut position, mut sequence) = (0usize, 0);
+        while position < total {
+            if position.is_multiple_of(512) {
+                session.set_pose([position as f32 * 0.01, 0., 0.]).unwrap();
+            }
+            let count = chunks[sequence % chunks.len()]
+                .min((position / 512 + 1) * 512 - position)
+                .min(total - position);
+            sequence += 1;
+            for (i, value) in input[..count].iter_mut().enumerate() {
+                *value = ((((position + i) * 53) % 211) as f32 - 105.) / 512.;
+            }
+            commands.clear();
+            for (sample, command) in &events {
+                if (position..position + count).contains(sample) {
+                    commands.push(RoomCommand {
+                        offset: (sample - position) as u32,
+                        ..*command
+                    });
+                }
+            }
+            session
+                .process(
+                    count,
+                    (0..sources).map(|_| Some(&input[..count])),
+                    &[],
+                    &commands,
+                    &mut block[..count * 2],
+                )
+                .unwrap();
+            output.extend_from_slice(&block[..count * 2]);
+            position += count;
+        }
+        output
+    };
+    let canonical = render(&[512]);
+    let fragmented = render(&[1, 173, 733, 4096, 19, 257]);
+    let mismatch = canonical
+        .iter()
+        .zip(&fragmented)
+        .position(|(a, b)| a.to_bits() != b.to_bits());
+    assert!(
+        mismatch.is_none(),
+        "fragmented output first differs at {mismatch:?}"
+    );
+    assert!(canonical.iter().any(|v| v.abs() > 1e-5));
+}
+
 #[test]
 fn shorter_room_keeps_the_head_locked_tail_after_switching() {
     let base = fixture();
