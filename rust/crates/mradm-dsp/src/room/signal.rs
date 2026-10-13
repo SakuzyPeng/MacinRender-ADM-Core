@@ -92,6 +92,7 @@ impl Emitter {
             work,
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn update_sources(
         &mut self,
         position: Position,
