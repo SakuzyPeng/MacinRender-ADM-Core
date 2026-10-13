@@ -140,6 +140,8 @@ class LiveGainRamp {
 
     explicit LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms = k_default_ramp_ms);
 
+    // Restore an unstarted ramp; reapply the current target before processing a new timeline position.
+    void reset() noexcept;
     void set_target(float target) noexcept;
     [[nodiscard]] float next() noexcept;
     void fill(std::span<float> output) noexcept;

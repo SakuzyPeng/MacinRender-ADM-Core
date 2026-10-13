@@ -20,6 +20,7 @@
 #include <ranges>
 #include <span>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -1136,14 +1137,22 @@ struct BinauralPrepared final : IPreparedRender {
     uint64_t render_block_size{0};
 };
 
+// Offline windows and file-stream seeks must rebuild history on the same absolute block grid.
+[[nodiscard]] uint64_t ola_preroll_start(uint64_t target, uint64_t block_size, uint64_t overlap_len) {
+    const auto warmup_frames = std::max<uint64_t>({block_size, overlap_len, k_diffuse_delay_len});
+    const uint64_t warmup_blocks = (warmup_frames + block_size - 1U) / block_size;
+    const uint64_t target_block = target / block_size;
+    return target_block > warmup_blocks ? (target_block - warmup_blocks) * block_size : 0;
+}
+
 // File streaming binaural session over the same prepared HRTF tables + source list as
 // render_window. It renders render_block_size-aligned blocks on demand into a FIFO, from
 // which process() serves any requested frame count via render_source_ola_block — the SAME
 // per-source OLA path render_window uses — so a gap-free run from frame 0 is bit-identical
 // to the offline render (the smoke test asserts this). saf_spreader mode (STFT latency
-// compensation) is not yet streamable and is rejected at open. seek() resets the per-source
-// OLA / diffuse / HRTF-cache state (a small discontinuity, acceptable for monitoring) and
-// repositions the reader. set_overrides drives per-source sample gain ramps and coalesced
+// compensation) is not yet streamable and is rejected at open. seek() rebuilds the per-source
+// OLA / diffuse / HRTF-cache state with the offline window's aligned pre-roll and current controls.
+// set_overrides drives per-source sample gain ramps and coalesced
 // topology state crossfades. The expensive prepared state is borrowed by reference; the owning
 // factory keeps it alive for the stream's lifetime.
 class BinauralStream final : public IRenderStream {
@@ -1205,14 +1214,54 @@ class BinauralStream final : public IRenderStream {
         return produced;
     }
 
-    [[nodiscard]] Result<void> seek(uint64_t frame) override {
-        reset_dsp_state(); // small discontinuity (OLA / diffuse tails dropped); fine for monitoring
-        frames_done_ = std::min(frame, total_frames_);
-        if (auto result = reader_->seek_frame(frames_done_); !result) {
+    [[nodiscard]] Result<void> seek(uint64_t frame) override { return seek_with_cancel(frame, {}); }
+
+    [[nodiscard]] bool seek_requires_preroll() const override { return true; }
+
+    [[nodiscard]] Result<void> seek_with_cancel(uint64_t frame, std::stop_token cancel) override {
+        if (cancel.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "双耳文件流式跳转已取消");
+        }
+        const uint64_t target = std::min(frame, total_frames_);
+        const auto start =
+            ola_preroll_start(target, render_block_size_, static_cast<uint64_t>(prepared_.bs->overlap_len));
+        if (auto result = reader_->seek_frame(start); !result) {
             return tl::unexpected{result.error()};
         }
+        frames_done_ = start;
         fifo_.clear();
+        old_fifo_.clear();
         fifo_read_ = 0;
+
+        // A discontinuity has no outgoing graph to crossfade. Adopt the latest edits before pre-roll,
+        // including targets still waiting for the live topology update interval at the old position.
+        if (topology_pending_) {
+            rebuild_sources(pending_topology_);
+            applied_topology_ = pending_topology_;
+            topology_pending_ = false;
+        } else {
+            reset_dsp_state();
+        }
+        next_topology_update_frame_ = target;
+        for (auto& slot : live_gain_slots_) {
+            slot.gain_ramp().reset();
+        }
+        update_live_gain_targets();
+
+        while (frames_done_ < target) {
+            if (cancel.stop_requested()) {
+                return make_error(ErrorCode::cancelled, "双耳文件流式跳转已取消");
+            }
+            const uint64_t block_start = frames_done_;
+            if (auto result = render_block(); !result) {
+                return result;
+            }
+            // Keep the suffix of the containing block so arbitrary pulls never shift the DSP grid.
+            fifo_read_ = static_cast<std::size_t>(std::min(target - block_start, frames_done_ - block_start)) * 2U;
+        }
+        if (cancel.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "双耳文件流式跳转已取消");
+        }
         return {};
     }
 
@@ -1769,11 +1818,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     const uint64_t win_end = windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
     uint64_t start_pos = 0;
     if (windowed && !spreader_mode && win_start > 0) {
-        const auto warmup_frames =
-            std::max<uint64_t>({render_block_size, static_cast<uint64_t>(bs->overlap_len), k_diffuse_delay_len});
-        const uint64_t warmup_blocks = (warmup_frames + render_block_size - 1U) / render_block_size;
-        const uint64_t start_block = win_start / render_block_size;
-        start_pos = (start_block > warmup_blocks) ? ((start_block - warmup_blocks) * render_block_size) : 0;
+        start_pos = ola_preroll_start(win_start, render_block_size, static_cast<uint64_t>(bs->overlap_len));
     }
     if (start_pos > 0) {
         if (auto result = reader->seek_frame(start_pos); !result) {
