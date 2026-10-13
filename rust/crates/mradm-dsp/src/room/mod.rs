@@ -24,6 +24,23 @@ pub const ROOM_FADE: usize = 4_800;
 pub fn set_worker_start_hook(hook: fn()) {
     workers::set_start_hook(hook);
 }
+/// Verification only: run `job` once on the shared room workers through the
+/// session's mailbox, so branches taken only inside the pool (the parallel
+/// late pass) can be compared with their serial form. Allocates per call;
+/// audio processing never uses it.
+#[doc(hidden)]
+pub fn run_on_workers<F>(job: F) -> crate::Result<()>
+where
+    F: FnMut() -> crate::Result<()> + Send + 'static,
+{
+    struct Job<F>(std::sync::Mutex<F>);
+    impl<F: FnMut() -> crate::Result<()> + Send> workers::Work for Job<F> {
+        fn run(&self) -> crate::Result<()> {
+            (self.0.lock().unwrap())()
+        }
+    }
+    workers::shared()?.run(std::sync::Arc::new(Job(std::sync::Mutex::new(job))))
+}
 /// Commit newly allocated scratch pages during preparation. Zero-filled virtual
 /// allocations otherwise defer page faults until the first audible switch.
 pub(crate) fn touch_pages<T: Copy>(values: &mut [T]) {

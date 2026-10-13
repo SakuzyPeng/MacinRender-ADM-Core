@@ -86,7 +86,7 @@ def main():
             rows = [json.loads(line) for line in result.stdout.splitlines()]
             if any(row.get('profiling') is not False for row in rows):
                 raise SystemExit('Capacity runs require rebuilding room_bench without room-profile')
-            if len(rows) != 3 or any(row['sources'] != args.sources for row in rows):
+            if len(rows) != 4 or any(row['sources'] != args.sources for row in rows):
                 raise SystemExit('Unexpected benchmark schema; use the current room_bench executable')
             print(name + ': ' + ', '.join(f"P99={row['p99_ms']:.3f}ms misses={row['deadline_misses']}" for row in rows), flush=True)
 

@@ -1,0 +1,472 @@
+{
+  "schema": "mradm.room-per-source-grid",
+  "version": 1,
+  "adr": "docs/adr/0019-room-per-source-update-grid.md",
+  "base_commit": "ec02592736f32e42a6ad14b21fadb2ca7ea6af8d",
+  "change": "Each room voice and head-locked dry path segments at session update points (block start, pose changes, configure, end_input; head-locked without pose) plus its own geometry events, initial command and live override changes. Other sources' events no longer resample a ramp.",
+  "source_sha256": {
+    "base": {
+      "rust/crates/mradm-dsp/src/room/session.rs": "9abaf8e2a1aeea87b2b09ff97691458dbf0a08618dd7d42c188aa826e93f88b5",
+      "rust/crates/mradm-dsp/src/room/profile.rs": "1dd62ec03d2a16bfaa566aeae17253c84393f9d3dd091559465b0209de288d2e"
+    },
+    "candidate": {
+      "rust/crates/mradm-dsp/src/room/session.rs": "2fbecabe8966244faf41db3112fc4f328088a23feacd64d266d79e1ab90f8b6f",
+      "rust/crates/mradm-dsp/src/room/profile.rs": "d0e5a1187f693e5fad89aaf2ed4fd9500803427f0c355f8f5b7d753847a7a50f"
+    }
+  },
+  "host": "Linux x64 cloud VM, 4 vCPU, default room workers (4); Rust 1.98.0 Release",
+  "resources": {
+    "room": "resources/rooms/reference-7x6x3.2-corrected-v1 (manifest 40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec)",
+    "sofa": "SADIE II D2_48K_24bit_256tap_FIR_SOFA.sofa (sha256 bb5980288fc5c990c821e02c5ddfa274759079b723973cd6ca47ac577243aa0c), prepared natively. Public dummy-head data, not the private acceptance HRIR.",
+    "room_bench_package": "Scratch synthetic room/HRIR package with reference-like sizes (arbitrary values); used only for segment counts and the baseline error check."
+  },
+  "session_hashes": {
+    "probe": "Scratch Release binary calling Session directly (FNV-1a 64 over every output f32 bit pattern). move-kK: every non-LFE source starts a position ramp each call at offset (i mod K) * frames / K with duration = frames.",
+    "probe_binary_sha256": {
+      "before": "8794bd36e1a438d689f92a2666be2443b90b6d909847c10e41d1de0514fbeaf5",
+      "after": "c4d082bc5741bf3ab5826aad6c5118253347112273475489cd433b805229f5bb"
+    },
+    "scenarios": {
+      "pose calls=120 sources=32 frames=512": {
+        "before": "b6dac30345aa0b91",
+        "after": "b6dac30345aa0b91",
+        "identical": true
+      },
+      "pose+switch calls=420 sources=32 frames=512": {
+        "before": "d9986f7d26b19371",
+        "after": "d9986f7d26b19371",
+        "identical": true
+      },
+      "move-k8+pose calls=40 sources=32 frames=512": {
+        "before": "24250bf2b293cf27",
+        "after": "b71f07489086aaf2",
+        "identical": false
+      },
+      "move-k4+pose+lfe calls=120 sources=8 frames=384": {
+        "before": "5dd00062d49943cd",
+        "after": "345935a7e554a50b",
+        "identical": false
+      },
+      "pose+switch+move-k2 calls=420 sources=3 frames=384": {
+        "before": "f1bb0d548519272b",
+        "after": "a8ec8ec5260c6d94",
+        "identical": false
+      },
+      "move-k3+pose calls=120 sources=2 frames=256": {
+        "before": "f2474e97c70e6eae",
+        "after": "98a72f91992103d5",
+        "identical": false
+      },
+      "pose calls=60 sources=1 frames=512": {
+        "before": "18a118f2ac322c89",
+        "after": "18a118f2ac322c89",
+        "identical": true
+      },
+      "static+lfe calls=60 sources=5 frames=512": {
+        "before": "74be3989f3f18f2a",
+        "after": "74be3989f3f18f2a",
+        "identical": true
+      },
+      "move-k1+pose calls=60 sources=32 frames=512": {
+        "before": "74550b782bafb295",
+        "after": "74550b782bafb295",
+        "identical": true
+      },
+      "move-k2+pose calls=60 sources=32 frames=512": {
+        "before": "3722a631a0192d18",
+        "after": "3722a631a0192d18",
+        "identical": true
+      },
+      "move-k1 calls=60 sources=1 frames=384": {
+        "before": "fe173721ee80a8d2",
+        "after": "fe173721ee80a8d2",
+        "identical": true
+      }
+    },
+    "expectation": "Identical unless a ramping source shares a block with another source's mid-block event: move-k8 (32 src/512), move-k4 (8 src/384), move-k2 (3 src/384) and move-k3 (2 src/256) change; move-k1 and move-k2 at 512 frames (events on block starts) stay identical."
+  },
+  "replay_schedule": {
+    "probe": "Scratch copy of examples/room_replay.rs render() (32 sources incl. head-locked source, gain event, head-lock switch, source removal at 32011, room switch at 7680, end_input at 96013) with the SADIE HRIR; canonical [256] and fragmented [1,173,733,4096,19,257] chunks.",
+    "probe_binary_sha256": {
+      "before": "a86f5ba78aaec47598544fd080cb63637fc632180fcbd3fd661b9cd80660154b",
+      "after": "4d4ee41b47ae2692701801188a4809f35328b9cdd80a8cfcfcf27be851ca6042"
+    },
+    "frames": 163078,
+    "pcm_sha256": {
+      "screens_off": {
+        "before": "6c5a83ce3ca9375baf4ee7875c8721c032c3ba2422154e64abf30841acf0ef6a",
+        "after": "6c5a83ce3ca9375baf4ee7875c8721c032c3ba2422154e64abf30841acf0ef6a"
+      },
+      "screens_on": {
+        "before": "c531b8448c2cfdb9ffb080f24b4f08f12707b3bffe064641e7f069d93558b59b",
+        "after": "c531b8448c2cfdb9ffb080f24b4f08f12707b3bffe064641e7f069d93558b59b"
+      }
+    },
+    "fragmented_identical": true
+  },
+  "room_bench": {
+    "build": "Release with --features room-profile (diagnostic only; P99 not capacity evidence)",
+    "calls": 128,
+    "call_frames": 512,
+    "voice_segments_per_source_block": {
+      "static": 1.0,
+      "continuous_pose": 1.0,
+      "continuous_pose_room_transition": 1.676,
+      "continuous_pose_source_ramps": 1.5
+    },
+    "note": "Identical for 1, 16 and 32 sources; the transition row counts voices of both room instances.",
+    "baseline_source_ramps": "Unsupported(\"Room control exceeds 16 distinct targets per 10 ms\") for 16 and 32 sources; 1 source renders."
+  },
+  "tests": {
+    "new": [
+      "a_source_ramp_ignores_other_sources_update_points",
+      "staggered_ramps_on_every_source_render_and_fragment_bit_identically"
+    ],
+    "new_tests_on_base": {
+      "a_source_ramp_ignores_other_sources_update_points": "fails: output first differs at frame 294",
+      "staggered_ramps_on_every_source_render_and_fragment_bit_identically": "fails: Unsupported(16 targets per 10 ms)"
+    },
+    "room_no_alloc": "passed with per-source staggered ramp events on 8 sources",
+    "room_integration_tests": 21,
+    "cargo_test_workspace": "41 suites, 274 passed, 0 failed",
+    "rustfmt_and_clippy": "workspace --all-targets -D warnings and mradm-dsp --features room-trace passed",
+    "cpp_ctest_debug_linux_x64": [
+      "mr_adm_room_tests",
+      "mr_adm_room_trace_tests",
+      "mr_adm_room_device_probe_tests"
+    ]
+  },
+  "timing": {
+    "order": "before/after interleaved per round, no other load; medians of rounds",
+    "call_frames": 512,
+    "scenarios": {
+      "movek4s8": {
+        "description": "move-k4+pose, 8 sources, 300 measured calls",
+        "before": {
+          "mean_ms_per_round": [
+            9.706,
+            10.246,
+            10.919
+          ],
+          "p99_ms_per_round": [
+            16.334,
+            15.901,
+            16.698
+          ],
+          "calls_over_10.667ms_per_round": [
+            80,
+            102,
+            168
+          ],
+          "median_mean_ms": 10.246,
+          "median_p99_ms": 16.334
+        },
+        "after": {
+          "mean_ms_per_round": [
+            7.657,
+            7.48,
+            7.829
+          ],
+          "p99_ms_per_round": [
+            12.46,
+            12.209,
+            11.758
+          ],
+          "calls_over_10.667ms_per_round": [
+            9,
+            7,
+            12
+          ],
+          "median_mean_ms": 7.657,
+          "median_p99_ms": 12.209
+        }
+      },
+      "movek4": {
+        "description": "move-k4+pose, 32 sources, 100 measured calls",
+        "before": {
+          "mean_ms_per_round": [
+            29.594,
+            29.23,
+            29.207
+          ],
+          "p99_ms_per_round": [
+            38.815,
+            61.514,
+            46.513
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 29.23,
+          "median_p99_ms": 46.513
+        },
+        "after": {
+          "mean_ms_per_round": [
+            21.401,
+            22.028,
+            21.106
+          ],
+          "p99_ms_per_round": [
+            29.299,
+            31.737,
+            30.546
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 21.401,
+          "median_p99_ms": 30.546
+        }
+      },
+      "movek8": {
+        "description": "move-k8+pose, 32 sources, 100 measured calls",
+        "before": {
+          "mean_ms_per_round": [
+            49.55,
+            47.524,
+            47.378
+          ],
+          "p99_ms_per_round": [
+            66.034,
+            68.897,
+            57.912
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 47.524,
+          "median_p99_ms": 66.034
+        },
+        "after": {
+          "mean_ms_per_round": [
+            21.399,
+            23.431,
+            22.949
+          ],
+          "p99_ms_per_round": [
+            31.679,
+            52.898,
+            33.321
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 22.949,
+          "median_p99_ms": 33.321
+        }
+      },
+      "movek16": {
+        "description": "move-k16+pose, 32 sources, 40 measured calls",
+        "before": {
+          "mean_ms_per_round": [
+            92.628,
+            89.995,
+            94.659
+          ],
+          "p99_ms_per_round": [
+            123.781,
+            108.127,
+            114.236
+          ],
+          "calls_over_10.667ms_per_round": [
+            40,
+            40,
+            40
+          ],
+          "median_mean_ms": 92.628,
+          "median_p99_ms": 114.236
+        },
+        "after": {
+          "mean_ms_per_round": [
+            24.181,
+            22.577,
+            22.667
+          ],
+          "p99_ms_per_round": [
+            34.788,
+            28.731,
+            29.424
+          ],
+          "calls_over_10.667ms_per_round": [
+            40,
+            40,
+            40
+          ],
+          "median_mean_ms": 22.667,
+          "median_p99_ms": 29.424
+        }
+      },
+      "static32": {
+        "description": "static, 32 sources, 600 measured calls",
+        "before": {
+          "mean_ms_per_round": [
+            2.302,
+            2.656,
+            2.651
+          ],
+          "p99_ms_per_round": [
+            4.338,
+            5.841,
+            5.839
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            1
+          ],
+          "median_mean_ms": 2.651,
+          "median_p99_ms": 5.839
+        },
+        "after": {
+          "mean_ms_per_round": [
+            2.913,
+            2.389,
+            2.57
+          ],
+          "p99_ms_per_round": [
+            6.823,
+            4.994,
+            5.712
+          ],
+          "calls_over_10.667ms_per_round": [
+            1,
+            0,
+            0
+          ],
+          "median_mean_ms": 2.57,
+          "median_p99_ms": 5.712
+        }
+      },
+      "pose32": {
+        "description": "pose, 32 sources, 600 measured calls (5-round rerun)",
+        "before": {
+          "mean_ms_per_round": [
+            9.091,
+            8.546,
+            8.812,
+            9.024,
+            8.979
+          ],
+          "p99_ms_per_round": [
+            14.429,
+            13.059,
+            12.853,
+            15.319,
+            14.393
+          ],
+          "calls_over_10.667ms_per_round": [
+            67,
+            38,
+            47,
+            73,
+            75
+          ],
+          "median_mean_ms": 8.979,
+          "median_p99_ms": 14.393
+        },
+        "after": {
+          "mean_ms_per_round": [
+            8.354,
+            8.769,
+            8.498,
+            8.287,
+            9.151
+          ],
+          "p99_ms_per_round": [
+            11.375,
+            15.275,
+            13.156,
+            12.343,
+            15.69
+          ],
+          "calls_over_10.667ms_per_round": [
+            24,
+            49,
+            39,
+            28,
+            64
+          ],
+          "median_mean_ms": 8.498,
+          "median_p99_ms": 13.156
+        }
+      },
+      "pose1": {
+        "description": "pose, 1 source, 600 measured calls (5-round rerun)",
+        "before": {
+          "mean_ms_per_round": [
+            2.199,
+            2.099,
+            2.069,
+            2.111,
+            2.025
+          ],
+          "p99_ms_per_round": [
+            4.064,
+            4.119,
+            5.147,
+            4.167,
+            3.775
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "median_mean_ms": 2.099,
+          "median_p99_ms": 4.119
+        },
+        "after": {
+          "mean_ms_per_round": [
+            2.095,
+            1.945,
+            1.994,
+            2.064,
+            2.183
+          ],
+          "p99_ms_per_round": [
+            4.149,
+            3.654,
+            3.813,
+            4.047,
+            4.036
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "median_mean_ms": 2.064,
+          "median_p99_ms": 4.036
+        }
+      }
+    }
+  },
+  "not_run": [
+    "three-platform room_replay with the frozen package (private HRIR)",
+    "macOS / Windows builds and tests",
+    "32-worker Linux or desktop capacity runs",
+    "device runs"
+  ],
+  "maintainer_room_bench_source_ramps": {
+    "scenario": "room_bench continuous_pose + source_ramps, 32 sources, 32 distinct event offsets per 512-frame call",
+    "calls": 2814,
+    "calls_over_10.667ms": {
+      "macos": 16,
+      "windows": 2804,
+      "linux": 2814
+    },
+    "source": "Reported by the maintainer; machine details and per-call timings are in the maintainer's runs, not reproduced here."
+  }
+}
