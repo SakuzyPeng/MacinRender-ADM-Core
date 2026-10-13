@@ -32,6 +32,7 @@
 #include "../adm_render_common/live_scene_trace.h"
 #include "live_binaural_renderer.h"
 #include "live_room_renderer.h"
+#include "live_scene_state.h"
 #include "live_triple_balance_renderer.h"
 #include "live_vbap_renderer.h"
 #include "resampler.h"
@@ -110,65 +111,6 @@ create_live_renderer(const live_scene::RendererConfig& config, const live_scene:
     }
     return make_error(ErrorCode::unsupported,
                       "Scene streams support SAF VBAP, SAF binaural, room-binaural and Triple Balance");
-}
-
-[[nodiscard]] live_scene::ObjectState default_state(const live_scene::ElementDescriptor& descriptor) {
-    live_scene::ObjectState state;
-    state.valid_fields = live_scene::k_known_state_fields & ~live_scene::state_position;
-    if (descriptor.role == live_scene::ElementRole::object) {
-        state.valid_fields |= live_scene::state_position;
-    }
-    if (descriptor.has_position) {
-        state.x = descriptor.x;
-        state.y = descriptor.y;
-        state.z = descriptor.z;
-    }
-    return state;
-}
-
-void copy_state_fields(live_scene::ObjectState& destination,
-                       const live_scene::ObjectState& source,
-                       std::uint64_t requested_fields) {
-    const auto fields = source.valid_fields & requested_fields;
-    if ((fields & live_scene::state_active) != 0U) {
-        destination.active = source.active;
-    }
-    if ((fields & live_scene::state_linear_gain) != 0U) {
-        destination.linear_gain = source.linear_gain;
-    }
-    if ((fields & live_scene::state_position) != 0U) {
-        destination.x = source.x;
-        destination.y = source.y;
-        destination.z = source.z;
-    }
-    if ((fields & live_scene::state_extent) != 0U) {
-        destination.width = source.width;
-        destination.height = source.height;
-        destination.depth = source.depth;
-    }
-    if ((fields & live_scene::state_diffuse) != 0U) {
-        destination.diffuse = source.diffuse;
-    }
-    if ((fields & live_scene::state_divergence) != 0U) {
-        destination.divergence = source.divergence;
-    }
-    if ((fields & live_scene::state_channel_lock) != 0U) {
-        destination.channel_lock = source.channel_lock;
-    }
-    if ((fields & live_scene::state_screen_reference) != 0U) {
-        destination.screen_reference = source.screen_reference;
-    }
-    if ((fields & live_scene::state_head_locked) != 0U) {
-        destination.head_locked = source.head_locked;
-    }
-    if ((fields & live_scene::state_divergence_range) != 0U) {
-        destination.divergence_azimuth_range = source.divergence_azimuth_range;
-        destination.divergence_position_range = source.divergence_position_range;
-    }
-    if ((fields & live_scene::state_channel_lock_max_distance) != 0U) {
-        destination.channel_lock_max_distance = source.channel_lock_max_distance;
-    }
-    destination.valid_fields |= fields;
 }
 
 [[nodiscard]] bool object_state_equal(const live_scene::ObjectState& lhs, const live_scene::ObjectState& rhs) noexcept {
@@ -782,7 +724,8 @@ struct SceneStreamEngine::Impl {
         for (const auto& descriptor : current_generation_model->elements) {
             const auto found = effective_states.find(descriptor.element_id);
             snapshot.push_back(
-                {descriptor.element_id, found != effective_states.end() ? found->second : default_state(descriptor)});
+                {descriptor.element_id,
+                 found != effective_states.end() ? found->second : live_scene::default_state(descriptor)});
         }
         return snapshot;
     }
@@ -1094,7 +1037,7 @@ struct SceneStreamEngine::Impl {
         for (std::size_t index = 0U; index < item.generation->elements.size(); ++index) {
             const auto& descriptor = item.generation->elements[index];
             current_element_index.emplace(descriptor.element_id, index);
-            base_states.emplace(descriptor.element_id, default_state(descriptor));
+            base_states.emplace(descriptor.element_id, live_scene::default_state(descriptor));
         }
         try {
             compile_policy_for_current_generation();
@@ -1142,8 +1085,8 @@ struct SceneStreamEngine::Impl {
                 continue;
             }
             const auto& descriptor = current_generation_model->elements[found->second];
-            auto base = default_state(descriptor);
-            copy_state_fields(base, initial.state, initial.state.valid_fields);
+            auto base = live_scene::default_state(descriptor);
+            live_scene::copy_state_fields(base, initial.state, initial.state.valid_fields);
             base_states[initial.element_id] = base;
             effective_states[initial.element_id] = apply_policy_to_state(found->second, base);
         }
@@ -1172,7 +1115,8 @@ struct SceneStreamEngine::Impl {
         for (std::size_t index = 0U; index < current_generation_model->elements.size(); ++index) {
             const auto& descriptor = current_generation_model->elements[index];
             const auto base = base_states.find(descriptor.element_id);
-            const auto producer_state = base != base_states.end() ? base->second : default_state(descriptor);
+            const auto producer_state =
+                base != base_states.end() ? base->second : live_scene::default_state(descriptor);
             const auto next = apply_policy_to_state(index, producer_state);
             const auto previous = effective_states.find(descriptor.element_id);
             if (previous == effective_states.end() || !object_state_equal(previous->second, next)) {
@@ -1203,10 +1147,10 @@ struct SceneStreamEngine::Impl {
             return;
         }
         const auto& descriptor = current_generation_model->elements[found->second];
-        auto base =
-            base_states.contains(source.element_id) ? base_states.at(source.element_id) : default_state(descriptor);
+        auto base = base_states.contains(source.element_id) ? base_states.at(source.element_id)
+                                                            : live_scene::default_state(descriptor);
         const auto previous_effective = apply_policy_to_state(found->second, base);
-        copy_state_fields(base, source.state, source.changed_fields);
+        live_scene::copy_state_fields(base, source.state, source.changed_fields);
         base_states[source.element_id] = base;
 
         auto converted = source;
@@ -1217,7 +1161,7 @@ struct SceneStreamEngine::Impl {
         converted.changed_fields = source.changed_fields & converted.state.valid_fields;
         for (std::uint64_t field = 1U; field <= live_scene::state_channel_lock_max_distance; field <<= 1U) {
             auto probe = previous_effective;
-            copy_state_fields(probe, converted.state, field);
+            live_scene::copy_state_fields(probe, converted.state, field);
             if (!object_state_equal(probe, previous_effective)) {
                 converted.changed_fields |= field;
             }
