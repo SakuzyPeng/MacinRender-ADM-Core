@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -13,6 +14,7 @@
 #include <numeric>
 #include <optional>
 #include <sstream>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1263,6 +1265,153 @@ bool verify_binaural_stream_matches_window() {
     return ok;
 }
 
+std::optional<std::vector<float>> pull_binaural_stream_frames(mradm::IRenderStream& stream, std::size_t frames) {
+    const std::array<std::size_t, 4> chunks{7U, 333U, 1024U, 19U};
+    std::vector<float> result;
+    std::size_t chunk = 0;
+    while (frames > 0) {
+        const auto want = std::min(frames, chunks.at(chunk++ % chunks.size()));
+        std::vector<float> block(want * 2U);
+        const auto got = stream.process(block, want);
+        if (!check(got.has_value(), "stream-seek: pull succeeds")) {
+            return std::nullopt;
+        }
+        if (*got == 0U) {
+            break;
+        }
+        result.insert(result.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*got * 2U));
+        frames -= *got;
+    }
+    return result;
+}
+
+bool binaural_pcm_equal(std::span<const float> actual, std::span<const float> expected) {
+    return std::ranges::equal(
+        actual, expected, [](float a, float b) { return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b); });
+}
+
+bool verify_binaural_seek_controls(mradm::IRenderer& renderer,
+                                   const mradm::IPreparedRender& prepared,
+                                   const mradm::RenderPlan& plan,
+                                   mradm::IRenderStream& stream) {
+    // A cancelled request must not discard an already buffered remainder.
+    if (!check(stream.seek(1031U).has_value(), "stream-seek: cancellation setup")) {
+        return false;
+    }
+    std::stop_source cancel;
+    cancel.request_stop();
+    const auto cancelled = stream.seek_with_cancel(4096U, cancel.get_token());
+    bool ok = check(!cancelled && cancelled.error().code == mradm::ErrorCode::cancelled,
+                    "stream-seek: cancellation reported");
+    const auto after_cancel = pull_binaural_stream_frames(stream, 333U);
+    if (!check(stream.seek(1031U).has_value(), "stream-seek: repeat cancellation origin")) {
+        return false;
+    }
+    const auto unchanged = pull_binaural_stream_frames(stream, 333U);
+    ok &= check(after_cancel && unchanged && binaural_pcm_equal(*after_cancel, *unchanged),
+                "stream-seek: pre-cancelled request preserves position and history");
+
+    // Seek adopts the current edits, including a pending topology change and an unfinished gain ramp.
+    mradm::LiveOverrides edits;
+    mradm::LiveObjectOverride edit;
+    edit.object_id = plan.scene.objects.front().id;
+    edit.gain_db = -6.0F;
+    edit.extent_scale = 0.0F;
+    edit.diffuse_scale = 0.5F;
+    edits.objects.push_back(edit);
+    mradm::NullLogSink logs;
+    for (const auto& current : {edits, mradm::LiveOverrides{}}) {
+        auto reference = renderer.open_stream(prepared, plan, logs);
+        if (!check(reference.has_value(), "stream-seek: edited reference opens")) {
+            return false;
+        }
+        (*reference)->set_listener_orientation(plan.listener_orientation);
+        (*reference)->set_overrides(current);
+        const auto full = pull_binaural_stream_frames(**reference, plan.scene.info.num_frames);
+        if (!full ||
+            !check(full->size() == plan.scene.info.num_frames * 2U, "stream-seek: complete edited reference")) {
+            return false;
+        }
+        stream.set_overrides(current);
+        if (!check(stream.seek(1031U).has_value(), "stream-seek: seek with current edits")) {
+            return false;
+        }
+        const auto actual = pull_binaural_stream_frames(stream, 2051U);
+        const auto expected = std::span{*full}.subspan(std::size_t{1031U} * 2U, std::size_t{2051U} * 2U);
+        ok &= check(actual && binaural_pcm_equal(*actual, expected),
+                    "stream-seek: current edits match a continuous render after seek");
+    }
+    return ok;
+}
+
+// A seek must retain the canonical render grid and reconstruct the same history as an offline window.
+bool verify_binaural_stream_seek() {
+    constexpr uint32_t k_frames = 9607U;
+    bool ok = true;
+    for (const bool shaped : {false, true}) {
+        const auto input = write_fixture(ObjectFixtureOptions{.azimuth = 30.0F,
+                                                              .duration = std::chrono::milliseconds{200},
+                                                              .divergence = shaped ? 0.4F : 0.0F,
+                                                              .diffuse = shaped ? 0.5F : 0.0F,
+                                                              .width = shaped ? 0.6F : 0.0F},
+                                         k_frames);
+        const FileGuard input_guard(input);
+        const auto output = temp_path("mr_binaural_seek_window", ".wav");
+        const FileGuard output_guard(output);
+        const auto scene = mradm::io::import_scene(input.string());
+        if (!check(scene.has_value(), "stream-seek: import scene")) {
+            return false;
+        }
+        mradm::RenderPlan plan;
+        plan.input_path = input.string();
+        plan.output_path = output.string();
+        plan.output_layout = "binaural";
+        plan.scene = *scene;
+        plan.object_smoothing_frames = shaped ? 2048U : 0U;
+        plan.listener_orientation.yaw_deg = shaped ? 25.0F : 0.0F;
+        auto renderer = mradm::create_binaural_renderer();
+        mradm::NullLogSink logs;
+        mradm::NullProgressSink progress;
+        const auto prepared = renderer->prepare(plan, logs);
+        if (!check(prepared.has_value(), "stream-seek: prepare")) {
+            return false;
+        }
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!check(stream.has_value(), "stream-seek: open")) {
+            return false;
+        }
+        (*stream)->set_listener_orientation(plan.listener_orientation);
+        if (!pull_binaural_stream_frames(**stream, 37U)) {
+            return false;
+        }
+        for (const uint64_t target : {1024U, 4096U, 1031U, 0U, 8191U, 9600U, k_frames, 12000U}) {
+            auto window = plan;
+            window.render_window = mradm::RenderWindow{std::min<uint64_t>(target, k_frames), 2051U};
+            if (!check(renderer->render_window(**prepared, window, progress, logs).has_value(),
+                       "stream-seek: offline window") ||
+                !check((*stream)->seek(target).has_value(), "stream-seek: seek")) {
+                return false;
+            }
+            auto reader = mradm::audio::FloatWavReader::open(output.string());
+            if (!check(reader.has_value(), "stream-seek: read reference")) {
+                return false;
+            }
+            std::vector<float> expected(reader->frame_count() * 2U);
+            if (!check(reader->read(expected.data(), reader->frame_count()) == reader->frame_count(),
+                       "stream-seek: complete reference")) {
+                return false;
+            }
+            const auto actual = pull_binaural_stream_frames(**stream, 2051U);
+            if (!actual) {
+                return false;
+            }
+            ok &= check(binaural_pcm_equal(*actual, expected), "stream-seek: bit-identical to offline window");
+        }
+        ok &= verify_binaural_seek_controls(*renderer, **prepared, plan, **stream);
+    }
+    return ok;
+}
+
 // A live gain override scales the object's output by the override factor (linear gain
 // commutes with the HRTF convolution).
 bool verify_binaural_stream_gain_override() {
@@ -1735,6 +1884,7 @@ int main() try {
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
     ok &= verify_binaural_stream_matches_window();
+    ok &= verify_binaural_stream_seek();
     ok &= verify_binaural_stream_gain_override();
     ok &= verify_binaural_stream_live_gain_ramp();
     ok &= verify_binaural_stream_topology_crossfade();

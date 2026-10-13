@@ -334,6 +334,10 @@ std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
 
 LiveGainRamp::LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms) : bank_(1U, sample_rate, ramp_ms) {}
 
+void LiveGainRamp::reset() noexcept {
+    bank_.reset();
+}
+
 void LiveGainRamp::set_target(float target) noexcept {
     bank_.set_targets(std::span{&target, 1U});
 }
