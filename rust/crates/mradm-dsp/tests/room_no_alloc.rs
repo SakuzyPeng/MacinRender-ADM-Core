@@ -66,6 +66,8 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
     );
     let mut candidate = Some(Box::new(Instance::new(other, 8).unwrap()));
     let mut session = Session::new(prepared, 1.5, true, false).unwrap();
+    // Exercise the ADR 0020 direct-only updates as well (proposed, off by default).
+    session.set_reflection_grid(1024).unwrap();
     let descriptions: Vec<_> = (0..8)
         .map(|id| RoomDescription {
             id,

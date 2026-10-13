@@ -142,7 +142,11 @@ python3 scripts/room/benchmark-linux.py "$ROOM_BIN" "$ROOM_JSON" /path/to/new-lo
 每种状态分别输出静态、连续头姿、连续头姿加房间切换，以及连续头姿加位置斜坡四个场景。
 位置斜坡场景（`source_ramps`）每次调用让每个声源在各自的偏移处开始一段覆盖整次调用的斜坡，
 `distinct_event_offsets` 为每次调用的不同偏移数；用 `room-profile` 构建时另输出
-`voice_segments`（声源分段数）及每声源每块的平均值，普通构建为 `null`。11250 次 512 帧调用对应
+`voice_segments`（声源分段数）及每声源每块的平均值，普通构建为 `null`。
+评估 [ADR 0020](../../docs/adr/0020-room-reflection-grid-during-ramps.md)（提议）时，设置
+`MR_ADM_ROOM_REFLECTION_GRID=1024`（或 512）后运行同一可执行文件，每行的 `reflection_grid` 记录
+实际取值；未设置时为 0，输出与 ADR 0019 逐位相同。该变量作用于进程内所有房间会话，只用于评估，
+不能作为容量或音质验收结论。11250 次 512 帧调用对应
 每个场景 120 秒音频；469 次调用约为 5 秒。脚本串行运行各组，保存可执行文件与清单哈希、
 CPU 配额、允许的核心、限流/压力快照及子进程 CPU、缺页、上下文切换增量。
 输出目录必须不存在；不要同时运行构建或其他基准。系统/cgroup 计数也可能包含其他进程，

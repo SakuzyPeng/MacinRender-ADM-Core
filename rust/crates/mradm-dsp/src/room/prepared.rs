@@ -214,7 +214,10 @@ pub struct ResponseWork {
     pub early_support: usize,
     pub query_cache: Option<Arc<std::sync::Mutex<super::hrir::QueryCache>>>,
     decoder: super::hrir::TimeQuery,
-    cached_source: Option<WeightedPosition>,
+    // Path and transfer caches per branch: a direct-only update (ADR 0020)
+    // leaves the reflection entries for the next full update.
+    cached_direct: Option<WeightedPosition>,
+    cached_early: Option<WeightedPosition>,
     cached_paths: Vec<geometry::Path>,
     cached_transfers: Vec<f32>,
 }
@@ -243,7 +246,8 @@ impl ResponseWork {
             early_support: 1,
             query_cache: None,
             decoder: super::hrir::TimeQuery::new(room.decoder_hrir.clone())?,
-            cached_source: None,
+            cached_direct: None,
+            cached_early: None,
             cached_paths: vec![
                 geometry::Path {
                     direction: [1., 0., 0.],
@@ -307,15 +311,21 @@ impl ResponseWork {
         self.direct_support = 1;
         self.early_support = 1;
         let cache = sources.len() == 1;
-        if cache
-            && self.cached_source.is_none_or(|last| {
+        let stale = |last: Option<WeightedPosition>| {
+            last.is_none_or(|last| {
                 last.position.point != sources[0].position.point
                     || last.position.direction != sources[0].position.direction
                     || last.weight != sources[0].weight
             })
-        {
+        };
+        let fill_direct = cache && direct && stale(self.cached_direct);
+        let fill_early = cache && early && stale(self.cached_early);
+        if fill_direct || fill_early {
             let source = sources[0];
             for (index, image) in room.images.iter().copied().enumerate() {
+                if (image.order == 0 && !fill_direct) || (image.order != 0 && !fill_early) {
+                    continue;
+                }
                 let path = geometry::path(&room.profile, source.position, image);
                 self.cached_paths[index] = path;
                 if path.gain == 0. {
@@ -336,7 +346,12 @@ impl ResponseWork {
                     self.cached_transfers[index * stride * 2 + stride + band] = value.im;
                 }
             }
-            self.cached_source = Some(source);
+            if fill_direct {
+                self.cached_direct = Some(source);
+            }
+            if fill_early {
+                self.cached_early = Some(source);
+            }
         }
         for source in sources {
             for (index, image) in room.images.iter().copied().enumerate() {

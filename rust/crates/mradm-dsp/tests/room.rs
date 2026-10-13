@@ -1185,6 +1185,7 @@ fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
     // Every source ramps with its own event offset: 32 distinct offsets per
     // 512 frames. A session-wide update grid exceeded the 16 targets per
     // 10 ms of each dynamic filter here; per-source grids keep it bounded.
+    // The ADR 0020 reflection grid lies on absolute samples as well.
     let prepared = fixture();
     let sources = 32;
     let descriptions: Vec<_> = (0..sources)
@@ -1219,8 +1220,9 @@ fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
     }
     events.sort_by_key(|e| e.0);
     let total = 12 * 512 + 1024;
-    let render = |chunks: &[usize]| {
+    let render = |chunks: &[usize], grid: u64| {
         let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        session.set_reflection_grid(grid).unwrap();
         session.configure(&descriptions).unwrap();
         let mut input = vec![0.; 4096];
         let mut block = vec![0.; 8192];
@@ -1261,17 +1263,131 @@ fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
         }
         output
     };
-    let canonical = render(&[512]);
-    let fragmented = render(&[1, 173, 733, 4096, 19, 257]);
-    let mismatch = canonical
-        .iter()
-        .zip(&fragmented)
-        .position(|(a, b)| a.to_bits() != b.to_bits());
+    let mut outputs = Vec::new();
+    for grid in [0, 1024] {
+        let canonical = render(&[512], grid);
+        let fragmented = render(&[1, 173, 733, 4096, 19, 257], grid);
+        let mismatch = canonical
+            .iter()
+            .zip(&fragmented)
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(
+            mismatch.is_none(),
+            "grid {grid}: fragmented output first differs at {mismatch:?}"
+        );
+        assert!(canonical.iter().any(|v| v.abs() > 1e-5));
+        outputs.push(canonical);
+    }
     assert!(
-        mismatch.is_none(),
-        "fragmented output first differs at {mismatch:?}"
+        outputs[0] != outputs[1],
+        "the reflection grid must defer reflection updates inside ramps"
     );
-    assert!(canonical.iter().any(|v| v.abs() > 1e-5));
+}
+
+#[test]
+fn reflection_grid_leaves_sessions_without_geometry_ramps_unchanged() {
+    // ADR 0020 (proposed) defers reflections only inside geometry ramps.
+    // Static, head-locked and LFE sources, pose changes, mid-block jumps,
+    // gain ramps and a room switch must render exactly as without the grid.
+    let prepared = fixture();
+    let next = alternate(&prepared, "grid-next", 0.7);
+    let descriptions: Vec<_> = (0..4)
+        .map(|i| RoomDescription {
+            id: i + 1,
+            role: if i == 3 { 2 } else { 0 },
+            position: around(i as f32 * 70. - 100., 10., 1.2),
+            ..RoomDescription::default()
+        })
+        .collect();
+    let initial: Vec<_> = descriptions
+        .iter()
+        .enumerate()
+        .map(|(i, d)| RoomCommand {
+            element: i as u32,
+            state: State {
+                position: d.position,
+                head_locked: u32::from(i == 1),
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
+    let render = |grid: u64| {
+        let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        for invalid in [1, 100, 255, 65_792] {
+            assert!(session.set_reflection_grid(invalid).is_err());
+        }
+        session.set_reflection_grid(grid).unwrap();
+        assert_eq!(session.reflection_grid(), grid);
+        session.configure(&descriptions).unwrap();
+        let frames = 384;
+        let mut input = vec![0.; frames];
+        let mut block = vec![0.; frames * 2];
+        let mut output = Vec::new();
+        for call in 0..80 {
+            for (i, value) in input.iter_mut().enumerate() {
+                *value = ((((call * frames + i) * 37) % 193) as f32 - 96.) / 384.;
+            }
+            session
+                .set_pose([call as f32 * 2.3 - 30., 4., -2.])
+                .unwrap();
+            if call == 10 {
+                session
+                    .queue_room(Box::new(Instance::new(next.clone(), 4).unwrap()), 1)
+                    .unwrap();
+            }
+            let mut commands: Vec<_> = [(0u32, 77u32), (1, 200)]
+                .into_iter()
+                .map(|(element, offset)| RoomCommand {
+                    element,
+                    offset,
+                    changed: 4,
+                    state: State {
+                        position: around(element as f32 * 90. + call as f32 * 9., 5., 1.1),
+                        head_locked: element,
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                })
+                .collect();
+            // Gain ramps on a jumping source and on a static one.
+            for (element, offset) in [(0u32, 10u32), (2, 300)] {
+                commands.push(RoomCommand {
+                    element,
+                    offset,
+                    duration: 700,
+                    changed: 2,
+                    state: State {
+                        gain: 0.5 + (call % 3) as f32 * 0.2,
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                });
+            }
+            commands.sort_by_key(|c| c.offset);
+            session
+                .process(
+                    frames,
+                    (0..4).map(|_| Some(input.as_slice())),
+                    if call == 0 { &initial } else { &[] },
+                    &commands,
+                    &mut block,
+                )
+                .unwrap();
+            output.extend_from_slice(&block);
+            drop(session.take_retired());
+        }
+        assert_eq!(session.info().applied_request, 1, "switch must complete");
+        output
+    };
+    let off = render(0);
+    let on = render(1024);
+    let mismatch = off
+        .iter()
+        .zip(&on)
+        .position(|(a, b)| a.to_bits() != b.to_bits());
+    assert!(mismatch.is_none(), "output first differs at {mismatch:?}");
+    assert!(off.iter().any(|v| v.abs() > 1e-5));
 }
 
 #[test]

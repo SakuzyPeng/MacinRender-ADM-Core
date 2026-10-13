@@ -295,6 +295,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "{}",
                 serde_json::json!({"sources":sources,"continuous_pose":moving,"room_transition":switching,
                 "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
+                "reflection_grid":session.reflection_grid(),
                 "voice_segments":segments,
                 "voice_segments_per_source_block":segments.map(|v|v as f64/(sources*blocks*frames/BLOCK) as f64),
                 "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
