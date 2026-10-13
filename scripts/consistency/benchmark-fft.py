@@ -39,12 +39,30 @@ def unpatched_manifest(root):
     original, original_lock = manifest.read_bytes(), lock.read_bytes()
     if original.count(PATCH) != 1:
         raise ValueError('expected exactly one local RustFFT patch; refusing to change manifests')
+    fft_source = root / 'rust/crates/mradm-dsp/src/fft.rs'
+    original_fft = None
+    reference = original.replace(PATCH, b'')
+    if b'mradm-scalar-default' in original:
+        feature = re.search(rb',\s*features\s*=\s*(\[[^\]]*"mradm-scalar-default"[^\]]*\])', reference)
+        if not feature or set(json.loads(feature.group(1))) != {'mradm-scalar-default', 'avx', 'sse', 'neon'}:
+            raise ValueError('unexpected FFT policy features; refusing reference rewrite')
+        reference = reference[:feature.start()] + reference[feature.end():]
+        original_fft = fft_source.read_bytes()
+        if original_fft.count(b'rustfft::FftPlanner::new_native()') != 1:
+            raise ValueError('unexpected native room planner factory')
     try:
-        manifest.write_bytes(original.replace(PATCH, b''))
+        manifest.write_bytes(reference)
+        if original_fft is not None:
+            # The unpatched reference has all SIMD disabled, so its ordinary
+            # planner is scalar. This probe never renders the realtime quality.
+            fft_source.write_bytes(original_fft.replace(b'rustfft::FftPlanner::new_native()',
+                                                         b'rustfft::FftPlanner::new()'))
         yield
     finally:
         manifest.write_bytes(original)
         lock.write_bytes(original_lock)
+        if original_fft is not None:
+            fft_source.write_bytes(original_fft)
 
 
 def prepare(build, out):

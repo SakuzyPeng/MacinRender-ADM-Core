@@ -35,7 +35,7 @@ def compiler_identity(build):
 
 
 def fft_features(build):
-    """Resolved RustFFT/realfft features; any SIMD feature restores run-time dispatch (ADR 0015)."""
+    """Require scalar default dispatch; native room kernels are an explicit opt-in."""
     try:
         features = json.loads(build['rust.fft_features'])
     except (KeyError, TypeError, ValueError):
@@ -44,8 +44,10 @@ def fft_features(build):
         raise ValueError('FFT feature record does not cover rustfft and realfft')
     enabled = sorted(f'{name}/{feature}' for name, values in features.items() for feature in values
                      if feature in FFT_SIMD_FEATURES)
-    if enabled:
-        raise ValueError('FFT SIMD dispatch is enabled: ' + ', '.join(enabled))
+    guarded = ('mradm-scalar-default' in features['rustfft']
+               and build.get('rust.fft_dispatch') == 'scalar-default-native-room-opt-in-v1')
+    if enabled and not guarded:
+        raise ValueError('FFT SIMD kernels lack a verified scalar-default policy: ' + ', '.join(enabled))
     return features
 
 

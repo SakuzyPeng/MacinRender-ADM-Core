@@ -1,0 +1,1306 @@
+{
+  "schema": "mradm.room-quality-v1.validation-summary",
+  "recorded_utc": "2026-10-13T11:37:13.364359+00:00",
+  "base_revision": "009e8ad",
+  "source_digest": "d16e6221d37012f8ed5b9a95370f6a5ae03a6b85ea77def880859edc7c8834b9",
+  "method": {
+    "build": "Rust 1.98.0 Release, profiling disabled, default worker count, shared existing caches",
+    "sample_rate": 48000,
+    "call_frames": 512,
+    "deadline_ms": 10.666666666666666,
+    "warmup_calls": 32,
+    "measured_calls_per_run": 938,
+    "s32_rounds": 3,
+    "s1_s16_rounds": 1,
+    "aggregation": "median of per-run means and p99; maximum of maxima; sum of deadline misses",
+    "order": "exact then realtime in rounds 1 and 3; reverse in round 2",
+    "scenarios": [
+      "static",
+      "pose",
+      "switch",
+      "ramps"
+    ],
+    "pose_hz": 93.75,
+    "dense_offsets": 32,
+    "scope": "room Session process call; excludes decoding, devices and resource preparation"
+  },
+  "platforms": {
+    "macos-arm64": {
+      "host": {
+        "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+        "cpu_count": 12,
+        "affinity": null,
+        "room_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+        "hrir_sha256": "b367ad7a91c1f610f2a98692cf3bee371e868278d9b81a80b0323f109a801196",
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+        "cpu_model": "Apple M4 Pro"
+      },
+      "validation": {
+        "source_restored": true,
+        "git_status_restored": null,
+        "commands": [
+          {
+            "name": "rust-tests",
+            "exit_code": 0,
+            "seconds": 13.735270977020264
+          },
+          {
+            "name": "release-cli-build",
+            "exit_code": 0,
+            "seconds": 27.491541862487793
+          },
+          {
+            "name": "release-build",
+            "exit_code": 0,
+            "seconds": 10.850252866744995
+          },
+          {
+            "name": "exact-replay-frozen",
+            "exit_code": 0,
+            "seconds": 1.6808769702911377
+          },
+          {
+            "name": "realtime-replay-frozen",
+            "exit_code": 0,
+            "seconds": 1.567478895187378
+          },
+          {
+            "name": "exact-replay-screens",
+            "exit_code": 0,
+            "seconds": 1.7161891460418701
+          },
+          {
+            "name": "realtime-replay-screens",
+            "exit_code": 0,
+            "seconds": 1.5764570236206055
+          },
+          {
+            "name": "exact-replay-dense_screens",
+            "exit_code": 0,
+            "seconds": 3.4730660915374756
+          },
+          {
+            "name": "realtime-replay-dense_screens",
+            "exit_code": 0,
+            "seconds": 2.5577759742736816
+          }
+        ]
+      },
+      "benchmarks": {
+        "1": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 0.2672551481876333,
+              "p99_ms_median": 0.510375,
+              "maximum_ms": 0.662167,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.2672551481876333
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.2293423518123667,
+              "p99_ms_median": 0.43937499999999996,
+              "maximum_ms": 0.54325,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.2293423518123667
+              ]
+            },
+            "mean_reduction_percent": 14.185992910658152
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 0.6003588976545845,
+              "p99_ms_median": 0.939333,
+              "maximum_ms": 1.978042,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.6003588976545845
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.5343076460554368,
+              "p99_ms_median": 0.838,
+              "maximum_ms": 1.138166,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.5343076460554368
+              ]
+            },
+            "mean_reduction_percent": 11.001960969878088
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 0.6173570074626861,
+              "p99_ms_median": 1.1121670000000001,
+              "maximum_ms": 1.2357500000000001,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.6173570074626861
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.5567149509594881,
+              "p99_ms_median": 1.016041,
+              "maximum_ms": 1.303958,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.5567149509594881
+              ]
+            },
+            "mean_reduction_percent": 9.822850598624377
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 1.120431517057567,
+              "p99_ms_median": 3.224083,
+              "maximum_ms": 5.392667,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.120431517057567
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.7418816599147107,
+              "p99_ms_median": 1.0996249999999999,
+              "maximum_ms": 3.85875,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.7418816599147107
+              ]
+            },
+            "mean_reduction_percent": 33.786077183636266
+          }
+        },
+        "16": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 0.47086891044776147,
+              "p99_ms_median": 0.884125,
+              "maximum_ms": 3.596208,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.47086891044776147
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.44387935287846497,
+              "p99_ms_median": 0.794875,
+              "maximum_ms": 0.928541,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.44387935287846497
+              ]
+            },
+            "mean_reduction_percent": 5.731862301894475
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 1.2580892590618342,
+              "p99_ms_median": 1.7409999999999999,
+              "maximum_ms": 11.536,
+              "deadline_misses": 1,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.2580892590618342
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.2592308038379518,
+              "p99_ms_median": 2.077709,
+              "maximum_ms": 3.3690830000000003,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.2592308038379518
+              ]
+            },
+            "mean_reduction_percent": -0.09073638995764632
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 1.3461303038379544,
+              "p99_ms_median": 2.215708,
+              "maximum_ms": 4.077624999999999,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.3461303038379544
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.3641529243070356,
+              "p99_ms_median": 2.339917,
+              "maximum_ms": 3.202459,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.3641529243070356
+              ]
+            },
+            "mean_reduction_percent": -1.3388466493694517
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 3.293374636460549,
+              "p99_ms_median": 4.717667,
+              "maximum_ms": 15.689541000000002,
+              "deadline_misses": 3,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                3.293374636460549
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.992081141791044,
+              "p99_ms_median": 2.862708,
+              "maximum_ms": 3.226875,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.992081141791044
+              ]
+            },
+            "mean_reduction_percent": 39.51246482143402
+          }
+        },
+        "32": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 0.6290751961620474,
+              "p99_ms_median": 1.143,
+              "maximum_ms": 1.402375,
+              "deadline_misses": 0,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                0.6207013486140712,
+                0.63971132196162,
+                0.6290751961620474
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.5847177409381669,
+              "p99_ms_median": 0.957916,
+              "maximum_ms": 1.9875,
+              "deadline_misses": 0,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                0.5847177409381669,
+                0.5884559744136458,
+                0.5809285383795307
+              ]
+            },
+            "mean_reduction_percent": 7.0512166899128985
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 2.056169316631131,
+              "p99_ms_median": 2.892667,
+              "maximum_ms": 5.017209,
+              "deadline_misses": 0,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                1.9798309818763329,
+                2.074897004264394,
+                2.056169316631131
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.9130678443496785,
+              "p99_ms_median": 2.874125,
+              "maximum_ms": 9.799458000000001,
+              "deadline_misses": 0,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                1.8755146727078886,
+                1.9130678443496785,
+                1.9547900842217516
+              ]
+            },
+            "mean_reduction_percent": 6.959615199195401
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 2.306145780383794,
+              "p99_ms_median": 4.156083,
+              "maximum_ms": 17.674208,
+              "deadline_misses": 3,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                2.1706814925373124,
+                2.306145780383794,
+                2.3360608528784645
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 2.0699990373134356,
+              "p99_ms_median": 3.53075,
+              "maximum_ms": 17.1465,
+              "deadline_misses": 2,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                2.0555434115138613,
+                2.0699990373134356,
+                2.2001842515991474
+              ]
+            },
+            "mean_reduction_percent": 10.239887915110824
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 5.65384768017057,
+              "p99_ms_median": 7.3414589999999995,
+              "maximum_ms": 26.521625,
+              "deadline_misses": 13,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.5960037942430665,
+                5.65384768017057,
+                5.7917836844349715
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 3.1645729808102327,
+              "p99_ms_median": 4.163042,
+              "maximum_ms": 20.968542,
+              "deadline_misses": 6,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                3.1645729808102327,
+                3.156881357142855,
+                3.3633134594882708
+              ]
+            },
+            "mean_reduction_percent": 44.02797599395601
+          }
+        }
+      },
+      "numerics": {
+        "frozen": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+          "realtime_pcm_sha256": "d2359256863575ced19264154b1f02bea4cb96d43aecb5a1be551b9a93a39a6d",
+          "static_hrir_brir_max_relative_l2": 2.1894480325317842e-07,
+          "static_hrir_brir_max_absolute_error": 2.384185791015625e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.004490930443251922,
+            "snr_db": 46.95327342711713,
+            "maximum_absolute_error": 0.00237300805747509,
+            "reference_peak": 0.06579935550689697
+          }
+        },
+        "screens": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910",
+          "realtime_pcm_sha256": "24be10bbdd9a656f12c6a2c7c0d751d5d59ea56771254236af42552385673e88",
+          "static_hrir_brir_max_relative_l2": 2.1894480325317842e-07,
+          "static_hrir_brir_max_absolute_error": 2.384185791015625e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.00472227567570052,
+            "snr_db": 46.51697326788687,
+            "maximum_absolute_error": 0.0024484191089868546,
+            "reference_peak": 0.06995325535535812
+          }
+        },
+        "dense_screens": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "e21985a58dc875ac944f1c13533ce409b418cd0c256d858a135b3928fb18ca83",
+          "realtime_pcm_sha256": "5bb320c9137a6bd16bc40de9b842dd776c52e1b9ffb54f395637d2ce09282483",
+          "static_hrir_brir_max_relative_l2": 2.1894480325317842e-07,
+          "static_hrir_brir_max_absolute_error": 2.384185791015625e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.009644123377493005,
+            "snr_db": 40.31474484639425,
+            "maximum_absolute_error": 0.002647621324285865,
+            "reference_peak": 0.05777798220515251
+          }
+        }
+      },
+      "binaries": {
+        "room_bench": "d8eac96b3e6bb79781dd836b4b12fcf03d9f87b9db3582db9098748f4dac1547",
+        "room_replay": "34ca69eedecd6f29df377a4d6d824a9827c4d22251869246ecec4564e573d62d"
+      }
+    },
+    "windows-x64": {
+      "host": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "cpu_count": 16,
+        "affinity": null,
+        "room_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+        "hrir_sha256": "b367ad7a91c1f610f2a98692cf3bee371e868278d9b81a80b0323f109a801196",
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+        "cpu_model": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz"
+      },
+      "validation": {
+        "source_restored": true,
+        "git_status_restored": true,
+        "commands": [
+          {
+            "name": "rust-tests",
+            "exit_code": 0,
+            "seconds": 59.143860816955566
+          },
+          {
+            "name": "canonical-build",
+            "exit_code": 0,
+            "seconds": 118.64392423629761
+          },
+          {
+            "name": "canonical-ctest",
+            "exit_code": 0,
+            "seconds": 12.735907316207886
+          },
+          {
+            "name": "release-build",
+            "exit_code": 0,
+            "seconds": 24.24406409263611
+          },
+          {
+            "name": "exact-replay-frozen",
+            "exit_code": 0,
+            "seconds": 3.996903419494629
+          },
+          {
+            "name": "realtime-replay-frozen",
+            "exit_code": 0,
+            "seconds": 3.682713270187378
+          },
+          {
+            "name": "exact-replay-screens",
+            "exit_code": 0,
+            "seconds": 3.6309010982513428
+          },
+          {
+            "name": "realtime-replay-screens",
+            "exit_code": 0,
+            "seconds": 3.3172569274902344
+          },
+          {
+            "name": "exact-replay-dense_screens",
+            "exit_code": 0,
+            "seconds": 9.040089845657349
+          },
+          {
+            "name": "realtime-replay-dense_screens",
+            "exit_code": 0,
+            "seconds": 6.519682168960571
+          }
+        ]
+      },
+      "benchmarks": {
+        "1": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 0.33454424307036246,
+              "p99_ms_median": 0.8013,
+              "maximum_ms": 1.0717999999999999,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.33454424307036246
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.28521780383795325,
+              "p99_ms_median": 0.7147,
+              "maximum_ms": 0.9269000000000001,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.28521780383795325
+              ]
+            },
+            "mean_reduction_percent": 14.744369468057084
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 0.8329234541577821,
+              "p99_ms_median": 1.5051,
+              "maximum_ms": 1.8032000000000001,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.8329234541577821
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.7128715351812375,
+              "p99_ms_median": 1.3462999999999998,
+              "maximum_ms": 1.5251,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.7128715351812375
+              ]
+            },
+            "mean_reduction_percent": 14.413319540621682
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 0.8941534115138604,
+              "p99_ms_median": 2.1310000000000002,
+              "maximum_ms": 2.5229,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.8941534115138604
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.7658797441364602,
+              "p99_ms_median": 1.9735,
+              "maximum_ms": 2.39,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.7658797441364602
+              ]
+            },
+            "mean_reduction_percent": 14.34582318041201
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 2.0751623667377417,
+              "p99_ms_median": 3.1925999999999997,
+              "maximum_ms": 3.4455,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.0751623667377417
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.1052042643923254,
+              "p99_ms_median": 1.6327,
+              "maximum_ms": 1.9491,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.1052042643923254
+              ]
+            },
+            "mean_reduction_percent": 46.74131132544769
+          }
+        },
+        "16": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 0.7144777185501056,
+              "p99_ms_median": 1.4252,
+              "maximum_ms": 1.6019999999999999,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.7144777185501056
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 0.6221810234541584,
+              "p99_ms_median": 1.2886,
+              "maximum_ms": 1.5949,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                0.6221810234541584
+              ]
+            },
+            "mean_reduction_percent": 12.918064860475354
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 2.8920594882729183,
+              "p99_ms_median": 4.2158999999999995,
+              "maximum_ms": 12.795499999999999,
+              "deadline_misses": 1,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.8920594882729183
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 2.4876886993603438,
+              "p99_ms_median": 3.6635999999999997,
+              "maximum_ms": 4.1178,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.4876886993603438
+              ]
+            },
+            "mean_reduction_percent": 13.982104813274665
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 3.242775266524522,
+              "p99_ms_median": 6.3701,
+              "maximum_ms": 6.8848,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                3.242775266524522
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 2.914439552238804,
+              "p99_ms_median": 5.4713,
+              "maximum_ms": 6.5988,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.914439552238804
+              ]
+            },
+            "mean_reduction_percent": 10.1251455096244
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 7.728897761194024,
+              "p99_ms_median": 9.3628,
+              "maximum_ms": 9.8306,
+              "deadline_misses": 0,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                7.728897761194024
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 4.611252878464816,
+              "p99_ms_median": 6.3747,
+              "maximum_ms": 13.2668,
+              "deadline_misses": 2,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                4.611252878464816
+              ]
+            },
+            "mean_reduction_percent": 40.337509681944205
+          }
+        },
+        "32": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 1.3684873134328377,
+              "p99_ms_median": 2.7658,
+              "maximum_ms": 3.6428,
+              "deadline_misses": 0,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                1.3214203624733476,
+                1.3684873134328377,
+                1.433735820895524
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.078944669509595,
+              "p99_ms_median": 2.1393,
+              "maximum_ms": 2.6748000000000003,
+              "deadline_misses": 0,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                1.0462833688699358,
+                1.1276434968017086,
+                1.078944669509595
+              ]
+            },
+            "mean_reduction_percent": 21.15786102517294
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 5.349862260127924,
+              "p99_ms_median": 6.976000000000001,
+              "maximum_ms": 14.352699999999999,
+              "deadline_misses": 1,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.041451385927506,
+                5.3814462686567115,
+                5.349862260127924
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 4.815402452025589,
+              "p99_ms_median": 6.8450999999999995,
+              "maximum_ms": 16.2488,
+              "deadline_misses": 3,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                4.815402452025589,
+                5.123213219616206,
+                4.670459488272919
+              ]
+            },
+            "mean_reduction_percent": 9.990160159554373
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 5.9515054371002,
+              "p99_ms_median": 10.4605,
+              "maximum_ms": 19.014,
+              "deadline_misses": 30,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.9515054371002,
+                6.561874200426436,
+                5.673588272921104
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 5.874601279317696,
+              "p99_ms_median": 10.732000000000001,
+              "maximum_ms": 24.585099999999997,
+              "deadline_misses": 31,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.658952132196169,
+                6.108757356076764,
+                5.874601279317696
+              ]
+            },
+            "mean_reduction_percent": 1.292179913053626
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 15.705502878464833,
+              "p99_ms_median": 22.2351,
+              "maximum_ms": 37.4481,
+              "deadline_misses": 2814,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                15.705502878464833,
+                15.765524200426418,
+                15.02442686567163
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 8.878738805970146,
+              "p99_ms_median": 11.428,
+              "maximum_ms": 24.5459,
+              "deadline_misses": 126,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                8.878738805970146,
+                9.389213219616195,
+                8.85585671641792
+              ]
+            },
+            "mean_reduction_percent": 43.467338329264514
+          }
+        }
+      },
+      "numerics": {
+        "frozen": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+          "realtime_pcm_sha256": "932223ec4a27376fe61c2351a0bc917042e006470ab4d26d34f21261637ca87a",
+          "static_hrir_brir_max_relative_l2": 2.749745699869397e-07,
+          "static_hrir_brir_max_absolute_error": 2.980232238769531e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.0044909195633373745,
+            "snr_db": 46.95329446993948,
+            "maximum_absolute_error": 0.002373012714087963,
+            "reference_peak": 0.06579935550689697
+          }
+        },
+        "screens": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910",
+          "realtime_pcm_sha256": "67bc1a9c6422057506c9930be3283337c1c3d5fb25c92ff592662bd8cfcae57f",
+          "static_hrir_brir_max_relative_l2": 2.749745699869397e-07,
+          "static_hrir_brir_max_absolute_error": 2.980232238769531e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.004722273460619388,
+            "snr_db": 46.516977342184106,
+            "maximum_absolute_error": 0.0024484144523739815,
+            "reference_peak": 0.06995325535535812
+          }
+        },
+        "dense_screens": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "e21985a58dc875ac944f1c13533ce409b418cd0c256d858a135b3928fb18ca83",
+          "realtime_pcm_sha256": "be0296a6fb3a730207210a2c9a8317b3fe75255b5a4db279b2b23de719a9efa2",
+          "static_hrir_brir_max_relative_l2": 2.749745699869397e-07,
+          "static_hrir_brir_max_absolute_error": 2.980232238769531e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.00964411914173834,
+            "snr_db": 40.31474866128796,
+            "maximum_absolute_error": 0.0026476189959794283,
+            "reference_peak": 0.05777798220515251
+          }
+        }
+      },
+      "binaries": {
+        "room_bench": "65e6b2e6748f5b01344ccd447026a719e19df3484eefc0993bb7a99ed44a069a",
+        "room_replay": "2cbbbf305907855dd3fb57ff8a47a3529fe7ca8c64ea3a9890f16ed3bdc680de"
+      }
+    },
+    "linux-x64": {
+      "host": {
+        "platform": "Linux-5.15.0-94-generic-x86_64-with-glibc2.35",
+        "cpu_count": 128,
+        "affinity": 32,
+        "room_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+        "hrir_sha256": "b367ad7a91c1f610f2a98692cf3bee371e868278d9b81a80b0323f109a801196",
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+        "cpu_max": "3200000 100000",
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz"
+      },
+      "validation": {
+        "source_restored": true,
+        "git_status_restored": null,
+        "commands": [
+          {
+            "name": "rust-tests",
+            "exit_code": 0,
+            "seconds": 89.12237048149109
+          },
+          {
+            "name": "release-build",
+            "exit_code": 0,
+            "seconds": 44.37125897407532
+          },
+          {
+            "name": "exact-replay-frozen",
+            "exit_code": 0,
+            "seconds": 6.118884563446045
+          },
+          {
+            "name": "realtime-replay-frozen",
+            "exit_code": 0,
+            "seconds": 5.451081991195679
+          },
+          {
+            "name": "exact-replay-screens",
+            "exit_code": 0,
+            "seconds": 6.290300607681274
+          },
+          {
+            "name": "realtime-replay-screens",
+            "exit_code": 0,
+            "seconds": 5.638453006744385
+          },
+          {
+            "name": "exact-replay-dense_screens",
+            "exit_code": 0,
+            "seconds": 11.214808464050293
+          },
+          {
+            "name": "realtime-replay-dense_screens",
+            "exit_code": 0,
+            "seconds": 9.088590621948242
+          }
+        ]
+      },
+      "benchmarks": {
+        "1": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 1.2347747356076764,
+              "p99_ms_median": 12.30737,
+              "maximum_ms": 15.793963000000002,
+              "deadline_misses": 29,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.2347747356076764
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 1.3523543539445635,
+              "p99_ms_median": 12.030275,
+              "maximum_ms": 13.624416,
+              "deadline_misses": 21,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                1.3523543539445635
+              ]
+            },
+            "mean_reduction_percent": -9.522353749732492
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 2.552939022388058,
+              "p99_ms_median": 13.020178,
+              "maximum_ms": 14.960749,
+              "deadline_misses": 76,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.552939022388058
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 2.2205963678038376,
+              "p99_ms_median": 13.378575,
+              "maximum_ms": 16.901234000000002,
+              "deadline_misses": 50,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.2205963678038376
+              ]
+            },
+            "mean_reduction_percent": 13.018041232858824
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 2.7517569552238794,
+              "p99_ms_median": 13.584394,
+              "maximum_ms": 16.110311,
+              "deadline_misses": 80,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.7517569552238794
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 2.6005692078891243,
+              "p99_ms_median": 13.323173,
+              "maximum_ms": 17.180543,
+              "deadline_misses": 65,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.6005692078891243
+              ]
+            },
+            "mean_reduction_percent": 5.494226045208805
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 6.1490775479744135,
+              "p99_ms_median": 17.695422999999998,
+              "maximum_ms": 22.253193,
+              "deadline_misses": 250,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                6.1490775479744135
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 3.7264091503198307,
+              "p99_ms_median": 14.388228,
+              "maximum_ms": 17.056175,
+              "deadline_misses": 124,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                3.7264091503198307
+              ]
+            },
+            "mean_reduction_percent": 39.39889160208496
+          }
+        },
+        "16": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 2.6043149648187645,
+              "p99_ms_median": 14.080729999999999,
+              "maximum_ms": 17.506787,
+              "deadline_misses": 53,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.6043149648187645
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 2.6556849658848645,
+              "p99_ms_median": 13.989381999999999,
+              "maximum_ms": 22.394043999999997,
+              "deadline_misses": 41,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                2.6556849658848645
+              ]
+            },
+            "mean_reduction_percent": -1.9724957142299715
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 4.2525303176972225,
+              "p99_ms_median": 15.442827,
+              "maximum_ms": 20.326329,
+              "deadline_misses": 100,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                4.2525303176972225
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 3.789832157782518,
+              "p99_ms_median": 15.211426,
+              "maximum_ms": 20.494237,
+              "deadline_misses": 96,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                3.789832157782518
+              ]
+            },
+            "mean_reduction_percent": 10.880537594033168
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 4.573956529850743,
+              "p99_ms_median": 16.349727,
+              "maximum_ms": 20.136619000000003,
+              "deadline_misses": 101,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                4.573956529850743
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 3.8693947654584235,
+              "p99_ms_median": 15.374858,
+              "maximum_ms": 19.658457000000002,
+              "deadline_misses": 101,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                3.8693947654584235
+              ]
+            },
+            "mean_reduction_percent": 15.403770451122112
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 9.557716713219623,
+              "p99_ms_median": 20.90295,
+              "maximum_ms": 29.472569,
+              "deadline_misses": 215,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                9.557716713219623
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 6.1316779008528774,
+              "p99_ms_median": 16.447229,
+              "maximum_ms": 18.409446,
+              "deadline_misses": 135,
+              "measured_calls": 938,
+              "per_run_mean_ms": [
+                6.1316779008528774
+              ]
+            },
+            "mean_reduction_percent": 35.84578739007892
+          }
+        },
+        "32": {
+          "static": {
+            "exact": {
+              "mean_ms_median": 3.2532233965884823,
+              "p99_ms_median": 14.665633000000001,
+              "maximum_ms": 21.117468,
+              "deadline_misses": 170,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                3.2791236577825122,
+                3.2532233965884823,
+                2.8982483368869927
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 3.075174109808102,
+              "p99_ms_median": 14.280337000000001,
+              "maximum_ms": 20.665993,
+              "deadline_misses": 139,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                3.0205689562899742,
+                3.075174109808102,
+                3.274511002132199
+              ]
+            },
+            "mean_reduction_percent": 5.473011382098547
+          },
+          "pose": {
+            "exact": {
+              "mean_ms_median": 5.829404436034109,
+              "p99_ms_median": 18.123176,
+              "maximum_ms": 25.907674,
+              "deadline_misses": 453,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.942157283582086,
+                5.629305442430695,
+                5.829404436034109
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 5.3141453123667315,
+              "p99_ms_median": 17.215312,
+              "maximum_ms": 20.713863999999997,
+              "deadline_misses": 386,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.0779138987206816,
+                5.3141453123667315,
+                5.323712180170575
+              ]
+            },
+            "mean_reduction_percent": 8.838966815929506
+          },
+          "switch": {
+            "exact": {
+              "mean_ms_median": 6.250998828358216,
+              "p99_ms_median": 18.166477,
+              "maximum_ms": 28.68927,
+              "deadline_misses": 487,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                6.250998828358216,
+                6.348989928571435,
+                6.132915469083152
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 5.726518318763323,
+              "p99_ms_median": 17.157044,
+              "maximum_ms": 25.869973,
+              "deadline_misses": 401,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                5.85116635927505,
+                5.234803763326232,
+                5.726518318763323
+              ]
+            },
+            "mean_reduction_percent": 8.390347270831988
+          },
+          "ramps": {
+            "exact": {
+              "mean_ms_median": 14.12446728891257,
+              "p99_ms_median": 26.770262,
+              "maximum_ms": 43.588133,
+              "deadline_misses": 1881,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                14.207769742004247,
+                14.12446728891257,
+                13.744044667377418
+              ]
+            },
+            "realtime": {
+              "mean_ms_median": 8.880245501066094,
+              "p99_ms_median": 20.374664,
+              "maximum_ms": 25.649555,
+              "deadline_misses": 544,
+              "measured_calls": 2814,
+              "per_run_mean_ms": [
+                8.880245501066094,
+                8.899995279317698,
+                8.844562773987207
+              ]
+            },
+            "mean_reduction_percent": 37.128634167768496
+          }
+        }
+      },
+      "numerics": {
+        "frozen": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+          "realtime_pcm_sha256": "932223ec4a27376fe61c2351a0bc917042e006470ab4d26d34f21261637ca87a",
+          "static_hrir_brir_max_relative_l2": 2.749745699869397e-07,
+          "static_hrir_brir_max_absolute_error": 2.980232238769531e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.0044909195633373745,
+            "snr_db": 46.95329446993948,
+            "maximum_absolute_error": 0.002373012714087963,
+            "reference_peak": 0.06579935550689697
+          }
+        },
+        "screens": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910",
+          "realtime_pcm_sha256": "67bc1a9c6422057506c9930be3283337c1c3d5fb25c92ff592662bd8cfcae57f",
+          "static_hrir_brir_max_relative_l2": 2.749745699869397e-07,
+          "static_hrir_brir_max_absolute_error": 2.980232238769531e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.004722273460619388,
+            "snr_db": 46.516977342184106,
+            "maximum_absolute_error": 0.0024484144523739815,
+            "reference_peak": 0.06995325535535812
+          }
+        },
+        "dense_screens": {
+          "exact_full_manifest_matches_prior": true,
+          "same_machine_packetization_bits_both_qualities": true,
+          "frames": 163398,
+          "exact_pcm_sha256": "e21985a58dc875ac944f1c13533ce409b418cd0c256d858a135b3928fb18ca83",
+          "realtime_pcm_sha256": "be0296a6fb3a730207210a2c9a8317b3fe75255b5a4db279b2b23de719a9efa2",
+          "static_hrir_brir_max_relative_l2": 2.749745699869397e-07,
+          "static_hrir_brir_max_absolute_error": 2.980232238769531e-07,
+          "session_errors": {
+            "samples": 326796,
+            "exact": false,
+            "relative_l2": 0.00964411914173834,
+            "snr_db": 40.31474866128796,
+            "maximum_absolute_error": 0.0026476189959794283,
+            "reference_peak": 0.05777798220515251
+          }
+        }
+      },
+      "binaries": {
+        "room_bench": "f221850b34ed914b784a69240cb1c106b94a60e3dc35fb5c113be26a2e8f567d",
+        "room_replay": "5de793766c43f7be77f32118d4f53bedae286cb454b7e273197fbace5f43e0b3"
+      }
+    }
+  },
+  "validation": {
+    "macos_debug_ctest": "80/80",
+    "macos_release_room_ctest": "1/1",
+    "three_platform_rust_tests": "83/83 each (57 library + 21 room + 4 quality + 1 zero-allocation)",
+    "windows_canonical_ctest": "2/2",
+    "clippy": "pass: dsp and ffi, all targets, sofa + room-trace",
+    "cpp_quality": "clang-format, clang-tidy, cppcheck passed for changed files",
+    "ffi_headers": "251 functions, 82 structures",
+    "fft_reference_transaction_tests": "7/7",
+    "phase2_tool_tests": "40/40",
+    "rustfft_unmodified_vendor_files": "77 normalized hashes match",
+    "cli_release_render_both_qualities": "pass",
+    "exact_prior_and_cross_platform_full_manifests": "pass for frozen, screens and dense screens",
+    "stage_probe_followup": {
+      "scope": "Only room_stages helper changed after the three-platform matrix: propagate quality to its Dynamic convolvers and record selected policy. Production core and measured room_bench/room_replay remain identical to source_digest.",
+      "sha256": "b5c401ff24e210f0896e4c5ed07d2638c4a0e1d4889147cc02dc975a2e7efe8a",
+      "macos_release_and_clippy": "passed both qualities, 128 iterations"
+    }
+  }
+}

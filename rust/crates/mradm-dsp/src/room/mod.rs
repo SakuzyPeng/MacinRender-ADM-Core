@@ -6,6 +6,7 @@ pub mod hrir;
 pub mod partition;
 pub mod prepared;
 pub mod profile;
+pub mod quality;
 pub mod resources;
 pub mod screen;
 pub mod session;

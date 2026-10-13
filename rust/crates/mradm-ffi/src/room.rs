@@ -8,6 +8,7 @@ use mradm_dsp::{
         geometry::Position,
         hrir::HrirBank,
         prepared::PreparedRoom,
+        quality::Quality,
         resources::{HrirData, RoomProfile, sha256},
         screen::{Mapping, RoomScreens},
         session::{Instance, PreparedSet, RoomInfo, Session},
@@ -173,6 +174,9 @@ fn description(prepared: &PreparedSet) -> Result<CString> {
     let room = &prepared.room;
     let value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
+        "quality":room.quality.name(),"processing_policy":room.quality.policy(),
+        "reflection_update_frames":room.quality.reflection_frames(),
+        "fft_policy":if room.quality == Quality::Exact { "scalar" } else { "native-auto" },
         "hrir_hash":room.hrir.data.identity,"source_sofa_sha256":room.hrir.data.source_sofa_sha256,
         "sample_rate":48000,"latency_frames":mradm_dsp::room::BLOCK,
         "material_filter_guard_frames":room.profile.band_offset,
@@ -281,11 +285,41 @@ pub unsafe extern "C" fn mradm_room_prepare(
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
+    unsafe {
+        mradm_room_prepare_quality(
+            profile,
+            hrir_name,
+            hrir_length,
+            sofa_name,
+            sofa_length,
+            reuse,
+            0,
+            out,
+            message,
+            capacity,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_room_prepare_quality(
+    profile: *const RoomProfileHandle,
+    hrir_name: *const u8,
+    hrir_length: usize,
+    sofa_name: *const u8,
+    sofa_length: usize,
+    reuse: *const RoomPreparedHandle,
+    quality: u32,
+    out: *mut *mut RoomPreparedHandle,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
     boundary(message, capacity, || unsafe {
         separate(profile, 1, out, 1)?;
         separate(hrir_name, hrir_length, out, 1)?;
         separate(sofa_name, sofa_length, out, 1)?;
         *out = ptr::null_mut();
+        let quality = Quality::try_from(quality)?;
         let profile = &*profile;
         let data = if !reuse.is_null() {
             separate(reuse, 1, out, 1)?;
@@ -316,8 +350,10 @@ pub unsafe extern "C" fn mradm_room_prepare(
             }
         }
         let (length, _, _) = PreparedRoom::required_fft(&profile.profile, &data)?;
-        type Cache =
-            std::collections::BTreeMap<(String, String, usize), std::sync::Weak<PreparedSet>>;
+        type Cache = std::collections::BTreeMap<
+            (String, String, usize, Quality),
+            std::sync::Weak<PreparedSet>,
+        >;
         static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
         // Preparation-only weak cache. It shares immutable data between Scene
         // and file sessions without keeping inactive rooms alive or touching DSP locks.
@@ -330,16 +366,24 @@ pub unsafe extern "C" fn mradm_room_prepare(
             profile.profile.identity.clone(),
             data.identity.clone(),
             length,
+            quality,
         );
         let prepared = if let Some(prepared) = cache.get(&key).and_then(std::sync::Weak::upgrade) {
             prepared
         } else {
-            let bank = if !reuse.is_null() && (&*reuse).prepared.room.hrir.fft_length == length {
+            let bank = if !reuse.is_null()
+                && (&*reuse).prepared.room.hrir.fft_length == length
+                && (&*reuse).prepared.room.quality == quality
+            {
                 (&*reuse).prepared.room.hrir.clone()
             } else {
-                Arc::new(HrirBank::new(data, length)?)
+                Arc::new(HrirBank::with_policy(data, length, quality.fft())?)
             };
-            let room = Arc::new(PreparedRoom::new(profile.profile.clone(), bank)?);
+            let room = Arc::new(PreparedRoom::with_quality(
+                profile.profile.clone(),
+                bank,
+                quality,
+            )?);
             let prepared = Arc::new(PreparedSet::new(room)?);
             cache.insert(key, Arc::downgrade(&prepared));
             prepared

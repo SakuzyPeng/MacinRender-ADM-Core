@@ -2,6 +2,7 @@
 
 > 状态：已接受。日期：2026-10-07。
 > 数值一致性二期的第二个切片，接续 ADR 0014 与 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)。
+> 2026-10-13 补充：房间实时档位可显式选择原生 FFT，默认与精确路径仍固定标量，见下文及 ADR 0020。
 
 ## 问题与依据
 
@@ -47,3 +48,16 @@ twiddle 仍来自平台 libm。f32 表的三平台位相等由门禁持续验证
 本切片不处理重采样（rubato 自带 SIMD 与 libm 窗函数）、spreader 分组/归约、HRTF 插值的
 `hypot` 和 EAR f64 中间值差异；这些仍按二期基线记录的顺序逐项处理，不把 FFT 门禁扩展为
 完整 PCM 的跨平台逐位一致承诺。
+
+## 2026-10-13：默认标量与显式原生规划器并存
+
+[房间实时档位](0020-room-quality-tiers.md) 允许跨平台数值误差。为避免 Cargo 的 feature 合并
+改变其它后端，vendored RustFFT 增加 `mradm-scalar-default` 特性：启用它时，
+`FftPlanner::new()` 始终选标量；新增 `FftPlanner::new_native()` 保留上游 CPU 能力探测。
+workspace 同时编译 AVX／SSE／NEON 内核，但只有房间实时档位显式调用原生规划器。
+`RealFft::new`、EAR f64 FFT、realfft／rubato／SOFA 中原有调用仍选择标量。
+
+构建记录同时保存解析后的特性与 `scalar-default-native-room-opt-in-v1` dispatch 标记。
+一致性比较器只在特性和标记都匹配时接受编译了原生内核的构建；原有精确位门禁不变。
+库测试直接比较默认 f32／f64 规划器与 `FftPlannerScalar` 的输出，并测试两种策略同时存活。
+精确路径仍遵守本 ADR 原有规则；仅显式实时档位不承诺跨 CPU 架构的 PCM 位相等。

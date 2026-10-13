@@ -2,6 +2,7 @@ use mradm_dsp::room::{
     BLOCK,
     control::{RoomCommand, RoomDescription, State},
     prepared::PreparedRoom,
+    quality::Quality,
     screen::{RoomScreenGeometry, RoomScreens},
     session::{Instance, PreparedSet, Session},
 };
@@ -38,7 +39,17 @@ static ALLOCATOR: CheckedAllocator = CheckedAllocator;
 
 #[test]
 fn regular_room_dsp_does_not_allocate_on_any_worker() {
-    let base = common::fixture();
+    for quality in [Quality::Realtime, Quality::Exact] {
+        verify_quality(quality);
+    }
+}
+fn verify_quality(quality: Quality) {
+    ALLOCATIONS.store(0, Ordering::SeqCst);
+    let base = if quality == Quality::Exact {
+        common::fixture()
+    } else {
+        common::fixture_with_quality(quality)
+    };
     let mut profile = (*base.room.profile).clone();
     profile.late_directions = (0..32)
         .map(|i| base.room.profile.late_directions[i % 6])
@@ -52,7 +63,8 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
         .collect();
     let prepared = Arc::new(
         PreparedSet::new(Arc::new(
-            PreparedRoom::new(Arc::new(profile.clone()), base.room.hrir.clone()).unwrap(),
+            PreparedRoom::with_quality(Arc::new(profile.clone()), base.room.hrir.clone(), quality)
+                .unwrap(),
         ))
         .unwrap(),
     );
@@ -60,7 +72,7 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
     profile.absorption = [[0.9; 8]; 6];
     let other = Arc::new(
         PreparedSet::new(Arc::new(
-            PreparedRoom::new(Arc::new(profile), base.room.hrir.clone()).unwrap(),
+            PreparedRoom::with_quality(Arc::new(profile), base.room.hrir.clone(), quality).unwrap(),
         ))
         .unwrap(),
     );

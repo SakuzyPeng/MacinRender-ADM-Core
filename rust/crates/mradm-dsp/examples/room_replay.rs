@@ -7,6 +7,7 @@ use mradm_dsp::{
         geometry::{self as room_geometry, Rotation},
         hrir::HrirBank,
         prepared::{PreparedRoom, ResponseWork},
+        quality::Quality,
         resources::{HrirData, RoomProfile, sha256},
         screen::{RoomScreenGeometry, RoomScreens},
         session::{Instance, PreparedSet, Session},
@@ -35,6 +36,7 @@ fn render(
     next: Arc<PreparedSet>,
     chunks: &[usize],
     screens: bool,
+    dense: bool,
 ) -> Result<Vec<f32>> {
     const MATERIAL: usize = 96013;
     let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
@@ -83,7 +85,7 @@ fn render(
     quiet.gain = 0.23;
     let mut relock = initial[2].state;
     relock.head_locked = 1;
-    let events = [
+    let mut events = vec![
         (
             731usize,
             RoomCommand {
@@ -114,6 +116,40 @@ fn render(
             },
         ),
     ];
+    if dense {
+        // Dense replay: 30 non-LFE sources each ramp at a distinct sample offset.
+        // Keep the original head-lock, gain, pose, room-switch, removal and EOS schedule.
+        for block in 0..MATERIAL.div_ceil(512) {
+            for (source, command) in initial.iter().enumerate().take(30) {
+                let sample = block * 512 + (source * 131 + 17) % 512;
+                if sample >= MATERIAL {
+                    continue;
+                }
+                let direction = geometry::portable_direction(
+                    source as f32 * 11.25 + (block + 1) as f32 * 0.5,
+                    (source % 3) as f32 * 20. - 20.,
+                );
+                events.push((
+                    sample,
+                    RoomCommand {
+                        element: source as u32,
+                        changed: 4,
+                        duration: 512,
+                        state: State {
+                            position: [
+                                (-direction[1] * 1.4) as f32,
+                                (direction[0] * 1.4) as f32,
+                                (direction[2] * 1.4) as f32,
+                            ],
+                            ..command.state
+                        },
+                        ..RoomCommand::default()
+                    },
+                ));
+            }
+        }
+        events.sort_by_key(|event| event.0);
+    }
     let mut candidate = Some(Box::new(Instance::new(next, 32)?));
     let mut input = vec![[0.; 4096]; 32];
     let mut block_output = vec![0.; 8192];
@@ -168,7 +204,7 @@ fn render(
             }
         }
         commands.clear();
-        for (sample, command) in events {
+        for (sample, command) in events.iter().copied() {
             if sample >= position && sample < position + count {
                 let mut c = command;
                 c.offset = (sample - position) as u32;
@@ -192,11 +228,23 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if cfg!(debug_assertions) {
         return Err("Use Release for numerical acceptance".into());
     }
-    let args: Vec<_> = std::env::args().collect();
-    if args.len() != 3 && !(args.len() == 4 && args[3] == "--screens") {
-        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens]".into());
+    let mut args: Vec<_> = std::env::args().collect();
+    let quality = if let Some(index) = args.iter().position(|v| v == "--quality") {
+        let value = args
+            .get(index + 1)
+            .ok_or("--quality needs exact or realtime")?
+            .parse::<Quality>()?;
+        args.drain(index..index + 2);
+        value
+    } else {
+        Quality::Exact
+    };
+    let screens = args.iter().any(|v| v == "--screens");
+    let dense = args.iter().any(|v| v == "--dense");
+    args.retain(|v| v != "--screens" && v != "--dense");
+    if args.len() != 3 {
+        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens] [--dense] [--quality exact|realtime]".into());
     }
-    let screens = args.len() == 4;
     let file = Path::new(&args[1]);
     let root = file.parent().ok_or("missing parent")?;
     let out = Path::new(&args[2]);
@@ -209,8 +257,12 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         |n, s| asset(root, n, s),
     )?);
     let (length, _, _) = PreparedRoom::required_fft(&profile, &hrir)?;
-    let bank = Arc::new(HrirBank::new(hrir, length)?);
-    let room = Arc::new(PreparedRoom::new(profile.clone(), bank.clone())?);
+    let bank = Arc::new(HrirBank::with_policy(hrir, length, quality.fft())?);
+    let room = Arc::new(PreparedRoom::with_quality(
+        profile.clone(),
+        bank.clone(),
+        quality,
+    )?);
     let prepared = Arc::new(PreparedSet::new(room.clone())?);
     let mut changed = (*profile).clone();
     changed.identity.push_str("-replay");
@@ -220,9 +272,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     changed.listener[0] += 0.25;
     changed.dimensions[1] += 0.2;
     changed.listener[1] += 0.1;
-    let next = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::new(
+    let next = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
         Arc::new(changed),
         bank,
+        quality,
     )?))?);
     let mut work = ResponseWork::new(&room)?;
     let mut query = vec![0.; room.hrir.data.output_taps * 2];
@@ -230,6 +283,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "scenario":"controls-distance-geometry-switch-v1",
         "room_hash":profile.identity,"hrir_hash":room.hrir.data.identity,"prepared":room.fingerprint(),
         "lfe":prepared.lfe.fingerprint(),"latency_frames":256,"tail_frames":prepared.tail_frames(),"files":{}});
+    if quality != Quality::Exact {
+        manifest["processing_policy"] = quality.policy().into();
+    }
     for (index, [az, el, r]) in [
         [0., 0., 0.75],
         [0., 0., 1.5],
@@ -265,8 +321,17 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if screens {
         manifest["scenario"] = "controls-screen-distance-geometry-switch-v1".into();
     }
-    let canonical = render(prepared.clone(), next.clone(), &[256], screens)?;
-    let fragmented = render(prepared, next, &[1, 173, 733, 4096, 19, 257], screens)?;
+    if dense {
+        manifest["dense_source_ramps"] = true.into();
+    }
+    let canonical = render(prepared.clone(), next.clone(), &[256], screens, dense)?;
+    let fragmented = render(
+        prepared,
+        next,
+        &[1, 173, 733, 4096, 19, 257],
+        screens,
+        dense,
+    )?;
     if canonical
         .iter()
         .map(|v| v.to_bits())

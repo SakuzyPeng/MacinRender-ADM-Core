@@ -360,6 +360,9 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->check(CLI::IsMember({"mpeg4", "caf"}));
     render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
     render_cmd->add_option("--room", opts.room_path, "Room package room.json (room-binaural)");
+    render_cmd->add_option("--room-quality", opts.room_quality, "Room processing quality: exact (default), realtime")
+        ->check(CLI::IsMember({"exact", "realtime"}))
+        ->needs("--room");
     render_cmd->add_option("--room-hrir",
                            opts.room_hrir_path,
                            "Personal SOFA or prepared HRIR manifest (optional; --sofa also prepares natively)");
@@ -540,7 +543,11 @@ int run_render_impl(const RenderCliOptions& opts) {
             spdlog::error(room.error().message);
             return EXIT_FAILURE;
         }
-        request.options.room = {*room, opts.room_hrir_path, opts.room_metres_per_unit};
+        request.options.room = {*room,
+                                opts.room_hrir_path,
+                                opts.room_metres_per_unit,
+                                opts.room_quality == "realtime" ? mradm::RoomQuality::realtime
+                                                                : mradm::RoomQuality::exact};
     }
     request.options.cancel_token = stop_source.get_token();
     RenderInterruptScope interrupt_scope{stop_source};

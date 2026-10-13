@@ -84,6 +84,7 @@
 - [ADR 0017：OM spreader 固定分组预算与可移植数学函数](adr/0017-deterministic-spreader.md)
 - [ADR 0018：Scene 流式渲染的数值与重放规则（提议）](adr/0018-scene-numeric-replay-rules.md)
 - [ADR 0019：房间渲染按声源自身的事件网格更新滤波器](adr/0019-room-per-source-update-grid.md)
+- [ADR 0020：房间渲染的精确与实时档位](adr/0020-room-quality-tiers.md)
 
 ## 使用指南
 

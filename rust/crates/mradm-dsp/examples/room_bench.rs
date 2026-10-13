@@ -7,6 +7,7 @@ use mradm_dsp::{
         control::{RoomCommand, RoomDescription, State},
         hrir::HrirBank,
         prepared::PreparedRoom,
+        quality::Quality,
         resources::{HrirData, RoomProfile},
         session::{Instance, PreparedSet, Session},
     },
@@ -63,6 +64,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for performance evidence".into());
     }
     let mut arguments: Vec<_> = std::env::args().collect();
+    let quality = if let Some(index) = arguments.iter().position(|v| v == "--quality") {
+        let value = arguments
+            .get(index + 1)
+            .ok_or("--quality needs exact or realtime")?
+            .parse::<Quality>()?;
+        arguments.drain(index..index + 2);
+        value
+    } else {
+        Quality::Exact
+    };
     let tracing = arguments.last().is_some_and(|v| v == "--trace");
     if tracing {
         arguments.pop();
@@ -85,7 +96,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
     if arguments.len() < 2 || arguments.len() > 6 {
         return Err(
-            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace]".into(),
+            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime]".into(),
         );
     }
     let file = Path::new(&arguments[1]);
@@ -114,17 +125,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         |n, s| asset(root, n, s),
     )?);
     let (length, _, _) = PreparedRoom::required_fft(&profile, &data)?;
-    let bank = Arc::new(HrirBank::new(data, length)?);
-    let prepared = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::new(
+    let bank = Arc::new(HrirBank::with_policy(data, length, quality.fft())?);
+    let prepared = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
         profile.clone(),
         bank.clone(),
+        quality,
     )?))?);
     let mut other = (*profile).clone();
     other.identity.push_str("-benchmark");
     other.absorption = [[0.9; 8]; 6];
-    let other = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::new(
+    let other = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
         Arc::new(other),
         bank,
+        quality,
     )?))?);
     let only_sources = arguments.get(4).map(|v| v.parse::<usize>()).transpose()?;
     if only_sources.is_some_and(|n| ![1, 16, 32].contains(&n)) {
@@ -294,6 +307,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!(
                 "{}",
                 serde_json::json!({"sources":sources,"continuous_pose":moving,"room_transition":switching,
+                "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames(),
                 "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
                 "voice_segments":segments,
                 "voice_segments_per_source_block":segments.map(|v|v as f64/(sources*blocks*frames/BLOCK) as f64),

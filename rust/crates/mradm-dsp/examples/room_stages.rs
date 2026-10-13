@@ -7,6 +7,7 @@ use mradm_dsp::{
         hrir::HrirBank,
         partition::Dynamic,
         prepared::{PreparedRoom, ResponseWork},
+        quality::Quality,
         resources::{HrirData, RoomProfile},
     },
 };
@@ -22,9 +23,21 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if cfg!(debug_assertions) {
         return Err("Release required".into());
     }
-    let args: Vec<_> = std::env::args().collect();
+    let mut args: Vec<_> = std::env::args().collect();
+    let quality = if let Some(index) = args.iter().position(|v| v == "--quality") {
+        let value = args
+            .get(index + 1)
+            .ok_or("--quality needs exact or realtime")?
+            .parse::<Quality>()?;
+        args.drain(index..index + 2);
+        value
+    } else {
+        Quality::Exact
+    };
     if args.len() < 2 {
-        return Err("usage: room_stages ROOM_JSON [ITERATIONS=2000]".into());
+        return Err(
+            "usage: room_stages ROOM_JSON [ITERATIONS=2000] [--quality exact|realtime]".into(),
+        );
     }
     let count = args
         .get(2)
@@ -44,8 +57,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         |n, s| asset(root, n, s),
     )?);
     let (n, _, _) = PreparedRoom::required_fft(&profile, &data)?;
-    let bank = Arc::new(HrirBank::new(data, n)?);
-    let room = Arc::new(PreparedRoom::new(profile, bank)?);
+    let bank = Arc::new(HrirBank::with_policy(data, n, quality.fft())?);
+    let room = Arc::new(PreparedRoom::with_quality(profile, bank, quality)?);
     let mut work = ResponseWork::new(&room)?;
     let position = room_geometry::position(&room.profile, [0., 1.4, 0.], 1.5, [1., 0., 0.])?;
     let mut face = usize::MAX;
@@ -64,7 +77,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         work.build(&room, position, &Rotation::new([i as f32 * 0.05, 7., 0.])?)?;
     }
     let source_response_us = start.elapsed().as_secs_f64() * 1e6 / count as f64;
-    let mut dynamic = Dynamic::new(2, room.short_taps)?;
+    let mut dynamic = Dynamic::with_policy(2, room.short_taps, quality.fft())?;
     let start = Instant::now();
     for i in 0..count {
         work.impulse[0] = i as f32 * 1e-8;
@@ -90,8 +103,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             work.early_support,
         ));
     }
-    let mut direct = Dynamic::new(2, room.short_taps)?;
-    let mut early = Dynamic::new(2, room.short_taps)?;
+    let mut direct = Dynamic::with_policy(2, room.short_taps, quality.fft())?;
+    let mut early = Dynamic::with_policy(2, room.short_taps, quality.fft())?;
     let mut direct_seconds = 0.;
     let mut early_seconds = 0.;
     for i in 0..count + 32 {
@@ -113,6 +126,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "{}",
         serde_json::json!({
             "schema":"mradm.room-stages", "version":2, "iterations":count,
+            "quality":quality.name(), "processing_policy":quality.policy(),
             "profiling":cfg!(feature = "room-profile"), "query_fft_length":n,
             "hrir_query_us":hrir_query_us, "source_response_us":source_response_us,
             "stereo_target_us":stereo_target_us, "stereo_convolution_us":stereo_convolution_us,

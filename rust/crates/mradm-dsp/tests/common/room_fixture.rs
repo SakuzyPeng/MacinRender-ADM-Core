@@ -4,6 +4,7 @@ use mradm_dsp::{
     room::{
         hrir::HrirBank,
         prepared::PreparedRoom,
+        quality::Quality,
         resources::{HrirData, RoomProfile},
         session::PreparedSet,
     },
@@ -11,6 +12,9 @@ use mradm_dsp::{
 use std::sync::Arc;
 
 pub fn fixture() -> Arc<PreparedSet> {
+    fixture_with_quality(Quality::Exact)
+}
+pub fn fixture_with_quality(quality: Quality) -> Arc<PreparedSet> {
     let directions = vec![
         [1., 0., 0.],
         [0., 1., 0.],
@@ -91,6 +95,11 @@ pub fn fixture() -> Arc<PreparedSet> {
         propagation_phases: phases,
     });
     let (length, _, _) = PreparedRoom::required_fft(&profile, &hrir).unwrap();
-    let bank = Arc::new(HrirBank::new(hrir, length).unwrap());
-    Arc::new(PreparedSet::new(Arc::new(PreparedRoom::new(profile, bank).unwrap())).unwrap())
+    let bank = Arc::new(HrirBank::with_policy(hrir, length, quality.fft()).unwrap());
+    Arc::new(
+        PreparedSet::new(Arc::new(
+            PreparedRoom::with_quality(profile, bank, quality).unwrap(),
+        ))
+        .unwrap(),
+    )
 }

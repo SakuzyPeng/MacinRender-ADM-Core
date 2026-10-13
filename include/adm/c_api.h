@@ -205,7 +205,7 @@
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 47
+#define ADM_API_VERSION_MINOR 48
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1865,6 +1865,11 @@ adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* st
  * request survives. Stream/monitor lifetime and other setters follow their
  * existing serialization rules; Scene room setters do not borrow last-error storage.
  */
+/* v1.48: session-fixed room quality. Existing entry points select EXACT.
+ * REALTIME uses native FFTs and a staggered reflection update grid; it retains
+ * deterministic sample-clock scheduling but has no cross-platform bit contract. */
+typedef enum adm_room_quality_t { ADM_ROOM_QUALITY_EXACT = 0, ADM_ROOM_QUALITY_REALTIME = 1 } adm_room_quality_t;
+
 typedef struct adm_room_t adm_room_t;
 typedef struct adm_room_config_t {
     uint32_t struct_size;
@@ -1902,6 +1907,21 @@ adm_error_code_t adm_create_scene_stream_with_room_ex(adm_context_t* context,
                                                       const adm_room_config_t* room,
                                                       const char* screen_json,
                                                       adm_scene_stream_t** out) ADM_API_NOEXCEPT;
+/* Quality is copied into options and survives setting/clearing the room config.
+ * The legacy room POD and all nested Scene POD layouts remain unchanged. */
+adm_error_code_t adm_render_options_set_room_quality(adm_render_options_t* options,
+                                                     adm_room_quality_t quality) ADM_API_NOEXCEPT;
+adm_error_code_t adm_room_inspect_with_quality(adm_context_t* context,
+                                               const adm_room_config_t* config,
+                                               adm_room_quality_t quality,
+                                               char** out_json) ADM_API_NOEXCEPT;
+adm_error_code_t adm_create_scene_stream_with_room_quality(adm_context_t* context,
+                                                           const adm_scene_stream_config_t* config,
+                                                           const adm_room_config_t* room,
+                                                           adm_room_quality_t quality,
+                                                           const char* screen_json,
+                                                           adm_scene_stream_t** out) ADM_API_NOEXCEPT;
+/* Room switches retain the quality selected when the session was created. */
 /* out_request and out_error are required. Revision is nonzero on acceptance.
  * out_error owns any synchronous error text; use adm_free_string. Preparation
  * failures are reported asynchronously by the status JSON. */

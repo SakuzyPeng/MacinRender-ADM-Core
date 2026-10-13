@@ -1,14 +1,19 @@
 //! Stateful real FFT with a non-destructive input and a normalized inverse.
 //!
-//! The workspace builds RustFFT without its SIMD features, so `RealFftPlanner` always falls back
-//! to the scalar planner: the algorithm depends only on the length and no FMA is used, which keeps
-//! the result bit-identical across x86_64 and aarch64 (ADR 0015). Do not re-enable `avx`, `sse` or
-//! `neon`; the consistency comparator rejects builds that resolve them.
+//! The patched default RustFFT planner is explicitly scalar (ADR 0015), even when native
+//! kernels are available. Only an explicit Native policy opts into platform SIMD/FMA.
 //! The local RustFFT patch batches independent radix-4 columns for automatic vectorization;
 //! each column retains the scalar planner's coefficients, expression tree and signed zeros.
 use crate::{Complex32, Error, Result};
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
+use realfft::{ComplexToReal, ComplexToRealEven, RealFftPlanner, RealToComplex, RealToComplexEven};
 use std::sync::Arc;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FftPolicy {
+    #[default]
+    Exact,
+    Native,
+}
 
 pub struct RealFft {
     forward: Arc<dyn RealToComplex<f32>>,
@@ -20,14 +25,32 @@ pub struct RealFft {
 
 impl RealFft {
     pub fn new(length: usize) -> Result<Self> {
+        Self::with_policy(length, FftPolicy::Exact)
+    }
+
+    pub fn with_policy(length: usize, policy: FftPolicy) -> Result<Self> {
         if length < 2 || !length.is_power_of_two() || length > (1 << 24) {
             return Err(Error::InvalidArgument(
                 "FFT length must be a power of two in [2, 16777216]",
             ));
         }
-        let mut planner = RealFftPlanner::new();
-        let forward = planner.plan_fft_forward(length);
-        let inverse = planner.plan_fft_inverse(length);
+        let (forward, inverse): (Arc<dyn RealToComplex<f32>>, Arc<dyn ComplexToReal<f32>>) =
+            match policy {
+                FftPolicy::Exact => {
+                    let mut planner = RealFftPlanner::new();
+                    (
+                        planner.plan_fft_forward(length),
+                        planner.plan_fft_inverse(length),
+                    )
+                }
+                FftPolicy::Native => {
+                    let mut planner = rustfft::FftPlanner::new_native();
+                    (
+                        Arc::new(RealToComplexEven::new(length, &mut planner)),
+                        Arc::new(ComplexToRealEven::new(length, &mut planner)),
+                    )
+                }
+            };
         let scratch_length = forward.get_scratch_len().max(inverse.get_scratch_len());
         Ok(Self {
             forward,
@@ -129,6 +152,86 @@ impl RealFft {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_planner_remains_scalar_with_native_kernels_available() {
+        for size in [32, 512, 4096] {
+            let input: Vec<_> = (0..size)
+                .map(|i| {
+                    Complex32::new(
+                        ((i * 73 % 127) as f32 - 63.) / 127.,
+                        ((i * 19 % 61) as f32 - 30.) / 61.,
+                    )
+                })
+                .collect();
+            let mut expected = input.clone();
+            rustfft::FftPlannerScalar::new()
+                .plan_fft_forward(size)
+                .process(&mut expected);
+            let mut actual = input;
+            rustfft::FftPlanner::new()
+                .plan_fft_forward(size)
+                .process(&mut actual);
+            assert!(
+                actual
+                    .iter()
+                    .zip(&expected)
+                    .all(|(a, b)| a.re.to_bits() == b.re.to_bits()
+                        && a.im.to_bits() == b.im.to_bits())
+            );
+            let input64: Vec<_> = expected
+                .iter()
+                .map(|v| rustfft::num_complex::Complex64::new(v.re as f64, v.im as f64))
+                .collect();
+            let mut expected64 = input64.clone();
+            rustfft::FftPlannerScalar::new()
+                .plan_fft_inverse(size)
+                .process(&mut expected64);
+            let mut actual64 = input64;
+            rustfft::FftPlanner::new()
+                .plan_fft_inverse(size)
+                .process(&mut actual64);
+            assert!(
+                actual64
+                    .iter()
+                    .zip(&expected64)
+                    .all(|(a, b)| a.re.to_bits() == b.re.to_bits()
+                        && a.im.to_bits() == b.im.to_bits())
+            );
+        }
+    }
+
+    #[test]
+    fn native_and_exact_plans_coexist_without_changing_exact_output() {
+        for size in [2, 32, 512, 4096, 32768] {
+            let input: Vec<_> = (0..size)
+                .map(|i| ((i * 73 % 127) as f32 - 63.) / 127.)
+                .collect();
+            let mut exact = RealFft::new(size).unwrap();
+            let mut native = RealFft::with_policy(size, FftPolicy::Native).unwrap();
+            let mut before = vec![Complex32::default(); exact.bins()];
+            let mut after = before.clone();
+            let mut fast = before.clone();
+            exact.forward(&input, &mut before).unwrap();
+            native.forward(&input, &mut fast).unwrap();
+            let mut roundtrip = vec![0.; size];
+            native.inverse(&fast, &mut roundtrip).unwrap();
+            assert!(
+                input
+                    .iter()
+                    .zip(roundtrip)
+                    .all(|(a, b)| (*a - b).abs() < 2e-6)
+            );
+            exact.forward(&input, &mut after).unwrap();
+            assert!(
+                before
+                    .iter()
+                    .zip(after)
+                    .all(|(a, b)| a.re.to_bits() == b.re.to_bits()
+                        && a.im.to_bits() == b.im.to_bits())
+            );
+        }
+    }
 
     #[test]
     fn padded_forward_matches_explicit_zeros_bit_for_bit() {

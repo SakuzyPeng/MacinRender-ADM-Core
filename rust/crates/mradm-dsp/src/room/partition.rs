@@ -1,7 +1,10 @@
 //! Finite partitioned convolution with explicit sample support. Filter changes
 //! use the same unfiltered input history; an outgoing output tail is never copied
 //! into a new filter. No processing method allocates.
-use crate::{Complex32, Error, Result, fft::RealFft};
+use crate::{
+    Complex32, Error, Result,
+    fft::{FftPolicy, RealFft},
+};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -13,10 +16,19 @@ pub struct Filters {
     used_partitions: usize,
     support: usize,
     spectrum: Vec<Complex32>,
+    policy: FftPolicy,
 }
 
 impl Filters {
     pub fn empty(block: usize, channels: usize, taps: usize) -> Result<Self> {
+        Self::empty_with_policy(block, channels, taps, FftPolicy::Exact)
+    }
+    fn empty_with_policy(
+        block: usize,
+        channels: usize,
+        taps: usize,
+        policy: FftPolicy,
+    ) -> Result<Self> {
         if !block.is_power_of_two()
             || !(16..=4096).contains(&block)
             || !(1..=64).contains(&channels)
@@ -41,15 +53,25 @@ impl Filters {
             used_partitions: partitions,
             support: taps,
             spectrum: vec![Complex32::default(); length],
+            policy,
         })
     }
 
     /// Channel-major FIRs, each exactly `taps` long.
     pub fn prepare(block: usize, channels: usize, impulse: &[f32]) -> Result<Self> {
+        Self::prepare_with_policy(block, channels, impulse, FftPolicy::Exact)
+    }
+    fn prepare_with_policy(
+        block: usize,
+        channels: usize,
+        impulse: &[f32],
+        policy: FftPolicy,
+    ) -> Result<Self> {
         if channels == 0 || !impulse.len().is_multiple_of(channels) {
             return Err(Error::InvalidArgument("Invalid room FIR channels"));
         }
-        let mut result = Self::empty(block, channels, impulse.len() / channels)?;
+        let mut result =
+            Self::empty_with_policy(block, channels, impulse.len() / channels, policy)?;
         let mut work = Uniform::new(&result)?;
         work.write_filters(&mut result, impulse)?;
         Ok(result)
@@ -57,6 +79,7 @@ impl Filters {
 }
 
 pub struct Uniform {
+    policy: FftPolicy,
     block: usize,
     partitions: usize,
     fft: RealFft,
@@ -76,7 +99,8 @@ impl Uniform {
         let mut result = Self {
             block,
             partitions: filters.partitions,
-            fft: RealFft::new(block * 2)?,
+            fft: RealFft::with_policy(block * 2, filters.policy)?,
+            policy: filters.policy,
             previous: vec![0.; if history { block } else { 0 }],
             time: vec![0.; block * 2],
             ring: vec![
@@ -104,7 +128,10 @@ impl Uniform {
     }
 
     fn compatible(&self, filters: &Filters) -> Result<()> {
-        if self.block != filters.block || self.partitions != filters.partitions {
+        if self.policy != filters.policy
+            || self.block != filters.block
+            || self.partitions != filters.partitions
+        {
             return Err(Error::InvalidArgument("Incompatible room partition state"));
         }
         Ok(())
@@ -193,7 +220,10 @@ impl Uniform {
         output: &mut [f32],
     ) -> Result<()> {
         self.compatible(filters)?;
-        if history.block != filters.block || history.partitions < filters.partitions {
+        if history.policy != filters.policy
+            || history.block != filters.block
+            || history.partitions < filters.partitions
+        {
             return Err(Error::InvalidArgument(
                 "Insufficient shared room input history",
             ));
@@ -244,7 +274,8 @@ impl Uniform {
     }
 
     pub fn copy_history_from(&mut self, source: &Self) -> Result<()> {
-        if self.block != source.block
+        if self.policy != source.policy
+            || self.block != source.block
             || self.partitions != source.partitions
             || self.previous.len() != source.previous.len()
             || self.ring.len() != source.ring.len()
@@ -263,6 +294,7 @@ const MAX_TARGETS: usize = 16;
 /// One mono input FFT/history can feed several filters of different lengths.
 /// The owner advances it exactly once per block, before rendering any reader.
 pub struct InputHistory {
+    policy: FftPolicy,
     ring: Vec<Complex32>,
     previous: [f32; super::BLOCK],
     head: usize,
@@ -270,6 +302,9 @@ pub struct InputHistory {
 }
 impl InputHistory {
     pub fn new(taps: usize) -> Result<Self> {
+        Self::with_policy(taps, FftPolicy::Exact)
+    }
+    pub fn with_policy(taps: usize, policy: FftPolicy) -> Result<Self> {
         if taps == 0 || taps > 1 << 20 {
             return Err(Error::InvalidArgument(
                 "Invalid shared room history support",
@@ -279,6 +314,7 @@ impl InputHistory {
         let mut ring = vec![Complex32::default(); partitions * (super::BLOCK + 1)];
         super::touch_pages(&mut ring);
         Ok(Self {
+            policy,
             ring,
             previous: [0.; super::BLOCK],
             head: partitions - 1,
@@ -294,7 +330,11 @@ impl InputHistory {
     // per history. No filter or cached output state is changed here.
     fn push(&mut self, input: &[f32], work: &mut Uniform) -> Result<()> {
         let block = super::BLOCK;
-        if work.block != block || input.len() != block || input.iter().any(|v| !v.is_finite()) {
+        if work.policy != self.policy
+            || work.block != block
+            || input.len() != block
+            || input.iter().any(|v| !v.is_finite())
+        {
             return Err(Error::InvalidArgument("Invalid shared room history input"));
         }
         work.time[..block].copy_from_slice(&self.previous);
@@ -306,7 +346,7 @@ impl InputHistory {
             .forward(&work.time, &mut self.ring[begin..begin + block + 1])
     }
     pub fn copy_history_from(&mut self, source: &Self) -> Result<()> {
-        if self.partitions != source.partitions {
+        if self.policy != source.policy || self.partitions != source.partitions {
             return Err(Error::InvalidArgument(
                 "Incompatible shared room input history",
             ));
@@ -343,13 +383,19 @@ pub struct Dynamic {
 
 impl Dynamic {
     pub fn new(channels: usize, taps: usize) -> Result<Self> {
-        Self::workspace(channels, taps, true)
+        Self::with_policy(channels, taps, FftPolicy::Exact)
+    }
+    pub fn with_policy(channels: usize, taps: usize, policy: FftPolicy) -> Result<Self> {
+        Self::workspace(channels, taps, true, policy)
     }
     pub fn reader(channels: usize, taps: usize) -> Result<Self> {
-        Self::workspace(channels, taps, false)
+        Self::reader_with_policy(channels, taps, FftPolicy::Exact)
     }
-    fn workspace(channels: usize, taps: usize, history: bool) -> Result<Self> {
-        let filter = Filters::empty(super::BLOCK, channels, taps)?;
+    pub fn reader_with_policy(channels: usize, taps: usize, policy: FftPolicy) -> Result<Self> {
+        Self::workspace(channels, taps, false, policy)
+    }
+    fn workspace(channels: usize, taps: usize, history: bool, policy: FftPolicy) -> Result<Self> {
+        let filter = Filters::empty_with_policy(super::BLOCK, channels, taps, policy)?;
         let core = Uniform::workspace(&filter, history)?;
         let mut targets: Vec<Target> = (0..MAX_TARGETS)
             .map(|_| Target {
@@ -498,7 +544,9 @@ impl Dynamic {
             let target = &mut self.targets[*index];
             if !target.cached {
                 if let Some(history) = history {
-                    if history.partitions < target.filter.partitions {
+                    if history.policy != target.filter.policy
+                        || history.partitions < target.filter.partitions
+                    {
                         return Err(Error::InvalidArgument(
                             "Insufficient shared room input history",
                         ));
@@ -580,6 +628,9 @@ impl LongFilters {
             })
     }
     pub fn prepare(channels: usize, impulse: &[f32]) -> Result<Arc<Self>> {
+        Self::with_policy(channels, impulse, FftPolicy::Exact)
+    }
+    pub fn with_policy(channels: usize, impulse: &[f32], policy: FftPolicy) -> Result<Arc<Self>> {
         if channels == 0 || !impulse.len().is_multiple_of(channels) {
             return Err(Error::InvalidArgument("Invalid long room FIR"));
         }
@@ -602,9 +653,9 @@ impl LongFilters {
         Ok(Arc::new(Self {
             taps,
             channels,
-            head: Filters::prepare(super::BLOCK, channels, &head)?,
+            head: Filters::prepare_with_policy(super::BLOCK, channels, &head, policy)?,
             tail: if tail_taps > 0 {
-                Some(Filters::prepare(2048, channels, &tail)?)
+                Some(Filters::prepare_with_policy(2048, channels, &tail, policy)?)
             } else {
                 None
             },

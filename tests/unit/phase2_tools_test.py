@@ -315,6 +315,15 @@ class EvidenceTests(unittest.TestCase):
                 comparator.fft_features({'rust.fft_features': json.dumps(features)})
         with self.assertRaises(ValueError):
             comparator.fft_features({})
+        guarded = {'rustfft': ['mradm-scalar-default', 'avx', 'sse', 'neon'], 'realfft': []}
+        record = {'rust.fft_features': json.dumps(guarded)}
+        with self.assertRaises(ValueError):
+            comparator.fft_features(record)
+        record['rust.fft_dispatch'] = 'scalar-default-native-room-opt-in-v1'
+        self.assertEqual(comparator.fft_features(record), guarded)
+        record['rust.fft_features'] = json.dumps({'rustfft': ['avx'], 'realfft': []})
+        with self.assertRaises(ValueError):
+            comparator.fft_features(record)
 
     def test_kernel_inventory_matches_probe_sizes(self):
         names = common.kernel_outputs()

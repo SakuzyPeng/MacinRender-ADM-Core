@@ -71,15 +71,16 @@ prepare(const RoomConfig& config, const std::filesystem::path& sofa, const Prepa
     const auto sofa_path = utf8_path(sofa);
     std::array<char, 512> message{};
     void* raw = nullptr;
-    auto status = checked(mradm_room_prepare(Access::get(*config.profile),
-                                             hrir.data(),
-                                             hrir.size(),
-                                             sofa_path.data(),
-                                             sofa_path.size(),
-                                             reuse != nullptr ? reuse->handle.get() : nullptr,
-                                             &raw,
-                                             message.data(),
-                                             message.size()),
+    auto status = checked(mradm_room_prepare_quality(Access::get(*config.profile),
+                                                     hrir.data(),
+                                                     hrir.size(),
+                                                     sofa_path.data(),
+                                                     sofa_path.size(),
+                                                     reuse != nullptr ? reuse->handle.get() : nullptr,
+                                                     static_cast<std::uint32_t>(config.quality),
+                                                     &raw,
+                                                     message.data(),
+                                                     message.size()),
                           message.data());
     if (!status) {
         return tl::unexpected{status.error()};
@@ -107,6 +108,8 @@ Result<std::array<float, 3>> polar(float azimuth, float elevation, float distanc
 Runtime::Runtime(std::shared_ptr<const Prepared> prepared, RoomConfig config, void* handle)
     : prepared_(std::move(prepared)), config_(std::move(config)), session_(handle, mradm_room_session_destroy),
       preroll_(prepared_->info.preroll_frames) {
+    status_.quality = config_.quality;
+    status_.reflection_update_frames = config_.quality == RoomQuality::realtime ? 1024U : 0U;
     status_.tail_frames = prepared_->info.tail_frames;
     status_.material_filter_guard_frames = prepared_->info.material_guard_frames;
     preparer_ = std::jthread([this](const std::stop_token& stop) { prepare_loop(stop); });
@@ -301,9 +304,9 @@ void Runtime::publish(const MradmRoomInfo& info) {
     }
 }
 Result<std::uint64_t> Runtime::request(const RoomConfig& config) {
-    if (!config.profile || config.metres_per_unit != config_.metres_per_unit ||
+    if (!config.profile || config.quality != config_.quality || config.metres_per_unit != config_.metres_per_unit ||
         (!config.hrir_manifest.empty() && config.hrir_manifest != config_.hrir_manifest)) {
-        return make_error(ErrorCode::invalid_argument, "房间切换必须保持当前 HRIR 和坐标比例");
+        return make_error(ErrorCode::invalid_argument, "房间切换必须保持当前档位、HRIR 和坐标比例");
     }
     const std::lock_guard lock(mutex_);
     if (ended_) {

@@ -275,8 +275,9 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
         }
         throw std::runtime_error("room switch did not reach the expected state");
     };
-    const mradm::RoomConfig other{take(mradm::RoomProfile::load(root / "second.json")), {}, 1.5};
-    const mradm::RoomConfig incompatible{take(mradm::RoomProfile::load(root / "incompatible.json")), {}, 1.5};
+    const mradm::RoomConfig other{take(mradm::RoomProfile::load(root / "second.json")), {}, 1.5, config.quality};
+    const mradm::RoomConfig incompatible{
+        take(mradm::RoomProfile::load(root / "incompatible.json")), {}, 1.5, config.quality};
     const auto bad = take(control->request(incompatible));
     wait([&](const auto& s) { return s.state == mradm::RoomSwitchState::failed && s.requested_revision == bad; });
     require(control->status().applied_revision == 0, "failed candidate retains current room");
@@ -323,7 +324,7 @@ void preparation_capacity_test(const std::filesystem::path& root, const mradm::R
     rendering.room = config;
     auto renderer = take(live::create_live_room_renderer(rendering, {}));
     auto control = renderer->room_control();
-    const mradm::RoomConfig other{take(mradm::RoomProfile::load(root / "second.json")), {}, 1.5};
+    const mradm::RoomConfig other{take(mradm::RoomProfile::load(root / "second.json")), {}, 1.5, config.quality};
     std::vector<live::ElementDescriptor> elements;
     live::Frame frame;
     frame.duration_samples = 256;
@@ -352,11 +353,41 @@ void preparation_capacity_test(const std::filesystem::path& root, const mradm::R
     std::cout << "preparation/source capacity growth passed\n";
 }
 
+void quality_isolation_test(const mradm::RoomConfig& config) {
+    namespace live = mradm::live_scene;
+    live::RendererConfig exact;
+    exact.renderer = mradm::RendererSelection::room_binaural;
+    exact.output_layout = "binaural";
+    exact.room = config;
+    auto exact_renderer = take(live::create_live_room_renderer(exact, {}));
+    auto fast = exact;
+    fast.room.quality = mradm::RoomQuality::realtime;
+    auto fast_renderer = take(live::create_live_room_renderer(fast, {}));
+    const auto a = nlohmann::json::parse(take(mradm::inspect_room(exact.room)));
+    const auto b = nlohmann::json::parse(take(mradm::inspect_room(fast.room)));
+    require(a.at("quality") == "exact" && b.at("quality") == "realtime",
+            "simultaneously active qualities keep separate prepared caches");
+    require(a.at("hrir_hash") == b.at("hrir_hash"), "qualities use identical raw HRIR resources");
+    require(!exact_renderer->room_control()->request(fast.room), "room switches cannot change quality");
+    require(fast_renderer->room_control()->status().quality == mradm::RoomQuality::realtime,
+            "runtime reports its fixed quality");
+    auto* options = adm_create_render_options();
+    require(options != nullptr, "quality options");
+    require(adm_render_options_set_room_quality(options, ADM_ROOM_QUALITY_REALTIME) == ADM_ERROR_OK,
+            "room quality setter");
+    require(adm_render_options_set_room_quality(options, static_cast<adm_room_quality_t>(2)) ==
+                ADM_ERROR_INVALID_ARGUMENT,
+            "unknown quality rejected");
+    require(adm_render_options_set_room(options, nullptr) == ADM_ERROR_OK, "clear room resource independently");
+    adm_destroy_render_options(options);
+}
+
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
 void scene_test(const std::filesystem::path& root,
                 std::uint32_t output_rate,
                 bool screen = false,
-                const std::filesystem::path& sofa = {}) {
+                const std::filesystem::path& sofa = {},
+                adm_room_quality_t quality = ADM_ROOM_QUALITY_EXACT) {
     auto* context = adm_create_context();
     require(context != nullptr, "context");
     adm_room_t* room = nullptr;
@@ -371,9 +402,14 @@ void scene_test(const std::filesystem::path& root,
         room_config.hrir_manifest = sofa_name.c_str();
     }
     char* report = nullptr;
-    require(adm_room_inspect(context, &room_config, &report) == ADM_ERROR_OK, "C room inspect");
+    const auto inspect_code = quality == ADM_ROOM_QUALITY_EXACT
+                                  ? adm_room_inspect(context, &room_config, &report)
+                                  : adm_room_inspect_with_quality(context, &room_config, quality, &report);
+    require(inspect_code == ADM_ERROR_OK, "C room inspect");
     const auto inspection = nlohmann::json::parse(report);
     adm_free_string(report);
+    const auto expected_quality = quality == ADM_ROOM_QUALITY_EXACT ? "exact" : "realtime";
+    require(inspection.at("quality") == expected_quality, "inspection reports the selected preparation quality");
     const auto tail = inspection.at("tail_frames").get<std::uint64_t>();
     adm_scene_stream_config_t config{};
     config.struct_size = sizeof(config);
@@ -389,9 +425,23 @@ void scene_test(const std::filesystem::path& root,
         config.rendering.sofa_path = sofa_name.c_str();
     }
     adm_scene_stream_t* stream = nullptr;
-    require(adm_create_scene_stream_with_room_ex(
-                context, &config, &room_config, screen ? k_screen_json : nullptr, &stream) == ADM_ERROR_OK,
-            "create Scene room stream");
+    require(adm_create_scene_stream_with_room_quality(
+                context, &config, &room_config, static_cast<adm_room_quality_t>(99), nullptr, &stream) ==
+                    ADM_ERROR_INVALID_ARGUMENT &&
+                stream == nullptr,
+            "invalid quality cannot create a Scene session");
+    const auto create_code =
+        quality == ADM_ROOM_QUALITY_EXACT
+            ? adm_create_scene_stream_with_room_ex(
+                  context, &config, &room_config, screen ? k_screen_json : nullptr, &stream)
+            : adm_create_scene_stream_with_room_quality(
+                  context, &config, &room_config, quality, screen ? k_screen_json : nullptr, &stream);
+    require(create_code == ADM_ERROR_OK, "create Scene room stream");
+    std::uint64_t unchanged_request = 0;
+    char* switch_error = nullptr;
+    require(adm_scene_stream_switch_room(stream, &room_config, &unchanged_request, &switch_error) == ADM_ERROR_OK,
+            "existing C room switch inherits the session quality");
+    adm_free_string(switch_error);
     adm_room_destroy(room); // the session retained both room and HRIR assets
     require(adm_scene_stream_begin_epoch(stream, 1, 0) == ADM_ERROR_OK, "begin epoch");
     adm_scene_element_descriptor_t descriptor{};
@@ -466,6 +516,9 @@ void scene_test(const std::filesystem::path& root,
     auto status = nlohmann::json::parse(report);
     adm_free_string(report);
     require(status.at("material_frames") == samples.size(), "room material/tail counters separate");
+    require(status.at("quality") == expected_quality, "quality survives epoch and room requests");
+    require(status.at("reflection_update_frames") == inspection.at("reflection_update_frames"),
+            "status reports the active reflection policy");
     require(adm_scene_stream_room_source_json(stream, 7, &report) == ADM_ERROR_OK, "actual room source position");
     auto source = nlohmann::json::parse(report);
     adm_free_string(report);
@@ -486,16 +539,24 @@ int main(int argc, char** argv) {
         auto room = take(mradm::RoomProfile::load(root / "room.json"));
         require(!mradm::RoomProfile::load(root / "bad.json"), "corrupt hash rejected");
         screen_config_test();
+        quality_isolation_test({room, {}, 1.5});
         file_test(root, {room, {}, 1.5});
         switching_test(root, {room, {}, 1.5});
         preparation_capacity_test(root, {room, {}, 1.5});
         scene_test(root, 48000);
         scene_test(root, 44100);
         scene_test(root, 48000, true);
+        file_test(root, {room, {}, 1.5, mradm::RoomQuality::realtime});
+        switching_test(root, {room, {}, 1.5, mradm::RoomQuality::realtime});
+        preparation_capacity_test(root, {room, {}, 1.5, mradm::RoomQuality::realtime});
+        scene_test(root, 48000, false, {}, ADM_ROOM_QUALITY_REALTIME);
+        scene_test(root, 44100, true, {}, ADM_ROOM_QUALITY_REALTIME);
         const std::filesystem::path sofa{argv[2]};
         std::filesystem::rename(root / "hrir.json", root / "stored-hrir.json");
         file_test(root, {room, {}, 1.5}, sofa);
+        file_test(root, {room, {}, 1.5, mradm::RoomQuality::realtime}, sofa);
         scene_test(root, 48000, false, sofa);
+        scene_test(root, 48000, false, sofa, ADM_ROOM_QUALITY_REALTIME);
         scene_test(root, 44100, false, sofa.parent_path() / "room-delayed.sofa");
         const auto info = nlohmann::json::parse(take(mradm::inspect_room({room, sofa, 1.5})));
         require(info.at("hrir_directions") == 6, "direct SOFA inspection uses native preparation");

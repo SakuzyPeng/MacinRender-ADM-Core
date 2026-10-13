@@ -32,6 +32,7 @@ struct RenderCliOptions {
     std::string room_hrir_path;
     std::string screen_config_path;
     double room_metres_per_unit{1.5};
+    std::string room_quality{"exact"};
     std::string semantic_policy_path;
     std::string semantic_report_path;
     std::string speaker_geometry_str{"standard"};

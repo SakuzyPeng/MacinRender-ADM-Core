@@ -3,7 +3,9 @@
   "archive_sha256": "21db5f9893e91f41798c88680037dba611ca6674703c1a18601b01a72c8adb89",
   "modified_files": [
     "src/algorithm/radix4.rs",
-    "Cargo.toml"
+    "Cargo.toml",
+    "Cargo.toml.orig",
+    "src/plan.rs"
   ],
   "added_files": [
     "src/algorithm/radix4_columns.rs",
@@ -18,7 +20,6 @@
   "unchanged_normalized_sha256": {
     ".gitignore": "b8493e38deeab8d0ada379105035baf0afc090beaa699d492a97950f8c9ccbc0",
     "CHANGELOG.md": "455496c471dba0a2807f96fc6eb81895938c2501c1564ec310a0bcf7ce60dee0",
-    "Cargo.toml.orig": "d54e2f7593e117daa2b58ef730d6a8f0b1db17ecc089a5aff25e48e1b4385b21",
     "LICENSE-APACHE": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
     "LICENSE-MIT": "cb22dce3ea93e49e43b70059c193184e27612526591db29a4cd95a369a2a5645",
     "README.md": "c9e6f0ab834ee832556cdb1b9d9580d58e88075efd29594ac55b46518806027e",
@@ -71,7 +72,6 @@
     "src/neon/neon_radix4.rs": "261fb0ac80ff8192b1ee26d6bd44909ec6fe9cf73126655983aba18548481440",
     "src/neon/neon_utils.rs": "0cc43f3ca95d9fa91eede9a139835c629934fc97de0a019fba346488fb988bd3",
     "src/neon/neon_vector.rs": "b8d3de24875e6d237875e275196f84723349075694d23fe0e77f86db9fc763bb",
-    "src/plan.rs": "d74fa9968990e4bb6526182320c924b8c0c5b4536f2dc562433ef56c80dad246",
     "src/sse/mod.rs": "9de305bc0aa8843c31d6abf87eec25e14dc03097f56a470eca049e6603cae02f",
     "src/sse/sse_butterflies.rs": "010a1105a12fdd5b728ff3ff3cf7d0767b7184a47a19e2622fd8342d0e0732d3",
     "src/sse/sse_common.rs": "fc9f1b7a24f0309e39663e4a847c90256a1404bc02e0a86cc208b1d98a764c64",

@@ -6,6 +6,7 @@ use super::{
     geometry::{self, Position, WeightedPosition},
     partition::{Dynamic, Long, LongFilters},
     prepared::{PreparedRoom, ResponseWork},
+    quality::Quality,
     signal::{self, Emitter, WorldTail},
     spatial::{MAX_SAMPLES, Shape},
 };
@@ -31,9 +32,10 @@ impl PreparedSet {
             .iter()
             .map(|v| (v[0] + v[1]) * 0.5)
             .collect();
+        let lfe = LongFilters::with_policy(1, &mean, room.quality.fft())?;
         Ok(Self {
             room,
-            lfe: LongFilters::prepare(1, &mean)?,
+            lfe,
             workers: super::workers::shared()?,
         })
     }
@@ -62,7 +64,7 @@ impl HeadSignal {
     fn new(room: &PreparedRoom) -> Result<Self> {
         let taps = room.short_taps;
         Ok(Self {
-            convolution: Dynamic::new(2, taps)?,
+            convolution: Dynamic::with_policy(2, taps, room.quality.fft())?,
             filter: vec![0.; 2 * taps],
             query: vec![0.; 2 * room.hrir.data.output_taps],
             shape: None,
@@ -153,6 +155,10 @@ struct Slot {
     /// This source's own update points in the current canonical block: its
     /// geometry events, initial command and live override changes (ADR 0019).
     marks: [bool; BLOCK],
+    moving: [bool; BLOCK],
+    hard: [bool; BLOCK],
+    discrete: Option<(u64, [u32; 4])>,
+    quality: Quality,
     active: bool,
     born: u64,
     retired_at: Option<u64>,
@@ -194,6 +200,10 @@ impl Slot {
             head: [0.; BLOCK],
             head_signal: HeadSignal::new(room)?,
             marks: [false; BLOCK],
+            moving: [false; BLOCK],
+            hard: [false; BLOCK],
+            discrete: None,
+            quality: room.quality,
             active: true,
             born,
             retired_at: None,
@@ -212,6 +222,9 @@ impl Slot {
         self.live.initialize(self.live_target);
         self.head_signal.reset();
         self.marks.fill(false);
+        self.moving.fill(false);
+        self.hard.fill(false);
+        self.discrete = None;
         self.world.fill(0.);
         self.head.fill(0.);
         self.lock_initialized = false;
@@ -309,6 +322,7 @@ impl Slot {
                 self.input_with_state(
                     input.map_or(0., |v| v[i]),
                     &state,
+                    sample + i as u64,
                     offset + i,
                     scene,
                     snapshot || self.marks[offset + i],
@@ -320,6 +334,7 @@ impl Slot {
                 self.input_with_state(
                     input.map_or(0., |v| v[i]),
                     &state,
+                    sample + i as u64,
                     offset + i,
                     scene,
                     snapshot || self.marks[offset + i],
@@ -333,11 +348,30 @@ impl Slot {
         &mut self,
         value: f32,
         state: &State,
+        sample: u64,
         offset: usize,
         scene: bool,
         snapshot: bool,
     ) -> Result<()> {
         if snapshot {
+            if self.quality == Quality::Realtime {
+                self.moving[offset] =
+                    self.control.geometry_ramping(sample) || self.live.geometry_ramping(sample);
+                // Screen mapping synthesizes a valid effective position. Keep
+                // authored validity so a clear at a ramp deadline still forces
+                // an immediate reflection update while another field ramps.
+                let discrete = (
+                    self.control.at(sample).valid & control::GEOMETRY_FIELDS,
+                    [
+                        state.channel_lock,
+                        state.screen_reference,
+                        state.head_locked,
+                        state.has_max_distance,
+                    ],
+                );
+                self.hard[offset] |= self.discrete != Some(discrete);
+                self.discrete = Some(discrete);
+            }
             self.states[offset] = *state;
             self.directions[offset] = self.last_direction;
         }
@@ -463,12 +497,19 @@ impl Voice {
                 &mut self.samples,
             )?;
             if prepare_filters {
+                let defer = room.quality == Quality::Realtime
+                    && slot.moving[begin]
+                    && !slot.hard[begin]
+                    && !room
+                        .quality
+                        .reflection_due(start + begin as u64, slot.description.id);
                 self.emitter.update_sources(
                     position,
                     &self.samples[..n],
                     poses[begin],
                     moved,
                     true,
+                    defer,
                     &mut self.work,
                 )?;
             }
@@ -490,6 +531,8 @@ struct VoiceInput {
     description: RoomDescription,
     born: u64,
     marks: [bool; BLOCK],
+    moving: [bool; BLOCK],
+    hard: [bool; BLOCK],
     states: [State; BLOCK],
     directions: [[f64; 3]; BLOCK],
     world: [f32; BLOCK],
@@ -500,6 +543,8 @@ impl Default for VoiceInput {
             description: RoomDescription::default(),
             born: 0,
             marks: [false; BLOCK],
+            moving: [false; BLOCK],
+            hard: [false; BLOCK],
             states: [State::default(); BLOCK],
             directions: [[1., 0., 0.]; BLOCK],
             world: [0.; BLOCK],
@@ -866,6 +911,10 @@ impl Instance {
                 input.description = slot.description;
                 input.born = slot.born;
                 input.marks = slot.marks;
+                if self.prepared.room.quality == Quality::Realtime {
+                    input.moving = slot.moving;
+                    input.hard = slot.hard;
+                }
                 input.states.copy_from_slice(&slot.states);
                 input.directions.copy_from_slice(&slot.directions);
                 input.world = slot.world;
@@ -959,6 +1008,7 @@ impl Session {
                 continue;
             }
             slot.marks[self.fill] = true;
+            slot.hard[self.fill] = true;
             if self.ended.is_some() {
                 slot.live_target = target;
                 continue;
@@ -1169,6 +1219,9 @@ impl Session {
         });
         self.marks[self.fill] = true;
         self.geometry_marks[self.fill] = true;
+        for slot in &mut self.slots {
+            slot.hard[self.fill] = true;
+        }
         self.current.prepared.workers.warm()?;
         if self.phase != 0 {
             self.current.query_caches(Some(&self.slots));
@@ -1366,6 +1419,11 @@ impl Session {
     /// The caller prepares `next` off the render worker. A displaced, inaudible
     /// candidate is returned to the caller for background destruction.
     pub fn validate_room(&self, next: &Instance, request: u64) -> Result<()> {
+        if next.prepared.room.quality != self.head_room.quality {
+            return Err(Error::InvalidArgument(
+                "Room quality is fixed for the session",
+            ));
+        }
         if request < self.requested_revision {
             return Err(Error::InvalidArgument("Room switch has been superseded"));
         }
@@ -1544,6 +1602,7 @@ impl Session {
             let slot = &mut self.slots[self.active[command.element as usize]];
             slot.control.initialize(command.state);
             slot.marks[self.fill] = true;
+            slot.hard[self.fill] = true;
         }
         let mut event = 0;
         let mut frame = 0;
@@ -1554,6 +1613,11 @@ impl Session {
                 slot.control.apply(command, self.clock)?;
                 if (command.changed | command.cleared) & control::GEOMETRY_FIELDS != 0 {
                     slot.marks[self.fill] = true;
+                    // Jumps, clears and reference-frame changes cannot wait for
+                    // the reflection grid, even while another field is ramping.
+                    slot.hard[self.fill] |= command.duration == 0
+                        || command.cleared & control::GEOMETRY_FIELDS != 0
+                        || command.changed & (64 | 128 | 256) != 0;
                 }
                 event += 1;
             }
@@ -1606,6 +1670,7 @@ impl Session {
                 self.geometry_marks.fill(false);
                 for slot in &mut self.slots {
                     slot.marks.fill(false);
+                    slot.hard.fill(false);
                 }
             }
         }
@@ -1668,7 +1733,9 @@ impl Session {
                 // Incoming output is inaudible during warmup. EQ and all raw
                 // convolution histories still advance. Targets only need one
                 // complete transition window before their first audible sample.
-                self.phase != 1 || self.warm_remaining <= FILTER_FADE + 2 * BLOCK,
+                self.phase != 1
+                    || self.warm_remaining
+                        <= FILTER_FADE + 2 * BLOCK + self.head_room.quality.reflection_frames(),
             )?;
         }
         {

@@ -363,6 +363,14 @@ struct adm_room_t {
 };
 
 namespace {
+static_assert(ADM_ROOM_QUALITY_EXACT == static_cast<int>(mradm::RoomQuality::exact));
+static_assert(ADM_ROOM_QUALITY_REALTIME == static_cast<int>(mradm::RoomQuality::realtime));
+static_assert(sizeof(adm_room_quality_t) == sizeof(std::uint32_t));
+
+bool valid_room_quality(adm_room_quality_t quality) {
+    return quality == ADM_ROOM_QUALITY_EXACT || quality == ADM_ROOM_QUALITY_REALTIME;
+}
+
 mradm::Result<mradm::RoomConfig> to_room_config(const adm_room_config_t* config) {
     if (config == nullptr || config->struct_size < sizeof(*config) || config->reserved != 0 ||
         config->room == nullptr || !std::isfinite(config->metres_per_unit) || config->metres_per_unit < 0.01 ||
@@ -2685,10 +2693,20 @@ adm_error_code_t adm_create_scene_stream_with_room_ex(adm_context_t* context,
                                                       const adm_room_config_t* room,
                                                       const char* screen_json,
                                                       adm_scene_stream_t** out) noexcept {
+    return adm_create_scene_stream_with_room_quality(context, config, room, ADM_ROOM_QUALITY_EXACT, screen_json, out);
+}
+
+adm_error_code_t adm_create_scene_stream_with_room_quality(adm_context_t* context,
+                                                           const adm_scene_stream_config_t* config,
+                                                           const adm_room_config_t* room,
+                                                           adm_room_quality_t quality,
+                                                           const char* screen_json,
+                                                           adm_scene_stream_t** out) noexcept {
     if (out != nullptr) {
         *out = nullptr;
     }
-    if (context == nullptr || config == nullptr || out == nullptr || config->struct_size < sizeof(*config)) {
+    if (context == nullptr || config == nullptr || out == nullptr || config->struct_size < sizeof(*config) ||
+        !valid_room_quality(quality)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
@@ -2703,6 +2721,10 @@ adm_error_code_t adm_create_scene_stream_with_room_ex(adm_context_t* context,
 
         mradm::realtime::SceneStreamConfig converted;
         converted.renderer = std::move(*renderer);
+        if (quality != ADM_ROOM_QUALITY_EXACT &&
+            converted.renderer.renderer != mradm::RendererSelection::room_binaural) {
+            return ADM_ERROR_UNSUPPORTED;
+        }
         if (screen_json != nullptr) {
             if (converted.renderer.renderer != mradm::RendererSelection::room_binaural) {
                 return ADM_ERROR_UNSUPPORTED;
@@ -2723,6 +2745,7 @@ adm_error_code_t adm_create_scene_stream_with_room_ex(adm_context_t* context,
             if (converted.renderer.renderer != mradm::RendererSelection::room_binaural) {
                 return ADM_ERROR_INVALID_ARGUMENT;
             }
+            room_config->quality = static_cast<mradm::RoomQuality>(quality);
             converted.renderer.room = std::move(*room_config);
         }
         converted.output_sample_rate = input.output_sample_rate;
@@ -3292,6 +3315,7 @@ adm_error_code_t room_switch(const std::shared_ptr<mradm::IRoomControl>& control
         owned_room_string(converted.error().message, error);
         return map_error(converted.error().code);
     }
+    converted->quality = control->status().quality;
     auto result = control->request(*converted);
     if (!result) {
         owned_room_string(result.error().message, error);
@@ -3312,6 +3336,8 @@ adm_error_code_t room_status_json(const std::shared_ptr<mradm::IRoomControl>& co
     constexpr std::array names{"applied", "preparing", "transitioning", "draining", "failed"};
     nlohmann::json json{{"schema", "mradm.room-status"},
                         {"version", 1},
+                        {"quality", mradm::room_quality_name(status.quality)},
+                        {"reflection_update_frames", status.reflection_update_frames},
                         {"state", names.at(static_cast<std::size_t>(status.state))},
                         {"requested_revision", status.requested_revision},
                         {"applied_revision", status.applied_revision},
@@ -3378,10 +3404,17 @@ const char* adm_room_manifest_json(const adm_room_t* room) noexcept {
     return room != nullptr ? room->manifest.c_str() : nullptr;
 }
 adm_error_code_t adm_room_inspect(adm_context_t* context, const adm_room_config_t* config, char** out_json) noexcept {
+    return adm_room_inspect_with_quality(context, config, ADM_ROOM_QUALITY_EXACT, out_json);
+}
+
+adm_error_code_t adm_room_inspect_with_quality(adm_context_t* context,
+                                               const adm_room_config_t* config,
+                                               adm_room_quality_t quality,
+                                               char** out_json) noexcept {
     if (out_json != nullptr) {
         *out_json = nullptr;
     }
-    if (context == nullptr || out_json == nullptr) {
+    if (context == nullptr || out_json == nullptr || !valid_room_quality(quality)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
@@ -3391,6 +3424,7 @@ adm_error_code_t adm_room_inspect(adm_context_t* context, const adm_room_config_
             store_last_error(context, converted.error());
             return map_error(converted.error().code);
         }
+        converted->quality = static_cast<mradm::RoomQuality>(quality);
         auto inspected = mradm::inspect_room(*converted);
         if (!inspected) {
             store_last_error(context, inspected.error());
@@ -3422,19 +3456,31 @@ adm_error_code_t adm_render_options_set_screen_config_json(adm_render_options_t*
     }
 }
 
+adm_error_code_t adm_render_options_set_room_quality(adm_render_options_t* options,
+                                                     adm_room_quality_t quality) noexcept {
+    if (options == nullptr || !valid_room_quality(quality)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    options->opts.room.quality = static_cast<mradm::RoomQuality>(quality);
+    return ADM_ERROR_OK;
+}
+
 adm_error_code_t adm_render_options_set_room(adm_render_options_t* options, const adm_room_config_t* config) noexcept {
     if (options == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        const auto quality = options->opts.room.quality;
         if (config == nullptr) {
             options->opts.room = {};
+            options->opts.room.quality = quality;
             return ADM_ERROR_OK;
         }
         auto converted = to_room_config(config);
         if (!converted) {
             return map_error(converted.error().code);
         }
+        converted->quality = quality;
         options->opts.room = std::move(*converted);
         return ADM_ERROR_OK;
     } catch (...) {

@@ -70,6 +70,28 @@ class BenchmarkTests(unittest.TestCase):
                 self.assertEqual((root / 'rust/Cargo.toml').read_bytes(), body)
                 self.assertEqual((root / 'rust/Cargo.lock').read_bytes(), b'lock')
 
+    def test_native_opt_in_reference_is_scalar_and_restores_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'rust/crates/mradm-dsp/src/fft.rs'
+            source.parent.mkdir(parents=True)
+            manifest = root / 'rust/Cargo.toml'
+            body = (b'rustfft = { version = "=6.4.1", default-features = false, '
+                    b'features = ["mradm-scalar-default", "avx", "sse", "neon"] }\n'
+                    b'[patch.crates-io]\n' + benchmark.PATCH + b'\n')
+            manifest.write_bytes(body)
+            (root / 'rust/Cargo.lock').write_bytes(b'lock')
+            native = b'let planner = rustfft::FftPlanner::new_native();\n'
+            source.write_bytes(native)
+            with self.assertRaisesRegex(RuntimeError, 'stop'):
+                with benchmark.unpatched_manifest(root):
+                    self.assertNotIn(b'features = [', manifest.read_bytes())
+                    self.assertIn(b'default-features = false', manifest.read_bytes())
+                    self.assertEqual(source.read_bytes(), native.replace(b'new_native()', b'new()'))
+                    raise RuntimeError('stop')
+            self.assertEqual(manifest.read_bytes(), body)
+            self.assertEqual(source.read_bytes(), native)
+
     def test_reference_keeps_other_dependencies_locked(self):
         lock = 'version = 4\n[[package]]\nname = "rustfft"\nversion = "6.4.1"\n'
         lock += '[[package]]\nname = "realfft"\nversion = "3.5.0"\n'

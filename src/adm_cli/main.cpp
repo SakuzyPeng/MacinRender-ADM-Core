@@ -41,8 +41,11 @@ int main(int argc, char** argv) {
     auto* room_check = app.add_subcommand("room-check", "Validate and prepare a room package and its personal HRIR");
     std::string room_path;
     std::string room_hrir;
+    std::string room_quality{"exact"};
     room_check->add_option("manifest", room_path, "room.json")->required();
     room_check->add_option("--hrir,--sofa", room_hrir, "Personal SOFA or prepared HRIR manifest");
+    room_check->add_option("--quality", room_quality, "Room processing quality: exact (default), realtime")
+        ->check(CLI::IsMember({"exact", "realtime"}));
     app.require_subcommand(1);
 
     try {
@@ -60,7 +63,11 @@ int main(int argc, char** argv) {
             spdlog::error(profile.error().message);
             return EXIT_FAILURE;
         }
-        auto report = mradm::inspect_room({*profile, room_hrir, 1.5});
+        auto report = mradm::inspect_room(
+            {*profile,
+             room_hrir,
+             1.5,
+             room_quality == "realtime" ? mradm::RoomQuality::realtime : mradm::RoomQuality::exact});
         if (!report) {
             spdlog::error(report.error().message);
             return EXIT_FAILURE;

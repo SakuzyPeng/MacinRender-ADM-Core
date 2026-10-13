@@ -6,13 +6,15 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 47
+#if ADM_API_VERSION_MINOR != 48
 #error "unexpected C ABI minor version"
 #endif
 
 _Static_assert(sizeof(adm_osc_head_tracking_state_t) == sizeof(int), "OSC enum representation");
 _Static_assert(ADM_RENDERER_ROOM_BINAURAL == 8, "room backend appends its renderer value");
 _Static_assert(sizeof(adm_room_config_t) == 32, "room configuration on supported 64-bit platforms");
+_Static_assert(sizeof(adm_room_quality_t) == sizeof(int), "room quality enum representation");
+_Static_assert(ADM_ROOM_QUALITY_EXACT == 0 && ADM_ROOM_QUALITY_REALTIME == 1, "room quality values");
 _Static_assert(offsetof(adm_room_config_t, room) == 8, "room resource pointer alignment");
 _Static_assert(offsetof(adm_room_config_t, metres_per_unit) == 24, "room unit scale alignment");
 _Static_assert(sizeof(adm_triple_balance_mode_t) == sizeof(int), "Triple Balance mode representation");
