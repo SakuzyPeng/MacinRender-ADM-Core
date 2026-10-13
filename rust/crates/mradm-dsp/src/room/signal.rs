@@ -31,10 +31,14 @@ pub struct Emitter {
     early_stale: bool,
     render_direct: bool,
     orientation: [f32; 3],
+    early_orientation: [f32; 3],
+    early_rotation: Rotation,
+    pose_budget_cosine: f64,
 }
 
 impl Emitter {
     pub fn new(room: Arc<PreparedRoom>, position: Position) -> Result<Self> {
+        let pose_budget_cosine = libm::cos(room.quality.reflection_pose_degrees().to_radians());
         Ok(Self {
             direct_eq: Long::new(room.eq.clone())?,
             wet_eq: Long::new(room.eq.clone())?,
@@ -61,6 +65,9 @@ impl Emitter {
             early_stale: false,
             render_direct: true,
             orientation: [0.; 3],
+            early_orientation: [0.; 3],
+            early_rotation: Rotation::new([0.; 3])?,
+            pose_budget_cosine,
         })
     }
 
@@ -155,13 +162,8 @@ impl Emitter {
                 && orientation == self.orientation);
         let moved =
             force || !self.initialized || position.point != self.position.point || early_stale;
-        work.build_branches(
-            &self.room,
-            sources,
-            &Rotation::new(orientation)?,
-            direct,
-            early,
-        )?;
+        let rotation = Rotation::new(orientation)?;
+        work.build_branches(&self.room, sources, &rotation, direct, early)?;
         if early {
             self.early_stale = false;
         }
@@ -173,8 +175,101 @@ impl Emitter {
             self.early
                 .set_target_support(&work.impulse[2 * taps..], work.early_support)?;
             self.early_initialized = true;
+            self.early_orientation = orientation;
+            self.early_rotation = rotation;
         }
         if moved {
+            self.room.late_send_many(sources, &mut self.send_impulse)?;
+            self.send.set_target(&self.send_impulse)?;
+        }
+        self.position = position;
+        self.orientation = orientation;
+        self.initialized = true;
+        Ok(())
+    }
+
+    /// Keep direct sound current while bounding the pose held by reflections.
+    /// The caller supplies an absolute sample-grid deadline and hard-event bypass.
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_sources_with_pose_budget(
+        &mut self,
+        position: Position,
+        sources: &[WeightedPosition],
+        orientation: [f32; 3],
+        force: bool,
+        early: bool,
+        defer_geometry: bool,
+        defer_pose: bool,
+        work: &mut ResponseWork,
+    ) -> Result<()> {
+        if self.room.quality.reflection_pose_degrees() == 0. {
+            return self.update_sources(
+                position,
+                sources,
+                orientation,
+                force,
+                early,
+                defer_geometry,
+                work,
+            );
+        }
+        let geometry_changed = force || position.point != self.position.point;
+        let geometry_pending = geometry_changed || self.early_stale;
+        let direct_changed = geometry_changed || orientation != self.orientation;
+        let pose_pending = orientation != self.early_orientation;
+        if self.initialized
+            && !direct_changed
+            && !geometry_pending
+            && (!early || (self.early_initialized && !pose_pending))
+        {
+            return Ok(());
+        }
+        let rotation = Rotation::new(orientation)?;
+        // Preserve the v1 geometry catch-up caused by a new head pose. Only
+        // pose-only work may be held; source motion does not get a coarser clock.
+        let catch_up_geometry = orientation != self.orientation && geometry_pending;
+        let hold_pose = !catch_up_geometry
+            && (!pose_pending
+                || (defer_pose
+                    && rotation.difference_cosine(&self.early_rotation)
+                        >= self.pose_budget_cosine));
+        if early
+            && self.initialized
+            && self.early_initialized
+            && (defer_geometry || !geometry_pending)
+            && hold_pose
+        {
+            if !direct_changed {
+                return Ok(());
+            }
+            if self.render_direct {
+                work.build_branches(&self.room, sources, &rotation, true, false)?;
+                self.direct.set_target_support(
+                    &work.impulse[..2 * self.room.short_taps],
+                    work.direct_support,
+                )?;
+            }
+            self.early_stale |= geometry_changed;
+            self.position = position;
+            self.orientation = orientation;
+            return Ok(());
+        }
+        let direct = self.render_direct && (!self.initialized || direct_changed);
+        work.build_branches(&self.room, sources, &rotation, direct, early)?;
+        let taps = self.room.short_taps;
+        if direct {
+            self.direct
+                .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
+        }
+        if early {
+            self.early
+                .set_target_support(&work.impulse[2 * taps..], work.early_support)?;
+            self.early_initialized = true;
+            self.early_stale = false;
+            self.early_orientation = orientation;
+            self.early_rotation = rotation;
+        }
+        if !self.initialized || geometry_pending {
             self.room.late_send_many(sources, &mut self.send_impulse)?;
             self.send.set_target(&self.send_impulse)?;
         }

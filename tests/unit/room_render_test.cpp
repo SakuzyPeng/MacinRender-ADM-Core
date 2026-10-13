@@ -368,6 +368,11 @@ void quality_isolation_test(const mradm::RoomConfig& config) {
     require(a.at("quality") == "exact" && b.at("quality") == "realtime",
             "simultaneously active qualities keep separate prepared caches");
     require(a.at("hrir_hash") == b.at("hrir_hash"), "qualities use identical raw HRIR resources");
+    require(a.at("processing_policy") == "room-exact-v1" && b.at("processing_policy") == "room-realtime-v2",
+            "inspection identifies the actual processing policy");
+    require(a.at("reflection_pose_limit_degrees") == 0.0 && a.at("reflection_pose_update_frames") == 0 &&
+                b.at("reflection_pose_limit_degrees") == 0.5 && b.at("reflection_pose_update_frames") == 1024,
+            "inspection reports the session-fixed reflection pose budget");
     require(!exact_renderer->room_control()->request(fast.room), "room switches cannot change quality");
     require(fast_renderer->room_control()->status().quality == mradm::RoomQuality::realtime,
             "runtime reports its fixed quality");

@@ -503,13 +503,19 @@ impl Voice {
                     && !room
                         .quality
                         .reflection_due(start + begin as u64, slot.description.id);
-                self.emitter.update_sources(
+                let defer_pose = room.quality == Quality::Realtime
+                    && !slot.hard[begin]
+                    && !room
+                        .quality
+                        .reflection_pose_due(start + begin as u64, slot.description.id);
+                self.emitter.update_sources_with_pose_budget(
                     position,
                     &self.samples[..n],
                     poses[begin],
                     moved,
                     true,
                     defer,
+                    defer_pose,
                     &mut self.work,
                 )?;
             }
@@ -1529,7 +1535,7 @@ impl Session {
         // even short rooms discard that target before the crossfade starts.
         self.warm_remaining = (incoming.prepared.room.eq.taps + incoming.prepared.room.short_taps
             - 2
-            + incoming.prepared.room.quality.reflection_frames())
+            + incoming.prepared.room.quality.reflection_history_frames())
         .div_ceil(BLOCK)
             * BLOCK;
         self.fade_done = 0;
@@ -1739,7 +1745,9 @@ impl Session {
                 // complete transition window before their first audible sample.
                 self.phase != 1
                     || self.warm_remaining
-                        <= FILTER_FADE + 2 * BLOCK + self.head_room.quality.reflection_frames(),
+                        <= FILTER_FADE
+                            + 2 * BLOCK
+                            + self.head_room.quality.reflection_history_frames(),
             )?;
         }
         {
