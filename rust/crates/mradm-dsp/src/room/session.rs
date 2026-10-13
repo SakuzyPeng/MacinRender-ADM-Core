@@ -1524,8 +1524,12 @@ impl Session {
             next.query_caches(Some(&self.slots));
         }
         let incoming = self.incoming.as_ref().expect("prepared room switch");
+        // The first reflection target may be initialized between grid points.
+        // Extend the total warmup as well as the filter-preparation window so
+        // even short rooms discard that target before the crossfade starts.
         self.warm_remaining = (incoming.prepared.room.eq.taps + incoming.prepared.room.short_taps
-            - 2)
+            - 2
+            + incoming.prepared.room.quality.reflection_frames())
         .div_ceil(BLOCK)
             * BLOCK;
         self.fade_done = 0;

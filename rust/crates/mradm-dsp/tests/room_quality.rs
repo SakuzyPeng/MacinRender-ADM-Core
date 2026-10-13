@@ -1,6 +1,7 @@
 use mradm_dsp::{
     geometry,
     room::{
+        BLOCK,
         control::{RoomCommand, RoomDescription, State},
         prepared::PreparedRoom,
         quality::Quality,
@@ -317,5 +318,110 @@ fn realtime_preroll_reproduces_continuous_ramps_on_each_source_phase() {
             bits(&a[goal * 2..], &b[(goal - begin) * 2..]),
             "source {id} preroll differs"
         );
+    }
+}
+
+#[test]
+fn short_room_switch_preserves_ramps_on_each_reflection_phase() {
+    let input: Vec<_> = (0..70 * BLOCK)
+        .map(|i| ((i * 37 % 193) as f32 - 96.) / 384.)
+        .collect();
+    for quality in [Quality::Exact, Quality::Realtime] {
+        let base = common::fixture_with_quality(quality);
+        let mut profile = (*base.room.profile).clone();
+        profile.identity.push_str("-short");
+        profile.dimensions = [1.; 3];
+        profile.listener = [0.5; 3];
+        profile.minimum_distance = 0.05;
+        profile.clearance = 0.025;
+        profile.early_fade = [0.001, 0.004];
+        profile.absorption = [[0.5; 8]; 6];
+        profile.eq = vec![1.];
+        profile.late_energy = 0.; // Isolate the direct and early-reflection transition.
+        let prepare = |profile| {
+            Arc::new(
+                PreparedSet::new(Arc::new(
+                    PreparedRoom::with_quality(profile, base.room.hrir.clone(), quality).unwrap(),
+                ))
+                .unwrap(),
+            )
+        };
+        let prepared = prepare(Arc::new(profile.clone()));
+        assert!(prepared.room.short_taps < Quality::Realtime.reflection_frames());
+        // A distinct identity exercises the complete switch with identical acoustics.
+        profile.identity.push_str("-same-acoustics");
+        let next = prepare(Arc::new(profile));
+        // These source identities cover the four staggered reflection phases.
+        for id in [6, 1, 2, 7] {
+            let render = |switch: Option<usize>, chunks: &[usize]| {
+                let mut session = Session::new(prepared.clone(), 1., true, true).unwrap();
+                session
+                    .configure(&[RoomDescription {
+                        id,
+                        position: [0., 0.3, 0.],
+                        ..Default::default()
+                    }])
+                    .unwrap();
+                let mut candidate =
+                    switch.map(|_| Box::new(Instance::new(next.clone(), 1).unwrap()));
+                let command = RoomCommand {
+                    changed: 4,
+                    duration: 9000,
+                    state: State {
+                        position: [-0.3, 0.2, 0.1],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let mut output = vec![0.; input.len() * 2];
+                let mut phases = [false; 4];
+                let mut at = 0;
+                let mut packet = 0;
+                while at < input.len() {
+                    if switch == Some(at) {
+                        session.queue_room(candidate.take().unwrap(), 1).unwrap();
+                    }
+                    let boundary = switch.filter(|sample| *sample > at).unwrap_or(input.len());
+                    let count = chunks[packet % chunks.len()].min(boundary - at);
+                    let commands = [command];
+                    let info = session
+                        .process(
+                            count,
+                            [Some(&input[at..at + count])].into_iter(),
+                            &[],
+                            if at == 0 { &commands } else { &[] },
+                            &mut output[at * 2..(at + count) * 2],
+                        )
+                        .unwrap();
+                    phases[info.phase as usize] = true;
+                    drop(session.take_retired());
+                    at += count;
+                    packet += 1;
+                }
+                if switch.is_some() {
+                    assert!(phases.into_iter().all(|phase| phase));
+                    assert_eq!(session.info().applied_request, 1);
+                    assert_eq!(session.info().phase, 0);
+                }
+                output
+            };
+            let reference = render(None, &[BLOCK]);
+            assert!(reference.iter().any(|sample| sample.abs() > 1e-5));
+            for (switch, chunks) in [
+                (5 * BLOCK, &[BLOCK][..]),
+                (5 * BLOCK + 173, &[1, 173, 733, 19, 257][..]),
+            ] {
+                let actual = render(Some(switch), chunks);
+                let maximum = reference
+                    .iter()
+                    .zip(actual)
+                    .map(|(a, b)| (*a - b).abs())
+                    .fold(0., f32::max);
+                assert!(
+                    maximum < 2e-6,
+                    "{quality:?} source {id}, switch at {switch}: PCM changed by {maximum}"
+                );
+            }
+        }
     }
 }
