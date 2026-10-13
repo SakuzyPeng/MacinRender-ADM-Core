@@ -104,7 +104,7 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
                     duration: BLOCK as u32,
                     changed: 4,
                     state: State {
-                        position: if (block + element as usize) % 2 == 0 {
+                        position: if (block + element as usize).is_multiple_of(2) {
                             [-0.5, 0.8, 0.2]
                         } else {
                             [0.4, 0.9, -0.1]
