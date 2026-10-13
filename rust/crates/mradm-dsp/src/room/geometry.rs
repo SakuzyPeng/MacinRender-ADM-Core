@@ -190,11 +190,34 @@ impl Rotation {
     pub fn apply(&self, direction: Vec3) -> Vec3 {
         self.matrix.map(|row| dot(row, direction))
     }
+    /// Cosine of the relative 3D rotation angle, including yaw wrap and poles.
+    pub fn difference_cosine(&self, other: &Self) -> f64 {
+        let trace = dot(self.matrix[0], other.matrix[0])
+            + dot(self.matrix[1], other.matrix[1])
+            + dot(self.matrix[2], other.matrix[2]);
+        ((trace - 1.) * 0.5).clamp(-1., 1.)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn relative_rotation_uses_orientation_not_euler_distance() {
+        let a = Rotation::new([179.9, 0., 0.]).unwrap();
+        let b = Rotation::new([-179.9, 0., 0.]).unwrap();
+        assert!(a.difference_cosine(&b) > libm::cos(0.21f64.to_radians()));
+        assert!(a.difference_cosine(&b) < libm::cos(0.19f64.to_radians()));
+        let a = Rotation::new([17., 90., 31.]).unwrap();
+        let b = Rotation::new([17., 90., 31.]).unwrap();
+        assert!((a.difference_cosine(&b) - 1.).abs() < 1e-14);
+        let b = Rotation::new([17.3, 90., 31.]).unwrap();
+        assert!(a.difference_cosine(&b) > libm::cos(0.31f64.to_radians()));
+        assert!(a.difference_cosine(&b) < libm::cos(0.29f64.to_radians()));
+        let a = Rotation::new([0.; 3]).unwrap();
+        let b = Rotation::new([0.3, 0.3, 0.3]).unwrap();
+        assert!(a.difference_cosine(&b) < libm::cos(0.5f64.to_radians()));
+    }
     #[test]
     fn shoebox_enumeration_counts_and_reflection_parity() {
         assert_eq!(images(1).len(), 7);

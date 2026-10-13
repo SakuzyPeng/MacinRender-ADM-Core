@@ -42,6 +42,287 @@ fn bits(a: &[f32], b: &[f32]) -> bool {
 }
 
 #[test]
+fn reflection_pose_budget_preserves_direct_sound_and_bypasses_on_jumps_and_deadlines() {
+    use mradm_dsp::room::{geometry as room_geometry, prepared::ResponseWork, signal::Emitter};
+    let prepared = common::fixture_with_quality(Quality::Realtime);
+    let room = &prepared.room;
+    let position =
+        room_geometry::position(&room.profile, [0., 1.4, 0.], 1.5, [1., 0., 0.]).unwrap();
+    let sources = [room_geometry::WeightedPosition {
+        position,
+        weight: 1.,
+    }];
+    let mut candidate = Emitter::new(room.clone(), position).unwrap();
+    let mut direct_reference = Emitter::new(room.clone(), position).unwrap();
+    let mut early_reference = Emitter::new(room.clone(), position).unwrap();
+    let mut work = ResponseWork::new(room).unwrap();
+    let mut direct_work = ResponseWork::new(room).unwrap();
+    let mut early_work = ResponseWork::new(room).unwrap();
+    let limit = room.quality.reflection_pose_degrees() as f32;
+    assert!(limit > 0.);
+    let poses = [
+        0.,
+        0.4 * limit,
+        0.8 * limit,
+        1.4 * limit,
+        1.6 * limit,
+        1.8 * limit,
+        -40.,
+        -40. + 0.4 * limit,
+        -40. + 0.8 * limit,
+    ];
+    let held = [
+        0.,
+        0.,
+        0.,
+        1.4 * limit,
+        1.4 * limit,
+        1.8 * limit,
+        -40.,
+        -40.,
+        -40.,
+    ];
+    for (step, (&pose, &held)) in poses.iter().zip(&held).enumerate() {
+        candidate
+            .update_sources_with_pose_budget(
+                position,
+                &sources,
+                [pose, 7., -3.],
+                false,
+                true,
+                false,
+                step != 5,
+                &mut work,
+            )
+            .unwrap();
+        direct_reference
+            .update(position, [pose, 7., -3.], &mut direct_work)
+            .unwrap();
+        early_reference
+            .update(position, [held, 7., -3.], &mut early_work)
+            .unwrap();
+        let input: Vec<_> = (0..BLOCK)
+            .map(|i| ((i * 31 + step * 17) % 127) as f32 / 4096.)
+            .collect();
+        let render = |emitter: &mut Emitter| {
+            let mut direct = [0.; 2 * BLOCK];
+            let mut early = [0.; 2 * BLOCK];
+            let mut send = [0.; BLOCK];
+            emitter
+                .process(&input, &[1.; BLOCK], &mut direct, &mut early, &mut send)
+                .unwrap();
+            (direct, early, send)
+        };
+        let actual = render(&mut candidate);
+        let precise = render(&mut direct_reference);
+        let expected_early = render(&mut early_reference);
+        assert!(bits(&actual.0, &precise.0), "direct changed at {step}");
+        assert!(
+            bits(&actual.1, &expected_early.1),
+            "reflection target differs at {step}"
+        );
+        assert!(
+            bits(&actual.2, &precise.2),
+            "head pose changed the late send at {step}"
+        );
+    }
+}
+
+#[test]
+fn small_head_motion_is_independent_of_packetization_and_finite_preroll() {
+    let prepared = common::fixture_with_quality(Quality::Realtime);
+    let descriptions: Vec<_> = (1..=8)
+        .map(|id| RoomDescription {
+            id,
+            position: around(id as f32 * 40.),
+            ..Default::default()
+        })
+        .collect();
+    let goal = (prepared.preroll_frames().div_ceil(2048) + 2) * 2048;
+    let end = goal + 4096;
+    let pcm: Vec<_> = (0..end)
+        .map(|i| ((i * 31 % 127) as f32 - 63.) / 512.)
+        .collect();
+    let pose_at = |sample: usize| {
+        let step = if sample < 17 {
+            0
+        } else {
+            1 + (sample - 17) / 173
+        } as f32;
+        [
+            ((179.85 + step * 0.08 + 180.) % 360.) - 180.,
+            20. + step * 0.02,
+            -9. + step * 0.03,
+        ]
+    };
+    let render = |begin: usize, chunks: &[usize]| {
+        let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        session.configure(&descriptions).unwrap();
+        session.reset(begin as u64).unwrap();
+        let mut at = begin;
+        let mut sequence = 0;
+        let mut result = Vec::new();
+        let mut output = vec![0.; 8192];
+        while at < end {
+            if at == begin || (at >= 17 && (at - 17).is_multiple_of(173)) {
+                session.set_pose(pose_at(at)).unwrap();
+            }
+            let next_pose = if at < 17 {
+                17
+            } else {
+                17 + ((at - 17) / 173 + 1) * 173
+            };
+            let count = chunks[sequence % chunks.len()]
+                .min(next_pose - at)
+                .min(end - at);
+            session
+                .process(
+                    count,
+                    (0..descriptions.len()).map(|_| Some(&pcm[at..at + count])),
+                    &[],
+                    &[],
+                    &mut output[..2 * count],
+                )
+                .unwrap();
+            result.extend_from_slice(&output[..2 * count]);
+            at += count;
+            sequence += 1;
+        }
+        result
+    };
+    let full = render(0, &[4096]);
+    assert!(bits(&full, &render(0, &[1, 71, 243, 19, 1024])));
+    let begin = (goal - prepared.preroll_frames()) / 2048 * 2048;
+    assert!(begin > 0);
+    assert!(bits(
+        &full[2 * goal..],
+        &render(begin, &[71, 256, 1024])[2 * (goal - begin)..]
+    ));
+}
+
+#[test]
+fn small_pose_steps_keep_the_reference_geometry_catch_up() {
+    use mradm_dsp::room::{geometry as room_geometry, prepared::ResponseWork, signal::Emitter};
+    let prepared = common::fixture_with_quality(Quality::Realtime);
+    let room = &prepared.room;
+    let position = |step: usize| {
+        room_geometry::position(
+            &room.profile,
+            [step as f32 * 0.015, 1.4, 0.],
+            1.5,
+            [1., 0., 0.],
+        )
+        .unwrap()
+    };
+    let mut reference = Emitter::new(room.clone(), position(0)).unwrap();
+    let mut candidate = Emitter::new(room.clone(), position(0)).unwrap();
+    let mut old_work = ResponseWork::new(room).unwrap();
+    let mut work = ResponseWork::new(room).unwrap();
+    for step in 0..24 {
+        let p = position(step);
+        let sources = [room_geometry::WeightedPosition {
+            position: p,
+            weight: 1.,
+        }];
+        let pose = [
+            (step / 2) as f32 * room.quality.reflection_pose_degrees() as f32 * 0.2,
+            7.,
+            -3.,
+        ];
+        reference
+            .update_sources(p, &sources, pose, false, true, true, &mut old_work)
+            .unwrap();
+        candidate
+            .update_sources_with_pose_budget(p, &sources, pose, false, true, true, true, &mut work)
+            .unwrap();
+        let input: Vec<_> = (0..BLOCK)
+            .map(|i| ((i + step * BLOCK) % 179) as f32 / 4096.)
+            .collect();
+        let render = |emitter: &mut Emitter| {
+            let mut direct = [0.; 2 * BLOCK];
+            let mut early = [0.; 2 * BLOCK];
+            let mut send = [0.; BLOCK];
+            emitter
+                .process(&input, &[1.; BLOCK], &mut direct, &mut early, &mut send)
+                .unwrap();
+            (direct, early, send)
+        };
+        let a = render(&mut reference);
+        let b = render(&mut candidate);
+        assert!(
+            bits(&a.0, &b.0) && bits(&a.1, &b.1) && bits(&a.2, &b.2),
+            "step {step}"
+        );
+    }
+}
+
+#[test]
+fn branch_updates_clear_previous_buckets_and_match_full_responses() {
+    use mradm_dsp::room::{geometry as room_geometry, prepared::ResponseWork};
+    for quality in [Quality::Exact, Quality::Realtime] {
+        let prepared = common::fixture_with_quality(quality);
+        let room = &prepared.room;
+        let mut selected = ResponseWork::new(room).unwrap();
+        let mut full = ResponseWork::new(room).unwrap();
+        for step in 0..48 {
+            let rotation = room_geometry::Rotation::new([step as f32 * 7., -13., 2.]).unwrap();
+            let position = |radius: f32, angle: f32| {
+                let d = geometry::portable_direction(angle, 9.);
+                room_geometry::position(
+                    &room.profile,
+                    [
+                        (-d[1] as f32) * radius,
+                        (d[0] as f32) * radius,
+                        (d[2] as f32) * radius,
+                    ],
+                    1.5,
+                    [1., 0., 0.],
+                )
+                .unwrap()
+            };
+            // Alternate sparse delay buckets, full silence, and multi-point
+            // extent-like inputs, then revisit both branch caches independently.
+            let sources = [
+                room_geometry::WeightedPosition {
+                    position: position([0.25, 3.0, 0.8, 1.9][step % 4], step as f32 * 31.),
+                    weight: if step % 7 == 0 { 0. } else { 0.7 },
+                },
+                room_geometry::WeightedPosition {
+                    position: position(1.2, step as f32 * 31. + 20.),
+                    weight: 0.3,
+                },
+            ];
+            let sources = &sources[..if step % 3 == 0 { 2 } else { 1 }];
+            full.build_many(room, sources, &rotation).unwrap();
+            let (direct, early) =
+                [(true, true), (true, false), (false, true), (false, false)][step % 4];
+            selected
+                .build_branches(room, sources, &rotation, direct, early)
+                .unwrap();
+            for (branch, enabled) in [direct, early].into_iter().enumerate() {
+                let range = branch * 2 * room.short_taps..(branch + 1) * 2 * room.short_taps;
+                if enabled {
+                    assert!(
+                        bits(&selected.impulse[range.clone()], &full.impulse[range]),
+                        "{quality:?}: branch {branch}, step {step}"
+                    );
+                } else {
+                    assert!(selected.impulse[range].iter().all(|v| v.to_bits() == 0));
+                }
+            }
+            assert_eq!(
+                selected.direct_support,
+                if direct { full.direct_support } else { 1 }
+            );
+            assert_eq!(
+                selected.early_support,
+                if early { full.early_support } else { 1 }
+            );
+        }
+    }
+}
+
+#[test]
 fn quality_is_fixed_and_incompatible_prepared_banks_are_rejected() {
     let exact = common::fixture();
     let fast = common::fixture_with_quality(Quality::Realtime);
@@ -120,7 +401,8 @@ fn realtime_ramps_switches_and_tail_are_independent_of_packetization() {
                 session.queue_room(candidate.take().unwrap(), 1).unwrap();
             }
             if at % 512 == 0 {
-                session.set_pose([at as f32 * 0.002, 7., -3.]).unwrap();
+                // Small head steps exercise the reflection budget through the off-block switch and EOS.
+                session.set_pose([at as f32 * 0.0002, 7., -3.]).unwrap();
             }
             let boundary = [2049, total, (at / 512 + 1) * 512]
                 .into_iter()

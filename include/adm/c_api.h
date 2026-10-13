@@ -1866,8 +1866,9 @@ adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* st
  * existing serialization rules; Scene room setters do not borrow last-error storage.
  */
 /* v1.48: session-fixed room quality. Existing entry points select EXACT.
- * REALTIME uses native FFTs and a staggered reflection update grid; it retains
- * deterministic sample-clock scheduling but has no cross-platform bit contract. */
+ * REALTIME uses native FFTs, a staggered reflection grid and bounded reflection
+ * head-pose updates. It retains deterministic sample-clock scheduling but has
+ * no cross-platform bit contract. Inspect JSON identifies the processing policy. */
 typedef enum adm_room_quality_t { ADM_ROOM_QUALITY_EXACT = 0, ADM_ROOM_QUALITY_REALTIME = 1 } adm_room_quality_t;
 
 typedef struct adm_room_t adm_room_t;

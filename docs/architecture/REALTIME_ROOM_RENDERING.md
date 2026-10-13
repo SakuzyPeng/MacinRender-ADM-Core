@@ -36,12 +36,16 @@ headLocked 分支加入同样的保护延迟。参考包为 256 帧（5.33 ms）
 默认 `exact` 保留现有标量 FFT、控制更新和跨平台数值基线。显式选择 `realtime` 时，
 房间实例启用原生 SIMD FFT，并在连续声源几何斜坡期间将早反射／晚场发送更新改为
 1024 帧周期（48 kHz 下约 21.33 ms），按声源 ID 错开相位。直达仍按原更新点处理；
-头姿、跳变、离散语义、字段清除等立即刷新。镜像阶数、所有有效路径和 FIR 支持不变。
+跳变、离散语义、字段清除等立即刷新。实时策略 `room-realtime-v2` 对纯头姿更新允许
+早反射目标最多保持 1024 帧、相对输入偏差最多 0.5°；较大头动立即刷新。
+头姿变化若需要补齐声源几何，仍按原时刻完整更新。直达和晚场头姿解码保持原更新点。
+这些上限不包括既有 10 ms 滤波器淡化。镜像阶数、所有有效路径和 FIR 支持不变。
 
 两档可同时使用；档位在会话创建时固定，换房和 epoch reset 保留它。实时档位保持
 同一二进制／CPU 能力下的分块位一致性，允许不同架构的 PCM 位差。seek 预热增加一个
 反射周期，处理 FIFO 与有限尾声不变。详见 [ADR 0020](../adr/0020-room-quality-tiers.md)；
 性能、波形误差和当前边界见 [第一版验证](ROOM_QUALITY_V1.md)。
+v2 的参数对照与头姿误差见 [头姿预算验证](ROOM_POSE_BUDGET.md)。
 
 ```sh
 build/release/mradm room-check /path/to/room.json --quality realtime
@@ -57,7 +61,8 @@ C++ 使用 `RoomConfig::quality = RoomQuality::realtime`。C ABI v1.48 提供：
 
 原有入口仍为精确档位，`adm_room_config_t` 大小不变。`set_room`／`clear_room` 保留 options
 选定的档位。检查 JSON 报告 `quality`、`processing_policy`、`fft_policy` 和
-`reflection_update_frames`，状态 JSON 报告档位与周期，能力 JSON 在 `qualities` 中列出两档。
+`reflection_update_frames`，以及 `reflection_pose_limit_degrees`／`reflection_pose_update_frames`；
+状态 JSON 报告档位与几何周期，能力 JSON 在 `qualities` 中列出两档。
 此档位名不表示所有主机都能满足实时预算，尤其频繁头姿仍可能触发全部声源反射重建。
 
 ## 资源与处理

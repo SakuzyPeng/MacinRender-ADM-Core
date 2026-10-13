@@ -176,6 +176,8 @@ fn description(prepared: &PreparedSet) -> Result<CString> {
         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
         "quality":room.quality.name(),"processing_policy":room.quality.policy(),
         "reflection_update_frames":room.quality.reflection_frames(),
+        "reflection_pose_limit_degrees":room.quality.reflection_pose_degrees(),
+        "reflection_pose_update_frames":room.quality.reflection_pose_frames(),
         "fft_policy":if room.quality == Quality::Exact { "scalar" } else { "native-auto" },
         "hrir_hash":room.hrir.data.identity,"source_sofa_sha256":room.hrir.data.source_sofa_sha256,
         "sample_rate":48000,"latency_frames":mradm_dsp::room::BLOCK,

@@ -77,6 +77,42 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         work.build(&room, position, &Rotation::new([i as f32 * 0.05, 7., 0.])?)?;
     }
     let source_response_us = start.elapsed().as_secs_f64() * 1e6 / count as f64;
+    // Exercise source movement across delay buckets, including the direct-only
+    // updates used between reflection grid points. Prepare geometry outside timing.
+    let moves = (0..64)
+        .map(|i| {
+            let d = geometry::portable_direction(i as f32 * 5.625, 7.);
+            let radius = 0.4 + (i % 13) as f64 * 0.17;
+            Ok((
+                room_geometry::WeightedPosition {
+                    position: room_geometry::position(
+                        &room.profile,
+                        [
+                            (-d[1] * radius) as f32,
+                            (d[0] * radius) as f32,
+                            (d[2] * radius) as f32,
+                        ],
+                        1.5,
+                        [1., 0., 0.],
+                    )?,
+                    weight: 1.,
+                },
+                Rotation::new([i as f32 * 0.5, 7., 0.])?,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let start = Instant::now();
+    for i in 0..count {
+        let (source, rotation) = &moves[i % moves.len()];
+        work.build_branches(&room, std::slice::from_ref(source), rotation, true, false)?;
+    }
+    let moving_direct_response_us = start.elapsed().as_secs_f64() * 1e6 / count as f64;
+    let start = Instant::now();
+    for i in 0..count {
+        let (source, rotation) = &moves[i % moves.len()];
+        work.build_branches(&room, std::slice::from_ref(source), rotation, true, true)?;
+    }
+    let moving_full_response_us = start.elapsed().as_secs_f64() * 1e6 / count as f64;
     let mut dynamic = Dynamic::with_policy(2, room.short_taps, quality.fft())?;
     let start = Instant::now();
     for i in 0..count {
@@ -129,6 +165,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             "quality":quality.name(), "processing_policy":quality.policy(),
             "profiling":cfg!(feature = "room-profile"), "query_fft_length":n,
             "hrir_query_us":hrir_query_us, "source_response_us":source_response_us,
+            "moving_direct_response_us":moving_direct_response_us, "moving_full_response_us":moving_full_response_us,
             "stereo_target_us":stereo_target_us, "stereo_convolution_us":stereo_convolution_us,
             "short_taps":room.short_taps,
             "supported_direct_target_us":direct_seconds * 1e6 / count as f64,

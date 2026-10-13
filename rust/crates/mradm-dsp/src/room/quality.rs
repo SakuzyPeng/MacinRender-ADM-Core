@@ -43,7 +43,7 @@ impl Quality {
     pub fn policy(self) -> &'static str {
         match self {
             Self::Exact => "room-exact-v1",
-            Self::Realtime => "room-realtime-v1",
+            Self::Realtime => "room-realtime-v2",
         }
     }
     pub fn fft(self) -> FftPolicy {
@@ -59,7 +59,29 @@ impl Quality {
         }
     }
     pub(crate) fn reflection_due(self, sample: u64, id: u64) -> bool {
-        let period = self.reflection_frames() as u64;
+        Self::periodic_due(sample, id, self.reflection_frames())
+    }
+    /// Maximum held reflection-target pose error, before the existing filter fade.
+    pub fn reflection_pose_degrees(self) -> f64 {
+        match self {
+            Self::Exact => 0.,
+            Self::Realtime => 0.5,
+        }
+    }
+    pub fn reflection_pose_frames(self) -> usize {
+        match self {
+            Self::Exact => 0,
+            Self::Realtime => 1024,
+        }
+    }
+    pub(crate) fn reflection_pose_due(self, sample: u64, id: u64) -> bool {
+        Self::periodic_due(sample, id, self.reflection_pose_frames())
+    }
+    pub fn reflection_history_frames(self) -> usize {
+        self.reflection_frames().max(self.reflection_pose_frames())
+    }
+    fn periodic_due(sample: u64, id: u64, period: usize) -> bool {
+        let period = period as u64;
         if period == 0 {
             return true;
         }

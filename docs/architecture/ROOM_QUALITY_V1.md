@@ -24,7 +24,8 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
 
 ## Release 性能
 
-固定私人参考房间与 HRIR：`reference-7x6x3.2-corrected-v1`、SADIE II D2，48 kHz、256 taps。
+固定私人参考房间与 HRIR（字节哈希见 JSON）：48 kHz，HRIR 清单为 1850 个方向、
+480 个输入 taps、768 帧运行支持；房间清单 ID 为 `reference-7x6x3.2-v1`。
 Rust 1.98.0，默认 worker 数，关闭 profile／trace；复用已有构建缓存。
 计时为 `Session::process` 整次调用，包含 worker 调度，不含解码、资源准备或设备链路。
 每次 512 帧，期限 10.667 ms；每轮先预热 32 次，再测 938 次。
@@ -91,3 +92,9 @@ Windows 与 Linux 的实时档位平均耗时已低于期限，但 p99 仍超限
 探针支持 `room_bench ... --quality exact|realtime` 和
 `room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens] [--dense] --quality exact|realtime`。
 所有波形及性能证据都来自 Release；Debug 仅用于正确性回归。
+
+后续在 `e5803f6` 基线上进行的直达路径与 worker 数量／任务粒度试验，见
+[独立对照记录](ROOM_DIRECT_WORKERS.md)。其中含平衡顺序复测与未保留的调度候选。
+
+当前实时策略已扩展到 `room-realtime-v2`，只对几何已跟上的小幅头姿更新使用有限预算；
+见 [v2 验证](ROOM_POSE_BUDGET.md)。本文保留第一版历史数据。

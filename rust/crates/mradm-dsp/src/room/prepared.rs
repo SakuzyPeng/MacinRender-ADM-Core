@@ -153,7 +153,7 @@ impl PreparedRoom {
         let send = self.send_taps.div_ceil(super::BLOCK) * super::BLOCK;
         let hrir = self.hrir.data.output_taps.div_ceil(super::BLOCK) * super::BLOCK;
         super::FILTER_FADE
-            + self.quality.reflection_frames()
+            + self.quality.reflection_history_frames()
             + self.eq.history_frames()
             + short.max(send + self.late[0].history_frames() + hrir)
             + super::BLOCK
@@ -243,6 +243,17 @@ pub struct ResponseWork {
 }
 
 impl ResponseWork {
+    // Only buckets marked below ever receive spectral accumulation. Clear those
+    // buckets before reusing a branch; inactive branches keep their own scratch.
+    fn clear_buckets(spectrum: &mut [f32], used: &mut [bool], stride: usize) {
+        for (bucket, active) in used.iter_mut().enumerate() {
+            if *active {
+                spectrum[bucket * stride..(bucket + 1) * stride].fill(0.);
+                *active = false;
+            }
+        }
+    }
+
     pub fn new(room: &PreparedRoom) -> Result<Self> {
         let bins = room.fft_length / 2 + 1;
         let mut result = Self {
@@ -323,13 +334,24 @@ impl ResponseWork {
         let _profile = super::profile::Guard::new(super::profile::Stage::SourceResponse);
         let bins = room.fft_length / 2 + 1;
         let stride = room.hrir.stride();
-        self.direct.fill(0.);
-        self.early.fill(0.);
-        self.direct_buckets.fill(false);
-        self.early_buckets.fill(false);
+        if direct {
+            Self::clear_buckets(&mut self.direct, &mut self.direct_buckets, stride * 4);
+        }
+        if early {
+            Self::clear_buckets(&mut self.early, &mut self.early_buckets, stride * 4);
+        }
+        // Preserve the public output contract: unrequested planes are zero.
         self.impulse.fill(0.);
         self.direct_support = 1;
         self.early_support = 1;
+        // geometry::images sorts by order, with the sole direct path first.
+        // A direct-only update therefore visits one image, not every reflection.
+        let images = match (direct, early) {
+            (true, true) => 0..room.images.len(),
+            (true, false) => 0..1,
+            (false, true) => 1..room.images.len(),
+            (false, false) => 0..0,
+        };
         let cache = sources.len() == 1;
         let stale = |last: Option<WeightedPosition>| {
             last.is_none_or(|last| {
@@ -342,7 +364,8 @@ impl ResponseWork {
         let fill_early = cache && early && stale(self.cached_early);
         if fill_direct || fill_early {
             let source = sources[0];
-            for (index, image) in room.images.iter().copied().enumerate() {
+            for index in images.clone() {
+                let image = room.images[index];
                 if (image.order == 0 && !fill_direct) || (image.order != 0 && !fill_early) {
                     continue;
                 }
@@ -374,10 +397,8 @@ impl ResponseWork {
             }
         }
         for source in sources {
-            for (index, image) in room.images.iter().copied().enumerate() {
-                if (!early && image.order != 0) || (!direct && image.order == 0) {
-                    continue;
-                }
+            for index in images.clone() {
+                let image = room.images[index];
                 let path = if cache {
                     self.cached_paths[index]
                 } else {

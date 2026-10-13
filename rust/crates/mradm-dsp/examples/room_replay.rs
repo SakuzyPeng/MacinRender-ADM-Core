@@ -37,6 +37,7 @@ fn render(
     chunks: &[usize],
     screens: bool,
     dense: bool,
+    head_motion: &str,
 ) -> Result<Vec<f32>> {
     const MATERIAL: usize = 96013;
     let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
@@ -176,7 +177,16 @@ fn render(
         }
         if position.is_multiple_of(512) {
             let step = (position / 512) as f32;
-            session.set_pose([step * 0.61 - 35., step * 0.12 - 10., step * 0.07])?;
+            session.set_pose(match head_motion {
+                "slow" => [step * 0.25 - 35., step * 0.05 - 10., step * 0.02],
+                "fast" => [step * 4. - 170., step * 1., step * 0.3],
+                "wrap" => [
+                    ((179.85 + step * 0.1 + 180.) % 360.) - 180.,
+                    89.8,
+                    -30. + step * 0.04,
+                ],
+                _ => [step * 0.61 - 35., step * 0.12 - 10., step * 0.07],
+            })?;
         }
         let boundary = [
             MATERIAL,
@@ -239,11 +249,24 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     } else {
         Quality::Exact
     };
+    let head_motion = if let Some(index) = args.iter().position(|v| v == "--head-motion") {
+        let value = args
+            .get(index + 1)
+            .ok_or("--head-motion needs standard, slow, fast or wrap")?
+            .clone();
+        if !["standard", "slow", "fast", "wrap"].contains(&value.as_str()) {
+            return Err("--head-motion needs standard, slow, fast or wrap".into());
+        }
+        args.drain(index..index + 2);
+        value
+    } else {
+        "standard".to_owned()
+    };
     let screens = args.iter().any(|v| v == "--screens");
     let dense = args.iter().any(|v| v == "--dense");
     args.retain(|v| v != "--screens" && v != "--dense");
     if args.len() != 3 {
-        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens] [--dense] [--quality exact|realtime]".into());
+        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens] [--dense] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
     }
     let file = Path::new(&args[1]);
     let root = file.parent().ok_or("missing parent")?;
@@ -324,13 +347,24 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if dense {
         manifest["dense_source_ramps"] = true.into();
     }
-    let canonical = render(prepared.clone(), next.clone(), &[256], screens, dense)?;
+    if head_motion != "standard" {
+        manifest["head_motion"] = head_motion.clone().into();
+    }
+    let canonical = render(
+        prepared.clone(),
+        next.clone(),
+        &[256],
+        screens,
+        dense,
+        &head_motion,
+    )?;
     let fragmented = render(
         prepared,
         next,
         &[1, 173, 733, 4096, 19, 257],
         screens,
         dense,
+        &head_motion,
     )?;
     if canonical
         .iter()

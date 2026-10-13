@@ -74,6 +74,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     } else {
         Quality::Exact
     };
+    let scenario = if let Some(index) = arguments.iter().position(|v| v == "--scenario") {
+        let value = arguments
+            .get(index + 1)
+            .ok_or("--scenario needs all, static, pose, switch or ramps")?
+            .clone();
+        if !["all", "static", "pose", "switch", "ramps"].contains(&value.as_str()) {
+            return Err("--scenario needs all, static, pose, switch or ramps".into());
+        }
+        arguments.drain(index..index + 2);
+        value
+    } else {
+        "all".to_owned()
+    };
     let tracing = arguments.last().is_some_and(|v| v == "--trace");
     if tracing {
         arguments.pop();
@@ -96,7 +109,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
     if arguments.len() < 2 || arguments.len() > 6 {
         return Err(
-            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime]".into(),
+            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime] [--scenario all|static|pose|switch|ramps]".into(),
         );
     }
     let file = Path::new(&arguments[1]);
@@ -154,12 +167,15 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
         // The last scenario ramps every source with its own event offset, as
         // dense ADM automation does; per-source update grids bound its cost.
-        for (moving, switching, ramps) in [
-            (false, false, false),
-            (true, false, false),
-            (true, true, false),
-            (true, false, true),
+        for (name, moving, switching, ramps) in [
+            ("static", false, false, false),
+            ("pose", true, false, false),
+            ("switch", true, true, false),
+            ("ramps", true, false, true),
         ] {
+            if scenario != "all" && scenario != name {
+                continue;
+            }
             let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
             let around = |i: usize, turn: f32| {
                 let v = geometry::portable_direction(
@@ -306,7 +322,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
             println!(
                 "{}",
-                serde_json::json!({"sources":sources,"continuous_pose":moving,"room_transition":switching,
+                serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
                 "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames(),
                 "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
                 "voice_segments":segments,
