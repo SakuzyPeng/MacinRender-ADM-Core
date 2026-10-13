@@ -19,8 +19,9 @@ pub enum Stage {
     LateDecoder,
     VoiceRender,
     VoiceBatch,
+    VoiceSegment,
 }
-pub const STAGE_COUNT: usize = 14;
+pub const STAGE_COUNT: usize = 15;
 pub const NAMES: [&str; STAGE_COUNT] = [
     "session_process",
     "canonical_block",
@@ -36,6 +37,7 @@ pub const NAMES: [&str; STAGE_COUNT] = [
     "late_decoder",
     "voice_render",
     "voice_batch",
+    "voice_segment",
 ];
 #[cfg(feature = "room-profile")]
 mod enabled {
@@ -91,6 +93,7 @@ mod enabled {
                         | Stage::EmitterBegin
                         | Stage::EmitterConvolution
                         | Stage::SourceReduction
+                        | Stage::VoiceSegment
                 )
             {
                 return Self {
