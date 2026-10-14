@@ -69,35 +69,14 @@ impl Workers {
             })
             .build()
             .map_err(|_| Error::RenderFailed("Cannot prepare room workers"))?;
-        // Start every thread while allocations are permitted.
+        // Start every thread while allocations are permitted. The vendored
+        // rayon-core prepares Apple's worker parking locks in its constructor;
+        // no timed join is needed to make each worker happen to go to sleep.
         pool.broadcast(|_| {
             (0..512usize).into_par_iter().for_each(|i| {
                 std::hint::black_box(i);
             });
         });
-        if count > 1 {
-            // Rayon parks a joining worker on its private condvar. macOS's
-            // pthread backing is lazy, so exercise that path before playback.
-            for index in 0..count {
-                pool.broadcast(|context| {
-                    if context.index() != index {
-                        return;
-                    }
-                    let started = std::sync::atomic::AtomicBool::new(false);
-                    rayon::join(
-                        || {
-                            while !started.load(std::sync::atomic::Ordering::Acquire) {
-                                std::thread::yield_now();
-                            }
-                        },
-                        || {
-                            started.store(true, std::sync::atomic::Ordering::Release);
-                            std::thread::sleep(std::time::Duration::from_millis(5));
-                        },
-                    );
-                });
-            }
-        }
         let shared = Arc::new(Shared {
             state: Mutex::new(Mailbox {
                 job: None,
@@ -106,6 +85,15 @@ impl Workers {
             }),
             changed: Condvar::new(),
         });
+        // Prepare our mailbox's parking pair as well. A fast Noop may finish
+        // before the submitting thread ever waits for it.
+        #[cfg(target_vendor = "apple")]
+        drop(
+            shared
+                .changed
+                .wait_timeout(shared.state.lock().unwrap(), std::time::Duration::ZERO)
+                .unwrap(),
+        );
         let driver = shared.clone();
         pool.spawn(move || {
             loop {

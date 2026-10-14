@@ -163,6 +163,6 @@ fn verify_quality(quality: Quality) {
     assert_eq!(
         ALLOCATIONS.load(Ordering::SeqCst),
         0,
-        "processing, including first block, must use prepared workspaces"
+        "{quality:?}: processing, including first block, must use prepared workspaces"
     );
 }
