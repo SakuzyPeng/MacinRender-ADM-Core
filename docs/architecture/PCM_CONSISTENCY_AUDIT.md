@@ -53,7 +53,8 @@ Windows SpatialAudioClient 等设备端空间化发生在应用提交床或对�
   均使用 EAR 5.1 和 `objects-point`；其他后端、素材及反馈阈值还需补覆盖。
 - Scene 主 epoch 在样本 6144 执行语义策略更新，短尾 epoch 重新清空策略。自 1.2 起该更新包含
   `gain.scale=0.5`、`gain.gain_db=-4.6`（libm 与 glibc powf 在此相差 1 ulp）、`extent`、`diffuse` 和 `divergence.range_scale`；
-  此前只有 `gain.scale=0.5`。仍缺少身份匹配、位置、channelLock 等策略矩阵；位置编辑待 1.3 统一 `scene_math` 后加入。
+  此前只有 `gain.scale=0.5`。1.3 起，VBAP 和双耳回放再加入 `position.offset`（方位 12.5°、仰角 −4°），经可移植的 `scene_math` 转为极坐标；Triple Balance 只接受房间立方体内的 Cartesian 位置，不加该项。
+  仍缺少身份匹配、channelLock 等策略矩阵。
 - 148 个 Scene id 比较 pull 或虚拟设备输出的 float PCM；其固定分块与碎片分块分别作跨平台比较。
   本清单没有用它们声明所有分块互相逐位相同，也没有声明所有文件流式渲染路径已覆盖。
 - i16/i24 WAV、CAF 以及独立 Monitor 的完整路径尚未作为这份精确 PCM 矩阵的替代格式全面覆盖；后续编码仍排除。
