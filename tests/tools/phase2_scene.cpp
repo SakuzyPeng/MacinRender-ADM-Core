@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <thread>
 
 #include <nlohmann/json.hpp>
@@ -276,11 +277,16 @@ class Replay {
             }
             if (position == 6144) {
                 // Exercises the Rust policy arithmetic: scale, a dB value where libm and glibc powf
-                // differ by one ulp, and the extent/diffuse/divergence products and clamps. Position
-                // edits join once scene_math uses portable functions (PCM consistency 1.3).
+                // differ by one ulp, the extent/diffuse/divergence products and clamps, and a polar
+                // position offset through the portable scene_math (PCM consistency 1.2 and 1.3).
+                // Triple Balance keeps Cartesian room positions: a polar offset would move replayed
+                // positions beyond the room cube, which it rejects.
+                const bool cube = config.renderer.renderer == RendererSelection::triple_balance;
                 done(stream->set_semantic_policy_json(
-                    R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5,"gain_db":-4.6},)"
-                    R"("extent":{"scale":1.5,"max":0.6},"diffuse":{"scale":0.5},"divergence":{"range_scale":0.5}}})",
+                    std::string{
+                        R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5,"gain_db":-4.6},)"
+                        R"("extent":{"scale":1.5,"max":0.6},"diffuse":{"scale":0.5},"divergence":{"range_scale":0.5})"} +
+                        (cube ? "" : R"(,"position":{"offset":{"azimuth":12.5,"elevation":-4}})") + "}}",
                     99));
             }
             if (position == 8192 && config.renderer.renderer == RendererSelection::triple_balance) {
