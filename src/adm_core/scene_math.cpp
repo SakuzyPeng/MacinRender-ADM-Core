@@ -1,6 +1,8 @@
 #include "scene_math.h"
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <limits>
 
 #include "adm/scene.h"
@@ -87,9 +89,9 @@ SceneObjectBlock apply_channel_lock(const SceneObjectBlock& block, const std::ve
     // Speaker selection, the distance tolerance and the locked position are computed in Rust.
     std::vector<MradmSceneSpeaker> numeric;
     numeric.reserve(speakers.size());
-    for (const auto& speaker : speakers) {
-        numeric.push_back({speaker.azimuth, speaker.elevation, speaker.is_lfe ? 1U : 0U});
-    }
+    std::ranges::transform(speakers, std::back_inserter(numeric), [](const SceneOutputSpeaker& speaker) {
+        return MradmSceneSpeaker{speaker.azimuth, speaker.elevation, speaker.is_lfe ? 1U : 0U};
+    });
     const auto& p = block.position;
     const auto input = p.cartesian ? std::array{p.x, p.y, p.z} : std::array{p.azimuth, p.elevation, p.distance};
     std::array<float, 3> polar{};
