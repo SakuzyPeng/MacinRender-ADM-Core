@@ -72,6 +72,10 @@ Linux 上 glibc 与 `libm` 的 f64 三角函数结果并不总是相同，因此
 Triple Balance 只接受房间立方体内的 Cartesian 位置：极坐标偏移会把距离大于 1 的回放位置移出立方体，
 渲染器按设计拒绝，因此不加该项。
 
+最终头 `71a8a5f`（含位置偏移回放与新增的 f64 twiddle 门禁）的 Consistency 运行 38552344508 与 CI 38552348665 通过：
+188 个 PCM id 与 151 份内核门禁三平台逐位相同。同一头的 Quality 指出 `apply_channel_lock` 中一处可改用
+`std::ranges::transform` 的循环（cppcheck `useStlAlgorithm`），随后修正，不影响数值。
+
 ## 性能
 
 在共享 4 核 Linux 虚拟机上比较切片前（`528a0d5`）与 `e432729` 的 Release 构建。离线交替运行 7 轮。
