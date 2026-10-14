@@ -61,6 +61,7 @@
 - [Rust 重采样迁移](architecture/RUST_RESAMPLER_MIGRATION.md)
 - [Rust Scene 流式渲染的过渡、空间数学与双耳迁移](architecture/RUST_SCENE_NUMERIC_MIGRATION.md)
 - [Scene 流式渲染的 C++ 数值残留迁移（一期 1.2）](architecture/RUST_SCENE_RESIDUAL_MIGRATION.md)
+- [Scene 空间计算与 FFT 系数的可移植数学函数（一期 1.3）](architecture/RUST_SCENE_PORTABLE_MATH.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 

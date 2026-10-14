@@ -229,6 +229,11 @@ Consistency 运行 38034179850 在 A/B 两种配置下完成三平台诊断采�
 结构迁移在 Linux x64 上对普通与诊断运行逐文件位相同，`1ad7641` 的三平台 Consistency/CI/Quality 通过。
 验证、性能与剩余项见 [Scene C++ 数值残留迁移](RUST_SCENE_RESIDUAL_MIGRATION.md)；回放变更后的三平台结果以新的 Consistency 运行为准。
 
+**1.3 状态**：channelLock 与 divergence 阈值移入 Rust（`c1a9c51`）；Scene 空间数学、VBAP spread、HRTF 幅度、
+live 双耳 divergence 与 SOFA 坐标转换改用 `libm`（`8d260b8`）；RustFFT 与纳入仓库的 RealFFT 的 twiddle 改用 `libm`（`e432729`）。
+三平台 Consistency 38545398947 与 38548940341 通过，全部 160 个内核文件三平台相同，f64 twiddle 列设为门禁。
+Scene 空间与卷积准备链路上不再调用平台数学库；HpTF 设计与峰值保护属于 1.4。见 [1.3 记录](RUST_SCENE_PORTABLE_MATH.md)。
+
 相关审计项：N04、N05、N09—N11、N16、N17，以及 N01/N03/S03—S07 中服务于 Scene 的部分和 S02。
 一期对精确一致性的要求适用于锁定输入与配置的矩阵，并不把真实设备的墙钟操作或欠载输出当作相同事件序列。
 数值内核的迁移与统一完成后，C++ 中若仍存在直接决定 Scene 样本值的运算，应登记原因和边界后才能结项。

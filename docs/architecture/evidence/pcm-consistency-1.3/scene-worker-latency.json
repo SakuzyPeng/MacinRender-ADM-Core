@@ -1,0 +1,179 @@
+{
+  "tool": "mr_adm_scene_stream_stress --seconds 0 --latency-iterations 2000",
+  "legacy": "528a0d5",
+  "candidate": "e432729 (Release, diagnostics OFF)",
+  "platform": "Linux x64 (shared 4-core VM)",
+  "alternating_rounds": 5,
+  "runs": [
+    {
+      "round": 1,
+      "build": "legacy",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 107.892,
+      "budget_us": 10000
+    },
+    {
+      "round": 1,
+      "build": "candidate",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 132.983,
+      "budget_us": 10000
+    },
+    {
+      "round": 1,
+      "build": "legacy",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 870.916,
+      "budget_us": 10000
+    },
+    {
+      "round": 1,
+      "build": "candidate",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 826.029,
+      "budget_us": 10000
+    },
+    {
+      "round": 2,
+      "build": "candidate",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 103.529,
+      "budget_us": 10000
+    },
+    {
+      "round": 2,
+      "build": "legacy",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 124.081,
+      "budget_us": 10000
+    },
+    {
+      "round": 2,
+      "build": "candidate",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 761.686,
+      "budget_us": 10000
+    },
+    {
+      "round": 2,
+      "build": "legacy",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 807.65,
+      "budget_us": 10000
+    },
+    {
+      "round": 3,
+      "build": "legacy",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 143.627,
+      "budget_us": 10000
+    },
+    {
+      "round": 3,
+      "build": "candidate",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 133.004,
+      "budget_us": 10000
+    },
+    {
+      "round": 3,
+      "build": "legacy",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 968.202,
+      "budget_us": 10000
+    },
+    {
+      "round": 3,
+      "build": "candidate",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 824.047,
+      "budget_us": 10000
+    },
+    {
+      "round": 4,
+      "build": "candidate",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 123.232,
+      "budget_us": 10000
+    },
+    {
+      "round": 4,
+      "build": "legacy",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 137.967,
+      "budget_us": 10000
+    },
+    {
+      "round": 4,
+      "build": "candidate",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 1036.42,
+      "budget_us": 10000
+    },
+    {
+      "round": 4,
+      "build": "legacy",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 883.998,
+      "budget_us": 10000
+    },
+    {
+      "round": 5,
+      "build": "legacy",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 123.391,
+      "budget_us": 10000
+    },
+    {
+      "round": 5,
+      "build": "candidate",
+      "renderer": "vbap",
+      "blocks": 2000,
+      "completion_p99_us": 115.983,
+      "budget_us": 10000
+    },
+    {
+      "round": 5,
+      "build": "legacy",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 976.799,
+      "budget_us": 10000
+    },
+    {
+      "round": 5,
+      "build": "candidate",
+      "renderer": "binaural",
+      "blocks": 2000,
+      "completion_p99_us": 812.161,
+      "budget_us": 10000
+    }
+  ],
+  "median_of_p99_us": {
+    "vbap": {
+      "legacy": 124.081,
+      "candidate": 123.232
+    },
+    "binaural": {
+      "legacy": 883.998,
+      "candidate": 824.047
+    }
+  }
+}
