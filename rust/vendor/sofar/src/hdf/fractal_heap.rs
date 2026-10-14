@@ -1,6 +1,6 @@
 use winnow::binary::{le_u8, le_u16, le_u32, le_u64};
 use winnow::error::{ErrMode, ParserError, StrContext};
-use winnow::stream::Stream;
+use winnow::stream::{Location, Stream};
 use winnow::token::{literal, take};
 use winnow::{ModalResult, Parser};
 
@@ -178,7 +178,7 @@ pub(crate) fn fractal_heap_read(input: &mut Input) -> ModalResult<(FractalHeap, 
             heap_data.directories.extend(block_data.directories);
         } else {
             // Direct block
-            let block_data = direct_block_read(input, &fractal_heap)?;
+            let block_data = direct_block_read(input, &fractal_heap, starting_block_size)?;
             heap_data.attributes.extend(block_data.attributes);
             heap_data.directories.extend(block_data.directories);
         }
@@ -192,7 +192,16 @@ pub(crate) fn fractal_heap_read(input: &mut Input) -> ModalResult<(FractalHeap, 
 fn direct_block_read(
     input: &mut Input,
     fractal_heap: &FractalHeap,
+    block_size: u64,
 ) -> ModalResult<FractalHeapData> {
+    let start = input.current_token_start();
+    let size = usize::try_from(block_size).map_err(|_| ErrMode::from_input(input))?;
+    if size > input.eof_offset() {
+        return Err(ErrMode::from_input(input));
+    }
+    let end = start
+        .checked_add(size)
+        .ok_or_else(|| ErrMode::from_input(input))?;
     let size_of_offsets = input.state.size_of_offsets();
 
     if input.state.recursive_counter() >= MAX_RECURSIVE_DEPTH {
@@ -231,7 +240,9 @@ fn direct_block_read(
         directories: Vec::new(),
     };
 
-    loop {
+    // A completely occupied block has no zero sentinel. Never interpret the
+    // following file object (which can be compressed audio) as heap entries.
+    while input.current_token_start() < end {
         let type_and_version = le_u8.parse_next(input)?;
         if type_and_version == 0 {
             break;
@@ -261,6 +272,9 @@ fn direct_block_read(
                 // Skip unknown types gracefully to continue parsing
                 let _skip = take(length as usize).parse_next(input)?;
             }
+        }
+        if input.current_token_start() > end {
+            return Err(ErrMode::from_input(input));
         }
     }
 
@@ -487,7 +501,7 @@ fn indirect_block_read(
     };
 
     // Process direct blocks
-    for _ in 0..k {
+    for entry in 0..k {
         let child_direct_block = varint_size(size_of_offsets).parse_next(input)?;
 
         if fractal_heap.encoded_length > 0 {
@@ -503,7 +517,12 @@ fn indirect_block_read(
             input.input.reset_to_start();
             take(child_direct_block as usize).parse_next(input)?;
 
-            let direct_data = direct_block_read(input, fractal_heap)?;
+            let row = entry / u32::from(fractal_heap.table_width);
+            let size = fractal_heap
+                .starting_block_size
+                .checked_shl(row.saturating_sub(1))
+                .ok_or_else(|| ErrMode::from_input(input))?;
+            let direct_data = direct_block_read(input, fractal_heap, size)?;
             block_data.attributes.extend(direct_data.attributes);
             block_data.directories.extend(direct_data.directories);
 

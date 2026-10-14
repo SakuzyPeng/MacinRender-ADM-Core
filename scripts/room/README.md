@@ -58,6 +58,37 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
 保留幅度和完整响应，支持不同采样率及以样本或秒声明的 `Data.Delay`；保护延迟单独报告。
 不完整几何、无法识别的左右耳、异常数据或不支持的 HDF5 编码会报错，不静默回退到默认 HRIR。
 
+### 多距离 HRTF：房间直达声
+
+`--room-hrir`、`room-check --hrir` 和 `adm_room_config_t.hrir_manifest` 也接受
+`mradm.hrtf-collection` v1 的 `distance_index.json`。当前支持 48 kHz、双耳
+`HRIR_DFEQ100`，各层必须具有相同的方向顺序、监听耳序和一个明确的参考层。
+加载时验证相对路径、文件长度、SHA-256、实际 SOFA 半径和层间几何；任何一层失败都会拒绝准备。
+
+```sh
+build/release/mradm room-check /path/room.json --hrir /path/collection/distance_index.json
+build/release/mradm render -i programme.wav -o binaural.wav --renderer room-binaural \
+  --room /path/room.json --room-hrir /path/collection/distance_index.json --room-metres-per-unit 1.5
+```
+
+直达声使用房间约束后的实际米数：相邻距离层线性加权，与球面三角形的方向权重相乘，
+逐耳对齐时延后合成最多六个 HRIR。head-locked 直达声及 extent/divergence 采样点使用同一查询。
+早期反射、晚场解码固定使用合集参考层。离线渲染、文件流式渲染和 Scene 流式渲染共用此实现。
+
+HRTF 超出集合范围时保持端点层；传播增益和延时仍只按实际距离计算一次。
+例如 SkinRLC 九层覆盖 0.2–1.6 m，但房间若限制最小距离为 0.25 m，实际最近位置仍是 0.25 m。
+合集必须已经去除公共自由场传播增益和延时，使用跨层一致的 EQ；加载器不重新均衡或归一化。
+公共保护帧按全部层计算，非直达分支使用相同时间基准，完整 FIR 不按能量截短。
+
+所有层在准备阶段驻留内存，共享方向网格、分数延时和相位表；整组准备预算为 1 GiB，
+不建立磁盘缓存，处理阶段无文件访问或分配。换房固定当前集合；改变集合须创建新会话。
+同时传入 `--sofa` 时，其文件必须匹配集合参考层。既有单 SOFA 和预处理包继续走原数值路径。
+
+检查 JSON 的 `hrtf_collection` 报告半径、参考层、逐层来源摘要，以及可选的
+`provenance/source_nearfield_quality_report.json`。这些质量记录只用于报告，不触发滤波修改。
+`mr_adm_room_hrir_check distance_index.json` 扫描全部节点、距离中点和层边界，并保留来源标记。
+节点相对 L2 门槛为 `2e-5`，边界两侧 ±1e-7 m 的响应差门槛为 `2e-4`；通过数值检查不等于声学精度或试听认证。
+
 ### 可选的离线打包工具（开发／兼容用途）
 
 以下脚本用于复现或分发旧格式资源包，不是播放或导入 SOFA 的必要步骤。

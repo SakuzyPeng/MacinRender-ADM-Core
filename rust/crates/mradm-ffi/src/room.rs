@@ -4,6 +4,7 @@ use crate::checked::*;
 use mradm_dsp::{
     Error, Result,
     room::{
+        collection,
         control::{RoomCommand, RoomDescription, RoomOverride},
         geometry::Position,
         hrir::HrirBank,
@@ -172,7 +173,7 @@ unsafe fn path(bytes: *const u8, length: usize) -> Result<PathBuf> {
 }
 fn description(prepared: &PreparedSet) -> Result<CString> {
     let room = &prepared.room;
-    let value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
+    let mut value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
         "quality":room.quality.name(),"processing_policy":room.quality.policy(),
         "reflection_update_frames":room.quality.reflection_frames(),
@@ -190,6 +191,9 @@ fn description(prepared: &PreparedSet) -> Result<CString> {
         "reflection_paths":room.images.len(),"hrir_bank_bytes":room.hrir.storage_bytes(),
         "windows_mmcss_workers":crate::room_environment::mmcss_workers(),
         "scope":"Validated resource integrity; acoustic and realtime acceptance are separate."});
+    if let Some(collection) = &room.hrir.data.collection {
+        value["hrtf_collection"] = collection.summary();
+    }
     CString::new(value.to_string()).map_err(|_| invalid())
 }
 
@@ -269,6 +273,18 @@ fn load_hrir(file: &Path) -> Result<Arc<HrirData>> {
         return native_hrir(&bytes);
     }
     let root = file.parent().unwrap_or(Path::new("."));
+    let manifest: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+    if manifest["schema"] == "mradm.hrtf-collection" {
+        let mut data = collection::prepare(&bytes, |n, s| array(root, n, s))?;
+        let review = root.join(collection::REVIEW_PATH);
+        if review
+            .try_exists()
+            .map_err(|_| Error::Io("无法检查 HRTF 来源报告"))?
+        {
+            collection::attach_reviews(&mut data, &bounded_read(&review, None, 1024 * 1024)?)?;
+        }
+        return Ok(Arc::new(data));
+    }
     Ok(Arc::new(HrirData::parse(&bytes, |n, s| array(root, n, s))?))
 }
 

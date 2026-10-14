@@ -112,6 +112,7 @@ pub struct HrirBank {
     pub fft_length: usize,
     fractions: PlanarBank,
     spectra: PlanarBank,
+    radial_spectra: Vec<Option<PlanarBank>>,
     triangles: Vec<Triangle>,
     integer_phases: Vec<Complex32>,
     hrir_integer_min: i64,
@@ -125,10 +126,11 @@ pub struct HrirBank {
 /// exact direction/FFT key reuses the same HRIR evaluation across room models;
 /// a miss computes the full response. There is no angular quantization.
 pub struct QueryCache {
+    identity: String,
     policy: FftPolicy,
     fft_length: usize,
     stride: usize,
-    keys: Vec<Option<[u64; 3]>>,
+    keys: Vec<Option<[u64; 4]>>,
     values: Vec<f32>,
     next: usize,
 }
@@ -136,6 +138,7 @@ impl QueryCache {
     pub fn new(bank: &HrirBank, count: usize) -> Self {
         let count = count.min(32);
         let mut result = Self {
+            identity: bank.data.identity.clone(),
             policy: bank.policy,
             fft_length: bank.fft_length,
             stride: bank.stride() * 4,
@@ -151,19 +154,28 @@ impl QueryCache {
         bank: &HrirBank,
         _index: usize,
         direction: Vec3,
+        distance: Option<f64>,
         face: &mut usize,
         out: &mut [f32],
     ) -> Result<()> {
-        if self.policy != bank.policy || self.fft_length != bank.fft_length || self.keys.is_empty()
+        if self.identity != bank.data.identity
+            || self.policy != bank.policy
+            || self.fft_length != bank.fft_length
+            || self.keys.is_empty()
         {
-            return bank.query(direction, face, out);
+            return bank.query_distance(direction, distance, face, out);
         }
-        let key = direction.map(f64::to_bits);
+        let key = [
+            direction[0].to_bits(),
+            direction[1].to_bits(),
+            direction[2].to_bits(),
+            distance.map_or(u64::MAX, f64::to_bits),
+        ];
         if let Some(index) = self.keys.iter().position(|stored| *stored == Some(key)) {
             out.copy_from_slice(&self.values[index * self.stride..(index + 1) * self.stride]);
             return Ok(());
         }
-        bank.query(direction, face, out)?;
+        bank.query_distance(direction, distance, face, out)?;
         let index = self.next;
         self.values[index * self.stride..(index + 1) * self.stride].copy_from_slice(out);
         self.keys[index] = Some(key);
@@ -190,12 +202,22 @@ impl TimeQuery {
         })
     }
     pub fn query(&mut self, direction: Vec3, face: &mut usize, output: &mut [f32]) -> Result<()> {
+        self.query_distance(direction, None, face, output)
+    }
+    pub fn query_distance(
+        &mut self,
+        direction: Vec3,
+        distance: Option<f64>,
+        face: &mut usize,
+        output: &mut [f32],
+    ) -> Result<()> {
         let taps = self.bank.data.output_taps;
         let bins = self.bank.fft_length / 2 + 1;
         if output.len() != 2 * taps {
             return Err(Error::InvalidArgument("Invalid HRIR output"));
         }
-        self.bank.query(direction, face, &mut self.planar)?;
+        self.bank
+            .query_distance(direction, distance, face, &mut self.planar)?;
         let stride = self.bank.spectra.stride();
         for ear in 0..2 {
             for bin in 0..bins {
@@ -217,11 +239,17 @@ impl TimeQuery {
 impl HrirBank {
     pub fn fingerprint(&self) -> serde_json::Value {
         use super::resources::{hash_complex, hash_f64};
-        serde_json::json!({"fft_length":self.fft_length,"spectra":self.spectra.fingerprint(),
+        let mut value = serde_json::json!({"fft_length":self.fft_length,"spectra":self.spectra.fingerprint(),
             "fractional":self.fractions.fingerprint(),"phase_rows":self.hrir_rotations.fingerprint(),
             "integer_phases":hash_complex(&self.integer_phases),
             "mesh_inverse":hash_f64(self.triangles.iter().flat_map(|t|t.inverse.into_iter().flatten())),
-            "bvh":hash_f64(self.nodes.iter().flat_map(|n|n.low.into_iter().chain(n.high)))})
+            "bvh":hash_f64(self.nodes.iter().flat_map(|n|n.low.into_iter().chain(n.high)))});
+        if let Some(collection) = &self.data.collection {
+            value["distance_layers"] = serde_json::json!({"identity":self.data.identity,
+                "radii":collection.layers.iter().map(|l|l.radius).collect::<Vec<_>>(),
+                "spectra":self.radial_spectra.iter().map(|s|s.as_ref().unwrap_or(&self.spectra).fingerprint()).collect::<Vec<_>>()});
+        }
+        value
     }
     pub fn new(data: Arc<HrirData>, fft_length: usize) -> Result<Self> {
         Self::with_policy(data, fft_length, FftPolicy::Exact)
@@ -229,6 +257,33 @@ impl HrirBank {
     pub fn with_policy(data: Arc<HrirData>, fft_length: usize, policy: FftPolicy) -> Result<Self> {
         if fft_length < data.output_taps || fft_length > 32768 {
             return Err(Error::InvalidArgument("Invalid room HRIR FFT support"));
+        }
+        if let Some(collection) = &data.collection {
+            let bins = fft_length / 2 + 1;
+            let stride = bins.next_multiple_of(16);
+            let count = data.directions.len();
+            let raw: usize = (0..collection.layers.len())
+                .map(|i| {
+                    let layer = data.layer(i);
+                    layer.impulses.len() * 4
+                        + layer.delays.len() * 16
+                        + layer.directions.len() * 24
+                        + layer.faces.len() * 12
+                })
+                .sum();
+            let (low, high) = data.delay_bounds();
+            let rotations = 2 * (libm::ceil(high - low) as usize + 1) + 1;
+            // All layers are resident; include the largest transient complex
+            // spectrum, shared phase tables and geometry in the preparation cap.
+            let budget = raw as u128
+                + (collection.layers.len() as u128 * count as u128 * 2 * stride as u128 * 8)
+                + (count as u128 * 2 * bins as u128 * 8)
+                + ((PHASES + 1 + rotations) as u128 * stride as u128 * 16)
+                + data.faces.len() as u128 * 256
+                + fft_length as u128 * 32;
+            if budget > super::collection::MAX_BYTES as u128 {
+                return Err(Error::Unsupported("距离 HRTF 准备资源超过 1 GiB 预算"));
+            }
         }
         if data.faces.len() != 2 * data.directions.len() - 4 {
             return Err(Error::InvalidArgument(
@@ -318,18 +373,7 @@ impl HrirBank {
                 Complex32::new(cos as f32, sin as f32)
             })
             .collect();
-        let minimum = data
-            .delays
-            .iter()
-            .flatten()
-            .copied()
-            .fold(f64::INFINITY, f64::min);
-        let maximum = data
-            .delays
-            .iter()
-            .flatten()
-            .copied()
-            .fold(f64::NEG_INFINITY, f64::max);
+        let (minimum, maximum) = data.delay_bounds();
         let extent = libm::ceil(maximum - minimum) as i64 + 1;
         let hrir_integer_min = data.guard as i64 - 40 - extent;
         let rotation_count = (2 * extent + 1) as usize;
@@ -347,7 +391,7 @@ impl HrirBank {
             }
         }
         let short_length = data.output_taps.next_power_of_two();
-        let short = if short_length < fft_length {
+        let short = if short_length < fft_length && data.collection.is_none() {
             Some(Arc::new(Self::with_policy(
                 data.clone(),
                 short_length,
@@ -356,12 +400,32 @@ impl HrirBank {
         } else {
             None
         };
+        let planar = PlanarBank::new(&spectra, bins);
+        drop(spectra);
+        let spectra = planar;
+        let mut radial_spectra = Vec::new();
+        if let Some(collection) = &data.collection {
+            for layer in &collection.layers {
+                let Some(layer) = &layer.data else {
+                    radial_spectra.push(None);
+                    continue;
+                };
+                let mut values = vec![Complex32::default(); length];
+                time.fill(0.);
+                for (index, impulse) in layer.impulses.chunks_exact(layer.taps).enumerate() {
+                    time[..layer.taps].copy_from_slice(impulse);
+                    fft.forward(&time, &mut values[index * bins..(index + 1) * bins])?;
+                }
+                radial_spectra.push(Some(PlanarBank::new(&values, bins)));
+            }
+        }
         let mut result = Self {
             policy,
             data,
             fft_length,
             fractions,
-            spectra: PlanarBank::new(&spectra, bins),
+            spectra,
+            radial_spectra,
             triangles,
             integer_phases,
             hrir_integer_min,
@@ -531,6 +595,79 @@ impl HrirBank {
         Ok(())
     }
 
+    /// None selects the fixed reference for reflections/late decoding. A finite
+    /// distance selects up to six samples using the same angular mesh and guard.
+    pub fn query_distance(
+        &self,
+        direction: Vec3,
+        distance: Option<f64>,
+        previous_face: &mut usize,
+        output: &mut [f32],
+    ) -> Result<()> {
+        let (Some(collection), Some(radius)) = (&self.data.collection, distance) else {
+            return self.query(direction, previous_face, output);
+        };
+        if !radius.is_finite() || radius < 0. || output.len() != 4 * self.stride() {
+            return Err(Error::InvalidArgument("无效的 HRTF 距离或输出缓冲"));
+        }
+        let _profile = super::profile::Guard::new(super::profile::Stage::HrirQuery);
+        let (vertices, weights) = self.weights(direction, previous_face)?;
+        let (low, high, alpha) = collection.bracket(radius);
+        let layers = [
+            (low, 1. - alpha),
+            (high, if low == high { 0. } else { alpha }),
+        ];
+        let stride = self.stride();
+        let bins = self.fft_length / 2 + 1;
+        output.fill(0.);
+        for ear in 0..2 {
+            let mut delay = 0.;
+            for (index, radial) in layers {
+                if radial == 0. {
+                    continue;
+                }
+                let data = self.data.layer(index);
+                for vertex in 0..3 {
+                    delay += data.delays[vertices[vertex]][ear] * (weights[vertex] * radial);
+                }
+            }
+            let destination = &mut output[ear * stride * 2..(ear + 1) * stride * 2];
+            for (index, radial) in layers {
+                if radial == 0. {
+                    continue;
+                }
+                let data = self.data.layer(index);
+                let spectra = self.radial_spectra[index].as_ref().unwrap_or(&self.spectra);
+                for vertex in 0..3 {
+                    let weight = weights[vertex] * radial;
+                    if weight <= 0. {
+                        continue;
+                    }
+                    let shift = delay - data.delays[vertices[vertex]][ear];
+                    let integer = libm::floor(shift);
+                    let fraction = shift - integer;
+                    let position = fraction.clamp(0., 1.) * PHASES as f64;
+                    let lo = (position as usize).min(PHASES - 1);
+                    let alpha = (position - lo as f64) as f32;
+                    let start = self.data.guard as f64 + integer - 40.;
+                    super::spectral::aligned_add(
+                        destination.split_at_mut(stride),
+                        spectra.row(vertices[vertex] * 2 + ear),
+                        self.fractions.row(lo),
+                        self.fractions.row(lo + 1),
+                        self.hrir_rotations
+                            .row((start as i64 - self.hrir_integer_min) as usize),
+                        alpha,
+                        weight as f32,
+                    );
+                }
+            }
+            destination[stride] = 0.;
+            destination[stride + bins - 1] = 0.;
+        }
+        Ok(())
+    }
+
     pub fn stride(&self) -> usize {
         self.spectra.stride()
     }
@@ -540,6 +677,19 @@ impl HrirBank {
             + self.integer_phases.len() * size_of::<Complex32>()
             + self.fractions.storage_bytes()
             + self.data.impulses.len() * size_of::<f32>()
+            + self
+                .radial_spectra
+                .iter()
+                .flatten()
+                .map(PlanarBank::storage_bytes)
+                .sum::<usize>()
+            + self.data.collection.as_ref().map_or(0, |c| {
+                c.layers
+                    .iter()
+                    .filter_map(|l| l.data.as_ref())
+                    .map(|d| d.impulses.len() * size_of::<f32>())
+                    .sum::<usize>()
+            })
     }
 
     pub fn integer_phase(&self, shift: i64, band: usize) -> Complex32 {

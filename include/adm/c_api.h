@@ -1876,8 +1876,9 @@ typedef struct adm_room_config_t {
     uint32_t struct_size;
     uint32_t reserved;
     const adm_room_t* room;
-    const char* hrir_manifest; /* UTF-8 SOFA or prepared HRIR JSON; NULL uses SOFA option/package default */
-    double metres_per_unit;    /* [0.01, 100]; recommended/default scale = 1.5 */
+    const char*
+        hrir_manifest;      /* UTF-8 SOFA, prepared HRIR or distance collection JSON; NULL uses SOFA/package default */
+    double metres_per_unit; /* [0.01, 100]; recommended/default scale = 1.5 */
 } adm_room_config_t;
 
 adm_error_code_t adm_room_load(adm_context_t* context, const char* manifest, adm_room_t** out) ADM_API_NOEXCEPT;

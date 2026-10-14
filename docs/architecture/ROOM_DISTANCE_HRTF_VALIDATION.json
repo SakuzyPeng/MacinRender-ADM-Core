@@ -1,0 +1,384 @@
+{
+  "schema": "mradm.room-distance-hrtf-validation",
+  "version": 1,
+  "date": "2026-10-14",
+  "passed": true,
+  "platform": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "scope": "Local macOS validation; no Windows or Linux native execution in this change"
+  },
+  "implementation": {
+    "base_commit": "78ef34a70b4af15151e099dcce6ac350de62c434",
+    "working_tree_change": true,
+    "flows": [
+      "offline rendering",
+      "file streaming",
+      "Scene streaming"
+    ],
+    "direct": "direction and physical radius; delay-aligned six-node interpolation",
+    "early_and_late_hrtf": "fixed collection reference radius 1.5 m",
+    "outside_range": "clamp HRTF only; propagation retains physical distance",
+    "public_c_abi_layout_changed": false,
+    "persistent_hrtf_disk_cache": false,
+    "prepared_resource_budget_bytes": 1073741824,
+    "additional_fix": "Bound HDF5 fractal-heap direct blocks; valid full metadata block in the 1.0 m layer previously read into subsequent file data"
+  },
+  "collection": {
+    "name": "SkinRLC_48k_AllDistances_v1",
+    "manifest_sha256": "90a76fa2673c89a2a384772e08d5e2851198f40e00fbdc01c9df244bccec33e4",
+    "variant": "HRIR_DFEQ100",
+    "radii_m": [
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.75,
+      1.0,
+      1.3,
+      1.5,
+      1.6
+    ],
+    "directions_per_layer": 1850,
+    "total_nodes": 16650,
+    "reference_m": 1.5,
+    "common_eq_sha256": "bfc0636563297ee0790c7aad734d913bf8424631070da48bb986adb566df7e4c",
+    "quality_flags": [
+      {
+        "radius_m": 0.2,
+        "virtual_dvf_points": 157,
+        "inherited_temporal_review_directions": 0,
+        "virtual_boundary_neighbor_spectral_rms_db_p95": 12.996046840862384
+      },
+      {
+        "radius_m": 0.3,
+        "virtual_dvf_points": 37,
+        "inherited_temporal_review_directions": 3,
+        "virtual_boundary_neighbor_spectral_rms_db_p95": 10.555178692016224
+      }
+    ],
+    "sample_modification": "None; source SOFA hashes validated before native preparation"
+  },
+  "node_validation": {
+    "boundary_probe_step_metres": 1e-07,
+    "boundary_threshold_relative_l2": 0.0002,
+    "hrir_bank_bytes": 414212864,
+    "interpolation_guard_frames": 96,
+    "layers": [
+      {
+        "maximum_relative_l2": 1.8676027894553572e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 0.2,
+        "worst_node": 579
+      },
+      {
+        "maximum_relative_l2": 1.8804436522913203e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 0.3,
+        "worst_node": 206
+      },
+      {
+        "maximum_relative_l2": 1.9584057462597718e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 0.4,
+        "worst_node": 1208
+      },
+      {
+        "maximum_relative_l2": 2.1132272133992143e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 0.5,
+        "worst_node": 439
+      },
+      {
+        "maximum_relative_l2": 1.9876962976160682e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 0.75,
+        "worst_node": 915
+      },
+      {
+        "maximum_relative_l2": 2.093367711086345e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 1.0,
+        "worst_node": 506
+      },
+      {
+        "maximum_relative_l2": 2.0086822900397683e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 1.3,
+        "worst_node": 508
+      },
+      {
+        "maximum_relative_l2": 1.912111173450133e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 1.5,
+        "worst_node": 256
+      },
+      {
+        "maximum_relative_l2": 1.7960346455025337e-07,
+        "nodes": 1850,
+        "passed": true,
+        "radius_m": 1.6,
+        "worst_node": 1652
+      }
+    ],
+    "maximum_boundary_relative_l2": 1.1425109154488113e-05,
+    "maximum_relative_l2": 2.1132272133992143e-07,
+    "midpoint_queries": 14800,
+    "output_taps": 1152,
+    "passed": true,
+    "preparation_seconds": 4.081940375,
+    "profile": "release",
+    "query_scan_seconds": 0.728757875,
+    "threshold_relative_l2": 2e-05
+  },
+  "expected_selection_examples": [
+    {
+      "distance_m": 0.1,
+      "lower_m": 0.2,
+      "upper_m": 0.2,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 0.2,
+      "lower_m": 0.2,
+      "upper_m": 0.2,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 0.25,
+      "lower_m": 0.2,
+      "upper_m": 0.3,
+      "upper_weight": 0.5
+    },
+    {
+      "distance_m": 0.3,
+      "lower_m": 0.3,
+      "upper_m": 0.3,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 0.4,
+      "lower_m": 0.4,
+      "upper_m": 0.4,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 0.5,
+      "lower_m": 0.5,
+      "upper_m": 0.5,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 0.625,
+      "lower_m": 0.5,
+      "upper_m": 0.75,
+      "upper_weight": 0.5
+    },
+    {
+      "distance_m": 0.75,
+      "lower_m": 0.75,
+      "upper_m": 0.75,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 0.875,
+      "lower_m": 0.75,
+      "upper_m": 1.0,
+      "upper_weight": 0.5
+    },
+    {
+      "distance_m": 1.0,
+      "lower_m": 1.0,
+      "upper_m": 1.0,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 1.15,
+      "lower_m": 1.0,
+      "upper_m": 1.3,
+      "upper_weight": 0.4999999999999996
+    },
+    {
+      "distance_m": 1.3,
+      "lower_m": 1.3,
+      "upper_m": 1.3,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 1.4,
+      "lower_m": 1.3,
+      "upper_m": 1.5,
+      "upper_weight": 0.49999999999999944
+    },
+    {
+      "distance_m": 1.5,
+      "lower_m": 1.5,
+      "upper_m": 1.5,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 1.55,
+      "lower_m": 1.5,
+      "upper_m": 1.6,
+      "upper_weight": 0.5
+    },
+    {
+      "distance_m": 1.6,
+      "lower_m": 1.6,
+      "upper_m": 1.6,
+      "upper_weight": 0
+    },
+    {
+      "distance_m": 2.0,
+      "lower_m": 1.6,
+      "upper_m": 1.6,
+      "upper_weight": 0
+    }
+  ],
+  "tests": {
+    "ctest_full": {
+      "passed": 80,
+      "failed": 0
+    },
+    "final_integration_after_preparation_memory_cleanup": {
+      "passed": 14,
+      "failed": 0
+    },
+    "final_rust_workspace_tests_passed": true,
+    "processing_allocations": {
+      "exact": 0,
+      "realtime": 0,
+      "coverage": "shared allocation probe includes collection, head-locked paths, motion, room switching and all workers"
+    },
+    "clang_format_clang_tidy_cppcheck": "passed",
+    "cargo_fmt_workspace_all_targets_clippy": "passed",
+    "single_layer_frozen_replay": {
+      "passed": true,
+      "baseline_binary": {
+        "path": "build/rust/cargo/rust_0e004/aarch64-apple-darwin/release/examples/room_replay",
+        "sha256": "bb4ff770576e45bc2c8e3cdd23134e16c6adf59987dbbad578bd548ae5999903",
+        "scope": "Pre-change local Release replay executable"
+      },
+      "prepared_and_all_checkpoint_hashes_identical": true,
+      "pcm": {
+        "samples": 200974,
+        "sha256": "d351653f3dd9437506d1f8f55f32bc17757aec70680fd43c97f6db1f070d10f4"
+      }
+    },
+    "audition_effective_semantic_reports_identical": true,
+    "commands": [
+      "cmake --build --preset debug -j 4",
+      "ctest --preset debug --parallel \"$(sysctl -n hw.ncpu)\" --output-on-failure",
+      "cmake --build --preset debug --target mr_adm_rust_quality",
+      "scripts/quality/check-changed.sh --build-dir build/debug",
+      "ctest --preset debug -R \"^mr_adm_rust_unit_tests$\" --output-on-failure",
+      "ctest --preset debug -R \"(room|scene|c_api|cli|sofa)\" --parallel \"$(sysctl -n hw.ncpu)\" --output-on-failure",
+      "cmake --build --preset release --target mradm mr_adm_room_hrir_check -j 4"
+    ]
+  },
+  "release_audition": {
+    "schema": "mradm.distance-audition",
+    "version": 1,
+    "profile": "release",
+    "sample_rate_hz": 48000,
+    "material_seconds": 14,
+    "seed": 20261014,
+    "timeline": [
+      [
+        0,
+        1,
+        60,
+        1.6,
+        0
+      ],
+      [
+        1,
+        3,
+        60,
+        0.2,
+        3
+      ],
+      [
+        4,
+        3,
+        60,
+        1.6,
+        3
+      ],
+      [
+        7,
+        1,
+        -60,
+        1.6,
+        0
+      ],
+      [
+        8,
+        3,
+        -60,
+        0.2,
+        3
+      ],
+      [
+        11,
+        3,
+        -60,
+        1.6,
+        3
+      ]
+    ],
+    "coordinate_metres_per_unit": 1,
+    "propagation": "same physical distance in both renders",
+    "loudness_normalization": false,
+    "peak_limiter": false,
+    "reference_radius_m": 1.5,
+    "source_sha256": "1d53936c287fe67455b36f11cf57f3b30d8f47a421789ee2ec29716ccaa43e18",
+    "renders": {
+      "multi-distance": {
+        "frames": 739736,
+        "peak": 0.2890998125076294,
+        "rms": 0.014934531206611675,
+        "elapsed_seconds": 4.977690125000663,
+        "maximum_rss_bytes": 659619840,
+        "sha256": "1de58653d58db373dd13116bc0d4d220e61bdf3509de02d81b711ce14e582f30",
+        "final_binary_pcm_identical": true
+      },
+      "fixed-150cm": {
+        "frames": 739736,
+        "peak": 0.2080552875995636,
+        "rms": 0.01275263862945256,
+        "elapsed_seconds": 1.342093167011626,
+        "maximum_rss_bytes": 283443200,
+        "sha256": "3ae1723e9762bd01d0eee7893ea713b394ca56f3099e83036c483b196c86ffaa",
+        "final_binary_pcm_identical": true
+      }
+    },
+    "relative_pcm_difference": 0.4754033088684082,
+    "scope": "Deterministic Release comparison; listening judgement and acoustic accuracy remain separate.",
+    "timing_conditions": "Sequential Release processes after builds and tests; end-to-end time includes resource preparation and output analysis."
+  },
+  "local_outputs": {
+    "directory": "local/validation/hrtf-distance-20261014/audition",
+    "node_report": "local/validation/hrtf-distance-20261014/nodes.json",
+    "inspection": "local/validation/hrtf-distance-20261014/inspection.json"
+  },
+  "release_artifact_sha256": {
+    "build/release/mradm": "9e954f658c13fa33f32fc15fe320f7aa2a6e573fadd67e917dbcbd813ff2c012",
+    "build/release/mr_adm_room_hrir_check": "418b775811d3e98b6de52dfe8b682d44e296e235967ffc9db3375d08c54f1905",
+    "build/release/libmr_adm_render_room.dylib": "c8acfde7a4f8ea3e8007d2588f1a7a295afb62e0978ea6a1f9c777d86d15ac50"
+  },
+  "limits": [
+    "Numerical reconstruction/continuity is not acoustic accuracy or listening certification.",
+    "0.2/0.3 m DVF and inherited tail-review flags remain unchanged.",
+    "End-to-end render timing includes preparation and analysis; this is not an audio-device deadline benchmark."
+  ],
+  "build_note": "Release completed. Local Rust toolchain emitted a non-fatal rust-objcopy/libLLVM stripping warning; optimized executables ran successfully."
+}

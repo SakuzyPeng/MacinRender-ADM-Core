@@ -23,6 +23,8 @@ fn omni() -> HrirData {
     HrirData {
         identity: "ideal-omni-unit-impulse-v1".into(),
         source_sofa_sha256: None,
+        collection: None,
+        source_geometry: None,
         impulses: vec![1.; 12],
         taps: 1,
         directions: vec![
