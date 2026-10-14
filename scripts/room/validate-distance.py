@@ -111,6 +111,8 @@ def main():
                   source_sha256=hashlib.sha256((root / "source.wav").read_bytes()).hexdigest(), renders={})
     for name, hrir in [("multi-distance", collection_path),
                        ("fixed-150cm", collection_path.parent / reference["primary"])]:
+        prepared = json.loads(subprocess.check_output(
+            [str(executable), "room-check", str(root / "room.json"), "--hrir", str(hrir)], text=True))
         command = [str(executable), "render", "-i", str(root / "source.wav"), "-o", str(root / f"{name}.wav"),
                    "--renderer", "room-binaural", "--room", str(root / "room.json"), "--room-hrir", str(hrir),
                    "--room-metres-per-unit", "1", "--output-bit-depth", "f32", "--no-peak-limit", "--interp-ms", "0",
@@ -124,15 +126,34 @@ def main():
         pcm = samples(root / f"{name}.wav")
         if not np.isfinite(pcm).all() or not np.any(pcm):
             raise ValueError("Invalid output PCM")
+        expected_frames = report["material_seconds"] * report["sample_rate_hz"] + prepared["tail_frames"]
+        if len(pcm) != expected_frames:
+            raise ValueError(f"{name}: expected {expected_frames} frames, got {len(pcm)}")
         rss = re.search(r"(\d+)\s+maximum resident set size", result.stderr)
         report["renders"][name] = dict(frames=len(pcm), peak=float(np.max(np.abs(pcm))),
                                        rms=float(np.sqrt(np.mean(pcm.astype(float) ** 2))),
                                        elapsed_seconds=elapsed, maximum_rss_bytes=int(rss[1]) if rss else None,
+                                       hrir_interpolation_guard_frames=prepared["hrir_interpolation_guard_frames"],
+                                       hrir_preprocessing_guard_frames=prepared["hrir_preprocessing_guard_frames"],
                                        sha256=hashlib.sha256((root / f"{name}.wav").read_bytes()).hexdigest())
-    a, b = samples(root / "multi-distance.wav"), samples(root / "fixed-150cm.wav")
-    if a.shape != b.shape:
-        raise ValueError("Comparison outputs have different support")
+    # Both renders use the same room. Only the declared HRIR protection delays
+    # can differ; physical propagation and measured HRIR delays stay intact.
+    guards = {name: render["hrir_interpolation_guard_frames"] + render["hrir_preprocessing_guard_frames"]
+              for name, render in report["renders"].items()}
+    common_guard = max(guards.values())
+    leading = {name: common_guard - guard for name, guard in guards.items()}
+    length = max(render["frames"] + leading[name] for name, render in report["renders"].items())
+    aligned = {}
+    padding = {}
+    for name, render in report["renders"].items():
+        trailing = length - render["frames"] - leading[name]
+        aligned[name] = np.pad(samples(root / f"{name}.wav").astype(np.float64),
+                               ((leading[name], trailing), (0, 0)))
+        padding[name] = dict(leading_frames=leading[name], trailing_frames=trailing)
+    a, b = aligned["multi-distance"], aligned["fixed-150cm"]
     report["relative_pcm_difference"] = float(np.linalg.norm(a - b) / np.linalg.norm(b))
+    report["comparison"] = dict(alignment="declared-hrir-guards", common_hrir_guard_frames=common_guard,
+                                frames=length, zero_padding=padding)
     report["scope"] = "Deterministic Release comparison; listening judgement and acoustic accuracy remain separate."
     (root / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
