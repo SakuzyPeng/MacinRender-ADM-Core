@@ -120,9 +120,10 @@ pub struct PolicyDirectBlock {
     pub user_position_override: u32,
 }
 
-/// The only f32 dB-to-linear conversion of the policy path.
+/// The only f32 dB-to-linear conversion of the policy path. `libm` keeps it identical on
+/// every platform (ADR 0018); the platform `powf` differs by one ulp for some inputs.
 pub fn db_to_gain(db: f32) -> f32 {
-    10f32.powf(db / 20.)
+    libm::powf(10., db / 20.)
 }
 
 /// Scale first, then the dB multiplier, each rounded separately.
@@ -278,12 +279,27 @@ mod tests {
             scale: PolicyValue::some(0.3),
             gain_db: PolicyValue::some(-7.5),
         };
-        let expected = 0.8f32 * 0.3 * 10f32.powf(-7.5 / 20.);
+        let expected = 0.8f32 * 0.3 * db_to_gain(-7.5);
         assert_eq!(apply_gain(&rule, 0.8).to_bits(), expected.to_bits());
         assert_eq!(
             apply_gain(&PolicyGain::default(), -0.0).to_bits(),
             (-0.0f32).to_bits()
         );
+    }
+
+    #[test]
+    fn db_conversion_is_portable() {
+        // Bits of libm 0.2.16 powf; glibc's powf rounds -29.845 dB one ulp lower.
+        for (db, bits) in [
+            (-96f32, 0x3784_F34F_u32),
+            (-29.845, 0x3D03_DBEC),
+            (-0.1, 0x3F7D_11D1),
+            (0., 0x3F80_0000),
+            (3.3, 0x3FBB_289F),
+            (18., 0x40FE_2F5E),
+        ] {
+            assert_eq!(db_to_gain(db).to_bits(), bits, "{db} dB");
+        }
     }
 
     #[test]

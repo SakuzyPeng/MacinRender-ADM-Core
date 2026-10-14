@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 
 #include "adm/semantic_policy.h"
 
@@ -851,15 +852,28 @@ bool verify_template_apply_is_identity() {
 }
 
 // Frozen copy of the C++ policy arithmetic before it moved to Rust (PCM consistency 1.2).
-// The shared transforms must reproduce it bit for bit, including the dB conversion.
+// The shared transforms must reproduce it bit for bit. The one intended change is the dB
+// conversion: ADR 0018 replaces the platform powf with libm's, whose bits are listed here.
 namespace original {
+
+float db_to_gain(float db) {
+    constexpr std::array<std::pair<float, std::uint32_t>, 7> portable{{{-96.0F, 0x3784F34FU},
+                                                                       {-29.845F, 0x3D03DBECU},
+                                                                       {-20.5F, 0x3DC157FBU},
+                                                                       {-0.1F, 0x3F7D11D1U},
+                                                                       {0.0F, 0x3F800000U},
+                                                                       {3.3F, 0x3FBB289FU},
+                                                                       {18.0F, 0x40FE2F5EU}}};
+    const auto* found = std::ranges::find(portable, db, &std::pair<float, std::uint32_t>::first);
+    return found != portable.end() ? std::bit_cast<float>(found->second) : std::nanf("");
+}
 
 float gain(float value, const mradm::GainPolicy& policy) {
     if (policy.scale) {
         value *= *policy.scale;
     }
     if (policy.gain_db) {
-        value *= std::pow(10.0F, *policy.gain_db / 20.0F);
+        value *= db_to_gain(*policy.gain_db);
     }
     return value;
 }
@@ -948,7 +962,8 @@ bool same_block(const mradm::SceneObjectBlock& a, const mradm::SceneObjectBlock&
 bool verify_numeric_matches_original() {
     bool ok = true;
     const std::array<std::optional<float>, 5> scales{std::nullopt, 0.0F, 0.37F, 1.0F, 2.75F};
-    const std::array<std::optional<float>, 7> decibels{std::nullopt, -96.0F, -20.5F, -0.1F, 0.0F, 3.3F, 18.0F};
+    const std::array<std::optional<float>, 8> decibels{
+        std::nullopt, -96.0F, -29.845F, -20.5F, -0.1F, 0.0F, 3.3F, 18.0F};
     std::size_t cases = 0;
     for (const auto& scale : scales) {
         for (const auto& gain_db : decibels) {
@@ -1035,7 +1050,7 @@ bool verify_numeric_matches_original() {
             }
         }
     }
-    ok &= check(cases == 83U, "numeric: every grid case ran");
+    ok &= check(cases == 88U, "numeric: every grid case ran");
     return ok;
 }
 
