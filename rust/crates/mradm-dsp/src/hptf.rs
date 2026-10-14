@@ -155,6 +155,8 @@ pub struct Cascade {
     coefficients: Coefficients,
     channels: usize,
     state: Vec<f64>,
+    // Frames since the last cleanup point; cleanup runs every CHUNK_FRAMES after reset.
+    position: usize,
 }
 impl Cascade {
     pub fn new(channels: usize) -> Result<Self> {
@@ -166,6 +168,7 @@ impl Cascade {
             coefficients: Coefficients::default(),
             channels,
             state: vec![0.0; count],
+            position: 0,
         })
     }
     pub fn channels(&self) -> usize {
@@ -181,6 +184,7 @@ impl Cascade {
     }
     pub fn reset(&mut self) {
         self.state.fill(0.0);
+        self.position = 0;
     }
     fn validate_buffer(&self, length: usize) -> Result<()> {
         if (self.channels == 0 && length != 0)
@@ -197,34 +201,51 @@ impl Cascade {
         self.process_validated(samples);
         Ok(())
     }
-    fn process_validated(&mut self, samples: &mut [f32]) {
-        if samples.is_empty() || self.channels == 0 || self.coefficients.is_bypass() {
+    /// Cleanup points lie on a fixed frame grid from the last reset, so the
+    /// output does not depend on how callers split the stream.
+    fn process_validated(&mut self, mut samples: &mut [f32]) {
+        if self.channels == 0 {
             return;
         }
-        let frames = samples.len() / self.channels;
+        while !samples.is_empty() {
+            let frames = (CHUNK_FRAMES - self.position).min(samples.len() / self.channels);
+            let (head, tail) = samples.split_at_mut(frames * self.channels);
+            if !self.coefficients.is_bypass() {
+                self.filter(head);
+            }
+            self.position += frames;
+            if self.position == CHUNK_FRAMES {
+                self.position = 0;
+                self.cleanup();
+            }
+            samples = tail;
+        }
+    }
+    fn filter(&mut self, samples: &mut [f32]) {
+        let channels = self.channels;
         let preamp = self.coefficients.preamp_gain as f64;
-        for channel in 0..self.channels {
-            let state = &mut self.state[channel * MAX_BANDS * 2..(channel + 1) * MAX_BANDS * 2];
-            for frame in 0..frames {
-                let index = frame * self.channels + channel;
-                let mut x = samples[index] as f64 * preamp;
-                for (s, z) in self.coefficients.sections[..self.coefficients.band_count]
-                    .iter()
-                    .zip(state.as_chunks_mut::<2>().0)
-                {
+        let sections = &self.coefficients.sections[..self.coefficients.band_count];
+        let states = self.state.as_chunks_mut::<{ MAX_BANDS * 2 }>().0;
+        for (channel, state) in states.iter_mut().enumerate() {
+            let state = state.as_chunks_mut::<2>().0;
+            for sample in samples.iter_mut().skip(channel).step_by(channels) {
+                let mut x = *sample as f64 * preamp;
+                for (s, z) in sections.iter().zip(state.iter_mut()) {
                     let y = (s.b0 as f64 * x) + z[0];
                     z[0] = ((s.b1 as f64 * x) - (s.a1 as f64 * y)) + z[1];
                     z[1] = (s.b2 as f64 * x) - (s.a2 as f64 * y);
                     x = y;
                 }
-                samples[index] = x as f32;
+                *sample = x as f32;
             }
         }
-        // Preserve the original block-end recovery/denormal policy. Nonfinite
-        // input may affect this block's output, but cannot poison future blocks.
+    }
+    /// Recovery/denormal policy: nonfinite input may affect output up to the
+    /// next cleanup point, but cannot poison later blocks.
+    fn cleanup(&mut self) {
         if self.state.iter().any(|x| !x.is_finite()) || self.state.iter().all(|x| x.abs() <= 1e-20)
         {
-            self.reset();
+            self.state.fill(0.0);
         }
     }
 }
@@ -328,7 +349,16 @@ impl Processor {
         }
         let channels = self.channels();
         let mut applied = false;
-        for chunk in samples.chunks_mut(CHUNK_FRAMES * channels) {
+        let mut rest = samples;
+        while !rest.is_empty() {
+            // A transition ends exactly at BLEND_FRAMES, independent of call sizes.
+            let limit = if self.blending {
+                CHUNK_FRAMES.min(BLEND_FRAMES - self.blend_pos)
+            } else {
+                CHUNK_FRAMES
+            };
+            let (chunk, tail) = rest.split_at_mut(limit.min(rest.len() / channels) * channels);
+            rest = tail;
             if !self.blending {
                 self.front.process_validated(chunk);
                 continue;

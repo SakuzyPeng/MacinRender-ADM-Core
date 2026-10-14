@@ -62,4 +62,7 @@ std::size_t StereoPeakGuard::pop(std::span<float> output, float volume, bool end
         mradm_dsp_peak_guard_pop(handle_, output.data(), output.size(), volume, ended ? 1U : 0U, &frames, nullptr, 0U));
     return frames;
 }
+void apply_output_volume(std::span<float> pcm, float gain) noexcept {
+    check(mradm_dsp_gain_scale(pcm.data(), pcm.size(), gain, nullptr, 0U));
+}
 } // namespace mradm::realtime
