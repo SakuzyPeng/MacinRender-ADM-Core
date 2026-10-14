@@ -1,6 +1,6 @@
 # Scene 流式渲染的 C++ 数值残留迁移（一期 1.2）
 
-> 对应 [PCM 一致性审计](PCM_CONSISTENCY_AUDIT.md)一期 1.2，规则见 [ADR 0018](../adr/0018-scene-numeric-replay-rules.md)（提议）。
+> 对应 [PCM 一致性审计](PCM_CONSISTENCY_AUDIT.md)一期 1.2，规则见 [ADR 0018](../adr/0018-scene-numeric-replay-rules.md)。
 > 证据在 [`evidence/pcm-consistency-1.2/`](evidence/pcm-consistency-1.2/)。
 
 ## 范围与结果
