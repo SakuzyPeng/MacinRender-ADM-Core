@@ -22,7 +22,15 @@ CASES = [
     ('binaural-point', 'objects-point', ['--renderer', 'saf-binaural', '--output-layout', 'binaural']),
     ('binaural-cloud', 'objects-extent', ['--renderer', 'saf-binaural', '--output-layout', 'binaural', '--binaural-spread-mode', 'cloud']),
     ('binaural-spreader', 'objects-extent-multi', ['--renderer', 'saf-binaural', '--output-layout', 'binaural', '--binaural-spread-mode', 'saf-spreader']),
+    # '{policy}' is replaced by POLICY written to the scratch directory.
+    ('vbap-policy', 'objects-extent', ['--renderer', 'saf', '--output-layout', '5.1.4', '--semantic-policy', '{policy}']),
+    ('binaural-policy-ds', 'directspeakers', ['--renderer', 'saf-binaural', '--output-layout', 'binaural', '--semantic-policy', '{policy}']),
 ]
+# Every numeric policy section, including gain_db where libm and glibc powf differ (PCM consistency 1.2).
+POLICY = {'schema': 'mradm.semantic-policy.v1', 'global': {
+    'gain': {'scale': 0.5, 'gain_db': -4.6}, 'extent': {'scale': 1.5, 'max': 0.6}, 'diffuse': {'scale': 0.5},
+    'divergence': {'range_scale': 0.5}, 'position': {'offset': {'azimuth': 12.5, 'elevation': -4}},
+    'interpolation': {'max_ms': 5}, 'direct_speakers': {'gain': {'gain_db': -1.5}, 'position': {'offset': {'azimuth': 3}}}}}
 
 
 def main():
@@ -36,6 +44,8 @@ def main():
     parser.add_argument('--candidate-runtime', type=Path, help='directory of shared libraries for the new CLI')
     parser.add_argument('--pcm-tool', type=Path, help='Release mr_adm_pcm_bits; records canonical PCM hashes')
     parser.add_argument('--require-identical-pcm', action='store_true')
+    parser.add_argument('--case', action='append', choices=[case for case, _, _ in CASES],
+                        help='measure only these cases (default: all)')
     args = parser.parse_args()
     if args.repeats < 3:
         parser.error('at least three measured repetitions are required')
@@ -47,7 +57,7 @@ def main():
     result = {'platform': platform.platform(), 'machine': platform.machine(), 'repeats': args.repeats,
               'binaries': {name: hashlib.sha256(path.read_bytes()).hexdigest()
                            for name, path in [('legacy', args.legacy), ('candidate', args.candidate)]},
-              'runtime_libraries': {}, 'cases': []}
+              'runtime_libraries': {}, 'policy': POLICY, 'cases': []}
     environments = {}
     launch_prefixes = {}
     for name, directory in [('legacy', args.legacy_runtime), ('candidate', args.candidate_runtime)]:
@@ -68,7 +78,12 @@ def main():
         environments[name] = env
     with tempfile.TemporaryDirectory(prefix='dsp-bench-', dir=args.output.parent) as scratch:
         scratch = Path(scratch)
+        policy = scratch / 'policy.json'
+        policy.write_text(json.dumps(POLICY), encoding='utf-8')
         for case, fixture, options in CASES:
+            if args.case and case not in args.case:
+                continue
+            options = [str(policy.resolve()) if option == '{policy}' else option for option in options]
             samples = {'legacy': [], 'candidate': []}
             pcm_hashes = {}
             for run in range(args.repeats + 1):
@@ -108,7 +123,8 @@ def main():
             if args.require_identical_pcm and pcm_hashes['legacy'] != pcm_hashes['candidate']:
                 raise RuntimeError(f'{case}: optimized PCM differs from baseline')
             row = {'case': case, 'fixture_sha256': hashlib.sha256((args.fixtures / (fixture + '.wav')).read_bytes()).hexdigest(),
-                   'arguments': options, 'runs': samples, 'pcm_sha256': pcm_hashes}
+                   'arguments': [('{policy}' if option == str(policy.resolve()) else option) for option in options],
+                   'runs': samples, 'pcm_sha256': pcm_hashes}
             for name in samples:
                 row[name] = {key: statistics.median(run[key] for run in samples[name]) for key in ['seconds', 'rss_bytes']}
             row['time_ratio'] = row['candidate']['seconds'] / row['legacy']['seconds']

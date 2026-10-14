@@ -129,9 +129,9 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 
 | 路径 | 仍在 C++ 执行的工作 | 性质与归属 | 阶段 |
 | --- | --- | --- | --- |
-| Scene 策略与状态 | `apply_policy_to_state`、共享 `apply_*_override` 的 dB 换算、增益相乘、偏移/钳位、方向乘距离。 | N01/N03/N04；既有平台函数，也有确定性标量运算。策略匹配与数值求值的边界需明确。 | 一期 |
-| Scene VBAP | `gains_for` 中距离下限、发散子源按声道累加，DirectSpeakers/LFE 路由及增益组装。 | N05/S07；底层 panner 和 mixer 在 Rust，系数组装仍有 C++。 | 一期 |
-| Scene Triple Balance | [`configure_generation` 调用 `bed_gains`](../../src/adm_render_triple_balance/live_triple_balance_renderer.cpp#L184)；[`bed.cpp`](../../src/adm_render_triple_balance/bed.cpp#L83) 根据布局路由，并计算分功率系数。 | 确定性系数生成也属于自有数值实现；该适配器不能整体标成“只搬运”。 | 一期 |
+| Scene 策略与状态 | 1.2 后只剩策略 JSON 数值解析（N01）；dB 换算、乘积、偏移/钳位和方向乘距离已迁入 Rust `semantic_policy`，见 [1.2 记录](RUST_SCENE_RESIDUAL_MIGRATION.md)。 | 匹配、过滤和布尔字段留在 C++；dB 已改用 `libm`。极坐标换算仍依赖 `scene_math` 平台函数（N04，1.3）。 | 一期 |
+| Scene VBAP | 1.2 后只剩声道映射和恒为单位增益的 LFE 路由；距离下限、spread 和发散子源累加已迁入 `Panner::source_gains`。channelLock 阈值与发散阈值比较在 `scene_math.cpp`。 | N05/S07；剩余几何与三角函数属于 1.3。 | 一期 |
+| Scene Triple Balance | 1.2 后床系数由 Rust `triple_balance::bed` 生成，C++ 只识别床声道和布局。 | 文件、文件流式和 Scene 共用；系数为精确常数。 | 一期 |
 | Scene 输出 | [`SceneOutputSession::pull`](../../src/adm_engine/scene_output_session.cpp#L230) 在无设备音量且不走立体声保护时逐样本乘音量。 | 确定性单次乘法；仍需纳入 Rust 批量样本处理。 | 一期 |
 | Scene 帧计数 | `SceneStreamEngine` 的输入/输出帧边界有理数累加。 | S06；纯整数运算不是已证实分歧。锁定帧映射规则和测试，不要求仅为换语言而搬走调度计数。 | 一期验收 |
 | 公共路由与布局 | [`direct_speakers_matrix`](../../src/adm_core/direct_speakers_matrix.cpp#L135) 的权重归一化；声道床/布局常量；标签规范化。 | N01；`sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。Scene 实际使用部分随调用链前移。 | 一期或三期 |
@@ -222,6 +222,11 @@ Consistency 运行 38034179850 在 A/B 两种配置下完成三平台诊断采�
 - 独立 C++ 检查点测试在 Debug/Release 通过；clang-format、clang-tidy、cppcheck 和文档链接检查通过。
 
 以上是本机修订验证；修订后的三平台检查点结果需由新的 Consistency 运行确认，不能沿用 38034179850 的记录。
+
+**1.2 状态**：语义策略数值求值、Live VBAP 源增益合成和 Triple Balance 床系数已迁入 Rust（`8a73dc9`、`4d01d0e`、`1ad7641`）；
+策略 dB 换算改用 `libm::powf`（`d476f1a`）；Scene 回放的策略更新加入 `gain_db`、extent、diffuse 和 divergence（`4bede24`）。
+结构迁移在 Linux x64 上对普通与诊断运行逐文件位相同，`1ad7641` 的三平台 Consistency/CI/Quality 通过。
+验证、性能与剩余项见 [Scene C++ 数值残留迁移](RUST_SCENE_RESIDUAL_MIGRATION.md)；回放变更后的三平台结果以新的 Consistency 运行为准。
 
 相关审计项：N04、N05、N09—N11、N16、N17，以及 N01/N03/S03—S07 中服务于 Scene 的部分和 S02。
 一期对精确一致性的要求适用于锁定输入与配置的矩阵，并不把真实设备的墙钟操作或欠载输出当作相同事件序列。

@@ -149,6 +149,99 @@ fn scene_spatial_first_queries_and_rejections_do_not_allocate() {
 }
 
 #[test]
+fn scene_policy_vbap_sources_and_bed_routing_do_not_allocate() {
+    use mradm_dsp::{
+        semantic_policy::*,
+        triple_balance::{Layout, bed},
+        vbap::{Panner, PannerSource},
+    };
+    let panner = Panner::new(
+        &[
+            30., 0., -30., 0., 0., 0., 110., 0., -110., 0., 45., 45., -45., 45.,
+        ],
+        true,
+    )
+    .unwrap();
+    let sources = [
+        PannerSource {
+            cartesian: 1,
+            position: [0.2, 0.9, 0.3],
+            gain: 0.5,
+            width: 0.4,
+            ..Default::default()
+        },
+        PannerSource {
+            cartesian: 0,
+            position: [-60., 10., 0.2],
+            gain: 0.5,
+            ..Default::default()
+        },
+    ];
+    let mut scratch = [0f32; 7];
+    let mut gains = [0f32; 7];
+    let rule = PolicyObject {
+        diffuse: SECTION_SCALED,
+        extent: SECTION_SCALED,
+        divergence: SECTION_SCALED,
+        position: PolicyPosition {
+            present: 1,
+            has_offset: 1,
+            offset_azimuth: PolicyValue::some(10.),
+            ..Default::default()
+        },
+        interpolation_max_ms: 5,
+        ..Default::default()
+    };
+    let direct = PolicyDirect {
+        gain: PolicyGain {
+            scale: PolicyValue::some(0.5),
+            gain_db: PolicyValue::some(-4.6),
+        },
+        mute: 0,
+        position: rule.position,
+    };
+    let mut block = PolicyBlock {
+        cartesian: 1,
+        position: [0.25, 0.75, 0.125],
+        has_interpolation: 1,
+        interpolation_samples: 4800,
+        ..Default::default()
+    };
+    let mut ds = PolicyDirectBlock {
+        gain: 1.,
+        user_gain_multiplier: 1.,
+        polar: [30., 0., 1.],
+        ..Default::default()
+    };
+    let mut bed_gains = [0f32; 24];
+    COUNT.with(|c| c.set(Some(0)));
+    apply_object(&rule, 48_000, &mut block);
+    apply_direct(&direct, &mut ds);
+    assert!(apply_gain(&direct.gain, 0.8).is_finite());
+    assert!(
+        scene_cartesian(block.position)
+            .iter()
+            .all(|x| x.is_finite())
+    );
+    for (spread, sum) in [(true, true), (false, true)] {
+        panner
+            .source_gains(&sources, spread, sum, &mut scratch, &mut gains)
+            .unwrap();
+    }
+    panner
+        .source_gains(&sources[1..], false, false, &mut scratch, &mut gains)
+        .unwrap();
+    assert!(
+        panner
+            .source_gains(&sources, false, false, &mut scratch, &mut gains)
+            .is_err()
+    );
+    bed::gains(Layout::Room222, 3, true, &mut bed_gains).unwrap();
+    assert!(bed::gains(Layout::Seven, 3, false, &mut bed_gains).is_err());
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+}
+
+#[test]
 fn prepared_ear_post_short_blocks_reset_and_rejections_do_not_allocate() {
     use mradm_dsp::ear_post::{DELAY, FilterBank, Processor, TAPS};
     use std::sync::Arc;

@@ -1,0 +1,404 @@
+{
+  "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "repeats": 5,
+  "binaries": {
+    "legacy": "6f7c1f0e43f16621881824ebf491c4413506983eea750ee250f10a929c897b5c",
+    "candidate": "ab590061b213c5bee99d6adafafa205bed0669da68019568ea1610068c5132d8"
+  },
+  "runtime_libraries": {},
+  "policy": {
+    "schema": "mradm.semantic-policy.v1",
+    "global": {
+      "gain": {
+        "scale": 0.5,
+        "gain_db": -4.6
+      },
+      "extent": {
+        "scale": 1.5,
+        "max": 0.6
+      },
+      "diffuse": {
+        "scale": 0.5
+      },
+      "divergence": {
+        "range_scale": 0.5
+      },
+      "position": {
+        "offset": {
+          "azimuth": 12.5,
+          "elevation": -4
+        }
+      },
+      "interpolation": {
+        "max_ms": 5
+      },
+      "direct_speakers": {
+        "gain": {
+          "gain_db": -1.5
+        },
+        "position": {
+          "offset": {
+            "azimuth": 3
+          }
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case": "ear-extent",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "5.1"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.06041197499962436,
+            "rss_bytes": 13864960
+          },
+          {
+            "seconds": 0.059400113000265264,
+            "rss_bytes": 13922304
+          },
+          {
+            "seconds": 0.060347418000674224,
+            "rss_bytes": 13922304
+          },
+          {
+            "seconds": 0.06215132400029688,
+            "rss_bytes": 13856768
+          },
+          {
+            "seconds": 0.059678616000383045,
+            "rss_bytes": 13914112
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.06037203899995802,
+            "rss_bytes": 13987840
+          },
+          {
+            "seconds": 0.09325357699981396,
+            "rss_bytes": 13979648
+          },
+          {
+            "seconds": 0.06283314499978587,
+            "rss_bytes": 13828096
+          },
+          {
+            "seconds": 0.06294597999931284,
+            "rss_bytes": 13840384
+          },
+          {
+            "seconds": 0.06502484599968739,
+            "rss_bytes": 14196736
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "7d7c0442cdc12492a2bf9d8ecbf0205447282e3f6a6d5df15e544ee61dff330b",
+        "candidate": "7d7c0442cdc12492a2bf9d8ecbf0205447282e3f6a6d5df15e544ee61dff330b"
+      },
+      "legacy": {
+        "seconds": 0.060347418000674224,
+        "rss_bytes": 13914112
+      },
+      "candidate": {
+        "seconds": 0.06294597999931284,
+        "rss_bytes": 13979648
+      },
+      "time_ratio": 1.0430600361163684,
+      "rss_ratio": 1.004710038269061
+    },
+    {
+      "case": "vbap-point",
+      "fixture_sha256": "681bac2db87cffd3143587c06ce910ff304150ce3de31429f1ec0144a0510c56",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "5.1.4"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.06079490499996609,
+            "rss_bytes": 12783616
+          },
+          {
+            "seconds": 0.06264121399999567,
+            "rss_bytes": 12668928
+          },
+          {
+            "seconds": 0.061281328000404756,
+            "rss_bytes": 12775424
+          },
+          {
+            "seconds": 0.06276699600039137,
+            "rss_bytes": 12734464
+          },
+          {
+            "seconds": 0.06176291600058903,
+            "rss_bytes": 12660736
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.060882869999659306,
+            "rss_bytes": 13111296
+          },
+          {
+            "seconds": 0.060371489000317524,
+            "rss_bytes": 12890112
+          },
+          {
+            "seconds": 0.06168044799960626,
+            "rss_bytes": 12914688
+          },
+          {
+            "seconds": 0.06057412199970713,
+            "rss_bytes": 12861440
+          },
+          {
+            "seconds": 0.0616884110004321,
+            "rss_bytes": 12824576
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "07f23badb70162ce86e1774de66f32e4258db3b389645e34831a0e3fa8292ebd",
+        "candidate": "07f23badb70162ce86e1774de66f32e4258db3b389645e34831a0e3fa8292ebd"
+      },
+      "legacy": {
+        "seconds": 0.06176291600058903,
+        "rss_bytes": 12734464
+      },
+      "candidate": {
+        "seconds": 0.060882869999659306,
+        "rss_bytes": 12890112
+      },
+      "time_ratio": 0.9857512232595798,
+      "rss_ratio": 1.0122225796075908
+    },
+    {
+      "case": "binaural-point",
+      "fixture_sha256": "0f6ef3d72a27b7ac3c0d6fdf4115f63b86c002048518f3c71483affb3a3cf58c",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.13582953100012674,
+            "rss_bytes": 35086336
+          },
+          {
+            "seconds": 0.1631314200003544,
+            "rss_bytes": 34947072
+          },
+          {
+            "seconds": 0.16339726699970925,
+            "rss_bytes": 35086336
+          },
+          {
+            "seconds": 0.16153429999940272,
+            "rss_bytes": 35053568
+          },
+          {
+            "seconds": 0.161458149000282,
+            "rss_bytes": 35213312
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.13829837899993436,
+            "rss_bytes": 35151872
+          },
+          {
+            "seconds": 0.1867468700002064,
+            "rss_bytes": 35115008
+          },
+          {
+            "seconds": 0.1610991080005988,
+            "rss_bytes": 35012608
+          },
+          {
+            "seconds": 0.13495234700076253,
+            "rss_bytes": 35192832
+          },
+          {
+            "seconds": 0.11028149899993878,
+            "rss_bytes": 34922496
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "141a39fa602efc5a50b3d8deb6cf7742bf031981d07fec1afeb958814eea0fe0",
+        "candidate": "141a39fa602efc5a50b3d8deb6cf7742bf031981d07fec1afeb958814eea0fe0"
+      },
+      "legacy": {
+        "seconds": 0.16153429999940272,
+        "rss_bytes": 35086336
+      },
+      "candidate": {
+        "seconds": 0.13829837899993436,
+        "rss_bytes": 35115008
+      },
+      "time_ratio": 0.8561548785641546,
+      "rss_ratio": 1.0008171842166707
+    },
+    {
+      "case": "binaural-cloud",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--binaural-spread-mode",
+        "cloud"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.16053777999968588,
+            "rss_bytes": 38375424
+          },
+          {
+            "seconds": 0.19699535900053888,
+            "rss_bytes": 38658048
+          },
+          {
+            "seconds": 0.2668180590007978,
+            "rss_bytes": 38494208
+          },
+          {
+            "seconds": 0.21198411400018813,
+            "rss_bytes": 38498304
+          },
+          {
+            "seconds": 0.24560184300025867,
+            "rss_bytes": 38432768
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.2127973579999889,
+            "rss_bytes": 38694912
+          },
+          {
+            "seconds": 0.2645034269999087,
+            "rss_bytes": 38457344
+          },
+          {
+            "seconds": 0.18871699800001807,
+            "rss_bytes": 38494208
+          },
+          {
+            "seconds": 0.2368556000001263,
+            "rss_bytes": 38334464
+          },
+          {
+            "seconds": 0.1881866430003356,
+            "rss_bytes": 38707200
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "3ff3af9fbf9e4f25bcdded021865deb3ca8c469cac449669135cea1ac97d17c3",
+        "candidate": "3ff3af9fbf9e4f25bcdded021865deb3ca8c469cac449669135cea1ac97d17c3"
+      },
+      "legacy": {
+        "seconds": 0.21198411400018813,
+        "rss_bytes": 38494208
+      },
+      "candidate": {
+        "seconds": 0.2127973579999889,
+        "rss_bytes": 38494208
+      },
+      "time_ratio": 1.0038363440752927,
+      "rss_ratio": 1.0
+    },
+    {
+      "case": "binaural-spreader",
+      "fixture_sha256": "a9c694d90e33864e00b762d6468f79623c1fb7856f0ba3b1658e752f5e24a59f",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--binaural-spread-mode",
+        "saf-spreader"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.3650105780006925,
+            "rss_bytes": 41967616
+          },
+          {
+            "seconds": 0.3723627169993051,
+            "rss_bytes": 42098688
+          },
+          {
+            "seconds": 0.5681654009995327,
+            "rss_bytes": 42020864
+          },
+          {
+            "seconds": 0.4683368289997816,
+            "rss_bytes": 42119168
+          },
+          {
+            "seconds": 0.4192779459999656,
+            "rss_bytes": 42061824
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.5469728610005404,
+            "rss_bytes": 42180608
+          },
+          {
+            "seconds": 0.36268654100058484,
+            "rss_bytes": 42373120
+          },
+          {
+            "seconds": 0.3890849810004511,
+            "rss_bytes": 42143744
+          },
+          {
+            "seconds": 0.5563925890000974,
+            "rss_bytes": 42221568
+          },
+          {
+            "seconds": 0.4910190310001781,
+            "rss_bytes": 42094592
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "821014d3ca1d28cb461bd50913a4b37d9978e366bce0721d480d0cbbb8777df5",
+        "candidate": "821014d3ca1d28cb461bd50913a4b37d9978e366bce0721d480d0cbbb8777df5"
+      },
+      "legacy": {
+        "seconds": 0.4192779459999656,
+        "rss_bytes": 42061824
+      },
+      "candidate": {
+        "seconds": 0.4910190310001781,
+        "rss_bytes": 42180608
+      },
+      "time_ratio": 1.1711062689670264,
+      "rss_ratio": 1.00282403349888
+    }
+  ]
+}
