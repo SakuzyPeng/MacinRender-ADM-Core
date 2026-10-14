@@ -1,0 +1,28 @@
+{
+  "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+  "reference": "glibc std (Rust f64::powf/cos/sin/log10/asin, Complex64::norm -> hypot, f32::exp) at 528a0d5",
+  "candidate": "libm 0.2.16 at 877a383",
+  "hptf_design": {
+    "profiles": 20000,
+    "generator": "xorshift64 seed 0x9E3779B97F4A7C15; 1-10 enabled bands; all seven kinds; Fc log-uniform 20 Hz-20 kHz; gain +-15 dB; Q 0.3-5; preamp 0 to -10 dB; rates 44100/48000/96000 cycled; auto trim on even cases",
+    "errors": 0,
+    "error_status_changes": 0,
+    "profiles_differing": 111,
+    "fields_differing": {
+      "biquad_coefficients": 0,
+      "preamp_gain": 0,
+      "auto_trim_db": 0,
+      "max_response_db": 111
+    },
+    "max_ulp": {
+      "max_response_db": 5
+    }
+  },
+  "peak_guard_release": {
+    "rates": "1..=768000",
+    "exp_differs": 9209,
+    "release_differs": 9208,
+    "max_exp_ulp": 1,
+    "standard_rates_differing": []
+  }
+}

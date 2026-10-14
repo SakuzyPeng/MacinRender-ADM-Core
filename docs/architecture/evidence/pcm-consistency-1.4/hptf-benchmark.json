@@ -1,0 +1,111 @@
+{
+  "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "method": "Release cargo test binary pinned with taskset to one CPU, baseline and candidate alternating for 8 rounds. Each round reports the median of 21 repeats: design() of a fixed 10-band profile at 48 kHz with auto trim (200 calls averaged), and Processor::process over 20 s of 48 kHz stereo in 511-frame calls.",
+  "baseline": {
+    "commit": "528a0d5",
+    "note": "HpTF and peak guard sources identical to 0ef1a01"
+  },
+  "candidate": {
+    "commit": "5c0edf1"
+  },
+  "binaries": {
+    "baseline": "dd32d18761b178264b971afd118856829eed44545e318ce338212af38e9edff3",
+    "candidate": "7657c015c13393114663ee463ee9d448a7393e93c2f4f2f719412797193f82f4"
+  },
+  "rounds": [
+    {
+      "build": "baseline",
+      "design_us_median": 140.3,
+      "process_20s_ms_median": 78.18
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 160.2,
+      "process_20s_ms_median": 81.25
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 146.8,
+      "process_20s_ms_median": 88.29
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 163.7,
+      "process_20s_ms_median": 88.63
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 145.7,
+      "process_20s_ms_median": 79.49
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 176.9,
+      "process_20s_ms_median": 92.72
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 168.4,
+      "process_20s_ms_median": 89.67
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 166.7,
+      "process_20s_ms_median": 83.3
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 143.8,
+      "process_20s_ms_median": 81.16
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 167.1,
+      "process_20s_ms_median": 86.46
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 141.5,
+      "process_20s_ms_median": 78.48
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 159.1,
+      "process_20s_ms_median": 78.47
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 145.2,
+      "process_20s_ms_median": 79.39
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 165.0,
+      "process_20s_ms_median": 81.7
+    },
+    {
+      "build": "baseline",
+      "design_us_median": 144.2,
+      "process_20s_ms_median": 75.39
+    },
+    {
+      "build": "candidate",
+      "design_us_median": 170.7,
+      "process_20s_ms_median": 82.46
+    }
+  ],
+  "summary": {
+    "design_us_median": {
+      "baseline": 144.7,
+      "candidate": 165.85,
+      "ratio": 1.146
+    },
+    "process_20s_ms_median": {
+      "baseline": 79.44,
+      "candidate": 82.88,
+      "ratio": 1.043
+    }
+  },
+  "source": "use mradm_dsp::hptf::{Band, BandKind, PreampMode, Processor, Snapshot, design};\nuse std::time::Instant;\n\nfn profile() -> Vec<Band> {\n    let kinds = [\n        BandKind::LowShelf,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::Peaking,\n        BandKind::HighShelf,\n    ];\n    let f = [\n        105., 46., 180., 420., 900., 1700., 3100., 5200., 7800., 10000.,\n    ];\n    let g = [9.7, -9.2, 2.1, -1.8, 3.3, -4.4, 5.0, -2.9, 1.7, -2.2];\n    let q = [0.7, 0.37, 1.1, 0.9, 1.6, 2.2, 3.1, 2.4, 1.3, 0.7];\n    (0..10)\n        .map(|i| Band {\n            kind: kinds[i],\n            enabled: true,\n            frequency: f[i],\n            gain_db: g[i],\n            q: q[i],\n        })\n        .collect()\n}\n\n#[test]\nfn zz_bench() {\n    let bands = profile();\n    let mut design_us = Vec::new();\n    let mut process_ms = Vec::new();\n    for _ in 0..21 {\n        let start = Instant::now();\n        for _ in 0..200 {\n            std::hint::black_box(design(&bands, -6.0, 48000, PreampMode::AutoTrim).unwrap());\n        }\n        design_us.push(start.elapsed().as_secs_f64() * 1e6 / 200.0);\n        let c = design(&bands, -6.0, 48000, PreampMode::AutoTrim).unwrap();\n        let mut p = Processor::new(2, 48000).unwrap();\n        p.reset(Some(Snapshot {\n            coefficients: c,\n            revision: 1,\n        }))\n        .unwrap();\n        let mut pcm: Vec<f32> = (0..48000 * 20 * 2)\n            .map(|i| ((i as f32) * 0.001).sin() * 0.3)\n            .collect();\n        let start = Instant::now();\n        for block in pcm.chunks_mut(511 * 2) {\n            p.process(block, None).unwrap();\n        }\n        process_ms.push(start.elapsed().as_secs_f64() * 1e3);\n        std::hint::black_box(&pcm);\n    }\n    design_us.sort_by(f64::total_cmp);\n    process_ms.sort_by(f64::total_cmp);\n    println!(\n        \"BENCH design_us_median {:.1} process_20s_ms_median {:.2}\",\n        design_us[10], process_ms[10]\n    );\n}\n"
+}

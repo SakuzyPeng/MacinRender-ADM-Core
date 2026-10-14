@@ -15,6 +15,12 @@
     },
     {
       "kind": "kernel",
+      "pattern": "hptf-*",
+      "reason": "HpTF band design, cascade response and auto trim use the libm port; identical on all platforms since PCM consistency 1.4",
+      "reference": "docs/architecture/RUST_SCENE_OUTPUT_DSP.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
