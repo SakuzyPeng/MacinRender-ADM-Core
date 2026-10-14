@@ -366,6 +366,8 @@ int32_t mradm_dsp_panner_create(
     const float* directions, size_t length, int32_t is_3d, void** output, char* message, size_t capacity);
 void mradm_dsp_panner_destroy(void* handle);
 // One live VBAP point source: x/y/z when cartesian != 0, otherwise azimuth/elevation/distance.
+// Fields are consumed by the Rust panner across this private boundary.
+// cppcheck-suppress-begin unusedStructMember
 typedef struct MradmPannerSource {
     uint32_t cartesian;
     float position[3];
@@ -374,6 +376,7 @@ typedef struct MradmPannerSource {
     float height;
     float depth;
 } MradmPannerSource;
+// cppcheck-suppress-end unusedStructMember
 int32_t mradm_dsp_panner_sources(const void* handle,
                                  const MradmPannerSource* sources,
                                  size_t count,
