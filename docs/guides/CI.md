@@ -84,9 +84,9 @@ config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；�
 160 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM 与 spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
 `scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA 内核及全部 188 个 PCM 用例）必须三平台逐位相同；
-新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。9 个内核模式展开为 150 个
-文件，其余 10 个为观察项（EAR 布局、Scene、HpTF 和平台 libm f64 twiddle）；目前只有 f64
-twiddle 观察列存在差异。`compare` job 先写出全部四份报告，再按门禁结果失败。
+新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。10 个内核模式展开为 151 个
+文件，其余 9 个为观察项（EAR 布局、Scene、HpTF）。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
+f64 twiddle 列三平台相同并设为门禁；全部 160 个内核文件目前三平台相同。`compare` job 先写出全部四份报告，再按门禁结果失败。
 SOFA 必须开启；三份仓库内固定文件受 SHA-256 校验，覆盖解析、HRTF 准备、离线与实时输出，见
 [外部 SOFA 一致性检查](../architecture/RUST_SOFA_CONSISTENCY.md)。未设置本机数据集环境变量不会跳过这些检查。
 SAF VBAP Scene 流式渲染另覆盖 22.2（`9+10+3`，24 声道）：48/96 kHz、固定/碎片分块，各含正常与 seek 后短尾

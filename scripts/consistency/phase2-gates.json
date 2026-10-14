@@ -9,6 +9,12 @@
     },
     {
       "kind": "kernel",
+      "pattern": "fft-twiddles.10-libm.f64",
+      "reason": "f64 twiddle cos/sin from the libm port in both vendored FFT crates; identical on all platforms since PCM consistency 1.3",
+      "reference": "docs/architecture/RUST_SCENE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
