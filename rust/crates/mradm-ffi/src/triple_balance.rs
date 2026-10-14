@@ -2,7 +2,7 @@
 use crate::boundary;
 use mradm_dsp::{
     Error, Result, pcm_mix,
-    triple_balance::{Event, Layout, Position, d_mode, panner, processor, session},
+    triple_balance::{Event, Layout, Position, bed, d_mode, panner, processor, session},
 };
 use std::{ptr, slice, sync::Arc};
 fn invalid() -> Error {
@@ -203,6 +203,22 @@ pub unsafe extern "C" fn mradm_dsp_tb_gains(
             out[i * 24..(i + 1) * 24].copy_from_slice(&evaluate(v, layout)?);
         }
         Ok(())
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_bed_gains(
+    layout: u32,
+    index: u32,
+    split_lfe: u32,
+    out: *mut f32,
+    len: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        let layout = Layout::from_code(layout)?;
+        let split_lfe = flag(split_lfe)?;
+        bed::gains(layout, index as usize, split_lfe, output(out, len)?)
     })
 }
 #[repr(C)]
