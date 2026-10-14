@@ -127,6 +127,8 @@ int mradm_dsp_gain_reset(void* handle, char* message, size_t capacity);
 int mradm_dsp_gain_set_targets(void* handle, const float* targets, size_t length, char* message, size_t capacity);
 // mode 0 fills gain envelopes, mode 1 multiplies PCM in place.
 int mradm_dsp_gain_process(void* handle, float* data, size_t length, uint32_t mode, char* message, size_t capacity);
+// Multiplies PCM in place by a constant finite volume.
+int mradm_dsp_gain_scale(float* data, size_t length, float gain, char* message, size_t capacity);
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmDspPeakStatus {
     size_t lookahead, buffered, writable, readable;
