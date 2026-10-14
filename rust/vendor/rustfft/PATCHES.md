@@ -38,3 +38,11 @@ The separate dispatch patch changes `src/plan.rs` and the two Cargo manifests:
 the feature preserves scalar-default semantics while exposing explicit native
 planning. Upstream SIMD implementations are unmodified. A replacement must retain
 both the scalar bit comparisons and explicit per-session policy isolation.
+
+## Portable twiddles (ADR 0018)
+
+`src/twiddles.rs` `compute_twiddle` takes the f64 cosine and sine from the pure-Rust `libm` 0.2.16 port instead of the
+platform C library; the angle expression and the conversion to the FFT precision are unchanged. Both manifests add the
+`libm` dependency. Every planner, Bluestein and Rader path obtains its twiddles through this function, so f32 and f64
+FFT twiddles are identical on all platforms. The vendored RealFFT applies the same change to its post-processing
+twiddles.

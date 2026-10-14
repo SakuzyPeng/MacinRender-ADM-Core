@@ -5,7 +5,8 @@
     "src/algorithm/radix4.rs",
     "Cargo.toml",
     "Cargo.toml.orig",
-    "src/plan.rs"
+    "src/plan.rs",
+    "src/twiddles.rs"
   ],
   "added_files": [
     "src/algorithm/radix4_columns.rs",
@@ -81,7 +82,6 @@
     "src/sse/sse_utils.rs": "7ba9e69e638d0b1dfa8501c28cbd78387b6a659e9c52411952b8e124f269268a",
     "src/sse/sse_vector.rs": "9d59529336338ff056b224040131f8cfe13f3285a21ca50cc20562c395ba00ae",
     "src/test_utils.rs": "50e3b6d646265b034daad888844782547befa820cd619951bce04e04b862c40d",
-    "src/twiddles.rs": "0f99bfa8cb31952ea1f3c9b326b18f7719b53d1fdccf07a15960f8aaa1b0f3b3",
     "src/wasm_simd/mod.rs": "39fd3216f3e1251e0c5afeefdc1fdd513d713f8f4e3d730be56cbfb9dcbfc34b",
     "src/wasm_simd/wasm_simd_butterflies.rs": "44e73dbd3da68e5c523bf4b8833185b0ab094530c4879c90019ea3b356af57c3",
     "src/wasm_simd/wasm_simd_common.rs": "b2992ab80d91cc470279cf74d954c8b8fb449199d2aedd10b57097ae20a837cd",

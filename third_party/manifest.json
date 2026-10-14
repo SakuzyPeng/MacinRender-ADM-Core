@@ -1088,7 +1088,7 @@
           "NOTICE.txt"
         ]
       },
-      "notes": "上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。"
+      "notes": "上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。3.5.0 本地补丁（rust/vendor/realfft/PATCHES.md）：后处理 twiddle 的 f64 cos/sin 改用 libm 可移植实现（ADR 0018）。"
     },
     {
       "name": "rust-rustfft-6.4.1",
@@ -1108,7 +1108,7 @@
           "LICENSE-MIT"
         ]
       },
-      "notes": "6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭。"
+      "notes": "6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭；twiddle 的 f64 cos/sin 改用 libm 可移植实现（ADR 0018）。"
     },
     {
       "name": "rust-ryu-1.0.23",

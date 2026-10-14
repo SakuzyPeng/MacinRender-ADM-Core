@@ -48,15 +48,16 @@ fn signal(size: usize) -> Vec<f32> {
 fn run(out: &Path, fixtures: &Path) {
     fs::create_dir_all(out).unwrap();
     // Every twiddle RustFFT/realfft can build for these lengths: compute_twiddle(k, len) for each
-    // power-of-two len <= 32768 and 0 <= k < len, with the crates' own formula. The scalar FFT is
-    // deterministic given these f32 constants; the f64 values show where libm itself differs.
+    // power-of-two len <= 32768 and 0 <= k < len, with the crates' own formula. Since ADR 0018 both
+    // vendored crates take cos/sin from the libm port, so the f64 values no longer depend on the
+    // platform C library; the scalar FFT is deterministic given the f32 constants.
     let mut twiddle_f64 = Vec::new();
     let mut twiddle_f32 = Vec::new();
     for len in (1..=15).map(|p| 1usize << p) {
         let constant = -2f64 * std::f64::consts::PI / len as f64;
         for k in 0..len {
             let angle = constant * k as f64;
-            let (re, im) = (angle.cos(), angle.sin());
+            let (re, im) = (libm::cos(angle), libm::sin(angle));
             twiddle_f64.extend([re, im]);
             twiddle_f32.extend([re as f32, im as f32]);
         }

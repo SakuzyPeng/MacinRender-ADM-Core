@@ -35,6 +35,7 @@ wasm_simd = []
 
 
 [dependencies]
+libm = "=0.2.16"
 num-complex = "0.4"
 num-traits = "0.2"
 num-integer = "^0.1.40"

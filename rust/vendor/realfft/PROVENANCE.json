@@ -1,0 +1,27 @@
+{
+  "upstream": "https://crates.io/crates/realfft/3.5.0",
+  "archive_sha256": "f821338fddb99d089116342c46e9f1fbf3828dba077674613e734e01d6ea8677",
+  "upstream_vcs_sha1": "d0d4eee0525fd27c96c8a046d6d107acd5ed84a6",
+  "modified_files": [
+    "src/lib.rs",
+    "Cargo.toml",
+    "Cargo.toml.orig"
+  ],
+  "added_files": [
+    "PATCHES.md",
+    "PROVENANCE.json"
+  ],
+  "omitted": [
+    ".github/",
+    ".cargo_vcs_info.json",
+    ".cargo-ok",
+    "Cargo.lock"
+  ],
+  "unchanged_normalized_sha256": {
+    ".gitignore": "2ebe6cb6f5289849dce5a8a6cdd77e06b1385302c862982f8e181c4782d19214",
+    "README.md": "1e92c54e7fa08298d2a34ea9aa63b85626c47519873a91cd1028f234e1221608",
+    "benches/realfft.rs": "25c6ee293111d25b2abf1ceb25504a1f9e49061bede246d184558b174060aa4d",
+    "examples/concurrency.rs": "b7a4dc1e7308cd53adac5611ac2334d8cd143a253c4983bf73ecb332c7f31191"
+  },
+  "text_normalization": "LF, trailing horizontal whitespace removed, single final newline; no algorithm changes outside modified_files"
+}
