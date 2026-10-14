@@ -864,7 +864,9 @@ float db_to_gain(float db) {
                                                                        {0.0F, 0x3F800000U},
                                                                        {3.3F, 0x3FBB289FU},
                                                                        {18.0F, 0x40FE2F5EU}}};
-    const auto* found = std::ranges::find(portable, db, &std::pair<float, std::uint32_t>::first);
+    // Iterator is a pointer on libc++ and a checked wrapper on MSVC.
+    const auto found = // NOLINT(readability-qualified-auto)
+        std::ranges::find(portable, db, &std::pair<float, std::uint32_t>::first);
     return found != portable.end() ? std::bit_cast<float>(found->second) : std::nanf("");
 }
 
