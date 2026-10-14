@@ -373,3 +373,33 @@ Release 单声源微基准使用八个头姿的完整响应，按实际结构支
 连续头姿，共 2,814 次调用）复测，超过 10.667 ms 预算的调用为 macOS 16 次、Windows 2,804 次、
 Linux 2,814 次。按声源更新网格消除了上限报错和随偏移数增长的开销，但 32 个声源同时持续运动
 在 Windows 和 Linux 上仍不满足实时预算，macOS 也没有做到零超时。
+
+## macOS worker parking 冷启动分配（2026-10-14）
+
+macOS CI 的 `mr_adm_room_trace_tests` 曾在
+[`4bede24`](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38533580204/job/115750975104) 和
+[`8d260b8`](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38545402660/job/115790082969) 分别记录 3 次、1 次
+处理期间分配，均发生在 `room_no_alloc`；后续成功运行不能证明该间歇问题已经消失。
+本机给原测试加分配栈探针后复跑 100 次未重现这些 CI 事件，因此没有将本机成功率当作根因证据。
+
+独立冷启动回归直接使用 Rayon 1.13.0 的 worker parking 状态，去掉线程调度碰巧提前
+初始化的可能：在 macOS arm64、Rust 1.98.0 上，原构造器的首次等待固定分配两次。
+即使提前使用 mutex，首次等待仍分配一次；诊断栈为
+`std::sys::sync::once_box::OnceBox::initialize` → pthread `Condvar::wait_timeout`，
+该条件变量分配为 48 字节。这确定复现了原 5 ms join 预热无法保证排除的惰性分配路径，
+不是声称已捕获 CI 当时的分配栈。
+
+现在 `rust/vendor/rayon-core` 在 Apple parking 状态构造时，以它自身的 mutex 执行零时长
+条件变量等待，早于工作线程启动；房间邮箱也显式初始化。移除依赖 5 ms 等待的 join
+预热，其余线程启动、调度和 DSP 算术不变。其他平台保留上游 parking 状态的默认构造。
+源码归档、许可证与修改范围见 [Rayon core 补丁](../../rust/vendor/rayon-core/PATCHES.md)。
+
+本机验证：
+
+- `rayon_sleep_no_alloc` 检查 1/2/3/8/32 个冷启动状态的首次等待及两种通知操作：修复前失败，修复后零分配。
+- `room-trace` 下，原 `room_no_alloc` 在 1/2/3/4/8/32 线程配置各复跑 8 次，共 48 次全部通过；仍检查首块、两档质量和房间切换。
+- 普通模式下，21 项房间、9 项档位和 3 项分配/诊断测试通过。
+- Debug CTest 的 `mr_adm_room_tests`、`mr_adm_room_trace_tests`、`mr_adm_room_device_probe_tests` 通过；其中 trace 门禁已加入冷启动回归。
+- Rust 格式、workspace 全目标 clippy、`room-trace` 测试目标 clippy、许可证与 vendored 来源哈希校验通过。
+
+以上为本机正确性与分配检查，不是性能测量；原 macOS CI runner 尚待复跑验证。

@@ -129,7 +129,7 @@
 | `rust-generic-array-0.14.7` @ 0.14.7 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT | 可用 |  |
 | `rust-libc-0.2.190` @ 0.2.190 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
 | `rust-rayon-1.11.0` @ 1.11.0 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
-| `rust-rayon-core-1.13.0` @ 1.13.0 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-rayon-core-1.13.0` @ 1.13.0 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 | 1.13.0 本地补丁（rust/vendor/rayon-core/PATCHES.md）：Apple worker parking 的互斥量与条件变量在构造时初始化，避免首次休眠在房间渲染期间分配；调度与运算不变。 |
 | `rust-sha2-0.10.9` @ 0.10.9 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
 | `rust-version_check-0.9.5` @ 0.9.5 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
 | `rust-paste-1.0.15` @ 1.0.15 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT OR Apache-2.0 | 可用 |  |
