@@ -196,6 +196,21 @@ class EvidenceTests(unittest.TestCase):
                           for partition in ((512,), (1, 7, 127, 511, 1024))})
         self.assertTrue(all(len(row['epochs']) == 2 for row in cases))
 
+    def test_partition_invariance_is_limited_to_absolute_position_renderers(self):
+        rows = {row['id']: row for row in common.scene_cases()}
+        invariant = [row for row in rows.values() if common.partition_invariant(row)]
+        self.assertEqual(len(invariant), 11)
+        for row in invariant:
+            sibling = rows[row['id'][:-len('fixed')] + 'fragmented']
+            self.assertEqual({k: v for k, v in sibling.items() if k not in ('id', 'partition')},
+                             {k: v for k, v in row.items() if k not in ('id', 'partition')})
+            self.assertEqual(row['input_rate'], row['output_rate'])
+        # Binaural convolution, a stereo switch to it, resampling and device DSP stay partition-specific.
+        self.assertFalse(any(row['backend'] == 'binaural' or row['layout'] == '0+2+0' or row['device_dsp']
+                             or row['input_rate'] != row['output_rate'] for row in invariant))
+        self.assertFalse(any(common.partition_invariant(row) for row in rows.values()
+                             if row['id'].endswith('-fragmented')))
+
     def test_sofa_inputs_are_pinned_and_part_of_source_identity(self):
         source = common.ROOT / 'tests/fixtures/sofa'
         common.validate_sofa_fixtures(source)

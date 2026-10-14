@@ -187,6 +187,17 @@ def scene_cases():
     return result
 
 
+
+def partition_invariant(row):
+    """Scene replays whose fixed and fragmented partitions must give identical PCM.
+
+    VBAP and Triple Balance render from absolute sample positions, and an
+    unchanged rate bypasses the resampler. Binaural convolution, a stereo switch
+    to it and fractional resampling ratios depend on block boundaries; their
+    partitions stay separate cases (PCM consistency 1.5)."""
+    return (row['id'].endswith('-fixed') and row['backend'] in ('vbap', 'triple-balance')
+            and row['layout'] != '0+2+0' and row['input_rate'] == row['output_rate'])
+
 FFT_SIZES = (256, 512, 1024, 2048, 4096, 8192, 16384, 32768)
 RESAMPLER_RATES = ((48000, 48000), (48000, 44100), (44100, 48000), (96000, 96000),
                    (48000, 96000), (96000, 48000), (48000, 192000), (192000, 48000))
