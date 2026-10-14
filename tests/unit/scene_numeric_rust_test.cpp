@@ -51,7 +51,7 @@ class SceneNumericChecks {
                     : error <= 2e-6 + (2e-6 * std::abs(double(expected))),
               label);
     }
-    // Extent cloud points are compared as directions. Since ADR 0018 the Rust side uses libm while
+    // Extent cloud points and rotated poles are compared as directions. Since ADR 0018 the Rust side uses libm while
     // the frozen reference keeps the platform library: azimuth is undefined at the poles, and a
     // near-cancelled component is limited by f32 vector rounding, so per-angle tolerances do not
     // apply. 2e-5 degrees is a few f32 ulps of a unit vector.
@@ -382,8 +382,8 @@ class SceneNumericChecks {
                     const float runtime_el = runtime_float(el);
                     const auto a = actual.rotate_az_el(runtime_az, runtime_el);
                     const auto b = old.rotate_az_el(runtime_az, runtime_el);
-                    compare(a.first, b.first, "head pole az");
-                    compare(a.second, b.second, "head pole el");
+                    // Rotated poles: azimuth is undefined at +-90 degrees and +-180 name one direction.
+                    compare_direction(a.first, a.second, b.first, b.second, "head pole direction");
                 }
             }
         }
