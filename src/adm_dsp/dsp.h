@@ -99,6 +99,26 @@ class Panner final {
         return result;
     }
 
+    // Products of each source gain with its panning table; `sum` adds them in source order.
+    [[nodiscard]] std::vector<float>
+    source_gains(std::span<const MradmPannerSource> sources, bool spread, bool sum) const {
+        std::vector<float> scratch(channels_);
+        std::vector<float> result(channels_);
+        std::array<char, 256> error{};
+        check(mradm_dsp_panner_sources(handle_,
+                                       sources.data(),
+                                       sources.size(),
+                                       spread ? 1U : 0U,
+                                       sum ? 1U : 0U,
+                                       scratch.data(),
+                                       result.data(),
+                                       result.size(),
+                                       error.data(),
+                                       error.size()),
+              error.data());
+        return result;
+    }
+
   private:
     void* handle_{nullptr};
     std::size_t channels_;

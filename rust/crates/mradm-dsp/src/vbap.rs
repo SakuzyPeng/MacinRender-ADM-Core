@@ -1,6 +1,6 @@
 //! VBAP and nine-direction MDAP, including the existing +/-90 degree dummy
 //! loudspeakers. Only geometry preparation allocates; gain queries do not.
-use crate::{Error, Result, geometry::*};
+use crate::{Error, Result, geometry::*, scene_math};
 
 pub struct Panner {
     pub real_speakers: usize,
@@ -133,9 +133,157 @@ impl Panner {
     }
 }
 
+/// One point source of a live VBAP element. `position` is x/y/z when `cartesian != 0`,
+/// otherwise azimuth/elevation/distance.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+pub struct PannerSource {
+    pub cartesian: u32,
+    pub position: [f32; 3],
+    pub gain: f32,
+    pub width: f32,
+    pub height: f32,
+    pub depth: f32,
+}
+
+impl Panner {
+    /// Gains of a set of point sources, each the panning table times the source gain.
+    /// `sum` adds the products in source order onto zero (an object and its divergence
+    /// sources); otherwise exactly one source's products are returned. With `spread`, the
+    /// extent widens each source at its distance, floored at 0.4.
+    pub fn source_gains(
+        &self,
+        sources: &[PannerSource],
+        spread: bool,
+        sum: bool,
+        scratch: &mut [f32],
+        output: &mut [f32],
+    ) -> Result<()> {
+        if output.len() != self.real_speakers
+            || scratch.len() != output.len()
+            || !sum && sources.len() != 1
+        {
+            return Err(Error::InvalidArgument("Invalid VBAP source query"));
+        }
+        if sum {
+            output.fill(0.);
+        }
+        for source in sources {
+            let [azimuth, elevation, distance] = if source.cartesian != 0 {
+                scene_math::cartesian_to_polar(source.position)
+            } else {
+                source.position
+            };
+            let width = if spread {
+                let distance = scene_math::max(0.4, distance);
+                scene_math::spread(
+                    [source.width, source.height, source.depth],
+                    distance,
+                    0.,
+                    0.,
+                    true,
+                )
+            } else {
+                0.
+            };
+            self.gains(azimuth, elevation, width, scratch)?;
+            for (out, table) in output.iter_mut().zip(scratch.iter()) {
+                let gain = table * source.gain;
+                if sum {
+                    *out += gain;
+                } else {
+                    *out = gain;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_gains_match_the_former_per_source_composition() {
+        // 7.1.4 without LFE: the composition C++ used to perform per divergence source.
+        let dirs = [
+            30., 0., -30., 0., 0., 0., 90., 0., -90., 0., 135., 0., -135., 0., 45., 45., -45., 45.,
+            135., 45., -135., 45.,
+        ];
+        let p = Panner::new(&dirs, true).unwrap();
+        let sources = [
+            PannerSource {
+                cartesian: 1,
+                position: [-0.4, 0.7, 0.2],
+                gain: 0.5,
+                width: 0.3,
+                height: 0.1,
+                depth: 0.2,
+            },
+            PannerSource {
+                cartesian: 0,
+                position: [-150., 20., 0.1],
+                gain: 0.25,
+                width: 0.5,
+                ..Default::default()
+            },
+            PannerSource {
+                cartesian: 0,
+                position: [72.5, -10., 1.5],
+                gain: 0.25,
+                ..Default::default()
+            },
+        ];
+        let n = p.real_speakers;
+        for spread in [false, true] {
+            let mut expected = vec![0f32; n];
+            let mut table = vec![0f32; n];
+            for s in &sources {
+                let [az, el, d] = if s.cartesian != 0 {
+                    scene_math::cartesian_to_polar(s.position)
+                } else {
+                    s.position
+                };
+                let distance = scene_math::max(0.4, d);
+                let width = if spread {
+                    scene_math::spread([s.width, s.height, s.depth], distance, 0., 0., true)
+                } else {
+                    0.
+                };
+                p.gains(az, el, width, &mut table).unwrap();
+                let products: Vec<f32> = table.iter().map(|t| t * s.gain).collect();
+                for (e, g) in expected.iter_mut().zip(&products) {
+                    *e += g;
+                }
+            }
+            let (mut scratch, mut out) = (vec![0f32; n], vec![7f32; n]);
+            p.source_gains(&sources, spread, true, &mut scratch, &mut out)
+                .unwrap();
+            assert_eq!(
+                out.iter().map(|g| g.to_bits()).collect::<Vec<_>>(),
+                expected.iter().map(|g| g.to_bits()).collect::<Vec<_>>()
+            );
+        }
+        // A single unsummed source keeps the signed products, as DirectSpeakers did.
+        let (mut scratch, mut out) = (vec![0f32; n], vec![0f32; n]);
+        let one = [PannerSource {
+            gain: -1.,
+            ..sources[2]
+        }];
+        p.source_gains(&one, false, false, &mut scratch, &mut out)
+            .unwrap();
+        p.gains(72.5, -10., 0., &mut scratch).unwrap();
+        assert!(
+            out.iter()
+                .zip(&scratch)
+                .all(|(o, t)| o.to_bits() == (t * -1.).to_bits())
+        );
+        assert!(out.iter().any(|g| g.to_bits() == (-0f32).to_bits()));
+        assert!(
+            p.source_gains(&sources, false, false, &mut scratch, &mut out)
+                .is_err()
+        );
+    }
     #[test]
     fn stereo_and_surround_power_and_routing() {
         let p = Panner::new(&[30., 0., -30., 0.], false).unwrap();

@@ -365,6 +365,25 @@ int32_t mradm_dsp_fft_inverse(void* handle,
 int32_t mradm_dsp_panner_create(
     const float* directions, size_t length, int32_t is_3d, void** output, char* message, size_t capacity);
 void mradm_dsp_panner_destroy(void* handle);
+// One live VBAP point source: x/y/z when cartesian != 0, otherwise azimuth/elevation/distance.
+typedef struct MradmPannerSource {
+    uint32_t cartesian;
+    float position[3];
+    float gain;
+    float width;
+    float height;
+    float depth;
+} MradmPannerSource;
+int32_t mradm_dsp_panner_sources(const void* handle,
+                                 const MradmPannerSource* sources,
+                                 size_t count,
+                                 uint32_t spread,
+                                 uint32_t sum,
+                                 float* scratch,
+                                 float* output,
+                                 size_t length,
+                                 char* message,
+                                 size_t capacity);
 int32_t mradm_dsp_panner_gains(const void* handle,
                                float azimuth,
                                float elevation,
