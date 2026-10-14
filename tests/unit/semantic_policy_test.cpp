@@ -1,8 +1,13 @@
+#include <algorithm>
+#include <array>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <span>
 #include <string>
 
 #include "adm/semantic_policy.h"
@@ -845,6 +850,195 @@ bool verify_template_apply_is_identity() {
     return ok;
 }
 
+// Frozen copy of the C++ policy arithmetic before it moved to Rust (PCM consistency 1.2).
+// The shared transforms must reproduce it bit for bit, including the dB conversion.
+namespace original {
+
+float gain(float value, const mradm::GainPolicy& policy) {
+    if (policy.scale) {
+        value *= *policy.scale;
+    }
+    if (policy.gain_db) {
+        value *= std::pow(10.0F, *policy.gain_db / 20.0F);
+    }
+    return value;
+}
+
+bool position_changes(const mradm::PositionPolicy& pos) {
+    const auto nonzero = [](const std::optional<float>& v) { return v.has_value() && (*v > 0.0F || *v < 0.0F); };
+    const bool offset_changes =
+        pos.offset && (nonzero(pos.offset->azimuth) || nonzero(pos.offset->elevation) || nonzero(pos.offset->distance));
+    return pos.azimuth || pos.elevation || pos.distance || pos.lock_azimuth || pos.lock_elevation || offset_changes;
+}
+
+void polar(float& azimuth, float& elevation, float& distance, const mradm::PositionPolicy& pos) {
+    azimuth = pos.azimuth.value_or(azimuth);
+    elevation = pos.elevation.value_or(elevation);
+    distance = pos.distance.value_or(distance);
+    if (pos.offset) {
+        azimuth += pos.offset->azimuth.value_or(0.0F);
+        elevation += pos.offset->elevation.value_or(0.0F);
+        distance += pos.offset->distance.value_or(0.0F);
+    }
+    azimuth = pos.lock_azimuth.value_or(azimuth);
+    elevation = pos.lock_elevation.value_or(elevation);
+    azimuth = mradm::wrap_azimuth(azimuth);
+    elevation = std::clamp(elevation, -90.0F, 90.0F);
+    distance = std::max(0.0F, distance);
+}
+
+void block(mradm::SceneObjectBlock& b, const mradm::SemanticPolicyOverride& policy, uint32_t sample_rate) {
+    if (policy.diffuse) {
+        if (policy.diffuse->enabled == false) {
+            b.diffuse = 0.0F;
+        } else {
+            b.diffuse *= policy.diffuse->scale.value_or(1.0F);
+            b.diffuse = std::clamp(b.diffuse, 0.0F, policy.diffuse->max.value_or(1.0F));
+        }
+    }
+    if (policy.extent) {
+        const float scale = policy.extent->scale.value_or(1.0F);
+        b.width *= scale * policy.extent->width_scale.value_or(1.0F);
+        b.height *= scale * policy.extent->height_scale.value_or(1.0F);
+        b.depth *= scale * policy.extent->depth_scale.value_or(1.0F);
+        const float max_value = policy.extent->max.value_or(1.0F);
+        b.width = std::clamp(b.width, 0.0F, max_value);
+        b.height = std::clamp(b.height, 0.0F, max_value);
+        b.depth = std::clamp(b.depth, 0.0F, max_value);
+    }
+    if (policy.divergence) {
+        b.divergence = std::clamp(b.divergence * policy.divergence->scale.value_or(1.0F), 0.0F, 1.0F);
+        const float range_scale = policy.divergence->range_scale.value_or(1.0F);
+        b.divergence_azimuth_range =
+            std::clamp(b.divergence_azimuth_range * range_scale, 0.0F, policy.divergence->max_range.value_or(120.0F));
+        b.divergence_position_range = std::max(0.0F, b.divergence_position_range * range_scale);
+    }
+    if (policy.position && position_changes(*policy.position)) {
+        auto p = mradm::scene_position_to_polar(b.position);
+        p.cartesian = false;
+        polar(p.azimuth, p.elevation, p.distance, *policy.position);
+        b.position = p;
+    }
+    const uint32_t max_ms = policy.interpolation ? policy.interpolation->max_ms.value_or(0U) : 0U;
+    if (max_ms > 0U && b.interp_length_samples) {
+        b.interp_length_samples =
+            std::min(*b.interp_length_samples, (static_cast<uint64_t>(sample_rate) * max_ms) / 1000U);
+    }
+}
+
+} // namespace original
+
+bool same_bits(float a, float b) {
+    return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
+}
+
+bool same_block(const mradm::SceneObjectBlock& a, const mradm::SceneObjectBlock& b) {
+    const auto& p = a.position;
+    const auto& q = b.position;
+    return p.cartesian == q.cartesian && same_bits(p.azimuth, q.azimuth) && same_bits(p.elevation, q.elevation) &&
+           same_bits(p.distance, q.distance) && same_bits(p.x, q.x) && same_bits(p.y, q.y) && same_bits(p.z, q.z) &&
+           same_bits(a.diffuse, b.diffuse) && same_bits(a.width, b.width) && same_bits(a.height, b.height) &&
+           same_bits(a.depth, b.depth) && same_bits(a.divergence, b.divergence) &&
+           same_bits(a.divergence_azimuth_range, b.divergence_azimuth_range) &&
+           same_bits(a.divergence_position_range, b.divergence_position_range) &&
+           a.interp_length_samples == b.interp_length_samples;
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+bool verify_numeric_matches_original() {
+    bool ok = true;
+    const std::array<std::optional<float>, 5> scales{std::nullopt, 0.0F, 0.37F, 1.0F, 2.75F};
+    const std::array<std::optional<float>, 7> decibels{std::nullopt, -96.0F, -20.5F, -0.1F, 0.0F, 3.3F, 18.0F};
+    std::size_t cases = 0;
+    for (const auto& scale : scales) {
+        for (const auto& gain_db : decibels) {
+            mradm::SemanticPolicyOverride policy;
+            policy.gain = mradm::GainPolicy{scale, gain_db, std::nullopt};
+            mradm::SceneObject object;
+            object.gain = 0.83F;
+            object.user_level.gain_multiplier = 1.2F;
+            mradm::apply_resolved_semantic_object(object, policy);
+            ok &= check(same_bits(object.gain, original::gain(0.83F, *policy.gain)) &&
+                            same_bits(object.user_level.gain_multiplier, original::gain(1.2F, *policy.gain)),
+                        "numeric: object gain matches the original arithmetic");
+
+            mradm::SceneDirectSpeakersBlock ds;
+            ds.gain = 0.61F;
+            mradm::DirectSpeakersPolicy rule;
+            rule.gain = policy.gain;
+            mradm::apply_resolved_semantic_direct_speaker(ds, std::span{&rule, 1U}, {});
+            ok &= check(same_bits(ds.gain, original::gain(0.61F, *policy.gain)) &&
+                            same_bits(ds.user_level.gain_multiplier, original::gain(1.0F, *policy.gain)),
+                        "numeric: DirectSpeakers gain matches the original arithmetic");
+            ++cases;
+        }
+    }
+
+    const std::array<std::optional<float>, 4> offsets{std::nullopt, -0.0F, -47.25F, 361.5F};
+    const std::array<mradm::SceneBlockPosition, 3> positions{
+        mradm::SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, -0.3F, 0.8F, 0.25F},
+        mradm::SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, -0.0F},
+        mradm::SceneBlockPosition{false, -179.5F, 80.0F, 0.6F, 0.0F, 0.0F, 0.0F}};
+    for (const auto& start : positions) {
+        for (const auto& offset : offsets) {
+            for (const auto& absolute : offsets) {
+                mradm::SemanticPolicyOverride policy;
+                mradm::PositionPolicy position;
+                position.azimuth = absolute;
+                position.offset = mradm::PositionPolicy::Offset{offset, offset, offset};
+                if (absolute && *absolute > 300.0F) {
+                    position.lock_elevation = -100.0F;
+                }
+                policy.position = position;
+                // Validated policies reject negative scales and limits; -0.0 passes validation.
+                const auto magnitude = [](std::optional<float> v) { return v && *v < 0.0F ? -*v : v; };
+                policy.diffuse = mradm::DiffusePolicy{std::nullopt, magnitude(absolute), magnitude(offset)};
+                policy.extent =
+                    mradm::ExtentPolicy{std::nullopt, 1.5F, magnitude(offset), 0.3F, magnitude(absolute), 0.9F};
+                policy.divergence = mradm::DivergencePolicy{std::nullopt, magnitude(offset), 1.9F, magnitude(absolute)};
+                policy.interpolation = mradm::InterpolationPolicy{std::nullopt, 7U};
+
+                mradm::SceneObjectBlock block;
+                block.position = start;
+                block.diffuse = 0.7F;
+                block.width = 0.4F;
+                block.height = 0.2F;
+                block.depth = 0.9F;
+                block.divergence = 0.6F;
+                block.divergence_azimuth_range = 70.0F;
+                block.divergence_position_range = 0.35F;
+                block.interp_length_samples = 1000U;
+                auto expected = block;
+                original::block(expected, policy, 44100U);
+                mradm::apply_resolved_semantic_object_block(block, policy, 44100U);
+                ok &= check(same_block(block, expected), "numeric: Objects block matches the original arithmetic");
+
+                mradm::SceneDirectSpeakersBlock ds;
+                ds.azimuth = start.azimuth;
+                ds.elevation = start.elevation;
+                ds.distance = start.distance;
+                mradm::DirectSpeakersPolicy rule;
+                rule.position = position;
+                float az = ds.azimuth;
+                float el = ds.elevation;
+                float dist = ds.distance;
+                const bool moves = original::position_changes(position);
+                if (moves) {
+                    original::polar(az, el, dist, position);
+                }
+                mradm::apply_resolved_semantic_direct_speaker(ds, std::span{&rule, 1U}, {});
+                ok &=
+                    check(ds.has_position == moves && ds.user_position_override == moves && same_bits(ds.azimuth, az) &&
+                              same_bits(ds.elevation, el) && same_bits(ds.distance, dist),
+                          "numeric: DirectSpeakers re-aim matches the original arithmetic");
+                ++cases;
+            }
+        }
+    }
+    ok &= check(cases == 83U, "numeric: every grid case ran");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -862,6 +1056,7 @@ int main() {
     ok &= verify_head_locked();
     ok &= verify_hoa();
     ok &= verify_template_apply_is_identity();
+    ok &= verify_numeric_matches_original();
     if (ok) {
         std::cout << "semantic policy test passed\n";
         return 0;

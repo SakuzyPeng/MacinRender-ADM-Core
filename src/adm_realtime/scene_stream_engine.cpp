@@ -1,6 +1,7 @@
 #include "scene_stream_engine.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -38,7 +39,9 @@
 #include "resampler.h"
 #include "ring_buffer.h"
 #include "room_worker_wait.h"
+#include "scene_math.h"
 #include "scene_transition.h"
+#include "semantic_policy_ffi.h"
 
 namespace mradm::realtime {
 
@@ -594,6 +597,16 @@ struct SceneStreamEngine::Impl {
         resolved_policy = resolve_policy_for_current_generation(current_policy);
     }
 
+    // Effective level (content level times object level) and, for polar results, Cartesian x/y/z.
+    [[nodiscard]] static std::array<float, 4>
+    finish_state(float block_gain, float object_gain, bool polar, std::array<float, 3> position) {
+        const std::array input{block_gain, object_gain, position[0], position[1], position[2]};
+        std::array<float, 4> result{};
+        dsp::scene_check(mradm_dsp_policy_scene_state(
+            input.data(), input.size(), polar ? 1U : 0U, result.data(), polar ? result.size() : 1U));
+        return result;
+    }
+
     // NOLINTNEXTLINE(readability-function-size)
     [[nodiscard]] live_scene::ObjectState apply_policy_to_state(std::size_t element_index,
                                                                 const live_scene::ObjectState& base,
@@ -635,7 +648,12 @@ struct SceneStreamEngine::Impl {
                 }
             }
             apply_resolved_semantic_object_block(block, resolved.object, config.renderer.sample_rate);
-            out.linear_gain = block.gain * object_gain;
+            const auto finished =
+                finish_state(block.gain,
+                             object_gain,
+                             !block.position.cartesian,
+                             {block.position.azimuth, block.position.elevation, block.position.distance});
+            out.linear_gain = finished[0];
             out.diffuse = block.diffuse;
             out.width = block.width;
             out.height = block.height;
@@ -648,10 +666,9 @@ struct SceneStreamEngine::Impl {
             out.screen_reference = block.screen_ref;
             out.head_locked = block.head_locked;
             if (!block.position.cartesian) {
-                const auto direction = direction_vector_from_polar(block.position.azimuth, block.position.elevation);
-                out.x = direction.x * block.position.distance;
-                out.y = direction.y * block.position.distance;
-                out.z = direction.z * block.position.distance;
+                out.x = finished[1];
+                out.y = finished[2];
+                out.z = finished[3];
             } else {
                 out.x = block.position.x;
                 out.y = block.position.y;
@@ -701,13 +718,15 @@ struct SceneStreamEngine::Impl {
         apply_resolved_semantic_direct_speaker(position_probe, resolved.direct_speakers, resolved.object);
         const bool policy_has_position = position_probe.has_position;
         apply_resolved_semantic_direct_speaker(block, resolved.direct_speakers, resolved.object);
-        out.linear_gain = block.gain * object_gain;
+        const bool positioned = block.has_position && (producer_has_position || policy_has_position);
+        const auto finished =
+            finish_state(block.gain, object_gain, positioned, {block.azimuth, block.elevation, block.distance});
+        out.linear_gain = finished[0];
         out.head_locked = block.head_locked;
-        if (block.has_position && (producer_has_position || policy_has_position)) {
-            const auto direction = direction_vector_from_polar(block.azimuth, block.elevation);
-            out.x = direction.x * block.distance;
-            out.y = direction.y * block.distance;
-            out.z = direction.z * block.distance;
+        if (positioned) {
+            out.x = finished[1];
+            out.y = finished[2];
+            out.z = finished[3];
             out.valid_fields |= live_scene::state_position;
         } else {
             out.valid_fields &= ~live_scene::state_position;

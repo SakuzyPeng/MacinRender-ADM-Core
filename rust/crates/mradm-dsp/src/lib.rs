@@ -28,6 +28,7 @@ pub mod rng;
 pub mod room;
 pub mod scene_math;
 pub mod scene_transition;
+pub mod semantic_policy;
 pub mod spreader;
 pub mod triple_balance;
 pub mod vbap;

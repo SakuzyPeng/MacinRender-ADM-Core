@@ -1,10 +1,15 @@
 #include "adm/semantic_policy.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
+#include <exception>
 #include <fstream>
 #include <limits>
+#include <optional>
+#include <span>
 #include <sstream>
 #include <string_view>
 #include <type_traits>
@@ -14,6 +19,8 @@
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
+
+#include "semantic_policy_ffi.h"
 
 namespace mradm {
 namespace {
@@ -782,18 +789,63 @@ matched_rule_names(const SceneObject& object, const ObjectMembership& membership
     return out;
 }
 
+// Policy arithmetic lives in Rust (mradm-dsp `semantic_policy`); these helpers only pack the
+// optional parameters and copy block fields. Booleans and filters stay here.
+void policy_check(int status) noexcept {
+    if (status != 0) {
+        std::terminate();
+    }
+}
+
+[[nodiscard]] MradmPolicyValue policy_value(const std::optional<float>& value) {
+    return {value.has_value() ? 1U : 0U, value.value_or(0.0F)};
+}
+
+[[nodiscard]] MradmPolicyGain policy_gain(const GainPolicy& gain) {
+    return {policy_value(gain.scale), policy_value(gain.gain_db)};
+}
+
+[[nodiscard]] MradmPolicyPosition policy_position(const std::optional<PositionPolicy>& position) {
+    MradmPolicyPosition out{};
+    if (!position) {
+        return out;
+    }
+    out.present = 1U;
+    out.azimuth = policy_value(position->azimuth);
+    out.elevation = policy_value(position->elevation);
+    out.distance = policy_value(position->distance);
+    if (position->offset) {
+        out.has_offset = 1U;
+        out.offset_azimuth = policy_value(position->offset->azimuth);
+        out.offset_elevation = policy_value(position->offset->elevation);
+        out.offset_distance = policy_value(position->offset->distance);
+    }
+    out.lock_azimuth = policy_value(position->lock_azimuth);
+    out.lock_elevation = policy_value(position->lock_elevation);
+    return out;
+}
+
+template <typename Section> [[nodiscard]] std::uint32_t policy_section(const std::optional<Section>& section) {
+    constexpr std::uint32_t disabled = 1U;
+    constexpr std::uint32_t scaled = 2U;
+    if (!section) {
+        return 0U;
+    }
+    return section->enabled.has_value() && !*section->enabled ? disabled : scaled;
+}
+
+void apply_gain_policy(const GainPolicy& gain, std::span<float> values) {
+    const auto rule = policy_gain(gain);
+    policy_check(mradm_dsp_policy_gain(&rule, values.data(), values.size()));
+}
+
 // Object-level (per AudioObject) application: gain + mute. Called once per object.
 void apply_object_override(SceneObject& object, const SemanticPolicyOverride& policy) {
     if (policy.gain) {
-        if (policy.gain->scale.has_value()) {
-            object.gain *= *policy.gain->scale;
-            object.user_level.gain_multiplier *= *policy.gain->scale;
-        }
-        if (policy.gain->gain_db.has_value()) {
-            const float multiplier = std::pow(10.0F, *policy.gain->gain_db / 20.0F);
-            object.gain *= multiplier;
-            object.user_level.gain_multiplier *= multiplier;
-        }
+        std::array values{object.gain, object.user_level.gain_multiplier};
+        apply_gain_policy(*policy.gain, values);
+        object.gain = values[0];
+        object.user_level.gain_multiplier = values[1];
         if (policy.gain->mute.has_value()) {
             object.mute = *policy.gain->mute;
             object.user_level.mute = policy.gain->mute;
@@ -856,12 +908,7 @@ void apply_hoa_gain(SceneHOATracks& pack, const GainPolicy& gain) {
     if (gain.mute.has_value()) {
         pack.mute = *gain.mute;
     }
-    if (gain.scale.has_value()) {
-        pack.gain *= *gain.scale;
-    }
-    if (gain.gain_db.has_value()) {
-        pack.gain *= std::pow(10.0F, *gain.gain_db / 20.0F);
-    }
+    apply_gain_policy(gain, std::span{&pack.gain, 1U});
 }
 
 [[nodiscard]] std::optional<bool> effective_hoa_head_locked(const SceneHOATracks& pack, const SemanticPolicy& policy) {
@@ -875,58 +922,6 @@ void apply_hoa_gain(SceneHOATracks& pack, const GainPolicy& gain) {
         }
     }
     return out;
-}
-
-// True when the position policy would actually change a position: any absolute
-// or lock field, or a non-absent, non-zero offset component. A neutral template's
-// zero-offset position section is therefore inert.
-[[nodiscard]] bool position_changes(const PositionPolicy& pos) {
-    const auto nonzero = [](const std::optional<float>& v) { return v.has_value() && (*v > 0.0F || *v < 0.0F); };
-    const bool offset_changes =
-        pos.offset && (nonzero(pos.offset->azimuth) || nonzero(pos.offset->elevation) || nonzero(pos.offset->distance));
-    return pos.azimuth.has_value() || pos.elevation.has_value() || pos.distance.has_value() ||
-           pos.lock_azimuth.has_value() || pos.lock_elevation.has_value() || offset_changes;
-}
-
-// Shared polar position math: absolute overwrite, then offset add, then lock
-// (wins), then wrap azimuth / clamp elevation / non-negative distance. Mutates
-// az/el/dist in place. Caller guards with position_changes() before invoking.
-void compute_polar_position(float& azimuth, float& elevation, float& distance, const PositionPolicy& pos) {
-    if (pos.azimuth.has_value()) {
-        azimuth = *pos.azimuth;
-    }
-    if (pos.elevation.has_value()) {
-        elevation = *pos.elevation;
-    }
-    if (pos.distance.has_value()) {
-        distance = *pos.distance;
-    }
-    if (pos.offset) {
-        azimuth += pos.offset->azimuth.value_or(0.0F);
-        elevation += pos.offset->elevation.value_or(0.0F);
-        distance += pos.offset->distance.value_or(0.0F);
-    }
-    if (pos.lock_azimuth.has_value()) {
-        azimuth = *pos.lock_azimuth;
-    }
-    if (pos.lock_elevation.has_value()) {
-        elevation = *pos.lock_elevation;
-    }
-    azimuth = wrap_azimuth(azimuth);
-    elevation = std::clamp(elevation, -90.0F, 90.0F);
-    distance = std::max(0.0F, distance);
-}
-
-// Objects block position override. Cartesian positions are converted to polar
-// first; output is always polar. No-op when the policy makes no change.
-void apply_position(SceneObjectBlock& block, const PositionPolicy& pos) {
-    if (!position_changes(pos)) {
-        return;
-    }
-    SceneBlockPosition polar = scene_position_to_polar(block.position);
-    polar.cartesian = false;
-    compute_polar_position(polar.azimuth, polar.elevation, polar.distance, pos);
-    block.position = polar;
 }
 
 // DirectSpeakers block override: filter by speaker_label / lfe (AND), then apply
@@ -943,76 +938,34 @@ void apply_ds_override(SceneDirectSpeakersBlock& ds, const DirectSpeakersPolicy&
     if (policy.head_locked.has_value()) {
         ds.head_locked = *policy.head_locked;
     }
+    MradmPolicyDirect rule{};
     if (policy.gain) {
-        if (policy.gain->mute.value_or(false)) {
-            ds.gain = 0.0F;
-        } else {
-            if (policy.gain->scale.has_value()) {
-                ds.gain *= *policy.gain->scale;
-            }
-            if (policy.gain->gain_db.has_value()) {
-                ds.gain *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
-            }
-        }
+        rule.gain = policy_gain(*policy.gain);
+        rule.mute = policy.gain->mute.value_or(false) ? 1U : 0U;
         if (policy.gain->mute.has_value()) {
             ds.user_level.mute = policy.gain->mute;
         }
-        if (policy.gain->scale.has_value()) {
-            ds.user_level.gain_multiplier *= *policy.gain->scale;
-        }
-        if (policy.gain->gain_db.has_value()) {
-            ds.user_level.gain_multiplier *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
-        }
     }
-    if (policy.position && position_changes(*policy.position)) {
-        ds.user_position_override = true;
-        compute_polar_position(ds.azimuth, ds.elevation, ds.distance, *policy.position);
-        ds.has_position = true;
-    }
+    rule.position = policy_position(policy.position);
+    MradmPolicyDirectBlock block{ds.gain,
+                                 ds.user_level.gain_multiplier,
+                                 ds.has_position ? 1U : 0U,
+                                 {ds.azimuth, ds.elevation, ds.distance},
+                                 ds.user_position_override ? 1U : 0U};
+    policy_check(mradm_dsp_policy_direct(&rule, &block));
+    ds.gain = block.gain;
+    ds.user_level.gain_multiplier = block.user_gain_multiplier;
+    ds.has_position = block.has_position != 0U;
+    ds.azimuth = block.polar[0];
+    ds.elevation = block.polar[1];
+    ds.distance = block.polar[2];
+    ds.user_position_override = block.user_position_override != 0U;
 }
 
 void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& policy, uint32_t sample_rate) {
     if (policy.head_locked.has_value()) {
         block.head_locked = *policy.head_locked;
     }
-    if (policy.diffuse) {
-        if (policy.diffuse->enabled.has_value() && !*policy.diffuse->enabled) {
-            block.diffuse = 0.0F;
-        } else {
-            block.diffuse *= policy.diffuse->scale.value_or(1.0F);
-            block.diffuse = std::clamp(block.diffuse, 0.0F, policy.diffuse->max.value_or(1.0F));
-        }
-    }
-
-    if (policy.extent) {
-        if (policy.extent->enabled.has_value() && !*policy.extent->enabled) {
-            block.width = 0.0F;
-            block.height = 0.0F;
-            block.depth = 0.0F;
-        } else {
-            const float scale = policy.extent->scale.value_or(1.0F);
-            block.width *= scale * policy.extent->width_scale.value_or(1.0F);
-            block.height *= scale * policy.extent->height_scale.value_or(1.0F);
-            block.depth *= scale * policy.extent->depth_scale.value_or(1.0F);
-            const float max_value = policy.extent->max.value_or(1.0F);
-            block.width = std::clamp(block.width, 0.0F, max_value);
-            block.height = std::clamp(block.height, 0.0F, max_value);
-            block.depth = std::clamp(block.depth, 0.0F, max_value);
-        }
-    }
-
-    if (policy.divergence) {
-        if (policy.divergence->enabled.has_value() && !*policy.divergence->enabled) {
-            block.divergence = 0.0F;
-        } else {
-            block.divergence = std::clamp(block.divergence * policy.divergence->scale.value_or(1.0F), 0.0F, 1.0F);
-            const float range_scale = policy.divergence->range_scale.value_or(1.0F);
-            const float max_range = policy.divergence->max_range.value_or(120.0F);
-            block.divergence_azimuth_range = std::clamp(block.divergence_azimuth_range * range_scale, 0.0F, max_range);
-            block.divergence_position_range = std::max(0.0F, block.divergence_position_range * range_scale);
-        }
-    }
-
     if (policy.channel_lock) {
         if (policy.channel_lock->enabled.has_value()) {
             block.channel_lock = *policy.channel_lock->enabled;
@@ -1024,20 +977,71 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
             block.channel_lock_max_distance = policy.channel_lock->max_distance;
         }
     }
-
-    if (policy.position) {
-        apply_position(block, *policy.position);
+    if (policy.interpolation && policy.interpolation->honor_jump_position.has_value() &&
+        !*policy.interpolation->honor_jump_position) {
+        block.jump_position = false;
     }
 
+    MradmPolicyObject rule{};
+    rule.diffuse = policy_section(policy.diffuse);
+    if (policy.diffuse) {
+        rule.diffuse_scale = policy_value(policy.diffuse->scale);
+        rule.diffuse_max = policy_value(policy.diffuse->max);
+    }
+    rule.extent = policy_section(policy.extent);
+    if (policy.extent) {
+        rule.extent_scale = policy_value(policy.extent->scale);
+        rule.width_scale = policy_value(policy.extent->width_scale);
+        rule.height_scale = policy_value(policy.extent->height_scale);
+        rule.depth_scale = policy_value(policy.extent->depth_scale);
+        rule.extent_max = policy_value(policy.extent->max);
+    }
+    rule.divergence = policy_section(policy.divergence);
+    if (policy.divergence) {
+        rule.divergence_scale = policy_value(policy.divergence->scale);
+        rule.divergence_range_scale = policy_value(policy.divergence->range_scale);
+        rule.divergence_max_range = policy_value(policy.divergence->max_range);
+    }
+    rule.position = policy_position(policy.position);
     if (policy.interpolation) {
-        if (policy.interpolation->honor_jump_position.has_value() && !*policy.interpolation->honor_jump_position) {
-            block.jump_position = false;
-        }
-        const uint32_t max_ms = policy.interpolation->max_ms.value_or(0U);
-        if (max_ms > 0U && block.interp_length_samples.has_value()) {
-            const uint64_t max_samples = (static_cast<uint64_t>(sample_rate) * max_ms) / 1000U;
-            block.interp_length_samples = std::min(*block.interp_length_samples, max_samples);
-        }
+        rule.interpolation_max_ms = policy.interpolation->max_ms.value_or(0U);
+    }
+
+    const auto& p = block.position;
+    MradmPolicyBlock numeric{};
+    numeric.cartesian = p.cartesian ? 1U : 0U;
+    numeric.position[0] = p.cartesian ? p.x : p.azimuth;
+    numeric.position[1] = p.cartesian ? p.y : p.elevation;
+    numeric.position[2] = p.cartesian ? p.z : p.distance;
+    numeric.diffuse = block.diffuse;
+    numeric.width = block.width;
+    numeric.height = block.height;
+    numeric.depth = block.depth;
+    numeric.divergence = block.divergence;
+    numeric.divergence_azimuth_range = block.divergence_azimuth_range;
+    numeric.divergence_position_range = block.divergence_position_range;
+    numeric.has_interpolation = block.interp_length_samples.has_value() ? 1U : 0U;
+    numeric.interpolation_samples = block.interp_length_samples.value_or(0U);
+    policy_check(mradm_dsp_policy_object(&rule, sample_rate, &numeric));
+
+    if (p.cartesian && numeric.cartesian == 0U) {
+        // Re-aimed Cartesian blocks become polar, as scene_position_to_polar would build them.
+        block.position = SceneBlockPosition{};
+    }
+    if (numeric.cartesian == 0U) {
+        block.position.azimuth = numeric.position[0];
+        block.position.elevation = numeric.position[1];
+        block.position.distance = numeric.position[2];
+    }
+    block.diffuse = numeric.diffuse;
+    block.width = numeric.width;
+    block.height = numeric.height;
+    block.depth = numeric.depth;
+    block.divergence = numeric.divergence;
+    block.divergence_azimuth_range = numeric.divergence_azimuth_range;
+    block.divergence_position_range = numeric.divergence_position_range;
+    if (block.interp_length_samples.has_value()) {
+        block.interp_length_samples = numeric.interpolation_samples;
     }
 }
 
@@ -1169,7 +1173,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     return Json{{"scale", 1.0F}, {"gain_db", 0.0F}};
 }
 
-// Neutral position = zero offset only (a no-op under apply_position's guard).
+// Neutral position = zero offset only (a no-op under the position-change guard).
 // Absolute / lock keys are intentionally omitted: their mere presence would
 // overwrite the block position.
 [[nodiscard]] Json neutral_position_policy() {
