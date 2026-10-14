@@ -546,6 +546,103 @@ bool test_scene_device_pull_partitioning() {
     return ok;
 }
 
+// Underrun zeros are not media: HpTF and the peak guard advance only with
+// media frames, so output after an underrun matches an uninterrupted run.
+std::vector<float> render_device_underrun(bool starve) {
+    constexpr std::uint32_t k_frames = 12000U;
+    constexpr std::uint32_t k_split = 6000U;
+    SceneStreamConfig config;
+    config.renderer.renderer = mradm::RendererSelection::saf;
+    config.renderer.output_layout = "0+2+0";
+    config.startup_watermark_frames = 1U;
+    config.output_ring_frames = 16384U;
+    auto created = SceneStreamEngine::create(config);
+    require(created);
+    auto stream = std::shared_ptr<SceneStreamEngine>(std::move(*created));
+    auto device = std::make_unique<CaptureDevice>();
+    auto* capture = device.get();
+    auto output = SceneOutputSession::create_with_device(stream, std::move(device), true);
+    require(output);
+    require((*output)->set_hptf(hptf_low_boost(), 1));
+    require((*output)->set_volume(0.875F));
+    require((*output)->begin_epoch(1U, 0));
+    mradm::live_scene::ElementDescriptor element;
+    element.element_id = 1U;
+    require(stream->configure_generation(1U, 1U, std::span{&element, 1U}));
+    std::vector<float> samples(k_frames);
+    std::uint32_t seed = 0x13579BDFU;
+    for (auto& sample : samples) {
+        seed = (seed * 1664525U) + 1013904223U;
+        sample = 3.0F * (static_cast<float>(seed >> 8U) / 8388608.0F - 1.0F);
+    }
+    mradm::live_scene::StateEntry initial;
+    initial.element_id = 1U;
+    initial.state.valid_fields = mradm::live_scene::k_known_state_fields;
+    initial.state.x = -0.5F;
+    initial.state.y = 0.5F;
+    const auto submit = [&](std::uint32_t start, std::uint32_t frames) {
+        ScenePcmPlaneView plane{1U, samples.data() + start, frames, 1U, true};
+        SceneFrameView frame;
+        frame.epoch_id = 1U;
+        frame.generation_id = 1U;
+        frame.media_sample_start = start;
+        frame.duration_samples = frames;
+        frame.flags = mradm::live_scene::frame_state_complete;
+        frame.pcm = std::span{&plane, 1U};
+        frame.initial_states = start == 0U ? std::span{&initial, 1U} : std::span<mradm::live_scene::StateEntry>{};
+        require(stream->submit_frame(frame, std::chrono::seconds(5)));
+        require(stream->wait_idle(std::chrono::seconds(20)));
+    };
+    std::vector<float> media;
+    std::vector<float> callback(512U * 2U);
+    const auto pull = [&] {
+        const auto produced = capture->pull(callback);
+        media.insert(media.end(), callback.begin(), callback.begin() + static_cast<std::ptrdiff_t>(produced * 2U));
+        return produced;
+    };
+    (*output)->play();
+    submit(0U, starve ? k_split : k_frames);
+    if (starve) {
+        // Drain everything the guard may release, then underrun repeatedly.
+        while (pull() == 512U) {}
+        const auto before = (*output)->status().underruns;
+        for (int underrun = 0; underrun < 3; ++underrun) {
+            if (pull() != 0U) {
+                throw std::runtime_error("expected an underrun without media");
+            }
+        }
+        if ((*output)->status().underruns <= before) {
+            throw std::runtime_error("starved pulls did not report an underrun");
+        }
+        submit(k_split, k_frames - k_split);
+    }
+    require(stream->signal_end(1U, k_frames));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (!(*output)->status().ended) {
+        if (pull() == 0U) {
+            if (std::chrono::steady_clock::now() > deadline) {
+                throw std::runtime_error("device EOS timed out");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    if (media.size() != static_cast<std::size_t>(k_frames) * 2U) {
+        throw std::runtime_error("underrun changed the media length");
+    }
+    return media;
+}
+
+bool test_scene_device_underrun_is_not_media() {
+    const auto reference = render_device_underrun(false);
+    const auto starved = render_device_underrun(true);
+    return check(std::ranges::equal(starved,
+                                    reference,
+                                    [](float a, float b) {
+                                        return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
+                                    }),
+                 "device media after an underrun matches an uninterrupted run");
+}
+
 bool test_idle_stream_destruction() {
     std::atomic<bool> valid{true};
     std::vector<std::thread> controllers;
@@ -584,6 +681,7 @@ int main() {
         ok &= test_scene_hptf_unsupported_without_stereo_guard();
         ok &= test_scene_hptf_snapshot_on_epoch();
         ok &= test_scene_device_pull_partitioning();
+        ok &= test_scene_device_underrun_is_not_media();
         ok &= test_idle_stream_destruction();
         return ok ? 0 : 1;
     } catch (const std::exception& error) {
