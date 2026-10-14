@@ -159,14 +159,18 @@ def main():
                 if process == 1:
                     shutil.copyfile(path, out / 'kernels' / path.name)
             shutil.rmtree(directory)
-        # Partition sensitivity is evidence, never an invented partition-invariance promise.
+        # Partition sensitivity is evidence; only partition_invariant cases promise identity.
         for row in scenes:
             name = row['id']
             if name.endswith('-fixed'):
                 for epoch in (1, 2):
                     a = out / 'pcm' / f'{name}-epoch{epoch}.pcmbits'
                     b = out / 'pcm' / f'{name[:-5]}fragmented-epoch{epoch}.pcmbits'
-                    manifest['comparisons'][name + f'-partition-epoch{epoch}'] = common.compare_pcm(a, b)
+                    comparison = common.compare_pcm(a, b)
+                    comparison['required'] = common.partition_invariant(row)
+                    if comparison['required'] and not comparison['identical']:
+                        raise ValueError(f'partition invariance failed: {name} epoch {epoch}')
+                    manifest['comparisons'][name + f'-partition-epoch{epoch}'] = comparison
         if diagnostics:
             for row in offline:
                 if not list((out / 'checkpoints' / row['id'] / 'writer').glob('*.f32')):
