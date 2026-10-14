@@ -138,6 +138,27 @@ fn radial_interpolation_preserves_gain_itd_endpoints_and_cache_identity() {
         )
         .unwrap();
     assert_ne!(near, spectrum);
+    // The outer-layer query is already cached. A second physical distance
+    // beyond it must hit the same entry and leave the caller's face hint alone.
+    let outer = spectrum.clone();
+    let mut hint = usize::MAX;
+    cache
+        .query(bank, 0, [1., 0., 0.], Some(4.), &mut hint, &mut spectrum)
+        .unwrap();
+    assert_eq!(hint, usize::MAX);
+    assert_eq!(outer, spectrum);
+    assert!(
+        cache
+            .query(
+                bank,
+                0,
+                [1., 0., 0.],
+                Some(f64::from_bits(u64::MAX)),
+                &mut hint,
+                &mut spectrum
+            )
+            .is_err()
+    );
     let single = common::fixture();
     cache
         .query(
@@ -189,7 +210,7 @@ fn radial_interpolation_preserves_gain_itd_endpoints_and_cache_identity() {
 }
 
 #[test]
-fn only_direct_changes_and_propagation_gain_and_time_are_applied_once() {
+fn direct_propagation_gain_and_time_are_applied_once() {
     let collection = common::fixture_with_collection(Quality::Exact);
     let fixed = common::fixture();
     let mut work = ResponseWork::new(&collection.room).unwrap();
@@ -201,6 +222,7 @@ fn only_direct_changes_and_propagation_gain_and_time_are_applied_once() {
     work.build(&collection.room, position, &rotation).unwrap();
     reference.build(&fixed.room, position, &rotation).unwrap();
     let taps = collection.room.short_taps;
+    // This fixture's reflection paths exceed the outer (reference) layer.
     assert_eq!(&work.impulse[taps * 2..], &reference.impulse[taps * 2..]);
     assert_ne!(&work.impulse[..taps * 2], &reference.impulse[..taps * 2]);
     let arrival = position.distance / collection.room.profile.speed * 48000.;

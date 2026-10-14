@@ -130,6 +130,8 @@ pub fn position(
 #[derive(Clone, Copy)]
 pub struct Path {
     pub direction: Vec3,
+    /// Complete image-source path length in metres, before time conversion.
+    pub distance: f64,
     pub samples: f64,
     pub gain: f64,
 }
@@ -158,6 +160,7 @@ pub fn path(room: &RoomProfile, source: Position, image: Image) -> Path {
     };
     Path {
         direction,
+        distance,
         samples: distance * f64::from(super::SAMPLE_RATE) / room.speed,
         gain: beam * beam * fade * room.reference_distance / distance,
     }

@@ -52,6 +52,8 @@ impl Collection {
             "radii_m":self.layers.iter().map(|l|l.radius).collect::<Vec<_>>(),
             "reference_radius_m":self.layers[self.reference].radius,
             "direct_interpolation":"delay-aligned-linear-radius",
+            "early_interpolation":"delay-aligned-image-path-radius",
+            "late_interpolation":"fixed-reference-layer",
             "outside_range":"clamp-hrtf-only", "prepared_budget_bytes":MAX_BYTES,
             "layers":self.layers.iter().map(|l|serde_json::json!({
                 "radius_m":l.radius,"provenance":l.quality})).collect::<Vec<_>>(),

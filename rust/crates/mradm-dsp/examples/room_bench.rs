@@ -1,18 +1,19 @@
 //! Release-only room CPU deadline probe. No audio device is involved: missed
 //! deadlines here are DSP misses, not claimed device underruns/latency.
 use mradm_dsp::{
-    Error, Result, geometry,
+    geometry,
     room::{
         BLOCK,
         control::{RoomCommand, RoomDescription, State},
         hrir::HrirBank,
         prepared::PreparedRoom,
         quality::Quality,
-        resources::{HrirData, RoomProfile},
         session::{Instance, PreparedSet, Session},
     },
 };
-use std::{fs, path::Path, sync::Arc, time::Instant};
+use std::{path::Path, sync::Arc, time::Instant};
+#[path = "room_support/assets.rs"]
+mod assets;
 
 #[cfg(feature = "room-profile")]
 #[path = "room_bench/trace.rs"]
@@ -25,13 +26,13 @@ fn process_counters(ticks: Option<f64>) -> (Option<f64>, Option<u64>) {
     #[cfg(target_os = "linux")]
     {
         let cpu = ticks.and_then(|ticks| {
-            let stat = fs::read_to_string("/proc/self/stat").ok()?;
+            let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
             let values: Vec<_> = stat.rsplit_once(')')?.1.split_whitespace().collect();
             let user: u64 = values.get(11)?.parse().ok()?;
             let system: u64 = values.get(12)?.parse().ok()?;
             Some((user + system) as f64 / ticks)
         });
-        let rss = fs::read_to_string("/proc/self/status")
+        let rss = std::fs::read_to_string("/proc/self/status")
             .ok()
             .and_then(|value| {
                 value.lines().find_map(|line| {
@@ -45,25 +46,43 @@ fn process_counters(ticks: Option<f64>) -> (Option<f64>, Option<u64>) {
             });
         (cpu, rss)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        let _ = ticks;
+        let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+        // getrusage initializes the complete platform-defined structure.
+        if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } != 0 {
+            return (None, None);
+        }
+        let usage = unsafe { usage.assume_init() };
+        let seconds = |t: libc::timeval| t.tv_sec as f64 + t.tv_usec as f64 / 1e6;
+        (
+            Some(seconds(usage.ru_utime) + seconds(usage.ru_stime)),
+            u64::try_from(usage.ru_maxrss).ok(),
+        )
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = ticks;
         (None, None)
     }
 }
 
-fn asset(root: &Path, name: &str, expected: usize) -> Result<Vec<u8>> {
-    let value = fs::read(root.join(name)).map_err(|_| Error::Io("Missing asset"))?;
-    if value.len() != expected {
-        return Err(Error::Io("Asset size mismatch"));
-    }
-    Ok(value)
-}
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if cfg!(debug_assertions) {
         return Err("Use Release for performance evidence".into());
     }
     let mut arguments: Vec<_> = std::env::args().collect();
+    let hrir_path = if let Some(index) = arguments.iter().position(|v| v == "--hrir") {
+        let path = arguments
+            .get(index + 1)
+            .ok_or("--hrir needs a resource path")?
+            .clone();
+        arguments.drain(index..index + 2);
+        Some(path)
+    } else {
+        None
+    };
     let quality = if let Some(index) = arguments.iter().position(|v| v == "--quality") {
         let value = arguments
             .get(index + 1)
@@ -77,10 +96,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let scenario = if let Some(index) = arguments.iter().position(|v| v == "--scenario") {
         let value = arguments
             .get(index + 1)
-            .ok_or("--scenario needs all, static, pose, switch or ramps")?
+            .ok_or("--scenario needs all, static, pose, switch, ramps or distance-ramps")?
             .clone();
-        if !["all", "static", "pose", "switch", "ramps"].contains(&value.as_str()) {
-            return Err("--scenario needs all, static, pose, switch or ramps".into());
+        if !["all", "static", "pose", "switch", "ramps", "distance-ramps"].contains(&value.as_str())
+        {
+            return Err(
+                "--scenario needs all, static, pose, switch, ramps or distance-ramps".into(),
+            );
         }
         arguments.drain(index..index + 2);
         value
@@ -109,7 +131,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
     if arguments.len() < 2 || arguments.len() > 6 {
         return Err(
-            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime] [--scenario all|static|pose|switch|ramps]".into(),
+            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime] [--scenario all|static|pose|switch|ramps|distance-ramps] [--hrir SOFA_OR_MANIFEST]".into(),
         );
     }
     let file = Path::new(&arguments[1]);
@@ -130,13 +152,12 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if frames != BLOCK && frames != 2 * BLOCK {
         return Err("FRAMES must be 256 or 512".into());
     }
-    let profile = Arc::new(RoomProfile::parse(&fs::read(file)?, |n, s| {
-        asset(root, n, s)
-    })?);
-    let data = Arc::new(HrirData::parse(
-        &fs::read(root.join(&profile.default_hrir))?,
-        |n, s| asset(root, n, s),
-    )?);
+    let profile = Arc::new(assets::profile(file)?);
+    let selected = hrir_path
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| root.join(&profile.default_hrir));
+    let data = Arc::new(assets::hrir(&selected)?);
     let (length, _, _) = PreparedRoom::required_fft(&profile, &data)?;
     let bank = Arc::new(HrirBank::with_policy(data, length, quality.fft())?);
     let prepared = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
@@ -172,6 +193,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             ("pose", true, false, false),
             ("switch", true, true, false),
             ("ramps", true, false, true),
+            ("distance-ramps", true, false, true),
         ] {
             if scenario != "all" && scenario != name {
                 continue;
@@ -188,10 +210,27 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     (v[2] * 1.4) as f32,
                 ]
             };
+            let radial = |i: usize, block: usize| {
+                let v = geometry::portable_direction(
+                    -60. + 120. * i as f32 / sources.max(1) as f32,
+                    0.,
+                );
+                let phase = ((block + i * 11) % 128) as f64 / 64.;
+                let metres = 0.2 + 1.4 * (1. - (phase - 1.).abs());
+                [
+                    (-v[1] * metres / 1.5) as f32,
+                    (v[0] * metres / 1.5) as f32,
+                    0.,
+                ]
+            };
             let descriptions: Vec<_> = (0..sources)
                 .map(|i| RoomDescription {
                     id: i as u64 + 1,
-                    position: around(i, 0.),
+                    position: if name == "distance-ramps" {
+                        radial(i, 0)
+                    } else {
+                        around(i, 0.)
+                    },
                     ..RoomDescription::default()
                 })
                 .collect();
@@ -242,7 +281,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         duration: frames as u32,
                         changed: 4,
                         state: State {
-                            position: around(i, (block + 1) as f32 * 0.5),
+                            position: if name == "distance-ramps" {
+                                radial(i, block + 1)
+                            } else {
+                                around(i, (block + 1) as f32 * 0.5)
+                            },
                             ..State::default()
                         },
                         ..RoomCommand::default()
@@ -333,6 +376,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "worker_wall_budget_percent":100.*total/(blocks as f64*deadline),
                 "cpu_seconds":cpu,"cpu_audio_budget_percent":cpu.map(|v|100.*v/(blocks as f64*deadline)),
                 "rss_peak_bytes":(rss_peak!=0).then_some(rss_peak),"pose_update_hz":if moving{48000./frames as f64}else{0.},
+                "mean_ms":total*1000./blocks as f64,"p95_ms":elapsed[(blocks*95/100).min(blocks-1)]*1000.,
+                "hrir_hash":prepared.room.hrir.data.identity,"hrir_bank_bytes":prepared.room.hrir.storage_bytes(),
+                "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},
                 "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
                 "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),
                 "algorithm_fifo_frames":BLOCK,"final_phase":session.info().phase,"peak":peak})

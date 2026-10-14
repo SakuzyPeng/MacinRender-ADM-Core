@@ -54,6 +54,10 @@ fn verify_quality(quality: Quality, collection: bool) {
         common::fixture_with_quality(quality)
     };
     let mut profile = (*base.room.profile).clone();
+    if collection {
+        profile.listener[0] = 0.4;
+        profile.minimum_distance = 0.2;
+    }
     profile.late_directions = (0..32)
         .map(|i| base.room.profile.late_directions[i % 6])
         .collect();
@@ -80,7 +84,8 @@ fn verify_quality(quality: Quality, collection: bool) {
         .unwrap(),
     );
     let mut candidate = Some(Box::new(Instance::new(other, 8).unwrap()));
-    let mut session = Session::new(prepared, 1.5, true, false).unwrap();
+    let mut session =
+        Session::new(prepared, if collection { 0.4 } else { 1.5 }, true, false).unwrap();
     let descriptions: Vec<_> = (0..8)
         .map(|id| RoomDescription {
             id,

@@ -60,6 +60,12 @@ def fixture(root):
                     "eq": asset("eq.f64", [1., 0., 0., 0.05], [4], "<f8"),
                     "propagation_phases": asset("phases.f32", phases, [1025, 81], "<f4")})
     write("room.json", room)
+    room["listener"][0] = 0.4
+    room["minimum_distance"] = 0.2
+    room["id"] = "near-wall"
+    write("near.json", room)
+    room["listener"][0] = 3.4
+    room["minimum_distance"] = 0.25
     room["id"] = "second"
     room["dimensions"] = [8, 7, 3.6]
     write("second.json", room)

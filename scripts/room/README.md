@@ -58,7 +58,7 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
 保留幅度和完整响应，支持不同采样率及以样本或秒声明的 `Data.Delay`；保护延迟单独报告。
 不完整几何、无法识别的左右耳、异常数据或不支持的 HDF5 编码会报错，不静默回退到默认 HRIR。
 
-### 多距离 HRTF：房间直达声
+### 多距离 HRTF：房间直达声与早期反射
 
 `--room-hrir`、`room-check --hrir` 和 `adm_room_config_t.hrir_manifest` 也接受
 `mradm.hrtf-collection` v1 的 `distance_index.json`。当前支持 48 kHz、双耳
@@ -73,7 +73,9 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
 
 直达声使用房间约束后的实际米数：相邻距离层线性加权，与球面三角形的方向权重相乘，
 逐耳对齐时延后合成最多六个 HRIR。head-locked 直达声及 extent/divergence 采样点使用同一查询。
-早期反射、晚场解码固定使用合集参考层。离线渲染、文件流式渲染和 Scene 流式渲染共用此实现。
+全部有效早期反射使用镜像声源到听者的完整路径长度选层，到达方向随头姿变换。
+查询半径不采用直达距离，也不采用最后一次反射点到听者的距离。晚场解码固定使用合集参考层。
+离线渲染、文件流式渲染和 Scene 流式渲染共用此实现，加载集合后自动启用，无需新增开关。
 
 HRTF 超出集合范围时保持端点层；传播增益和延时仍只按实际距离计算一次。
 例如 SkinRLC 九层覆盖 0.2–1.6 m，但房间若限制最小距离为 0.25 m，实际最近位置仍是 0.25 m。
@@ -84,7 +86,7 @@ HRTF 超出集合范围时保持端点层；传播增益和延时仍只按实际
 不建立磁盘缓存，处理阶段无文件访问或分配。换房固定当前集合；改变集合须创建新会话。
 同时传入 `--sofa` 时，其文件必须匹配集合参考层。既有单 SOFA 和预处理包继续走原数值路径。
 
-检查 JSON 的 `hrtf_collection` 报告半径、参考层、逐层来源摘要，以及可选的
+检查 JSON 的 `hrtf_collection` 报告半径、参考层、直达／早期反射／晚场查询策略、逐层来源摘要，以及可选的
 `provenance/source_nearfield_quality_report.json`。这些质量记录只用于报告，不触发滤波修改。
 `mr_adm_room_hrir_check distance_index.json` 扫描全部节点、距离中点和层边界，并保留来源标记。
 节点相对 L2 门槛为 `2e-5`，边界两侧 ±1e-7 m 的响应差门槛为 `2e-4`；通过数值检查不等于声学精度或试听认证。
@@ -92,6 +94,24 @@ HRTF 超出集合范围时保持端点层；传播增益和延时仍只按实际
 `validate-distance.py` 使用 Release `mradm` 生成距离移动素材并比较集合与参考层。
 差异计算按 `room-check` 声明的 HRIR 保护延迟对齐，以补零覆盖两份输出的完整尾声；
 原始 WAV 保持不变，真实传播延时及 HRIR 测量时延保留。报告记录原始帧数、保护延迟和比较用的补零帧数。
+
+`validate-reflection-distance.py` 专门比较反射距离选层的修改前后结果：修改渲染逻辑前先运行
+`--stage baseline`，重建 Release 后对同一目录运行 `--stage candidate`。两次使用同一集合、输入和
+近墙房间，仅反射 HRTF 查询策略变化；工具校验资源哈希、有效语义、声明保护延时和完整尾声。
+近墙验证房间的监听点为 `[0.4, 3.0, 1.2]` m，最小距离 0.2 m，负 X 墙各频带吸收率为 0.2，
+其余组件从给定房间克隆；原房间和 HRTF 文件均不修改。
+
+```sh
+python3 scripts/room/validate-reflection-distance.py --stage baseline \
+  --mradm build/release/mradm --room /path/room.json --collection /path/distance_index.json --output /path/new-comparison
+# 修改反射查询并重建 Release，再使用相同参数与目录运行 --stage candidate。
+cmake --build --preset release --target mr_adm_room_reflection_check
+build/release/mr_adm_room_reflection_check /path/new-comparison/room.json /path/distance_index.json
+```
+
+路径检查工具输出非零传播增益反射的阶数、完整距离、到达时间、选层和权重，另计零增益和端点钳制数量。
+精确／实时档位仍遵守既有更新网格、头姿预算、10 ms 淡化及换房契约。缓存使用钳制后的有效 HRTF
+半径，因此同方向且超过最远层的路径可复用响应；传播时间与增益继续保留各自的完整距离。
 
 ### 可选的离线打包工具（开发／兼容用途）
 
@@ -126,6 +146,11 @@ CMake 可用 `MR_ADM_ROOM_PREP_PYTHON` 指定已有环境，避免另外创建�
 新增算法类型需要新的 `kind` 及对应 Rust 实现；不要只修改版本字符串伪装兼容。当前仅
 接受 `hybrid-shoebox-v1` 和 `delay-aligned-v1`。新算法必须实现不可变准备、会话处理、
 确定尾长、reset 与双实例切换契约，并提供各平台相同资源/事件的逐位回归。
+
+性能探针 `room_bench` 新增 `--hrir SOFA_OR_MANIFEST`，支持原生 SOFA、预处理包和距离集合。
+`--scenario distance-ramps` 在 0.2–1.6 m 间做连续径向运动，同时更新头姿；`all` 保留原场景并加入此场景。
+输出包括均值、p95/p99、截止时间超限次数、HRIR 准备字节数。macOS 的 RSS 为进程累计峰值，Linux 为周期采样；
+若需要分别归属每个场景的 RSS，应将各场景放到独立进程。计时排除资源准备，正式性能证据不启用内层 profiling。
 
 ## Linux 性能复测
 
