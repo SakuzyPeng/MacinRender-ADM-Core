@@ -270,6 +270,9 @@ pub struct Processor {
     blend_revision: u64,
     blending: bool,
     blend_pos: usize,
+    /// Latest target received during a transition; it starts at the exact
+    /// frame where that transition ends.
+    queued: Option<Snapshot>,
     scratch: Vec<f32>,
 }
 impl Processor {
@@ -289,6 +292,7 @@ impl Processor {
             blend_revision: 0,
             blending: false,
             blend_pos: 0,
+            queued: None,
             scratch: vec![0.0; length],
         };
         result.front.coefficients.sample_rate = sample_rate;
@@ -314,9 +318,13 @@ impl Processor {
         }
         Ok(())
     }
+    /// Clear both histories. The newest target wins: an explicit target, then a
+    /// queued one, then the transition target.
     pub fn reset(&mut self, target: Option<Snapshot>) -> Result<Update> {
-        if let Some(target) = target {
-            self.validate_target(&target)?;
+        if let Some(target) = &target {
+            self.validate_target(target)?;
+        }
+        if let Some(target) = target.or(self.queued.take()) {
             self.front.coefficients = target.coefficients;
             self.front_revision = target.revision;
         } else if self.blending {
@@ -327,25 +335,32 @@ impl Processor {
         self.back.reset();
         self.blending = false;
         self.blend_pos = 0;
+        self.queued = None;
         Ok(self.update(true))
     }
+    fn start(&mut self, target: Snapshot) {
+        self.back.coefficients = target.coefficients;
+        self.back.reset();
+        self.blend_revision = target.revision;
+        self.blend_pos = 0;
+        self.blending = true;
+    }
+    /// A target starts a transition at the first frame of this call, or, while
+    /// one is active, replaces any queued target and starts where it ends.
     pub fn process(&mut self, samples: &mut [f32], target: Option<Snapshot>) -> Result<Update> {
         self.front.validate_buffer(samples.len())?;
         if let Some(target) = &target {
             self.validate_target(target)?;
-            if self.blending {
-                return Err(Error::InvalidArgument("HpTF: transition already active"));
-            }
         }
         if samples.is_empty() || self.channels() == 0 {
             return Ok(self.update(false));
         }
         if let Some(target) = target {
-            self.back.coefficients = target.coefficients;
-            self.back.reset();
-            self.blend_revision = target.revision;
-            self.blend_pos = 0;
-            self.blending = true;
+            if self.blending {
+                self.queued = Some(target);
+            } else {
+                self.start(target);
+            }
         }
         let channels = self.channels();
         let mut applied = false;
@@ -384,6 +399,9 @@ impl Processor {
                 self.blending = false;
                 self.blend_pos = 0;
                 applied = true;
+                if let Some(next) = self.queued.take() {
+                    self.start(next);
+                }
             }
         }
         Ok(self.update(applied))
