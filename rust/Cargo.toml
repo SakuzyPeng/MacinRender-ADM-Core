@@ -1,7 +1,7 @@
 [workspace]
 members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-ffi"]
 resolver = "2"
-exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft"]
+exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft", "vendor/rayon-core"]
 
 [workspace.package]
 edition = "2024"
@@ -47,3 +47,5 @@ rubato = { path = "vendor/rubato" }
 rustfft = { path = "vendor/rustfft" }
 # Portable libm twiddles (ADR 0018); RustFFT carries the same patch.
 realfft = { path = "vendor/realfft" }
+# Initialize Apple worker parking storage during pool construction.
+rayon-core = { path = "vendor/rayon-core" }

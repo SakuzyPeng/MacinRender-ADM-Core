@@ -1955,7 +1955,7 @@
           "LICENSE-MIT"
         ]
       },
-      "notes": ""
+      "notes": "1.13.0 本地补丁（rust/vendor/rayon-core/PATCHES.md）：Apple worker parking 的互斥量与条件变量在构造时初始化，避免首次休眠在房间渲染期间分配；调度与运算不变。"
     },
     {
       "name": "rust-sha2-0.10.9",

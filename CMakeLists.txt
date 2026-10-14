@@ -1559,6 +1559,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp
             --no-default-features --features room-trace --test room_profile --test room_no_alloc
+            --test rayon_sleep_no_alloc
             --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}")
     set_tests_properties(mr_adm_room_trace_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
