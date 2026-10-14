@@ -2,10 +2,11 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <set>
 #include <string>
 
-#include "layout_222.h"
+#include "triple_balance.h"
 
 namespace mradm::triple_balance {
 namespace {
@@ -81,30 +82,20 @@ Result<void> validate_bed(const SceneObject& object, const SceneInfo& info) {
 
 Result<std::vector<float>>
 bed_gains(const SceneDirectSpeakersBlock& block, std::string_view layout, LfeRoutingMode lfe_mode) {
-    const bool seven = layout == "4+7+0" || layout == "7.1.4";
     const auto index = bed_channel(block);
-    if (!index || (!seven && layout != "9.1.6" && !is_room_222(layout))) {
+    const auto code = dsp::tb_layout(layout);
+    if (!index || !code) {
         return make_error(ErrorCode::unsupported, "room bed requires verified labels and 7.1.4/9.1.6/22.2 output");
     }
-    if (is_room_222(layout)) {
-        constexpr std::array<std::size_t, 10> k_destinations{6, 7, 2, 3, 10, 11, 4, 5, 18, 19};
-        std::vector<float> gains(k_room_222_channels, 0);
-        if (*index == 3 && lfe_mode == LfeRoutingMode::split_power) {
-            gains[3] = gains[9] = std::sqrt(.5F);
-        } else {
-            gains[k_destinations.at(*index)] = 1;
-        }
-        return gains;
-    }
-    std::vector<float> gains(seven ? 12U : 16U, 0.0F);
-    if (*index < 8) {
-        gains[*index] = 1.0F;
-    } else if (seven) {
-        const float equal_power = std::sqrt(0.5F);
-        gains[*index] = equal_power;
-        gains[*index + 2] = equal_power;
-    } else {
-        gains[*index + 4] = 1.0F;
+    std::vector<float> gains(dsp::tb_channels(*code));
+    auto routed = dsp::tb_status(mradm_dsp_tb_bed_gains,
+                                 *code,
+                                 static_cast<uint32_t>(*index),
+                                 lfe_mode == LfeRoutingMode::split_power ? 1U : 0U,
+                                 gains.data(),
+                                 gains.size());
+    if (!routed) {
+        return tl::unexpected{routed.error()};
     }
     return gains;
 }

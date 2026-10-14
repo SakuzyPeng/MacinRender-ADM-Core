@@ -67,6 +67,9 @@ int mradm_dsp_tb_d_process(void* state,
 int mradm_dsp_tb_object_status(const void* p, MradmTbObjectStatus* out, char* message, size_t capacity);
 int mradm_dsp_tb_gains(
     uint32_t layout, const MradmTbQuery* queries, size_t n, float* out, size_t len, char* message, size_t capacity);
+// Bed channel index 0..9 (L R C LFE Lss Rss Lrs Rrs Lts Rts); len is the layout's channel count.
+int mradm_dsp_tb_bed_gains(
+    uint32_t layout, uint32_t index, uint32_t split_lfe, float* out, size_t len, char* message, size_t capacity);
 int mradm_dsp_tb_nodes(MradmTbNode* out, size_t len, char* message, size_t capacity);
 int mradm_dsp_tb_quantize(MradmTbPosition p, float size, int32_t* out, size_t len, char* message, size_t capacity);
 int mradm_dsp_tb_raw(const int32_t* q, size_t n, float* out, size_t len, char* message, size_t capacity);

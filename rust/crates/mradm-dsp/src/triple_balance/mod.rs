@@ -1,4 +1,5 @@
 //! Triple Balance numerical preparation and independent render state.
+pub mod bed;
 pub mod d_mode;
 pub mod live;
 pub mod panner;
