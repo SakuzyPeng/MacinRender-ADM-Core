@@ -1268,6 +1268,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
     mr_adm_core_apply_warnings(mr_adm_room_scene_benchmark)
 
+    add_executable(mr_adm_room_file_device_probe EXCLUDE_FROM_ALL tests/manual/room_file_device_probe.cpp)
+    target_link_libraries(mr_adm_room_file_device_probe PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
+        MacinRender::ADMRenderRoom MacinRender::ADMIo nlohmann_json::nlohmann_json)
+    if(WIN32)
+        target_link_libraries(mr_adm_room_file_device_probe PRIVATE Psapi)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_room_file_device_probe)
+
     add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_monitor_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE

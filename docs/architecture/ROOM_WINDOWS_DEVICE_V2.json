@@ -1,0 +1,1031 @@
+{
+  "schema": "mradm.room-windows-device-v2.validation.v1",
+  "date": "2026-10-13",
+  "production_commit": "058339986288b032686b9140ef771b4c694bff1e",
+  "processing_policy": "room-realtime-v2",
+  "host": {
+    "cpu": "Intel Core i7-11800H",
+    "output": "Realtek(R) Audio, native WASAPI endpoint",
+    "workers": 8,
+    "sample_rate": 48000,
+    "build": "canonical MSVC/Ninja Release; Rust 1.98.0; room profiling disabled"
+  },
+  "method": {
+    "scene_producer_frames": 512,
+    "scene_sources": 32,
+    "scene_motion": "each source: 512-frame ramp every 512 frames, staggered event offsets; 0.5-degree target rotation per producer frame",
+    "file_input": {
+      "name": "file-32-moving-600s.wav",
+      "seconds": 600,
+      "sample_rate": 48000,
+      "channels": 32,
+      "objects": 32,
+      "bits": 16,
+      "metadata_period_frames": 12000,
+      "sha256": "c150c816b08b4dcc7a1fb1b27c5c726ff3745d5cdce40dd2b7d7fa39a76f22c1",
+      "bytes": 1868807212,
+      "kind": "generated ADM BWF; 32 independent tones, 4 Hz staggered continuous source ramps"
+    },
+    "file_motion": "4 Hz authored continuous 250-ms ADM position ramps with per-source phase offsets",
+    "head_input": "100 Hz simulated head motion: PoseBridge v3 OSC for Scene, direct public MonitorSession API for file streaming",
+    "room_switch_period_seconds": 5,
+    "control": "same dense Scene motion with only one initial room switch; ten-minute run follows both long runs",
+    "sequential": true,
+    "scope": "native device-backed playback; GUI and physical sensor-to-headphone latency are not measured"
+  },
+  "build": {
+    "commit": "0583399",
+    "probe_changes": true,
+    "source_archive_sha256": "2cf64c9f5c1983127d41aa12fa9a7c58b5588b31c4add79b90cc78bc19c43bec",
+    "commands": [
+      {
+        "name": "canonical Release build",
+        "returncode": 0
+      }
+    ],
+    "binaries": {
+      "mr_adm_room_scene_benchmark.exe": "74b39f1dfc2bc6c0ba342629eb02e3fd4138573c142c28c79bc51ea3b70277e2",
+      "mr_adm_room_file_device_probe.exe": "5eeb480626eb1170aac9dfdda709c574846fa7f859a6fe62d8197cf053e11941"
+    },
+    "source_restored": true,
+    "restore_mismatches": [],
+    "git_status_restored": true
+  },
+  "restoration": {
+    "source_restored": true,
+    "restore_mismatches": [],
+    "git_status_restored": true,
+    "temporary_input_removed": true,
+    "control_probe_sha256": "74b39f1dfc2bc6c0ba342629eb02e3fd4138573c142c28c79bc51ea3b70277e2"
+  },
+  "post_build_validation_tool_changes": "Only probe variable names, explicit parentheses, declaration splitting and lint annotation changed in C++; the control Python driver adds single-switch selection. No production renderer changes.",
+  "results": {
+    "scene_repeated_switch_30min": {
+      "case": "Scene_streaming_device",
+      "passed": false,
+      "requested_seconds": 1800,
+      "wall_seconds": 1802.1207166,
+      "sources": 32,
+      "quality": "realtime",
+      "source_ramps": true,
+      "repeated_room_switches": true,
+      "room_switch_requests": 360,
+      "applied_revision": 360,
+      "presented_frames": 86467352,
+      "expected_frames": 86467352,
+      "ended": true,
+      "failed": false,
+      "underruns": 83,
+      "underrun_events": [
+        {
+          "count": 1,
+          "room_state": 3,
+          "seconds": 223.1331
+        },
+        {
+          "count": 2,
+          "room_state": 3,
+          "seconds": 223.1931882
+        },
+        {
+          "count": 3,
+          "room_state": 3,
+          "seconds": 417.7343261
+        },
+        {
+          "count": 4,
+          "room_state": 3,
+          "seconds": 417.7850491
+        },
+        {
+          "count": 5,
+          "room_state": 3,
+          "seconds": 417.8945566
+        },
+        {
+          "count": 6,
+          "room_state": 3,
+          "seconds": 457.6361567
+        },
+        {
+          "count": 7,
+          "room_state": 3,
+          "seconds": 457.755288
+        },
+        {
+          "count": 8,
+          "room_state": 3,
+          "seconds": 482.8669473
+        },
+        {
+          "count": 9,
+          "room_state": 3,
+          "seconds": 482.9345882
+        },
+        {
+          "count": 10,
+          "room_state": 3,
+          "seconds": 483.0447599
+        },
+        {
+          "count": 11,
+          "room_state": 3,
+          "seconds": 507.9765135
+        },
+        {
+          "count": 12,
+          "room_state": 3,
+          "seconds": 508.0160682
+        },
+        {
+          "count": 13,
+          "room_state": 3,
+          "seconds": 547.757167
+        },
+        {
+          "count": 14,
+          "room_state": 3,
+          "seconds": 547.8475095
+        },
+        {
+          "count": 15,
+          "room_state": 3,
+          "seconds": 547.9357671
+        },
+        {
+          "count": 16,
+          "room_state": 3,
+          "seconds": 612.8364925
+        },
+        {
+          "count": 17,
+          "room_state": 3,
+          "seconds": 612.9259843
+        },
+        {
+          "count": 18,
+          "room_state": 3,
+          "seconds": 657.6870992
+        },
+        {
+          "count": 19,
+          "room_state": 3,
+          "seconds": 657.7964549
+        },
+        {
+          "count": 20,
+          "room_state": 3,
+          "seconds": 677.5865717
+        },
+        {
+          "count": 21,
+          "room_state": 3,
+          "seconds": 677.6979875
+        },
+        {
+          "count": 22,
+          "room_state": 3,
+          "seconds": 677.7665765
+        },
+        {
+          "count": 23,
+          "room_state": 3,
+          "seconds": 702.8566421
+        },
+        {
+          "count": 24,
+          "room_state": 3,
+          "seconds": 748.0078485
+        },
+        {
+          "count": 25,
+          "room_state": 2,
+          "seconds": 807.5977664
+        },
+        {
+          "count": 26,
+          "room_state": 3,
+          "seconds": 807.6704311
+        },
+        {
+          "count": 27,
+          "room_state": 3,
+          "seconds": 807.7192822
+        },
+        {
+          "count": 28,
+          "room_state": 3,
+          "seconds": 807.7787145
+        },
+        {
+          "count": 29,
+          "room_state": 3,
+          "seconds": 807.8584777
+        },
+        {
+          "count": 30,
+          "room_state": 3,
+          "seconds": 807.9482561
+        },
+        {
+          "count": 31,
+          "room_state": 3,
+          "seconds": 812.8176122
+        },
+        {
+          "count": 32,
+          "room_state": 3,
+          "seconds": 812.8880736
+        },
+        {
+          "count": 33,
+          "room_state": 3,
+          "seconds": 813.0086888
+        },
+        {
+          "count": 34,
+          "room_state": 3,
+          "seconds": 813.0988015
+        },
+        {
+          "count": 35,
+          "room_state": 3,
+          "seconds": 867.8103909
+        },
+        {
+          "count": 36,
+          "room_state": 3,
+          "seconds": 867.8684692
+        },
+        {
+          "count": 37,
+          "room_state": 3,
+          "seconds": 867.9496895
+        },
+        {
+          "count": 38,
+          "room_state": 3,
+          "seconds": 868.0088148
+        },
+        {
+          "count": 39,
+          "room_state": 3,
+          "seconds": 927.6298175
+        },
+        {
+          "count": 40,
+          "room_state": 3,
+          "seconds": 927.6995277
+        },
+        {
+          "count": 41,
+          "room_state": 3,
+          "seconds": 927.7691217
+        },
+        {
+          "count": 42,
+          "room_state": 3,
+          "seconds": 927.9799227
+        },
+        {
+          "count": 43,
+          "room_state": 3,
+          "seconds": 928.0495331
+        },
+        {
+          "count": 44,
+          "room_state": 3,
+          "seconds": 942.8993614
+        },
+        {
+          "count": 45,
+          "room_state": 3,
+          "seconds": 987.8003975
+        },
+        {
+          "count": 46,
+          "room_state": 3,
+          "seconds": 987.8516505
+        },
+        {
+          "count": 47,
+          "room_state": 3,
+          "seconds": 987.8901727
+        },
+        {
+          "count": 48,
+          "room_state": 3,
+          "seconds": 987.9721212
+        },
+        {
+          "count": 49,
+          "room_state": 3,
+          "seconds": 988.0117166
+        },
+        {
+          "count": 50,
+          "room_state": 3,
+          "seconds": 1107.9711561
+        },
+        {
+          "count": 51,
+          "room_state": 3,
+          "seconds": 1108.0218157
+        },
+        {
+          "count": 52,
+          "room_state": 3,
+          "seconds": 1202.8717987
+        },
+        {
+          "count": 53,
+          "room_state": 3,
+          "seconds": 1227.91153
+        },
+        {
+          "count": 54,
+          "room_state": 3,
+          "seconds": 1227.9636008
+        },
+        {
+          "count": 55,
+          "room_state": 3,
+          "seconds": 1227.9935524
+        },
+        {
+          "count": 56,
+          "room_state": 3,
+          "seconds": 1228.0218608
+        },
+        {
+          "count": 57,
+          "room_state": 3,
+          "seconds": 1228.0615129
+        },
+        {
+          "count": 58,
+          "room_state": 3,
+          "seconds": 1267.6917797
+        },
+        {
+          "count": 59,
+          "room_state": 3,
+          "seconds": 1267.781644
+        },
+        {
+          "count": 60,
+          "room_state": 3,
+          "seconds": 1267.9326881
+        },
+        {
+          "count": 61,
+          "room_state": 3,
+          "seconds": 1377.7644092
+        },
+        {
+          "count": 62,
+          "room_state": 3,
+          "seconds": 1377.8537473
+        },
+        {
+          "count": 63,
+          "room_state": 3,
+          "seconds": 1397.8442597
+        },
+        {
+          "count": 64,
+          "room_state": 3,
+          "seconds": 1542.9152617
+        },
+        {
+          "count": 65,
+          "room_state": 3,
+          "seconds": 1587.774575
+        },
+        {
+          "count": 66,
+          "room_state": 3,
+          "seconds": 1587.8149978
+        },
+        {
+          "count": 67,
+          "room_state": 3,
+          "seconds": 1587.8553767
+        },
+        {
+          "count": 68,
+          "room_state": 3,
+          "seconds": 1587.8962983
+        },
+        {
+          "count": 69,
+          "room_state": 3,
+          "seconds": 1587.9445731
+        },
+        {
+          "count": 70,
+          "room_state": 3,
+          "seconds": 1588.0089323
+        },
+        {
+          "count": 71,
+          "room_state": 3,
+          "seconds": 1588.0453179
+        },
+        {
+          "count": 72,
+          "room_state": 3,
+          "seconds": 1593.0553848
+        },
+        {
+          "count": 73,
+          "room_state": 3,
+          "seconds": 1593.1172187
+        },
+        {
+          "count": 74,
+          "room_state": 3,
+          "seconds": 1593.1648259
+        },
+        {
+          "count": 75,
+          "room_state": 3,
+          "seconds": 1657.6056806
+        },
+        {
+          "count": 76,
+          "room_state": 3,
+          "seconds": 1657.7370342
+        },
+        {
+          "count": 77,
+          "room_state": 3,
+          "seconds": 1687.6359208
+        },
+        {
+          "count": 78,
+          "room_state": 3,
+          "seconds": 1707.6162706
+        },
+        {
+          "count": 79,
+          "room_state": 3,
+          "seconds": 1707.8466071
+        },
+        {
+          "count": 80,
+          "room_state": 3,
+          "seconds": 1707.885544
+        },
+        {
+          "count": 81,
+          "room_state": 3,
+          "seconds": 1757.7466031
+        },
+        {
+          "count": 82,
+          "room_state": 3,
+          "seconds": 1757.8061982
+        },
+        {
+          "count": 83,
+          "room_state": 3,
+          "seconds": 1757.9164126
+        }
+      ],
+      "cpu_percent": 416.02980898776934,
+      "rss_peak_bytes": 534122496,
+      "callback_interval": {
+        "bin_width_ms": 0.02,
+        "count": 180196,
+        "max_ms": 11.4505,
+        "p50_ms": 9.98,
+        "p999_ms": 10.72,
+        "p99_ms": 10.58
+      },
+      "callback_pull_duration": {
+        "bin_width_ms": 0.02,
+        "count": 180197,
+        "max_ms": 0.6195,
+        "p50_ms": 0.1,
+        "p999_ms": 0.2,
+        "p99_ms": 0.16
+      },
+      "control_acceptance": {
+        "nominal_source_hz": 100,
+        "minimum_received_packets": 178200,
+        "received_packets": 180195,
+        "applied_poses": 180195,
+        "application_fraction": 1.0,
+        "rejected_packets": 0,
+        "missing_tx_packets": 0,
+        "scope": "100 Hz simulated samples, including the tail; require at least 99% of the material-duration packet budget and application count.",
+        "passed": true
+      },
+      "memory_analysis": {
+        "evaluated": true,
+        "observation_seconds": 898.9995983,
+        "rss_slope_bytes_per_minute": 20733.170728457415,
+        "rss_first_bytes": 489197568,
+        "rss_last_bytes": 490180608,
+        "rss_min_bytes": 384503808,
+        "rss_max_bytes": 534122496,
+        "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests",
+        "final_windows": {
+          "5_minutes": {
+            "evaluated": true,
+            "observation_seconds": 299.9933461999999,
+            "rss_slope_bytes_per_minute": 469819.08719017945,
+            "rss_first_bytes": 489349120,
+            "rss_last_bytes": 490180608,
+            "rss_min_bytes": 384503808,
+            "rss_max_bytes": 534122496,
+            "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests"
+          },
+          "10_minutes": {
+            "evaluated": true,
+            "observation_seconds": 599.9961833,
+            "rss_slope_bytes_per_minute": 403042.96152960224,
+            "rss_first_bytes": 489639936,
+            "rss_last_bytes": 490180608,
+            "rss_min_bytes": 384503808,
+            "rss_max_bytes": 534122496,
+            "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests"
+          }
+        }
+      },
+      "host_queued_audio_ms": {
+        "count": 1800,
+        "max": 10.0,
+        "min": 0.0,
+        "p50": 10.0,
+        "p99": 10.0,
+        "p999": 10.0
+      },
+      "underruns_by_observed_room_state": {
+        "draining": 82,
+        "transitioning": 1
+      },
+      "frame_count_matches": true
+    },
+    "file_repeated_switch_10min": {
+      "case": "file_streaming_device",
+      "passed": true,
+      "requested_seconds": 600.0,
+      "wall_seconds": 601.4210533,
+      "input_channels": 32,
+      "objects": 32,
+      "quality": "realtime",
+      "room_switch_requests": 120,
+      "applied_revision": 120,
+      "presented_frames": 28867352,
+      "expected_frames": 28867352,
+      "ended": true,
+      "failed": false,
+      "underruns": 0,
+      "underrun_events": [],
+      "rss_peak_bytes": 565772288,
+      "memory_analysis": {
+        "evaluated": true,
+        "observation_seconds": 299.999844,
+        "rss_slope_bytes_per_minute": 868979.6163801029,
+        "rss_first_bytes": 499093504,
+        "rss_last_bytes": 521699328,
+        "rss_min_bytes": 425566208,
+        "rss_max_bytes": 565772288,
+        "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests",
+        "final_windows": {
+          "5_minutes": {
+            "evaluated": true,
+            "observation_seconds": 299.999844,
+            "rss_slope_bytes_per_minute": 868979.6163801029,
+            "rss_first_bytes": 499093504,
+            "rss_last_bytes": 521699328,
+            "rss_min_bytes": 425566208,
+            "rss_max_bytes": 565772288,
+            "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests"
+          },
+          "10_minutes": {
+            "evaluated": true,
+            "observation_seconds": 599.9992057,
+            "rss_slope_bytes_per_minute": 6434272.569332956,
+            "rss_first_bytes": 406183936,
+            "rss_last_bytes": 521699328,
+            "rss_min_bytes": 400109568,
+            "rss_max_bytes": 565772288,
+            "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests"
+          }
+        }
+      },
+      "poses_sent": 60142,
+      "pose_sender_max_lateness_ms": 3.7523999999962143,
+      "sampled_peak": 0.009181386791169643,
+      "underruns_by_observed_room_state": {},
+      "frame_count_matches": true
+    },
+    "scene_single_switch_10min": {
+      "case": "Scene_streaming_device",
+      "passed": true,
+      "requested_seconds": 600,
+      "wall_seconds": 601.6094124,
+      "sources": 32,
+      "quality": "realtime",
+      "source_ramps": true,
+      "repeated_room_switches": false,
+      "room_switch_requests": 1,
+      "applied_revision": 1,
+      "presented_frames": 28867352,
+      "expected_frames": 28867352,
+      "ended": true,
+      "failed": false,
+      "underruns": 0,
+      "underrun_events": [],
+      "cpu_percent": 366.9817708124674,
+      "rss_peak_bytes": 503091200,
+      "callback_interval": {
+        "bin_width_ms": 0.02,
+        "count": 60153,
+        "max_ms": 10.8778,
+        "p50_ms": 9.98,
+        "p999_ms": 10.7,
+        "p99_ms": 10.62
+      },
+      "callback_pull_duration": {
+        "bin_width_ms": 0.02,
+        "count": 60154,
+        "max_ms": 0.3377,
+        "p50_ms": 0.1,
+        "p999_ms": 0.2,
+        "p99_ms": 0.14
+      },
+      "control_acceptance": {
+        "nominal_source_hz": 100,
+        "minimum_received_packets": 59400,
+        "received_packets": 60151,
+        "applied_poses": 60151,
+        "application_fraction": 1.0,
+        "rejected_packets": 0,
+        "missing_tx_packets": 0,
+        "scope": "100 Hz simulated samples, including the tail; require at least 99% of the material-duration packet budget and application count.",
+        "passed": true
+      },
+      "memory_analysis": {
+        "evaluated": true,
+        "observation_seconds": 298.99366160000005,
+        "rss_slope_bytes_per_minute": -9439.230883549284,
+        "rss_first_bytes": 365834240,
+        "rss_last_bytes": 365801472,
+        "rss_min_bytes": 365793280,
+        "rss_max_bytes": 365834240,
+        "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests",
+        "final_windows": {
+          "5_minutes": {
+            "evaluated": true,
+            "observation_seconds": 298.99366160000005,
+            "rss_slope_bytes_per_minute": -9439.230883549284,
+            "rss_first_bytes": 365834240,
+            "rss_last_bytes": 365801472,
+            "rss_min_bytes": 365793280,
+            "rss_max_bytes": 365834240,
+            "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests"
+          },
+          "10_minutes": {
+            "evaluated": true,
+            "observation_seconds": 599.0052074,
+            "rss_slope_bytes_per_minute": 14668.898601289648,
+            "rss_first_bytes": 139104256,
+            "rss_last_bytes": 365801472,
+            "rss_min_bytes": 139104256,
+            "rss_max_bytes": 503091200,
+            "scope": "resident memory in the latter half; inspect the time series alongside zero-allocation tests"
+          }
+        }
+      },
+      "host_queued_audio_ms": {
+        "count": 600,
+        "max": 10.0,
+        "min": 0.0,
+        "p50": 10.0,
+        "p99": 10.0,
+        "p999": 10.0
+      },
+      "underruns_by_observed_room_state": {},
+      "frame_count_matches": true
+    }
+  },
+  "strict_zero_underrun_all_cases_passed": false,
+  "acceptance": {
+    "tested_normal_playback_passed": true,
+    "scope": "This Windows host, realtime-v2, 32 sources at 48 kHz; ten-minute device-backed playback evidence.",
+    "normal_playback_evidence": "scene_single_switch_10min",
+    "file_pipeline_evidence": "file_repeated_switch_10min; also passes additional repeated-switch stress",
+    "five_second_switching_classification": "additional stress test, outside normal playback acceptance",
+    "scene_repeated_switch_stress_passed": false,
+    "repeated_switch_stress_blocks_normal_playback_acceptance": false,
+    "interpretation": "Retain all measured underrun counts. The all-cases zero-underrun aggregate is a stress-coverage statistic, not the normal-playback verdict."
+  },
+  "loopback": {
+    "schema": "mradm.room-loopback-latency",
+    "version": 1,
+    "windows": [
+      {
+        "window": 0,
+        "valid": true,
+        "correlation": 0.9999968706117,
+        "secondary_peak_ratio": 0.12454266942784471,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.817933333333336,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 1,
+        "valid": true,
+        "correlation": 0.9999998411134454,
+        "secondary_peak_ratio": 0.09356930974973406,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83853333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 2,
+        "valid": true,
+        "correlation": 0.9999990720434548,
+        "secondary_peak_ratio": 0.09888080585626673,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.81623333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 3,
+        "valid": true,
+        "correlation": 0.9999945812498442,
+        "secondary_peak_ratio": 0.12597290920540008,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.827533333333335,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 4,
+        "valid": true,
+        "correlation": 0.9999963000204787,
+        "secondary_peak_ratio": 0.11096694374973654,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.833733333333335,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 5,
+        "valid": true,
+        "correlation": 0.9999968053495986,
+        "secondary_peak_ratio": 0.10951849493892371,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.832633333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 6,
+        "valid": true,
+        "correlation": 0.9999993512531339,
+        "secondary_peak_ratio": 0.12222241219460421,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.839733333333335,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 7,
+        "valid": true,
+        "correlation": 0.9999923170174171,
+        "secondary_peak_ratio": 0.10917297913024676,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.825833333333335,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 8,
+        "valid": true,
+        "correlation": 0.9999956763926283,
+        "secondary_peak_ratio": 0.10846379641287941,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.84303333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 9,
+        "valid": true,
+        "correlation": 0.9999981590546645,
+        "secondary_peak_ratio": 0.10921644177162713,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83293333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 10,
+        "valid": true,
+        "correlation": 0.9999925652512285,
+        "secondary_peak_ratio": 0.11403565631475483,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.84323333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 11,
+        "valid": true,
+        "correlation": 0.9999994670521087,
+        "secondary_peak_ratio": 0.1175002715104581,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.827133333333336,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 12,
+        "valid": true,
+        "correlation": 0.9999988954740907,
+        "secondary_peak_ratio": 0.12525285188492305,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83403333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 13,
+        "valid": true,
+        "correlation": 0.9999984228364308,
+        "secondary_peak_ratio": 0.11720758704594551,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.84753333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 14,
+        "valid": true,
+        "correlation": 0.9999992889083097,
+        "secondary_peak_ratio": 0.10680364936374019,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.832633333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 15,
+        "valid": true,
+        "correlation": 0.9999999992598451,
+        "secondary_peak_ratio": 0.11233475477613289,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83603333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 16,
+        "valid": true,
+        "correlation": 0.9999989390468912,
+        "secondary_peak_ratio": 0.10850115092985142,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83143333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 17,
+        "valid": true,
+        "correlation": 0.9999996900016628,
+        "secondary_peak_ratio": 0.09976568790701021,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.81953333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 18,
+        "valid": true,
+        "correlation": 0.9999999976199276,
+        "secondary_peak_ratio": 0.10465368654889712,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.830333333333336,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 19,
+        "valid": true,
+        "correlation": 0.9999991969010367,
+        "secondary_peak_ratio": 0.11921447287348334,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.82893333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 20,
+        "valid": true,
+        "correlation": 0.9999911690872737,
+        "secondary_peak_ratio": 0.11557229572932197,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.82333333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 21,
+        "valid": true,
+        "correlation": 0.9999932590353642,
+        "secondary_peak_ratio": 0.09899605724506509,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83273333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 22,
+        "valid": true,
+        "correlation": 0.99999965389783,
+        "secondary_peak_ratio": 0.11570633750450066,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83593333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 23,
+        "valid": true,
+        "correlation": 0.9999988465970344,
+        "secondary_peak_ratio": 0.11146714621331089,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.81763333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 24,
+        "valid": true,
+        "correlation": 0.9999997678230969,
+        "secondary_peak_ratio": 0.11125597734845606,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.82873333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 25,
+        "valid": true,
+        "correlation": 0.9999996554693633,
+        "secondary_peak_ratio": 0.10939896345722744,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.840333333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 26,
+        "valid": true,
+        "correlation": 0.9999968596838693,
+        "secondary_peak_ratio": 0.12104446020546265,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.82553333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 27,
+        "valid": true,
+        "correlation": 0.9999995555902339,
+        "secondary_peak_ratio": 0.12249188323489747,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.82983333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 28,
+        "valid": true,
+        "correlation": 0.9999989024227829,
+        "secondary_peak_ratio": 0.11951717760466761,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.82013333333334,
+        "minimum_uncertainty_ms": 20.020833333333332
+      },
+      {
+        "window": 29,
+        "valid": true,
+        "correlation": 0.999999362977989,
+        "secondary_peak_ratio": 0.09475395920767604,
+        "lag_frames": 2920,
+        "callback_referenced_delay_ms": 60.83133333333333,
+        "minimum_uncertainty_ms": 20.020833333333332
+      }
+    ],
+    "valid_windows": 30,
+    "delay_distribution_ms": {
+      "min": 60.81623333333334,
+      "p50": 60.831383333333335,
+      "p99": 60.84628633333334,
+      "max": 60.84753333333334
+    },
+    "scope": "PCM entering output callback to PCM delivered to selected capture callback. Sensor, OSC, renderer and pre-render queue are excluded.",
+    "uncertainty": "At least the sum of observed maximum output/input callback periods plus one sample. Driver timestamp conventions, clock drift, resampling and scheduler delay are uncalibrated; this is not sensor-to-headphone or acoustic latency.",
+    "recording_sha256": {
+      "output.f32": "92130fdbfe3f7000eed10ec499c10f67d37839c8dfdf1efcc8a6466a4efc5b64",
+      "capture.f32": "93273c1b5a578fb38a2b5c59862abb379343668c965e654a27fac094a5a744b6"
+    }
+  },
+  "validation": {
+    "windows_short_device_smokes": "8 seconds each: Scene and file, complete frames and zero underruns",
+    "macos_release_null_device_smokes": "8 seconds dense repeated switches; 8 and 5 seconds dense single switch, including short final producer frame",
+    "python_unit_tests": 3,
+    "clang_format": "passed",
+    "clang_tidy": "passed with repository SDK compatibility flags; no project diagnostics",
+    "cppcheck": "passed"
+  },
+  "evidence_sha256": {
+    "source-files.json": "dcb09784cfab12a06bbf6071199dbffa2b5b3c3d3c28fcea87609caf59a5c01f",
+    "scene-30min-report.json": "7eb776dbe1369dd21fafa7163a4d63a207e0d43eda50bd81314f30c91235f52f",
+    "file-10min-report.json": "2f27311893146d3165277f662c3d73cc31677e33ed3c770f0cd49967c9f94b8f",
+    "scene-single-switch-10min/report.json": "5186ad830ecb2a56bb739c59926e6a22bb2e311de9370da2ab116d2542ffe2d9",
+    "scene-30min/loopback-analysis.json": "e0d29813c362d9fee9ea79e2086e3dbe1009a8ff7a1aa392422348b2e328a1d1"
+  }
+}

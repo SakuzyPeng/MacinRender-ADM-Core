@@ -127,6 +127,9 @@ def main():
     parser.add_argument('--device', required=True, help='exact output name or current opaque ID; "null" for a dry run')
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--sources', type=int, choices=[1, 16, 32], default=32)
+    parser.add_argument('--quality', choices=['exact', 'realtime'], default='exact')
+    parser.add_argument('--source-ramps', action='store_true', help='move each source at a distinct 512-frame event offset')
+    parser.add_argument('--single-room-switch', action='store_true', help='switch once near the start, then keep the room fixed')
     parser.add_argument('--output', type=Path, required=True, help='new evidence directory')
     parser.add_argument('--volume', type=float, default=.1, help='session-only linear output gain')
     group = parser.add_mutually_exclusive_group()
@@ -136,9 +139,12 @@ def main():
     if not 5 <= args.seconds <= 3600 or not 0 < args.volume <= 1:
         parser.error('seconds must be 5..3600 and volume must be (0,1]')
     args.output.mkdir(parents=True, exist_ok=False)
+    mode = 'stream' if args.single_room_switch else ('stream-cycles' if args.device == 'null' else 'stream-device')
     command = [str(args.probe.resolve()), str(args.room.resolve()), str(args.other_room.resolve()),
-               str(args.seconds), 'stream-cycles' if args.device == 'null' else 'stream-device', str(args.sources),
-               '--osc-port', '0', '--volume', str(args.volume)]
+               str(args.seconds), mode, str(args.sources),
+               '--osc-port', '0', '--volume', str(args.volume), '--quality', args.quality]
+    if args.source_ramps:
+        command += ['--source-ramps']
     if args.device != 'null':
         command += ['--device', args.device]
     if args.capture or args.capture_loopback:
@@ -148,7 +154,9 @@ def main():
                 'probe_sha256': hashlib.sha256(args.probe.read_bytes()).hexdigest(),
                 'room_manifest_sha256': hashlib.sha256(args.room.read_bytes()).hexdigest(),
                 'other_manifest_sha256': hashlib.sha256(args.other_room.read_bytes()).hexdigest(),
-                'pose_protocol': 3, 'pose_target_hz': 100, 'latency_scope': 'host software endpoints only'}
+                'pose_protocol': 3, 'pose_target_hz': 100, 'quality': args.quality,
+                'source_ramps': args.source_ramps, 'single_room_switch': args.single_room_switch,
+                'latency_scope': 'host software endpoints only'}
     (args.output / 'environment.json').write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
     stop = threading.Event()
     sender = None
