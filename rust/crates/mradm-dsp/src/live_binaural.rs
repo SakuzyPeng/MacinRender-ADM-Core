@@ -642,7 +642,7 @@ impl Session {
                 if state.divergence_range[1] > 0. && state.valid & 4 != 0 {
                     let [x, y, z] = state.position.map(f64::from);
                     let distance = ((x * x) + (y * y) + (z * z)).sqrt().max(1e-6);
-                    angle = (f64::from(state.divergence_range[1]).atan2(distance)
+                    angle = (libm::atan2(f64::from(state.divergence_range[1]), distance)
                         * (180. / std::f64::consts::PI)) as f32;
                 }
                 angle = math::clamp(angle, 0., 120.);

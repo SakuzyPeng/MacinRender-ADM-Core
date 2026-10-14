@@ -70,32 +70,35 @@ pub fn clamp(x: f32, a: f32, b: f32) -> f32 {
 pub fn cartesian_to_polar([x, y, z]: Vec3) -> Vec3 {
     let (x, y, z) = (f64::from(x), f64::from(y), f64::from(z));
     [
-        ((-x).atan2(y) * DEG) as f32,
-        (z.atan2(x.hypot(y)) * DEG) as f32,
+        (libm::atan2(-x, y) * DEG) as f32,
+        (libm::atan2(z, libm::hypot(x, y)) * DEG) as f32,
         (((x * x) + (y * y) + (z * z)).sqrt()) as f32,
     ]
 }
 pub fn direction(az: f32, el: f32) -> Vec3 {
     let az = f64::from(az) * DRAD;
     let el = f64::from(el) * DRAD;
-    let ce = el.cos();
+    let ce = libm::cos(el);
     [
-        (-az.sin() * ce) as f32,
-        (az.cos() * ce) as f32,
-        el.sin() as f32,
+        (-libm::sin(az) * ce) as f32,
+        (libm::cos(az) * ce) as f32,
+        libm::sin(el) as f32,
     ]
 }
 pub fn polar(v: Vec3, binaural: bool) -> [f32; 2] {
     if binaural {
         let [x, y, z] = normalize(v, true);
         [
-            ((f64::from(-x)).atan2(f64::from(y)) * DEG) as f32,
-            (f64::from(z).atan2(f64::from(x).hypot(f64::from(y))) * DEG) as f32,
+            (libm::atan2(f64::from(-x), f64::from(y)) * DEG) as f32,
+            (libm::atan2(f64::from(z), libm::hypot(f64::from(x), f64::from(y))) * DEG) as f32,
         ]
     } else {
         let [x, y, z] = v;
         let degrees = 180. / std::f32::consts::PI;
-        [(-x).atan2(y) * degrees, z.atan2(x.hypot(y)) * degrees]
+        [
+            libm::atan2f(-x, y) * degrees,
+            libm::atan2f(z, libm::hypotf(x, y)) * degrees,
+        ]
     }
 }
 pub fn distance(a: Vec3, b: Vec3) -> f32 {
@@ -216,8 +219,8 @@ pub fn cloud(
         if s[2] <= 0. {
             continue;
         }
-        let x = (s[0] * w * RAD).tan();
-        let y = (s[1] * h * RAD).tan();
+        let x = libm::tanf(s[0] * w * RAD);
+        let y = libm::tanf(s[1] * h * RAD);
         let expanded = if binaural {
             add(add(center, scale(horizontal, x)), scale(vertical, y))
         } else {
@@ -285,7 +288,7 @@ pub fn divergence(
         return 1;
     }
     let angle = if cartesian && pos_range > 0. {
-        (f64::from(pos_range).atan2(1e-6f64.max(f64::from(p[2]))) * DEG) as f32
+        (libm::atan2(f64::from(pos_range), 1e-6f64.max(f64::from(p[2]))) * DEG) as f32
     } else {
         az_range
     };
@@ -390,8 +393,8 @@ fn conjugate([w, x, y, z]: Quaternion) -> Quaternion {
 }
 fn axis(axis: [f64; 3], angle: f64) -> Quaternion {
     let h = angle * 0.5;
-    let s = h.sin();
-    [h.cos(), axis[0] * s, axis[1] * s, axis[2] * s]
+    let s = libm::sin(h);
+    [libm::cos(h), axis[0] * s, axis[1] * s, axis[2] * s]
 }
 #[derive(Clone, Copy)]
 pub struct Rotation {
@@ -421,27 +424,31 @@ impl Rotation {
     pub fn apply(&self, az: f32, el: f32, apple: bool) -> [f32; 2] {
         let a = f64::from(az) * DRAD;
         let e = f64::from(el) * DRAD;
-        let ce = e.cos();
-        let x = if apple { a.sin() * ce } else { -a.sin() * ce };
+        let ce = libm::cos(e);
+        let x = if apple {
+            libm::sin(a) * ce
+        } else {
+            -libm::sin(a) * ce
+        };
         let q = if apple {
             self.head_to_world
         } else {
             conjugate(self.head_to_world)
         };
         let [_, x, y, z] = multiply(
-            multiply(q, [0., x, a.cos() * ce, e.sin()], self.contract),
+            multiply(q, [0., x, libm::cos(a) * ce, libm::sin(e)], self.contract),
             conjugate(q),
             self.contract,
         );
         if apple {
             [
-                (x.atan2(y) * DEG) as f32,
-                (z.clamp(-1., 1.).asin() * DEG) as f32,
+                (libm::atan2(x, y) * DEG) as f32,
+                (libm::asin(z.clamp(-1., 1.)) * DEG) as f32,
             ]
         } else {
             [
-                ((-x).atan2(y) * DEG) as f32,
-                (z.atan2(x.hypot(y)) * DEG) as f32,
+                (libm::atan2(-x, y) * DEG) as f32,
+                (libm::atan2(z, libm::hypot(x, y)) * DEG) as f32,
             ]
         }
     }
@@ -461,12 +468,12 @@ pub fn pose(input: &[f32], quaternion: bool) -> Result<[f32; 7]> {
         let yaw = remainder_double(input[0] as f64) * (std::f64::consts::PI / 360.);
         let pitch = remainder_double(input[1] as f64) * (std::f64::consts::PI / 360.);
         let roll = remainder_double(input[2] as f64) * (std::f64::consts::PI / 360.);
-        let cy = yaw.cos();
-        let sy = yaw.sin();
-        let cp = pitch.cos();
-        let sp = pitch.sin();
-        let cr = roll.cos();
-        let sr = roll.sin();
+        let cy = libm::cos(yaw);
+        let sy = libm::sin(yaw);
+        let cp = libm::cos(pitch);
+        let sp = libm::sin(pitch);
+        let cr = libm::cos(roll);
+        let sr = libm::sin(roll);
         [
             (cy * sp * cr) + (sy * cp * sr),
             (sy * cp * cr) - (cy * sp * sr),
@@ -486,12 +493,12 @@ pub fn pose(input: &[f32], quaternion: bool) -> Result<[f32; 7]> {
     let s = (2. * ((w * x) - (y * z))).clamp(-1., 1.);
     let (yaw, roll) = if s.abs() >= 1. - 1e-12 {
         (
-            (2. * ((w * y) - (x * z))).atan2(1. - (2. * ((y * y) + (z * z)))),
+            libm::atan2(2. * ((w * y) - (x * z)), 1. - (2. * ((y * y) + (z * z)))),
             0.,
         )
     } else {
-        let yaw = (2. * ((x * z) + (w * y))).atan2(1. - (2. * ((x * x) + (y * y))));
-        let roll = (2. * ((x * y) + (w * z))).atan2(1. - (2. * ((x * x) + (z * z))));
+        let yaw = libm::atan2(2. * ((x * z) + (w * y)), 1. - (2. * ((x * x) + (y * y))));
+        let roll = libm::atan2(2. * ((x * y) + (w * z)), 1. - (2. * ((x * x) + (z * z))));
         (yaw, roll)
     };
     Ok([
@@ -500,7 +507,7 @@ pub fn pose(input: &[f32], quaternion: bool) -> Result<[f32; 7]> {
         z as f32,
         w as f32,
         (yaw * DEG) as f32,
-        (s.asin() * DEG) as f32,
+        (libm::asin(s) * DEG) as f32,
         (roll * DEG) as f32,
     ])
 }
