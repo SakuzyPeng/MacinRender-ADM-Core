@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -405,6 +407,145 @@ bool test_scene_hptf_snapshot_on_epoch() {
     return ok;
 }
 
+mradm::render_common::HptfCoefficients hptf_design(const char* text) {
+    auto profile = mradm::render_common::parse_parametric_eq(text);
+    require(profile);
+    auto coeffs = mradm::render_common::design_cascade(*profile, 48000U, mradm::HptfPreampMode::warn_only);
+    require(coeffs);
+    return *coeffs;
+}
+
+// Output controls are applied at consumed device frames. With the Scene output
+// fully produced, HpTF, peak guard and volume depend only on those positions,
+// not on callback sizes. Revision 2 arrives during the fade to 1 and is
+// replaced by 3 before that fade ends.
+std::vector<float> render_device_partition(std::span<const std::size_t> sizes, std::vector<std::uint64_t>& revisions) {
+    constexpr std::uint32_t k_frames = 12000U;
+    SceneStreamConfig config;
+    config.renderer.renderer = mradm::RendererSelection::saf;
+    config.renderer.output_layout = "0+2+0";
+    config.startup_watermark_frames = 1U;
+    config.output_ring_frames = 16384U;
+    auto created = SceneStreamEngine::create(config);
+    require(created);
+    auto stream = std::shared_ptr<SceneStreamEngine>(std::move(*created));
+    auto device = std::make_unique<CaptureDevice>();
+    auto* capture = device.get();
+    auto output = SceneOutputSession::create_with_device(stream, std::move(device), true);
+    require(output);
+    require((*output)->begin_epoch(1U, 0));
+    mradm::live_scene::ElementDescriptor element;
+    element.element_id = 1U;
+    require(stream->configure_generation(1U, 1U, std::span{&element, 1U}));
+    std::vector<float> samples(k_frames);
+    std::uint32_t seed = 0x2468ACE1U;
+    for (auto& sample : samples) {
+        seed = (seed * 1664525U) + 1013904223U;
+        sample = 3.0F * (static_cast<float>(seed >> 8U) / 8388608.0F - 1.0F);
+    }
+    mradm::live_scene::StateEntry initial;
+    initial.element_id = 1U;
+    initial.state.valid_fields = mradm::live_scene::k_known_state_fields;
+    initial.state.x = 0.25F;
+    initial.state.y = 0.75F;
+    ScenePcmPlaneView plane{1U, samples.data(), k_frames, 1U, true};
+    SceneFrameView frame;
+    frame.epoch_id = 1U;
+    frame.generation_id = 1U;
+    frame.duration_samples = k_frames;
+    frame.flags = mradm::live_scene::frame_state_complete;
+    frame.pcm = std::span{&plane, 1U};
+    frame.initial_states = std::span{&initial, 1U};
+    require(stream->submit_frame(frame, std::chrono::seconds(5)));
+    require(stream->signal_end(1U, k_frames));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (!stream->status().production_complete) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            throw std::runtime_error("Scene production timed out");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    const std::array<std::size_t, 6> controls{0U, 2048U, 2600U, 3000U, 7000U, 8192U};
+    (*output)->play();
+    std::vector<float> result;
+    std::size_t step = 0U;
+    std::size_t control = 0U;
+    bool short_read = false;
+    while (!(*output)->status().ended) {
+        const auto consumed = result.size() / 2U;
+        if (control < controls.size() && consumed == controls.at(control)) {
+            switch (control++) {
+            case 0U:
+                require((*output)->set_volume(0.875F));
+                break;
+            case 1U:
+                require((*output)->set_hptf(hptf_low_boost(), 1));
+                break;
+            case 2U:
+                require((*output)->set_hptf(hptf_design("Preamp: -3 dB\nFilter 1: ON PK Fc 1700 Hz Gain 6 dB Q 0.75\n"),
+                                            2));
+                break;
+            case 3U:
+                require((*output)->set_hptf(
+                    hptf_design("Preamp: -6 dB\nFilter 1: ON HSC Fc 4200 Hz Gain -4 dB Q 0.75\n"), 3));
+                break;
+            case 4U:
+                require((*output)->set_hptf(std::nullopt, 4));
+                break;
+            default:
+                require((*output)->set_volume(0.5F));
+                break;
+            }
+        }
+        auto count = sizes[step++ % sizes.size()];
+        if (control < controls.size()) {
+            count = std::min(count, controls.at(control) - consumed);
+        }
+        std::vector<float> callback(count * 2U);
+        const auto produced = capture->pull(callback);
+        result.insert(result.end(), callback.begin(), callback.begin() + static_cast<std::ptrdiff_t>(produced * 2U));
+        revisions.push_back((*output)->hptf_applied_revision());
+        // Only the final media read may be short; EOS follows on a later callback.
+        if (short_read && produced != 0U) {
+            throw std::runtime_error("device media after a short pull");
+        }
+        short_read = short_read || produced != count;
+    }
+    if (result.size() != static_cast<std::size_t>(k_frames) * 2U) {
+        throw std::runtime_error("device partition changed the media length");
+    }
+    return result;
+}
+
+bool test_scene_device_pull_partitioning() {
+    std::vector<std::uint64_t> revisions;
+    const std::array<std::size_t, 1> whole{512U};
+    const auto reference = render_device_partition(whole, revisions);
+    bool ok = check(revisions.back() == 4U, "device partition: bypass revision applied last");
+    ok &= check(std::ranges::find(revisions, 2U) == revisions.end(), "device partition: replaced target never applies");
+    ok &= check(std::ranges::any_of(reference, [](float x) { return std::abs(x) > 0.5F; }),
+                "device partition: output exercises the peak guard");
+    const std::array<std::size_t, 5> fragmented{1U, 7U, 127U, 511U, 1024U};
+    const std::array<std::size_t, 1> large{4096U};
+    const std::array<std::size_t, 2> odd{3U, 1021U};
+    const std::array<std::size_t, 1> callback{960U};
+    for (const auto sizes : {std::span<const std::size_t>{fragmented},
+                             std::span<const std::size_t>{large},
+                             std::span<const std::size_t>{odd},
+                             std::span<const std::size_t>{callback}}) {
+        revisions.clear();
+        const auto output = render_device_partition(sizes, revisions);
+        ok &= check(std::ranges::equal(output,
+                                       reference,
+                                       [](float a, float b) {
+                                           return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
+                                       }),
+                    "device output is independent of callback partitioning");
+        ok &= check(std::ranges::find(revisions, 2U) == revisions.end(), "device partition: revision 2 stays queued");
+    }
+    return ok;
+}
+
 bool test_idle_stream_destruction() {
     std::atomic<bool> valid{true};
     std::vector<std::thread> controllers;
@@ -442,6 +583,7 @@ int main() {
         ok &= test_scene_hptf_respects_ceiling();
         ok &= test_scene_hptf_unsupported_without_stereo_guard();
         ok &= test_scene_hptf_snapshot_on_epoch();
+        ok &= test_scene_device_pull_partitioning();
         ok &= test_idle_stream_destruction();
         return ok ? 0 : 1;
     } catch (const std::exception& error) {
