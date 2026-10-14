@@ -86,8 +86,8 @@
 | `rust-proc-macro2-1.0.107` @ 1.0.107 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-quote-1.0.47` @ 1.0.47 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-rawpointer-0.2.1` @ 0.2.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
-| `rust-realfft-3.5.0` @ 3.5.0 | Rust DSP 的锁定依赖 | MIT | 可用 | 上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。 |
-| `rust-rustfft-6.4.1` @ 6.4.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭。 |
+| `rust-realfft-3.5.0` @ 3.5.0 | Rust DSP 的锁定依赖 | MIT | 可用 | 上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。3.5.0 本地补丁（rust/vendor/realfft/PATCHES.md）：后处理 twiddle 的 f64 cos/sin 改用 libm 可移植实现（ADR 0018）。 |
+| `rust-rustfft-6.4.1` @ 6.4.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭；twiddle 的 f64 cos/sin 改用 libm 可移植实现（ADR 0018）。 |
 | `rust-ryu-1.0.23` @ 1.0.23 | serde_json 的浮点格式化依赖 | Apache-2.0 OR BSL-1.0 | 可用 | 经 serde_json 引入。 |
 | `rust-safe_arch-1.2.0` @ 1.2.0 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-serde-1.0.229` @ 1.0.229 | serde_json 的序列化框架依赖 | MIT OR Apache-2.0 | 可用 | 只开 std，不启用 derive。 |

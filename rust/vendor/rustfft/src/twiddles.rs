@@ -11,9 +11,10 @@ pub fn compute_twiddle<T: FftNum>(
     let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
     let angle = constant * index as f64;
 
+    // MacinRender: portable libm instead of the platform C library (ADR 0018).
     let result = Complex {
-        re: T::from_f64(angle.cos()).unwrap(),
-        im: T::from_f64(angle.sin()).unwrap(),
+        re: T::from_f64(libm::cos(angle)).unwrap(),
+        im: T::from_f64(libm::sin(angle)).unwrap(),
     };
 
     match direction {

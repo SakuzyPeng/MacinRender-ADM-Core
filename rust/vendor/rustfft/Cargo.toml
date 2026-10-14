@@ -119,6 +119,9 @@ path = "benches/bench_rustfft_wasm_simd.rs"
 name = "compare_3n2m_strategies"
 path = "benches/compare_3n2m_strategies.rs"
 
+[dependencies.libm]
+version = "=0.2.16"
+
 [dependencies.num-complex]
 version = "0.4"
 

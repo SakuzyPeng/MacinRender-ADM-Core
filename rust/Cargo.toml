@@ -1,7 +1,7 @@
 [workspace]
 members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-ffi"]
 resolver = "2"
-exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft"]
+exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft"]
 
 [workspace.package]
 edition = "2024"
@@ -45,3 +45,5 @@ sofar = { path = "vendor/sofar" }
 rubato = { path = "vendor/rubato" }
 # Preserve scalar FFT arithmetic while exposing independent columns to LLVM.
 rustfft = { path = "vendor/rustfft" }
+# Portable libm twiddles (ADR 0018); RustFFT carries the same patch.
+realfft = { path = "vendor/realfft" }
