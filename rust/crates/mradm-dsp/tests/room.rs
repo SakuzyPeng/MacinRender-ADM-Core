@@ -94,6 +94,8 @@ fn shared_world_decoder_preserves_both_tails_under_changing_pose() {
     let mut hrir = HrirData {
         identity: "directional-test-hrir".into(),
         source_sofa_sha256: None,
+        collection: None,
+        source_geometry: None,
         impulses: data.impulses.clone(),
         taps: data.taps,
         directions: data.directions.clone(),

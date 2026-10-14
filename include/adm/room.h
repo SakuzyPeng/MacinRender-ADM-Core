@@ -46,7 +46,8 @@ enum class RoomQuality : std::uint32_t { exact = 0, realtime = 1 };
 // cppcheck-suppress-begin unusedStructMember
 struct RoomConfig {
     std::shared_ptr<const RoomProfile> profile;
-    std::filesystem::path hrir_manifest; // SOFA or prepared HRIR JSON; empty selects SOFA option/package default
+    std::filesystem::path
+        hrir_manifest; // SOFA, prepared HRIR or distance collection; empty selects SOFA/package default
     double metres_per_unit{1.5};
     RoomQuality quality{RoomQuality::exact};
 };

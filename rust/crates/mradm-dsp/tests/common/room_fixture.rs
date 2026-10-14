@@ -15,6 +15,13 @@ pub fn fixture() -> Arc<PreparedSet> {
     fixture_with_quality(Quality::Exact)
 }
 pub fn fixture_with_quality(quality: Quality) -> Arc<PreparedSet> {
+    build_fixture(quality, false)
+}
+#[allow(dead_code)]
+pub fn fixture_with_collection(quality: Quality) -> Arc<PreparedSet> {
+    build_fixture(quality, true)
+}
+fn build_fixture(quality: Quality, collection: bool) -> Arc<PreparedSet> {
     let directions = vec![
         [1., 0., 0.],
         [0., 1., 0.],
@@ -33,9 +40,11 @@ pub fn fixture_with_quality(quality: Quality) -> Arc<PreparedSet> {
         impulses[direction * 16 + 2] = 1.;
         impulses[direction * 16 + 8 + 4] = 0.75;
     }
-    let hrir = Arc::new(HrirData {
+    let mut hrir = HrirData {
         identity: "synthetic-hrir".into(),
         source_sofa_sha256: None,
+        collection: None,
+        source_geometry: None,
         impulses,
         taps: 8,
         directions: directions.clone(),
@@ -44,7 +53,47 @@ pub fn fixture_with_quality(quality: Quality) -> Arc<PreparedSet> {
         guard: 96,
         preprocessing_guard: 0,
         output_taps: 192,
-    });
+    };
+    if collection {
+        use mradm_dsp::room::collection::{Collection, Layer};
+        let mut near = HrirData {
+            identity: "synthetic-near".into(),
+            source_sofa_sha256: None,
+            source_geometry: None,
+            collection: None,
+            impulses: vec![0.; 6 * 2 * 12],
+            taps: 12,
+            directions: hrir.directions.clone(),
+            faces: hrir.faces.clone(),
+            delays: vec![[6., 8.]; 6],
+            guard: 96,
+            preprocessing_guard: 0,
+            output_taps: 192,
+        };
+        for direction in 0..6 {
+            near.impulses[direction * 24 + 6] = 2.;
+            near.impulses[direction * 24 + 12 + 8] = 1.5;
+        }
+        hrir.identity = "synthetic-collection".into();
+        hrir.collection = Some(Collection {
+            name: "Synthetic distance".into(),
+            reference: 1,
+            reviews: serde_json::Value::Null,
+            layers: vec![
+                Layer {
+                    radius: 0.2,
+                    data: Some(near),
+                    quality: serde_json::Value::Null,
+                },
+                Layer {
+                    radius: 1.5,
+                    data: None,
+                    quality: serde_json::Value::Null,
+                },
+            ],
+        });
+    }
+    let hrir = Arc::new(hrir);
     let mut phases = vec![0.; 1025 * 81];
     for phase in 0..=1024 {
         let mut sum = 0.;

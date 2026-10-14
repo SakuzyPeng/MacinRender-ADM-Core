@@ -312,6 +312,13 @@ pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
     }
     let source_hash = sha256(bytes);
     Ok(HrirData {
+        collection: None,
+        source_geometry: Some(super::collection::SourceGeometry {
+            radius,
+            sample_rate: rate as u32,
+            receivers: [ears[0], ears[1]],
+            order,
+        }),
         identity: sha256(format!("mradm-native-sofa-v1:{source_hash}").as_bytes()),
         source_sofa_sha256: Some(source_hash),
         impulses,

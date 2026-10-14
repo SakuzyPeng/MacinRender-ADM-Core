@@ -1,5 +1,6 @@
 //! Room-only numerical contract. Resource I/O belongs to the caller; preparation
 //! accepts authenticated bytes and processing owns all of its mutable history.
+pub mod collection;
 pub mod control;
 pub mod geometry;
 pub mod hrir;

@@ -336,6 +336,8 @@ impl RoomProfile {
 }
 
 pub struct HrirData {
+    pub collection: Option<super::collection::Collection>,
+    pub source_geometry: Option<super::collection::SourceGeometry>,
     pub identity: String,
     pub source_sofa_sha256: Option<String>,
     pub impulses: Vec<f32>,
@@ -403,6 +405,8 @@ impl HrirData {
         }
         Ok(Self {
             identity: sha256(&serde_json::to_vec(&value).map_err(|_| invalid())?),
+            collection: None,
+            source_geometry: None,
             source_sofa_sha256: value
                 .get("source_sofa_sha256")
                 .and_then(Value::as_str)

@@ -408,17 +408,23 @@ impl ResponseWork {
                     continue;
                 }
                 let direction = rotation.apply(path.direction);
+                let distance = (image.order == 0).then_some(source.position.distance);
                 if let Some(cache) = self.query_cache.as_ref().filter(|_| sources.len() == 1) {
                     cache.lock().unwrap().query(
                         &room.hrir,
                         index,
                         direction,
+                        distance,
                         &mut self.faces[index],
                         &mut self.query,
                     )?;
                 } else {
-                    room.hrir
-                        .query(direction, &mut self.faces[index], &mut self.query)?;
+                    room.hrir.query_distance(
+                        direction,
+                        distance,
+                        &mut self.faces[index],
+                        &mut self.query,
+                    )?;
                 }
                 let bucket = (libm::floor(path.samples) as usize + room.profile.alignment_guard)
                     / room.path_bucket_stride;
@@ -536,5 +542,20 @@ impl ResponseWork {
             return Err(Error::InvalidArgument("Invalid HRIR time buffer"));
         }
         self.decoder.query(direction, previous_face, output)
+    }
+
+    pub fn direct_hrir(
+        &mut self,
+        room: &PreparedRoom,
+        direction: [f64; 3],
+        distance: f64,
+        previous_face: &mut usize,
+        output: &mut [f32],
+    ) -> Result<()> {
+        if room.hrir.data.output_taps * 2 != output.len() {
+            return Err(Error::InvalidArgument("Invalid HRIR time buffer"));
+        }
+        self.decoder
+            .query_distance(direction, Some(distance), previous_face, output)
     }
 }

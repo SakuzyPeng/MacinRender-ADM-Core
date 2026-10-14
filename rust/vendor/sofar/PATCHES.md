@@ -19,3 +19,10 @@ widths. This prevents gzip-only data from being silently unshuffled. The workspa
 room SOFA tests compare exact samples across equivalent storage variants and
 reject an unsupported checksum filter. Filter metadata follows the
 [HDF5 file format specification](https://support.hdfgroup.org/documentation/hdf5/latest/_f_m_t2.html).
+
+Bound fractal-heap direct-block decoding by its doubling-table block size.
+A fully occupied direct block has no trailing zero sentinel; previously the
+reader continued into unrelated file bytes and rejected a valid SOFA. Root
+direct blocks use the starting size; indirect entries use the starting size
+for the first two rows, doubling thereafter. The synthetic `full-heap.sofa`
+fixture reproduces the boundary with anonymous metadata and six impulse nodes.

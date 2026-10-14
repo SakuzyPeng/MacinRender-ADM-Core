@@ -300,6 +300,7 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
     (*renderer).reset();
     ok(renderer->configure_generation(2, elements));
     rendering.room = other;
+    rendering.room.hrir_manifest = config.hrir_manifest;
     auto fresh = take(live::create_live_room_renderer(rendering, {}));
     ok(fresh->configure_generation(2, elements));
     frame.generation_id = 2;
@@ -425,7 +426,7 @@ void scene_test(const std::filesystem::path& root,
     config.output_sample_rate = output_rate;
     config.output_ring_frames = 32768;
     config.startup_watermark_frames = 1;
-    if (!sofa.empty()) {
+    if (!sofa.empty() && sofa.extension() == ".sofa") {
         room_config.hrir_manifest = nullptr;
         config.rendering.sofa_path = sofa_name.c_str();
     }
@@ -557,6 +558,16 @@ int main(int argc, char** argv) {
         scene_test(root, 48000, false, {}, ADM_ROOM_QUALITY_REALTIME);
         scene_test(root, 44100, true, {}, ADM_ROOM_QUALITY_REALTIME);
         const std::filesystem::path sofa{argv[2]};
+        const auto collection = sofa.parent_path() / "distance" / "distance_index.json";
+        const auto collection_info = nlohmann::json::parse(take(mradm::inspect_room({room, collection, 1.5})));
+        require(collection_info.at("hrtf_collection").at("radii_m").size() == 2,
+                "distance collection inspection reports every layer");
+        file_test(root, {room, collection, 0.5});
+        file_test(root, {room, collection, 0.5, mradm::RoomQuality::realtime});
+        switching_test(root, {room, collection, 1.5});
+        scene_test(root, 48000, false, collection);
+        scene_test(root, 44100, true, collection, ADM_ROOM_QUALITY_REALTIME);
+        file_test(root, {room, collection, 1.5}, collection.parent_path() / "far.sofa");
         std::filesystem::rename(root / "hrir.json", root / "stored-hrir.json");
         file_test(root, {room, {}, 1.5}, sofa);
         file_test(root, {room, {}, 1.5, mradm::RoomQuality::realtime}, sofa);

@@ -102,9 +102,10 @@ impl HeadSignal {
         let n = room.hrir.data.output_taps;
         let taps = room.short_taps;
         for source in &samples[..count] {
-            work.hrir(
+            work.direct_hrir(
                 room,
                 source.position.direction,
+                source.position.distance,
                 &mut self.face,
                 &mut self.query,
             )?;

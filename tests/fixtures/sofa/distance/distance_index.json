@@ -1,0 +1,48 @@
+{
+  "schema": "mradm.hrtf-collection",
+  "version": 1,
+  "collection": "Synthetic distance fixture",
+  "primary_variant": "HRIR_DFEQ100",
+  "sampling_rate_hz": 48000,
+  "directions_per_distance": 6,
+  "radii_m": [
+    0.2,
+    1.5
+  ],
+  "layers": [
+    {
+      "radius_m": 0.2,
+      "reference_layer": false,
+      "directions": 6,
+      "primary": "near.sofa",
+      "provenance": {
+        "original": 6,
+        "virtual_dvf": 0
+      },
+      "files": {
+        "HRIR_DFEQ100": {
+          "path": "near.sofa",
+          "bytes": 16206,
+          "sha256": "4186ea5e39a34ffb578a8e68b60b663fccc878325125d439f34efb11f995a10f"
+        }
+      }
+    },
+    {
+      "radius_m": 1.5,
+      "reference_layer": true,
+      "directions": 6,
+      "primary": "far.sofa",
+      "provenance": {
+        "original": 6,
+        "virtual_dvf": 0
+      },
+      "files": {
+        "HRIR_DFEQ100": {
+          "path": "far.sofa",
+          "bytes": 16206,
+          "sha256": "0b011bff4c16505feeaa7685e7b6cd46625742544561f27733b5ba478ee80ffb"
+        }
+      }
+    }
+  ]
+}

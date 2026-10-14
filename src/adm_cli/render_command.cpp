@@ -365,7 +365,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->needs("--room");
     render_cmd->add_option("--room-hrir",
                            opts.room_hrir_path,
-                           "Personal SOFA or prepared HRIR manifest (optional; --sofa also prepares natively)");
+                           "Personal SOFA, prepared HRIR or distance collection manifest (room-binaural)");
     render_cmd->add_option(
         "--screen-config", opts.screen_config_path, "Reference/reproduction screen JSON (room-binaural)");
     render_cmd
