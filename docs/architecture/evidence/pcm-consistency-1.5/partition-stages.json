@@ -1,0 +1,1103 @@
+{
+ "source": "Linux x64 config A diagnostic collection at f94d28e (bit-identical to 7e52d72)",
+ "method": "Per case, each Scene checkpoint stage is concatenated in slice order per epoch (scene/e*-g*-s*.<stage> and e*-out*.<stage>; device/e*.<stage>) and the fixed (512) and fragmented (1,7,127,511,1024) partitions are compared word by word. A value is the index of the first differing 32-bit word in the concatenated stream (interleaved across channels).",
+ "cases": [
+  {
+   "case": "scene-vbap-0+2+0-cloud0-48000-48000",
+   "backend": "vbap",
+   "layout": "0+2+0",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:36-incoming": 0,
+    "e1:40-render": 16423,
+    "e1:50-resampled": 16423,
+    "e1:60-transition": 16423
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-0+2+0-cloud0-48000-44100",
+   "backend": "vbap",
+   "layout": "0+2+0",
+   "rates": [
+    48000,
+    44100
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:36-incoming": 0,
+    "e1:40-render": 16423,
+    "e1:50-resampled": 2342,
+    "e1:60-transition": 2342
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-0+2+0-cloud0-44100-48000",
+   "backend": "vbap",
+   "layout": "0+2+0",
+   "rates": [
+    44100,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:36-incoming": 0,
+    "e1:40-render": 16402,
+    "e1:50-resampled": 14356,
+    "e1:60-transition": 14356
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-0+2+0-cloud0-96000-96000",
+   "backend": "vbap",
+   "layout": "0+2+0",
+   "rates": [
+    96000,
+    96000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:36-incoming": 0,
+    "e1:40-render": 16509,
+    "e1:50-resampled": 16509,
+    "e1:60-transition": 16509
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-0+2+0-cloud0-48000-96000",
+   "backend": "vbap",
+   "layout": "0+2+0",
+   "rates": [
+    48000,
+    96000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:36-incoming": 0,
+    "e1:40-render": 16423,
+    "e1:50-resampled": 32805,
+    "e1:60-transition": 32805
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-0+2+0-cloud0-96000-48000",
+   "backend": "vbap",
+   "layout": "0+2+0",
+   "rates": [
+    96000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:36-incoming": 0,
+    "e1:40-render": 16509,
+    "e1:50-resampled": 8258,
+    "e1:60-transition": 8258
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-4+7+0-cloud0-48000-48000",
+   "backend": "vbap",
+   "layout": "4+7+0",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-4+7+0-cloud0-96000-96000",
+   "backend": "vbap",
+   "layout": "4+7+0",
+   "rates": [
+    96000,
+    96000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud0-48000-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud0-48000-44100",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    44100
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud0-44100-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    44100,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud0-96000-96000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    96000,
+    96000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud0-48000-96000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    96000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud0-96000-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    96000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud1-48000-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud1-48000-44100",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    44100
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud1-44100-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    44100,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud1-96000-96000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    96000,
+    96000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud1-48000-96000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    96000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-binaural-binaural-cloud1-96000-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    96000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-device-dsp",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e1:70-before-hptf": 0,
+    "e1:80-hptf": 0,
+    "e1:90-output": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:36-incoming",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:70-before-hptf",
+    "e2:80-hptf",
+    "e2:90-output"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-7.1.4-size0-48000-48000",
+   "backend": "triple-balance",
+   "layout": "7.1.4",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-7.1.4-size1-48000-48000",
+   "backend": "triple-balance",
+   "layout": "7.1.4",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-9.1.6-size0-48000-48000",
+   "backend": "triple-balance",
+   "layout": "9.1.6",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-9.1.6-size1-48000-48000",
+   "backend": "triple-balance",
+   "layout": "9.1.6",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-22.2-size0-48000-48000",
+   "backend": "triple-balance",
+   "layout": "22.2",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-22.2-size1-48000-48000",
+   "backend": "triple-balance",
+   "layout": "22.2",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-7.1.4-size0-96000-96000",
+   "backend": "triple-balance",
+   "layout": "7.1.4",
+   "rates": [
+    96000,
+    96000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-triple-balance-9.1.6-size1-48000-44100",
+   "backend": "triple-balance",
+   "layout": "9.1.6",
+   "rates": [
+    48000,
+    44100
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:50-resampled": 18736,
+    "e1:60-transition": 18736
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:35-outgoing",
+    "e1:36-incoming",
+    "e1:40-render",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-sofa-simple-cloud0-48000-44100",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    44100
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 1,
+    "e1:36-incoming": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-sofa-simple-cloud1-48000-44100",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    44100
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:36-incoming": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 1,
+    "e1:60-transition": 1,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-sofa-general-compressed-cloud0-48000-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:36-incoming": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-sofa-general-compressed-cloud1-48000-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": true
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:36-incoming": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-sofa-off-axis-compressed-cloud0-44100-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    44100,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 0,
+    "e1:36-incoming": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-sofa-off-axis-compressed-cloud1-44100-48000",
+   "backend": "binaural",
+   "layout": "binaural",
+   "rates": [
+    44100,
+    48000
+   ],
+   "partition_invariant_gate": false,
+   "pcm_identical": {
+    "epoch1": false,
+    "epoch2": false
+   },
+   "first_differing_word": {
+    "e1:35-outgoing": 1,
+    "e1:36-incoming": 0,
+    "e1:40-render": 0,
+    "e1:50-resampled": 0,
+    "e1:60-transition": 0,
+    "e2:40-render": 0,
+    "e2:50-resampled": 0,
+    "e2:60-transition": 0
+   },
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e2:10-input",
+    "e2:21-effective"
+   ]
+  },
+  {
+   "case": "scene-vbap-9+10+3-cloud0-48000-48000",
+   "backend": "vbap",
+   "layout": "9+10+3",
+   "rates": [
+    48000,
+    48000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  },
+  {
+   "case": "scene-vbap-9+10+3-cloud0-96000-96000",
+   "backend": "vbap",
+   "layout": "9+10+3",
+   "rates": [
+    96000,
+    96000
+   ],
+   "partition_invariant_gate": true,
+   "pcm_identical": {
+    "epoch1": true,
+    "epoch2": true
+   },
+   "first_differing_word": {},
+   "identical_stages": [
+    "e1:10-input",
+    "e1:21-effective",
+    "e1:40-render",
+    "e1:50-resampled",
+    "e1:60-transition",
+    "e2:10-input",
+    "e2:21-effective",
+    "e2:40-render",
+    "e2:50-resampled",
+    "e2:60-transition"
+   ]
+  }
+ ]
+}
