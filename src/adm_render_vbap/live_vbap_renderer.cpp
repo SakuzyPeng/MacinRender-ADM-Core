@@ -1,6 +1,7 @@
 #include "live_vbap_renderer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <iterator>
@@ -25,7 +26,6 @@
 #include "live_scene_trace.h"
 #include "live_vbap.h"
 #include "render_common.h"
-#include "scene_math.h"
 #include "speaker_layouts.h"
 
 namespace mradm::live_scene {
@@ -298,8 +298,10 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         });
     }
 
+    // Panning in Rust: each source's table times its gain, summed in source order for an
+    // object and its divergence sources. C++ only scatters the non-LFE results to channels.
     [[nodiscard]] Result<std::vector<float>>
-    point_gains(float azimuth, float elevation, float gain, float spread_deg) const {
+    panned_gains(std::span<const MradmPannerSource> sources, bool spread, bool sum) const {
         std::vector<float> speakers;
         speakers.reserve(layout_.speakers.size() * 2U);
         for (const auto& speaker : layout_.speakers) {
@@ -314,7 +316,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
 
         std::vector<float> table;
         try {
-            table = dsp::panner_for(speakers, !is_2d())->gains(azimuth, elevation, spread_deg);
+            table = dsp::panner_for(speakers, !is_2d())->source_gains(sources, spread, sum);
         } catch (const std::exception& error) {
             return make_error(ErrorCode::render_failed, error.what());
         }
@@ -323,10 +325,20 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         std::size_t source_index = 0;
         for (std::size_t channel = 0; channel < layout_.speakers.size(); ++channel) {
             if (!layout_.speakers[channel].is_lfe) {
-                gains[channel] = table[source_index++] * gain;
+                gains[channel] = table[source_index++];
             }
         }
         return gains;
+    }
+
+    [[nodiscard]] static MradmPannerSource point_source(const SceneBlockPosition& position, float gain) {
+        MradmPannerSource source{};
+        source.cartesian = position.cartesian ? 1U : 0U;
+        source.position[0] = position.cartesian ? position.x : position.azimuth;
+        source.position[1] = position.cartesian ? position.y : position.elevation;
+        source.position[2] = position.cartesian ? position.z : position.distance;
+        source.gain = gain;
+        return source;
     }
 
     [[nodiscard]] Result<std::vector<float>>
@@ -364,22 +376,17 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             block = apply_channel_lock(block, speakers);
         }
 
-        std::vector<float> result(layout_.speakers.size(), 0.0F);
+        std::vector<MradmPannerSource> sources;
         for (const auto& source : expand_object_divergence(block)) {
-            const auto position = scene_position_to_polar(source.position);
-            const float distance = std::max(0.4F, position.distance);
-            float spread = 0.0F;
-            if (!is_2d() && config_.speaker_spread_mode != SpeakerSpreadMode::none) {
-                spread =
-                    dsp::scene_math<6, 1>(7U, {source.width, source.height, source.depth, distance, 0.0F, 0.0F})[0];
-            }
-            auto source_gains = point_gains(position.azimuth, position.elevation, source.gain, spread);
-            if (!source_gains) {
-                return tl::unexpected{source_gains.error()};
-            }
-            for (std::size_t channel = 0; channel < result.size(); ++channel) {
-                result[channel] += (*source_gains)[channel];
-            }
+            auto point = point_source(source.position, source.gain);
+            point.width = source.width;
+            point.height = source.height;
+            point.depth = source.depth;
+            sources.push_back(point);
+        }
+        auto result = panned_gains(sources, !is_2d() && config_.speaker_spread_mode != SpeakerSpreadMode::none, true);
+        if (!result) {
+            return result;
         }
 
         if ((state.valid_fields & state_diffuse) != 0U && state.diffuse > 1.0e-4F) {
@@ -432,13 +439,13 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                               fmt::format("DirectSpeakers element {} has neither a routable label nor position",
                                           descriptor.element_id));
         }
-        const auto polar = scene_position_to_polar(position);
         warn_once(frame,
                   descriptor.element_id,
                   0,
                   "DirectSpeakers uses its current canonical position instead of fixed label routing",
                   DiagnosticCode::direct_speaker_fallback);
-        return point_gains(polar.azimuth, polar.elevation, gain, 0.0F);
+        const std::array sources{point_source(position, gain)};
+        return panned_gains(sources, false, false);
     }
 
     [[nodiscard]] Result<std::vector<float>>
