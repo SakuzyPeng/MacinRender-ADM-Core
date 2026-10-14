@@ -29,6 +29,7 @@ mod room;
 mod room_environment;
 mod scene_math;
 mod scene_transition;
+mod semantic_policy;
 mod spatial;
 mod spreader;
 #[cfg(test)]
