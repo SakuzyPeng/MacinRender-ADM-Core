@@ -341,6 +341,31 @@ pub fn nearest_compat(
     }
     index.map(|i| (i, best))
 }
+/// channelLock: snap to the nearest non-LFE speaker, keeping the source distance. With a
+/// maximum distance, a speaker farther than that (plus 1e-4) leaves the position unlocked.
+/// Returns the locked polar position.
+pub fn channel_lock(
+    position: Vec3,
+    cartesian: bool,
+    max_distance: Option<f32>,
+    speakers: &[Speaker],
+) -> Option<Vec3> {
+    let (index, _) = nearest(position, cartesian, speakers)?;
+    let p = if cartesian {
+        cartesian_to_polar(position)
+    } else {
+        position
+    };
+    let speaker = speakers[index];
+    if let Some(max) = max_distance {
+        let source = direction(p[0], p[1]);
+        let target = direction(speaker.azimuth, speaker.elevation);
+        if distance(source, target) > max + 1e-4 {
+            return None;
+        }
+    }
+    Some([speaker.azimuth, speaker.elevation, p[2]])
+}
 type Quaternion = [f64; 4];
 fn multiply(a: Quaternion, b: Quaternion, contract: bool) -> Quaternion {
     let [w, x, y, z] = a;
@@ -478,4 +503,90 @@ pub fn pose(input: &[f32], quaternion: bool) -> Result<[f32; 7]> {
         (s.asin() * DEG) as f32,
         (roll * DEG) as f32,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_lock_matches_the_former_composition() {
+        let speakers = [
+            Speaker {
+                azimuth: 30.,
+                elevation: 0.,
+                is_lfe: 0,
+            },
+            Speaker {
+                azimuth: -30.,
+                elevation: 0.,
+                is_lfe: 0,
+            },
+            Speaker {
+                azimuth: 0.,
+                elevation: 0.,
+                is_lfe: 1,
+            },
+            Speaker {
+                azimuth: 110.,
+                elevation: 30.,
+                is_lfe: 0,
+            },
+        ];
+        for (position, cartesian) in [
+            ([0.3, 0.8, 0.1], true),
+            ([-0.0, 0.0, 0.0], true),
+            ([95., 20., 0.4], false),
+            ([0., 0., 2.], false),
+        ] {
+            let polar = if cartesian {
+                cartesian_to_polar(position)
+            } else {
+                position
+            };
+            let (index, gap) = nearest(position, cartesian, &speakers).unwrap();
+            assert_ne!(speakers[index].is_lfe, 1);
+            let s = speakers[index];
+            let expected = [s.azimuth, s.elevation, polar[2]];
+            assert_eq!(
+                channel_lock(position, cartesian, None, &speakers),
+                Some(expected)
+            );
+            // The tolerance compares the same unit-direction distance as nearest().
+            let between = distance(
+                direction(polar[0], polar[1]),
+                direction(s.azimuth, s.elevation),
+            );
+            assert_eq!(between.to_bits(), gap.to_bits());
+            assert_eq!(
+                channel_lock(position, cartesian, Some(gap - 1e-4), &speakers),
+                Some(expected)
+            );
+            if gap > 1e-3 {
+                assert_eq!(
+                    channel_lock(position, cartesian, Some(gap - 2e-3), &speakers),
+                    None
+                );
+            }
+        }
+        assert_eq!(
+            channel_lock([0., 0., 1.], false, None, &speakers[2..3]),
+            None
+        );
+    }
+
+    #[test]
+    fn negligible_divergence_yields_one_point() {
+        let mut points = [CloudPoint::default(); 3];
+        for d in [0., 1e-4, -2.] {
+            assert_eq!(
+                divergence([0.2, 0.9, 0.1], true, d, 30., 0., 1., &mut points),
+                1
+            );
+        }
+        assert_eq!(
+            divergence([0.2, 0.9, 0.1], true, 2e-4, 30., 0., 1., &mut points),
+            3
+        );
+    }
 }

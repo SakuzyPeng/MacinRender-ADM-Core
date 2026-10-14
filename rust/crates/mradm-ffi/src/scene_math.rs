@@ -169,6 +169,45 @@ pub unsafe extern "C" fn mradm_dsp_scene_nearest(
         Ok(())
     })
 }
+/// `src` is the position; `max_distance` applies when `has_max_distance != 0`. `locked`
+/// receives 1 and `dst` the polar position when the block locks to a speaker.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_scene_channel_lock(
+    src: *const f32,
+    n: usize,
+    cartesian: u32,
+    has_max_distance: u32,
+    max_distance: f32,
+    speakers: *const Speaker,
+    speaker_count: usize,
+    dst: *mut f32,
+    m: usize,
+    locked: *mut u32,
+) -> i32 {
+    boundary(std::ptr::null_mut(), 0, || unsafe {
+        separate(src, n, dst, m)?;
+        separate(speakers, speaker_count, dst, m)?;
+        separate(dst, m, locked, 1)?;
+        separate(src, n, locked, 1)?;
+        separate(speakers, speaker_count, locked, 1)?;
+        if n != 3 || m != 3 {
+            return Err(invalid());
+        }
+        let cart = flag(cartesian)?;
+        let limit = flag(has_max_distance)?.then_some(max_distance);
+        let s = input(src, n)?;
+        let speakers = input(speakers, speaker_count)?;
+        if speakers.iter().any(|s| s.is_lfe > 1) {
+            return Err(invalid());
+        }
+        let result = math::channel_lock([s[0], s[1], s[2]], cart, limit, speakers);
+        *locked = u32::from(result.is_some());
+        if let Some(polar) = result {
+            output(dst, m)?.copy_from_slice(&polar);
+        }
+        Ok(())
+    })
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_scene_rotation_create(
     pose: *const f32,
