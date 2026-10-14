@@ -88,7 +88,8 @@ uint64_t rss() {
 }
 class Fixture {
   public:
-    Fixture(std::size_t sources, uint32_t frames, bool broadband = false) : broadband_(broadband) {
+    Fixture(std::size_t sources, uint32_t frames, bool broadband = false, bool moving = false)
+        : broadband_(broadband), moving_(moving) {
         frame_.epoch_id = frame_.generation_id = 1;
         frame_.duration_samples = frames;
         for (std::size_t i = 0; i < sources; ++i) {
@@ -118,13 +119,33 @@ class Fixture {
     void update(uint64_t block) {
         frame_.media_sample_start = static_cast<int64_t>(block * frame_.duration_samples);
         frame_.initial_states = block == 0 ? states_ : std::vector<StateEntry>{};
+        frame_.updates.clear();
         for (std::size_t source = 0; source < frame_.pcm.size(); ++source) {
+            if (moving_) {
+                MetadataUpdate movement;
+                movement.element_id = source + 1;
+                movement.offset_samples = static_cast<uint32_t>((source * 131 + 17) % frame_.duration_samples);
+                movement.ramp_duration_samples = frame_.duration_samples;
+                movement.changed_fields = movement.state.valid_fields = state_position;
+                std::array<float, 3> position{};
+                if (mradm_room_polar((static_cast<float>(source) * 360.F / static_cast<float>(frame_.pcm.size())) +
+                                         (static_cast<float>((block + 1) % 720) * .5F),
+                                     (static_cast<float>(source % 3) * 15.F) - 15.F,
+                                     1.4F,
+                                     position.data()) != 0) {
+                    throw std::runtime_error("moving position");
+                }
+                movement.state.x = position[0];
+                movement.state.y = position[1];
+                movement.state.z = position[2];
+                frame_.updates.push_back(movement);
+            }
             auto& pcm = frame_.pcm[source].samples;
             for (std::size_t i = 0; i < pcm.size(); ++i) {
                 if (broadband_) {
                     // Fixed PCG hash noise avoids ambiguous periodic correlation
                     // peaks in device loopback measurements. No mutable RNG state.
-                    const auto index = static_cast<std::uint32_t>(block * pcm.size() + i);
+                    const auto index = static_cast<std::uint32_t>((block * pcm.size()) + i);
                     const auto salt = static_cast<std::uint32_t>(source) * 3812015801U;
                     const std::uint32_t state = ((index * 747796405U) + 2891336453U) ^ salt;
                     const auto word = ((state >> ((state >> 28U) + 4U)) ^ state) * 277803737U;
@@ -136,6 +157,7 @@ class Fixture {
                 pcm[i] = (static_cast<float>(word) - 32760.F) / 16777216.F;
             }
         }
+        std::ranges::stable_sort(frame_.updates, {}, &MetadataUpdate::offset_samples);
     }
     [[nodiscard]] const std::vector<ElementDescriptor>& elements() const { return elements_; }
     [[nodiscard]] const Frame& frame() const { return frame_; }
@@ -145,6 +167,7 @@ class Fixture {
     std::vector<StateEntry> states_;
     Frame frame_;
     bool broadband_;
+    bool moving_;
 };
 RendererConfig renderer_config(const RoomConfig& room) {
     RendererConfig config;
@@ -259,6 +282,7 @@ struct ProbeOptions {
     std::string capture_name;
     std::filesystem::path recordings;
     bool loopback{false};
+    bool moving{false};
     int osc_port{-1};
     float volume{.1F};
 };
@@ -309,7 +333,7 @@ bool streaming(const RoomConfig& first,
     auto output = take(SceneOutputSession::create_with_device(stream, std::move(device), true));
     done(output->set_volume(options.volume));
     done(output->begin_epoch(1, 0));
-    Fixture fixture(sources, 512, true);
+    Fixture fixture(sources, 512, true, options.moving);
     done(stream->configure_generation(1, 1, fixture.elements()));
     std::vector<ScenePcmPlaneView> planes;
     planes.reserve(fixture.frame().pcm.size());
@@ -322,6 +346,8 @@ bool streaming(const RoomConfig& first,
                                 {"osc_port", receiver ? receiver->snapshot().bound_port : 0},
                                 {"seconds", seconds},
                                 {"sample_rate", 48000},
+                                {"quality", first.quality == RoomQuality::realtime ? "realtime" : "exact"},
+                                {"source_ramps", options.moving},
                                 {"volume", options.volume}}
                      .dump()
               << '\n'
@@ -437,6 +463,11 @@ bool streaming(const RoomConfig& first,
         frame.flags = frame_state_complete;
         frame.pcm = planes;
         frame.initial_states = fixture.frame().initial_states;
+        frame.updates = fixture.frame().updates;
+        // The last material slice can be shorter than a canonical producer frame.
+        while (!frame.updates.empty() && frame.updates.back().offset_samples >= frame.duration_samples) {
+            frame.updates = frame.updates.first(frame.updates.size() - 1);
+        }
         if (take(stream->submit_frame(frame, std::chrono::seconds(5))) != SceneSubmitStatus::accepted) {
             throw std::runtime_error("producer timeout");
         }
@@ -496,6 +527,8 @@ bool streaming(const RoomConfig& first,
     nlohmann::json report{{"case", real_device ? "Scene_streaming_device" : "Scene_streaming_null_device"},
                           {"device", real_device ? selected.name : "null"},
                           {"sources", sources},
+                          {"quality", first.quality == RoomQuality::realtime ? "realtime" : "exact"},
+                          {"source_ramps", options.moving},
                           {"requested_seconds", seconds},
                           {"control_transport", receiver ? "OSC loopback UDP" : "direct API"},
                           {"nominal_head_update_hz", 100},
@@ -544,6 +577,7 @@ bool streaming(const RoomConfig& first,
 }
 
 } // namespace
+// NOLINTNEXTLINE(readability-function-size): manual probe option parsing and mode dispatch.
 int main(int argc, char** argv) {
 #ifndef NDEBUG
     std::cerr << "Use a Release build.\n";
@@ -563,7 +597,8 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "usage: room_scene_benchmark ROOM_JSON OTHER_ROOM_JSON [SECONDS=10] "
                 "[all|stream|stream-cycles|stream-device|kernel|kernel-worker|latency] [SOURCES=32] [--device NAME|ID] "
-                "[--osc-port PORT] [--capture NAME|--capture-loopback] [--recordings NEW_DIR] [--volume GAIN]");
+                "[--osc-port PORT] [--capture NAME|--capture-loopback] [--recordings NEW_DIR] [--volume GAIN] "
+                "[--quality exact|realtime] [--source-ramps]");
         }
         const unsigned seconds = argc > 3 ? static_cast<unsigned>(std::stoul(argv[3])) : 10;
         if (seconds < 5 || seconds > 3600) {
@@ -583,6 +618,10 @@ int main(int argc, char** argv) {
                 options.loopback = true;
                 continue;
             }
+            if (flag == "--source-ramps") {
+                options.moving = true;
+                continue;
+            }
             if (++i >= argc) {
                 throw std::runtime_error("Missing probe option value");
             }
@@ -596,6 +635,12 @@ int main(int argc, char** argv) {
                 options.volume = std::stof(argv[i]);
             } else if (flag == "--osc-port") {
                 options.osc_port = std::stoi(argv[i]);
+            } else if (flag == "--quality") {
+                const std::string_view quality = argv[i];
+                if (quality != "exact" && quality != "realtime") {
+                    throw std::runtime_error("quality must be exact or realtime");
+                }
+                first.quality = next.quality = quality == "realtime" ? RoomQuality::realtime : RoomQuality::exact;
             } else {
                 throw std::runtime_error("Unknown probe option");
             }

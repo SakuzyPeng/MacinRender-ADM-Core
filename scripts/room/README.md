@@ -205,6 +205,10 @@ python3 scripts/room/device-probe.py --probe build/release/mr_adm_room_scene_ben
 一次房间。测试信号为确定性宽带噪声，会按会话音量实际播放；缺省 `--volume 0.1`，不改
 系统音量。名称/ID 必须唯一匹配当前设备，不会在选择失败时静默改用另一设备。
 `--device null` 可先检查调用链；它不构成真实设备验收。
+`--quality exact|realtime` 显式选择档位，缺省仍为精确档。`--source-ramps` 让每个声源
+每 512 帧提交一次持续 512 帧的位置斜坡，各源事件偏移不同；它会与头追和换房同时运行。
+两项配置都写入证据，避免把静态声源或精确档结果误作实时档的密集运动验收。
+`--single-room-switch` 只在开头请求一次换房，之后保持房间固定，用于隔离周期换房的影响。
 Windows 发送线程使用独立高精度等待定时器，采样时间按 10 ms 逻辑时钟递增，主机时间另行记录。
 接收包数须达到素材时长 × 100 Hz 的 99%，应用比例也须达到 99%，并且没有拒包、丢包或发送错误；
 仅把低频率收到的包全部应用不能通过。原生探针在素材结束后继续更新头姿、完成排尾，停止请求新房间。
@@ -227,3 +231,16 @@ python3 scripts/room/analyze-loopback.py /path/new-device-evidence/recordings \
 时间；报告的不确定度下限包含输入/输出最大回调周期与一个样本，驱动时间戳约定、时钟漂移、
 重采样及调度误差仍未校准。虚拟回环、软件队列或内核 257 帧结果都不能作为传感器到耳机
 的物理延迟。回环设备若静音/电平为零，结果会缺少有效相关窗，不能算测量通过。
+
+文件流式渲染可通过独立的 Release 探针验证正式 `MonitorSession` 路径，包括 ADM 导入、
+PCM 文件解码、后台渲染、监控处理和真实音频设备：
+
+```sh
+cmake --build --preset release --target mr_adm_room_file_device_probe
+build/release/mr_adm_room_file_device_probe programme.wav \
+  /path/reference/room.json /path/variant/room.json 'exact current output device ID'
+```
+
+该探针固定为实时档，直接以 100 Hz 调用头姿 API，每 5 秒请求换房，并播放至文件及房间
+尾声排空。它报告实际帧数、欠载、控制请求、峰值电平、RSS 和诊断，不计算传感器延迟。
+文件监控的 `ended` 表示生产端 EOS；验收还需等待输出环形缓冲排空并核对完整帧数。
