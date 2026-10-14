@@ -1,6 +1,6 @@
 use mradm_dsp::hptf::{
-    BLEND_FRAMES, Band, BandKind, Biquad, Cascade, Coefficients, MAX_BANDS, PreampMode, Processor,
-    Snapshot, design,
+    BLEND_FRAMES, Band, BandKind, Biquad, CHUNK_FRAMES, Cascade, Coefficients, MAX_BANDS,
+    PreampMode, Processor, Snapshot, design,
 };
 
 fn band(kind: BandKind, frequency: f64, gain_db: f64, q: f64) -> Band {
@@ -211,6 +211,10 @@ fn bypass_clone_reset_and_nonfinite_state_recovery() {
     bad[3] = f32::NAN;
     c.process(&mut bad).unwrap();
     assert!(bad.iter().any(|x| !x.is_finite()));
+    // The poisoned history lasts until the next cleanup point, CHUNK_FRAMES after reset.
+    let mut rest = vec![0.1; (CHUNK_FRAMES - 32) * 2];
+    c.process(&mut rest).unwrap();
+    assert!(rest[rest.len() - 1].is_nan());
     let mut fresh = Cascade::new(2).unwrap();
     fresh.set_coefficients(profile()).unwrap();
     let (mut a, mut b) = (noise(256, 2), noise(256, 2));
@@ -306,6 +310,77 @@ fn processor_uses_two_independent_histories_and_preserves_reset_priority() {
     let mut pcm = source.clone();
     p.process(&mut pcm, None).unwrap();
     assert_eq!(pcm, source);
+}
+
+fn process_partitioned(sizes: &[usize]) -> Vec<f32> {
+    const TARGET: usize = 9000;
+    let first = design(
+        &[
+            band(BandKind::Peaking, 1500., 5., 1.2),
+            band(BandKind::HighShelf, 6000., -3., 0.7),
+        ],
+        -2.,
+        48000,
+        PreampMode::WarnOnly,
+    )
+    .unwrap();
+    // Noise with one nonfinite sample, a decay through the cleanup threshold,
+    // then a transition to a low-frequency profile accepted at a fixed frame.
+    let mut pcm = noise(12000, 2);
+    pcm[1500 * 2 + 1] = f32::NAN;
+    pcm[3000 * 2..8800 * 2].fill(0.);
+    pcm[8800 * 2..8900 * 2].fill(1e-30);
+    let mut p = Processor::new(2, 48000).unwrap();
+    p.reset(Some(Snapshot {
+        coefficients: first,
+        revision: 1,
+    }))
+    .unwrap();
+    let mut offset = 0;
+    for &size in sizes.iter().cycle() {
+        if offset == pcm.len() / 2 {
+            break;
+        }
+        let end = offset.saturating_add(size).min(pcm.len() / 2);
+        let end = if offset < TARGET {
+            end.min(TARGET)
+        } else {
+            end
+        };
+        let target = (offset == TARGET).then_some(Snapshot {
+            coefficients: profile(),
+            revision: 2,
+        });
+        p.process(&mut pcm[offset * 2..end * 2], target).unwrap();
+        offset = end;
+    }
+    pcm
+}
+
+#[test]
+fn processor_output_is_independent_of_call_partitioning() {
+    let reference = process_partitioned(&[usize::MAX]);
+    // Poison ends at the first cleanup point after the NaN, and the decay is flushed.
+    assert!(reference[1500 * 2..2048 * 2].iter().any(|x| x.is_nan()));
+    assert!(reference[2048 * 2..].iter().all(|x| x.is_finite()));
+    let flushed = (3000..8800)
+        .find(|&f| reference[f * 2..8800 * 2].iter().all(|&x| x == 0.))
+        .unwrap();
+    assert!(flushed.is_multiple_of(CHUNK_FRAMES));
+    for sizes in [
+        &[1, 7, 127, 511, 1024][..],
+        &[512],
+        &[1023, 1025, 2047],
+        &[4096],
+        &[3],
+    ] {
+        let output = process_partitioned(sizes);
+        assert_eq!(
+            output.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+            reference.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+            "partition {sizes:?}"
+        );
+    }
 }
 
 #[test]

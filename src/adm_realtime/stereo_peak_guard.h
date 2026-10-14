@@ -33,4 +33,7 @@ class StereoPeakGuard {
 };
 // cppcheck-suppress-end unusedStructMember
 
+// Constant volume for device outputs that have neither a peak guard nor their own volume control.
+void apply_output_volume(std::span<float> pcm, float gain) noexcept;
+
 } // namespace mradm::realtime

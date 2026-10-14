@@ -148,7 +148,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | 链路 | 当前实现 | 本次判断 |
 | --- | --- | --- |
 | ADM 数字与时间解析 | [`document::number/samples`](../../rust/crates/mradm-adm/src/document.rs#L381)：Rust 十进制解析；时间使用 u128 纳秒与整数舍入。 | 不再依赖 C++ stream 或平台 long double；应与 N02 的后续数学转换分开。 |
-| HpTF 文本解析 | [`parametric_eq::number`](../../rust/crates/mradm-dsp/src/hptf/parametric_eq.rs#L60)：固定 C locale 字节规则，拒绝十六进制和非零下溢。 | 前次发现的解析分歧已统一；N16 和 S02 仍然存在。 |
+| HpTF 文本解析 | [`parametric_eq::number`](../../rust/crates/mradm-dsp/src/hptf/parametric_eq.rs#L60)：固定 C locale 字节规则，拒绝十六进制和非零下溢。 | 前次发现的解析分歧已统一；N16 和 S02 已在一期 1.4 处理（设计改用 `libm`，尾音清理改为固定帧网格）。 |
 | PCM 输入 | [`Reader::read_frames`](../../rust/crates/mradm-wav/src/reader.rs#L263)：显式小端整数转换与二的幂缩放，float32 按位读。Scene 直接接受调用方 f32。 | 相同合法字节和格式没有新增随机路径。PCM32 输入转 f32 的精度损失是确定的格式转换。通用 `FloatFlacReader` 仍用 dr_flac；它不是 ADM WAVE 主输入的替换实现，也不由 WAVE 门禁证明。 |
 | 重采样 | [`Resampler`](../../rust/crates/mradm-dsp/src/resampler.rs)、vendored rubato 固定标量归约、[`mradm_math` 窗和 sinc](../../rust/vendor/rubato/src/windows.rs#L3)。 | 已处理原有运行时 SIMD 和平台三角函数差异；已有 `trig.*` / `resampler-*` 门禁。仍固定比率、质量、初始延迟、reset 和 EOS。 |
 | Spreader 与 SVD | 固定 8 组预算、按索引归约、稳定源 seed；nalgebra `libm-force`；spreader 几何与滤波系数显式走 libm。 | 已处理二期的根因，不再把硬件线程数本身列作剩余随机混音源。见 [ADR 0017](../adr/0017-deterministic-spreader.md)。 |
@@ -233,6 +233,12 @@ Consistency 运行 38034179850 在 A/B 两种配置下完成三平台诊断采�
 live 双耳 divergence 与 SOFA 坐标转换改用 `libm`（`8d260b8`）；RustFFT 与纳入仓库的 RealFFT 的 twiddle 改用 `libm`（`e432729`）。
 三平台 Consistency 38545398947 与 38548940341 通过，全部 160 个内核文件三平台相同，f64 twiddle 列设为门禁。
 Scene 空间与卷积准备链路上不再调用平台数学库；HpTF 设计与峰值保护属于 1.4。见 [1.3 记录](RUST_SCENE_PORTABLE_MATH.md)。
+
+**1.4 状态**：无峰值保护输出的音量乘法移入 Rust（`caf6859`）；HpTF 极小尾音清理改为自 reset 起每 1024 帧的固定网格，
+淡化在第 2048 帧精确结束（`8ee8f82`，S02）；HpTF 设计与 `StereoPeakGuard` 释放系数改用 `libm`（`877a383`，N16、N17）。
+Linux x64 上锁定矩阵的普通与诊断运行全部不变；Consistency 38570610669 中 188 个 PCM id、160 个内核文件和 44 个设备/HpTF 检查点三平台相同，
+HpTF 设计内核设为门禁（共 155 份）。`SceneOutputSession` 中不再有决定样本值的 C++ 浮点运算。
+见 [1.4 记录](RUST_SCENE_OUTPUT_DSP.md)。
 
 相关审计项：N04、N05、N09—N11、N16、N17，以及 N01/N03/S03—S07 中服务于 Scene 的部分和 S02。
 一期对精确一致性的要求适用于锁定输入与配置的矩阵，并不把真实设备的墙钟操作或欠载输出当作相同事件序列。

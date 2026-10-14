@@ -12,10 +12,12 @@ const HIGH: f64 = 20000.0;
 const TOLERANCE_DB: f64 = 0.001;
 const REFINEMENTS: usize = 4096;
 
+// Transcendentals use libm so coefficients match on every platform (ADR 0018);
+// sqrt stays std, which is correctly rounded.
 fn design_band(band: &Band, rate: f64) -> Result<Biquad> {
-    let a = 10.0_f64.powf(band.gain_db / 40.0);
+    let a = libm::pow(10.0, band.gain_db / 40.0);
     let w = TAU * band.frequency / rate;
-    let (cs, sn) = (w.cos(), w.sin());
+    let (cs, sn) = (libm::cos(w), libm::sin(w));
     let alpha = sn / (2.0 * band.q);
     let (b0, b1, b2, a0, a1, a2) = match band.kind {
         BandKind::Peaking => (
@@ -88,13 +90,13 @@ fn design_band(band: &Band, rate: f64) -> Result<Biquad> {
 fn response_at_z(section: &Biquad, z: Complex64, z2: Complex64) -> f64 {
     let numerator = section.b0 as f64 + (section.b1 as f64 * z) + (section.b2 as f64 * z2);
     let denominator = 1.0 + (section.a1 as f64 * z) + (section.a2 as f64 * z2);
-    20.0 * (numerator.norm() / denominator.norm().max(1e-30))
-        .max(1e-30)
-        .log10()
+    let numerator = libm::hypot(numerator.re, numerator.im);
+    let denominator = libm::hypot(denominator.re, denominator.im).max(1e-30);
+    20.0 * libm::log10((numerator / denominator).max(1e-30))
 }
 fn section_response(section: &Biquad, hz: f64, rate: f64) -> f64 {
     let w = TAU * hz / rate;
-    let z = Complex64::new((-w).cos(), (-w).sin());
+    let z = Complex64::new(libm::cos(-w), libm::sin(-w));
     response_at_z(section, z, z * z)
 }
 pub(super) fn cascade_response(coefficients: &Coefficients, hz: f64) -> f64 {
@@ -102,9 +104,9 @@ pub(super) fn cascade_response(coefficients: &Coefficients, hz: f64) -> f64 {
         return 0.0;
     }
     let w = TAU * hz / coefficients.sample_rate as f64;
-    let z = Complex64::new((-w).cos(), (-w).sin());
+    let z = Complex64::new(libm::cos(-w), libm::sin(-w));
     let z2 = z * z;
-    let mut db = 20.0 * (coefficients.preamp_gain as f64).log10();
+    let mut db = 20.0 * libm::log10(coefficients.preamp_gain as f64);
     for section in &coefficients.sections[..coefficients.band_count] {
         db += response_at_z(section, z, z2);
     }
@@ -139,7 +141,7 @@ fn extrema(section: Biquad, fc: f64, rate: f64) -> Extrema {
     };
     let mut store = |root: f64, index: usize| {
         if (0.0..=1.0).contains(&root) {
-            result.frequencies[index] = root.sqrt().asin() * rate / PI;
+            result.frequencies[index] = libm::asin(root.sqrt()) * rate / PI;
         }
     };
     if a == 0.0 {
@@ -184,7 +186,7 @@ impl Ord for Interval {
 
 fn peak_response(coefficients: &Coefficients, bands: &[Extrema]) -> f64 {
     let high = HIGH.min(coefficients.sample_rate as f64 * 0.49);
-    let preamp_db = 20.0 * (coefficients.preamp_gain as f64).log10();
+    let preamp_db = 20.0 * libm::log10(coefficients.preamp_gain as f64);
     if high <= LOW || bands.is_empty() {
         return preamp_db;
     }
@@ -275,7 +277,7 @@ pub fn design(
             return Err(Error::InvalidArgument("HpTF:启用的滤波器段数超过上限 32"));
         }
     }
-    let gain = 10.0_f64.powf(preamp_db / 20.0);
+    let gain = libm::pow(10.0, preamp_db / 20.0);
     if !gain.is_finite() || gain > f32::MAX as f64 || gain < (f32::MIN_POSITIVE as f64) {
         return Err(Error::InvalidArgument("HpTF:Preamp 超出可表示范围"));
     }
@@ -296,18 +298,18 @@ pub fn design(
         peaks.push(extrema(section, band.frequency, sample_rate as f64));
     }
     let mut peak = peak_response(&out, &peaks);
-    if !peak.is_finite() || peak > 20.0 * (f32::MAX as f64).log10() {
+    if !peak.is_finite() || peak > 20.0 * libm::log10(f32::MAX as f64) {
         return Err(Error::InvalidArgument("HpTF:级联响应超出可表示范围"));
     }
     if matches!(mode, PreampMode::AutoTrim) && peak > 0.0 {
-        let trimmed = out.preamp_gain as f64 * 10.0_f64.powf(-peak / 20.0);
+        let trimmed = out.preamp_gain as f64 * libm::pow(10.0, -peak / 20.0);
         if !trimmed.is_finite() || trimmed < (f32::MIN_POSITIVE as f64) {
             return Err(Error::InvalidArgument(
                 "HpTF:自动衰减后的增益超出可表示范围",
             ));
         }
         let gain = (trimmed as f32).next_down();
-        let adjustment = 20.0 * (gain as f64 / out.preamp_gain as f64).log10();
+        let adjustment = 20.0 * libm::log10(gain as f64 / out.preamp_gain as f64);
         out.auto_trim_db = adjustment as f32;
         out.preamp_gain = gain;
         peak += adjustment;

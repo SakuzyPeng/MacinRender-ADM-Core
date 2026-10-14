@@ -121,3 +121,14 @@ impl GainBank {
         Ok(())
     }
 }
+
+/// Constant device volume for output paths without a gain ramp or peak guard.
+pub fn scale(samples: &mut [f32], gain: f32) -> Result<()> {
+    if !gain.is_finite() {
+        return Err(Error::InvalidArgument("Nonfinite output volume"));
+    }
+    for sample in samples {
+        *sample *= gain;
+    }
+    Ok(())
+}

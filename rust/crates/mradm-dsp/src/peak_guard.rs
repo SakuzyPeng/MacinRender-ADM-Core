@@ -32,7 +32,7 @@ impl StereoPeakGuard {
             read: 0,
             size: 0,
             gain: 1.,
-            release: 1. - (-1. / (0.1 * sample_rate as f32)).exp(),
+            release: 1. - libm::expf(-1. / (0.1 * sample_rate as f32)),
         })
     }
     pub fn reset(&mut self) {
