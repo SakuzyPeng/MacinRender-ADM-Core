@@ -1,6 +1,10 @@
 //! Private buffer-oriented boundary for live gains and device peak protection.
 use crate::{boundary, ptr, slice};
-use mradm_dsp::{Error, Result, gain::GainBank, peak_guard::StereoPeakGuard};
+use mradm_dsp::{
+    Error, Result,
+    gain::{self, GainBank},
+    peak_guard::StereoPeakGuard,
+};
 
 unsafe fn input<'a>(data: *const f32, length: usize) -> Result<&'a [f32]> {
     if length > isize::MAX as usize / size_of::<f32>() || (length != 0 && data.is_null()) {
@@ -100,6 +104,19 @@ pub unsafe extern "C" fn mradm_dsp_gain_process(
         } else {
             bank.apply(samples)
         }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_gain_scale(
+    data: *mut f32,
+    length: usize,
+    gain: f32,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        gain::scale(unsafe { output(data, length) }?, gain)
     })
 }
 

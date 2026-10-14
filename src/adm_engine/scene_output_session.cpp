@@ -228,10 +228,7 @@ std::size_t SceneOutputSession::pull(std::span<float> output, std::size_t frames
         device_->mark_end();
     }
     if (!peak_guard_ && !device_->has_device_volume()) {
-        const float gain = volume_.load();
-        for (std::size_t i = 0; i < static_cast<std::size_t>(result.media_frames) * channels_; ++i) {
-            output[i] *= gain;
-        }
+        apply_output_volume(output.first(static_cast<std::size_t>(result.media_frames) * channels_), volume_.load());
     }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     if (result.media_frames)

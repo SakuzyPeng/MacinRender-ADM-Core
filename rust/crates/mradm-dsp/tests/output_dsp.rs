@@ -1,5 +1,5 @@
 use mradm_dsp::{
-    gain::GainBank,
+    gain::{self, GainBank},
     peak_guard::{CEILING, StereoPeakGuard},
 };
 
@@ -70,6 +70,25 @@ fn gain_errors_are_atomic_and_partitioning_is_exact() {
     assert!(GainBank::new(0, 48000, 20).is_err());
     assert!(GainBank::new(2, 0, 20).is_err());
     assert!(GainBank::new(usize::MAX, 48000, 20).is_err());
+}
+
+#[test]
+fn output_volume_is_a_plain_product() {
+    let source = [0.5, -0.0, -0.75, 3.0e-39, f32::MAX, f32::INFINITY];
+    let finite = &source[..5];
+    for volume in [0.0, 0.875, 1.0] {
+        let mut scaled = source;
+        gain::scale(&mut scaled, volume).unwrap();
+        // NaN bits from inf * 0 are platform-defined; compare finite products exactly.
+        for (&x, &y) in finite.iter().zip(&scaled) {
+            assert_eq!(y.to_bits(), (x * volume).to_bits());
+        }
+        assert_eq!(scaled[5].is_nan(), volume == 0.0);
+    }
+    let mut unchanged = source;
+    assert!(gain::scale(&mut unchanged, f32::NAN).is_err());
+    assert_eq!(unchanged.map(f32::to_bits), source.map(f32::to_bits));
+    gain::scale(&mut [], 0.5).unwrap();
 }
 
 fn protect(input: &[f32], rate: u32, chunk: usize, volume: f32) -> Vec<f32> {

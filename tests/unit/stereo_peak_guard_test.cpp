@@ -201,6 +201,66 @@ bool test_device_clock_and_epoch() {
     return ok;
 }
 
+// Without a peak guard the session applies its own volume to every rendered sample.
+std::vector<float> render_unprotected(float volume) {
+    SceneStreamConfig config;
+    config.renderer.renderer = mradm::RendererSelection::saf_binaural;
+    config.renderer.output_layout = "binaural";
+    config.startup_watermark_frames = 1U;
+    auto created = SceneStreamEngine::create(config);
+    require(created);
+    auto stream = std::shared_ptr<SceneStreamEngine>(std::move(*created));
+    auto device = std::make_unique<CaptureDevice>();
+    auto* capture = device.get();
+    auto output = SceneOutputSession::create_with_device(stream, std::move(device), false);
+    require(output);
+    require((*output)->set_volume(volume));
+    constexpr std::uint32_t k_frames = 1531U;
+    require((*output)->begin_epoch(1U, 0));
+    mradm::live_scene::ElementDescriptor element;
+    element.element_id = 1U;
+    element.role = mradm::live_scene::ElementRole::lfe;
+    require(stream->configure_generation(1U, 1U, std::span{&element, 1U}));
+    std::vector<float> samples(k_frames);
+    for (std::size_t i = 0U; i < samples.size(); ++i) {
+        samples[i] = std::sin(static_cast<float>(i) * 0.01F) * 1.5F;
+    }
+    ScenePcmPlaneView plane{1U, samples.data(), k_frames, 1U, true};
+    SceneFrameView frame;
+    frame.epoch_id = 1U;
+    frame.generation_id = 1U;
+    frame.duration_samples = k_frames;
+    frame.flags = mradm::live_scene::frame_state_complete;
+    frame.pcm = std::span{&plane, 1U};
+    require(stream->submit_frame(frame, std::chrono::milliseconds(100)));
+    require(stream->signal_end(1U, k_frames));
+    (*output)->play();
+    std::vector<float> result;
+    std::vector<float> callback(254U);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!(*output)->status().ended && std::chrono::steady_clock::now() < deadline) {
+        const auto produced = capture->pull(callback);
+        result.insert(result.end(), callback.begin(), callback.begin() + static_cast<std::ptrdiff_t>(produced * 2U));
+        if (produced == 0U) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    if (result.size() != std::size_t{k_frames} * 2U) {
+        throw std::runtime_error("unprotected session changed the media length");
+    }
+    return result;
+}
+
+bool test_unprotected_volume() {
+    const auto unity = render_unprotected(1.0F);
+    const auto scaled = render_unprotected(0.375F);
+    bool exact = std::ranges::any_of(unity, [](float sample) { return std::abs(sample) > 1.0F; });
+    for (std::size_t i = 0U; i < unity.size(); ++i) {
+        exact &= scaled[i] == unity[i] * 0.375F;
+    }
+    return check(exact, "unprotected output applies the session volume to unbounded PCM");
+}
+
 bool test_real_pcm() {
     const char* path = std::getenv("MR_ADM_TEST_STEREO_PCM");
     if (path == nullptr) {
@@ -377,6 +437,7 @@ int main() {
         ok &= test_linked_smooth_gain();
         ok &= test_short_end_and_reset();
         ok &= test_device_clock_and_epoch();
+        ok &= test_unprotected_volume();
         ok &= test_real_pcm();
         ok &= test_scene_hptf_respects_ceiling();
         ok &= test_scene_hptf_unsupported_without_stereo_guard();
