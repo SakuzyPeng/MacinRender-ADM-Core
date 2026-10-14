@@ -84,29 +84,37 @@ SceneObjectBlock apply_channel_lock(const SceneObjectBlock& block, const std::ve
     if (!block.channel_lock) {
         return block;
     }
-    const auto index = nearest_non_lfe_speaker_index(block.position, speakers);
-    if (!index) {
-        return block;
+    // Speaker selection, the distance tolerance and the locked position are computed in Rust.
+    std::vector<MradmSceneSpeaker> numeric;
+    numeric.reserve(speakers.size());
+    for (const auto& speaker : speakers) {
+        numeric.push_back({speaker.azimuth, speaker.elevation, speaker.is_lfe ? 1U : 0U});
     }
-    const auto& speaker = speakers[*index];
-    const auto src = direction_vector_from_position(block.position);
-    const auto spk = direction_vector_from_polar(speaker.azimuth, speaker.elevation);
-    if (block.channel_lock_max_distance &&
-        direction_distance(src, spk) > (*block.channel_lock_max_distance + 1.0e-4F)) {
+    const auto& p = block.position;
+    const auto input = p.cartesian ? std::array{p.x, p.y, p.z} : std::array{p.azimuth, p.elevation, p.distance};
+    std::array<float, 3> polar{};
+    uint32_t locked = 0U;
+    dsp::scene_check(mradm_dsp_scene_channel_lock(input.data(),
+                                                  input.size(),
+                                                  p.cartesian ? 1U : 0U,
+                                                  block.channel_lock_max_distance ? 1U : 0U,
+                                                  block.channel_lock_max_distance.value_or(0.0F),
+                                                  numeric.data(),
+                                                  numeric.size(),
+                                                  polar.data(),
+                                                  polar.size(),
+                                                  &locked));
+    if (locked == 0U) {
         return block;
     }
     SceneObjectBlock result = block;
     result.position.cartesian = false;
-    result.position.distance = scene_position_to_polar(block.position).distance;
-    result.position.azimuth = speaker.azimuth;
-    result.position.elevation = speaker.elevation;
+    result.position.azimuth = polar[0];
+    result.position.elevation = polar[1];
+    result.position.distance = polar[2];
     return result;
 }
 std::vector<SceneObjectBlock> expand_object_divergence(const SceneObjectBlock& block) {
-    // Preserve the unconverted original position for a single source.
-    if (std::clamp(block.divergence, 0.0F, 1.0F) <= 1.0e-4F) {
-        return {block};
-    }
     const auto& p = block.position;
     const std::array input{p.cartesian ? p.x : p.azimuth,
                            p.cartesian ? p.y : p.elevation,
@@ -119,6 +127,11 @@ std::vector<SceneObjectBlock> expand_object_divergence(const SceneObjectBlock& b
     size_t count = 0;
     dsp::scene_check(mradm_dsp_scene_divergence(
         input.data(), input.size(), p.cartesian ? 1U : 0U, points.data(), points.size(), &count));
+    // Rust returns one point when the clamped divergence is negligible; keep the original,
+    // unconverted block for that single source.
+    if (count == 1U) {
+        return {block};
+    }
     SceneObjectBlock base = block;
     base.position = scene_position_to_polar(p);
     std::vector<SceneObjectBlock> result;

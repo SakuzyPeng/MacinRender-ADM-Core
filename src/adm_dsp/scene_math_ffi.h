@@ -36,6 +36,16 @@ int mradm_dsp_scene_nearest(const float* src,
                             size_t speaker_count,
                             size_t* index,
                             float* distance);
+int mradm_dsp_scene_channel_lock(const float* src,
+                                 size_t n,
+                                 uint32_t cartesian,
+                                 uint32_t has_max_distance,
+                                 float max_distance,
+                                 const MradmSceneSpeaker* speakers,
+                                 size_t speaker_count,
+                                 float* dst,
+                                 size_t m,
+                                 uint32_t* locked);
 int mradm_dsp_scene_rotation_create(const float* pose, size_t n, uint32_t contract, void** out);
 void mradm_dsp_scene_rotation_destroy(void* h);
 int mradm_dsp_scene_rotation_update(void* h, const float* pose, size_t n);
