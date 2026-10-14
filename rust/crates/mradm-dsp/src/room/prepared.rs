@@ -282,6 +282,7 @@ impl ResponseWork {
             cached_paths: vec![
                 geometry::Path {
                     direction: [1., 0., 0.],
+                    distance: 0.,
                     samples: 0.,
                     gain: 0.
                 };
@@ -408,7 +409,13 @@ impl ResponseWork {
                     continue;
                 }
                 let direction = rotation.apply(path.direction);
-                let distance = (image.order == 0).then_some(source.position.distance);
+                // Preserve the direct radius arithmetic. Reflections use their
+                // complete virtual-source distance, not the last wall segment.
+                let distance = if image.order == 0 {
+                    Some(source.position.distance)
+                } else {
+                    room.hrir.data.collection.as_ref().map(|_| path.distance)
+                };
                 if let Some(cache) = self.query_cache.as_ref().filter(|_| sources.len() == 1) {
                     cache.lock().unwrap().query(
                         &room.hrir,

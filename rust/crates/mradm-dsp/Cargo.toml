@@ -20,6 +20,10 @@ pulp = { version = "=0.22.3", default-features = false, features = ["std", "x86-
 # Room always needs the native decoder; the sofa feature gates the other binaural path.
 sofar = { version = "=0.3.0", default-features = false }
 
+[dev-dependencies]
+# Native resource counters in offline performance probes; already in Cargo.lock.
+libc = "=0.2.190"
+
 [features]
 diagnostics = []
 # Room stage counters only; disabled in production and final benchmarks.

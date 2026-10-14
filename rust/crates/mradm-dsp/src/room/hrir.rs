@@ -123,7 +123,7 @@ pub struct HrirBank {
 }
 
 /// Prepared per-source workspace used only during a two-room transition. An
-/// exact direction/FFT key reuses the same HRIR evaluation across room models;
+/// exact direction/effective-radius/FFT key reuses HRIR evaluation across rooms;
 /// a miss computes the full response. There is no angular quantization.
 pub struct QueryCache {
     identity: String,
@@ -165,6 +165,17 @@ impl QueryCache {
         {
             return bank.query_distance(direction, distance, face, out);
         }
+        let distance = if let (Some(collection), Some(radius)) = (&bank.data.collection, distance) {
+            if !radius.is_finite() || radius < 0. {
+                return Err(Error::InvalidArgument("无效的 HRTF 查询距离"));
+            }
+            Some(radius.clamp(
+                collection.layers[0].radius,
+                collection.layers.last().unwrap().radius,
+            ))
+        } else {
+            distance
+        };
         let key = [
             direction[0].to_bits(),
             direction[1].to_bits(),
@@ -595,7 +606,7 @@ impl HrirBank {
         Ok(())
     }
 
-    /// None selects the fixed reference for reflections/late decoding. A finite
+    /// None selects the fixed reference for late decoding. A finite
     /// distance selects up to six samples using the same angular mesh and guard.
     pub fn query_distance(
         &self,

@@ -1088,7 +1088,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         else()
             message(STATUS "Room HRIR preparation tests need numpy/scipy/h5py in MR_ADM_ROOM_PREP_PYTHON")
         endif()
-        foreach(_room_probe IN ITEMS room_hrir_check room_omni)
+        foreach(_room_probe IN ITEMS room_hrir_check room_omni room_reflection_check)
             add_custom_target(mr_adm_${_room_probe}
                 COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
                     "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release

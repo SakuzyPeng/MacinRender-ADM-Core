@@ -564,6 +564,10 @@ int main(int argc, char** argv) {
                 "distance collection inspection reports every layer");
         file_test(root, {room, collection, 0.5});
         file_test(root, {room, collection, 0.5, mradm::RoomQuality::realtime});
+        const auto near_room = take(mradm::RoomProfile::load(root / "near.json"));
+        file_test(root, {near_room, collection, 0.3});
+        file_test(root, {near_room, collection, 0.3, mradm::RoomQuality::realtime});
+        switching_test(root, {near_room, collection, 1.5});
         switching_test(root, {room, collection, 1.5});
         scene_test(root, 48000, false, collection);
         scene_test(root, 44100, true, collection, ADM_ROOM_QUALITY_REALTIME);
