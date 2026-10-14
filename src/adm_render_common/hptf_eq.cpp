@@ -300,7 +300,6 @@ std::optional<HptfSnapshot> HptfMailbox::consume() noexcept {
 struct HptfProcessor::State {
     std::unique_ptr<void, decltype(&mradm_dsp_hptf_processor_destroy)> handle{nullptr,
                                                                               mradm_dsp_hptf_processor_destroy};
-    bool blending{false};
 };
 HptfProcessor::HptfProcessor() = default;
 HptfProcessor::~HptfProcessor() = default;
@@ -353,7 +352,6 @@ void HptfProcessor::reset_state() noexcept {
     MradmDspHptfUpdate update{};
     check_realtime(
         mradm_dsp_hptf_processor_reset(state_->handle.get(), target ? &*target : nullptr, &update, nullptr, 0U));
-    state_->blending = update.blending != 0U;
     status_.publish(from_rust(update.snapshot));
 }
 
@@ -377,9 +375,9 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
     if (frames == 0U || channels_ == 0U || !state_ || interleaved == nullptr) {
         return;
     }
-    // While a fade is active, the existing mailbox coalesces newer targets.
-    // Only the next process call after completion can start the queued fade.
-    const auto target = to_rust(state_->blending ? std::nullopt : pending_.consume());
+    // A target published during a fade replaces any target Rust has queued and
+    // starts at the frame where that fade ends, independent of call sizes.
+    const auto target = to_rust(pending_.consume());
     MradmDspHptfUpdate update{};
     check_realtime(mradm_dsp_hptf_processor_process(state_->handle.get(),
                                                     interleaved,
@@ -388,7 +386,6 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
                                                     &update,
                                                     nullptr,
                                                     0U));
-    state_->blending = update.blending != 0U;
     if (update.applied != 0U) {
         status_.publish(from_rust(update.snapshot));
     }
