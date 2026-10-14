@@ -60,6 +60,7 @@
 - [Rust 共享 PCM 混音与状态迁移](architecture/RUST_PCM_MIX_MIGRATION.md)
 - [Rust 重采样迁移](architecture/RUST_RESAMPLER_MIGRATION.md)
 - [Rust Scene 流式渲染的过渡、空间数学与双耳迁移](architecture/RUST_SCENE_NUMERIC_MIGRATION.md)
+- [Scene 流式渲染的 C++ 数值残留迁移（一期 1.2）](architecture/RUST_SCENE_RESIDUAL_MIGRATION.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 

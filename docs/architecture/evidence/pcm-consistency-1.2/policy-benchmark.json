@@ -1,0 +1,194 @@
+{
+  "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "repeats": 5,
+  "binaries": {
+    "legacy": "6f7c1f0e43f16621881824ebf491c4413506983eea750ee250f10a929c897b5c",
+    "candidate": "ab590061b213c5bee99d6adafafa205bed0669da68019568ea1610068c5132d8"
+  },
+  "runtime_libraries": {},
+  "policy": {
+    "schema": "mradm.semantic-policy.v1",
+    "global": {
+      "gain": {
+        "scale": 0.5,
+        "gain_db": -4.6
+      },
+      "extent": {
+        "scale": 1.5,
+        "max": 0.6
+      },
+      "diffuse": {
+        "scale": 0.5
+      },
+      "divergence": {
+        "range_scale": 0.5
+      },
+      "position": {
+        "offset": {
+          "azimuth": 12.5,
+          "elevation": -4
+        }
+      },
+      "interpolation": {
+        "max_ms": 5
+      },
+      "direct_speakers": {
+        "gain": {
+          "gain_db": -1.5
+        },
+        "position": {
+          "offset": {
+            "azimuth": 3
+          }
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case": "vbap-policy",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "5.1.4",
+        "--semantic-policy",
+        "{policy}"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.058853049000390456,
+            "rss_bytes": 13070336
+          },
+          {
+            "seconds": 0.059569408999777806,
+            "rss_bytes": 13139968
+          },
+          {
+            "seconds": 0.06126971599951503,
+            "rss_bytes": 12988416
+          },
+          {
+            "seconds": 0.060969637999733095,
+            "rss_bytes": 12972032
+          },
+          {
+            "seconds": 0.061682767999627686,
+            "rss_bytes": 13139968
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.06020589299987478,
+            "rss_bytes": 13238272
+          },
+          {
+            "seconds": 0.060052554000321834,
+            "rss_bytes": 13094912
+          },
+          {
+            "seconds": 0.058167609000520315,
+            "rss_bytes": 13209600
+          },
+          {
+            "seconds": 0.062120951999531826,
+            "rss_bytes": 13328384
+          },
+          {
+            "seconds": 0.06286997299957875,
+            "rss_bytes": 13197312
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "df1f3ae87fca4f67fd71d70a68e66a273aee71030b74ac3c1df80868244db2ac",
+        "candidate": "3eb9cc55e8802d6e31eb9874d5b5cf22e2d9aaaff61bd1390d098c6d40569d7a"
+      },
+      "legacy": {
+        "seconds": 0.060969637999733095,
+        "rss_bytes": 13070336
+      },
+      "candidate": {
+        "seconds": 0.06020589299987478,
+        "rss_bytes": 13209600
+      },
+      "time_ratio": 0.9874733551827606,
+      "rss_ratio": 1.0106549670949545
+    },
+    {
+      "case": "binaural-policy-ds",
+      "fixture_sha256": "c1c9dd8c5ad87f2c15494ff762328701663c1c61bcb1ede3cbf27a4c556949cc",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--semantic-policy",
+        "{policy}"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.13486191499941924,
+            "rss_bytes": 35532800
+          },
+          {
+            "seconds": 0.1871548220005934,
+            "rss_bytes": 35713024
+          },
+          {
+            "seconds": 0.16350627399970108,
+            "rss_bytes": 36085760
+          },
+          {
+            "seconds": 0.21237685400046757,
+            "rss_bytes": 35848192
+          },
+          {
+            "seconds": 0.16132172800007538,
+            "rss_bytes": 35786752
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.16077607799979887,
+            "rss_bytes": 35692544
+          },
+          {
+            "seconds": 0.2131507120002425,
+            "rss_bytes": 35889152
+          },
+          {
+            "seconds": 0.21466517099997873,
+            "rss_bytes": 36065280
+          },
+          {
+            "seconds": 0.1359933160001674,
+            "rss_bytes": 35581952
+          },
+          {
+            "seconds": 0.1638123809998433,
+            "rss_bytes": 35991552
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "11f4d4a35950ed77420301578950a08f755abd197dc842c30d884e1ec78bef55",
+        "candidate": "412b31de2260edd8a6112c154413ae789f44fb21e985d753ec77d3e54a128d38"
+      },
+      "legacy": {
+        "seconds": 0.16350627399970108,
+        "rss_bytes": 35786752
+      },
+      "candidate": {
+        "seconds": 0.1638123809998433,
+        "rss_bytes": 35889152
+      },
+      "time_ratio": 1.0018721422282717,
+      "rss_ratio": 1.0028613940711915
+    }
+  ]
+}
