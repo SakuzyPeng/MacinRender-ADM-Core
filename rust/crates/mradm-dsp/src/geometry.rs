@@ -30,17 +30,16 @@ pub fn norm(a: Vec3) -> f64 {
 pub fn unit(a: Vec3) -> Vec3 {
     scale(a, 1.0 / norm(a).max(f64::MIN_POSITIVE))
 }
+/// Unit direction in f64, evaluated with the pure-Rust `libm` port so the result does not
+/// depend on the platform C library (ADR 0017 for the OM spreader, ADR 0018 for Scene).
 pub fn direction(azimuth: f32, elevation: f32) -> Vec3 {
-    let (sa, ca) = (azimuth as f64).to_radians().sin_cos();
-    let (se, ce) = (elevation as f64).to_radians().sin_cos();
-    [ca * ce, sa * ce, se]
-}
-/// Same as [`direction`], evaluated with the pure-Rust `libm` port so the result does not
-/// depend on the platform C library (OM spreader, ADR 0017).
-pub fn portable_direction(azimuth: f32, elevation: f32) -> Vec3 {
     let (sa, ca) = libm::sincos((azimuth as f64).to_radians());
     let (se, ce) = libm::sincos((elevation as f64).to_radians());
     [ca * ce, sa * ce, se]
+}
+/// Former name of [`direction`] from before every caller used `libm`.
+pub fn portable_direction(azimuth: f32, elevation: f32) -> Vec3 {
+    direction(azimuth, elevation)
 }
 pub fn directions(input: &[f32]) -> Result<Vec<Vec3>> {
     directions_with(input, direction)

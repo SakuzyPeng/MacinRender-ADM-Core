@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -7,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <numbers>
 #include <string_view>
 
 #include "adm/scene.h"
@@ -27,6 +29,7 @@ class SceneNumericChecks {
     size_t sample_point = 0;
     size_t compared = 0;
     double maximum = 0;
+    double maximum_direction = 0;
     int failures = 0;
     void check(bool good, std::string_view label) {
         if (!good) {
@@ -47,6 +50,27 @@ class SceneNumericChecks {
         check(exact ? std::bit_cast<uint32_t>(actual) == std::bit_cast<uint32_t>(expected)
                     : error <= 2e-6 + (2e-6 * std::abs(double(expected))),
               label);
+    }
+    // Extent cloud points are compared as directions. Since ADR 0018 the Rust side uses libm while
+    // the frozen reference keeps the platform library: azimuth is undefined at the poles, and a
+    // near-cancelled component is limited by f32 vector rounding, so per-angle tolerances do not
+    // apply. 2e-5 degrees is a few f32 ulps of a unit vector.
+    void
+    compare_direction(float azimuth, float elevation, float ref_azimuth, float ref_elevation, std::string_view label) {
+        ++compared;
+        constexpr double radians = std::numbers::pi / 180.0;
+        const auto unit = [](double az, double el) {
+            return std::array{-std::sin(az) * std::cos(el), std::cos(az) * std::cos(el), std::sin(el)};
+        };
+        const auto a = unit(double(azimuth) * radians, double(elevation) * radians);
+        const auto b = unit(double(ref_azimuth) * radians, double(ref_elevation) * radians);
+        const double chord = std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        const double degrees = 2.0 * std::asin(std::min(1.0, chord / 2.0)) / radians;
+        maximum_direction = std::max(maximum_direction, degrees);
+        if (degrees > 2e-5) {
+            std::cerr << "case=" << sample_case << " point=" << sample_point << " separation=" << degrees << " ";
+        }
+        check(degrees <= 2e-5, label);
     }
     // NOLINTNEXTLINE(readability-function-size): preserve one ordered geometry comparison matrix.
     void spatial() {
@@ -106,8 +130,8 @@ class SceneNumericChecks {
             check(cloud.size() == rc.size(), "cloud count");
             for (size_t j = 0; j < cloud.size(); ++j) {
                 sample_point = j;
-                compare(cloud.at(j).azimuth, rc[j].azimuth, "cloud az");
-                compare(cloud.at(j).elevation, rc[j].elevation, "cloud el");
+                compare_direction(
+                    cloud.at(j).azimuth, cloud.at(j).elevation, rc[j].azimuth, rc[j].elevation, "cloud direction");
                 compare(cloud.at(j).weight, rc[j].weight, "cloud weight", true);
             }
             std::array<MradmSceneCloudPoint, 17> binaural{};
@@ -133,8 +157,11 @@ class SceneNumericChecks {
             check(count == bc.size(), "binaural cloud count");
             for (size_t j = 0; j < count; ++j) {
                 sample_point = j;
-                compare(binaural.at(j).azimuth, bc[j].azimuth, "binaural cloud az");
-                compare(binaural.at(j).elevation, bc[j].elevation, "binaural cloud el");
+                compare_direction(binaural.at(j).azimuth,
+                                  binaural.at(j).elevation,
+                                  bc[j].azimuth,
+                                  bc[j].elevation,
+                                  "binaural cloud direction");
                 compare(binaural.at(j).weight, bc[j].gain, "binaural gain", true);
                 check(binaural.at(j).slot == bc[j].slot, "binaural slot");
             }
@@ -425,7 +452,7 @@ class SceneNumericChecks {
         const auto transition_maximum = maximum;
         maximum = std::max(spatial_maximum, transition_maximum);
         std::cout << "Scene spatial comparison: " << compared << " floats, max absolute error " << maximum
-                  << ", failures " << failures << '\n';
+                  << ", max cloud separation " << maximum_direction << " degrees, failures " << failures << '\n';
         if (argc > 1) {
             std::ofstream json{argv[1]};
             json << std::setprecision(17) << R"({"arithmetic":"scene-separate-v1","spatial":{"compared":)"

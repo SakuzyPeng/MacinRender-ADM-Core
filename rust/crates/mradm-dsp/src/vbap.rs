@@ -100,11 +100,10 @@ impl Panner {
                     unit(cross(center, [0.0, 0.0, 1.0]))
                 };
                 let tangent = unit(cross(center, base));
-                let (sine, cosine) = ((spread.clamp(0.0, 180.0) as f64) * 0.5)
-                    .to_radians()
-                    .sin_cos();
+                let (sine, cosine) =
+                    libm::sincos(((spread.clamp(0.0, 180.0) as f64) * 0.5).to_radians());
                 for i in 0..8 {
-                    let (s, c) = (i as f64 * std::f64::consts::TAU / 8.0).sin_cos();
+                    let (s, c) = libm::sincos(i as f64 * std::f64::consts::TAU / 8.0);
                     accumulate(
                         add(
                             scale(center, cosine),

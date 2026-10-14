@@ -91,8 +91,8 @@ impl Dataset {
                 directions.extend_from_slice(&point[..2]);
             } else {
                 let [x, y, z] = [point[0] as f64, point[1] as f64, point[2] as f64];
-                directions.push(y.atan2(x).to_degrees() as f32);
-                directions.push(z.atan2((x * x + y * y).sqrt()).to_degrees() as f32);
+                directions.push(libm::atan2(y, x).to_degrees() as f32);
+                directions.push(libm::atan2(z, (x * x + y * y).sqrt()).to_degrees() as f32);
             }
         }
         Ok(Self {

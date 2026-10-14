@@ -111,7 +111,7 @@ impl Filters {
                 for (bin, value) in spectrum.iter().copied().enumerate() {
                     if !value.re.is_finite()
                         || !value.im.is_finite()
-                        || !value.re.hypot(value.im).is_finite()
+                        || !libm::hypotf(value.re, value.im).is_finite()
                     {
                         return Err(Error::RenderFailed("Nonfinite prepared HRTF spectrum"));
                     }
@@ -125,7 +125,7 @@ impl Filters {
             }
         }
         let magnitudes = if cache_magnitudes {
-            spectra.iter().map(|h| h.re.hypot(h.im)).collect()
+            spectra.iter().map(|h| libm::hypotf(h.re, h.im)).collect()
         } else {
             Vec::new()
         };
@@ -194,14 +194,14 @@ impl Filters {
             let index = self.spectrum_index(direction, bin, ear);
             let h = self.spectra[index];
             *m = if self.magnitudes.is_empty() {
-                h.re.hypot(h.im)
+                libm::hypotf(h.re, h.im)
             } else {
                 self.magnitudes[index]
             };
             magnitude += gain * *m;
             sum += h * gain;
         }
-        let complex_magnitude = sum.re.hypot(sum.im);
+        let complex_magnitude = libm::hypotf(sum.re, sum.im);
         let value = if complex_magnitude > 1e-9 {
             sum * (magnitude / complex_magnitude)
         } else {
@@ -240,7 +240,7 @@ impl Filters {
                 magnitude += gains[k] * magnitudes[k][i];
                 sum += spectra[k][i] * gains[k];
             }
-            let complex_magnitude = sum.re.hypot(sum.im);
+            let complex_magnitude = libm::hypotf(sum.re, sum.im);
             let h = if complex_magnitude > 1e-9 {
                 sum * (magnitude / complex_magnitude)
             } else {
