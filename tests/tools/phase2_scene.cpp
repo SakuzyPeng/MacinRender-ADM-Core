@@ -275,8 +275,13 @@ class Replay {
                 reconfigure = true;
             }
             if (position == 6144) {
+                // Exercises the Rust policy arithmetic: scale, a dB value where libm and glibc powf
+                // differ by one ulp, and the extent/diffuse/divergence products and clamps. Position
+                // edits join once scene_math uses portable functions (PCM consistency 1.3).
                 done(stream->set_semantic_policy_json(
-                    R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}})", 99));
+                    R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5,"gain_db":-4.6},)"
+                    R"("extent":{"scale":1.5,"max":0.6},"diffuse":{"scale":0.5},"divergence":{"range_scale":0.5}}})",
+                    99));
             }
             if (position == 8192 && config.renderer.renderer == RendererSelection::triple_balance) {
                 auto next = config.renderer;
