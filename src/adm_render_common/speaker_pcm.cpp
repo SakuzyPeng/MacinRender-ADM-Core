@@ -13,6 +13,7 @@
 
 #include "consistency_trace.h"
 #include "meter.h"
+#include "post_gain.h"
 #include "render_common.h"
 
 namespace mradm::render_common {
@@ -245,7 +246,7 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                 metrics.measured_lufs = *loudness;
             }
             if (const auto peak = lufs_st->max_true_peak(); peak && *peak > 0.0) {
-                metrics.measured_peak_dbtp = 20.0 * std::log10(*peak);
+                metrics.measured_peak_dbtp = dsp::amplitude_to_db(*peak);
             }
         }
         return metrics;

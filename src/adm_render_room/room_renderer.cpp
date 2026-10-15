@@ -8,6 +8,7 @@
 #include "adm/render_room.h"
 
 #include "meter.h"
+#include "post_gain.h"
 #include "render_common.h"
 #include "room_internal.h"
 
@@ -385,7 +386,7 @@ class RoomRenderer final : public IRenderer {
             metrics.measured_lufs = *value;
         }
         if (auto value = meter->max_true_peak(); value) {
-            metrics.measured_peak_dbtp = 20.0 * std::log10(std::max(*value, 1e-10));
+            metrics.measured_peak_dbtp = dsp::amplitude_to_db(std::max(*value, 1e-10));
         }
         return metrics;
     }

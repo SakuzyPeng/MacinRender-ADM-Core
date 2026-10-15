@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@
 
 #include "../adm_render_common/consistency_trace.h"
 #include "meter.h"
+#include "post_gain.h"
 
 namespace mradm {
 
@@ -86,8 +88,8 @@ namespace {
                     return make_error(ErrorCode::io_error, "short read while applying peak gain", "path=" + path);
                 }
                 const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
-                for (std::size_t i = 0; i < samples; ++i) {
-                    buf[i] *= gain;
+                if (auto scaled = dsp::apply_gain(std::span<float>(buf.data(), samples), gain); !scaled) {
+                    return scaled;
                 }
                 if (writer.write(buf.data(), got) != got) {
                     return make_error(ErrorCode::io_error, "short write while applying peak gain", "path=" + path);
@@ -114,20 +116,23 @@ Result<void> apply_peak_limit(const std::string& path, float target_dbtp, LogSin
         return tl::unexpected{peak_linear.error()};
     }
 
-    const double peak_dbtp = 20.0 * std::log10(std::max(1.0e-10, *peak_linear));
+    const auto decision = dsp::peak_limit_gain(*peak_linear, static_cast<double>(target_dbtp));
+    if (!decision) {
+        return tl::unexpected{decision.error()};
+    }
     logs.log(LogLevel::info,
              "peak-limit",
-             fmt::format("True Peak: {:.2f} dBTP, target: {:.1f} dBTP", peak_dbtp, static_cast<double>(target_dbtp)));
+             fmt::format(
+                 "True Peak: {:.2f} dBTP, target: {:.1f} dBTP", decision->peak_dbtp, static_cast<double>(target_dbtp)));
 
-    const double target_linear = std::pow(10.0, static_cast<double>(target_dbtp) / 20.0);
-    if (*peak_linear <= target_linear * 1.001) {
+    const double target_linear = decision->target_linear;
+    if (!decision->apply) {
         logs.log(LogLevel::info, "peak-limit", "True Peak within target — no gain applied");
         return {};
     }
 
-    const auto gain = static_cast<float>(target_linear / *peak_linear);
-    logs.log(
-        LogLevel::info, "peak-limit", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, 20.0F * std::log10(gain)));
+    const float gain = decision->gain;
+    logs.log(LogLevel::info, "peak-limit", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, decision->gain_db));
 
     consistency::dump("post/peak.10-measurement.f32",
                       {static_cast<float>(*peak_linear), static_cast<float>(target_linear)});
