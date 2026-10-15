@@ -279,6 +279,54 @@
     },
     {
       "kind": "case",
+      "pattern": "scene-device-dsp-sofa-simple-48000-44100-fixed-epoch1",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-sofa-simple-48000-44100-fixed-epoch2",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-sofa-simple-48000-44100-fragmented-epoch1",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-sofa-simple-48000-44100-fragmented-epoch2",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-vbap-44100-48000-fixed-epoch1",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-vbap-44100-48000-fixed-epoch2",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-vbap-44100-48000-fragmented-epoch1",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-vbap-44100-48000-fragmented-epoch2",
+      "reason": "device DSP behind resampled output, with an external SOFA set or a stereo VBAP feed; added for the PCM consistency 1.6 release-candidate matrix",
+      "reference": "docs/architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md"
+    },
+    {
+      "kind": "case",
       "pattern": "scene-hoa-extent",
       "reason": "identical on all three platforms since the phase-two baseline",
       "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
