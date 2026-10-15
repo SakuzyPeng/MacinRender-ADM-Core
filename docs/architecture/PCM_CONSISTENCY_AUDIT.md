@@ -8,6 +8,7 @@
 
 本文件统一维护剩余数值运算清单与本轮分期路线，吸收 `d42e294` 中的 C++ 审计和性能检查。
 原分支的审计内容保留在 Git 提交历史中；各 ADR、迁移验收记录和原始证据继续作为独立历史记录引用。
+N/S 条目表描述基准提交时的机制，保留原文以便追溯；一期结项后的处理情况见[条目状态](#条目状态)。
 
 ## 比较范围
 
@@ -123,6 +124,40 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 代码扫描还会命中 `render_common.h` 中未被生产调用的 `interpolated_scalar` 模板、测试信号的 `sin`、
 诊断参考路径和纯 UI 峰值/RMS 显示。这些没有作为额外 PCM 风险条目计数。
 
+## 条目状态
+
+一期结项（`d288d3c`）后各条目的处理情况。“已处理”指 Scene 链路上的该机制已统一并有门禁；
+共享实现随之改变的离线与文件流式路径一并受益，但这些路径的完整覆盖仍按二期、三期验收。
+
+| 条目 | 状态 | 处理与剩余 |
+| --- | --- | --- |
+| N01 | 部分 | Scene 策略 JSON 数字仍经 nlohmann（C 运行时 `strtod`），1.6 登记为依赖运行时正确舍入；CLI11 浮点选项、HOA 标签 `std::stof`、标签大小写规范化属三期 |
+| N02 | 未处理 | ADM 导入的 `powf` 与 Cartesian `atan2`（`mradm-adm` `project.rs`）；三期 |
+| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；`resolve_live_channel_gain` 与 HOA `set_overrides` 的 `std::pow` 只服务文件流式与离线后端，三期 |
+| N04 | 已处理 | Scene 空间数学改用 `libm`（1.3） |
+| N05 | 已处理 | `geometry::direction` 与 VBAP spread 环改用 `libm::sincos`（1.3） |
+| N06 | 未处理 | EAR 几何、extent 与立体声 panner；三期 |
+| N07 | 未处理 | HOA 编码与 EAR HOA 解码；三期 |
+| N08 | 部分 | twiddle 部分随 N09 处理；去相关随机相位的 `sin/cos` 仍为平台函数，`ear-*.20-fir.f32` 有门禁；三期 |
+| N09 | 已处理 | RustFFT 与 RealFFT twiddle 改用 `libm`（1.3），f64 twiddle 列设为门禁 |
+| N10 | 已处理 | HRTF 幅度改用 `libm::hypotf`（1.3）；`1e-9` 相位回退是固定规则 |
+| N11 | 已处理 | SOFA 坐标改用 `libm::atan2`（1.3）；门禁只覆盖仓库内三份 SOFA |
+| N12 | 未处理 | Triple Balance 非 D 模式的离线与文件流式入口仍为 `PORTABLE=false`；三期 |
+| N13 | 未处理 | 二期 |
+| N14 | 未处理 | 二期 |
+| N15 | 未处理 | 二期 |
+| N16 | 已处理 | HpTF 设计改用 `libm`（1.4），设计内核设为门禁 |
+| N17 | 已处理 | 峰值保护释放系数改用 `libm::expf`（1.4） |
+| N18 | 未处理 | Monitor 折叠矩阵 `std::sin/cos`；三期 |
+| S01 | 未处理 | 二期 |
+| S02 | 已处理 | HpTF 尾音清理改为自 reset 起的 1024 帧网格（1.4） |
+| S03 | 部分 | Scene 的分块条件已在 1.5 逐环节记录，并对 11 个用例设分块无关门禁；双耳卷积与分数比率重采样依赖分块，是否消除待决定；文件流式 `Mixer` 平滑属三期 |
+| S04 | 部分 | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；Monitor 快照属三期 |
+| S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
+| S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
+| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；双耳 `extent_spread_deg` 与 `BinauralStream` 归约属三期 |
+| S08 | 未处理 | 尚未复现；三期，复现后可提前修复 |
+
 ## C++ 剩余执行点
 
 下表补充语言与调用路径，复用上面的审计条目和分期，不另设一套风险编号。
@@ -130,12 +165,12 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 
 | 路径 | 仍在 C++ 执行的工作 | 性质与归属 | 阶段 |
 | --- | --- | --- | --- |
-| Scene 策略与状态 | 1.2 后只剩策略 JSON 数值解析（N01）；dB 换算、乘积、偏移/钳位和方向乘距离已迁入 Rust `semantic_policy`，见 [1.2 记录](RUST_SCENE_RESIDUAL_MIGRATION.md)。 | 匹配、过滤和布尔字段留在 C++；dB 已改用 `libm`。极坐标换算仍依赖 `scene_math` 平台函数（N04，1.3）。 | 一期 |
-| Scene VBAP | 1.2 后只剩声道映射和恒为单位增益的 LFE 路由；距离下限、spread 和发散子源累加已迁入 `Panner::source_gains`。channelLock 阈值与发散阈值比较在 `scene_math.cpp`。 | N05/S07；剩余几何与三角函数属于 1.3。 | 一期 |
-| Scene Triple Balance | 1.2 后床系数由 Rust `triple_balance::bed` 生成，C++ 只识别床声道和布局。 | 文件、文件流式和 Scene 共用；系数为精确常数。 | 一期 |
-| Scene 输出 | [`SceneOutputSession::pull`](../../src/adm_engine/scene_output_session.cpp#L230) 在无设备音量且不走立体声保护时逐样本乘音量。 | 确定性单次乘法；仍需纳入 Rust 批量样本处理。 | 一期 |
-| Scene 帧计数 | `SceneStreamEngine` 的输入/输出帧边界有理数累加。 | S06；纯整数运算不是已证实分歧。锁定帧映射规则和测试，不要求仅为换语言而搬走调度计数。 | 一期验收 |
-| 公共路由与布局 | [`direct_speakers_matrix`](../../src/adm_core/direct_speakers_matrix.cpp#L135) 的权重归一化；声道床/布局常量；标签规范化。 | N01；`sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。Scene 实际使用部分随调用链前移。 | 一期或三期 |
+| Scene 策略与状态 | 只剩策略 JSON 数值解析（N01）；dB 换算、乘积、偏移/钳位和方向乘距离在 Rust `semantic_policy`（1.2），极坐标经 `libm`（1.3）。 | 匹配、过滤和布尔字段留在 C++。N01 已登记为依赖 C 运行时 `strtod` 正确舍入（1.6）。 | 一期（已结项） |
+| Scene VBAP | 声道映射与 LFE 路由；`split_power` 模式的 LFE 增益为常量 1 乘以固定系数，结果精确。channelLock 与 divergence 阈值已移入 Rust（1.3）。 | 不再有平台数学函数或舍入运算。 | 一期（已结项） |
+| Scene Triple Balance | 床系数由 Rust `triple_balance::bed` 生成，C++ 只识别床声道和布局。 | 文件、文件流式和 Scene 共用；系数为精确常数。 | 一期（已结项） |
+| Scene 输出 | 1.4 起 `SceneOutputSession` 不再有决定样本值的 C++ 浮点运算；无保护路径的音量在 Rust `gain::scale` 中相乘。 | 只剩缓冲清零和拷贝；回调路径无锁、无 C++ 分配（1.6）。 | 一期（已结项） |
+| Scene 帧计数 | `SceneStreamEngine` 的输入/输出帧边界有理数累加。 | S06；纯整数运算，规则与测试在 1.5 锁定。 | 一期（已结项） |
+| 公共路由与布局 | [`direct_speakers_matrix`](../../src/adm_core/direct_speakers_matrix.cpp#L135) 的权重归一化；声道床/布局常量；标签规范化。 | N01；`sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。1.6 核对确认 Scene 不调用 `direct_speakers_matrix`。 | 三期 |
 | 文件流式及离线后端准备 | EAR double 增益乘积与发散累加、VBAP 增益表组装、HOA 元数据分组、Triple Balance 床增益、5 处块排序。 | N03/N06/N07/N12/S08；包括确定性运算与顺序风险。 | 三期 |
 | 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期 |
 | 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期 |
