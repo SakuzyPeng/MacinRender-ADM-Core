@@ -4,6 +4,8 @@
   "upstream_vcs_sha1": "0052abf06d8844f0972657c71e327d7eeee8967c",
   "modified_files": [
     "src/interp.rs",
+    "src/filter.rs",
+    "src/lib.rs",
     "Cargo.toml",
     "Cargo.toml.orig"
   ],
@@ -38,10 +40,8 @@
     "examples/replaygain.rs": "caa21c2c4c19b89e54d96cdf428e499b7701b14aa4171295a662762fa4da2f77",
     "src/capi.rs": "f873c8f2043461f9851386520893ba2903ebad7be07d66af43f7b93ba420b504",
     "src/ebur128.rs": "9ca45bfb2f614216b6c5c4b2c1cc6c1681f586d7abaed17b9735bb8adb304c91",
-    "src/filter.rs": "40c24d0bae9bc52a2f0839feda45a8df099213761b597b409c6178025e4c68a5",
     "src/histogram_bins.rs": "88b02989277a69f54fcc998d37e3bdc5f2db3cf6b56ae8a579ecf9337c16ed43",
     "src/history.rs": "b08661cb499d880ea62343c8ba2b89bd9abd74160a2dcb7898f9935cdb559cd8",
-    "src/lib.rs": "010430a7268f41cc77782f280a8c5fd8f34b48ee98889f3a20291aa310beeb60",
     "src/true_peak.rs": "5f1b0ba694b1685ca76eedc5b721fc964ea76ef1b1983768631f42ca19934861",
     "src/utils.rs": "229710f71858676b4bfa6254fe8ade7b03a6efee6e2e3965cdf58f967e9e2a42",
     "tests/c/calc_gating_block.c": "39acbd7f54f3295d93abdf75c92ac04ca5cbdad919be0fc61a99be07b242c1d4",

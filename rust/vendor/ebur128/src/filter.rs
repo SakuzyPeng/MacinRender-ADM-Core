@@ -109,6 +109,12 @@ fn filter_coefficients(rate: f64) -> ([f64; 5], [f64; 5]) {
     )
 }
 
+/// K-weighting numerator and denominator as the meter uses them at `rate` (local patch: exposed
+/// for the PCM consistency probe).
+pub fn k_weighting_coefficients(rate: u32) -> ([f64; 5], [f64; 5]) {
+    filter_coefficients(rate as f64)
+}
+
 impl Filter {
     pub fn new(
         rate: u32,
