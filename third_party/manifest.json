@@ -666,7 +666,7 @@
           "LICENSE"
         ]
       },
-      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）。"
+      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）；K-weighting 的 tan/pow、门控系数的 pow 与 LUFS 换算的 log10 改用 libm，x86 不再设置 MXCSR flush-to-zero，所有架构统一在每次调用后清零低于 f64::EPSILON 的滤波器状态（二期 2.2）。"
     },
     {
       "name": "rust-glam-0.30.10",
