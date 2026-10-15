@@ -243,6 +243,8 @@ def kernel_outputs():
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     names += [f'meter-{rate}.05-k-weighting.f64' for rate in METER_RATES]
+    names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
+                                                '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS
               for part in ('10-parameters.i32', '20-true-peak.f64', '30-loudness.f64')]
     names += ['spreader.10-input.f32', 'spreader.20-voronoi.f32', 'spreader.30-fir.c32', 'spreader.40-output.f32']

@@ -145,7 +145,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | N12 | 未处理 | Triple Balance 非 D 模式的离线与文件流式入口仍为 `PORTABLE=false`；三期 |
 | N13 | 已处理 | 2.2：K-weighting、门控系数与 LUFS 换算改用 `libm`，计量探针全部设为门禁 |
 | N14 | 已处理 | True Peak 插值系数改用 `libm`（2.1），生产计量的 True Peak 设为门禁 |
-| N15 | 未处理 | 二期 |
+| N15 | 已处理 | 2.3：峰值转 dB、合成增益判定、两个公开后处理 API 的增益与逐样本乘法移入 Rust（`libm`）；对象增益覆盖的 dB 换算留在三期 |
 | N16 | 已处理 | HpTF 设计改用 `libm`（1.4），设计内核设为门禁 |
 | N17 | 已处理 | 峰值保护释放系数改用 `libm::expf`（1.4） |
 | N18 | 未处理 | Monitor 折叠矩阵 `std::sin/cos`；三期 |
@@ -175,7 +175,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期 |
 | 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期 |
 | 文件流式渲染的监听适配 | Monitor 折叠矩阵、实时覆盖增益、`clamp_frame` 秒到帧换算。 | N03/N18/S06；实时监听用途不改变其所属渲染流程。 | 三期 |
-| 离线后处理 | 峰值转 dB、总增益合成、`apply_gain_to_file`；公开 `apply_loudness_norm` / `apply_peak_limit` 的独立计算。 | N13—N15/S01；统一为公共 Rust 数值入口，保留各 API 已定义的行为。 | 二期 |
+| 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移） |
 | PCM 输出控制 | 秒到帧 trim、写出块循环与临时文件替换。WAVE 样本量化和序列化已经在 Rust。 | S06；数值边界统一，I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期 |
 
 ## 已收敛的实现与 PCM 写出
@@ -318,6 +318,11 @@ x86 不再打开 FTZ，所有架构统一在每次调用后清零低于 `f64::EP
 `56f1ded` 的 Consistency 38742360010 中 196 个 PCM id 与全部 188 个内核文件三平台相同。修复前的检查点运行把 2.1 的分歧定位到
 macOS 上 192 kHz K-weighting 分母的 1 ulp 差异（经接近 1 的极点放大），Linux 与 Windows 之间的 1 ulp 来自 `log10`，
 S01 使末段读数在 macOS 与 x86 之间相差 120–168 LU。见 [2.2 记录](RUST_METER_LOUDNESS.md)。
+
+**2.3 状态**：`mradm-dsp` 新增 `post_gain`：各后端的峰值转 dB、`RenderService` 的响度目标 / 峰值补偿 / 峰值上限 / 最终增益判定、
+公开 `apply_loudness_norm` 与 `apply_peak_limit` 的增益，以及三处整段重写的逐样本乘法都移入 Rust，dB 换算使用 `libm`；
+判定顺序、容差与 NaN / −0 的取值保持不变。内核探针新增 5 个 `post-gain` 文件并设为门禁（193 个内核文件中 188 个）。
+Linux x64 上 196 个 PCM id 与 2.2 逐位相同。见 [2.3 记录](RUST_POST_GAIN.md)。
 
 保持既有声道权重、LFE 处理、完整积分历史、worker 归属和错误语义；声道映射修正或计量算法变更另行评估。
 对 ebur128 使用可追踪的小范围补丁，不以更换语言或更新依赖版本代替数值规则和标准测试。

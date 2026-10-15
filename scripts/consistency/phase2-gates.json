@@ -27,6 +27,12 @@
     },
     {
       "kind": "kernel",
+      "pattern": "post-gain.*",
+      "reason": "offline post-processing gain: dB/amplitude conversion with the libm port and the staged loudness, peak makeup, peak ceiling and final gain decisions (PCM consistency 2.3)",
+      "reference": "docs/architecture/RUST_POST_GAIN.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"

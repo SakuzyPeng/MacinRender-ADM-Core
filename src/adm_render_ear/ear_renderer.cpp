@@ -25,6 +25,7 @@
 #include "ear.h"
 #include "ear_post.h"
 #include "meter.h"
+#include "post_gain.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 #include "speaker_pcm.h"
@@ -978,7 +979,7 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
                 metrics.measured_lufs = *loudness;
             }
             if (const auto peak = lufs_st->max_true_peak(); peak && *peak > 0.0) {
-                metrics.measured_peak_dbtp = 20.0 * std::log10(*peak);
+                metrics.measured_peak_dbtp = dsp::amplitude_to_db(*peak);
             }
         }
         return metrics;

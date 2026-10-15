@@ -13,6 +13,7 @@
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
+#include "../adm_dsp/post_gain_ffi.h"
 #include "wav_backend.h"
 
 namespace mradm::audio {
@@ -226,8 +227,8 @@ Result<void> apply_gain_to_file(const std::string& path,
                 break;
             }
             const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
-            for (std::size_t i = 0; i < samples; ++i) {
-                buf[i] *= gain;
+            if (mradm_dsp_apply_gain(buf.data(), samples, gain) != 0) {
+                return make_error(ErrorCode::internal_error, "apply_gain_to_file: invalid gain buffer", "path=" + path);
             }
             if (writer.write(buf.data(), got) != got) {
                 return make_error(

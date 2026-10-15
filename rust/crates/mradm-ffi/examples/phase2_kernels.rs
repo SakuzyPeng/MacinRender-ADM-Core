@@ -12,6 +12,8 @@ use std::{
 mod coverage;
 #[path = "phase2/meter.rs"]
 mod meter;
+#[path = "phase2/post_gain.rs"]
+mod post_gain;
 #[path = "phase2/sofa.rs"]
 mod sofa;
 fn floats(path: &Path, name: &str, values: &[f32]) {
@@ -307,6 +309,7 @@ fn run(out: &Path, fixtures: &Path) {
     fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
     sofa::run(out, fixtures);
     meter::run(out);
+    post_gain::run(out);
 }
 
 fn main() {
