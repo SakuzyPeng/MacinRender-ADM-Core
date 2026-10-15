@@ -325,6 +325,15 @@ S01 使末段读数在 macOS 与 x86 之间相差 120–168 LU。见 [2.2 记录
 Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`d836744` 的 Consistency 38757362457、CI 38757366795 与 Quality 38757371551 通过，
 196 个 PCM id 与全部 193 个内核文件三平台相同，209 项门禁无失败。见 [2.3 记录](RUST_POST_GAIN.md)。
 
+**2.4 状态**：以测试内独立实现的 BS.1770-4 参考（标准表格的 48 kHz K-weighting、400 ms 块、绝对与相对门限）和 EBU Tech 3341
+式合成信号验收计量：48 kHz 下 integrated、momentary、short-term 与参考相差不超过 3.2e-12 LU，门限两侧的取舍一致；
+4 种采样率下与标称值最大偏差 0.041 LU；44.1/48/96 kHz 的 True Peak 偏差 0 至 +0.104 dB，192 kHz 按既有行为等于样本峰值。
+验收发现 2.2 的极小状态清零发生在每次调用结束时，使静音段的 momentary 与 short-term 依赖分块；vendored ebur128 改为每完成一个
+100 ms 块时清零，6 种分块与 reset 后的读数逐位相同，长静音后 integrated 与 True Peak 不变。内核探针新增 20 个 `meter-acceptance`
+文件（213 个内核文件中 208 个设为门禁）；`mr_adm_normalization_acceptance_tests` 重新测量归一化后的最终 PCM，与目标相差不超过 1.6e-6。
+`a347a32` 的 Consistency 38769696216 中 196 个 PCM id 与全部 213 个内核文件三平台相同，209 项门禁无失败；
+`418986d` 的 CI 38773742902 与 Quality 38773737452 通过。N13—N15 与 S01 全部处理，**二期结项**。见 [2.4 记录](RUST_METER_ACCEPTANCE.md)。
+
 保持既有声道权重、LFE 处理、完整积分历史、worker 归属和错误语义；声道映射修正或计量算法变更另行评估。
 对 ebur128 使用可追踪的小范围补丁，不以更换语言或更新依赖版本代替数值规则和标准测试。
 

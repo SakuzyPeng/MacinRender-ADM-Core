@@ -114,3 +114,15 @@ short-term，以及离线模式的 integrated 与两声道 True Peak（−inf �
 
 ## 验证
 
+
+**本机（Linux x64，config A）。** 与 2.3 相比 196 个 PCM id 逐位相同；原有 188 个内核文件中只有上表 6 个计量文件改变，
+新增 20 个 `meter-acceptance` 文件；ctest 79/79 通过（新增 `mr_adm_normalization_acceptance_tests`）；
+Rust fmt / clippy 与 consistency 工具测试通过。
+
+**三平台验收。** `a347a32` 的 Consistency 38769696216 与 CI 通过；同一提交的 Quality 38769704409 因 cppcheck 报告新测试
+`main` 可能抛出异常并有两个成员未初始化而失败，`418986d` 修正测试后 CI 38773742902 与 Quality 38773737452 通过
+（修正只涉及 `tests/unit`，不在一致性采集的源码指纹内，三平台采集结果不受影响）：
+
+- A/B 两种配置下 196 个 PCM id 三平台相同，209 项门禁无失败；
+- 213 个内核文件全部三平台相同，包括 20 个 `meter-acceptance` 文件与 6 个改变的计量文件；
+- 诊断运行每对平台比较的 19518 个 Scene 检查点全部相同，其余诊断检查点的相同 / 不同分布与 2.3 完全一致。
