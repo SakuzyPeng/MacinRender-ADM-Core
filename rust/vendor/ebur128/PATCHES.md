@@ -12,3 +12,7 @@ f32 exactly as before (PCM consistency phase 2). Both manifests add the `libm` d
 coefficient table is identical on all platforms by construction rather than by observation.
 
 The phase-two kernel probe gates the true-peak results of the production meter at 44.1, 48, 96 and 192 kHz.
+
+`src/filter.rs` adds `k_weighting_coefficients(rate)`, re-exported from `src/lib.rs`, which returns the K-weighting
+numerator and denominator the meter builds for that rate. It only exposes existing values so the kernel probe can record
+them (PCM consistency 2.2).

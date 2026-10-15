@@ -37,6 +37,7 @@
 mod ebur128;
 pub use self::ebur128::*;
 pub use self::utils::energy_to_loudness;
+pub use self::filter::k_weighting_coefficients;
 
 #[cfg(feature = "internal-tests")]
 pub mod interp;

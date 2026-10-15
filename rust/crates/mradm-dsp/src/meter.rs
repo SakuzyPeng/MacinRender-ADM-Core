@@ -101,6 +101,11 @@ fn translate(error: ebur128::Error) -> Error {
     }
 }
 
+/// K-weighting numerator and denominator the meter applies at `rate`.
+pub fn k_weighting(rate: u32) -> ([f64; 5], [f64; 5]) {
+    ebur128::k_weighting_coefficients(rate)
+}
+
 pub struct Meter {
     inner: EbuR128,
 }
