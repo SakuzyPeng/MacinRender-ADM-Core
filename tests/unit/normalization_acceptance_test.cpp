@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -30,6 +31,8 @@ namespace {
 
 constexpr uint32_t k_sr = 48000U;
 constexpr uint32_t k_frames = k_sr * 6U;
+constexpr uint32_t k_burst_start = k_sr * 3U;
+constexpr uint32_t k_burst_end = k_burst_start + (k_sr / 2U);
 
 class FileGuard {
   public:
@@ -108,14 +111,15 @@ std::filesystem::path write_input(float scale) {
         std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid, "", "")});
     auto axml = std::make_shared<fixture::WaveAxml>(xml.str());
     auto writer = fixture::write_wave(path.string(), 1U, k_sr, 32U, chna, axml);
-    std::vector<float> samples(k_frames, 0.0F);
+    std::vector<float> samples;
+    samples.reserve(k_frames);
     for (uint32_t n = 0; n < k_frames; ++n) {
         const double t = static_cast<double>(n) / k_sr;
         double value = 0.25 * std::sin(2.0 * std::numbers::pi * 1000.0 * t);
-        if (n >= 3U * k_sr && n < 3U * k_sr + k_sr / 2U) {
+        if (n >= k_burst_start && n < k_burst_end) {
             value = std::sin((std::numbers::pi / 2.0 * static_cast<double>(n % 4U)) + (std::numbers::pi / 4.0));
         }
-        samples[n] = static_cast<float>(scale * value);
+        samples.push_back(static_cast<float>(scale * value));
     }
     writer->write(samples.data(), k_frames);
     return path;
@@ -154,11 +158,11 @@ std::optional<Measured> measure(const std::filesystem::path& path) {
 }
 
 struct Case {
-    const char* name;
-    float scale;
-    mradm::RenderOptions options;
-    std::optional<double> lufs;      // expected final integrated loudness
-    std::optional<double> peak_dbtp; // expected final true peak
+    const char* name = "";
+    float scale = 0.0F;
+    mradm::RenderOptions options{};
+    std::optional<double> lufs = std::nullopt;      // expected final integrated loudness
+    std::optional<double> peak_dbtp = std::nullopt; // expected final true peak
 };
 
 mradm::RenderOptions base_options() {
@@ -186,37 +190,39 @@ bool run_case(const Case& c) {
     if (!check(result.success(), name + ": render succeeds")) {
         return false;
     }
-    const auto final_pcm = measure(output);
-    if (!check(final_pcm.has_value(), name + ": final PCM can be measured")) {
-        return false;
+    const auto measured = measure(output);
+    if (!measured) {
+        return check(false, name + ": final PCM can be measured");
     }
-    std::cout << std::setprecision(10) << name << ": final " << final_pcm->lufs << " LUFS, " << final_pcm->peak_dbtp
+    const Measured& final_pcm = *measured;
+    std::cout << std::setprecision(10) << name << ": final " << final_pcm.lufs << " LUFS, " << final_pcm.peak_dbtp
               << " dBTP\n";
     if (!c.lufs && !c.peak_dbtp) {
-        return check(final_pcm->silent, name + ": silence stays digital silence") &&
+        return check(final_pcm.silent, name + ": silence stays digital silence") &&
                check(!result.metrics || (!result.metrics->measured_lufs && !result.metrics->measured_peak_dbtp),
                      name + ": silence reports no loudness or peak");
     }
-    if (!check(result.metrics.has_value(), name + ": metrics are reported")) {
-        return false;
+    if (!result.metrics) {
+        return check(false, name + ": metrics are reported");
     }
+    const mradm::RenderMetrics& metrics = *result.metrics;
     // The f32 gain, float output and 24-bit quantization move the re-measured values by about
     // 1e-6 LU / dB on this programme.
     constexpr double k_tolerance = 1e-5;
     bool ok = true;
     if (c.lufs) {
-        ok &= check(std::abs(final_pcm->lufs - *c.lufs) < k_tolerance, name + ": final loudness meets the target");
+        ok &= check(std::abs(final_pcm.lufs - *c.lufs) < k_tolerance, name + ": final loudness meets the target");
     }
     if (c.peak_dbtp) {
-        ok &= check(std::abs(final_pcm->peak_dbtp - *c.peak_dbtp) < k_tolerance,
+        ok &= check(std::abs(final_pcm.peak_dbtp - *c.peak_dbtp) < k_tolerance,
                     name + ": final true peak meets the target");
     }
-    if (result.metrics->measured_lufs) {
-        ok &= check(std::abs(*result.metrics->measured_lufs - final_pcm->lufs) < k_tolerance,
+    if (metrics.measured_lufs) {
+        ok &= check(std::abs(*metrics.measured_lufs - final_pcm.lufs) < k_tolerance,
                     name + ": reported loudness describes the final PCM");
     }
-    if (result.metrics->measured_peak_dbtp) {
-        ok &= check(std::abs(*result.metrics->measured_peak_dbtp - final_pcm->peak_dbtp) < k_tolerance,
+    if (metrics.measured_peak_dbtp) {
+        ok &= check(std::abs(*metrics.measured_peak_dbtp - final_pcm.peak_dbtp) < k_tolerance,
                     name + ": reported true peak describes the final PCM");
     }
     return ok;
@@ -224,7 +230,7 @@ bool run_case(const Case& c) {
 
 } // namespace
 
-int main() {
+int main() try {
     std::vector<Case> cases;
     {
         auto options = base_options();
@@ -263,4 +269,7 @@ int main() {
     }
     std::cout << "normalization acceptance tests passed\n";
     return EXIT_SUCCESS;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return EXIT_FAILURE;
 }
