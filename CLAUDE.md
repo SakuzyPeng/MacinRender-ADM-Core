@@ -17,10 +17,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）、WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）、PoseBridge OSC 协议解析（`mradm-osc`，见 `RUST_OSC_PROTOCOL_MIGRATION.md`）和 AutoEq ParametricEQ 文本解析（`mradm-dsp` `hptf::parametric_eq`，见 `RUST_HPTF_PARSE_MIGRATION.md`）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度（含 OSC 头追踪的 UDP 收发与快照）、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016 / 0017 / 0018）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。二期已按锁定矩阵结项（见 `docs/architecture/RUST_PHASE2_CLOSEOUT.md`）：macOS arm64 / Linux x64 / Windows x64 的全部 78 个 PCM 用例逐位相同并设为门禁。完成切片包括 Scene `scene-separate-v1`（ADR 0014）、RustFFT 标量规划器（ADR 0015）、重采样固定归约及可移植三角函数（ADR 0016）、OM spreader 固定分组与可移植数学函数（ADR 0017），以及保持每列算术树的 FFT 独立列优化。后续覆盖已扩展到 118 个精确 PCM id 和 8 个内核模式（123 个文件），新增 96 kHz Scene、96/192 kHz 重采样、HRTF 边界及退化 OM 输入（见 `RUST_COVERAGE_EXTENSION.md`）；一期 1.3 起 FFT twiddle 取自 `libm`，f64 twiddle 列也设为门禁；1.4 起 HpTF 设计内核同样设为门禁；其余 5 个内核文件继续观察，目前全部 160 个内核文件三平台相同。新增 PCM 用例必须同步加入门禁（`phase2_tools_test.py` 强制）；不得把当前矩阵扩展为任意输入或工具链的全局承诺。dr_flac 按用户决定暂缓；覆盖继续按批次扩展，进一步优化与参考退役分别推进。
 
 上述迁移清单表示主要内核已经迁入 Rust；C++ 仍有系数组装、样本归约、淡化和后置增益，尚非纯调度层。
-一期 1.2 已把 Scene 的语义策略数值求值（`mradm-dsp` `semantic_policy`，dB 经 `libm::powf`）、Live VBAP 源增益合成与 Triple Balance 床系数迁入 Rust（见 `RUST_SCENE_RESIDUAL_MIGRATION.md`）；1.3 让 Scene 空间数学、HRTF/SOFA 几何与 FFT twiddle 全部改用 `libm`，RealFFT 3.5.0 因此纳入 `rust/vendor/realfft`（见 `RUST_SCENE_PORTABLE_MATH.md`）；1.4 把 HpTF 设计与峰值保护释放系数改用 `libm`，HpTF 尾音清理改为固定 1024 帧网格，无保护输出的音量乘法移入 Rust（见 `RUST_SCENE_OUTPUT_DSP.md`）；1.5 核对事件、时钟、分块、reset、EOS 与欠载规则，HpTF 排队目标改为在当前淡化结束的那一帧开始，11 个同采样率 VBAP/Triple Balance 回放用例要求固定与碎片分块逐位相同，双耳卷积与分数比率重采样记录为依赖分块（见 `RUST_SCENE_TIMING.md`）。
+一期 1.2 已把 Scene 的语义策略数值求值（`mradm-dsp` `semantic_policy`，dB 经 `libm::powf`）、Live VBAP 源增益合成与 Triple Balance 床系数迁入 Rust（见 `RUST_SCENE_RESIDUAL_MIGRATION.md`）；1.3 让 Scene 空间数学、HRTF/SOFA 几何与 FFT twiddle 全部改用 `libm`，RealFFT 3.5.0 因此纳入 `rust/vendor/realfft`（见 `RUST_SCENE_PORTABLE_MATH.md`）；1.4 把 HpTF 设计与峰值保护释放系数改用 `libm`，HpTF 尾音清理改为固定 1024 帧网格，无保护输出的音量乘法移入 Rust（见 `RUST_SCENE_OUTPUT_DSP.md`）；1.5 核对事件、时钟、分块、reset、EOS 与欠载规则，HpTF 排队目标改为在当前淡化结束的那一帧开始，11 个同采样率 VBAP/Triple Balance 回放用例要求固定与碎片分块逐位相同，双耳卷积与分数比率重采样记录为依赖分块（见 `RUST_SCENE_TIMING.md`）；1.6 让一致性 config A 使用发布构建的选项（C ABI bundle / PIC），新增变采样后接 HpTF 与峰值保护的外部 SOFA 与 VBAP 设备回放（PCM 门禁增至 196 个），并以分配计数测试约束设备回调（见 `RUST_SCENE_RELEASE_ACCEPTANCE.md`）。
 剩余数值运算与本轮分期统一维护在 [PCM 一致性审计与 Rust 迁移路线](docs/architecture/PCM_CONSISTENCY_AUDIT.md)：
 一期 Scene 流式渲染及其实际共享依赖，二期计量与归一化，三期文件流式渲染和离线渲染；Apple 后端及后续编码排除。
-基于 `456a3ba` 的门禁清单为 188 个 PCM id、160 份内核测量，其中 150 份内核设为门禁（1.3 起为 151 份，1.4 起为 155 份）；
+基于 `456a3ba` 的门禁清单为 188 个 PCM id、160 份内核测量，其中 150 份内核设为门禁（1.3 起为 151 份，1.4 起为 155 份；1.6 起 PCM id 为 196 个）；
 清单规模与历史已完成验收分别记录，不将 118 项历史报告直接当作新增范围的三平台结果。
 
 ## 常用构建与测试命令
@@ -231,7 +231,7 @@ Rust/C++ 边界规则：
 - 方向是 **C++ 调 Rust**（ADR 0008 决策三）；Rust 不实现 `IRenderer` / `IRenderStream` 等 STL 接口
 - FFI 用显式长度缓冲、opaque 句柄、调用方提供的错误消息缓冲；状态码对应 `adm::ErrorCode`；句柄由分配侧配对销毁；panic 不穿过 C 边界
 - C++ 侧的私有 FFI 头（`src/adm_dsp/*_ffi.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`、`src/adm_realtime/osc_ffi.h`，纯 C、`extern "C"` 由 `__cplusplus` 守护；C++ 包装另放 `scene_math.h` 等）是**手写**的，改 Rust 签名必须同步修改，并跑 `cmake --build build/debug --target mr_adm_ffi_header_check`（需 `cargo install cbindgen --locked --version 0.29.2`；比较导出符号、签名与 `#[repr(C)]` 字段，quality CI 同样执行）。被签名引用的 `#[repr(C)]` 类型名在 workspace 内必须唯一（cbindgen 按名字合并）。Rust 类型与这些头不得出现在 `include/adm/*`
-- 共享 C ABI bundle 只导出 `c_api.h` 声明的 `adm_*`（当前 139 个；Windows 用从 `c_api.h` 生成的 `.def`）；Rust 分配器、panic 入口与私有 `mradm_*` 符号不得外泄，`scripts/quality/check-capi-exports.py <lib>` 在 ci/release 校验
+- 共享 C ABI bundle 只导出 `c_api.h` 声明的 `adm_*`（当前 157 个；Windows 用从 `c_api.h` 生成的 `.def`）；Rust 分配器、panic 入口与私有 `mradm_*` 符号不得外泄，`scripts/quality/check-capi-exports.py <lib>` 在 ci/release 校验
 - 新的 Rust 依赖必须锁定精确版本、关闭不需要的 features，并登记到许可证清单/SBOM（`scripts/quality/check-licenses.sh` 会校验 Cargo 依赖）
 - 迁移批次的惯例：先保留旧 C++ 实现作对照（`tests/reference/*` + `provenance.json`，或 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关），记录验收到 `docs/architecture/RUST_*_MIGRATION.md` 与 `evidence/`；**禁止**把旧实现当运行时静默回退
 - `tests/reference/` 下每个文件都登记在 `tests/reference/retention.json`（单元、测试、开关、SHA-256、未满足的退役条件），`scripts/quality/check-reference-retention.py` 校验（ci 的 version-metadata job）；冻结参考不得改算法，必须改时同步更新哈希并在迁移文档说明。退役条件（已发布 + 独立回归 + 二期确认）与步骤见 `docs/architecture/RUST_REFERENCE_RETENTION.md`
@@ -314,7 +314,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 ## CI 与发布
 
 - `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；生产构建无需 Boost/vcpkg；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败；另有 Linux ARM64 Release job（`ubuntu-24.04-arm`，显式 `MR_ADM_STRICT_FP=OFF`）守护 Scene 算术规则在优化构建下不漂移
-- `.github/workflows/consistency.yml` — push main / manual：Rust 二期三平台 A/B 采集；门禁输入完整性、同进程/新进程重复性、诊断无扰动，以及 `scripts/consistency/phase2-gates.json` 列出的跨平台位相等项（当前为 FFT 及其 f32/f64 twiddle、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计内核及全部 188 个 PCM 用例）；其余 5 个内核观察项目前三平台相同
+- `.github/workflows/consistency.yml` — push main / manual：Rust 二期三平台 A/B 采集；门禁输入完整性、同进程/新进程重复性、诊断无扰动，以及 `scripts/consistency/phase2-gates.json` 列出的跨平台位相等项（当前为 FFT 及其 f32/f64 twiddle、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计内核及全部 196 个 PCM 用例）；其余 5 个内核观察项目前三平台相同
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
@@ -326,7 +326,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 ## 关键文档索引
 
 - `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md` — 平台化重构方向、模块边界
-- `docs/architecture/PCM_CONSISTENCY_AUDIT.md` — 到 PCM 写出为止的 C++/Rust 数值审计、唯一的本轮迁移路线与逐切片验证要求；一期 Scene 流式渲染及其实际共享依赖；`RUST_SCENE_RESIDUAL_MIGRATION.md` — 一期 1.2 记录；`RUST_SCENE_PORTABLE_MATH.md` — 一期 1.3 记录；`RUST_SCENE_OUTPUT_DSP.md` — 一期 1.4 记录；`RUST_SCENE_TIMING.md` — 一期 1.5 记录
+- `docs/architecture/PCM_CONSISTENCY_AUDIT.md` — 到 PCM 写出为止的 C++/Rust 数值审计、唯一的本轮迁移路线与逐切片验证要求；一期 Scene 流式渲染及其实际共享依赖；`RUST_SCENE_RESIDUAL_MIGRATION.md` — 一期 1.2 记录；`RUST_SCENE_PORTABLE_MATH.md` — 一期 1.3 记录；`RUST_SCENE_OUTPUT_DSP.md` — 一期 1.4 记录；`RUST_SCENE_TIMING.md` — 一期 1.5 记录；`RUST_SCENE_RELEASE_ACCEPTANCE.md` — 一期 1.6 三平台验收与结项
 - `docs/architecture/ADM_FEATURE_COVERAGE.md` — ADM 特性覆盖审计
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
