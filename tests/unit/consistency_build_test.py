@@ -202,6 +202,71 @@ class CMakeTests(Harness):
         self.assertTrue(all('-ffp-contract=off' not in row['command'] for row in rows))
 
 
+class ReleaseParityTests(unittest.TestCase):
+    """Config A must be the release-candidate configuration (PCM consistency 1.6)."""
+
+    IGNORED = {'CMAKE_C_COMPILER_LAUNCHER', 'CMAKE_CXX_COMPILER_LAUNCHER', 'FETCHCONTENT_BASE_DIR'}
+    # Options only the consistency build spells out; each must equal what release builds get by default.
+    DEFAULTED = {'MR_ADM_CORE_BUILD_TESTS', 'MR_ADM_CONSISTENCY_DIAGNOSTICS', 'MR_ADM_STRICT_FP',
+                 'MR_ADM_EAR_SCALAR_REFERENCE', 'MR_ADM_ENABLE_SOFA'}
+
+    @staticmethod
+    def configure_steps(path):
+        import re
+        steps = re.split(r'\n\s*- name: ', path.read_text(encoding='utf-8'))
+        return [dict(re.findall(r'-D([A-Za-z0-9_]+)=("[^"]*"|[^\s^"]+)', step))
+                for step in steps if step.startswith('Configure')]
+
+    @staticmethod
+    def option_defaults():
+        import re
+        text = ''.join(p.read_text(encoding='utf-8') for p in [REPO / 'CMakeLists.txt', *(REPO / 'cmake').glob('*.cmake')])
+        return {name: value for name, value in re.findall(r'option\(\s*([A-Z0-9_]+)\s+"[^"]*"\s+(ON|OFF)\s*\)', text)}
+
+    @staticmethod
+    def preset(name):
+        presets = {p['name']: p for p in json.loads((REPO / 'CMakePresets.json').read_text(encoding='utf-8'))['configurePresets']}
+        result = {}
+        def resolve(key):
+            inherits = presets[key].get('inherits', [])
+            for parent in [inherits] if isinstance(inherits, str) else inherits:
+                resolve(parent)
+            result.update(presets[key].get('cacheVariables', {}))
+        resolve(name)
+        return result
+
+    def compare(self, release, candidate, platform):
+        defaults = self.option_defaults()
+        release = {k: v for k, v in release.items() if k not in self.IGNORED}
+        candidate = {k: v for k, v in candidate.items() if k not in self.IGNORED}
+        for key, value in release.items():
+            self.assertEqual(candidate.get(key), value, f'{platform}: {key}')
+        for key in candidate.keys() - release.keys():
+            if key == 'EAR_SIMD':
+                continue  # Only the opt-in libear reference build reads it; production EAR is Rust.
+            self.assertIn(key, self.DEFAULTED, f'{platform}: consistency-only option {key}')
+            self.assertEqual(candidate[key], defaults[key], f'{platform}: {key} differs from the release default')
+
+    def test_unix_config_a_matches_release(self):
+        release = self.configure_steps(REPO / '.github/workflows/release.yml')
+        self.assertEqual(len(release), 3)
+        self.assertEqual(release[0], release[1], 'macOS and Linux release configure options diverge')
+        unix_release = dict(self.preset('release'), **release[0])
+        workflow = self.configure_steps(REPO / '.github/workflows/consistency.yml')
+        candidate = dict(self.preset('consistency-a'), **workflow[0])
+        self.compare(unix_release, candidate, 'unix')
+
+    def test_windows_config_a_matches_release(self):
+        import re
+        release = self.configure_steps(REPO / '.github/workflows/release.yml')[2]
+        text = (REPO / '.github/workflows/consistency.yml').read_text(encoding='utf-8')
+        numeric = re.search(r'config: a\s*\n\s*numeric_flags: "([^"]*)"', text)
+        self.assertIsNotNone(numeric)
+        candidate = dict(self.configure_steps(REPO / '.github/workflows/consistency.yml')[1],
+                         **dict(re.findall(r'-D([A-Za-z0-9_]+)=(\S+)', numeric[1])))
+        self.compare(release, candidate, 'windows')
+
+
 class BuildInfoTests(Harness):
     def setUp(self):
         super().setUp()
