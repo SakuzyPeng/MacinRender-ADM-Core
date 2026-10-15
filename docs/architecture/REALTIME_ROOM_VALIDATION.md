@@ -374,6 +374,18 @@ Release 单声源微基准使用八个头姿的完整响应，按实际结构支
 Linux 2,814 次。按声源更新网格消除了上限报错和随偏移数增长的开销，但 32 个声源同时持续运动
 在 Windows 和 Linux 上仍不满足实时预算，macOS 也没有做到零超时。
 
+## 斜坡期间早反射降频实验（2026-10-13，历史记录）
+
+`claude/nice-thompson-ogju1h` 在 `7d92315` 基线上，用同一 Release 二进制对照反射网格关闭与
+G = 1024 的结果，隔离降低反射更新率带来的收益。Linux x64、4 vCPU 主机上，所测斜坡场景平均耗时
+下降 34–57%；32 源密集运动加连续头姿仍每次超过 10.667 ms。输出差异与逐轮测量见
+[实验记录](ROOM_REFLECTION_GRID_EVALUATION.md)及其[原始 JSON](ROOM_REFLECTION_GRID_EVALUATION.json)。
+
+这些是历史实验结果；当时未完成维护者三平台、听音或 C ABI / Scene 流式长测。当前
+[ADR 0020](../adr/0020-room-quality-tiers.md) 已采用会话固定档位、硬事件旁路和反射周期预热，
+另有 FFT 与头姿更新策略，验收以当前档位记录为准。合并时保留实验数据，测试改为在各档位内验证
+密集渐变的分块一致性，以及数值不变的 extent 渐变不影响增益、跳变、headLocked / LFE 和换房。
+
 ## macOS worker parking 冷启动分配（2026-10-14）
 
 macOS CI 的 `mr_adm_room_trace_tests` 曾在

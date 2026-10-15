@@ -7,6 +7,7 @@ use mradm_dsp::{
         control::{RoomCommand, RoomDescription, State},
         geometry::Rotation,
         prepared::PreparedRoom,
+        quality::Quality,
         session::{Instance, PreparedSet, Session},
     },
 };
@@ -782,7 +783,10 @@ fn alternate(base: &Arc<PreparedSet>, name: &str, energy: f64) -> Arc<PreparedSe
     profile.identity = name.into();
     profile.id = name.into();
     profile.late_energy = energy;
-    let room = Arc::new(PreparedRoom::new(Arc::new(profile), base.room.hrir.clone()).unwrap());
+    let room = Arc::new(
+        PreparedRoom::with_quality(Arc::new(profile), base.room.hrir.clone(), base.room.quality)
+            .unwrap(),
+    );
     Arc::new(PreparedSet::new(room).unwrap())
 }
 
@@ -1187,7 +1191,7 @@ fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
     // Every source ramps with its own event offset: 32 distinct offsets per
     // 512 frames. A session-wide update grid exceeded the 16 targets per
     // 10 ms of each dynamic filter here; per-source grids keep it bounded.
-    let prepared = fixture();
+    // Exercise both quality policies with the same absolute event timeline.
     let sources = 32;
     let descriptions: Vec<_> = (0..sources)
         .map(|i| RoomDescription {
@@ -1221,7 +1225,7 @@ fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
     }
     events.sort_by_key(|e| e.0);
     let total = 12 * 512 + 1024;
-    let render = |chunks: &[usize]| {
+    let render = |chunks: &[usize], prepared: &Arc<PreparedSet>| {
         let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
         session.configure(&descriptions).unwrap();
         let mut input = vec![0.; 4096];
@@ -1263,17 +1267,137 @@ fn staggered_ramps_on_every_source_render_and_fragment_bit_identically() {
         }
         output
     };
-    let canonical = render(&[512]);
-    let fragmented = render(&[1, 173, 733, 4096, 19, 257]);
-    let mismatch = canonical
+    for quality in [Quality::Exact, Quality::Realtime] {
+        let prepared = common::fixture_with_quality(quality);
+        let canonical = render(&[512], &prepared);
+        let fragmented = render(&[1, 173, 733, 4096, 19, 257], &prepared);
+        let mismatch = canonical
+            .iter()
+            .zip(&fragmented)
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(
+            mismatch.is_none(),
+            "{quality:?}: fragmented output first differs at {mismatch:?}"
+        );
+        assert!(canonical.iter().any(|v| v.abs() > 1e-5));
+    }
+}
+
+#[test]
+fn inert_geometry_ramps_preserve_gain_ramps_jumps_and_room_switches() {
+    // An extent ramp from zero to zero changes no geometry. Adding it must
+    // preserve gain ramps, jumps, head-locked/LFE routing and a room switch.
+    // Compare within each quality so native FFT rounding is not conflated
+    // with the reflection scheduling rule.
+    let descriptions: Vec<_> = (0..4)
+        .map(|i| RoomDescription {
+            id: i + 1,
+            role: if i == 3 { 2 } else { 0 },
+            position: around(i as f32 * 70. - 100., 10., 1.2),
+            ..RoomDescription::default()
+        })
+        .collect();
+    let initial: Vec<_> = descriptions
         .iter()
-        .zip(&fragmented)
-        .position(|(a, b)| a.to_bits() != b.to_bits());
-    assert!(
-        mismatch.is_none(),
-        "fragmented output first differs at {mismatch:?}"
-    );
-    assert!(canonical.iter().any(|v| v.abs() > 1e-5));
+        .enumerate()
+        .map(|(i, d)| RoomCommand {
+            element: i as u32,
+            state: State {
+                position: d.position,
+                head_locked: u32::from(i == 1),
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
+    let render = |prepared: &Arc<PreparedSet>, inert_geometry_ramp: bool| {
+        let next = alternate(prepared, "inert-grid-next", 0.7);
+        let mut session = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        session.configure(&descriptions).unwrap();
+        let frames = 384;
+        let mut input = vec![0.; frames];
+        let mut block = vec![0.; frames * 2];
+        let mut output = Vec::new();
+        for call in 0..80 {
+            for (i, value) in input.iter_mut().enumerate() {
+                *value = ((((call * frames + i) * 37) % 193) as f32 - 96.) / 384.;
+            }
+            session
+                .set_pose([call as f32 * 2.3 - 30., 4., -2.])
+                .unwrap();
+            if call == 10 {
+                session
+                    .queue_room(Box::new(Instance::new(next.clone(), 4).unwrap()), 1)
+                    .unwrap();
+            }
+            let mut commands: Vec<_> = [(0u32, 77u32), (1, 200)]
+                .into_iter()
+                .map(|(element, offset)| RoomCommand {
+                    element,
+                    offset,
+                    changed: 4,
+                    state: State {
+                        position: around(element as f32 * 90. + call as f32 * 9., 5., 1.1),
+                        head_locked: element,
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                })
+                .collect();
+            // Gain ramps on a jumping source and on a static one.
+            for (element, offset) in [(0u32, 10u32), (2, 300)] {
+                commands.push(RoomCommand {
+                    element,
+                    offset,
+                    duration: 700,
+                    changed: 2,
+                    state: State {
+                        gain: 0.5 + (call % 3) as f32 * 0.2,
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                });
+            }
+            if inert_geometry_ramp {
+                for element in 0..3 {
+                    commands.push(RoomCommand {
+                        element,
+                        duration: 700,
+                        changed: 8,
+                        ..initial[element as usize]
+                    });
+                }
+            }
+            commands.sort_by_key(|c| c.offset);
+            session
+                .process(
+                    frames,
+                    (0..4).map(|_| Some(input.as_slice())),
+                    if call == 0 { &initial } else { &[] },
+                    &commands,
+                    &mut block,
+                )
+                .unwrap();
+            output.extend_from_slice(&block);
+            drop(session.take_retired());
+        }
+        assert_eq!(session.info().applied_request, 1, "switch must complete");
+        output
+    };
+    for quality in [Quality::Exact, Quality::Realtime] {
+        let prepared = common::fixture_with_quality(quality);
+        let original = render(&prepared, false);
+        let restated = render(&prepared, true);
+        let mismatch = original
+            .iter()
+            .zip(&restated)
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(
+            mismatch.is_none(),
+            "{quality:?}: inert geometry ramp changed output at {mismatch:?}"
+        );
+        assert!(original.iter().any(|v| v.abs() > 1e-5));
+    }
 }
 
 #[test]

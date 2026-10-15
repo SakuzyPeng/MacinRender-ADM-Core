@@ -1,0 +1,728 @@
+{
+  "schema": "mradm.room-reflection-grid-evaluation",
+  "version": 1,
+  "adr": "docs/adr/0020-room-reflection-grid-during-ramps.md (proposed)",
+  "base_commit": "7d92315",
+  "switch": "MR_ADM_ROOM_REFLECTION_GRID read at session preparation; unset or 0 keeps the ADR 0019 output.",
+  "host": "Linux x64 cloud VM, 4 vCPU; Rust 1.98.0 Release",
+  "resources": {
+    "room": "resources/rooms/reference-7x6x3.2-corrected-v1 (manifest 40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec)",
+    "sofa": "SADIE II D2_48K_24bit_256tap_FIR_SOFA.sofa (sha256 bb5980288fc5c990c821e02c5ddfa274759079b723973cd6ca47ac577243aa0c); public data, not the acceptance HRIR"
+  },
+  "probe": "Scratch Release binary calling Session directly (FNV-1a 64 over output f32 bits); one binary, grid chosen by the environment variable.",
+  "probe_binary_sha256": "561b0fcc2e68a11286fa564d90eda50c2755d5acfeba81cba00af2bee0922792",
+  "bit_identity": {
+    "grid_off_vs_adr_0019_build": {
+      "pose calls=120 sources=32 frames=512": true,
+      "pose+switch calls=420 sources=32 frames=512": true,
+      "move-k8+pose calls=40 sources=32 frames=512": true,
+      "move-k4+pose+lfe calls=120 sources=8 frames=384": true,
+      "pose+switch+move-k2 calls=420 sources=3 frames=384": true,
+      "move-k3+pose calls=120 sources=2 frames=256": true,
+      "pose calls=60 sources=1 frames=512": true,
+      "static+lfe calls=60 sources=5 frames=512": true,
+      "move-k1+pose calls=60 sources=32 frames=512": true,
+      "move-k2+pose calls=60 sources=32 frames=512": true,
+      "move-k1 calls=60 sources=1 frames=384": true
+    },
+    "grid_1024_vs_scratch_prototype": "identical on all 11 scenarios",
+    "replay_schedule_grid_off": "PCM sha256 equal to the ADR 0019 build with and without screens"
+  },
+  "grid_1024_session_hashes": {
+    "pose calls=120 sources=32 frames=512": {
+      "grid_off": "b6dac30345aa0b91",
+      "grid_1024": "b6dac30345aa0b91",
+      "identical": true
+    },
+    "pose+switch calls=420 sources=32 frames=512": {
+      "grid_off": "d9986f7d26b19371",
+      "grid_1024": "d9986f7d26b19371",
+      "identical": true
+    },
+    "move-k8+pose calls=40 sources=32 frames=512": {
+      "grid_off": "b71f07489086aaf2",
+      "grid_1024": "ce94b1ac7a5e1c7b",
+      "identical": false
+    },
+    "move-k4+pose+lfe calls=120 sources=8 frames=384": {
+      "grid_off": "345935a7e554a50b",
+      "grid_1024": "7a93fbbfb16f6ed9",
+      "identical": false
+    },
+    "pose+switch+move-k2 calls=420 sources=3 frames=384": {
+      "grid_off": "a8ec8ec5260c6d94",
+      "grid_1024": "13d2f3f04f44e38c",
+      "identical": false
+    },
+    "move-k3+pose calls=120 sources=2 frames=256": {
+      "grid_off": "98a72f91992103d5",
+      "grid_1024": "83e89cd389edb1db",
+      "identical": false
+    },
+    "pose calls=60 sources=1 frames=512": {
+      "grid_off": "18a118f2ac322c89",
+      "grid_1024": "18a118f2ac322c89",
+      "identical": true
+    },
+    "static+lfe calls=60 sources=5 frames=512": {
+      "grid_off": "74be3989f3f18f2a",
+      "grid_1024": "74be3989f3f18f2a",
+      "identical": true
+    },
+    "move-k1+pose calls=60 sources=32 frames=512": {
+      "grid_off": "74550b782bafb295",
+      "grid_1024": "863fb704f8881100",
+      "identical": false
+    },
+    "move-k2+pose calls=60 sources=32 frames=512": {
+      "grid_off": "3722a631a0192d18",
+      "grid_1024": "cf4830e1c961c5e7",
+      "identical": false
+    },
+    "move-k1 calls=60 sources=1 frames=384": {
+      "grid_off": "fe173721ee80a8d2",
+      "grid_1024": "720e7c50c863300a",
+      "identical": false
+    }
+  },
+  "output_difference_vs_grid_off": {
+    "note": "first 100 ms skipped",
+    "move-k16_72_32_512": {
+      "512": {
+        "relative_l2_db": -61.8,
+        "max_abs_diff_over_peak": 0.00239
+      },
+      "1024": {
+        "relative_l2_db": -54.6,
+        "max_abs_diff_over_peak": 0.00563
+      }
+    },
+    "move-k16_pose_72_32_512": {
+      "512": {
+        "relative_l2_db": -61.8,
+        "max_abs_diff_over_peak": 0.00209
+      },
+      "1024": {
+        "relative_l2_db": -61.8,
+        "max_abs_diff_over_peak": 0.00209
+      }
+    },
+    "move-k1_60_1_384": {
+      "512": {
+        "relative_l2_db": -47.7,
+        "max_abs_diff_over_peak": 0.0113
+      },
+      "1024": {
+        "relative_l2_db": -41.3,
+        "max_abs_diff_over_peak": 0.0271
+      }
+    },
+    "move-k4_pose_lfe_120_8_384": {
+      "512": {
+        "relative_l2_db": -60.9,
+        "max_abs_diff_over_peak": 0.00336
+      },
+      "1024": {
+        "relative_l2_db": -59.4,
+        "max_abs_diff_over_peak": 0.00349
+      }
+    }
+  },
+  "replay_schedule_grid_1024": {
+    "screens_off": {
+      "relative_l2_db": -48.2,
+      "max_abs_diff_over_peak": 0.0345,
+      "pcm_sha256_grid_off": "6c5a83ce3ca9375baf4ee7875c8721c032c3ba2422154e64abf30841acf0ef6a",
+      "pcm_sha256_grid_1024": "d9c8221f7fb65c407e05c19eebb330500da26aa0f024c260fe509d060e2d952a",
+      "first_differing_frame": 1050,
+      "last_differing_frame": 53475,
+      "frames": 163078
+    },
+    "screens_on": {
+      "relative_l2_db": -47.5,
+      "max_abs_diff_over_peak": 0.035,
+      "pcm_sha256_grid_off": "c531b8448c2cfdb9ffb080f24b4f08f12707b3bffe064641e7f069d93558b59b",
+      "pcm_sha256_grid_1024": "256bacd7169b1d00b16327d3acff875be64ee35dd46c3c0fe381f92d0624e272",
+      "first_differing_frame": 1033,
+      "last_differing_frame": 52608,
+      "frames": 163078
+    }
+  },
+  "timing": {
+    "order": "grid off / 1024 interleaved per round, 3 rounds, no other load; 512-frame calls",
+    "scenario_keys": {
+      "w4/w1": "4 room workers / 1 room worker",
+      "rampspose": "32 sources, all ramping, 16 offsets, per-call pose",
+      "ramps": "32 sources, all ramping, 16 offsets, no pose",
+      "pose": "32 static sources, per-call pose",
+      "static": "32 static sources",
+      "movek4s8": "8 sources ramping, 4 offsets, per-call pose"
+    },
+    "scenarios": {
+      "w4rampspose": {
+        "grid_off": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            26.492,
+            27.292,
+            26.98
+          ],
+          "p99_ms_per_round": [
+            35.706,
+            40.11,
+            38.6
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 26.98,
+          "median_p99_ms": 38.6
+        },
+        "grid_1024": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            15.889,
+            15.819,
+            14.426
+          ],
+          "p99_ms_per_round": [
+            23.973,
+            20.071,
+            21.513
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 15.819,
+          "median_p99_ms": 21.513
+        }
+      },
+      "w4ramps": {
+        "grid_off": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            25.436,
+            25.314,
+            24.43
+          ],
+          "p99_ms_per_round": [
+            42.265,
+            41.081,
+            32.238
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 25.314,
+          "median_p99_ms": 41.081
+        },
+        "grid_1024": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            12.299,
+            12.04,
+            10.997
+          ],
+          "p99_ms_per_round": [
+            23.632,
+            26.858,
+            22.398
+          ],
+          "calls_over_10.667ms_per_round": [
+            63,
+            57,
+            55
+          ],
+          "median_mean_ms": 12.04,
+          "median_p99_ms": 23.632
+        }
+      },
+      "w4pose": {
+        "grid_off": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            9.36,
+            9.169,
+            8.992
+          ],
+          "p99_ms_per_round": [
+            15.822,
+            14.127,
+            14.513
+          ],
+          "calls_over_10.667ms_per_round": [
+            50,
+            35,
+            33
+          ],
+          "median_mean_ms": 9.169,
+          "median_p99_ms": 14.513
+        },
+        "grid_1024": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            9.293,
+            9.488,
+            9.461
+          ],
+          "p99_ms_per_round": [
+            16.956,
+            15.069,
+            18.715
+          ],
+          "calls_over_10.667ms_per_round": [
+            43,
+            51,
+            49
+          ],
+          "median_mean_ms": 9.461,
+          "median_p99_ms": 16.956
+        }
+      },
+      "w4static": {
+        "grid_off": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            2.821,
+            2.948,
+            2.878
+          ],
+          "p99_ms_per_round": [
+            5.284,
+            5.619,
+            7.218
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            0
+          ],
+          "median_mean_ms": 2.878,
+          "median_p99_ms": 5.619
+        },
+        "grid_1024": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            2.775,
+            2.598,
+            3.218
+          ],
+          "p99_ms_per_round": [
+            5.505,
+            5.193,
+            8.297
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            2
+          ],
+          "median_mean_ms": 2.775,
+          "median_p99_ms": 5.505
+        }
+      },
+      "w4movek4s8": {
+        "grid_off": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            8.632,
+            8.775,
+            8.731
+          ],
+          "p99_ms_per_round": [
+            13.931,
+            12.307,
+            13.463
+          ],
+          "calls_over_10.667ms_per_round": [
+            21,
+            33,
+            24
+          ],
+          "median_mean_ms": 8.731,
+          "median_p99_ms": 13.463
+        },
+        "grid_1024": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            5.754,
+            6.035,
+            5.702
+          ],
+          "p99_ms_per_round": [
+            10.746,
+            12.44,
+            8.053
+          ],
+          "calls_over_10.667ms_per_round": [
+            3,
+            8,
+            0
+          ],
+          "median_mean_ms": 5.754,
+          "median_p99_ms": 10.746
+        }
+      },
+      "w1rampspose": {
+        "grid_off": {
+          "timed_calls": 40,
+          "mean_ms_per_round": [
+            89.197,
+            81.207,
+            87.93
+          ],
+          "p99_ms_per_round": [
+            114.044,
+            101.704,
+            111.386
+          ],
+          "calls_over_10.667ms_per_round": [
+            40,
+            40,
+            40
+          ],
+          "median_mean_ms": 87.93,
+          "median_p99_ms": 111.386
+        },
+        "grid_1024": {
+          "timed_calls": 40,
+          "mean_ms_per_round": [
+            43.87,
+            47.173,
+            44.433
+          ],
+          "p99_ms_per_round": [
+            57.547,
+            60.23,
+            57.975
+          ],
+          "calls_over_10.667ms_per_round": [
+            40,
+            40,
+            40
+          ],
+          "median_mean_ms": 44.433,
+          "median_p99_ms": 57.975
+        }
+      },
+      "w1ramps": {
+        "grid_off": {
+          "timed_calls": 40,
+          "mean_ms_per_round": [
+            93.84,
+            80.132,
+            75.075
+          ],
+          "p99_ms_per_round": [
+            117.132,
+            110.614,
+            104.687
+          ],
+          "calls_over_10.667ms_per_round": [
+            40,
+            40,
+            40
+          ],
+          "median_mean_ms": 80.132,
+          "median_p99_ms": 110.614
+        },
+        "grid_1024": {
+          "timed_calls": 40,
+          "mean_ms_per_round": [
+            37.154,
+            32.914,
+            34.821
+          ],
+          "p99_ms_per_round": [
+            56.12,
+            68.872,
+            53.155
+          ],
+          "calls_over_10.667ms_per_round": [
+            40,
+            40,
+            40
+          ],
+          "median_mean_ms": 34.821,
+          "median_p99_ms": 56.12
+        }
+      },
+      "w1pose": {
+        "grid_off": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            28.325,
+            28.153,
+            28.953
+          ],
+          "p99_ms_per_round": [
+            38.278,
+            37.253,
+            38.8
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 28.325,
+          "median_p99_ms": 38.278
+        },
+        "grid_1024": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            27.957,
+            29.444,
+            29.744
+          ],
+          "p99_ms_per_round": [
+            41.034,
+            41.604,
+            45.448
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 29.444,
+          "median_p99_ms": 41.604
+        }
+      }
+    },
+    "pose_note": "Without geometry ramps the grid-on path is the grid-off path; the pose differences are run-to-run noise."
+  },
+  "timing_grid_off_vs_adr_0019_build": {
+    "order": "ADR 0019 build / current build with the grid off interleaved per round, 5 rounds",
+    "adr_0019_probe_binary_sha256": "7d7dda67d426590dfaa458a7d11b4612a775821dfcb58c4a5b08753cf9a61f42",
+    "scenarios": {
+      "w4pose": {
+        "adr_0019_build": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            8.801,
+            9.678,
+            9.009,
+            9.285,
+            9.811
+          ],
+          "p99_ms_per_round": [
+            12.24,
+            14.076,
+            11.799,
+            14.572,
+            15.072
+          ],
+          "calls_over_10.667ms_per_round": [
+            24,
+            60,
+            26,
+            40,
+            63
+          ],
+          "median_mean_ms": 9.285,
+          "median_p99_ms": 14.076
+        },
+        "grid_off": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            9.52,
+            9.327,
+            8.713,
+            9.649,
+            8.537
+          ],
+          "p99_ms_per_round": [
+            13.567,
+            13.428,
+            12.113,
+            14.383,
+            12.912
+          ],
+          "calls_over_10.667ms_per_round": [
+            49,
+            42,
+            20,
+            56,
+            20
+          ],
+          "median_mean_ms": 9.327,
+          "median_p99_ms": 13.428
+        }
+      },
+      "w4static": {
+        "adr_0019_build": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            2.726,
+            2.766,
+            4.073,
+            2.852,
+            2.935
+          ],
+          "p99_ms_per_round": [
+            5.053,
+            5.899,
+            13.899,
+            7.66,
+            6.998
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            3,
+            0,
+            1
+          ],
+          "median_mean_ms": 2.852,
+          "median_p99_ms": 6.998
+        },
+        "grid_off": {
+          "timed_calls": 300,
+          "mean_ms_per_round": [
+            2.83,
+            2.824,
+            3.278,
+            2.726,
+            2.771
+          ],
+          "p99_ms_per_round": [
+            5.41,
+            6.632,
+            5.961,
+            4.863,
+            5.843
+          ],
+          "calls_over_10.667ms_per_round": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "median_mean_ms": 2.824,
+          "median_p99_ms": 5.843
+        }
+      },
+      "w4ramps": {
+        "adr_0019_build": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            25.67,
+            23.584,
+            24.827,
+            25.364,
+            26.0
+          ],
+          "p99_ms_per_round": [
+            33.432,
+            29.574,
+            33.432,
+            34.965,
+            34.894
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 25.364,
+          "median_p99_ms": 33.432
+        },
+        "grid_off": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            26.712,
+            24.611,
+            24.068,
+            27.669,
+            28.547
+          ],
+          "p99_ms_per_round": [
+            38.826,
+            33.851,
+            30.431,
+            34.346,
+            44.705
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 26.712,
+          "median_p99_ms": 34.346
+        }
+      },
+      "w1pose": {
+        "adr_0019_build": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            27.798,
+            29.603,
+            26.764,
+            29.676,
+            31.223
+          ],
+          "p99_ms_per_round": [
+            37.586,
+            120.402,
+            38.819,
+            44.754,
+            41.161
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 29.603,
+          "median_p99_ms": 41.161
+        },
+        "grid_off": {
+          "timed_calls": 100,
+          "mean_ms_per_round": [
+            30.168,
+            27.128,
+            30.041,
+            33.729,
+            30.409
+          ],
+          "p99_ms_per_round": [
+            45.73,
+            37.576,
+            40.305,
+            43.434,
+            40.026
+          ],
+          "calls_over_10.667ms_per_round": [
+            100,
+            100,
+            100,
+            100,
+            100
+          ],
+          "median_mean_ms": 30.168,
+          "median_p99_ms": 40.305
+        }
+      }
+    }
+  },
+  "not_run": [
+    "maintainer machines (macOS / Windows / Linux) with the switch",
+    "listening comparison",
+    "C ABI / Scene streaming long runs with the switch"
+  ]
+}
