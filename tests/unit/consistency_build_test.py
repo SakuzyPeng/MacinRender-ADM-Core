@@ -31,6 +31,46 @@ class Harness(unittest.TestCase):
 
 
 class CMakeTests(Harness):
+    def test_rust_link_paths_follow_the_selected_sdk(self):
+        source = self.project()
+        with (source / 'CMakeLists.txt').open('a') as out:
+            out.write('''
+include(MRRustLink)
+function(probe_rust_link_paths platform name)
+    set(CMAKE_SYSTEM_NAME "${platform}")
+    add_library(${name} INTERFACE IMPORTED)
+    set_target_properties(${name} PROPERTIES
+        INTERFACE_LINK_DIRECTORIES "/keep/before;/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib;/keep/with space"
+        INTERFACE_LINK_LIBRARIES "System;c;m"
+        INTERFACE_LINK_OPTIONS "-Wl,user-option")
+    mr_adm_rust_use_platform_sdk(${name})
+    mr_adm_rust_use_platform_sdk(${name})
+    get_target_property(directories ${name} INTERFACE_LINK_DIRECTORIES)
+    get_target_property(libraries ${name} INTERFACE_LINK_LIBRARIES)
+    get_target_property(options ${name} INTERFACE_LINK_OPTIONS)
+    file(WRITE "${CMAKE_BINARY_DIR}/${name}.txt" "${directories}\\n${libraries}\\n${options}\\n")
+
+    add_library(${name}_empty INTERFACE IMPORTED)
+    mr_adm_rust_use_platform_sdk(${name}_empty)
+    get_property(has_directories TARGET ${name}_empty PROPERTY INTERFACE_LINK_DIRECTORIES SET)
+    file(WRITE "${CMAKE_BINARY_DIR}/${name}-empty.txt" "${has_directories}")
+endfunction()
+probe_rust_link_paths(Darwin darwin)
+probe_rust_link_paths(Linux linux)
+probe_rust_link_paths(Windows windows)
+''')
+        build = self.root / 'rust-sdk-build'
+        self.configure(source, build)
+        legacy = '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib'
+        for name in ('darwin', 'linux', 'windows'):
+            with self.subTest(platform=name):
+                expected = ['/keep/before', '/keep/with space']
+                if name != 'darwin':
+                    expected.insert(1, legacy)
+                self.assertEqual((build / f'{name}.txt').read_text().splitlines(),
+                                 [';'.join(expected), 'System;c;m', '-Wl,user-option'])
+                self.assertEqual((build / f'{name}-empty.txt').read_text(), '0')
+
     def test_subprocess_logs_accept_utf8_and_legacy_diagnostics(self):
         # CMake emits UTF-8 while a compiler may emit bytes from the active Windows code page.
         # Neither stream may crash Python's reader thread or turn stdout/stderr into None.

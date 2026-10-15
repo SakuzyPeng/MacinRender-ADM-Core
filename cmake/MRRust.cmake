@@ -30,6 +30,8 @@ function(mr_adm_import_rust)
     )
 endfunction()
 mr_adm_import_rust()
+include(MRRustLink)
+mr_adm_rust_use_platform_sdk(mradm_ffi-static)
 corrosion_set_env_vars(mradm_ffi
     "CARGO_TARGET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/build/rust"
     "CARGO_INCREMENTAL=0"
