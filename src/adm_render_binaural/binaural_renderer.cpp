@@ -40,6 +40,7 @@
 #include "dsp.h"
 #include "head_rotation.h"
 #include "meter.h"
+#include "post_gain.h"
 #include "render_common.h"
 
 namespace mradm {
@@ -2123,7 +2124,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         }
         if (const auto peak = lufs_st->max_true_peak(); peak) {
             // Preserve the binaural backend's established -200 dB silent floor.
-            metrics.measured_peak_dbtp = 20.0 * std::log10(std::max(*peak, 1e-10));
+            metrics.measured_peak_dbtp = dsp::amplitude_to_db(std::max(*peak, 1e-10));
         }
     }
     return metrics;

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,7 @@
 
 #include "../adm_render_common/consistency_trace.h"
 #include "meter.h"
+#include "post_gain.h"
 
 namespace mradm {
 
@@ -99,8 +101,8 @@ Result<std::optional<double>> measure_lufs(const std::string& path) {
                     return make_error(ErrorCode::io_error, "short read while applying loudness gain", "path=" + path);
                 }
                 const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
-                for (std::size_t i = 0; i < samples; ++i) {
-                    buf[i] *= gain;
+                if (auto scaled = dsp::apply_gain(std::span<float>(buf.data(), samples), gain); !scaled) {
+                    return scaled;
                 }
                 const uint64_t wrote = writer.write(buf.data(), got);
                 if (wrote != got) {
@@ -142,13 +144,17 @@ Result<void> apply_loudness_norm(const std::string& path, float target_lufs, Log
              "loudness",
              fmt::format("integrated loudness: {:.1f} LUFS, target: {:.1f} LUFS", measured, target));
 
-    const double gain_db = target - measured;
-    if (std::abs(gain_db) < 0.1) {
+    const auto decision = dsp::loudness_gain(measured, target);
+    if (!decision) {
+        return tl::unexpected{decision.error()};
+    }
+    const double gain_db = decision->gain_db;
+    if (!decision->apply) {
         logs.log(LogLevel::info, "loudness", "integrated loudness within tolerance — no gain applied");
         return {};
     }
 
-    const auto gain = static_cast<float>(std::pow(10.0, gain_db / 20.0));
+    const float gain = decision->gain;
     logs.log(LogLevel::info, "loudness", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, gain_db));
 
     consistency::dump("post/loudness.10-measurement.f64", {measured, target, gain_db});

@@ -17,6 +17,7 @@
 
 #include "hoa.h"
 #include "meter.h"
+#include "post_gain.h"
 // clang-format off
 #include "dsp.h"
 // clang-format on
@@ -727,7 +728,7 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
                 }
             }
             if (max_peak > 0.0) {
-                metrics.measured_peak_dbtp = 20.0 * std::log10(max_peak);
+                metrics.measured_peak_dbtp = dsp::amplitude_to_db(max_peak);
             }
         }
         return metrics;

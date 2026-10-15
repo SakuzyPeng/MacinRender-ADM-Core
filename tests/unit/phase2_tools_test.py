@@ -357,7 +357,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 188)
+        self.assertEqual(len(names), 193)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -417,6 +417,10 @@ class EvidenceTests(unittest.TestCase):
         meter = [n for n in names if n.startswith('meter-')]
         self.assertEqual(len(meter), 28)
         self.assertTrue(all(gated(n) for n in meter))
+        # Phase 2.3 gates the offline post-processing gain.
+        post = [n for n in names if n.startswith('post-gain.')]
+        self.assertEqual(len(post), 5)
+        self.assertTrue(all(gated(n) for n in post))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

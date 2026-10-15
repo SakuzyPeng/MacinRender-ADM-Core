@@ -27,6 +27,7 @@
 #include "format_table.h"
 #include "input_layout_json.h"
 #include "layout_table.h"
+#include "post_gain.h"
 #include "renderer_factory.h"
 #include "scene_json.h"
 #include "support_matrix.h"
@@ -931,69 +932,61 @@ RenderResult RenderService::render(const RenderRequest& request,
     // Compute combined gain: loudness target first, optional peak makeup second,
     // peak ceiling third, then explicit final gain after the automatic stages.
     // Merging both into one apply_gain_to_file avoids a second read-write pass.
-    double gain_db = 0.0;
-
-    if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
-        const auto target = static_cast<double>(request.options.loudness_target_lufs);
-        const double delta = target - *metrics.measured_lufs;
-        if (std::abs(delta) >= 0.1) {
-            gain_db += delta;
-            logs.log(
-                LogLevel::info, "engine", fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB", target, delta));
-        } else {
-            logs.log(LogLevel::info, "engine", "integrated loudness within 0.1 LU of target — no adjustment");
-        }
+    // The final gain is added after the peak clamp, so it deliberately bypasses peak
+    // limiting and may exceed the ceiling / 0 dBFS (integer outputs can clip); it is
+    // folded into gain_db so the applied gain, file metadata, and reported metrics
+    // all include it. The decisions and dB conversion run in Rust (PCM consistency 2.3).
+    const auto gain_plan = dsp::render_gain({metrics.measured_lufs,
+                                             metrics.measured_peak_dbtp,
+                                             static_cast<double>(request.options.loudness_target_lufs),
+                                             static_cast<double>(request.options.peak_limit_dbtp),
+                                             request.options.final_gain_db,
+                                             request.options.measure_loudness,
+                                             request.options.peak_normalize_to_limit,
+                                             request.options.peak_limit});
+    if (!gain_plan) {
+        return fail_with_report(gain_plan.error());
     }
-
-    if (request.options.peak_normalize_to_limit && metrics.measured_peak_dbtp.has_value()) {
-        const double peak_after = *metrics.measured_peak_dbtp + gain_db;
-        const auto target_peak = static_cast<double>(request.options.peak_limit_dbtp);
-        const double peak_makeup = target_peak - peak_after;
-        if (peak_makeup > 0.1) {
-            gain_db += peak_makeup;
-            logs.log(LogLevel::info,
-                     "engine",
-                     fmt::format("true peak after loudness {:.2f} dBTP, target {:.1f} dBTP -> makeup {:.2f} dB",
-                                 peak_after,
-                                 target_peak,
-                                 peak_makeup));
-        } else {
-            logs.log(LogLevel::info, "engine", "true peak already at/above normalization target; no makeup");
-        }
+    const auto target_peak = static_cast<double>(request.options.peak_limit_dbtp);
+    if (gain_plan->loudness == dsp::GainStage::applied) {
+        logs.log(LogLevel::info,
+                 "engine",
+                 fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB",
+                             static_cast<double>(request.options.loudness_target_lufs),
+                             gain_plan->loudness_db));
+    } else if (gain_plan->loudness == dsp::GainStage::unchanged) {
+        logs.log(LogLevel::info, "engine", "integrated loudness within 0.1 LU of target — no adjustment");
     }
-
-    if (request.options.peak_limit && metrics.measured_peak_dbtp.has_value()) {
-        const double peak_after = *metrics.measured_peak_dbtp + gain_db;
-        const auto target_peak = static_cast<double>(request.options.peak_limit_dbtp);
-        const double peak_clamp = std::min(0.0, target_peak - peak_after);
-        if (peak_clamp < -0.1) {
-            gain_db += peak_clamp;
-            logs.log(LogLevel::info,
-                     "engine",
-                     fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp {:.2f} dB",
-                                 peak_after,
-                                 target_peak,
-                                 peak_clamp));
-        } else {
-            logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
-        }
+    if (gain_plan->makeup == dsp::GainStage::applied) {
+        logs.log(LogLevel::info,
+                 "engine",
+                 fmt::format("true peak after loudness {:.2f} dBTP, target {:.1f} dBTP -> makeup {:.2f} dB",
+                             gain_plan->makeup_peak_after,
+                             target_peak,
+                             gain_plan->makeup_db));
+    } else if (gain_plan->makeup == dsp::GainStage::unchanged) {
+        logs.log(LogLevel::info, "engine", "true peak already at/above normalization target; no makeup");
     }
-
-    // Final gain: unconstrained user gain applied after all automatic staging.
-    // Added after the peak clamp is computed, so it deliberately bypasses peak
-    // limiting and may exceed the ceiling / 0 dBFS (integer outputs can clip).
-    // Folded into gain_db so the applied gain, file metadata, and reported metrics
-    // all include it.
-    if (std::abs(request.options.final_gain_db) >= 1e-9) {
-        gain_db += request.options.final_gain_db;
+    if (gain_plan->ceiling == dsp::GainStage::applied) {
+        logs.log(LogLevel::info,
+                 "engine",
+                 fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp {:.2f} dB",
+                             gain_plan->ceiling_peak_after,
+                             target_peak,
+                             gain_plan->ceiling_db));
+    } else if (gain_plan->ceiling == dsp::GainStage::unchanged) {
+        logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
+    }
+    if (gain_plan->final_applied) {
         logs.log(
             LogLevel::info,
             "engine",
             fmt::format("final gain {:+.2f} dB (unconstrained, bypasses peak limit)", request.options.final_gain_db));
     }
+    const double gain_db = gain_plan->gain_db;
 
-    if (std::abs(gain_db) >= 0.01) {
-        const auto gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
+    if (gain_plan->apply) {
+        const float gain_linear = gain_plan->gain;
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
         ProgressRangeSink gain_progress(
             progress, RenderStage::post_processing, RenderOperation::apply_gain, 0.885, 0.89, "applying gain");
