@@ -62,7 +62,18 @@ ARM 上没有对应的等价设置。去掉 FTZ 后，非正规数在三个平�
 4 个读数变化 1 ulp，其中包括不经过门控的 short-term，因此来自 `log10`。末段 momentary 从约 −610 至 −665 LUFS（FTZ 路径，不清零）变为约 −490 LUFS（按块清零），
 说明探针确实覆盖了 S01。
 
-**三平台。** `56f1ded` 的 Consistency 38742360010 与 CI 38742364325 通过：
+**三平台定位。** `df34ded`（生产数值仍为 2.1）的 Consistency 38740981573 中 196 个 PCM id 三平台相同、门禁无失败，
+观察项给出三类分歧，分别对应三个来源：
+
+| 来源 | 观察到的差异 | 平台对 |
+| --- | --- | --- |
+| K-weighting 系数（`tan`/`pow`） | 192 kHz 的分母 a4 在 macOS 上差 1 ulp；44.1/48/96 kHz 系数三平台相同。192 kHz 的极点靠近 1，这 1 ulp 被放大为响亮段的 momentary、short-term 与 integrated 差 3274–46836 ulp（最大 8.3e-11 LU），即 2.1 观察到的分歧 | macOS 与 x86 |
+| LUFS 换算（`log10`） | 系数相同时，192 kHz 与 96 kHz 的个别 short-term / integrated 差 1 ulp | Linux 与 Windows |
+| 极小状态清理（S01） | 所有采样率的末段 momentary 相差 120–168 LU：macOS 按块清零为 −488 至 −499 LUFS，x86 FTZ 路径为 −608 至 −665 LUFS | macOS 与 x86 |
+
+修复后三类差异全部消失：44.1、48、96 kHz 的计量结果与 macOS 原有结果逐位相同；192 kHz 的系数统一为 `libm` 的值（与 Linux、Windows 原有系数相同）。
+
+**三平台验收。** `56f1ded` 的 Consistency 38742360010、CI 38742364325 与 Quality 38742368760 通过：
 
 - A/B 两种配置下 196 个 PCM id 三平台相同，208 项门禁无失败；
 - 188 个内核文件全部三平台相同，包括 28 个计量文件和 5 个观察项；
