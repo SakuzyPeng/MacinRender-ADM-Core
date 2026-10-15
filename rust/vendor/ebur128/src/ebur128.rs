@@ -590,6 +590,9 @@ impl EbuR128 {
                     self.audio_data_index,
                     &self.channel_map,
                 );
+                // Local patch (PCM consistency 2.4): clear sub-epsilon filter state on the 100 ms
+                // block grid rather than at the end of every call.
+                self.filter.clear_small_states(&self.channel_map);
 
                 src = next;
                 self.audio_data_index += self.needed_frames;
