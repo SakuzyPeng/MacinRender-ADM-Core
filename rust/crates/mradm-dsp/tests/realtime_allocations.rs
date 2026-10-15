@@ -392,7 +392,6 @@ fn prepared_hptf_updates_processing_and_seek_do_not_allocate() {
     let mut cascade = Cascade::new(2).unwrap();
     let mut processor = Processor::new(2, 48000).unwrap();
     let mut input = [0.01; 274];
-    let mut blending = false;
     COUNT.with(|c| c.set(Some(0)));
     cascade.set_coefficients(coefficients).unwrap();
     for revision in 1..100 {
@@ -401,12 +400,14 @@ fn prepared_hptf_updates_processing_and_seek_do_not_allocate() {
             coefficients,
             revision,
         };
-        let update = processor
-            .process(&mut input, (!blending).then_some(target))
+        // Most targets arrive during a fade and queue behind it.
+        processor
+            .process(&mut input, (revision % 3 != 0).then_some(target))
             .unwrap();
-        blending = update.blending;
         if revision % 13 == 0 {
-            blending = processor.reset(Some(target)).unwrap().blending;
+            processor
+                .reset((revision % 2 == 0).then_some(target))
+                .unwrap();
             cascade.reset();
         }
     }

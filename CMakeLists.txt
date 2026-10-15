@@ -931,6 +931,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
     set_tests_properties(mr_adm_stereo_peak_guard_tests PROPERTIES TIMEOUT 30)
 
+    # Replaces the global operator new; keep it out of other test binaries.
+    add_executable(mr_adm_scene_callback_alloc_tests tests/unit/scene_callback_alloc_test.cpp)
+    target_link_libraries(
+        mr_adm_scene_callback_alloc_tests
+        PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
+    )
+    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        target_compile_definitions(mr_adm_scene_callback_alloc_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_scene_callback_alloc_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_callback_alloc_tests)
+    add_test(NAME mr_adm_scene_callback_alloc_tests COMMAND mr_adm_scene_callback_alloc_tests)
+    set_tests_properties(mr_adm_scene_callback_alloc_tests PROPERTIES TIMEOUT 60)
+
     add_executable(mr_adm_live_binaural_rust_tests tests/unit/live_binaural_rust_test.cpp)
     target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural)
