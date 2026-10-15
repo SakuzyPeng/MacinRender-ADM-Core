@@ -74,16 +74,16 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 
 | Job | Runner | 内容 |
 |---|---|---|
-| `render` | `macos-26`、`ubuntu-24.04` × config A/B | 用 `consistency-a` / `consistency-b` Release preset 构建 CLI 与工具，运行数值工具测试、Rust 二期采集和诊断无扰动验证，上传 PCM/检查点与构建记录 |
+| `render` | `macos-26`、`ubuntu-24.04` × config A/B | 用 `consistency-a` / `consistency-b` Release preset 构建 CLI、工具与 C ABI bundle（校验导出），运行数值工具测试、Rust 二期采集和诊断无扰动验证，上传 PCM/检查点与构建记录 |
 | `render-windows` | `windows-2025-vs2026` × config A/B | Windows 对应构建与渲染矩阵 |
 | `compare` | `ubuntu-24.04` | 汇总三平台结果，`scripts/consistency/compare-rust-phase2.py` 校验、比较并上传 JSON 报告 |
 
-config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
+config A 使用与 `release.yml` 相同的构建选项（含 `MR_ADM_BUILD_CAPI_BUNDLE`，即全部目标位置无关编译；`consistency_build_test.py` 校验两者不漂移），config B 只在其上打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
-二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 40 个离线场景、74 个 Scene 流式渲染配置（各含两个 epoch）及
+二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 40 个离线场景、78 个 Scene 流式渲染配置（各含两个 epoch）及
 160 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM 与 spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA 内核及全部 188 个 PCM 用例）必须三平台逐位相同；
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA 内核及全部 196 个 PCM 用例）必须三平台逐位相同；
 新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。11 个内核模式展开为 155 个
 文件，其余 5 个为观察项（EAR 布局、Scene）。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
 f64 twiddle 列三平台相同并设为门禁；1.4 起 HpTF 设计也取自 `libm`，其 4 个内核文件设为门禁。
