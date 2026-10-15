@@ -218,6 +218,9 @@ RESAMPLER_RATES = ((48000, 48000), (48000, 44100), (44100, 48000), (96000, 96000
 OM_EDGE_CASES = ('zero', 'repeated', 'rank-one', 'antiphase', 'near-rank-one', 'tiny',
                  'complex-rank-one', 'floor-adjacent')
 HRTF_PROBE_SIZES = (256, 1024)
+# Production meter probe: 4x, 2x and no oversampling; specialized stereo and generic 12-channel scanners.
+METER_RATES = (44100, 48000, 96000, 192000)
+METER_CHANNELS = (2, 12)
 
 
 def kernel_outputs():
@@ -239,6 +242,8 @@ def kernel_outputs():
                '43-scales.f32', '50-continuous.c32')]
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
+    names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS
+              for part in ('10-parameters.i32', '20-true-peak.f64', '30-loudness.f64')]
     names += ['spreader.10-input.f32', 'spreader.20-voronoi.f32', 'spreader.30-fir.c32', 'spreader.40-output.f32']
     names += [f'sofa-{Path(sofa).stem}.{part}' for sofa in SOFA_FIXTURES for part in
               ('10-parameters.i32', '11-directions.f32', '12-hrir.f32', '20-grid-weights.f32',

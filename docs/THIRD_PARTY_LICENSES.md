@@ -65,7 +65,7 @@
 | `rust-bytemuck-1.25.2` @ 1.25.2 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-dasp_frame-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-dasp_sample-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
-| `rust-ebur128-0.1.10` @ 0.1.10 | Rust 响度/True Peak 计量的锁定依赖 | MIT | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 |
+| `rust-ebur128-0.1.10` @ 0.1.10 | Rust 响度/True Peak 计量的锁定依赖 | MIT | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）。 |
 | `rust-glam-0.30.10` @ 0.30.10 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.31.1` @ 0.31.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.32.1` @ 0.32.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
