@@ -9,25 +9,19 @@ pub(super) const RATES: [u32; 4] = [44100, 48000, 96000, 192000];
 pub(super) const CHANNELS: [u32; 2] = [2, 12];
 const CHUNK: usize = 4800;
 
-/// One second of noise peaking at 0.25, half a second 24 dB lower, then half a second at
-/// 2^-60. Channel 0 opens with the fs/4 sequence 0.5, 0.5, -0.5, -0.5 whose true peak is
-/// 0.5·√2, well above the noise, so its peak exercises the interpolation filter. The last
-/// segment keeps the filter state below f64::EPSILON, where ebur128 flushes subnormals on
-/// x86 but zeroes the state after each chunk elsewhere; it stays under the absolute gate.
+/// One second of noise peaking at 0.25, half a second 24 dB lower, then one second of DC at
+/// 2^-80. Channel 0 opens with the fs/4 sequence 0.5, 0.5, -0.5, -0.5 whose true peak is
+/// 0.5·√2, well above the noise, so its peak exercises the interpolation filter. The DC keeps
+/// the K-weighting state just below f64::EPSILON, under the absolute gate: where ebur128 zeroes
+/// such state after each chunk, every chunk restarts a step response, otherwise it settles.
 fn programme(rate: u32, channels: u32) -> Vec<f32> {
     let (loud, quiet) = (rate as usize, rate as usize / 2);
-    let frames = loud + 2 * quiet;
+    let frames = 2 * loud + quiet;
     let channels = channels as usize;
     let noise = signal(frames * channels);
-    let mut samples = vec![0f32; frames * channels];
-    for frame in 0..frames {
-        let scale = if frame < loud {
-            0.25
-        } else if frame < loud + quiet {
-            0.015625
-        } else {
-            1.0 / (1u64 << 60) as f32
-        };
+    let mut samples = vec![1.0 / (1u128 << 80) as f32; frames * channels];
+    for frame in 0..loud + quiet {
+        let scale = if frame < loud { 0.25 } else { 0.015625 };
         for channel in 0..channels {
             let index = frame * channels + channel;
             samples[index] = if channel == 0 && frame < loud / 2 {
