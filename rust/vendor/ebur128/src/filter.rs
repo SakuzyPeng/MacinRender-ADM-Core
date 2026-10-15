@@ -66,9 +66,9 @@ fn filter_coefficients(rate: f64) -> ([f64; 5], [f64; 5]) {
     let G = 3.999843853973347;
     let Q = 0.7071752369554196;
 
-    let K = f64::tan(std::f64::consts::PI * f0 / rate);
-    let Vh = f64::powf(10.0, G / 20.0);
-    let Vb = f64::powf(Vh, 0.4996667741545416);
+    let K = libm::tan(std::f64::consts::PI * f0 / rate);
+    let Vh = libm::pow(10.0, G / 20.0);
+    let Vb = libm::pow(Vh, 0.4996667741545416);
 
     let mut pb = [0.0, 0.0, 0.0];
     let mut pa = [1.0, 0.0, 0.0];
@@ -84,7 +84,7 @@ fn filter_coefficients(rate: f64) -> ([f64; 5], [f64; 5]) {
 
     let f0 = 38.13547087602444;
     let Q = 0.5003270373238773;
-    let K = f64::tan(std::f64::consts::PI * f0 / rate);
+    let K = libm::tan(std::f64::consts::PI * f0 / rate);
 
     ra[1] = 2.0 * (K * K - 1.0) / (1.0 + K / Q + K * K);
     ra[2] = (1.0 - K / Q + K * K) / (1.0 + K / Q + K * K);
@@ -107,6 +107,12 @@ fn filter_coefficients(rate: f64) -> ([f64; 5], [f64; 5]) {
             pa[2] * ra[2],
         ],
     )
+}
+
+/// K-weighting numerator and denominator as the meter uses them at `rate` (local patch: exposed
+/// for the PCM consistency probe).
+pub fn k_weighting_coefficients(rate: u32) -> ([f64; 5], [f64; 5]) {
+    filter_coefficients(rate as f64)
 }
 
 impl Filter {
@@ -373,52 +379,8 @@ impl Filter {
     }
 }
 
-#[cfg(all(
-    any(target_arch = "x86", target_arch = "x86_64"),
-    target_feature = "sse2"
-))]
-mod ftz {
-    #[cfg(target_arch = "x86")]
-    #[allow(deprecated)]
-    use std::arch::x86::{_mm_getcsr, _mm_setcsr, _MM_FLUSH_ZERO_ON};
-    #[cfg(target_arch = "x86_64")]
-    #[allow(deprecated)]
-    use std::arch::x86_64::{_mm_getcsr, _mm_setcsr, _MM_FLUSH_ZERO_ON};
-
-    pub struct Ftz(u32);
-
-    impl Ftz {
-        #[allow(deprecated)]
-        unsafe fn new() -> Self {
-            let csr = _mm_getcsr();
-            _mm_setcsr(csr | _MM_FLUSH_ZERO_ON);
-            Ftz(csr)
-        }
-    }
-
-    impl Drop for Ftz {
-        #[allow(deprecated)]
-        fn drop(&mut self) {
-            unsafe {
-                _mm_setcsr(self.0);
-            }
-        }
-    }
-
-    pub fn with_ftz<F: FnOnce(Option<&Ftz>) -> T, T>(func: F) -> T {
-        // Safety: MXCSR is unset in any case when Ftz goes out of scope and the closure also can't
-        // mem::forget() it to prevent running the Drop impl.
-        unsafe {
-            let ftz = Ftz::new();
-            func(Some(&ftz))
-        }
-    }
-}
-
-#[cfg(not(any(all(
-    any(target_arch = "x86", target_arch = "x86_64"),
-    target_feature = "sse2"
-)),))]
+// Local patch: x86 no longer sets MXCSR flush-to-zero. Every architecture zeroes filter states
+// below f64::EPSILON after each call, so subnormal handling is the same everywhere.
 mod ftz {
     pub enum Ftz {}
 

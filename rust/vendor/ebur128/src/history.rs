@@ -102,7 +102,7 @@ impl Histogram {
         }
 
         power /= size as f64;
-        let minus_twenty_decibels = f64::powf(10.0, -20.0 / 10.0);
+        let minus_twenty_decibels = libm::pow(10.0, -20.0 / 10.0);
         let integrated = minus_twenty_decibels * power;
 
         let index = if integrated < HISTOGRAM_BOUNDARIES[0] {
@@ -201,7 +201,7 @@ impl Queue {
         }
 
         let power = q.iter().sum::<f64>() / q.len() as f64;
-        let minus_twenty_decibels = f64::powf(10.0, -20.0 / 10.0);
+        let minus_twenty_decibels = libm::pow(10.0, -20.0 / 10.0);
         let integrated = minus_twenty_decibels * power;
 
         let relgated = q.iter().take_while(|&v| *v < integrated).count();
@@ -318,7 +318,7 @@ impl History {
         }
 
         let relative_gate = -10.0;
-        let relative_gate_factor = f64::powf(10.0, relative_gate / 10.0);
+        let relative_gate_factor = libm::pow(10.0, relative_gate / 10.0);
         let relative_threshold =
             (relative_threshold / above_thresh_counter as f64) * relative_gate_factor;
 
@@ -409,7 +409,7 @@ impl History {
         }
 
         let relative_gate = -10.0;
-        let relative_gate_factor = f64::powf(10.0, relative_gate / 10.0);
+        let relative_gate_factor = libm::pow(10.0, relative_gate / 10.0);
         let relative_threshold =
             (relative_threshold / above_thresh_counter as f64) * relative_gate_factor;
 
