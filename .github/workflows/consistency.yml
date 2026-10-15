@@ -88,6 +88,9 @@ jobs:
       # property, and Debug codegen would not represent what ships. They also pin FLAC/Opus to
       # vendored and disable installed-package lookup, so A and B differ only in the numeric
       # options under test.
+      # They also carry release.yml's remaining options (C ABI bundle, which turns on
+      # position-independent code, and the disabled package lookups), so config A is the
+      # release-candidate configuration; consistency_build_test.py keeps the two in step.
       # MR_ADM_CORE_BUILD_TESTS is passed explicitly: the tools live in the tests section of
       # CMakeLists.txt, so turning it off would fail this workflow with an opaque "no rule to
       # make target" rather than something that points at the cause.
@@ -114,7 +117,10 @@ jobs:
       - name: Build
         run: >
           cmake --build build/consistency-${{ matrix.config }}
-          --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark
+          --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
+
+      - name: C ABI exports
+        run: python3 scripts/quality/check-capi-exports.py "build/consistency-${{ matrix.config }}/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
 
       - name: Measure FFT performance and preserved bits
         if: matrix.config == 'a'
@@ -290,6 +296,7 @@ jobs:
             -DMR_ADM_ENABLE_IAMF=OFF ^
             -DMR_ADM_ENABLE_SOFA=ON ^
             -DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF ^
+            -DMR_ADM_BUILD_CAPI_BUNDLE=ON ^
             %NUMERIC_FLAGS%
 
       - name: Prepare original scalar FFT benchmark
@@ -303,7 +310,11 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/win-canon --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark
+          cmake --build build/win-canon --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
+
+      - name: C ABI exports
+        shell: pwsh
+        run: python scripts/quality/check-capi-exports.py build/win-canon/mradm_capi.dll
 
       - name: Measure FFT performance and preserved bits
         if: matrix.config == 'a'

@@ -41,12 +41,16 @@ void validate_spec(const Json& spec) {
     const bool device_dsp = spec.at("device_dsp");
     const bool triple = spec.at("backend") == "triple-balance";
     const bool sofa = spec.contains("sofa");
-    require(!sofa || (spec.at("backend") == "binaural" && !device_dsp), "SOFA replay requires binaural rendering");
+    require(!sofa || spec.at("backend") == "binaural", "SOFA replay requires binaural rendering");
     int version = triple ? 2 : 1;
     std::string switch_control = triple ? "switch speaker backend" : "switch stereo backend";
     if (sofa) {
         version = 3;
         switch_control = "switch SOFA to built-in KEMAR";
+    }
+    // Version 4: device DSP with an external SOFA set, a VBAP feed or resampled output.
+    if (device_dsp && (sofa || spec.at("backend") == "vbap" || spec.at("input_rate") != spec.at("output_rate"))) {
+        version = 4;
     }
     Json fixed{{"version", version},
                {"clock", "epoch*2s + input_sample/input_rate; +1s at sample 10240"},

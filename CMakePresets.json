@@ -52,7 +52,11 @@
         "EAR_SIMD": "ON",
         "MR_ADM_ENABLE_IAMF": "OFF",
         "MR_ADM_ENABLE_SOFA": "ON",
-        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF"
+        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+        "MR_ADM_BUILD_CAPI_BUNDLE": "ON",
+        "CMAKE_DISABLE_FIND_PACKAGE_fmt": "TRUE",
+        "CMAKE_DISABLE_FIND_PACKAGE_spdlog": "TRUE",
+        "CMAKE_DISABLE_FIND_PACKAGE_CLI11": "TRUE"
       }
     },
     {

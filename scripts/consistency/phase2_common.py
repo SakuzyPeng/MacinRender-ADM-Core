@@ -177,6 +177,20 @@ def scene_cases():
                            input_rate=input_rate, output_rate=output_rate, partition=partition)
                 row['controls'] = dict(row['controls'], **{'8192': 'switch SOFA to built-in KEMAR'})
                 result.append(row)
+    # Version 4 runs the device DSP (HpTF transitions, peak guard, volume) behind
+    # resampled output: an external SOFA set that switches to KEMAR, and a stereo
+    # VBAP feed that switches to binaural (PCM consistency 1.6).
+    device = next(row for row in result if row['id'] == 'scene-device-dsp-fixed')
+    for name, backend, layout, sofa, input_rate, output_rate in [
+            ('sofa-simple', 'binaural', 'binaural', 'simple.sofa', 48000, 44100),
+            ('vbap', 'vbap', '0+2+0', None, 44100, 48000)]:
+        for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+            row = dict(device, id=f'scene-device-dsp-{name}-{input_rate}-{output_rate}-{partition_name}', version=4,
+                       backend=backend, layout=layout, input_rate=input_rate, output_rate=output_rate, partition=partition)
+            if sofa:
+                row['sofa'] = sofa
+                row['controls'] = dict(row['controls'], **{'8192': 'switch SOFA to built-in KEMAR'})
+            result.append(row)
     # Extend the same multichannel VBAP replay contract to the 24-channel 22.2 layout.
     for rate in (48000, 96000):
         for partition_name in ('fixed', 'fragmented'):
