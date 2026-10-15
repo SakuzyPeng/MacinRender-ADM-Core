@@ -357,8 +357,13 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 160)
+        self.assertEqual(len(names), 184)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
+        # Every oversampling factor and both scanner kinds report true peak and loudness.
+        for rate in common.METER_RATES:
+            for channels in common.METER_CHANNELS:
+                self.assertIn(f'meter-{rate}-{channels}.20-true-peak.f64', names)
+                self.assertIn(f'meter-{rate}-{channels}.30-loudness.f64', names)
         for rates in common.RESAMPLER_RATES:
             self.assertIn(f'resampler-{rates[0]}-{rates[1]}.20-output.f32', names)
         for name in common.OM_EDGE_CASES:
@@ -404,6 +409,14 @@ class EvidenceTests(unittest.TestCase):
         cases = [c['id'] for c in common.offline_cases()]
         cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
         self.assertEqual(sorted(case_gates), sorted(cases))
+        # Phase 2.1 gates the meter's true peak; loudness stays an observation until 2.2.
+        kernel_gates = [g['pattern'] for g in gates if g['kind'] == 'kernel']
+        def gated(name):
+            return any(fnmatch.fnmatchcase(name, pattern) for pattern in kernel_gates)
+        meter = [n for n in names if n.startswith('meter-')]
+        self.assertEqual(len(meter), 24)
+        self.assertTrue(all(gated(n) for n in meter if not n.endswith('.30-loudness.f64')))
+        self.assertFalse(any(gated(n) for n in meter if n.endswith('.30-loudness.f64')))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

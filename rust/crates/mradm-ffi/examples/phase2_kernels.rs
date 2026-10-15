@@ -10,6 +10,8 @@ use std::{
 };
 #[path = "phase2/coverage.rs"]
 mod coverage;
+#[path = "phase2/meter.rs"]
+mod meter;
 #[path = "phase2/sofa.rs"]
 mod sofa;
 fn floats(path: &Path, name: &str, values: &[f32]) {
@@ -304,6 +306,7 @@ fn run(out: &Path, fixtures: &Path) {
     capabilities.push("fft_dispatch=scalar (RustFFT SIMD features disabled)".into());
     fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
     sofa::run(out, fixtures);
+    meter::run(out);
 }
 
 fn main() {
