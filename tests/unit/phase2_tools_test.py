@@ -158,7 +158,7 @@ class EvidenceTests(unittest.TestCase):
         offline, scene = common.offline_cases(), common.scene_cases()
         self.assertEqual(len(offline), 40)
         self.assertEqual(len({r['id'] for r in offline}), 40)
-        self.assertEqual(len(scene), 74)
+        self.assertEqual(len(scene), 78)
         self.assertTrue(any('--loudness-target' in c['args'] for c in offline))
         self.assertTrue(any('triple-balance' in c['args'] for c in offline))
         for row in scene:
@@ -185,8 +185,20 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(common.json_digest(original_scene),
                          closeout['inventory']['scene_parameters_sha256'])
         self.assertEqual(common.json_digest([row for row in common.scene_cases()
-                                            if 'sofa' not in row and row['layout'] != '9+10+3']),
+                                            if 'sofa' not in row and row['layout'] != '9+10+3'
+                                            and row['version'] != 4]),
                          '4af0ffe8691c5287445862e3336ceab8e98a359c60b274acf7952584db3bf46c')
+
+    def test_release_matrix_runs_device_dsp_behind_resampling(self):
+        rows = [row for row in common.scene_cases() if row['version'] == 4]
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            self.assertTrue(row['device_dsp'])
+            self.assertNotEqual(row['input_rate'], row['output_rate'])
+            self.assertIn(row['layout'], ('0+2+0', 'binaural'))
+        self.assertEqual({row.get('sofa') for row in rows}, {'simple.sofa', None})
+        self.assertEqual({row['controls']['8192'] for row in rows},
+                         {'switch SOFA to built-in KEMAR', 'switch stereo backend'})
 
     def test_vbap_scene_222_covers_rates_partitions_and_both_epochs(self):
         cases = [row for row in common.scene_cases() if row['backend'] == 'vbap' and row['layout'] == '9+10+3']
@@ -234,7 +246,7 @@ class EvidenceTests(unittest.TestCase):
 
     def test_sofa_catalog_covers_offline_modes_and_live_conversion(self):
         offline = [r for r in common.offline_cases() if 'sofa' in r]
-        scene = [r for r in common.scene_cases() if 'sofa' in r]
+        scene = [r for r in common.scene_cases() if 'sofa' in r and r['version'] == 3]
         self.assertEqual(len(offline), 6)
         self.assertEqual(len(scene), 12)
         self.assertEqual({r['sofa'] for r in scene}, set(common.SOFA_FIXTURES))
