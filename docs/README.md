@@ -65,6 +65,7 @@
 - [Scene 输出 DSP（一期 1.4）](architecture/RUST_SCENE_OUTPUT_DSP.md)
 - [Scene 状态与控制时序（一期 1.5）](architecture/RUST_SCENE_TIMING.md)
 - [Scene 流式渲染三平台验收（一期 1.6）](architecture/RUST_SCENE_RELEASE_ACCEPTANCE.md)
+- [True Peak 插值系数（二期 2.1）](architecture/RUST_METER_TRUE_PEAK.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
