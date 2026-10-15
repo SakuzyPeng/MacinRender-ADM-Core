@@ -2,6 +2,8 @@
 // the same path have their own allocation tests (realtime_allocations.rs).
 #include <atomic>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -12,21 +14,56 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <malloc.h>
+#endif
+
 #include "../../src/adm_engine/scene_output_session.h"
 #include "../../src/adm_render_common/hptf_eq.h"
 
+// These replacements need CRT storage and shared counters; C++ containers would recurse into operator new.
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables, cppcoreguidelines-no-malloc)
 namespace {
 std::atomic<std::size_t> g_callback_allocations{0};
 thread_local bool t_armed = false;
 
-void* allocate(std::size_t size) {
+void record_allocation() {
     if (t_armed) {
         g_callback_allocations.fetch_add(1U, std::memory_order_relaxed);
     }
+}
+
+void* allocate(std::size_t size) {
+    record_allocation();
     if (void* memory = std::malloc(size == 0U ? 1U : size)) {
         return memory;
     }
     throw std::bad_alloc();
+}
+
+void* allocate_aligned(std::size_t size, std::align_val_t alignment) {
+    record_allocation();
+    const auto bytes = size == 0U ? 1U : size;
+#ifdef _WIN32
+    void* memory = _aligned_malloc(bytes, static_cast<std::size_t>(alignment));
+#else
+    void* memory = nullptr;
+    if (posix_memalign(&memory, static_cast<std::size_t>(alignment), bytes) != 0) {
+        throw std::bad_alloc();
+    }
+#endif
+    if (memory != nullptr) {
+        return memory;
+    }
+    throw std::bad_alloc();
+}
+
+void free_aligned(void* memory) noexcept {
+#ifdef _WIN32
+    _aligned_free(memory);
+#else
+    std::free(memory);
+#endif
 }
 } // namespace
 
@@ -35,6 +72,12 @@ void* operator new(std::size_t size) {
 }
 void* operator new[](std::size_t size) {
     return allocate(size);
+}
+void* operator new(std::size_t size, std::align_val_t alignment) {
+    return allocate_aligned(size, alignment);
+}
+void* operator new[](std::size_t size, std::align_val_t alignment) {
+    return allocate_aligned(size, alignment);
 }
 void operator delete(void* memory) noexcept {
     std::free(memory);
@@ -48,6 +91,19 @@ void operator delete(void* memory, std::size_t /*size*/) noexcept {
 void operator delete[](void* memory, std::size_t /*size*/) noexcept {
     std::free(memory);
 }
+void operator delete(void* memory, std::align_val_t /*alignment*/) noexcept {
+    free_aligned(memory);
+}
+void operator delete[](void* memory, std::align_val_t /*alignment*/) noexcept {
+    free_aligned(memory);
+}
+void operator delete(void* memory, std::size_t /*size*/, std::align_val_t /*alignment*/) noexcept {
+    free_aligned(memory);
+}
+void operator delete[](void* memory, std::size_t /*size*/, std::align_val_t /*alignment*/) noexcept {
+    free_aligned(memory);
+}
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables, cppcoreguidelines-no-malloc)
 
 namespace {
 using namespace mradm::realtime;
@@ -63,6 +119,74 @@ bool check(bool condition, std::string_view message) {
         std::cerr << "FAIL: " << message << '\n';
     }
     return condition;
+}
+
+template <typename Allocate, typename Release>
+bool check_allocator(Allocate allocation_fn, Release release_fn, std::size_t alignment, std::string_view name) {
+    bool ok = true;
+    // Zero-size requests must succeed; an aligned size need not be a multiple of its alignment.
+    for (const std::size_t size : {0U, 65U}) {
+        g_callback_allocations.store(0U);
+        t_armed = true;
+        void* memory = allocation_fn(size);
+        t_armed = false;
+        ok &= check(g_callback_allocations.exchange(0U) == 1U, name);
+        ok &= check(memory != nullptr, "allocator self-test returns storage");
+        ok &= check(reinterpret_cast<std::uintptr_t>(memory) % alignment == 0U,
+                    "allocator self-test preserves alignment");
+        release_fn(memory, size);
+        ok &= check(g_callback_allocations.load() == 0U, "unarmed deallocation does not affect the counter");
+    }
+    return ok;
+}
+
+bool check_allocation_counter() {
+    // Call the functions directly: new-expressions may legally have their allocations elided.
+    constexpr auto alignment = std::align_val_t{64U};
+    constexpr auto ordinary_alignment = alignof(std::max_align_t);
+    bool ok = true;
+    ok &= check_allocator([](std::size_t size) { return ::operator new(size); },
+                          [](void* memory, std::size_t) { ::operator delete(memory); },
+                          ordinary_alignment,
+                          "ordinary scalar allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new[](size); },
+                          [](void* memory, std::size_t) { ::operator delete[](memory); },
+                          ordinary_alignment,
+                          "ordinary array allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new(size, alignment); },
+                          [](void* memory, std::size_t) { ::operator delete(memory, alignment); },
+                          64U,
+                          "aligned scalar allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new[](size, alignment); },
+                          [](void* memory, std::size_t) { ::operator delete[](memory, alignment); },
+                          64U,
+                          "aligned array allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new(size, alignment); },
+                          [](void* memory, std::size_t size) { ::operator delete(memory, size, alignment); },
+                          64U,
+                          "aligned scalar allocation with sized delete is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new[](size, alignment); },
+                          [](void* memory, std::size_t size) { ::operator delete[](memory, size, alignment); },
+                          64U,
+                          "aligned array allocation with sized delete is counted");
+    // The standard nothrow forms must also reach the corresponding throwing replacement.
+    ok &= check_allocator([](std::size_t size) { return ::operator new(size, std::nothrow); },
+                          [](void* memory, std::size_t) { ::operator delete(memory, std::nothrow); },
+                          ordinary_alignment,
+                          "nothrow scalar allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new[](size, std::nothrow); },
+                          [](void* memory, std::size_t) { ::operator delete[](memory, std::nothrow); },
+                          ordinary_alignment,
+                          "nothrow array allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new(size, alignment, std::nothrow); },
+                          [](void* memory, std::size_t) { ::operator delete(memory, alignment, std::nothrow); },
+                          64U,
+                          "nothrow aligned scalar allocation is counted");
+    ok &= check_allocator([](std::size_t size) { return ::operator new[](size, alignment, std::nothrow); },
+                          [](void* memory, std::size_t) { ::operator delete[](memory, alignment, std::nothrow); },
+                          64U,
+                          "nothrow aligned array allocation is counted");
+    return ok;
 }
 
 class CaptureDevice final : public IAudioOutputDevice {
@@ -98,6 +222,7 @@ mradm::render_common::HptfCoefficients design(const char* text, std::uint32_t ra
 }
 
 // Runs one epoch through a device session; returns callback allocations.
+// NOLINTNEXTLINE(readability-function-size): one epoch transaction including underrun recovery and EOS.
 std::size_t run(mradm::RendererSelection renderer,
                 const char* layout,
                 std::uint32_t input_rate,
@@ -134,7 +259,7 @@ std::size_t run(mradm::RendererSelection renderer,
         seed = (seed * 1664525U) + 1013904223U;
         sample = 2.0F * (static_cast<float>(seed >> 8U) / 8388608.0F - 1.0F);
     }
-    std::vector<float> callback(480U * channels);
+    std::vector<float> callback(std::size_t{480U} * channels);
     std::int64_t position = 0;
     const auto submit = [&](bool first) {
         ScenePcmPlaneView plane{1U, samples.data(), static_cast<std::uint32_t>(samples.size()), 1U, true};
@@ -194,7 +319,7 @@ int main() {
     return 0;
 #else
     try {
-        bool ok = true;
+        bool ok = check_allocation_counter();
         ok &= check(run(mradm::RendererSelection::saf_binaural, "binaural", 48000U, 48000U, true) == 0U,
                     "binaural device callback with HpTF, volume and underruns does not allocate");
         ok &= check(run(mradm::RendererSelection::saf, "0+2+0", 44100U, 48000U, true) == 0U,
