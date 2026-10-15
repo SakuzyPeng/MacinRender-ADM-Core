@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <deque>
 #include <exception>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -2079,9 +2080,9 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
     }
     std::unordered_set<std::uint64_t> element_ids;
     element_ids.reserve(generation->elements.size());
-    for (const auto& element : generation->elements) {
-        element_ids.insert(element.element_id);
-    }
+    std::ranges::transform(generation->elements,
+                           std::inserter(element_ids, element_ids.end()),
+                           &live_scene::ElementDescriptor::element_id);
     std::unordered_set<std::uint64_t> plane_ids;
     plane_ids.reserve(view.pcm.size());
     std::size_t owned_bytes = sizeof(live_scene::Frame);

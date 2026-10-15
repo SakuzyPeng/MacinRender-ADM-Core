@@ -1409,7 +1409,7 @@ void adm_render_options_set_cancel_token(adm_render_options_t* opts, adm_cancel_
 /* ── Render ──────────────────────────────────────────────────────────────── */
 
 // NOLINTNEXTLINE(misc-use-anonymous-namespace)
-static adm_error_code_t render_file_impl(adm_context_t* context,
+static adm_error_code_t render_file_impl(const adm_context_t* context,
                                          const char* input_path,
                                          const char* output_path,
                                          const adm_render_options_t* opts,
@@ -1458,6 +1458,7 @@ static adm_error_code_t render_file_impl(adm_context_t* context,
     }
 }
 
+// cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
 adm_error_code_t adm_render_file_ex(adm_context_t* context,
                                     const char* input_path,
                                     const char* output_path,
@@ -1469,6 +1470,7 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
     return render_file_impl(context, input_path, output_path, opts, progress_sink, result);
 }
 
+// cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
 adm_error_code_t adm_render_file_ex2(adm_context_t* context,
                                      const char* input_path,
                                      const char* output_path,
@@ -1538,7 +1540,7 @@ void adm_destroy_preview_session(adm_preview_session_t* session) noexcept {
 }
 
 // NOLINTNEXTLINE(misc-use-anonymous-namespace)
-static adm_error_code_t preview_render_window_impl(adm_preview_session_t* session,
+static adm_error_code_t preview_render_window_impl(const adm_preview_session_t* session,
                                                    double start_sec,
                                                    double end_sec,
                                                    const char* output_path,
@@ -1584,6 +1586,7 @@ static adm_error_code_t preview_render_window_impl(adm_preview_session_t* sessio
     }
 }
 
+// cppcheck-suppress constParameterPointer ; session is part of the fixed C ABI signature.
 adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
                                            double start_sec,
                                            double end_sec,
@@ -1595,6 +1598,7 @@ adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
     return preview_render_window_impl(session, start_sec, end_sec, output_path, progress_sink, result);
 }
 
+// cppcheck-suppress constParameterPointer ; session is part of the fixed C ABI signature.
 adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
                                               double start_sec,
                                               double end_sec,
@@ -2563,6 +2567,8 @@ void adm_free_string(char* s) noexcept {
 
 /* ── Capabilities (JSON) ─────────────────────────────────────────────────── */
 
+// ADR 0007 freezes these public signatures, including the mutable context pointer.
+// cppcheck-suppress-begin constParameterPointer
 adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) noexcept {
     if (out_json != nullptr) {
         *out_json = nullptr;
@@ -2672,6 +2678,8 @@ adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** o
         return ADM_ERROR_INTERNAL;
     }
 }
+
+// cppcheck-suppress-end constParameterPointer
 
 /* ── Producer-neutral realtime Scene stream (v1.35) ─────────────────────── */
 
