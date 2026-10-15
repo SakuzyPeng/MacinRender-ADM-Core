@@ -124,9 +124,9 @@ bool test_short_end_and_reset() {
 
 class CaptureDevice final : public IAudioOutputDevice {
   public:
-    mradm::Result<void> start(std::uint32_t /*channels*/, std::uint32_t rate, PullFn pull) override {
+    mradm::Result<void> start(std::uint32_t /*channels*/, std::uint32_t rate, PullFn callback) override {
         rate_ = rate;
-        pull_ = std::move(pull);
+        pull_ = std::move(callback);
         return {};
     }
     void stop() override { pull_ = {}; }

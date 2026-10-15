@@ -314,15 +314,14 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
         std::vector<int> commands;
         std::vector<float> values;
         for (const auto* list : {&initial_, &events_}) {
-            for (const auto& command : *list) {
+            for (const auto& entry : *list) {
                 commands.insert(commands.end(),
-                                {static_cast<int>(command.element),
-                                 static_cast<int>(command.offset),
-                                 static_cast<int>(command.duration),
-                                 static_cast<int>(command.fields)});
-                values.insert(
-                    values.end(),
-                    {command.position.x, command.position.y, command.position.z, command.size, command.level});
+                                {static_cast<int>(entry.element),
+                                 static_cast<int>(entry.offset),
+                                 static_cast<int>(entry.duration),
+                                 static_cast<int>(entry.fields)});
+                values.insert(values.end(),
+                              {entry.position.x, entry.position.y, entry.position.z, entry.size, entry.level});
             }
         }
         if (!commands.empty()) {

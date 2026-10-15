@@ -1218,9 +1218,10 @@ class AppleStream final : public IRenderStream {
             abl->mNumberBuffers = num_out_ch_;
             // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
             for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
-                abl->mBuffers[ch].mNumberChannels = 1;
-                abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
-                abl->mBuffers[ch].mData = out_planar_[ch].data();
+                auto& buffer = abl->mBuffers[ch];
+                buffer.mNumberChannels = 1;
+                buffer.mDataByteSize = frames_now * sizeof(float);
+                buffer.mData = out_planar_[ch].data();
             }
             // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
             AudioTimeStamp time_stamp{};
@@ -1752,9 +1753,10 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
             time_stamp.mSampleTime = static_cast<Float64>(frames_done);
             // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
             for (uint16_t ch = 0; ch < num_out_ch; ++ch) {
-                abl->mBuffers[ch].mNumberChannels = 1;
-                abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
-                abl->mBuffers[ch].mData = out_planar[ch].data();
+                auto& buffer = abl->mBuffers[ch];
+                buffer.mNumberChannels = 1;
+                buffer.mDataByteSize = frames_now * sizeof(float);
+                buffer.mData = out_planar[ch].data();
             }
             // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
             AudioUnitRenderActionFlags flags = 0;

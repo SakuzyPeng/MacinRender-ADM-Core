@@ -303,9 +303,9 @@ void test_owned_snapshots_and_rapid_updates() {
 
 class CaptureDevice final : public mradm::realtime::IAudioOutputDevice {
   public:
-    mradm::Result<void> start(uint32_t /*channels*/, uint32_t rate, PullFn pull) override {
+    mradm::Result<void> start(uint32_t /*channels*/, uint32_t rate, PullFn callback) override {
         rate_ = rate;
-        pull_ = std::move(pull);
+        pull_ = std::move(callback);
         return {};
     }
     void stop() override { pull_ = {}; }

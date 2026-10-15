@@ -341,8 +341,8 @@ class ManualSink final : public mradm::realtime::IAudioOutputDevice {
   public:
     explicit ManualSink(bool realtime_playback = true) : realtime_playback_(realtime_playback) {}
 
-    mradm::Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) override {
-        channels_ = channels;
+    mradm::Result<void> start(uint32_t channel_count, uint32_t sample_rate, PullFn pull) override {
+        channels_ = channel_count;
         rate_ = sample_rate;
         pull_ = std::move(pull);
         return {};
@@ -1069,10 +1069,10 @@ bool test_downmix_stream() {
 // Check that the matrix adapter preserves the inner request size and short reads.
 class FiniteMatrixStream final : public mradm::IRenderStream {
   public:
-    mradm::Result<std::size_t> process(std::span<float> out, std::size_t requested) override {
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t requested_frames) override {
         ++calls_;
-        requested_ = requested;
-        const auto count = std::min(requested, remaining_);
+        requested_ = requested_frames;
+        const auto count = std::min(requested_frames, remaining_);
         for (std::size_t frame = 0; frame < count; ++frame) {
             for (std::size_t channel = 0; channel < 4U; ++channel) {
                 out[(frame * 4U) + channel] = static_cast<float>(channel + 1U);
