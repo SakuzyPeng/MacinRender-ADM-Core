@@ -1,0 +1,57 @@
+{
+  "upstream": "https://crates.io/crates/ebur128/0.1.10",
+  "archive_sha256": "e227cc62d64d6fe01abbef48134b9c1f17d470cef1e7a56337ad05b1f81df7f9",
+  "upstream_vcs_sha1": "0052abf06d8844f0972657c71e327d7eeee8967c",
+  "modified_files": [
+    "src/interp.rs",
+    "Cargo.toml",
+    "Cargo.toml.orig"
+  ],
+  "added_files": [
+    "PATCHES.md",
+    "PROVENANCE.json"
+  ],
+  "omitted": [
+    ".github/",
+    ".cargo_vcs_info.json",
+    ".cargo-ok",
+    "Cargo.lock",
+    "Cargo.lock.msrv"
+  ],
+  "unchanged_normalized_sha256": {
+    ".gitignore": "2a71e037622f2d868253a96ee49f03aaa5ba0ab8e779236a686c3e791100b3d2",
+    "CHANGELOG.md": "0babff0fb637a0bbab33e3f9f71c6bcd890aa7112ccc36d9f1040fb22f26f2a9",
+    "LICENSE": "34b4ff1c457f0ac5a0289e8a817bbaa4ff4c6c77d9d4df48f99b077c26100f13",
+    "README.md": "4997a515e6fae84c55365447eaa0d34cb8424759b64c3bbddd118e72f5934927",
+    "assets/ebur128.h": "3e26382a46a1027e34364a48c4b7ffe4b3ec355bd8d93f37f09c1c63789952c5",
+    "benches/calc_gating_block.rs": "15f38f9add0a335e3fba8a6748878f1533c1457af762eb3de82042c34046ef2a",
+    "benches/ebur128.rs": "c0222e7022b1c5c62c51964479d6d804ad540ce8741c2f710cc96aff83b1a1a6",
+    "benches/filter.rs": "c42f9801997fc6ceb1b013dbefbcdc9003f7fcce0b0d079fae8e2056c2e9f30c",
+    "benches/history.rs": "bfb90b7ff851232e7ab4401b7f78eb4228943c7853f75f980b0190be4806096a",
+    "benches/interp.rs": "c1a301a9a84f87a669b27ba89a8e03c1e7815bec5501d82f0cc4a4a4860f31d3",
+    "benches/true_peak.rs": "c50380d479e2e28a6d74bea83278567fd2454878a912297f24194bc66465a06c",
+    "build.rs": "9db799f754ea0bf88648c78daebf26a8f7a10eea379a720735b10eb0858b4486",
+    "capi-test/Makefile": "53f8b9e88972b1e634724cd630dec41895979cbf1568b90062d7bdac2c2443de",
+    "capi-test/capi-test.c": "1c19b65afc441fa65ec35bf300ca002d628ba491e628b5120e511cac6765f70f",
+    "examples/generate_histogram_bins.rs": "333ab74ba361b914654e709cc7cd34439542d37d7644b8e24cad29731bde4448",
+    "examples/normalize.rs": "415a744fb35e564d81db4e32bcf548eae4f740ccf53309cad8106207290a6a37",
+    "examples/replaygain.rs": "caa21c2c4c19b89e54d96cdf428e499b7701b14aa4171295a662762fa4da2f77",
+    "src/capi.rs": "f873c8f2043461f9851386520893ba2903ebad7be07d66af43f7b93ba420b504",
+    "src/ebur128.rs": "9ca45bfb2f614216b6c5c4b2c1cc6c1681f586d7abaed17b9735bb8adb304c91",
+    "src/filter.rs": "40c24d0bae9bc52a2f0839feda45a8df099213761b597b409c6178025e4c68a5",
+    "src/histogram_bins.rs": "88b02989277a69f54fcc998d37e3bdc5f2db3cf6b56ae8a579ecf9337c16ed43",
+    "src/history.rs": "b08661cb499d880ea62343c8ba2b89bd9abd74160a2dcb7898f9935cdb559cd8",
+    "src/lib.rs": "010430a7268f41cc77782f280a8c5fd8f34b48ee98889f3a20291aa310beeb60",
+    "src/true_peak.rs": "5f1b0ba694b1685ca76eedc5b721fc964ea76ef1b1983768631f42ca19934861",
+    "src/utils.rs": "229710f71858676b4bfa6254fe8ade7b03a6efee6e2e3965cdf58f967e9e2a42",
+    "tests/c/calc_gating_block.c": "39acbd7f54f3295d93abdf75c92ac04ca5cbdad919be0fc61a99be07b242c1d4",
+    "tests/c/filter.c": "f8f9c2b63236e12899faed0a845676f1f3604011581a98cdefdcb00a6090b92e",
+    "tests/c/history.c": "a923dc2766c14e72bc6321e32cdc3fcb207049696193cf6207e3e686e58f760b",
+    "tests/c/interp.c": "2e4062a5e4bc9c3db9d39ebdce467248d4c23310a6e955a659baa31ac5d5a990",
+    "tests/c/queue.h": "8b284031772b1ba2035d9b05b24f2cb9b23e7bd324bcccb5e3fcc57d34aafa48",
+    "tests/c/true_peak.c": "5b49d2cd8e8173858396fd4ee106651a9e8f796e3906640112ae70401e0f1bbe",
+    "tests/c/version.txt": "a0291509130b29f66d27d84239e55fa5dbf2f4cd84aeb48be6ce68c38b0ae225",
+    "tests/reference_tests.rs": "205f7793969c2b470db3d27fd940aa55f53ca4d3b95a5c940695d02385561750"
+  },
+  "text_normalization": "LF, trailing horizontal whitespace removed, single final newline; no algorithm changes outside modified_files"
+}

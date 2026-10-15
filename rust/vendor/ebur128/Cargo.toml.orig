@@ -1,0 +1,101 @@
+[package]
+name = "ebur128"
+version = "0.1.10"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+edition = "2018"
+categories = ["multimedia"]
+keywords = ["multimedia", "audio", "dsp"]
+description = "Implementation of the EBU R128 loudness standard"
+repository = "https://github.com/sdroege/ebur128"
+homepage = "https://github.com/sdroege/ebur128"
+license = "MIT"
+readme = "README.md"
+rust-version = "1.60"
+
+[dependencies]
+bitflags = "1.0"
+smallvec = "1.0"
+dasp_sample = "0.11"
+dasp_frame = "0.11"
+libm = "=0.2.16"
+
+[build-dependencies]
+cc = { version = "1.0", optional = true }
+
+[dev-dependencies]
+criterion = "0.4"
+float_eq = "1"
+ebur128-c = { package = "ebur128", version = "=0.1.1" }
+quickcheck = "0.9"
+quickcheck_macros = "0.9"
+rand = "0.7"
+hound = "3"
+
+[features]
+internal-tests = []
+c-tests = ["cc", "internal-tests"] # and ebur128-c, quickcheck, quickcheck_macros, rand but dev-dependencies can't be optional...
+reference-tests = []
+capi = []
+
+# Enabling this increases the precision of true-peak calculation slightly, but causes a significant
+# performance-hit in the default build-configuration. To avoid the performance-hit, also enable
+# `RUSTFLAGS=-C target-feature=+fma`, assuming your platform supports it
+precision-true-peak = []
+
+
+[lib]
+name = "ebur128"
+
+[package.metadata.capi]
+min_version = "0.9.1"
+
+[package.metadata.capi.header]
+name = "ebur128.h"
+subdirectory = false
+generation = false
+
+[package.metadata.capi.pkg_config]
+name = "libebur128"
+filename = "libebur128"
+description = "EBU R 128 standard for loudness normalisation"
+version = "1.2.6"
+
+[package.metadata.capi.library]
+name = "ebur128"
+version = "1.2.6"
+
+[[bench]]
+name = "interp"
+harness = false
+required-features = ["internal-tests"]
+
+[[bench]]
+name = "true_peak"
+harness = false
+required-features = ["internal-tests"]
+
+[[bench]]
+name = "history"
+harness = false
+required-features = ["internal-tests"]
+
+[[bench]]
+name = "filter"
+harness = false
+required-features = ["internal-tests"]
+
+[[bench]]
+name = "calc_gating_block"
+harness = false
+required-features = ["internal-tests"]
+
+[[bench]]
+name = "ebur128"
+harness = false
+
+[[test]]
+name = "reference_tests"
+required-features = ["reference-tests"]
+
+[profile.dev]
+opt-level = 1
