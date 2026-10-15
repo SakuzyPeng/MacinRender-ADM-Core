@@ -410,15 +410,13 @@ class EvidenceTests(unittest.TestCase):
         cases = [c['id'] for c in common.offline_cases()]
         cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
         self.assertEqual(sorted(case_gates), sorted(cases))
-        # Phase 2.1 gates the meter's true peak; K-weighting and loudness stay observations until 2.2.
+        # Phase 2.1 gates the meter's true peak, 2.2 its K-weighting and loudness.
         kernel_gates = [g['pattern'] for g in gates if g['kind'] == 'kernel']
         def gated(name):
             return any(fnmatch.fnmatchcase(name, pattern) for pattern in kernel_gates)
         meter = [n for n in names if n.startswith('meter-')]
         self.assertEqual(len(meter), 28)
-        observed = ('.05-k-weighting.f64', '.30-loudness.f64')
-        self.assertTrue(all(gated(n) for n in meter if not n.endswith(observed)))
-        self.assertFalse(any(gated(n) for n in meter if n.endswith(observed)))
+        self.assertTrue(all(gated(n) for n in meter))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

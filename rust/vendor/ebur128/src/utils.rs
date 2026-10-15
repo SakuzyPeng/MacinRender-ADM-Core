@@ -32,7 +32,7 @@ pub fn energy_to_loudness(energy: f64) -> f64 {
     }
     #[cfg(not(test))]
     {
-        10.0 * f64::log10(energy) - 0.691
+        10.0 * libm::log10(energy) - 0.691
     }
 }
 

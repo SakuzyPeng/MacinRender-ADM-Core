@@ -6,6 +6,8 @@
     "src/interp.rs",
     "src/filter.rs",
     "src/lib.rs",
+    "src/history.rs",
+    "src/utils.rs",
     "Cargo.toml",
     "Cargo.toml.orig"
   ],
@@ -41,9 +43,7 @@
     "src/capi.rs": "f873c8f2043461f9851386520893ba2903ebad7be07d66af43f7b93ba420b504",
     "src/ebur128.rs": "9ca45bfb2f614216b6c5c4b2c1cc6c1681f586d7abaed17b9735bb8adb304c91",
     "src/histogram_bins.rs": "88b02989277a69f54fcc998d37e3bdc5f2db3cf6b56ae8a579ecf9337c16ed43",
-    "src/history.rs": "b08661cb499d880ea62343c8ba2b89bd9abd74160a2dcb7898f9935cdb559cd8",
     "src/true_peak.rs": "5f1b0ba694b1685ca76eedc5b721fc964ea76ef1b1983768631f42ca19934861",
-    "src/utils.rs": "229710f71858676b4bfa6254fe8ade7b03a6efee6e2e3965cdf58f967e9e2a42",
     "tests/c/calc_gating_block.c": "39acbd7f54f3295d93abdf75c92ac04ca5cbdad919be0fc61a99be07b242c1d4",
     "tests/c/filter.c": "f8f9c2b63236e12899faed0a845676f1f3604011581a98cdefdcb00a6090b92e",
     "tests/c/history.c": "a923dc2766c14e72bc6321e32cdc3fcb207049696193cf6207e3e686e58f760b",
