@@ -322,7 +322,8 @@ S01 使末段读数在 macOS 与 x86 之间相差 120–168 LU。见 [2.2 记录
 **2.3 状态**：`mradm-dsp` 新增 `post_gain`：各后端的峰值转 dB、`RenderService` 的响度目标 / 峰值补偿 / 峰值上限 / 最终增益判定、
 公开 `apply_loudness_norm` 与 `apply_peak_limit` 的增益，以及三处整段重写的逐样本乘法都移入 Rust，dB 换算使用 `libm`；
 判定顺序、容差与 NaN / −0 的取值保持不变。内核探针新增 5 个 `post-gain` 文件并设为门禁（193 个内核文件中 188 个）。
-Linux x64 上 196 个 PCM id 与 2.2 逐位相同。见 [2.3 记录](RUST_POST_GAIN.md)。
+Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`d836744` 的 Consistency 38757362457、CI 38757366795 与 Quality 38757371551 通过，
+196 个 PCM id 与全部 193 个内核文件三平台相同，209 项门禁无失败。见 [2.3 记录](RUST_POST_GAIN.md)。
 
 保持既有声道权重、LFE 处理、完整积分历史、worker 归属和错误语义；声道映射修正或计量算法变更另行评估。
 对 ebur128 使用可追踪的小范围补丁，不以更换语言或更新依赖版本代替数值规则和标准测试。
