@@ -315,7 +315,9 @@ Linux x64 上 glibc 与 `libm` 的系数逐位相同，锁定矩阵输出不变�
 **2.2 状态**：vendored ebur128 的 K-weighting `tan`/`pow`、门控系数 `pow` 与 LUFS `log10` 改用 `libm`；
 x86 不再打开 FTZ，所有架构统一在每次调用后清零低于 `f64::EPSILON` 的滤波器状态（S01）。内核探针新增 K-weighting 系数，
 末段改为让状态停在阈值以下的 2^-80 直流，计量文件全部设为门禁（188 个内核文件中 183 个）。Linux x64 上锁定矩阵的 PCM 不变；
-`56f1ded` 的 Consistency 38742360010 中 196 个 PCM id 与全部 188 个内核文件三平台相同。见 [2.2 记录](RUST_METER_LOUDNESS.md)。
+`56f1ded` 的 Consistency 38742360010 中 196 个 PCM id 与全部 188 个内核文件三平台相同。修复前的检查点运行把 2.1 的分歧定位到
+macOS 上 192 kHz K-weighting 分母的 1 ulp 差异（经接近 1 的极点放大），Linux 与 Windows 之间的 1 ulp 来自 `log10`，
+S01 使末段读数在 macOS 与 x86 之间相差 120–168 LU。见 [2.2 记录](RUST_METER_LOUDNESS.md)。
 
 保持既有声道权重、LFE 处理、完整积分历史、worker 归属和错误语义；声道映射修正或计量算法变更另行评估。
 对 ebur128 使用可追踪的小范围补丁，不以更换语言或更新依赖版本代替数值规则和标准测试。
