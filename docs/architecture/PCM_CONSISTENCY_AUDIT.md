@@ -143,7 +143,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | N10 | 已处理 | HRTF 幅度改用 `libm::hypotf`（1.3）；`1e-9` 相位回退是固定规则 |
 | N11 | 已处理 | SOFA 坐标改用 `libm::atan2`（1.3）；门禁只覆盖仓库内三份 SOFA |
 | N12 | 未处理 | Triple Balance 非 D 模式的离线与文件流式入口仍为 `PORTABLE=false`；三期 |
-| N13 | 未处理 | 二期 |
+| N13 | 未处理 | 2.1 的计量探针确认 192 kHz 响度三平台不同；2.2 |
 | N14 | 已处理 | True Peak 插值系数改用 `libm`（2.1），生产计量的 True Peak 设为门禁 |
 | N15 | 未处理 | 二期 |
 | N16 | 已处理 | HpTF 设计改用 `libm`（1.4），设计内核设为门禁 |
@@ -309,7 +309,8 @@ C++ 中剩余的 Scene 运算已登记，**一期结项**。见 [1.6 记录](RUS
 
 **2.1 状态**：ebur128 0.1.10 纳入 `rust/vendor/ebur128`，True Peak 插值滤波器的窗与 sinc 改用 `libm`；
 内核探针新增 4 种采样率 × 2 种声道数的生产计量结果，True Peak 设为门禁，响度作为观察项留给 2.2。
-Linux x64 上 glibc 与 `libm` 的系数逐位相同，锁定矩阵输出不变。见 [2.1 记录](RUST_METER_TRUE_PEAK.md)。
+Linux x64 上 glibc 与 `libm` 的系数逐位相同，锁定矩阵输出不变。`bcb6c3f` 的 Consistency 38718937064 中 196 个 PCM id 与全部 True Peak 门禁三平台相同；
+响度观察项在 192 kHz 三平台两两不同（macOS 与 x86 最大 8.3e-11 LU，Linux 与 Windows 1 ulp），由 2.2 定位和统一。见 [2.1 记录](RUST_METER_TRUE_PEAK.md)。
 
 保持既有声道权重、LFE 处理、完整积分历史、worker 归属和错误语义；声道映射修正或计量算法变更另行评估。
 对 ebur128 使用可追踪的小范围补丁，不以更换语言或更新依赖版本代替数值规则和标准测试。
