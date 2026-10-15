@@ -23,6 +23,7 @@ pub mod mixing;
 pub mod monitor;
 pub mod pcm_mix;
 pub mod peak_guard;
+pub mod post_gain;
 pub mod resampler;
 pub mod rng;
 pub mod room;

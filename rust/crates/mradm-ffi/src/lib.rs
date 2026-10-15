@@ -24,6 +24,7 @@ mod monitor;
 mod osc;
 mod output_dsp;
 mod pcm_mix;
+mod post_gain;
 mod resampler;
 mod room;
 mod room_environment;

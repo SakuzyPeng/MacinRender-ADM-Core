@@ -81,14 +81,15 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 config A 使用与 `release.yml` 相同的构建选项（含 `MR_ADM_BUILD_CAPI_BUNDLE`，即全部目标位置无关编译；`consistency_build_test.py` 校验两者不漂移），config B 只在其上打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
 二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 40 个离线场景、78 个 Scene 流式渲染配置（各含两个 epoch）及
-188 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM、spreader 与生产计量），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
+193 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM、spreader、生产计量与离线后处理增益），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计、生产计量内核及全部 196 个 PCM 用例）必须三平台逐位相同；
-新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。12 个内核模式展开为 183 个
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计、生产计量、离线后处理增益内核及全部 196 个 PCM 用例）必须三平台逐位相同；
+新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。13 个内核模式展开为 188 个
 文件，其余 5 个为观察项（EAR 布局、Scene）。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
 f64 twiddle 列三平台相同并设为门禁；1.4 起 HpTF 设计也取自 `libm`，其 4 个内核文件设为门禁。
 二期 2.1 起 ebur128 的 True Peak 插值系数也取自 `libm`，生产计量的 True Peak 设为门禁；
-2.2 起 K-weighting、门控系数与 LUFS 换算也取自 `libm`，x86 不再打开 FTZ，计量的系数与响度同样设为门禁，全部内核文件三平台相同。1.5 起，11 个同采样率 VBAP/Triple Balance Scene 回放用例
+2.2 起 K-weighting、门控系数与 LUFS 换算也取自 `libm`，x86 不再打开 FTZ，计量的系数与响度同样设为门禁，全部内核文件三平台相同；
+2.3 起离线后处理的 dB 换算与增益判定移入 Rust，`post-gain` 内核设为门禁。1.5 起，11 个同采样率 VBAP/Triple Balance Scene 回放用例
 还要求固定与碎片分块的 PCM 在每个平台上逐位相同（`phase2_common.partition_invariant`），否则采集失败；
 其余分块对比只作为证据写入 manifest。`compare` job 先写出全部四份报告，再按门禁结果失败。
 SOFA 必须开启；三份仓库内固定文件受 SHA-256 校验，覆盖解析、HRTF 准备、离线与实时输出，见
