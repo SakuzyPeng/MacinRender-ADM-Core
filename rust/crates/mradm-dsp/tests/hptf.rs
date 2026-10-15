@@ -383,6 +383,101 @@ fn processor_output_is_independent_of_call_partitioning() {
     }
 }
 
+/// Targets as (frame, revision); each call ends at the next target frame.
+fn process_events(sizes: &[usize], events: &[(usize, u64)]) -> (Vec<f32>, Vec<(usize, u64)>) {
+    let shapes = [
+        profile(),
+        design(
+            &[band(BandKind::LowShelf, 120., 6., 0.7)],
+            -6.,
+            48000,
+            PreampMode::WarnOnly,
+        )
+        .unwrap(),
+        design(
+            &[band(BandKind::HighShelf, 5000., -6., 0.7)],
+            0.,
+            48000,
+            PreampMode::AutoTrim,
+        )
+        .unwrap(),
+    ];
+    let mut pcm = noise(12000, 2);
+    let mut p = Processor::new(2, 48000).unwrap();
+    let mut applied = Vec::new();
+    let (mut offset, mut previous) = (0, 0);
+    for &size in sizes.iter().cycle() {
+        if offset == pcm.len() / 2 {
+            break;
+        }
+        let next = events
+            .iter()
+            .map(|&(frame, _)| frame)
+            .find(|&frame| frame > offset)
+            .unwrap_or(usize::MAX);
+        let end = offset.saturating_add(size).min(next).min(pcm.len() / 2);
+        let target = events
+            .iter()
+            .find(|&&(frame, _)| frame == offset)
+            .map(|&(_, revision)| Snapshot {
+                coefficients: shapes[revision as usize % shapes.len()],
+                revision,
+            });
+        let update = p.process(&mut pcm[offset * 2..end * 2], target).unwrap();
+        if update.snapshot.revision != previous {
+            previous = update.snapshot.revision;
+            applied.push((end, previous));
+        }
+        offset = end;
+    }
+    (pcm, applied)
+}
+
+#[test]
+fn targets_during_a_transition_start_where_it_ends() {
+    // Revision 3 arrives during the fade to 2 and is replaced by 4 before
+    // that fade ends; 4 starts at frame 4000 + BLEND_FRAMES.
+    let events = [(4000, 2), (4700, 3), (5500, 4)];
+    let (reference, applied) = process_events(&[usize::MAX], &events);
+    // Both transitions complete inside the final call, which reports the latest.
+    assert_eq!(applied, [(12000, 4)]);
+    let direct = [(4000, 2), (4000 + BLEND_FRAMES, 4)];
+    let bits = |pcm: &[f32]| pcm.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+    assert_eq!(
+        bits(&process_events(&[usize::MAX], &direct).0),
+        bits(&reference)
+    );
+    for sizes in [
+        &[1, 7, 127, 511, 1024][..],
+        &[512],
+        &[1023, 1025, 2047],
+        &[3],
+    ] {
+        let (output, applied) = process_events(sizes, &events);
+        assert_eq!(bits(&output), bits(&reference), "partition {sizes:?}");
+        assert!(applied.iter().all(|&(_, revision)| revision != 3));
+        assert_eq!(applied.last().map(|&(_, revision)| revision), Some(4));
+    }
+    // A reset applies the queued target, not the transition it waited behind.
+    let mut p = Processor::new(2, 48000).unwrap();
+    for revision in [5, 6] {
+        let target = Snapshot {
+            coefficients: profile(),
+            revision,
+        };
+        assert!(p.process(&mut [0.1; 32], Some(target)).unwrap().blending);
+    }
+    let update = p.reset(None).unwrap();
+    assert_eq!((update.snapshot.revision, update.blending), (6, false));
+    assert_eq!(
+        p.process(&mut noise(4096, 2), None)
+            .unwrap()
+            .snapshot
+            .revision,
+        6
+    );
+}
+
 #[test]
 fn malformed_frames_and_targets_preserve_state_and_output() {
     let mut c = Cascade::new(2).unwrap();
@@ -421,7 +516,9 @@ fn malformed_frames_and_targets_preserve_state_and_output() {
     }
     let before = p.update(false);
     let mut out = [42.; 16];
-    assert!(p.process(&mut out, Some(target)).is_err());
+    let mut foreign = target;
+    foreign.coefficients.sample_rate = 44100;
+    assert!(p.process(&mut out, Some(foreign)).is_err());
     assert_eq!(out, [42.; 16]);
     assert!(p.process(&mut out[..3], None).is_err());
     assert!(

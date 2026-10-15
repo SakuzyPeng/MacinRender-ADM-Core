@@ -161,9 +161,10 @@ On seek, reset adopts the latest pending profile, or the incoming branch if a fa
 was already in flight, then clears both histories. It never consumes and loses a
 profile merely because playback changed epoch.
 
-Only one swap is in flight at a time: a profile arriving mid-blend replaces the
-pending slot and is picked up when the current blend finishes. Worst-case apply
-latency is therefore two blend windows.
+Only one swap is in flight at a time: a profile arriving mid-blend replaces any
+queued target and starts on the frame where the current blend ends, inside the
+same process call if necessary. Worst-case apply latency is therefore two blend
+windows, and the result does not depend on callback sizes (PCM consistency 1.5).
 
 ## Threading
 

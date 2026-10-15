@@ -86,12 +86,15 @@ void transitions(Capture& capture) {
     processor.publish(gain(0.75F), 3);
     pcm.assign(4800, 1.0F);
     processor.process(pcm.data(), 2400);
-    require(processor.applied_revision() == 2, "pending target waits for the next process call");
-    require(pcm.back() == 0.25F, "large blocks finish the current fade without a third arm");
+    // The fade to 2 ends 1791 frames into this call; the target published
+    // during it starts on the next frame, inside the same call.
+    require(processor.applied_revision() == 2, "the queued target is still fading");
+    require(pcm[1790U * 2U] != 0.25F && pcm[1791U * 2U] == 0.25F && pcm.back() == 0.3984375F,
+            "queued target starts where the current fade ends");
     capture.pcm("finish-with-pending", pcm);
     pcm.assign(274, 1.0F);
     processor.process(pcm.data(), 137);
-    require(pcm.front() == 0.25F && processor.applied_revision() == 2, "queued target starts at next call");
+    require(pcm.front() == 0.398681640625F && processor.applied_revision() == 2, "queued fade continues across calls");
     capture.pcm("queued-fade", pcm);
     processor.reset_state();
     require(processor.applied_revision() == 3, "seek adopts the active fade target");
