@@ -22,8 +22,8 @@
     {
       "kind": "kernel",
       "pattern": "meter-*",
-      "reason": "production meter: ebur128's true-peak interpolation filter (PCM consistency 2.1), K-weighting, gate factors and LUFS conversion take their math from the libm port, and every architecture zeroes sub-epsilon filter state instead of setting x86 flush-to-zero (PCM consistency 2.2)",
-      "reference": "docs/architecture/RUST_METER_LOUDNESS.md"
+      "reason": "production meter: ebur128's true-peak interpolation filter (PCM consistency 2.1), K-weighting, gate factors and LUFS conversion take their math from the libm port, and every architecture zeroes sub-epsilon filter state instead of setting x86 flush-to-zero (PCM consistency 2.2), on the 100 ms block grid so readings do not depend on chunking; acceptance programmes cover gate boundaries, inter-sample peaks, long silence, chunking and reset (PCM consistency 2.4)",
+      "reference": "docs/architecture/RUST_METER_ACCEPTANCE.md"
     },
     {
       "kind": "kernel",

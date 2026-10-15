@@ -5,6 +5,7 @@
   "modified_files": [
     "src/interp.rs",
     "src/filter.rs",
+    "src/ebur128.rs",
     "src/lib.rs",
     "src/history.rs",
     "src/utils.rs",
@@ -41,7 +42,6 @@
     "examples/normalize.rs": "415a744fb35e564d81db4e32bcf548eae4f740ccf53309cad8106207290a6a37",
     "examples/replaygain.rs": "caa21c2c4c19b89e54d96cdf428e499b7701b14aa4171295a662762fa4da2f77",
     "src/capi.rs": "f873c8f2043461f9851386520893ba2903ebad7be07d66af43f7b93ba420b504",
-    "src/ebur128.rs": "9ca45bfb2f614216b6c5c4b2c1cc6c1681f586d7abaed17b9735bb8adb304c91",
     "src/histogram_bins.rs": "88b02989277a69f54fcc998d37e3bdc5f2db3cf6b56ae8a579ecf9337c16ed43",
     "src/true_peak.rs": "5f1b0ba694b1685ca76eedc5b721fc964ea76ef1b1983768631f42ca19934861",
     "tests/c/calc_gating_block.c": "39acbd7f54f3295d93abdf75c92ac04ca5cbdad919be0fc61a99be07b242c1d4",

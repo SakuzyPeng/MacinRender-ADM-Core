@@ -68,6 +68,7 @@
 - [True Peak 插值系数（二期 2.1）](architecture/RUST_METER_TRUE_PEAK.md)
 - [响度计量（二期 2.2）](architecture/RUST_METER_LOUDNESS.md)
 - [离线后处理增益（二期 2.3）](architecture/RUST_POST_GAIN.md)
+- [计量与归一化验收（二期 2.4）](architecture/RUST_METER_ACCEPTANCE.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
