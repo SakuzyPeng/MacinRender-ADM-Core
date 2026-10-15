@@ -66,6 +66,40 @@ fn arbitrary_partitions_small_outputs_exact_lengths_and_reset() {
 }
 
 #[test]
+fn power_of_two_ratios_are_exact_across_partitions() {
+    // The interpolation index advances by an exactly representable step, so
+    // rebasing it at chunk ends is exact. Fractional ratios (44.1 <-> 48 kHz)
+    // round differently per partition and keep the tolerance above.
+    for (from, to) in [
+        (48000, 96000),
+        (96000, 48000),
+        (48000, 192000),
+        (192000, 48000),
+        (44100, 88200),
+    ] {
+        for channels in [1, 2] {
+            let input: Vec<_> = (0..5000 * channels)
+                .map(|i| ((i * 37 % 101) as f32 - 50.0) / 100.0)
+                .collect();
+            let mut r = Resampler::new(channels, from, to).unwrap();
+            let reference = convert(&mut r, &input, 1024, 4096);
+            for (chunk, capacity) in [(1, 1), (7, 17), (511, 4096), (1023, 3)] {
+                r.reset();
+                let candidate = convert(&mut r, &input, chunk, capacity);
+                assert!(
+                    candidate
+                        .iter()
+                        .zip(&reference)
+                        .all(|(a, b)| a.to_bits() == b.to_bits())
+                        && candidate.len() == reference.len(),
+                    "{from}->{to}, channels={channels}, chunk={chunk}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn single_frame_empty_input_and_channel_isolation() {
     for (from, to) in [
         (48000, 44100),
