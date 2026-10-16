@@ -30,6 +30,7 @@
 
 #include "consistency_trace.h"
 #include "render_common.h"
+#include "stream_dsp.h"
 
 namespace mradm {
 
@@ -307,7 +308,7 @@ class HoaStream final : public IRenderStream {
     void set_overrides(const LiveOverrides& overrides) override {
         std::unordered_map<std::string, float> live;
         for (const auto& ov : overrides.objects) {
-            live[ov.object_id] = ov.mute ? 0.0F : std::pow(10.0F, ov.gain_db / 20.0F);
+            live[ov.object_id] = ov.mute ? 0.0F : dsp::live_gain(ov.gain_db);
         }
         std::ranges::fill(live_gain_targets_, 1.0F);
         // Semantic boundary: the override is projected object → input channel (each channel

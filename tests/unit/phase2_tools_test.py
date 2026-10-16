@@ -40,7 +40,7 @@ class CollectionTests(unittest.TestCase):
         common.save(self.build / 'rust-dependencies.json', {'packages': [], 'resolve': {'nodes': []}})
         self.binaries = {}
         for name in ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render',
-                     'mr_adm_phase2_scene', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render'):
+                     'mr_adm_phase2_scene', 'mr_adm_phase2_stream', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render'):
             path = self.build / (name + ('.exe' if os.name == 'nt' else ''))
             path.write_bytes(b'unchanged executable')
             self.binaries[name] = path
@@ -154,11 +154,64 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 common.pcm_bytes(b)
 
+    def test_stream_frame_counts_follow_input_and_seek_timeline(self):
+        for case in common.stream_cases():
+            self.assertEqual(common.stream_output_shape(case), (2, 48000, 74200))
+            common.validate_stream_shape(case, (2, 48000, 74200))
+        case = dict(common.stream_cases()[0], input_frames=100, frames=200)
+        for events, limit, expected in [
+            ([], 200, 100),
+            ([{'frame': 50, 'seek': 10}], 200, 140),
+            ([{'frame': 50, 'seek': 90}], 200, 60),
+            ([{'frame': 50, 'seek': 500}], 200, 50),
+            ([{'frame': 50, 'seek': 10}, {'frame': 75, 'seek': 5}], 200, 170),
+            ([{'frame': 50, 'seek': 10}], 80, 80),
+            ([{'frame': 100, 'seek': 0}], 200, 200),
+        ]:
+            with self.subTest(events=events, limit=limit):
+                self.assertEqual(common.stream_output_shape(dict(case, events=events, frames=limit)),
+                                 (2, 48000, expected))
+        with self.assertRaisesRegex(ValueError, 'after expected EOS'):
+            common.stream_output_shape(dict(case, events=[{'frame': 101, 'seek': 0}]))
+
+    def test_stream_comparator_rejects_self_consistent_wrong_frame_counts(self):
+        # Corrupt both the PCM and its manifest shape/hash. File integrity and repeatability alone
+        # cannot detect a seek that was silently ignored, an early EOS, or excess output.
+        case = common.stream_cases()[0]
+        for channels, rate, frames in [(2, 48000, 48000), (2, 48000, 74200 - 1),
+                                       (2, 48000, 74200 + 1), (1, 48000, 74200), (2, 44100, 74200)]:
+            with self.subTest(channels=channels, rate=rate, frames=frames), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                pcm = root / 'pcm' / (case['id'] + '.pcmbits'); pcm.parent.mkdir()
+                bits = b'\0' * (channels * frames * 4)
+                pcm.write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, channels, rate, frames) + bits)
+                common.save(root / 'manifest.json', {
+                    'schema': 'mradm.phase2.v1', 'complete': True,
+                    'source': {'files': {}, 'sha256': common.json_digest({})},
+                    'offline': [], 'scene': [], 'stream': [case], 'sofa': common.SOFA_FIXTURES,
+                    'outputs': {case['id']: {'path': pcm.relative_to(root).as_posix(),
+                                             'shape': [channels, rate, frames], 'sha256': common.digest(bits)}},
+                })
+                with patch.object(common, 'offline_cases', return_value=[]), \
+                        patch.object(common, 'scene_cases', return_value=[]), \
+                        patch.object(common, 'stream_cases', return_value=[case]), \
+                        patch.object(common, 'validate_sofa_fixtures'), \
+                        self.assertRaisesRegex(ValueError, 'frame count differs from replay timeline'):
+                    comparator.validate(root)
+
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
         self.assertEqual(len(offline), 40)
         self.assertEqual(len({r['id'] for r in offline}), 40)
         self.assertEqual(len(scene), 78)
+        streams = common.stream_cases()
+        self.assertEqual(len(streams), 6)
+        self.assertEqual(len(common.case_ids()), 202)
+        for row in streams:
+            frames = [event['frame'] for event in row['events']]
+            self.assertEqual(frames, sorted(set(frames)))
+            self.assertTrue(all(0 < n <= 1024 for n in row['partition']))
+        self.assertEqual({tuple(r['partition']) for r in streams}, {(512,), (1, 7, 127, 511, 1024)})
         self.assertTrue(any('--loudness-target' in c['args'] for c in offline))
         self.assertTrue(any('triple-balance' in c['args'] for c in offline))
         for row in scene:
@@ -357,7 +410,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 213)
+        self.assertEqual(len(names), 217)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -403,16 +456,13 @@ class EvidenceTests(unittest.TestCase):
             if gate['kind'] == 'kernel':
                 self.assertTrue(any(fnmatch.fnmatchcase(n, gate['pattern']) for n in names), gate['pattern'])
             else:
-                cases = [c['id'] for c in common.offline_cases()]
-                cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
+                cases = common.case_ids()
                 self.assertTrue(any(fnmatch.fnmatchcase(n, gate['pattern']) for n in cases), gate['pattern'])
         # Every PCM case is bit-identical on all three platforms (ADR 0017): each case is gated by
         # exact id, so a new case must join the gates (or be argued out here) in the same change.
         case_gates = [g['pattern'] for g in gates if g['kind'] == 'case']
         self.assertEqual(len(case_gates), len(set(case_gates)))
-        cases = [c['id'] for c in common.offline_cases()]
-        cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
-        self.assertEqual(sorted(case_gates), sorted(cases))
+        self.assertEqual(sorted(case_gates), sorted(common.case_ids()))
         # Phase 2.1 gates the meter's true peak, 2.2 its K-weighting and loudness, 2.4 its
         # acceptance programmes.
         kernel_gates = [g['pattern'] for g in gates if g['kind'] == 'kernel']
@@ -425,6 +475,10 @@ class EvidenceTests(unittest.TestCase):
         post = [n for n in names if n.startswith('post-gain.')]
         self.assertEqual(len(post), 5)
         self.assertTrue(all(gated(n) for n in post))
+        # Phase 3.1 gates the file-streaming and monitor arithmetic.
+        stream = [n for n in names if n.startswith('stream-dsp.')]
+        self.assertEqual(len(stream), 4)
+        self.assertTrue(all(gated(n) for n in stream))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

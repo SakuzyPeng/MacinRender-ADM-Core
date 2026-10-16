@@ -18,6 +18,8 @@ mod meter_acceptance;
 mod post_gain;
 #[path = "phase2/sofa.rs"]
 mod sofa;
+#[path = "phase2/stream_dsp.rs"]
+mod stream_dsp;
 fn floats(path: &Path, name: &str, values: &[f32]) {
     assert!(!values.is_empty() && values.iter().all(|v| v.is_finite()));
     let mut out = BufWriter::new(fs::File::create(path.join(name)).unwrap());
@@ -313,6 +315,7 @@ fn run(out: &Path, fixtures: &Path) {
     meter::run(out);
     meter_acceptance::run(out);
     post_gain::run(out);
+    stream_dsp::run(out);
 }
 
 fn main() {

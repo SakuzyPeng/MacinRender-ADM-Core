@@ -42,6 +42,7 @@
 #include "meter.h"
 #include "post_gain.h"
 #include "render_common.h"
+#include "stream_dsp.h"
 
 namespace mradm {
 
@@ -494,11 +495,9 @@ struct ExtentSource {
 // dominates spatial impression); depth adds an isotropic term. Note: this does NOT
 // apply distance scaling — extent is taken directly from the block. Used both to
 // gate point-source bypass (k_spreader_extent_threshold_deg) and to drive the cone.
+// The arithmetic runs in Rust with separately rounded operations (PCM consistency 3.1).
 float extent_spread_deg(const SceneObjectBlock& block) noexcept {
-    const float depth_r = std::max(0.0F, block.depth) * 20.0F;
-    const float width_r = (std::max(0.0F, block.width) * 60.0F) + depth_r;
-    const float height_r = (std::max(0.0F, block.height) * 45.0F) + depth_r;
-    return std::max(width_r, height_r) * 2.0F;
+    return dsp::extent_spread_degrees(block.width, block.height, block.depth);
 }
 
 // NOLINTBEGIN(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
@@ -1490,13 +1489,11 @@ class BinauralStream final : public IRenderStream {
         // render_window's reduce, so the output is bit-identical to the offline render.
         output.assign(fn * 2U, 0.0F);
         for (std::size_t si = 0; si < sources.size(); ++si) {
-            const auto& gain = live_gain_slots_[source_gain_slots_[si]].gain_envelope();
-            const float* sl = src_cs_[si].l_out.data();
-            const float* sr = src_cs_[si].r_out.data();
-            for (std::size_t f = 0; f < fn; ++f) {
-                output[(f * 2U) + 0U] += sl[f] * gain[f];
-                output[(f * 2U) + 1U] += sr[f] * gain[f];
-            }
+            dsp::accumulate_stereo(output,
+                                   src_cs_[si].l_out,
+                                   src_cs_[si].r_out,
+                                   live_gain_slots_[source_gain_slots_[si]].gain_envelope(),
+                                   fn);
         }
     }
 
@@ -1524,13 +1521,7 @@ class BinauralStream final : public IRenderStream {
             render_current_sources(old_fifo_, frames_now);
             rebuild_sources(pending_topology_);
             render_current_sources(fifo_, frames_now);
-            for (std::size_t frame = 0; frame < fn; ++frame) {
-                const float mix = fn <= 1U ? 1.0F : static_cast<float>(frame) / static_cast<float>(fn - 1U);
-                for (std::size_t channel = 0; channel < 2U; ++channel) {
-                    const std::size_t index = (frame * 2U) + channel;
-                    fifo_[index] = (old_fifo_[index] * (1.0F - mix)) + (fifo_[index] * mix);
-                }
-            }
+            dsp::topology_crossfade(old_fifo_, fifo_, fn);
             applied_topology_ = pending_topology_;
             topology_pending_ = false;
             next_topology_update_frame_ = frames_done_ + topology_update_interval_frames_;
