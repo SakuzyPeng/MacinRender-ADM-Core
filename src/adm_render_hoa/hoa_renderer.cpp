@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "hoa.h"
@@ -30,7 +29,6 @@
 
 #include "consistency_trace.h"
 #include "render_common.h"
-#include "stream_dsp.h"
 
 namespace mradm {
 
@@ -82,6 +80,7 @@ std::optional<std::pair<float, float>> parse_speaker_label(const std::string& la
 struct ChannelBinding {
     uint16_t input_channel{};
     std::string object_id;
+    std::string speaker_label_key; // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
 };
 struct HoaPrepared final : IPreparedRender {
     std::vector<ChannelBinding> gain_matrix;
@@ -141,7 +140,11 @@ Result<void> build_gain_matrix(const AdmScene& scene, LogSink& logs, HoaPrepared
                                               scene.info.num_channels));
             }
             auto& cg = by_channel[in_ch];
-            cg.binding = {in_ch, obj.id};
+            cg.binding = {in_ch, obj.id, {}};
+            if (!track.ds_blocks.empty() && !track.ds_blocks.front().speaker_labels.empty()) {
+                cg.binding.speaker_label_key =
+                    render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
+            }
             for (const auto& raw : track.blocks) {
                 SceneObjectBlock base = raw;
                 if (obj.position_offset) {
@@ -236,9 +239,11 @@ Result<void> build_gain_matrix(const AdmScene& scene, LogSink& logs, HoaPrepared
 // output). A gap-free run from frame 0 is bit-identical to render_window. seek() resets the
 // diffuse delay lines (a small discontinuity, acceptable for monitoring), seeding the
 // circular write position to frame % delay-len to match the offline windowed indexing.
-// set_overrides applies live per-object gain by pre-scaling the matching input channels
-// before the (linear) HOA encode — equal to scaling the object gain, and it scales the
-// object's direct + diffuse alike. Topology scales are not yet wired for HOA.
+// set_overrides applies live gain by pre-scaling the matching input channels before the
+// (linear) HOA encode — equal to scaling the object gain, and it scales the object's direct +
+// diffuse alike. As in the other backends, a DirectSpeakers override with a speaker label
+// targets that bed channel and wins over the whole-object override. Topology scales are not
+// yet wired for HOA.
 class HoaStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<HoaStream>>
@@ -306,19 +311,17 @@ class HoaStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        std::unordered_map<std::string, float> live;
-        for (const auto& ov : overrides.objects) {
-            live[ov.object_id] = ov.mute ? 0.0F : dsp::live_gain(ov.gain_db);
-        }
         std::ranges::fill(live_gain_targets_, 1.0F);
         // Semantic boundary: the override is projected object → input channel (each channel
         // scaled by its owning object's gain). ADM's gain matrix is one object per input
-        // channel, so this is exact today; if independently-overridable objects ever shared
-        // one input channel they would scale together (last writer wins) — revisit then.
+        // channel, so this is exact today.
         for (const auto& cg : prepared_.gain_matrix) {
-            if (const auto it = live.find(cg.object_id);
-                it != live.end() && cg.input_channel < live_gain_targets_.size()) {
-                live_gain_targets_[cg.input_channel] = it->second;
+            if (cg.input_channel >= live_gain_targets_.size()) {
+                continue;
+            }
+            if (const auto g =
+                    render_common::resolve_live_channel_gain(overrides, cg.object_id, cg.speaker_label_key)) {
+                live_gain_targets_[cg.input_channel] = *g;
             }
         }
         live_gain_smoother_.set_targets(live_gain_targets_);

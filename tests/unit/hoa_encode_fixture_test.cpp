@@ -12,6 +12,7 @@
 #include <optional>
 #include <span>
 #include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -1236,6 +1237,72 @@ bool verify_hoa_stream_gain_override() {
     return ok;
 }
 
+// A DirectSpeakers override with a speaker label targets that bed channel and wins over the
+// whole-object override regardless of order; a label that names another channel leaves this one
+// alone. HOA once keyed overrides by object only (last entry wins, labels ignored).
+bool verify_hoa_stream_per_channel_override() {
+    auto [doc, uid] = make_ds_doc({.azimuth = 0.0F, .elevation = 0.0F, .label = "M+000"});
+    const auto in_path = write_fixture_samples(doc, uid, "per_channel_in", make_noise_samples(4096));
+    FileGuard in_guard{in_path};
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "hoa per-channel: import scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "hoa3";
+    plan.scene = *scene;
+    auto renderer = mradm::create_hoa_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "hoa per-channel: prepare")) {
+        return false;
+    }
+    using Entry = std::pair<std::string, float>; // speaker label (empty = whole object), gain dB
+    auto pull_rms = [&](const std::vector<Entry>& entries, bool mute_label = false) -> double {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return -1.0;
+        }
+        mradm::LiveOverrides ov;
+        ov.revision = 1;
+        for (const auto& [label, gain_db] : entries) {
+            ov.objects.push_back({object_id, gain_db, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, label, std::nullopt, false});
+            ov.objects.back().mute = mute_label && !label.empty();
+        }
+        (*stream)->set_overrides(ov);
+        const uint32_t oc = (*stream)->out_channels();
+        std::vector<float> buf;
+        double total = 0.0;
+        std::size_t n = 0;
+        while (true) {
+            buf.assign(std::size_t{1024U} * oc, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            const auto used = static_cast<std::vector<float>::difference_type>(*produced * oc);
+            total += std::accumulate(buf.begin(), buf.begin() + used, 0.0, [](double acc, float v) {
+                return acc + (static_cast<double>(v) * static_cast<double>(v));
+            });
+            n += *produced * oc;
+        }
+        return n > 0 ? std::sqrt(total / static_cast<double>(n)) : 0.0;
+    };
+    const double base = pull_rms({});
+    const double whole = pull_rms({{"", -20.0F}});
+    const double specific_last = pull_rms({{"", -20.0F}, {"M+000", 0.0F}});
+    const double specific_first = pull_rms({{"M+000", 0.0F}, {"", -20.0F}});
+    const double other_channel = pull_rms({{"M-030", 0.0F}}, true);
+    bool ok = check(base > 1.0e-3, "hoa per-channel: baseline has energy");
+    ok &= check(whole < base * 0.2 && whole > base * 0.05, "hoa per-channel: whole-object -20 dB scales by ~0.1");
+    ok &= check(specific_last == base, "hoa per-channel: matching label wins when listed last");
+    ok &= check(specific_first == base, "hoa per-channel: matching label wins when listed first");
+    ok &= check(other_channel == base, "hoa per-channel: another channel's mute leaves this channel alone");
+    return ok;
+}
+
 } // namespace
 
 int main() try {
@@ -1273,6 +1340,7 @@ int main() try {
     ok &= verify_lfe_metrics_separation();
     ok &= verify_hoa_stream_matches_window();
     ok &= verify_hoa_stream_gain_override();
+    ok &= verify_hoa_stream_per_channel_override();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";

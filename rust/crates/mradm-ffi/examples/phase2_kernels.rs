@@ -12,6 +12,8 @@ use std::{
 mod coverage;
 #[path = "phase2/ear_gains.rs"]
 mod ear_gains;
+#[path = "phase2/hoa.rs"]
+mod hoa;
 #[path = "phase2/meter.rs"]
 mod meter;
 #[path = "phase2/meter_acceptance.rs"]
@@ -319,6 +321,7 @@ fn run(out: &Path, fixtures: &Path) {
     post_gain::run(out);
     stream_dsp::run(out);
     ear_gains::run(out);
+    hoa::run(out);
 }
 
 fn main() {
