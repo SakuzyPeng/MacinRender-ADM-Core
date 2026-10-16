@@ -78,7 +78,7 @@ EAR、VBAP 与 HOA 的文件流式渲染也从这组生效块中绑定声道级�
 房间双耳渲染器（`room-binaural`，不在一致性矩阵内）有同样的残留。它按场景顺序遍历块，用 `ds_blocks[0]` 决定 DirectSpeakers 声源的 LFE 角色与实时标签，
 并让 screenRef 检查统计全部块。被覆盖的 LFE 块与生效的全频块同起点时，旧实现会报“同一房间声源不能在全频与 LFE 角色间切换”。
 现在角色、标签、screenRef 判断与事件表都改用 `last_blocks_at_each_start` 的结果。`room_render_test` 新增 Objects 与 DirectSpeakers
-两组比较（两个起点、每个起点 5 个先写入的被覆盖块），要求离线 PCM 与只含获胜块的场景逐位相同；修改前 DirectSpeakers 一组准备失败。
+两组比较（两个起点、每个起点 5 个先写入的被覆盖块），要求离线 PCM 与只含获胜块的场景逐位相同；修改前 DirectSpeakers 一组准备失败。`5b1c9a8` 的 CI 38922601411 与 Quality 38922605025 通过。
 
 Triple Balance 不改动。它的块时间按 rtime 计算，要求时间戳不减，并在每个 512 帧控制周期内依次应用全部事件，所以同起点的最后一个事件生效。
 床声道要求每个块的标签声道、包与用户增益相同，因此读取第一个块不影响增益。被覆盖的对象块仍参与可用性检查与 size 统计（是否含 diffuse、最小 diffuse 尺寸、最大尺寸），
