@@ -69,6 +69,9 @@ mradm::RenderOptions options(const Json& args) {
             result.loudness_target_lufs = std::stof(v);
         } else if (key == "--peak-limit-dbtp") {
             result.peak_limit_dbtp = std::stof(v);
+        } else if (key == "--triple-balance-mode") {
+            phase2::require(v == "standard" || v == "d", "unsupported Triple Balance mode");
+            result.triple_balance_mode = v == "d" ? mradm::TripleBalanceMode::d : mradm::TripleBalanceMode::standard;
         } else {
             throw std::runtime_error("unsupported measurement option: " + key);
         }

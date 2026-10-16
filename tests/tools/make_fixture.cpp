@@ -22,6 +22,8 @@
 //   objects-extent-multi  3 Objects tracks — enables multiple OLA sources / spreader groups
 //   directspeakers   5.1 bed — DirectSpeakers gain calculation plus LFE routing
 //   hoa              HOA1 (4 channels) — HOA-typed input path
+//   objects-room     1 Cartesian Objects channel with equal-size extent moving over four blocks —
+//                    the Triple Balance size path (PCM consistency 3.4)
 //   hoa3             HOA3 (16 channels) — higher-order decoding, whose AllRAD products once took
 //                    nalgebra's runtime-dispatched SIMD path (PCM consistency 3.3)
 //   objects-cartesian  1 Objects channel with CartesianPosition + extent — the only fixture that
@@ -31,6 +33,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -240,6 +243,49 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
     return {doc, uid_strs};
 }
 
+// Cartesian object for the Triple Balance room renderer, which accepts only equal-size extent
+// (width = height = depth) and no diffuse. Four 250 ms blocks move the source through the room
+// and change its size, so the position and size smoothing and the size lattice are exercised.
+[[nodiscard]] BuiltDoc build_objects_room() {
+    struct Step {
+        float x;
+        float y;
+        float z;
+        float size;
+    };
+    constexpr std::array<Step, 4> k_steps{{{-0.5F, 0.75F, 0.0F, 0.0F},
+                                           {0.25F, 0.5F, 0.25F, 0.25F},
+                                           {0.75F, -0.25F, 0.5F, 0.625F},
+                                           {-0.25F, -0.75F, 0.875F, 0.125F}}};
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"ObjRoomCF"},
+                                                  fixture::TypeDefinition::objects);
+    for (std::size_t i = 0; i < k_steps.size(); ++i) {
+        const auto& step = k_steps.at(i);
+        fixture::AudioBlockFormatObjects block{
+            fixture::CartesianPosition{fixture::X{step.x}, fixture::Y{step.y}, fixture::Z{step.z}}};
+        block.set(fixture::Cartesian{true});
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{250} * static_cast<int>(i)}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{250}}});
+        block.set(fixture::Width{step.size});
+        block.set(fixture::Height{step.size});
+        block.set(fixture::Depth{step.size});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ObjRoomPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
+    doc->add(pf);
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids{wire_channel(doc, cf, pf, "ObjRoom")};
+    finish_doc(doc, uids, "ObjectsRoom");
+    std::vector<std::string> uid_strs;
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
+    });
+    return {doc, uid_strs};
+}
+
 [[nodiscard]] BuiltDoc build_hoa(int max_order) {
     // Full ACN order up to max_order: (0,0) (1,-1) (1,0) (1,1) (2,-2) ...
     struct Component {
@@ -302,7 +348,7 @@ void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
               << "kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n"
-              << "     | directspeakers | hoa | hoa3\n";
+              << "     | objects-room | directspeakers | hoa | hoa3\n";
 }
 
 } // namespace
@@ -337,6 +383,9 @@ int main(int argc, char** argv) try {
     } else if (kind == "hoa") {
         built = build_hoa(1);
         seed = 0x44444444U;
+    } else if (kind == "objects-room") {
+        built = build_objects_room();
+        seed = 0x88888888U;
     } else if (kind == "hoa3") {
         built = build_hoa(3);
         seed = 0x77777777U;
