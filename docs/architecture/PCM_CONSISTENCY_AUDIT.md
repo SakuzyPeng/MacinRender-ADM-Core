@@ -156,7 +156,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
 | S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
 | S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁 |
-| S08 | 已处理 | 3.5：在 libstdc++ 上复现（40 个同起点块时旧实现生效的不是文档中的最后一块）；六处按起点排序改为稳定排序，同起点块保持场景（ADM 文档）顺序、最后一块生效，`params-*` 用例设为门禁 |
+| S08 | 已处理 | 3.5：在 libstdc++ 上复现（40 个同起点块时旧实现生效的不是文档中的最后一块）。规则：同起点块保持场景（ADM 文档）顺序，最后一块在其整个区间生效，被覆盖块不留下分量、插值前驱或路由判断。双耳、EAR、VBAP、HOA、Apple、22.2 LFE 路由与 VBAP 高度判断都在建立增益、总线或路由前经 `render_common::last_blocks_at_each_start` 只保留每个起点的最后一块；`binaural_render_fixture_test` 与 `same_start_blocks_test` 与仅含获胜块的场景逐位比较，`params-*` 用例设为门禁 |
 
 ## C++ 剩余执行点
 
@@ -389,7 +389,8 @@ Linux x64 上原有 216 个 PCM id 不变；`e0ef382` 的 Consistency 3887402058
 
 **3.5 状态**：ADM 导入的 dB 增益与 Cartesian DirectSpeakers 投影改用 `libm`（N02），各 Rust crate 的生产代码不再调用平台初等函数；
 CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十进制解析，标签 / UID 规范化只看 ASCII（N01）；核对后 N03 不再有需要迁移的
-增益入口；同起点块改为按 ADM 文档顺序稳定排序、最后一块生效（S08，在 libstdc++ 上复现了旧实现的错误生效块）。新增 `params` 夹具、
+增益入口；同起点块在各后端建立增益、总线或路由前只保留 ADM 文档顺序中的最后一块（S08，在 libstdc++ 上复现了旧实现的错误生效块；
+合并后又修正了双耳取到同起点第一块、EAR / VBAP / HOA 从被覆盖块插值、Apple LFE 总线与 22.2 LFE 路由残留被覆盖块的问题）。新增 `params` 夹具、
 5 个 `params-*` 离线用例与 3 个 `adm-import` / `decimal` 内核文件，PCM 门禁增至 233 个，内核文件 231 个中 226 个设为门禁。
 Linux x64 上原有 228 个 PCM id 不变；`75e38ae` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过，
 233 个 PCM id 与 231 个内核文件三平台相同，253 项门禁无失败，诊断检查点全部相同。见 [3.5 记录](RUST_PARAMETER_ENTRY.md)。

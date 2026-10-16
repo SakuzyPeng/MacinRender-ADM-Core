@@ -107,3 +107,13 @@ clang-format 与 clang-tidy 无告警；命令行越界与非数字的取值仍�
 - A/B 两种配置下 233 个 PCM id 三平台相同，包括 5 个 `params-*` 用例（含经命令行解析听者朝向的 `params-binaural-rotated`）；253 项门禁无失败；
 - 231 个内核文件全部三平台相同，包括 `adm-import.10-gain.f32`、`adm-import.20-cartesian.f32` 与 `decimal.10-parse.f64`；
 - 诊断检查点 78,459 个（每对平台 25,952 个用例检查点与 201 个内核检查点）全部三平台相同。
+
+**同起点块修正后（本机，Linux x64，config A）。** 合并后双耳与其余后端改为只保留每个起点的最后一块。与 3.5 的采集相比，
+原有 228 个 PCM id 与 231 个内核文件全部不变，只有 5 个 `params-*` 用例改变：
+- EAR、VBAP 与 HOA 只有开头 5 ms 默认插值段改变（分别 960、480 与 3,600 个样本，最大差 0.21），获胜块不再从被覆盖块渐变；
+- 两个双耳用例的全部样本改变，生效块由同起点的第一块改为最后一块。
+
+比较器自检 233 个 PCM id、253 项门禁无失败。ctest 80 项全部通过（新增 `mr_adm_same_start_blocks_tests`）。
+`lfe_routing_test` 原先把 LFE1 与 LFE2 块放在同一轨道的同一起点上；按本规则 LFE2 会覆盖 LFE1。因此“两个语义 LFE”的用例改为把
+LFE2 放在另一条轨道上，重复的 LFE1 块改用不同起点。clang-format 与 clang-tidy 无告警。上面的三平台结果对应修正前的 `75e38ae`，
+`params-*` 的新结果需要重新验收。
