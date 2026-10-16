@@ -4,16 +4,16 @@ pub fn cart(p: [f64; 3]) -> Vec3 {
     let a = -p[0] * (std::f64::consts::PI / 180.0);
     let e = p[1] * (std::f64::consts::PI / 180.0);
     Vec3::new(
-        a.sin() * e.cos() * p[2],
-        a.cos() * e.cos() * p[2],
-        e.sin() * p[2],
+        libm::sin(a) * libm::cos(e) * p[2],
+        libm::cos(a) * libm::cos(e) * p[2],
+        libm::sin(e) * p[2],
     )
 }
 pub fn azimuth(p: Vec3) -> f64 {
-    -p.x.atan2(p.y).to_degrees()
+    -libm::atan2(p.x, p.y).to_degrees()
 }
 pub fn elevation(p: Vec3) -> f64 {
-    p.z.atan2(p.x.hypot(p.y)).to_degrees()
+    libm::atan2(p.z, libm::hypot(p.x, p.y)).to_degrees()
 }
 pub fn inside_angle(mut x: f64, start: f64, mut end: f64, tol: f64) -> bool {
     // rem_euclid also bounds work for finite but very large authored angles.
@@ -39,7 +39,7 @@ pub fn vertex_order(points: &[Vec3]) -> Vec<usize> {
     let mut order: Vec<_> = (0..points.len()).collect();
     let angle = |i: usize| {
         let p = points[i] - centre;
-        p.dot(&a).atan2(p.dot(&b))
+        libm::atan2(p.dot(&a), p.dot(&b))
     };
     order.sort_by(|&i, &j| angle(i).total_cmp(&angle(j)));
     order

@@ -328,7 +328,7 @@ impl Panner {
             normalize(&mut g);
             let front = p[..3].iter().copied().fold(0.0, f64::max);
             let back = p[3..].iter().copied().fold(0.0, f64::max);
-            let scale = 0.5f64.powf(0.5 * back / (front + back));
+            let scale = libm::pow(0.5, 0.5 * back / (front + back));
             let mut out = vec![0.0; self.count];
             for i in 0..2 {
                 out[self.stereo_ids[i]] = g[i] * scale;
