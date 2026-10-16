@@ -419,7 +419,8 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
     bool screen_warned = false;
     for (const auto& object : plan.scene.objects) {
         const bool screen_ref = std::ranges::any_of(object.tracks, [](const auto& track) {
-            return std::ranges::any_of(track.blocks, [](const auto& block) { return block.screen_ref; });
+            return std::ranges::any_of(render_common::last_blocks_at_each_start(track.blocks),
+                                       [](const auto* block) { return block->screen_ref; });
         });
         auto reference = screen_ref ? resolve_reference_screen(plan.scene, object.id, plan.screens)
                                     : Result<ScreenGeometry>{ScreenGeometry{}};
@@ -439,23 +440,28 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
             description.id = std::uint64_t{source} + 1;
             description.screens = room_internal::screens(plan.screens, *reference);
             description.position[1] = 1;
-            if (!track.ds_blocks.empty()) {
-                description.role = render_common::direct_speakers_block_is_lfe(track.ds_blocks[0]) ? 2U : 1U;
+            // Only the last block at each start is in effect (S08): an overwritten block leaves no role,
+            // live label, ramp origin or activity behind.
+            const auto object_blocks = render_common::last_blocks_at_each_start(track.blocks);
+            const auto direct_blocks = render_common::last_blocks_at_each_start(track.ds_blocks);
+            if (!direct_blocks.empty()) {
+                description.role = render_common::direct_speakers_block_is_lfe(*direct_blocks.front()) ? 2U : 1U;
             }
             data->descriptions.push_back(description);
             data->channels.push_back(*track.channel_index);
             data->objects.push_back(object.id);
-            data->labels.push_back(!track.ds_blocks.empty() && !track.ds_blocks[0].speaker_labels.empty()
-                                       ? render_common::canonicalise_speaker_label(track.ds_blocks[0].speaker_labels[0])
-                                       : std::string{});
+            data->labels.push_back(
+                !direct_blocks.empty() && !direct_blocks.front()->speaker_labels.empty()
+                    ? render_common::canonicalise_speaker_label(direct_blocks.front()->speaker_labels.front())
+                    : std::string{});
             MradmRoomCommand inactive{};
             inactive.element = source;
             inactive.changed = k_fields;
             inactive.state = default_state();
             inactive.state.active = 0;
             data->events.push_back({0, 0, inactive});
-            for (std::size_t i = 0; i < track.blocks.size(); ++i) {
-                const auto& block = track.blocks[i];
+            for (std::size_t i = 0; i < object_blocks.size(); ++i) {
+                const auto& block = *object_blocks[i];
                 auto p = position(block.position, object);
                 if (!p) {
                     return tl::unexpected{p.error()};
@@ -479,7 +485,7 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
                     logs.log(LogLevel::warning, "room-binaural", "未配置重放屏幕，screenRef 保留原方向");
                     screen_warned = true;
                 }
-                const auto next = i + 1 < track.blocks.size() ? track.blocks[i + 1].start_sample : data->frames;
+                const auto next = i + 1 < object_blocks.size() ? object_blocks[i + 1]->start_sample : data->frames;
                 const auto end = std::min({block.end_sample, object.end_sample, next, data->frames});
                 const auto ramp =
                     i == 0 || block.jump_position
@@ -487,8 +493,8 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
                         : block.interp_length_samples.value_or(static_cast<std::uint64_t>(plan.default_interp_ms) * 48);
                 add_block(*data, source, block.start_sample, end, ramp, state);
             }
-            for (std::size_t i = 0; i < track.ds_blocks.size(); ++i) {
-                const auto& block = track.ds_blocks[i];
+            for (std::size_t i = 0; i < direct_blocks.size(); ++i) {
+                const auto& block = *direct_blocks[i];
                 if ((description.role == 2) != render_common::direct_speakers_block_is_lfe(block)) {
                     return make_error(ErrorCode::unsupported, "同一房间声源不能在全频与 LFE 角色间切换");
                 }
@@ -515,7 +521,7 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
                     }
                     std::ranges::copy(*p, std::begin(state.position));
                 }
-                const auto next = i + 1 < track.ds_blocks.size() ? track.ds_blocks[i + 1].start_sample : data->frames;
+                const auto next = i + 1 < direct_blocks.size() ? direct_blocks[i + 1]->start_sample : data->frames;
                 add_block(*data,
                           source,
                           block.start_sample,
