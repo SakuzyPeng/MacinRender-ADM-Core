@@ -47,8 +47,15 @@ EAR、VBAP、HOA、双耳 spreader、双耳 OLA 与 Apple 后端在每个声道�
 introsort，等价元素的顺序就会随实现改变。
 
 3.5 先在 Linux x64（libstdc++）上复现：一个声道 40 个同起点块时，旧实现生效的是列表中间的一块，而不是文档中的最后一块，四个后端的
-输出能量分布都明显不同。规则定义为：**起点相同的块保持场景中的顺序（ADM 文档顺序，导入不重排），最后一块生效**；六处排序都改为
+输出能量分布都明显不同。规则定义为：**起点相同的块保持场景中的顺序（ADM 文档顺序，导入不重排），最后一块生效**；各处排序改为
 `std::ranges::stable_sort`。Rust 侧按 C++ 给出的顺序使用块表，不再排序。
+
+双耳 OLA 与 spreader 的取块器从头查找未结束的块，单独稳定排序仍会选中同起点的第一块。因此双耳在展开 Objects 的 point、cloud、
+diffuse、divergence 与 spreader 分量之前，按起点稳定排序并只保留场景顺序中的最后一块；DirectSpeakers 同样在建立独立源之前处理。
+被覆盖块的分量不会残留，也不会在获胜块较早结束后重新生效。文件流式渲染的拓扑重建复用这一处理。
+
+`binaural_render_fixture_test` 使用两组乱序、每组 40 个同起点块，与仅含各组最后一块的场景逐位比较 PCM。覆盖 point、cloud / diffuse / divergence、
+全 diffuse 与 DirectSpeakers（含被覆盖的 LFE），两种平滑长度，以及离线渲染、文件流式渲染和离线 SAF spreader；获胜块较短，另检查被覆盖块不会恢复。
 
 ## 新增用例与内核门禁
 

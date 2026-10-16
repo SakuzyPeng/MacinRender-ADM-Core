@@ -1290,6 +1290,135 @@ bool binaural_pcm_equal(std::span<const float> actual, std::span<const float> ex
         actual, expected, [](float a, float b) { return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b); });
 }
 
+struct SameStartOutput {
+    std::vector<float> offline;
+    std::vector<float> streaming;
+};
+
+std::optional<SameStartOutput> render_same_start_plan(mradm::RenderPlan plan) {
+    const auto output = temp_path("mr_binaural_same_start", ".wav");
+    FileGuard output_guard(output);
+    plan.output_path = output.string();
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "same-start: prepare") ||
+        !check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
+               "same-start: offline rendering")) {
+        return std::nullopt;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(output.string());
+    if (!check(reader && reader->channels() == 2U && reader->frame_count() == plan.scene.info.num_frames,
+               "same-start: complete stereo output")) {
+        return std::nullopt;
+    }
+    SameStartOutput result;
+    result.offline.resize(static_cast<std::size_t>(reader->frame_count()) * 2U);
+    reader->read(result.offline.data(), reader->frame_count());
+    if (plan.binaural_spread_mode != mradm::BinauralSpreadMode::saf_spreader) {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!check(stream.has_value(), "same-start: file streaming opens")) {
+            return std::nullopt;
+        }
+        (*stream)->set_listener_orientation(plan.listener_orientation);
+        auto samples = pull_binaural_stream_frames(**stream, plan.scene.info.num_frames);
+        if (!samples || !check(samples->size() == result.offline.size(), "same-start: complete file stream")) {
+            return std::nullopt;
+        }
+        result.streaming = std::move(*samples);
+    }
+    return result;
+}
+
+enum class SameStartKind : uint8_t { point, cloud, diffuse, direct_speakers };
+
+void set_same_start_blocks(mradm::SceneTrackRef& track, SameStartKind kind, bool include_overwritten) {
+    track.blocks.clear();
+    track.ds_blocks.clear();
+    // Interleave two starts in reverse chronological order. Each winning block is shorter than
+    // its overwritten peers: those peers must not resume when the winner ends.
+    for (int i = include_overwritten ? 0 : 39; i < 40; ++i) {
+        for (int group = 1; group >= 0; --group) {
+            const bool winner = i == 39;
+            const uint64_t start = static_cast<uint64_t>(group) * 2048U;
+            const uint64_t end = start + (winner ? 1024U : 2048U);
+            const float winning_azimuth = group == 0 ? 97.5F : -37.5F;
+            const float azimuth = winner ? winning_azimuth : -97.5F + (5.0F * static_cast<float>(i));
+            if (kind == SameStartKind::direct_speakers) {
+                mradm::SceneDirectSpeakersBlock block;
+                block.start_sample = start;
+                block.end_sample = end;
+                block.azimuth = azimuth;
+                block.has_position = true;
+                block.gain = winner ? 0.375F : 0.9F;
+                block.head_locked = winner && group == 1;
+                if (!winner) {
+                    block.low_pass_hz = 120.0F;
+                }
+                track.ds_blocks.push_back(block);
+                continue;
+            }
+            mradm::SceneObjectBlock block;
+            block.start_sample = start;
+            block.end_sample = end;
+            block.position.azimuth = azimuth;
+            block.gain = winner ? 0.375F : 0.9F;
+            block.head_locked = winner && group == 1;
+            // Point winners must remove every lane of an earlier extent/diffuse/divergent block;
+            // diffuse winners must remove earlier direct lanes, including the SAF spreader lane.
+            if (!winner || kind == SameStartKind::cloud) {
+                block.width = 0.4F;
+                block.height = 0.2F;
+                block.diffuse = 0.25F;
+                block.divergence = 0.5F;
+            } else if (kind == SameStartKind::diffuse) {
+                block.diffuse = 1.0F;
+            }
+            track.blocks.push_back(block);
+        }
+    }
+}
+
+bool verify_binaural_same_start_blocks() {
+    constexpr uint32_t k_frames = 4096U;
+    const auto input = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{100}, k_frames);
+    FileGuard input_guard(input);
+    const auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U,
+               "same-start: input scene")) {
+        return false;
+    }
+    bool ok = true;
+    for (const auto kind :
+         {SameStartKind::point, SameStartKind::cloud, SameStartKind::diffuse, SameStartKind::direct_speakers}) {
+        for (const auto mode : {mradm::BinauralSpreadMode::cloud, mradm::BinauralSpreadMode::saf_spreader}) {
+            for (const uint32_t smoothing : {0U, 1024U}) {
+                mradm::RenderPlan plan;
+                plan.input_path = input.string();
+                plan.output_layout = "binaural";
+                plan.scene = *scene;
+                plan.listener_orientation = {37.0F, 13.0F, -9.0F};
+                plan.binaural_spread_mode = mode;
+                plan.object_smoothing_frames = smoothing;
+                auto& track = plan.scene.objects.front().tracks.front();
+                set_same_start_blocks(track, kind, false);
+                const auto expected = render_same_start_plan(plan);
+                set_same_start_blocks(track, kind, true);
+                const auto actual = render_same_start_plan(plan);
+                if (!actual || !expected) {
+                    return false;
+                }
+                ok &= check(binaural_pcm_equal(actual->offline, expected->offline),
+                            "same-start: offline PCM equals only the last blocks");
+                ok &= check(binaural_pcm_equal(actual->streaming, expected->streaming),
+                            "same-start: file-streaming PCM equals only the last blocks");
+            }
+        }
+    }
+    return ok;
+}
+
 bool verify_binaural_seek_controls(mradm::IRenderer& renderer,
                                    const mradm::IPreparedRender& prepared,
                                    const mradm::RenderPlan& plan,
@@ -1618,6 +1747,7 @@ bool verify_binaural_stream_topology_reprepare() {
 // A listener head orientation rotates scene-relative sources into the head frame before HRTF lookup:
 // turning left (yaw +90°) swings a front source onto the right ear. ADM headLocked and explicit live
 // overrides exempt head-relative sources, while a gain-only live override must continue to inherit ADM.
+// NOLINTNEXTLINE(readability-function-size): keep the inherited and live head-lock cases together.
 bool verify_binaural_head_tracking() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
@@ -1884,6 +2014,7 @@ int main() try {
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
     ok &= verify_binaural_stream_matches_window();
+    ok &= verify_binaural_same_start_blocks();
     ok &= verify_binaural_stream_seek();
     ok &= verify_binaural_stream_gain_override();
     ok &= verify_binaural_stream_live_gain_ramp();

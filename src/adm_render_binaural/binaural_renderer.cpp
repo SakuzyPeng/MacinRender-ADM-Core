@@ -607,6 +607,26 @@ active_spreader_block_at(const SpreaderTrack& track, uint64_t cursor, uint64_t c
     return nullptr;
 }
 
+// Resolve equal starts before splitting metadata into point, cloud, diffuse and spreader lanes.
+// Otherwise an overwritten block can leave a lane that the winning block never creates. The last
+// block in scene/document order wins for the entire interval, even when it ends before its peers.
+template <typename Block> std::vector<const Block*> last_blocks_at_each_start(const std::vector<Block>& blocks) {
+    std::vector<const Block*> ordered;
+    ordered.reserve(blocks.size());
+    std::ranges::transform(blocks, std::back_inserter(ordered), [](const auto& block) { return &block; });
+    std::ranges::stable_sort(ordered, {}, &Block::start_sample);
+    std::size_t count = 0;
+    for (const auto* block : ordered) {
+        if (count > 0 && ordered[count - 1]->start_sample == block->start_sample) {
+            ordered[count - 1] = block;
+        } else {
+            ordered[count++] = block;
+        }
+    }
+    ordered.resize(count);
+    return ordered;
+}
+
 std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink& logs) {
     std::vector<SpreaderTrack> tracks;
     const auto lock_speakers = binaural_lock_speakers();
@@ -629,7 +649,8 @@ std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink&
                 st.seed *= 1099511628211ULL;
             }
             st.object_gain = obj.gain;
-            for (const auto& blk : track.blocks) {
+            for (const auto* block : last_blocks_at_each_start(track.blocks)) {
+                const auto& blk = *block;
                 const auto prepared =
                     render_common::prepare_object_block(blk, obj, lock_speakers, logs, "binaural", screen_ref_warned);
                 SpreaderBlock sb;
@@ -756,7 +777,8 @@ void append_object_track_sources(const SceneObject& obj,
     BinauralSourceBank track_sources;
     init_source_bank(track_sources, channel_index, obj.gain, obj.id);
 
-    for (const auto& blk : track.blocks) {
+    for (const auto* block : last_blocks_at_each_start(track.blocks)) {
+        const auto& blk = *block;
         const auto prepared =
             render_common::prepare_object_block(blk, obj, lock_speakers, logs, "binaural", screen_ref_warned);
         for (std::size_t source_index = 0; source_index < prepared.sources.size(); ++source_index) {
@@ -829,7 +851,8 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
             }
 
             // DirectSpeakers-type blocks.
-            for (const auto& ds : track.ds_blocks) {
+            for (const auto* block : last_blocks_at_each_start(track.ds_blocks)) {
+                const auto& ds = *block;
                 // Per-channel live-gain key: the channel's normalized speaker label (empty → whole-object).
                 const std::string ds_label_key =
                     ds.speaker_labels.empty() ? std::string{}
