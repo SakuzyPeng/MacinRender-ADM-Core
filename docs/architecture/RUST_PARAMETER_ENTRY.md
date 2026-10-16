@@ -65,9 +65,13 @@ diffuse、divergence 与 spreader 分量之前，按起点稳定排序并只保�
 因此双耳的处理移入 `render_common::last_blocks_at_each_start`。EAR、VBAP、HOA、Apple、22.2 LFE 路由与 VBAP 高度判断都在建立增益、
 总线或路由之前调用它，只保留每个起点的最后一块。
 
+EAR、VBAP 与 HOA 的文件流式渲染也从这组生效块中绑定声道级实时增益标签。若同起点的 `M-030` 被 `M+030` 覆盖，
+针对 `M+030` 的增益与静音会作用于该声道，`M-030` 不再匹配；若获胜块没有标签，则只匹配整个对象的实时覆盖。
+
 `same_start_blocks_test` 对其余后端做同样的比较：
 - 覆盖 EAR 与 VBAP（4+5+0 Objects，以及 9+10+3 split-power 的 DirectSpeakers）和 HOA3（Objects 与 DirectSpeakers）。
 - 每例用两组乱序、每组 40 个同起点块，与只含各组获胜块的场景比较，覆盖两种平滑长度。离线渲染与碎片分块的文件流式渲染都要求逐位相同。
+- 文件流式渲染另覆盖获胜块有标签或无标签，以及按获胜标签、被覆盖标签和整个对象设置增益或静音，共 36 组实时覆盖比较。
 - 修改前，EAR、VBAP 与 HOA 的 Objects 用例全部不同，EAR 与 VBAP 的 split-power 用例准备失败。
 - Apple 后端只在 macOS 上编译，没有加 PCM 回归。
 

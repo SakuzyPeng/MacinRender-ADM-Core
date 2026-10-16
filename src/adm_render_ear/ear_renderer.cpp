@@ -294,7 +294,7 @@ void calculate_direct_speakers(const dsp::EarCalculator& calculator,
     calculator.direct_speakers(metadata.values, metadata.labels, gains);
 }
 
-Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
+Result<void> append_direct_speakers_blocks(std::span<const SceneDirectSpeakersBlock* const> blocks,
                                            const SceneObject& obj,
                                            ChannelGainInfo& cg,
                                            dsp::EarCalculator& direct_speakers_calc,
@@ -302,7 +302,7 @@ Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
                                            const render_common::ResolvedDirectSpeakersMatrix* matrix,
                                            const render_common::LfeRoutingPlan& lfe_routing,
                                            LogSink& logs) {
-    for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.ds_blocks)) {
+    for (const auto* resolved_block : blocks) {
         const auto& ds = *resolved_block;
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
@@ -422,15 +422,16 @@ Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
             cg.object_id = obj.id;
-            // Capture the channel's DirectSpeakers label so a per-channel live override can target
-            // one bed channel (Objects tracks have no ds_blocks → key stays empty → whole-object).
-            if (!track.ds_blocks.empty() && !track.ds_blocks.front().speaker_labels.empty()) {
+            // Bind live controls from the same resolved blocks used to build the channel's gains.
+            // An overwritten block must not leave its speaker label behind.
+            const auto direct_blocks = render_common::last_blocks_at_each_start(track.ds_blocks);
+            if (!direct_blocks.empty() && !direct_blocks.front()->speaker_labels.empty()) {
                 cg.speaker_label_key =
-                    render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
+                    render_common::canonicalise_speaker_label(direct_blocks.front()->speaker_labels.front());
             }
             append_object_blocks(track, obj, cg, calculator, speakers, num_out, logs, screen_ref_warned);
             auto direct_speakers =
-                append_direct_speakers_blocks(track, obj, cg, calculator, num_out, matrix, lfe_routing, logs);
+                append_direct_speakers_blocks(direct_blocks, obj, cg, calculator, num_out, matrix, lfe_routing, logs);
             if (!direct_speakers) {
                 return tl::unexpected{direct_speakers.error()};
             }

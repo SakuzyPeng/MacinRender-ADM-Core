@@ -237,11 +237,12 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
             cg.object_id = obj.id;
-            // Capture the channel's DirectSpeakers label so a per-channel live override can target
-            // one bed channel (Objects tracks have no ds_blocks → key stays empty → whole-object).
-            if (!track.ds_blocks.empty() && !track.ds_blocks.front().speaker_labels.empty()) {
+            // Bind live controls from the same resolved blocks used to build the channel's gains.
+            // An overwritten block must not leave its speaker label behind.
+            const auto direct_blocks = render_common::last_blocks_at_each_start(track.ds_blocks);
+            if (!direct_blocks.empty() && !direct_blocks.front()->speaker_labels.empty()) {
                 cg.speaker_label_key =
-                    render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
+                    render_common::canonicalise_speaker_label(direct_blocks.front()->speaker_labels.front());
             }
 
             // Objects blocks use SAF VBAP/MDAP.
@@ -276,7 +277,7 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
             // DirectSpeakers blocks use the selected label or position path. LFE
             // identification always takes precedence and retains dedicated routing.
             // DS channels are treated as jump_position=true (no interpolation).
-            for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.ds_blocks)) {
+            for (const auto* resolved_block : direct_blocks) {
                 const auto& ds = *resolved_block;
                 std::vector<float> gains(num_out, 0.0F);
 
