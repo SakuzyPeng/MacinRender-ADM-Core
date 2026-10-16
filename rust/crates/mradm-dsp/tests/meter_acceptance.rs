@@ -65,25 +65,41 @@ struct Reading {
     short_term: f64,
 }
 
-fn reference(samples: &[f32], weights: &[f64]) -> Reading {
-    let power = reference_power(samples, weights);
+struct GatedReading {
+    integrated: f64,
+    relative_threshold: f64,
+    relative_rejected: usize,
+}
+
+fn reference_gating(power: &[f64]) -> GatedReading {
     let step = 4_800;
     let blocks: Vec<f64> = (0..)
         .map(|block| block * step + 4 * step)
         .take_while(|&end| end <= power.len())
-        .map(|end| window(&power, end, 4 * step))
+        .map(|end| window(power, end, 4 * step))
         .collect();
     let absolute = 10f64.powf((-70.0 + 0.691) / 10.0);
     let gated: Vec<f64> = blocks.into_iter().filter(|&e| e >= absolute).collect();
-    let integrated = if gated.is_empty() {
-        f64::NEG_INFINITY
-    } else {
-        let relative = gated.iter().sum::<f64>() / gated.len() as f64 * 0.1;
-        let kept: Vec<f64> = gated.into_iter().filter(|&e| e >= relative).collect();
-        loudness(kept.iter().sum::<f64>() / kept.len() as f64)
-    };
+    if gated.is_empty() {
+        return GatedReading {
+            integrated: f64::NEG_INFINITY,
+            relative_threshold: f64::NEG_INFINITY,
+            relative_rejected: 0,
+        };
+    }
+    let relative = gated.iter().sum::<f64>() / gated.len() as f64 * 0.1;
+    let kept: Vec<f64> = gated.iter().copied().filter(|&e| e >= relative).collect();
+    GatedReading {
+        integrated: loudness(kept.iter().sum::<f64>() / kept.len() as f64),
+        relative_threshold: loudness(relative),
+        relative_rejected: gated.len() - kept.len(),
+    }
+}
+
+fn reference(samples: &[f32], weights: &[f64]) -> Reading {
+    let power = reference_power(samples, weights);
     Reading {
-        integrated,
+        integrated: reference_gating(&power).integrated,
         momentary: loudness(window(&power, power.len(), 19_200)),
         short_term: loudness(window(&power, power.len(), 144_000)),
     }
@@ -228,9 +244,9 @@ fn integrated_loudness_holds_at_every_supported_rate() {
     }
 }
 
-/// Absolute and relative gates around their thresholds. Each programme alternates a level that
-/// must be kept with one that must be gated; the meter has to take the same decisions as the
-/// reference, which is checked through the integrated value.
+/// Absolute and relative gate boundaries. For equal-duration high/low segments, the relative
+/// boundary solves L = 0.1 * (H + L) / 2, so L = H / 19, not H / 10. The independent reference
+/// checks that the low blocks really lie on the intended side before comparing the meter.
 #[test]
 fn gate_boundaries_match_the_reference() {
     // A 1 kHz stereo sine at x dBFS reads x LUFS (the K-weighting gain at 1 kHz is +0.69 dB).
@@ -243,17 +259,29 @@ fn gate_boundaries_match_the_reference() {
         let borrowed: Vec<(f64, &[f64])> = levels.iter().map(|(s, g)| (*s, g.as_slice())).collect();
         sines(48_000, &borrowed)
     };
-    for (a, b) in [
-        (-69.9, -70.1),
-        (-69.98, -70.02),
-        (-20.0, -29.9),
-        (-20.0, -30.1),
-        (-20.0, -29.98),
-        (-20.0, -30.02),
+    let relative_low = -20.0 - 10.0 * 19f64.log10();
+    for (a, b, keeps_low) in [
+        (-69.9, -70.1, None),
+        (-69.98, -70.02, None),
+        (-20.0, relative_low + 0.1, Some(true)),
+        (-20.0, relative_low - 0.1, Some(false)),
+        (-20.0, relative_low + 0.02, Some(true)),
+        (-20.0, relative_low - 0.02, Some(false)),
     ] {
         let samples = near(a, b);
         let (meter, _) = measure(&samples, 48_000, &[], 4_800);
-        let truth = reference(&samples, &[1.0, 1.0]);
+        let power = reference_power(&samples, &[1.0, 1.0]);
+        let truth = reference_gating(&power);
+        if let Some(keeps_low) = keeps_low {
+            let low = loudness(window(&power, power.len(), 19_200));
+            assert!(
+                (low - truth.relative_threshold).abs() < 0.11,
+                "{a}/{b}: low {low} is not near the relative gate {}",
+                truth.relative_threshold
+            );
+            assert_eq!(low >= truth.relative_threshold, keeps_low, "{a}/{b}");
+            assert_eq!(truth.relative_rejected == 0, keeps_low, "{a}/{b}");
+        }
         assert!(
             (meter.integrated - truth.integrated).abs() < 1e-9,
             "{a}/{b}: meter {} reference {}",
@@ -393,14 +421,15 @@ fn mixed_programme(rate: u32) -> Vec<f32> {
     samples
 }
 
-fn bits(meter: &Meter, peak: &Meter) -> Vec<u64> {
-    let mut out = vec![
+fn bits(meter: &Meter, peak: &Meter) -> [u64; 6] {
+    [
         meter.integrated().unwrap().to_bits(),
         meter.momentary().unwrap().to_bits(),
         meter.shortterm().unwrap().to_bits(),
-    ];
-    out.extend((0..2).map(|c| peak.true_peak(c).unwrap().to_bits()));
-    out
+        peak.integrated().unwrap().to_bits(),
+        peak.true_peak(0).unwrap().to_bits(),
+        peak.true_peak(1).unwrap().to_bits(),
+    ]
 }
 
 /// The renderer feeds the meter one render block at a time, so readings must not depend on the
@@ -410,39 +439,57 @@ fn bits(meter: &Meter, peak: &Meter) -> Vec<u64> {
 fn chunking_and_reset_are_bit_exact() {
     for rate in RATES {
         let samples = mixed_programme(rate);
-        let mut expected = None;
-        for pattern in [
-            vec![usize::MAX],
-            vec![1],
-            vec![7],
-            vec![127],
-            vec![4_800],
-            vec![1, 4_799, 333, 10_007],
+        let other = tone(rate, 440.0, 0.0, 0.9, 0.7);
+        // A seek between 100 ms boundaries must restart the filter-cleanup grid too.
+        let (head, tail) = samples.split_at(2 * (rate as usize * 2 + rate as usize / 20));
+        for (scenario, prefill, input) in [
+            ("unrelated input", other.as_slice(), samples.as_slice()),
+            ("mid-programme seek", head, tail),
         ] {
-            let mut meter = Meter::new(2, rate, MeterMode::Monitor, &[]).unwrap();
-            let mut peak = Meter::new(2, rate, MeterMode::IntegratedTruePeak, &[]).unwrap();
-            // Reset after unrelated input must leave no trace.
-            let other = tone(rate, 440.0, 0.0, 0.9, 0.7);
-            meter.add_frames(&other).unwrap();
-            peak.add_frames(&other).unwrap();
-            meter.reset();
-            peak.reset();
-            let mut offset = 0;
-            for &size in pattern.iter().cycle() {
-                if offset == samples.len() {
-                    break;
+            // This baseline never sees prefill or reset, so a broken reset cannot contaminate
+            // both the actual readings and their expected values.
+            let mut fresh = Meter::new(2, rate, MeterMode::Monitor, &[]).unwrap();
+            let mut fresh_peak = Meter::new(2, rate, MeterMode::IntegratedTruePeak, &[]).unwrap();
+            let empty = bits(&fresh, &fresh_peak);
+            fresh.add_frames(input).unwrap();
+            fresh_peak.add_frames(input).unwrap();
+            let expected = bits(&fresh, &fresh_peak);
+            for pattern in [
+                vec![usize::MAX],
+                vec![1],
+                vec![7],
+                vec![127],
+                vec![4_800],
+                vec![1, 4_799, 333, 10_007],
+            ] {
+                let mut meter = Meter::new(2, rate, MeterMode::Monitor, &[]).unwrap();
+                let mut peak = Meter::new(2, rate, MeterMode::IntegratedTruePeak, &[]).unwrap();
+                meter.add_frames(prefill).unwrap();
+                peak.add_frames(prefill).unwrap();
+                meter.reset();
+                peak.reset();
+                assert_eq!(
+                    bits(&meter, &peak),
+                    empty,
+                    "{rate} Hz {scenario}: empty reset"
+                );
+                let mut offset = 0;
+                for &size in pattern.iter().cycle() {
+                    if offset == input.len() {
+                        break;
+                    }
+                    let end = input
+                        .len()
+                        .min(offset.saturating_add(size.saturating_mul(2)));
+                    meter.add_frames(&input[offset..end]).unwrap();
+                    peak.add_frames(&input[offset..end]).unwrap();
+                    offset = end;
                 }
-                let end = samples
-                    .len()
-                    .min(offset.saturating_add(size.saturating_mul(2)));
-                meter.add_frames(&samples[offset..end]).unwrap();
-                peak.add_frames(&samples[offset..end]).unwrap();
-                offset = end;
-            }
-            let readings = bits(&meter, &peak);
-            match &expected {
-                None => expected = Some(readings),
-                Some(first) => assert_eq!(&readings, first, "{rate} Hz chunks {pattern:?}"),
+                assert_eq!(
+                    bits(&meter, &peak),
+                    expected,
+                    "{rate} Hz {scenario} chunks {pattern:?}"
+                );
             }
         }
     }
@@ -475,8 +522,12 @@ fn long_silence_keeps_the_programme_reading() {
         "integrated after ten minutes of silence"
     );
     assert_eq!(
-        after[3..],
-        early[3..],
+        after[3], early[3],
+        "offline integrated after ten minutes of silence"
+    );
+    assert_eq!(
+        after[4..],
+        early[4..],
         "true peak after ten minutes of silence"
     );
     assert_eq!(meter.momentary().unwrap(), f64::NEG_INFINITY);
