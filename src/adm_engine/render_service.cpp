@@ -481,33 +481,39 @@ RenderResult RenderService::render(const RenderRequest& request,
     {
         const double start_sec = request.options.render_start_sec;
         const bool has_end = request.options.render_end_sec.has_value();
-        if (start_sec > 0.0 || has_end) {
-            if (start_sec < 0.0) {
-                const auto msg = fmt::format("--start must be >= 0 (got {:.6g}s)", start_sec);
+        // NaN and negative starts must also enter validation when no end was supplied.
+        if (start_sec != 0.0 || has_end) {
+            if (trim_sample_rate == 0) {
+                constexpr auto msg = "cannot apply time-range trim: input sample rate is unknown";
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
+            const auto start_frame = dsp::seconds_to_frame(start_sec, trim_sample_rate);
+            if (!start_frame) {
+                const auto msg = fmt::format("--start must be finite and >= 0 (got {:.6g}s)", start_sec);
                 return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
             }
             const double end_sec = request.options.render_end_sec.value_or(0.0);
+            const auto requested_end_frame =
+                has_end ? dsp::seconds_to_frame(end_sec, trim_sample_rate) : std::optional<uint64_t>{trim_total_frames};
+            if (!requested_end_frame) {
+                const auto msg = fmt::format("--end must be finite and >= 0 (got {:.6g}s)", end_sec);
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
             if (has_end && end_sec <= start_sec) {
                 const auto msg =
                     fmt::format("--end ({:.6g}s) must be greater than --start ({:.6g}s)", end_sec, start_sec);
                 return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
             }
-            if (trim_sample_rate == 0) {
-                constexpr auto msg = "cannot apply time-range trim: input sample rate is unknown";
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
             const auto sr = static_cast<double>(trim_sample_rate);
             // Nearest frame, ties away from zero (PCM consistency 3.6); shared with Monitor seek.
-            trim_start_frame = dsp::seconds_to_frame(start_sec, trim_sample_rate).value_or(0);
+            trim_start_frame = *start_frame;
             if (trim_start_frame >= trim_total_frames) {
                 const auto msg = fmt::format("--start ({:.6g}s) is at or beyond the input duration ({:.6g}s)",
                                              start_sec,
                                              static_cast<double>(trim_total_frames) / sr);
                 return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
             }
-            uint64_t end_frame = has_end ? dsp::seconds_to_frame(end_sec, trim_sample_rate).value_or(trim_total_frames)
-                                         : trim_total_frames;
-            end_frame = std::min(end_frame, trim_total_frames);
+            const uint64_t end_frame = std::min(*requested_end_frame, trim_total_frames);
             // The seconds-level "--end > --start" check above can still collapse to
             // an empty frame range once rounded (e.g. both endpoints land in the same
             // frame). Reject it here, before rendering, so we neither waste a full
