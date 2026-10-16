@@ -18,6 +18,8 @@ mod hoa;
 mod meter;
 #[path = "phase2/meter_acceptance.rs"]
 mod meter_acceptance;
+#[path = "phase2/params.rs"]
+mod params;
 #[path = "phase2/post_gain.rs"]
 mod post_gain;
 #[path = "phase2/sofa.rs"]
@@ -325,6 +327,7 @@ fn run(out: &Path, fixtures: &Path) {
     ear_gains::run(out);
     hoa::run(out);
     triple_balance::run(out);
+    params::run(out);
 }
 
 fn main() {

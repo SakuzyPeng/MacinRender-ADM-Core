@@ -45,9 +45,9 @@ struct RenderCliOptions {
     std::string apple_spatial_preset_str{"off"};
     bool apple_speaker_rendering_flags{false};
     // Listener head orientation in degrees (binaural backends — Apple & SAF). NaN = unset → 0.
-    double listener_yaw{std::numeric_limits<double>::quiet_NaN()};
-    double listener_pitch{std::numeric_limits<double>::quiet_NaN()};
-    double listener_roll{std::numeric_limits<double>::quiet_NaN()};
+    float listener_yaw{std::numeric_limits<float>::quiet_NaN()};
+    float listener_pitch{std::numeric_limits<float>::quiet_NaN()};
+    float listener_roll{std::numeric_limits<float>::quiet_NaN()};
     std::string iamf_container_str{"obu"};
     std::string iamf_layers_csv;
 };

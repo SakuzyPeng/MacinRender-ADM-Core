@@ -205,12 +205,12 @@ class EvidenceTests(unittest.TestCase):
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 48)
-        self.assertEqual(len({r['id'] for r in offline}), 48)
+        self.assertEqual(len(offline), 53)
+        self.assertEqual(len({r['id'] for r in offline}), 53)
         self.assertEqual(len(scene), 78)
         streams = common.stream_cases()
         self.assertEqual(len(streams), 24)
-        self.assertEqual(len(common.case_ids()), 228)
+        self.assertEqual(len(common.case_ids()), 233)
         self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear', 'hoa', 'triple-balance'})
         self.assertIn('objects-room', {r['fixture'] for r in offline + streams})
         self.assertTrue(any('--triple-balance-mode' in r['args'] for r in offline))
@@ -420,7 +420,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 228)
+        self.assertEqual(len(names), 231)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -501,6 +501,10 @@ class EvidenceTests(unittest.TestCase):
         triple = [n for n in names if n.startswith('triple-balance.')]
         self.assertEqual(len(triple), 4)
         self.assertTrue(all(gated(n) for n in triple))
+        # Phase 3.5 gates the ADM import projections and the command-line decimal parser.
+        params = [n for n in names if n.startswith(('adm-import.', 'decimal.'))]
+        self.assertEqual(len(params), 3)
+        self.assertTrue(all(gated(n) for n in params))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

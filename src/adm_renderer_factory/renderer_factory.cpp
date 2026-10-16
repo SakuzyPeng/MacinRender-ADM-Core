@@ -1,7 +1,6 @@
 #include "renderer_factory.h"
 
 #include <algorithm>
-#include <cctype>
 #include <set>
 #include <unordered_map>
 
@@ -26,7 +25,7 @@ namespace mradm {
 std::string normalize_output_layout(const std::string& layout) {
     std::string key = layout;
     std::ranges::transform(
-        key, key.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        key, key.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
 
     if (key.empty()) {
         return "binaural";

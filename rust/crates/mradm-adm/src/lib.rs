@@ -3,6 +3,7 @@
 
 mod document;
 mod generate;
+pub mod numeric;
 mod patch;
 mod project;
 pub mod records;
