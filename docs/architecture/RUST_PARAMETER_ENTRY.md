@@ -115,5 +115,12 @@ clang-format 与 clang-tidy 无告警；命令行越界与非数字的取值仍�
 
 比较器自检 233 个 PCM id、253 项门禁无失败。ctest 80 项全部通过（新增 `mr_adm_same_start_blocks_tests`）。
 `lfe_routing_test` 原先把 LFE1 与 LFE2 块放在同一轨道的同一起点上；按本规则 LFE2 会覆盖 LFE1。因此“两个语义 LFE”的用例改为把
-LFE2 放在另一条轨道上，重复的 LFE1 块改用不同起点。clang-format 与 clang-tidy 无告警。上面的三平台结果对应修正前的 `75e38ae`，
-`params-*` 的新结果需要重新验收。
+LFE2 放在另一条轨道上，重复的 LFE1 块改用不同起点。clang-format 与 clang-tidy 无告警。上面的三平台结果对应修正前的 `75e38ae`。
+
+**同起点块修正后的三平台验收。** `c89e81a` 的 Consistency 38907550214 与 CI 38907555184 通过：
+- A/B 两种配置下 233 个 PCM id 三平台相同。5 个 `params-*` 用例的新结果与本机采集逐位相同；253 项门禁无失败。
+- 231 个内核文件全部三平台相同。
+- 诊断检查点 78,459 个全部三平台相同。
+
+同一提交的 Quality 38907559281 因 cppcheck（`uninitMemberVarNoCtor`）报告新测试的后端表成员没有默认初始化而失败；`5686243` 补上初始化，
+只改动这一个测试文件。
