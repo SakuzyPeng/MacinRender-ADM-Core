@@ -640,6 +640,67 @@ bool verify_start_beyond_duration_rejected() {
     return check(!std::filesystem::exists(out_path), "no output written for out-of-range start");
 }
 
+// Both public C++ entry points must reject invalid times before opening an output.
+bool verify_invalid_trim_times_rejected() {
+    const auto in_path = write_render_fixture();
+    const FileGuard in_guard(in_path);
+    mradm::RenderOptions options;
+    options.renderer = mradm::RendererSelection::ear;
+    options.output_layout = "0+5+0";
+    options.peak_limit = false;
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    const auto preview = mradm::PreviewSession::create(in_path, options, logs);
+    if (!check(preview.has_value(), "create preview for invalid trim times")) {
+        return false;
+    }
+    const double inf = std::numeric_limits<double>::infinity();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    struct InvalidTrim {
+        double start{0.0};
+        std::optional<double> end;
+    };
+    const std::array<InvalidTrim, 9> invalid{{{inf, std::nullopt},
+                                              {-inf, std::nullopt},
+                                              {nan, std::nullopt},
+                                              {-0.1, std::nullopt},
+                                              {nan, 1.0},
+                                              {0.0, inf},
+                                              {0.0, -inf},
+                                              {0.0, nan},
+                                              {0.5, nan}}};
+    bool ok = true;
+    for (const auto& window : invalid) {
+        for (const bool use_preview : {false, true}) {
+            const auto out_path = temp_path("mr_trim_invalid_time", ".wav");
+            const FileGuard out_guard(out_path);
+            const auto result = use_preview ? preview->render_window(window.start, window.end, out_path, progress, logs)
+                                            : render_with_trim(in_path, out_path, window.start, window.end);
+            const bool rejected = !result.success() && result.error.code == mradm::ErrorCode::invalid_argument;
+            if (!rejected) {
+                std::cerr << "invalid trim accepted: start=" << window.start << " end=" << window.end.value_or(-1.0)
+                          << " preview=" << use_preview << '\n';
+            }
+            ok &= check(rejected, "invalid trim time returns invalid_argument");
+            ok &= check(!std::filesystem::exists(out_path), "invalid trim time leaves no output");
+        }
+    }
+    return ok;
+}
+
+bool verify_large_finite_end_clamped() {
+    const auto in_path = write_render_fixture();
+    const FileGuard in_guard(in_path);
+    const auto out_path = temp_path("mr_trim_large_end", ".wav");
+    const FileGuard out_guard(out_path);
+    const auto result = render_with_trim(in_path, out_path, 0.0, std::numeric_limits<double>::max());
+    if (!check(result.success(), "finite end whose frame product overflows clamps to duration")) {
+        return false;
+    }
+    uint64_t frames = 0;
+    return check(wav_frame_count(out_path, frames) && frames == k_frames, "large finite end keeps full duration");
+}
+
 // --end <= --start is rejected.
 bool verify_end_not_after_start_rejected() {
     const auto in_path = write_render_fixture();
@@ -899,6 +960,8 @@ int main() try {
     ok &= verify_start_end_window();
     ok &= verify_no_trim_full_duration();
     ok &= verify_start_beyond_duration_rejected();
+    ok &= verify_invalid_trim_times_rejected();
+    ok &= verify_large_finite_end_clamped();
     ok &= verify_end_not_after_start_rejected();
     ok &= verify_subframe_window_rejected();
     ok &= verify_metrics_follow_trim_window();
@@ -908,7 +971,7 @@ int main() try {
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "render trim fixture tests passed (10/10)\n";
+    std::cout << "render trim fixture tests passed (12/12)\n";
     return EXIT_SUCCESS;
 } catch (const std::exception& error) {
     std::cerr << "fixture setup failed: " << error.what() << '\n';
