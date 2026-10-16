@@ -1,4 +1,5 @@
-// Release replay of file-streaming renders (PCM consistency 3.1 binaural, 3.2 EAR, 3.3 HOA). The backend
+// Release replay of file-streaming renders (PCM consistency 3.1 binaural, 3.2 EAR, 3.3 HOA,
+// 3.4 Triple Balance). The backend
 // comes from the renderer factory shared with RenderService and the monitor; its IRenderStream is
 // pulled in a fixed request partition while live overrides, head orientations and seeks land at
 // fixed output frames, so the delivered PCM is a deterministic function of the case file.
@@ -39,7 +40,8 @@ mradm::RendererSelection renderer(const std::string& name) {
     static const std::map<std::string, mradm::RendererSelection> names{
         {"ear", mradm::RendererSelection::ear},
         {"hoa", mradm::RendererSelection::hoa},
-        {"saf-binaural", mradm::RendererSelection::saf_binaural}};
+        {"saf-binaural", mradm::RendererSelection::saf_binaural},
+        {"triple-balance", mradm::RendererSelection::triple_balance}};
     phase2::require(names.contains(name), "unsupported file-streaming renderer");
     return names.at(name);
 }

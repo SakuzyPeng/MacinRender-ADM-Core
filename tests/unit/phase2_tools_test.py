@@ -155,7 +155,7 @@ class EvidenceTests(unittest.TestCase):
                 common.pcm_bytes(b)
 
     def test_stream_frame_counts_follow_input_and_seek_timeline(self):
-        channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16, 'hoa3': 16}
+        channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16, '22.2': 24, 'hoa3': 16}
         for case in common.stream_cases():
             shape = (channels[case['output_layout']], 48000, 74200)
             self.assertEqual(common.stream_output_shape(case), shape)
@@ -205,13 +205,15 @@ class EvidenceTests(unittest.TestCase):
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 42)
-        self.assertEqual(len({r['id'] for r in offline}), 42)
+        self.assertEqual(len(offline), 48)
+        self.assertEqual(len({r['id'] for r in offline}), 48)
         self.assertEqual(len(scene), 78)
         streams = common.stream_cases()
-        self.assertEqual(len(streams), 18)
-        self.assertEqual(len(common.case_ids()), 216)
-        self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear', 'hoa'})
+        self.assertEqual(len(streams), 24)
+        self.assertEqual(len(common.case_ids()), 228)
+        self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear', 'hoa', 'triple-balance'})
+        self.assertIn('objects-room', {r['fixture'] for r in offline + streams})
+        self.assertTrue(any('--triple-balance-mode' in r['args'] for r in offline))
         self.assertIn('hoa3', {r['fixture'] for r in offline + streams})
         self.assertTrue(any(o.get('speaker_label') for r in streams for e in r['events'] for o in e.get('objects', [])))
         for row in streams:
@@ -418,7 +420,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 224)
+        self.assertEqual(len(names), 228)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -495,6 +497,10 @@ class EvidenceTests(unittest.TestCase):
         hoa = [n for n in names if n.startswith(('hoa-encode.', 'ear-hoa.'))]
         self.assertEqual(len(hoa), 4)
         self.assertTrue(all(gated(n) for n in hoa))
+        # Phase 3.4 gates the Triple Balance standard-mode panning and the D-mode gains.
+        triple = [n for n in names if n.startswith('triple-balance.')]
+        self.assertEqual(len(triple), 4)
+        self.assertTrue(all(gated(n) for n in triple))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

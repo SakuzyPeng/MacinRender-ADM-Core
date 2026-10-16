@@ -118,12 +118,26 @@ def offline_cases():
          'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '7.1.4']},
         {'id': 'hoa-loudness-minus23', 'fixture': 'objects-extent-multi', 'slice': '3.3',
          'args': ['--no-peak-limit', '--renderer', 'hoa', '--output-layout', 'hoa3', '--loudness-target', '-23']},
+        # PCM consistency 3.4: Triple Balance size path (standard mode) and D mode on a moving,
+        # equal-size Cartesian object.
+        {'id': 'triple-size-714', 'fixture': 'objects-room', 'slice': '3.4',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '7.1.4']},
+        {'id': 'triple-size-916', 'fixture': 'objects-room', 'slice': '3.4',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '9.1.6']},
+        {'id': 'triple-size-222', 'fixture': 'objects-room', 'slice': '3.4',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '22.2']},
+        {'id': 'triple-size-window', 'fixture': 'objects-room', 'slice': '3.4',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '9.1.6', '--start', '0.2', '--end', '0.7']},
+        {'id': 'triple-d-916', 'fixture': 'objects-room', 'slice': '3.4',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '9.1.6', '--triple-balance-mode', 'd']},
+        {'id': 'triple-d-222', 'fixture': 'objects-room', 'slice': '3.4',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '22.2', '--triple-balance-mode', 'd']},
     ]
     return result
 
 
 def stream_cases():
-    """File-streaming replays (PCM consistency 3.1 binaural, 3.2 EAR, 3.3 HOA).
+    """File-streaming replays (PCM consistency 3.1 binaural, 3.2 EAR, 3.3 HOA, 3.4 Triple Balance).
 
     An IRenderStream is pulled in a fixed or fragmented request partition while live gain, mute
     and (binaural) topology overrides, a head orientation and a seek land at fixed output frames.
@@ -164,6 +178,16 @@ def stream_cases():
                                      {'index': 0, 'speaker_label': 'M-030', 'gain_db': -6.0}]},
         {'frame': 44000, 'objects': []},
     ]
+    # Triple Balance edits gain, mute and one linked isotropic size scale.
+    room_events = [
+        {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
+        {'frame': 7001, 'objects': [{'index': 0, 'gain_db': -14.5}]},
+        {'frame': 12345, 'objects': [{'index': 0, 'gain_db': 2.25, 'extent_scale': 0.5}]},
+        {'frame': 26000, 'objects': [{'index': 0, 'gain_db': -6.0, 'extent_scale': 1.5}]},
+        {'frame': 31000, 'seek': 4800},
+        {'frame': 40000, 'objects': [{'index': 0, 'mute': True}]},
+        {'frame': 44000, 'objects': []},
+    ]
     # HOA input packs carry no AudioObject that a live override could address.
     seek_events = [{'frame': 31000, 'seek': 4800}]
     variants = [('binaural-cloud', 'objects-extent-multi', 'saf-binaural', 'binaural', 2, 'cloud', binaural_events),
@@ -174,7 +198,10 @@ def stream_cases():
                 ('ear-bed', 'directspeakers', 'ear', '7.1.4', 12, None, bed_events),
                 ('hoa-extent', 'objects-extent-multi', 'hoa', 'hoa3', 16, None, object_events),
                 ('hoa-bed', 'directspeakers', 'hoa', 'hoa3', 16, None, bed_events),
-                ('ear-hoa3', 'hoa3', 'ear', '7.1.4', 12, None, seek_events)]
+                ('ear-hoa3', 'hoa3', 'ear', '7.1.4', 12, None, seek_events),
+                ('triple-714', 'objects-room', 'triple-balance', '7.1.4', 12, None, room_events),
+                ('triple-916', 'objects-room', 'triple-balance', '9.1.6', 16, None, room_events),
+                ('triple-222', 'objects-room', 'triple-balance', '22.2', 24, None, room_events)]
     result = []
     for name, fixture, renderer, layout, channels, spread, events in variants:
         for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
@@ -354,6 +381,7 @@ def kernel_outputs():
     names += [f'ear-gains.{part}' for part in ('10-point.f64', '20-extent.f64', '30-direct.f64')]
     names += [f'hoa-encode.{part}' for part in ('10-point.f32', '20-extent.f32', '30-direct.f32')]
     names += ['ear-hoa.10-decode.f64']
+    names += [f'triple-balance.{part}' for part in ('10-point.f32', '20-room.f32', '30-size.f32', '40-d-mode.f32')]
     names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS

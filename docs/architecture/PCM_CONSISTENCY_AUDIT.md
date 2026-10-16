@@ -142,7 +142,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | N09 | 已处理 | RustFFT 与 RealFFT twiddle 改用 `libm`（1.3），f64 twiddle 列设为门禁 |
 | N10 | 已处理 | HRTF 幅度改用 `libm::hypotf`（1.3）；`1e-9` 相位回退是固定规则 |
 | N11 | 已处理 | SOFA 坐标改用 `libm::atan2`（1.3）；门禁只覆盖仓库内三份 SOFA |
-| N12 | 未处理 | Triple Balance 非 D 模式的离线与文件流式入口仍为 `PORTABLE=false`；三期 |
+| N12 | 已处理 | 3.4：去掉 `PORTABLE` 泛型，标准模式的离线、文件流式与 Scene 共用同一组 `libm` 实现与 size 积分格点，位置与 size 平滑常量改用 `libm::expf`；`triple-balance.*` 内核与 D 模式离线用例设为门禁 |
 | N13 | 已处理 | 2.2：K-weighting、门控系数与 LUFS 换算改用 `libm`，计量探针全部设为门禁 |
 | N14 | 已处理 | True Peak 插值系数改用 `libm`（2.1），生产计量的 True Peak 设为门禁 |
 | N15 | 已处理 | 2.3：峰值转 dB、合成增益判定、两个公开后处理 API 的增益与逐样本乘法移入 Rust（`libm`）；对象增益覆盖的 dB 换算留在三期 |
@@ -155,7 +155,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | S04 | 部分 | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；Monitor 快照属三期 |
 | S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
 | S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
-| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；Triple Balance 随 3.4 处理 |
+| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁 |
 | S08 | 未处理 | 尚未复现；三期，复现后可提前修复 |
 
 ## C++ 剩余执行点
@@ -373,6 +373,13 @@ Linux x64 上原有 196 个 PCM id 不变；`b20a365` 的 Consistency 3884492992
 PCM 门禁增至 208 个，内核文件 220 个中 215 个设为门禁。Linux x64 上只有 3 个使用 extent 的 EAR 离线用例在最后几位改变；
 `c931750` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过，208 个 PCM id 与 220 个内核文件三平台相同，
 223 项门禁无失败。见 [3.2 记录](RUST_EAR_PORTABLE_MATH.md)。
+
+**3.3 状态**：HOA 编码与 EAR HOA 解码改用 `libm`（N07）；AllRAD 解码器原先经 nalgebra 动态矩阵调用 matrixmultiply，二阶及以上输入在多于
+5 个扬声器的布局上随主机选择 AVX/FMA 或 NEON 内核，现改为与 nalgebra 标量循环同序的固定乘积，一阶解码器逐位不变。HOA 文件流式的
+实时覆盖改用共用的按声道解析。新增三阶 HOA 夹具、`ear-hoa3` / `hoa-loudness-minus23` 离线用例、6 个 HOA 文件流式重放与 4 个 HOA 内核文件，
+PCM 门禁增至 216 个，内核文件 224 个中 219 个设为门禁。Linux x64 上只有 2 个 HOA extent 用例在最后几位改变；
+`5c00c47` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过，216 个 PCM id 与 224 个内核文件三平台相同，
+233 项门禁无失败，诊断检查点全部相同。见 [3.3 记录](RUST_HOA_PORTABLE_MATH.md)。
 
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。

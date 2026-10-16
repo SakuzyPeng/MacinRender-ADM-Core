@@ -29,7 +29,7 @@ impl Position {
         }
     }
     pub fn advance(&mut self, target: Self) {
-        let a = 1. - (-512f32 / 1200.).exp();
+        let a = 1. - libm::expf(-512. / 1200.);
         self.x += a * (target.x - self.x);
         self.y += a * (target.y - self.y);
         self.z += a * (target.z - self.z);

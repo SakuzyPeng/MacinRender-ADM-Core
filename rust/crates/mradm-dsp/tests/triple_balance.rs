@@ -504,3 +504,43 @@ fn exact_simple_gain_delay_and_multi_lane_rejection() {
         .unwrap();
     assert_eq!(out, reference);
 }
+/// PCM consistency 3.4: every Triple Balance path (offline, file streaming, Scene and D mode)
+/// takes its elementary functions from the libm port, not the platform C library behind the
+/// inherent `f32::sin` and friends; constant arguments are no exception, since the compiler may
+/// fold them with the host library.
+#[test]
+fn triple_balance_sources_use_the_libm_port() {
+    fn scan(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                scan(&path, files);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    scan(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/triple_balance"),
+        &mut files,
+    );
+    assert!(files.len() >= 8);
+    for file in files {
+        let text = std::fs::read_to_string(&file).unwrap();
+        for (line, code) in text.lines().enumerate() {
+            let code = code.split("//").next().unwrap();
+            for function in [
+                "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "hypot", "powf", "exp",
+                "exp2", "ln", "log2", "log10", "sin_cos",
+            ] {
+                assert!(
+                    !code.contains(&format!(".{function}(")),
+                    "{}:{}: platform `{function}` instead of libm",
+                    file.display(),
+                    line + 1
+                );
+            }
+        }
+    }
+}

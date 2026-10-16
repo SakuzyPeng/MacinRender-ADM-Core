@@ -24,6 +24,8 @@ mod post_gain;
 mod sofa;
 #[path = "phase2/stream_dsp.rs"]
 mod stream_dsp;
+#[path = "phase2/triple_balance.rs"]
+mod triple_balance;
 fn floats(path: &Path, name: &str, values: &[f32]) {
     assert!(!values.is_empty() && values.iter().all(|v| v.is_finite()));
     let mut out = BufWriter::new(fs::File::create(path.join(name)).unwrap());
@@ -322,6 +324,7 @@ fn run(out: &Path, fixtures: &Path) {
     stream_dsp::run(out);
     ear_gains::run(out);
     hoa::run(out);
+    triple_balance::run(out);
 }
 
 fn main() {

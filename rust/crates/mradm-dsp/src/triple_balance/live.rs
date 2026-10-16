@@ -127,26 +127,23 @@ impl Lane {
                 direct: 1.,
                 spread: [0.; 24],
             };
-            self.point = panner::live_point(position, 1., layout).expect("validated live point");
+            self.point = panner::point(position, 1., layout).expect("validated live point");
         } else {
             self.mix = if layout == Layout::Room222 {
-                panner::live_room_mix(
-                    panner::live_room(position, size).expect("validated live room"),
+                panner::room_mix(
+                    panner::room(position, size).expect("validated live room"),
                     size,
                 )
             } else {
                 let q = panner::quantize(position.internal(), size).expect("validated live size");
-                panner::live_size_mix(
-                    panner::live_raw(q).expect("validated live quantization"),
-                    size,
-                )
+                panner::size_mix(panner::raw(q).expect("validated live quantization"), size)
             };
             // Match the established size mix's dry point conversion and height rule.
             let mut point = position.internal().adm();
             if self.mix.direct == 0. {
                 point.z = 0.;
             }
-            self.point = panner::live_point(point, 1., layout).expect("validated live dry point");
+            self.point = panner::point(point, 1., layout).expect("validated live dry point");
         }
     }
     fn sample(&mut self, layout: Layout, input: f32, output: &mut [f32]) {
@@ -228,7 +225,7 @@ impl Mixer {
                 return Err(invalid());
             }
         }
-        panner::prepare_live();
+        panner::prepare_lattice();
         Ok(Self {
             layout,
             rate,
@@ -250,7 +247,7 @@ impl Mixer {
             return Err(invalid());
         }
         if c.fields & POSITION != 0 {
-            panner::live_point(c.position, 1., self.layout)?;
+            panner::point(c.position, 1., self.layout)?;
         }
         if c.fields & SIZE != 0 {
             if !c.size.is_finite() || !(0. ..=1.).contains(&c.size) {
