@@ -205,15 +205,19 @@ class EvidenceTests(unittest.TestCase):
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 53)
-        self.assertEqual(len({r['id'] for r in offline}), 53)
+        self.assertEqual(len(offline), 62)
+        self.assertEqual(len({r['id'] for r in offline}), 62)
         self.assertEqual(len(scene), 78)
         streams = common.stream_cases()
         self.assertEqual(len(streams), 24)
-        self.assertEqual(len(common.case_ids()), 233)
+        self.assertEqual(len(common.case_ids()), 242)
         self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear', 'hoa', 'triple-balance'})
         self.assertIn('objects-room', {r['fixture'] for r in offline + streams})
         self.assertTrue(any('--triple-balance-mode' in r['args'] for r in offline))
+        # Phase 3.6: integer WAVE and float32 CAF final files.
+        self.assertEqual({r['args'][r['args'].index('--output-bit-depth') + 1] for r in offline
+                          if '--output-bit-depth' in r['args']}, {'i16', 'i24'})
+        self.assertEqual(len([r for r in offline if r.get('container') == 'caf']), 2)
         self.assertIn('hoa3', {r['fixture'] for r in offline + streams})
         self.assertTrue(any(o.get('speaker_label') for r in streams for e in r['events'] for o in e.get('objects', [])))
         for row in streams:
@@ -420,7 +424,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 231)
+        self.assertEqual(len(names), 235)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -505,6 +509,10 @@ class EvidenceTests(unittest.TestCase):
         params = [n for n in names if n.startswith(('adm-import.', 'decimal.'))]
         self.assertEqual(len(params), 3)
         self.assertTrue(all(gated(n) for n in params))
+        # Phase 3.6 gates the seconds-to-frame rule and integer WAVE quantization.
+        final = [n for n in names if n.startswith(('timeline.', 'wav-quantize.'))]
+        self.assertEqual(len(final), 4)
+        self.assertTrue(all(gated(n) for n in final))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

@@ -101,9 +101,11 @@ def main():
             destination = out / 'pcm' / (name + '.pcmbits')
             trace = out / 'checkpoints' / name if diagnostics else None
             sofa_args = ['--sofa', out / 'fixtures' / row['sofa']] if 'sofa' in row else []
+            # Float32 WAV unless the case names its own depth or a CAF container (3.6).
+            depth = [] if '--output-bit-depth' in row['args'] else ['--output-bit-depth', 'f32']
             for process in (1, 2):
-                wav, bits = work / 'cli.wav', work / 'cli.pcmbits'
-                run([binaries['mradm'], 'render', '-i', fixture, '-o', wav, '--output-bit-depth', 'f32', *row['args'], *sofa_args],
+                wav, bits = work / ('cli.' + row.get('container', 'wav')), work / 'cli.pcmbits'
+                run([binaries['mradm'], 'render', '-i', fixture, '-o', wav, *depth, *row['args'], *sofa_args],
                     out / 'logs' / f'{name}-cli{process}.log', trace if process == 1 else None)
                 run([binaries['mr_adm_pcm_bits'], 'extract', wav, bits], out / 'logs' / f'{name}-extract{process}.log')
                 wav.unlink()
