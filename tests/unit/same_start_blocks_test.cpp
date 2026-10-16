@@ -22,14 +22,15 @@
 #include <utility>
 #include <vector>
 
-#include "../support/adm_fixture.h"
-#include "../support/wav_fixture.h"
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
 #include "adm/render_vbap.h"
+
+#include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -65,16 +66,16 @@ std::filesystem::path write_input() {
     block.set(fixture::Gain{1.0F});
     cf->add(block);
     doc->add(cf);
-    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"SameStartPF"},
-                                               fixture::TypeDefinition::objects);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"SameStartPF"}, fixture::TypeDefinition::objects);
     pf->add_reference(cf);
     doc->add(pf);
     auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"SameStartSF"},
                                                  fixture::FormatDefinition::pcm);
     sf->set_reference(cf);
     doc->add(sf);
-    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"SameStartTF"},
-                                                fixture::FormatDefinition::pcm);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"SameStartTF"}, fixture::FormatDefinition::pcm);
     tf->set_reference(sf);
     sf->add_reference(tf);
     doc->add(tf);
@@ -121,7 +122,8 @@ void set_blocks(mradm::SceneTrackRef& track, Kind kind, bool include_overwritten
             const bool winner = i == 39;
             const uint64_t start = static_cast<uint64_t>(group) * 2048U;
             const uint64_t end = start + (winner ? 1024U : 2048U);
-            const float azimuth = winner ? (group == 0 ? 97.5F : -37.5F) : -97.5F + (5.0F * static_cast<float>(i));
+            const float winning_azimuth = group == 0 ? 97.5F : -37.5F;
+            const float azimuth = winner ? winning_azimuth : -97.5F + (5.0F * static_cast<float>(i));
             if (kind == Kind::direct_speakers) {
                 mradm::SceneDirectSpeakersBlock block;
                 block.start_sample = start;
@@ -236,8 +238,7 @@ int main() try {
     }
     const std::array backends{
         Backend{"ear", mradm::create_ear_renderer, "4+5+0", Kind::objects, mradm::LfeRoutingMode::direct},
-        Backend{
-            "ear", mradm::create_ear_renderer, "9+10+3", Kind::direct_speakers, mradm::LfeRoutingMode::split_power},
+        Backend{"ear", mradm::create_ear_renderer, "9+10+3", Kind::direct_speakers, mradm::LfeRoutingMode::split_power},
         Backend{"vbap", mradm::create_vbap_renderer, "4+5+0", Kind::objects, mradm::LfeRoutingMode::direct},
         Backend{
             "vbap", mradm::create_vbap_renderer, "9+10+3", Kind::direct_speakers, mradm::LfeRoutingMode::split_power},

@@ -7,9 +7,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <iterator>
 #include <future>
 #include <ios>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -35,7 +35,8 @@ namespace mradm::render_common {
 // splits blocks into lanes (point / cloud / diffuse / spreader sources, LFE or divergence buses)
 // or interpolates from a predecessor, so an overwritten block leaves no lane, ramp or routing
 // decision behind. The result is ordered by start (stable for equal starts before the collapse).
-template <typename Block> [[nodiscard]] std::vector<const Block*> last_blocks_at_each_start(const std::vector<Block>& blocks) {
+template <typename Block>
+[[nodiscard]] std::vector<const Block*> last_blocks_at_each_start(const std::vector<Block>& blocks) {
     std::vector<const Block*> ordered;
     ordered.reserve(blocks.size());
     std::ranges::transform(blocks, std::back_inserter(ordered), [](const auto& block) { return &block; });
