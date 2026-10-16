@@ -131,7 +131,7 @@ fn quadrature(axis: usize, p: usize, r: usize) -> Spatial {
     let mut position = 0.;
     let mut result = [0.; SPATIAL];
     for _ in 0..count {
-        let weight = panner::kernel::<true>(position, center, radius, axis);
+        let weight = panner::kernel(position, center, radius, axis);
         let gains = basis(axis, position);
         for i in 0..SPATIAL {
             result[i] += panner::power(gains[i] * weight, exponent);
@@ -249,11 +249,11 @@ fn spatial(p: Position, size: f32) -> Spatial {
         (axes[0][i] * axes[1][i]) * axes[2][i]
     }));
     let walls = [
-        panner::kernel::<true>(0., x, radius, 0),
-        panner::kernel::<true>(1., x, radius, 0),
-        panner::kernel::<true>(0., y, radius, 1),
-        panner::kernel::<true>(1., y, radius, 1),
-        panner::kernel::<true>(1., z, radius, 0) * 0.203_455_92,
+        panner::kernel(0., x, radius, 0),
+        panner::kernel(1., x, radius, 0),
+        panner::kernel(0., y, radius, 1),
+        panner::kernel(1., y, radius, 1),
+        panner::kernel(1., z, radius, 0) * 0.203_455_92,
     ];
     let faces = [
         basis(0, 0.),

@@ -89,7 +89,7 @@ fn quadrature(axis: usize, p: usize, r: usize) -> Spatial {
     let mut result = [0.; SPATIAL];
     for sample in 0..count {
         let position = sample as f32 / (count - 1) as f32;
-        let mut weight = panner::kernel::<true>(position, center, radius, 0);
+        let mut weight = panner::kernel(position, center, radius, 0);
         if axis == 2 {
             // Reflect the height weighting about the middle layer for the added floor.
             weight *= libm::cosf(((position * 2. - 1.).abs() * 0.341_477_48) * 4.);
@@ -177,12 +177,12 @@ pub(super) fn gains(p: Position, size: f32) -> Gains {
             (axes[0][i] * axes[1][i]) * axes[2][i]
         }));
         let walls = [
-            panner::kernel::<true>(0., x, radius, 0),
-            panner::kernel::<true>(1., x, radius, 0),
-            panner::kernel::<true>(0., y, radius, 0),
-            panner::kernel::<true>(1., y, radius, 0),
-            panner::kernel::<true>(1., z, radius, 0) * 0.203_455_92,
-            panner::kernel::<true>(0., z, radius, 0) * 0.203_455_92,
+            panner::kernel(0., x, radius, 0),
+            panner::kernel(1., x, radius, 0),
+            panner::kernel(0., y, radius, 0),
+            panner::kernel(1., y, radius, 0),
+            panner::kernel(1., z, radius, 0) * 0.203_455_92,
+            panner::kernel(0., z, radius, 0) * 0.203_455_92,
         ];
         let faces = [
             basis(0, 0.),
