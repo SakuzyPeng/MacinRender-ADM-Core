@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,7 @@
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
+#include "../adm_render_common/consistency_trace.h"
 #include "audio_io_internal.h"
 
 namespace mradm::audio {
@@ -348,6 +350,10 @@ struct FloatCafWriter::Impl {
     long data_size_offset{0}; // ftell position of the data chunk's int64 size field
     uint64_t pcm_bytes_written{0};
     std::vector<unsigned char> bytes; // little-endian sample bytes of one write
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    uint64_t trace_id{0};
+    uint64_t trace_position{0};
+#endif
 };
 
 Result<FloatCafWriter>
@@ -405,6 +411,9 @@ FloatCafWriter::open(const std::string& path, uint32_t channels, uint32_t sample
     w.impl_ = std::make_unique<Impl>();
     w.impl_->file = f;
     w.impl_->channels = channels;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    w.impl_->trace_id = next_writer_trace_id();
+#endif
     w.impl_->data_size_offset = size_offset;
     return w;
 }
@@ -429,7 +438,16 @@ uint64_t FloatCafWriter::write(const float* samples, uint64_t frame_count) {
     samples_to_float32_le(samples, sample_count, impl_->bytes.data());
     const std::size_t written = std::fwrite(impl_->bytes.data(), 4U, sample_count, impl_->file);
     impl_->pcm_bytes_written += written * 4U;
-    return written / impl_->channels;
+    const uint64_t frames_written = written / impl_->channels;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    if (frames_written != 0) {
+        consistency::dump("writer/pass" + std::to_string(impl_->trace_id) + "-s" +
+                              std::to_string(impl_->trace_position) + ".80-pcm.f32",
+                          std::span<const float>{samples, static_cast<std::size_t>(frames_written) * impl_->channels});
+    }
+    impl_->trace_position += frames_written;
+#endif
+    return frames_written;
 }
 
 
