@@ -374,6 +374,13 @@ PCM 门禁增至 208 个，内核文件 220 个中 215 个设为门禁。Linux x
 `c931750` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过，208 个 PCM id 与 220 个内核文件三平台相同，
 223 项门禁无失败。见 [3.2 记录](RUST_EAR_PORTABLE_MATH.md)。
 
+**3.3 状态**：HOA 编码与 EAR HOA 解码改用 `libm`（N07）；AllRAD 解码器原先经 nalgebra 动态矩阵调用 matrixmultiply，二阶及以上输入在多于
+5 个扬声器的布局上随主机选择 AVX/FMA 或 NEON 内核，现改为与 nalgebra 标量循环同序的固定乘积，一阶解码器逐位不变。HOA 文件流式的
+实时覆盖改用共用的按声道解析。新增三阶 HOA 夹具、`ear-hoa3` / `hoa-loudness-minus23` 离线用例、6 个 HOA 文件流式重放与 4 个 HOA 内核文件，
+PCM 门禁增至 216 个，内核文件 224 个中 219 个设为门禁。Linux x64 上只有 2 个 HOA extent 用例在最后几位改变；
+`5c00c47` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过，216 个 PCM id 与 224 个内核文件三平台相同，
+233 项门禁无失败，诊断检查点全部相同。见 [3.3 记录](RUST_HOA_PORTABLE_MATH.md)。
+
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。
 
