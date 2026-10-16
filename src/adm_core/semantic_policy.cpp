@@ -656,7 +656,7 @@ void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& s
 [[nodiscard]] std::string lower_ascii(std::string_view text) {
     std::string out{text};
     std::ranges::transform(
-        out, out.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        out, out.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
     return out;
 }
 

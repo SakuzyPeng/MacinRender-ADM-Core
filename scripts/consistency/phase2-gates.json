@@ -63,6 +63,18 @@
     },
     {
       "kind": "kernel",
+      "pattern": "adm-import.*",
+      "reason": "ADM import dB gain conversion and Cartesian DirectSpeakers projection with the libm port (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "decimal.*",
+      "reason": "locale-independent, correctly rounded decimal parsing of command-line parameters, binary32 rounded once (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
@@ -1437,6 +1449,36 @@
       "pattern": "stream-triple-222-fragmented",
       "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
       "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "params-ear",
+      "reason": "EAR 7.1.4 of ADM dB gains, a Cartesian DirectSpeakers channel and 40 same-start blocks resolved in document order (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "params-saf",
+      "reason": "VBAP 5.1 of ADM dB gains, a Cartesian DirectSpeakers channel and 40 same-start blocks resolved in document order (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "params-hoa",
+      "reason": "HOA3 encoding of ADM dB gains, a Cartesian DirectSpeakers channel and 40 same-start blocks resolved in document order (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "params-binaural",
+      "reason": "binaural of ADM dB gains, a Cartesian DirectSpeakers channel and 40 same-start blocks resolved in document order (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "params-binaural-rotated",
+      "reason": "binaural with decimal listener orientation values near binary32 rounding boundaries of ADM dB gains, a Cartesian DirectSpeakers channel and 40 same-start blocks resolved in document order (PCM consistency 3.5)",
+      "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
     }
   ]
 }

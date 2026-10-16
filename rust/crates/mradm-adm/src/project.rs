@@ -391,11 +391,8 @@ impl Snapshot {
             ..DirectBlock::default()
         };
         if pos.cartesian != 0 {
-            let (x, y, z) = (f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
-            out.azimuth = ((-x).atan2(y) * (180.0 / std::f64::consts::PI)) as f32;
-            out.elevation =
-                (z.atan2((x * x + y * y).sqrt()) * (180.0 / std::f64::consts::PI)) as f32;
-            out.distance = (x * x + y * y + z * z).sqrt() as f32;
+            [out.azimuth, out.elevation, out.distance] =
+                crate::numeric::cartesian_to_polar(pos.x, pos.y, pos.z);
         } else {
             for p in doc.children(key, "position") {
                 let n = doc.node(p);
@@ -571,7 +568,7 @@ fn gain(doc: &Document, key: u32) -> Result<Gain> {
         _ => return Err(Error::xml("无效 gainUnit")),
     };
     let linear = if decibels != 0 {
-        10.0f64.powf(value / 20.0) as f32
+        crate::numeric::gain_from_db(value)
     } else {
         value as f32
     };

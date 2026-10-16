@@ -10,9 +10,16 @@
 #include "adm/audio_io.h"
 #include "adm/render.h"
 
+#include "decimal.h"
 #include "phase2_io.h"
 
 namespace {
+// The same locale-independent, correctly rounded parser as the mradm command line (PCM consistency 3.5).
+template <typename T> T decimal(const std::string& text) {
+    const auto value = mradm::dsp::parse_decimal<T>(text);
+    phase2::require(value.has_value(), "invalid decimal option value");
+    return *value;
+}
 using Json = nlohmann::json;
 class Log final : public mradm::LogSink {
   public:
@@ -49,9 +56,9 @@ mradm::RenderOptions options(const Json& args) {
         } else if (key == "--object-smoothing-frames") {
             result.object_smoothing_frames = static_cast<uint32_t>(std::stoul(v));
         } else if (key == "--start") {
-            result.render_start_sec = std::stod(v);
+            result.render_start_sec = decimal<double>(v);
         } else if (key == "--end") {
-            result.render_end_sec = std::stod(v);
+            result.render_end_sec = decimal<double>(v);
         } else if (key == "--speaker-spread-mode" && v == "none") {
             result.speaker_spread_mode = mradm::SpeakerSpreadMode::none;
         } else if (key == "--binaural-spread-mode") {
@@ -59,16 +66,16 @@ mradm::RenderOptions options(const Json& args) {
             result.binaural_spread_mode =
                 v == "cloud" ? mradm::BinauralSpreadMode::cloud : mradm::BinauralSpreadMode::saf_spreader;
         } else if (key == "--listener-yaw") {
-            result.listener_orientation.yaw_deg = std::stof(v);
+            result.listener_orientation.yaw_deg = decimal<float>(v);
         } else if (key == "--listener-pitch") {
-            result.listener_orientation.pitch_deg = std::stof(v);
+            result.listener_orientation.pitch_deg = decimal<float>(v);
         } else if (key == "--listener-roll") {
-            result.listener_orientation.roll_deg = std::stof(v);
+            result.listener_orientation.roll_deg = decimal<float>(v);
         } else if (key == "--loudness-target") {
             result.measure_loudness = true;
-            result.loudness_target_lufs = std::stof(v);
+            result.loudness_target_lufs = decimal<float>(v);
         } else if (key == "--peak-limit-dbtp") {
-            result.peak_limit_dbtp = std::stof(v);
+            result.peak_limit_dbtp = decimal<float>(v);
         } else if (key == "--triple-balance-mode") {
             phase2::require(v == "standard" || v == "d", "unsupported Triple Balance mode");
             result.triple_balance_mode = v == "d" ? mradm::TripleBalanceMode::d : mradm::TripleBalanceMode::standard;

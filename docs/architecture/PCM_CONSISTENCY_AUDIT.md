@@ -131,9 +131,9 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 
 | 条目 | 状态 | 处理与剩余 |
 | --- | --- | --- |
-| N01 | 部分 | Scene 策略 JSON 数字仍经 nlohmann（C 运行时 `strtod`），1.6 登记为依赖运行时正确舍入；CLI11 浮点选项、HOA 标签 `std::stof`、标签大小写规范化属三期 |
-| N02 | 未处理 | ADM 导入的 `powf` 与 Cartesian `atan2`（`mradm-adm` `project.rs`）；三期 |
-| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；3.3：HOA 文件流式改用共用的按声道解析（扬声器标签优先于整体覆盖）；其余参数入口属 3.5 |
+| N01 | 已处理 | 3.5：CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十进制解析（binary32 参数一次舍入），UID / 扬声器标签 / 布局名等的大小写规范化与字符分类改为只看 ASCII；JSON 数字仍经 nlohmann（`strtod`），按 1.6 登记为依赖三个 C 运行时的正确舍入，再转 binary32 的步骤与平台无关 |
+| N02 | 已处理 | 3.5：ADM 导入的 dB 增益与 Cartesian DirectSpeakers 投影改用 `libm`（`mradm-adm` `numeric`），`adm-import.*` 内核设为门禁 |
+| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；3.3：HOA 文件流式改用共用的按声道解析（扬声器标签优先于整体覆盖）；3.5：核对语义策略、实时覆盖与 Monitor 的全部增益入口都经 Rust `libm::powf`，C++ 不再有 `std::pow` |
 | N04 | 已处理 | Scene 空间数学改用 `libm`（1.3） |
 | N05 | 已处理 | `geometry::direction` 与 VBAP spread 环改用 `libm::sincos`（1.3） |
 | N06 | 已处理 | 3.2：EAR 几何、extent 权重与立体声 panner 改用 `libm`，`ear-gains.*` 内核设为门禁；EAR HOA 解码的球谐与采样方向属 N07（3.3） |
@@ -156,7 +156,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
 | S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
 | S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁 |
-| S08 | 未处理 | 尚未复现；三期，复现后可提前修复 |
+| S08 | 已处理 | 3.5：在 libstdc++ 上复现（40 个同起点块时旧实现生效的不是文档中的最后一块）；六处按起点排序改为稳定排序，同起点块保持场景（ADM 文档）顺序、最后一块生效，`params-*` 用例设为门禁 |
 
 ## C++ 剩余执行点
 
