@@ -247,6 +247,8 @@ def kernel_outputs():
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS
               for part in ('10-parameters.i32', '20-true-peak.f64', '30-loudness.f64')]
+    names += [f'meter-acceptance-{rate}.{part}' for rate in METER_RATES
+              for part in ('10-gates.f64', '20-true-peak.f64', '30-long-silence.f64', '40-chunking.f64', '50-reset.f64')]
     names += ['spreader.10-input.f32', 'spreader.20-voronoi.f32', 'spreader.30-fir.c32', 'spreader.40-output.f32']
     names += [f'sofa-{Path(sofa).stem}.{part}' for sofa in SOFA_FIXTURES for part in
               ('10-parameters.i32', '11-directions.f32', '12-hrir.f32', '20-grid-weights.f32',

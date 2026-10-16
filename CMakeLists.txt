@@ -1677,6 +1677,18 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_render_trim_fixture_tests)
     add_test(NAME mr_adm_render_trim_fixture_tests COMMAND mr_adm_render_trim_fixture_tests)
 
+    # PCM consistency 2.4: final PCM after loudness / peak gain staging, re-measured.
+    add_executable(mr_adm_normalization_acceptance_tests tests/unit/normalization_acceptance_test.cpp)
+    target_link_libraries(mr_adm_normalization_acceptance_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMAudio
+            MacinRender::ADMDsp
+    )
+    mr_adm_core_apply_warnings(mr_adm_normalization_acceptance_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_normalization_acceptance_tests)
+    add_test(NAME mr_adm_normalization_acceptance_tests COMMAND mr_adm_normalization_acceptance_tests)
+
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_opus_mka_smoke_tests)

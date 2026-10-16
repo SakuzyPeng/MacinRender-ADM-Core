@@ -180,7 +180,7 @@ impl Filter {
         assert!(src.channels() == self.channels as usize);
         assert!(self.filter_state.len() == self.channels as usize);
 
-        ftz::with_ftz(|ftz| {
+        ftz::with_ftz(|_| {
             if self.calculate_sample_peak {
                 assert!(self.sample_peak.len() == self.channels as usize);
 
@@ -240,14 +240,6 @@ impl Filter {
                     filter_state[2] = filter_state[1];
                     filter_state[1] = filter_state[0];
                 });
-
-                if ftz.is_none() {
-                    for v in filter_state {
-                        if v.abs() < f64::EPSILON {
-                            *v = 0.0;
-                        }
-                    }
-                }
             }
 
             if let Some(ref mut tp) = self.tp {
@@ -255,6 +247,24 @@ impl Filter {
                 tp.check_true_peak(src, &mut self.true_peak);
             }
         });
+    }
+
+    /// Local patch (PCM consistency 2.4): zeroes filter states below `f64::EPSILON`. The meter
+    /// calls this whenever a 100 ms block completes, a position fixed by the frame count since
+    /// the last reset, so the result does not depend on how the input is split into calls.
+    pub fn clear_small_states(&mut self, channel_map: &[crate::ebur128::Channel]) {
+        for (filter_state, channel_map) in
+            Iterator::zip(self.filter_state.iter_mut(), channel_map.iter())
+        {
+            if *channel_map == crate::ebur128::Channel::Unused {
+                continue;
+            }
+            for v in filter_state {
+                if v.abs() < f64::EPSILON {
+                    *v = 0.0;
+                }
+            }
+        }
     }
 
     pub fn seed<'a, T: Sample + 'a, S: crate::Samples<'a, T>>(
@@ -379,8 +389,9 @@ impl Filter {
     }
 }
 
-// Local patch: x86 no longer sets MXCSR flush-to-zero. Every architecture zeroes filter states
-// below f64::EPSILON after each call, so subnormal handling is the same everywhere.
+// Local patch: x86 no longer sets MXCSR flush-to-zero, so subnormal handling is the same on every
+// architecture. `process` leaves small states to `clear_small_states` at block boundaries (2.4);
+// `seed` still zeroes them after each call, as upstream did without FTZ.
 mod ftz {
     pub enum Ftz {}
 

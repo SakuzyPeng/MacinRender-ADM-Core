@@ -357,7 +357,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 193)
+        self.assertEqual(len(names), 213)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -365,6 +365,9 @@ class EvidenceTests(unittest.TestCase):
             for channels in common.METER_CHANNELS:
                 self.assertIn(f'meter-{rate}-{channels}.20-true-peak.f64', names)
                 self.assertIn(f'meter-{rate}-{channels}.30-loudness.f64', names)
+            # Phase 2.4 acceptance programmes.
+            for part in ('10-gates.f64', '20-true-peak.f64', '30-long-silence.f64', '40-chunking.f64', '50-reset.f64'):
+                self.assertIn(f'meter-acceptance-{rate}.{part}', names)
         for rates in common.RESAMPLER_RATES:
             self.assertIn(f'resampler-{rates[0]}-{rates[1]}.20-output.f32', names)
         for name in common.OM_EDGE_CASES:
@@ -410,12 +413,13 @@ class EvidenceTests(unittest.TestCase):
         cases = [c['id'] for c in common.offline_cases()]
         cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
         self.assertEqual(sorted(case_gates), sorted(cases))
-        # Phase 2.1 gates the meter's true peak, 2.2 its K-weighting and loudness.
+        # Phase 2.1 gates the meter's true peak, 2.2 its K-weighting and loudness, 2.4 its
+        # acceptance programmes.
         kernel_gates = [g['pattern'] for g in gates if g['kind'] == 'kernel']
         def gated(name):
             return any(fnmatch.fnmatchcase(name, pattern) for pattern in kernel_gates)
         meter = [n for n in names if n.startswith('meter-')]
-        self.assertEqual(len(meter), 28)
+        self.assertEqual(len(meter), 48)
         self.assertTrue(all(gated(n) for n in meter))
         # Phase 2.3 gates the offline post-processing gain.
         post = [n for n in names if n.startswith('post-gain.')]
