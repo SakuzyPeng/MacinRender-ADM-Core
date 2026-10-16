@@ -102,12 +102,14 @@ def validate(root):
         raise ValueError('incomplete or unsupported baseline')
     if manifest['source']['sha256'] != common.json_digest(manifest['source']['files']):
         raise ValueError('source fingerprint does not match inventory')
-    if manifest['offline'] != common.offline_cases() or manifest['scene'] != common.scene_cases():
+    if (manifest['offline'] != common.offline_cases() or manifest['scene'] != common.scene_cases()
+            or manifest.get('stream') != common.stream_cases()):
         raise ValueError('baseline does not cover the versioned case catalog')
     if manifest.get('sofa') != common.SOFA_FIXTURES:
         raise ValueError('baseline does not cover the pinned SOFA inputs')
     common.validate_sofa_fixtures(root / 'fixtures')
-    expected = [c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
+    expected = ([c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
+                + [c['id'] for c in manifest['stream']])
     if not expected or len(set(expected)) != len(expected) or set(expected) != set(manifest['outputs']):
         raise ValueError('missing or duplicate case outputs')
     disk_pcm = {p.name for p in (root / 'pcm').glob('*.pcmbits')}
@@ -127,7 +129,7 @@ def validate(root):
             raise ValueError('fixture integrity failure: ' + name)
         if path.suffix == '.pcmbits':
             common.pcm_bytes(path)
-    for row in manifest['offline'] + manifest['scene']:
+    for row in manifest['offline'] + manifest['scene'] + manifest['stream']:
         if json.loads(safe_file(root, 'cases/' + row['id'] + '.json').read_text(encoding='utf-8')) != row:
             raise ValueError('case parameters differ from manifest')
     actual = {p.relative_to(root).as_posix() for folder in ('kernels', 'checkpoints', 'kernel-checkpoints')
@@ -158,6 +160,9 @@ def validate(root):
     repeat_keys.update(r['id'] + f'-epoch{e}' + suffix for r in manifest['scene'] for e in (1, 2)
                        for suffix in ('-same-process1', '-same-process2', '-new-process'))
     repeat_keys.update(r['id'] + f'-partition-epoch{e}' for r in manifest['scene'] if r['id'].endswith('-fixed') for e in (1, 2))
+    repeat_keys.update(r['id'] + suffix for r in manifest['stream']
+                       for suffix in ('-same-process1', '-same-process2', '-new-process'))
+    repeat_keys.update(r['id'] + '-partition' for r in manifest['stream'] if r['id'].endswith('-fixed'))
     if repeat_keys != set(manifest['comparisons']):
         raise ValueError('repeat/partition evidence inventory is incomplete')
     status_keys = {r['id'] + f'-process{i}' for r in manifest['scene'] for i in (1, 2)}
@@ -171,7 +176,7 @@ def validate(root):
             if len(records) != 2 or any(r != {'epochs': expected_epochs, 'status': 'passed', 'underruns': 0} for r in records):
                 raise ValueError('invalid Scene state/frame-count evidence')
     for name, row in manifest['comparisons'].items():
-        if '-partition-' not in name and not row['identical']:
+        if ('-partition-' not in name or row.get('required')) and not row['identical']:
             raise ValueError('repeatability failure was marked complete')
     return manifest
 
@@ -218,7 +223,7 @@ def compare(directories, require_platforms=True, gates=()):
     manifests = [validate(p) for p in directories]
     first = manifests[0]
     for manifest in manifests[1:]:
-        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'sofa', 'fixtures'):
+        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'fixtures'):
             if manifest[field] != first[field]:
                 raise ValueError('incompatible baseline: ' + field)
         if compiler_identity(manifest['build']) != compiler_identity(first['build']):

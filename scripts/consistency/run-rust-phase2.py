@@ -57,21 +57,21 @@ def main():
     if diagnostics != bool(args.baseline):
         parser.error('diagnostic builds require --baseline; plain builds must not use it')
     binaries = {name: build / (name + ('.exe' if os.name == 'nt' else '')) for name in
-                ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render', 'mr_adm_phase2_scene', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render')}
+                ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render', 'mr_adm_phase2_scene', 'mr_adm_phase2_stream', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render')}
     for binary in binaries.values():
         if not binary.is_file():
             parser.error(f'missing tool: {binary}')
     source = common.source_fingerprint()
     common.validate_build_stamp(build, source, binaries)
     baseline = load_uninstrumented_baseline(args.baseline, source, args.config) if diagnostics else None
-    offline, scenes = common.offline_cases(), common.scene_cases()
+    offline, scenes, streams = common.offline_cases(), common.scene_cases(), common.stream_cases()
     sofa_root = common.ROOT / 'tests/fixtures/sofa'
     common.validate_sofa_fixtures(sofa_root)
     build_record, build_errors = collect(build)
     if build_errors:
         raise ValueError('invalid build provenance: ' + '; '.join(build_errors))
     manifest = {'schema': 'mradm.phase2.v1', 'complete': False, 'config': args.config, 'diagnostics': diagnostics,
-                'source': source, 'offline': offline, 'scene': scenes, 'sofa': common.SOFA_FIXTURES, 'build': build_record,
+                'source': source, 'offline': offline, 'scene': scenes, 'stream': streams, 'sofa': common.SOFA_FIXTURES, 'build': build_record,
                 'binaries': {k: common.digest(v.read_bytes()) for k, v in binaries.items()},
                 'comparisons': {}, 'outputs': {}, 'fixtures': {}, 'replay_status': {}}
     if manifest['build'].get('rust.compiler_verbose') == 'unavailable':
@@ -89,7 +89,7 @@ def main():
     try:
         for name in common.SOFA_FIXTURES:
             shutil.copyfile(sofa_root / name, out / 'fixtures' / name)
-        for fixture in sorted({c['fixture'] for c in offline}):
+        for fixture in sorted({c['fixture'] for c in offline + streams}):
             run([binaries['mr_adm_make_fixture'], fixture, out / 'fixtures' / (fixture + '.wav')], out / 'logs' / (fixture + '.log'))
         for row in offline:
             name = row['id']; print('offline:', name, flush=True)
@@ -142,6 +142,21 @@ def main():
                     else:
                         manifest['comparisons'][case_id + '-new-process'] = common.require_same(destination, first)
                 shutil.rmtree(directory)
+        for row in streams:
+            name = row['id']; print('stream:', name, flush=True)
+            case = out / 'cases' / (name + '.json'); common.save(case, row)
+            fixture = out / 'fixtures' / (row['fixture'] + '.wav')
+            destination = out / 'pcm' / (name + '.pcmbits')
+            for process in (1, 2):
+                directory = work / f'stream{process}'
+                run([binaries['mr_adm_phase2_stream'], case, fixture, directory], out / 'logs' / f'{name}-process{process}.log')
+                first, second = (directory / f'pass-{i}.pcmbits' for i in (1, 2))
+                manifest['comparisons'][name + f'-same-process{process}'] = common.require_same(first, second)
+                if process == 1:
+                    shutil.copyfile(first, destination); record(name, destination)
+                else:
+                    manifest['comparisons'][name + '-new-process'] = common.require_same(destination, first)
+                shutil.rmtree(directory)
         for process in (1, 2):
             directory = work / f'kernels{process}'
             run([binaries['mr_adm_phase2_kernels'], directory, out / 'fixtures'], out / 'logs' / f'kernels{process}.log',
@@ -171,6 +186,15 @@ def main():
                     if comparison['required'] and not comparison['identical']:
                         raise ValueError(f'partition invariance failed: {name} epoch {epoch}')
                     manifest['comparisons'][name + f'-partition-epoch{epoch}'] = comparison
+        # The IRenderStream contract: delivered PCM does not depend on the request partition.
+        for row in streams:
+            name = row['id']
+            if name.endswith('-fixed'):
+                comparison = common.compare_pcm(out / 'pcm' / f'{name}.pcmbits', out / 'pcm' / f'{name[:-5]}fragmented.pcmbits')
+                comparison['required'] = True
+                if not comparison['identical']:
+                    raise ValueError('stream partition invariance failed: ' + name)
+                manifest['comparisons'][name + '-partition'] = comparison
         if diagnostics:
             for row in offline:
                 if not list((out / 'checkpoints' / row['id'] / 'writer').glob('*.f32')):

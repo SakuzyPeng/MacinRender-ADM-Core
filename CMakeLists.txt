@@ -1064,7 +1064,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_compile_definitions(mr_adm_fft_benchmark PRIVATE MR_ADM_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>)
     mr_adm_core_apply_warnings(mr_adm_fft_benchmark)
 
-    foreach(_probe IN ITEMS scene render)
+    foreach(_probe IN ITEMS scene render stream)
         add_executable(mr_adm_phase2_${_probe} EXCLUDE_FROM_ALL tests/tools/phase2_${_probe}.cpp)
         target_link_libraries(mr_adm_phase2_${_probe} PRIVATE MacinRender::ADMEngine
             MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio nlohmann_json::nlohmann_json)
@@ -1073,6 +1073,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endforeach()
 
     target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMRenderBinaural)
+    target_link_libraries(mr_adm_phase2_stream PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMIo)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
     add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp src/adm_render_common/live_scene_trace.cpp)
     target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
@@ -1121,7 +1122,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/phase2_common.py"
                 --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
             DEPENDS mradm_exe mr_adm_make_fixture mr_adm_pcm_bits mr_adm_phase2_render
-                mr_adm_phase2_scene mr_adm_phase2_kernels mr_adm_repeat_render
+                mr_adm_phase2_scene mr_adm_phase2_stream mr_adm_phase2_kernels mr_adm_repeat_render
             USES_TERMINAL
         )
         set(_mr_scene_checkpoint_args)

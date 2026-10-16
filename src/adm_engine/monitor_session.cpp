@@ -1,11 +1,9 @@
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
 #include <memory>
 #include <mutex>
-#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +21,7 @@
 #include "render_stream_factory.h"
 #include "renderer_factory.h"
 #include "speaker_layouts.h"
+#include "stream_dsp.h"
 
 namespace mradm {
 
@@ -45,12 +44,9 @@ namespace {
 
 // Constant-power stereo fold of one source speaker at `azimuth` (degrees, +ve = left,
 // BS.2051). az is clamped to ±90° so rear speakers fold to the nearest side. Returns the
-// {L, R} gains.
+// {L, R} gains, computed in Rust with the libm port (PCM consistency 3.1).
 [[nodiscard]] std::pair<float, float> stereo_pan_for_azimuth(float azimuth) {
-    const float az = std::clamp(azimuth, -90.0F, 90.0F);
-    const float a = ((az / 90.0F) + 1.0F) * 0.5F; // 0 = hard right, 0.5 = center, 1 = hard left
-    const float angle = a * (std::numbers::pi_v<float> / 2.0F);
-    return {std::sin(angle), std::cos(angle)};
+    return dsp::monitor_stereo_fold(azimuth);
 }
 
 // Build a downmix / upmix matrix [monitor_channels × src_channels] (row-major) mapping a

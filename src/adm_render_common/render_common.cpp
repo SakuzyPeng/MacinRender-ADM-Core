@@ -4,8 +4,6 @@
 #include <array>
 #include <cctype>
 #include <charconv>
-#include <cmath>
-#include <numbers>
 #include <string>
 #include <utility>
 
@@ -13,6 +11,7 @@
 #include <fmt/ranges.h>
 
 #include "scene_math.h"
+#include "stream_dsp.h"
 
 namespace mradm::render_common {
 
@@ -307,7 +306,7 @@ std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
     if (pick->mute) {
         return 0.0F;
     }
-    return std::pow(10.0F, pick->gain_db / 20.0F);
+    return dsp::live_gain(pick->gain_db);
 }
 
 std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
