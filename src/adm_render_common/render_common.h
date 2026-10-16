@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <future>
 #include <ios>
 #include <limits>
@@ -28,6 +29,28 @@
 #include "../adm_dsp/gain.h"
 
 namespace mradm::render_common {
+
+// Blocks of one track sharing a start: the last one in scene (ADM document) order is in effect
+// for its entire interval, even when it ends before its peers. Resolve this before a backend
+// splits blocks into lanes (point / cloud / diffuse / spreader sources, LFE or divergence buses)
+// or interpolates from a predecessor, so an overwritten block leaves no lane, ramp or routing
+// decision behind. The result is ordered by start (stable for equal starts before the collapse).
+template <typename Block> [[nodiscard]] std::vector<const Block*> last_blocks_at_each_start(const std::vector<Block>& blocks) {
+    std::vector<const Block*> ordered;
+    ordered.reserve(blocks.size());
+    std::ranges::transform(blocks, std::back_inserter(ordered), [](const auto& block) { return &block; });
+    std::ranges::stable_sort(ordered, {}, &Block::start_sample);
+    std::size_t count = 0;
+    for (const auto* block : ordered) {
+        if (count > 0 && ordered[count - 1]->start_sample == block->start_sample) {
+            ordered[count - 1] = block;
+        } else {
+            ordered[count++] = block;
+        }
+    }
+    ordered.resize(count);
+    return ordered;
+}
 
 // 方向归一化的规范长度计算；用于替代各标准库算法不同的三参数 std::hypot。
 // 对有限 binary32 分量，平方在 binary64 中精确（至多 48 位有效位），也不会溢出或下溢。

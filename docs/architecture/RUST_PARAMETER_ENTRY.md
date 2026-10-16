@@ -57,6 +57,20 @@ diffuse、divergence 与 spreader 分量之前，按起点稳定排序并只保�
 `binaural_render_fixture_test` 使用两组乱序、每组 40 个同起点块，与仅含各组最后一块的场景逐位比较 PCM。覆盖 point、cloud / diffuse / divergence、
 全 diffuse 与 DirectSpeakers（含被覆盖的 LFE），两种平滑长度，以及离线渲染、文件流式渲染和离线 SAF spreader；获胜块较短，另检查被覆盖块不会恢复。
 
+其他后端也有被覆盖块残留的情况：
+- **EAR、VBAP 与 HOA：** Rust `pcm_mix` 与 `hoa` 的取块器会推进到同起点的最后一块，所以稳定排序后生效的是正确的块。但获胜块的插值前驱仍是同起点被覆盖的那一块：不是 jump 的获胜块从被覆盖块的增益渐变，而不是从上一个起点的生效块渐变。
+- **Apple：** Apple 后端把 DirectSpeakers 的 LFE 块与非 LFE 块分到不同的总线，被覆盖的 LFE 块会在自己的总线上继续生效。
+- **22.2 LFE 路由与 VBAP 高度判断：** 两者都统计被覆盖块。例如被覆盖的 LFE1 加上生效的 LFE2，会让 split-power 判定场景同时含两个语义 LFE 而拒绝渲染。
+
+因此双耳的处理移入 `render_common::last_blocks_at_each_start`。EAR、VBAP、HOA、Apple、22.2 LFE 路由与 VBAP 高度判断都在建立增益、
+总线或路由之前调用它，只保留每个起点的最后一块。
+
+`same_start_blocks_test` 对其余后端做同样的比较：
+- 覆盖 EAR 与 VBAP（4+5+0 Objects，以及 9+10+3 split-power 的 DirectSpeakers）和 HOA3（Objects 与 DirectSpeakers）。
+- 每例用两组乱序、每组 40 个同起点块，与只含各组获胜块的场景比较，覆盖两种平滑长度。离线渲染与碎片分块的文件流式渲染都要求逐位相同。
+- 修改前，EAR、VBAP 与 HOA 的 Objects 用例全部不同，EAR 与 VBAP 的 split-power 用例准备失败。
+- Apple 后端只在 macOS 上编译，没有加 PCM 回归。
+
 ## 新增用例与内核门禁
 
 一致性夹具新增 `params`：声道 0 是 Objects，40 个块都从 0 开始、方向各不相同，增益为 −6.25 dB；声道 1 是没有标签的 DirectSpeakers，

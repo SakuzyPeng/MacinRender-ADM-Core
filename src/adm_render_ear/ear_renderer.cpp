@@ -193,7 +193,8 @@ void append_object_blocks(const SceneTrackRef& track,
                           std::size_t num_out,
                           LogSink& logs,
                           bool& screen_ref_warned) {
-    for (const auto& raw_block : track.blocks) {
+    for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.blocks)) {
+        const auto& raw_block = *resolved_block;
         const auto prepared =
             render_common::prepare_object_block(raw_block, obj, speakers, logs, "ear", screen_ref_warned);
         BlockGains bg;
@@ -301,7 +302,8 @@ Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
                                            const render_common::ResolvedDirectSpeakersMatrix* matrix,
                                            const render_common::LfeRoutingPlan& lfe_routing,
                                            LogSink& logs) {
-    for (const auto& ds : track.ds_blocks) {
+    for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.ds_blocks)) {
+        const auto& ds = *resolved_block;
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
         bg.diffuse_gains.resize(num_out, 0.0); // DS has no diffuse bus
@@ -380,7 +382,8 @@ void append_hoa_blocks(const SceneHOATracks& pack,
 
         // One BlockGains per AudioBlockFormatHoa block; the decode matrix row is
         // fixed (order/degree unchanged across blocks), only the gain scalar varies.
-        for (const auto& hblk : ch.blocks) {
+        for (const auto* resolved_block : render_common::last_blocks_at_each_start(ch.blocks)) {
+            const auto& hblk = *resolved_block;
             const double ch_gain = static_cast<double>(hblk.gain) * obj_gain;
             BlockGains bg;
             bg.gains.resize(num_out, 0.0);
