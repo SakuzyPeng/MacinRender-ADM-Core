@@ -115,6 +115,43 @@ def offline_cases():
     return result
 
 
+def stream_cases():
+    """File-streaming replays (PCM consistency 3.1).
+
+    A binaural IRenderStream is pulled in a fixed or fragmented request partition while live
+    gain, mute and topology overrides, a head orientation and a seek land at fixed output frames.
+    The IRenderStream contract makes the delivered PCM independent of the request partition.
+    """
+    events = [
+        {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
+        {'frame': 7001, 'objects': [{'index': 0, 'gain_db': -14.5}]},
+        {'frame': 12345, 'objects': [{'index': 0, 'gain_db': 2.25, 'extent_scale': 0.5, 'diffuse_scale': 1.5}]},
+        {'frame': 20000, 'orientation': [37.0, 12.0, -9.0]},
+        {'frame': 26000, 'objects': [{'index': 0, 'gain_db': -6.0, 'width_scale': 1.75, 'height_scale': 0.25,
+                                      'depth_scale': 2.0, 'divergence_scale': 0.5}]},
+        {'frame': 31000, 'seek': 4800},
+        {'frame': 40000, 'objects': [{'index': 0, 'mute': True}]},
+        {'frame': 44000, 'objects': []},
+    ]
+    result = []
+    for name, fixture, spread in [('cloud', 'objects-extent-multi', 'cloud'),
+                                  ('cartesian', 'objects-cartesian', 'cloud'),
+                                  ('point', 'objects-point', 'none')]:
+        for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+            result.append({'id': f'stream-binaural-{name}-{partition_name}', 'version': 1, 'fixture': fixture,
+                           'renderer': 'saf-binaural', 'spread': spread, 'partition': partition,
+                           'frames': 96000, 'events': events})
+    return result
+
+
+def case_ids():
+    """Every PCM output id: offline cases, both epochs of each Scene replay and file-streaming replays."""
+    ids = [c['id'] for c in offline_cases()]
+    ids += [c['id'] + f'-epoch{e}' for c in scene_cases() for e in (1, 2)]
+    ids += [c['id'] for c in stream_cases()]
+    return ids
+
+
 def scene_cases():
     result = []
     variants = [('vbap', '0+2+0', False), ('vbap', '4+7+0', False),
@@ -243,6 +280,7 @@ def kernel_outputs():
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     names += [f'meter-{rate}.05-k-weighting.f64' for rate in METER_RATES]
+    names += [f'stream-dsp.{part}' for part in ('10-spread.f32', '20-fold.f32', '30-live-gain.f32', '40-mix.f32')]
     names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS
@@ -351,7 +389,7 @@ def validate_build_stamp(build, source, binaries):
 def stamp_build(build):
     """Called by CMake only after all measured executables were built."""
     names = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render',
-             'mr_adm_phase2_scene', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
+             'mr_adm_phase2_scene', 'mr_adm_phase2_stream', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
     import os
     binaries = {name: digest((build / (name + ('.exe' if os.name == 'nt' else ''))).read_bytes()) for name in names}
     save(build / 'phase2-build-stamp.json', {'source': source_fingerprint(), 'binaries': binaries,

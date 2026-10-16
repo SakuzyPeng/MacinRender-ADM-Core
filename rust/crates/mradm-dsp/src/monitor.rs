@@ -23,6 +23,16 @@ fn samples(channels: usize, frames: usize, length: usize) -> Result<usize> {
     Ok(needed)
 }
 
+/// Constant-power stereo fold of one speaker at `azimuth` degrees (+left, BS.2051): the azimuth is
+/// clamped to +-90 so rear speakers fold to the nearest side, and the {L, R} gains are the sine
+/// and cosine of a quarter turn scaled by the pan position, from the libm port (PCM consistency 3.1).
+pub fn stereo_fold(azimuth: f32) -> [f32; 2] {
+    let azimuth = azimuth.clamp(-90.0, 90.0);
+    let position = (azimuth / 90.0 + 1.0) * 0.5;
+    let angle = position * (core::f32::consts::PI / 2.0);
+    [libm::sinf(angle), libm::cosf(angle)]
+}
+
 /// Worker-owned backend blend. Stream lifetime and early-EOS decisions stay with the caller.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Crossfade {
@@ -195,6 +205,19 @@ impl Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stereo_fold_pans_by_azimuth() {
+        assert_eq!(stereo_fold(-90.0), [0.0, 1.0]);
+        assert_eq!(stereo_fold(-135.0), stereo_fold(-90.0));
+        assert_eq!(stereo_fold(135.0), stereo_fold(90.0));
+        let [l, r] = stereo_fold(90.0);
+        assert_eq!(l, 1.0);
+        assert!(r.abs() < 1e-7);
+        let [l, r] = stereo_fold(0.0);
+        assert_eq!(l, r);
+        assert!((l - core::f32::consts::FRAC_1_SQRT_2).abs() < 1e-7);
+        assert!(stereo_fold(f32::NAN)[0].is_nan());
+    }
     #[test]
     fn counter_overflow_is_atomic() {
         let mut fade = Crossfade::new(1, 2048).unwrap();

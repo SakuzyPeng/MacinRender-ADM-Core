@@ -9,6 +9,7 @@
 
 #include "render_common.h"
 #include "render_state.h"
+#include "stream_dsp.h"
 
 namespace mradm::triple_balance {
 namespace {
@@ -67,8 +68,8 @@ class TripleBalanceStream final : public IRenderStream {
             const float width = item.extent_scale * item.extent_width_scale;
             const float height = item.extent_scale * item.extent_height_scale;
             const float depth = item.extent_scale * item.extent_depth_scale;
-            if (!std::isfinite(item.gain_db) || !std::isfinite(std::pow(10.0F, item.gain_db / 20.0F)) ||
-                !std::isfinite(width) || !std::isfinite(height) || !std::isfinite(depth) || item.extent_scale < 0 ||
+            if (!std::isfinite(item.gain_db) || !std::isfinite(dsp::live_gain(item.gain_db)) || !std::isfinite(width) ||
+                !std::isfinite(height) || !std::isfinite(depth) || item.extent_scale < 0 ||
                 item.extent_width_scale < 0 || item.extent_height_scale < 0 || item.extent_depth_scale < 0) {
                 return make_error(ErrorCode::invalid_argument,
                                   "Triple Balance requires finite nonnegative size scales",

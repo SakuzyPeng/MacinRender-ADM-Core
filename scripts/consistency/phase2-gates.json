@@ -33,6 +33,12 @@
     },
     {
       "kind": "kernel",
+      "pattern": "stream-dsp.*",
+      "reason": "file-streaming and monitor arithmetic: binaural extent spread cone, weighted stereo source sum and topology crossfade with separately rounded operations, live override dB gains and the monitor stereo fold with the libm port (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
@@ -1215,6 +1221,42 @@
       "kind": "case",
       "pattern": "scene-vbap-9+10+3-cloud0-96000-96000-fragmented-epoch2",
       "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-binaural-cloud-fixed",
+      "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-binaural-cloud-fragmented",
+      "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-binaural-cartesian-fixed",
+      "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-binaural-cartesian-fragmented",
+      "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-binaural-point-fixed",
+      "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-binaural-point-fragmented",
+      "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
+      "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
     }
   ]
 }

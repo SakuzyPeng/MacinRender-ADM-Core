@@ -9,6 +9,7 @@
 
 #include "meter.h"
 #include "room_worker_wait.h"
+#include "stream_dsp.h"
 
 namespace mradm::realtime {
 
@@ -262,7 +263,7 @@ Result<void> MonitorEngine::set_overrides(const LiveOverrides& overrides) {
     // A finite dB value can still overflow the float gain used by every backend.
     // Reject it on the control thread before replacing a snapshot or calling noexcept DSP.
     const auto invalid = std::ranges::find_if(overrides.objects, [](const auto& item) {
-        return !std::isfinite(item.gain_db) || (!item.mute && !std::isfinite(std::pow(10.0F, item.gain_db / 20.0F)));
+        return !std::isfinite(item.gain_db) || (!item.mute && !std::isfinite(dsp::live_gain(item.gain_db)));
     });
     if (invalid != overrides.objects.end()) {
         return make_error(

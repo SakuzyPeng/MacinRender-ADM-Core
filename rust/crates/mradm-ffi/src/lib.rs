@@ -33,6 +33,7 @@ mod scene_transition;
 mod semantic_policy;
 mod spatial;
 mod spreader;
+mod stream_dsp;
 #[cfg(test)]
 mod test_alloc;
 mod triple_balance;
