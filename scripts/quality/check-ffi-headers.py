@@ -28,6 +28,7 @@ FFI_HEADERS = [
     "src/adm_dsp/ear_ffi.h",
     "src/adm_dsp/dsp_ffi.h",
     "src/adm_dsp/decimal_ffi.h",
+    "src/adm_dsp/timeline_ffi.h",
     "src/adm_dsp/hoa_ffi.h",
     "src/adm_dsp/live_binaural_ffi.h",
     "src/adm_dsp/room_ffi.h",

@@ -68,6 +68,13 @@ void emit_wav_progress(ProgressSink* progress,
 
 } // namespace
 
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+uint64_t next_writer_trace_id() {
+    static std::atomic<uint64_t> next_id{0};
+    return next_id.fetch_add(1);
+}
+#endif
+
 // ── FloatWavWriter ────────────────────────────────────────────────────────────
 
 struct FloatWavWriter::Impl {
@@ -89,8 +96,7 @@ Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t ch
     w.impl_ = std::make_unique<Impl>();
     w.impl_->writer = std::move(*writer);
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    static std::atomic<uint64_t> next_id{0};
-    w.impl_->trace_id = next_id.fetch_add(1);
+    w.impl_->trace_id = next_writer_trace_id();
     w.impl_->trace_channels = channels;
 #endif
     return w;

@@ -1,4 +1,7 @@
 // Repeat the manifest's exact RenderService requests twice in one process.
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -79,6 +82,13 @@ mradm::RenderOptions options(const Json& args) {
             result.loudness_target_lufs = decimal<float>(v);
         } else if (key == "--peak-limit-dbtp") {
             result.peak_limit_dbtp = decimal<float>(v);
+        } else if (key == "--final-gain-db") {
+            result.final_gain_db = decimal<double>(v);
+        } else if (key == "--output-bit-depth") {
+            static const std::map<std::string, mradm::OutputBitDepth> depths{{"f32", mradm::OutputBitDepth::f32},
+                                                                             {"i24", mradm::OutputBitDepth::i24},
+                                                                             {"i16", mradm::OutputBitDepth::i16}};
+            result.output_bit_depth = depths.at(v);
         } else if (key == "--triple-balance-mode") {
             phase2::require(v == "standard" || v == "d", "unsupported Triple Balance mode");
             result.triple_balance_mode = v == "d" ? mradm::TripleBalanceMode::d : mradm::TripleBalanceMode::standard;
@@ -87,6 +97,24 @@ mradm::RenderOptions options(const Json& args) {
         }
     }
     return result;
+}
+// The final file's samples as float32. Integer WAV must keep the requested depth; 16- and 24-bit
+// samples convert to float32 exactly, so equal floats mean equal integers.
+template <typename Reader> std::vector<float> samples(Reader& reader) {
+    std::vector<float> result(static_cast<std::size_t>(reader.frame_count()) * reader.channels());
+    phase2::require(reader.read(result.data(), reader.frame_count()) == reader.frame_count(), "short repeat output");
+    return result;
+}
+uint16_t bits(mradm::OutputBitDepth depth) {
+    switch (depth) {
+    case mradm::OutputBitDepth::i16:
+        return 16U;
+    case mradm::OutputBitDepth::i24:
+        return 24U;
+    case mradm::OutputBitDepth::f32:
+        break;
+    }
+    return 32U;
 }
 } // namespace
 int main(int argc, char** argv) {
@@ -102,7 +130,10 @@ int main(int argc, char** argv) {
         for (int pass = 1; pass <= 2; ++pass) {
             mradm::RenderRequest request;
             request.input_path = argv[2];
-            request.output_path = directory / ("pass-" + std::to_string(pass) + ".wav");
+            // Optional final container: "caf" writes float32 CAF instead of WAV (PCM consistency 3.6).
+            const bool caf = spec.value("container", std::string{"wav"}) == "caf";
+            const auto output = directory / ("pass-" + std::to_string(pass) + (caf ? ".caf" : ".wav"));
+            request.output_path = output;
             request.options = options(spec.at("args"));
             if (spec.contains("sofa")) {
                 const std::filesystem::path name(spec.at("sofa").get<std::string>());
@@ -114,18 +145,24 @@ int main(int argc, char** argv) {
             if (!result.success()) {
                 throw std::runtime_error(result.error.message);
             }
-            auto reader = mradm::audio::FloatWavReader::open(request.output_path->string());
-            phase2::require(reader.has_value(), "cannot open repeat output");
-            std::vector<float> samples(static_cast<std::size_t>(reader->frame_count()) * reader->channels());
-            phase2::require(reader->read(samples.data(), reader->frame_count()) == reader->frame_count(),
-                            "short repeat output");
-            phase2::pcm(directory / ("pass-" + std::to_string(pass) + ".pcmbits"),
-                        reader->channels(),
-                        reader->sample_rate(),
-                        samples);
-            // Close before unlinking on Windows.
-            reader = mradm::make_error(mradm::ErrorCode::io_error, "closed");
-            std::filesystem::remove(*request.output_path);
+            const auto bits_path = directory / ("pass-" + std::to_string(pass) + ".pcmbits");
+            if (caf) {
+                auto reader = mradm::audio::FloatCafReader::open(output.string());
+                phase2::require(reader.has_value(), "cannot open repeat output");
+                phase2::pcm(bits_path, reader->channels(), reader->sample_rate(), samples(*reader));
+                // Close before unlinking on Windows.
+                reader = mradm::make_error(mradm::ErrorCode::io_error, "closed");
+            } else {
+                auto reader = mradm::audio::FloatWavReader::open(output.string());
+                phase2::require(reader.has_value(), "cannot open repeat output");
+                const bool floating = request.options.output_bit_depth == mradm::OutputBitDepth::f32;
+                phase2::require(reader->is_ieee_float() == floating &&
+                                    reader->bits_per_sample() == bits(request.options.output_bit_depth),
+                                "repeat output has the requested sample format");
+                phase2::pcm(bits_path, reader->channels(), reader->sample_rate(), samples(*reader));
+                reader = mradm::make_error(mradm::ErrorCode::io_error, "closed");
+            }
+            std::filesystem::remove(output);
         }
         return 0;
     } catch (const std::exception& e) {

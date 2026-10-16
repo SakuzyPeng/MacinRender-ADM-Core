@@ -133,7 +133,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | --- | --- | --- |
 | N01 | 已处理 | 3.5：CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十进制解析（binary32 参数一次舍入），UID / 扬声器标签 / 布局名等的大小写规范化与字符分类改为只看 ASCII；JSON 数字仍经 nlohmann（`strtod`），按 1.6 登记为依赖三个 C 运行时的正确舍入，再转 binary32 的步骤与平台无关 |
 | N02 | 已处理 | 3.5：ADM 导入的 dB 增益与 Cartesian DirectSpeakers 投影改用 `libm`（`mradm-adm` `numeric`），`adm-import.*` 内核设为门禁 |
-| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；3.3：HOA 文件流式改用共用的按声道解析（扬声器标签优先于整体覆盖）；3.5：核对语义策略、实时覆盖与 Monitor 的全部增益入口都经 Rust `libm::powf`，C++ 不再有 `std::pow` |
+| N03 | 已处理 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；3.3：HOA 文件流式改用共用的按声道解析（扬声器标签优先于整体覆盖）；3.5：核对语义策略、实时覆盖与 Monitor 的全部增益入口都经 Rust `libm::powf`，C++ 不再有 `std::pow` |
 | N04 | 已处理 | Scene 空间数学改用 `libm`（1.3） |
 | N05 | 已处理 | `geometry::direction` 与 VBAP spread 环改用 `libm::sincos`（1.3） |
 | N06 | 已处理 | 3.2：EAR 几何、extent 权重与立体声 panner 改用 `libm`，`ear-gains.*` 内核设为门禁；EAR HOA 解码的球谐与采样方向属 N07（3.3） |
@@ -151,11 +151,11 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | N18 | 已处理 | 3.1：Monitor 折叠矩阵改用 `libm::sinf/cosf`，`stream-dsp.20-fold.f32` 设为门禁 |
 | S01 | 已处理 | 2.2：去掉 x86 FTZ，所有架构统一清零低于 `f64::EPSILON` 的滤波器状态；2.4：清零改在 100 ms 块网格上，读数与分块无关 |
 | S02 | 已处理 | HpTF 尾音清理改为自 reset 起的 1024 帧网格（1.4） |
-| S03 | 部分 | Scene 的分块条件已在 1.5 逐环节记录，并对 11 个用例设分块无关门禁；双耳卷积与分数比率重采样依赖分块，是否消除待决定；文件流式 `Mixer` 平滑属三期 |
-| S04 | 部分 | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；Monitor 快照属三期 |
-| S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
-| S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
-| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁 |
+| S03 | 保留（分块条件） | Scene 的分块条件已在 1.5 逐环节记录，并对 11 个用例设分块无关门禁；双耳卷积与分数比率重采样依赖分块，按分块配置分别门禁；三期结项：文件流式 `Mixer` 的对象平滑按每次调用的首尾增益插值，依赖请求分块，三期的文件流式重放都不开平滑，这一路径没有门禁 |
+| S04 | 保留（运行时条件） | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；三期结项：Monitor 按墙钟取样控制快照，同一 UI 操作落在哪个样本取决于调度，不要求逐位相同 |
+| S05 | 保留（运行时条件） | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；三期结项：Monitor 是否欠载取决于调度，数值比较使用无欠载的文件流式与 Scene 重放 |
+| S06 | 已处理 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；3.6：输出裁剪、预览窗口与 Monitor 定位 / 循环共用 Rust `timeline::seconds_to_frame`（最近帧，半帧远离零），`timeline.*` 内核与半帧边界裁剪用例设为门禁 |
+| S07 | 保留（构建条件） | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁；三期结项：门禁依赖固定的工具链、`Cargo.lock`、有效编译选项与默认宿主浮点环境，C++ 剩余乘法与加法都是单独语句，锁定的三个平台不会融合（GCC 在 C++ 中默认 `-ffp-contract=fast`，不在矩阵内的组合不受保护） |
 | S08 | 已处理 | 3.5：在 libstdc++ 上复现（40 个同起点块时旧实现生效的不是文档中的最后一块）。规则：同起点块保持场景（ADM 文档）顺序，最后一块在其整个区间生效，被覆盖块不留下分量、插值前驱或路由判断。双耳、EAR、VBAP、HOA、Apple、22.2 LFE 路由与 VBAP 高度判断都在建立增益、总线或路由前经 `render_common::last_blocks_at_each_start` 只保留每个起点的最后一块；`binaural_render_fixture_test` 与 `same_start_blocks_test` 与仅含获胜块的场景逐位比较，`params-*` 用例设为门禁 |
 
 ## C++ 剩余执行点
@@ -176,7 +176,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期 |
 | 文件流式渲染的监听适配 | Monitor 折叠矩阵、实时覆盖增益、`clamp_frame` 秒到帧换算。 | N03/N18/S06；实时监听用途不改变其所属渲染流程。 | 三期 |
 | 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移） |
-| PCM 输出控制 | 秒到帧 trim、写出块循环与临时文件替换。WAVE 样本量化和序列化已经在 Rust。 | S06；数值边界统一，I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期 |
+| PCM 输出控制 | 写出块循环与临时文件替换。3.6 起秒到帧换算在 Rust `timeline`；WAVE 样本量化和序列化在 Rust；CAF float32 由 C++ 显式按小端序列化。 | S06 已处理；I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期（3.6 已完成） |
 
 ## 已收敛的实现与 PCM 写出
 
@@ -192,7 +192,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | HRTF 缓存 | [`Filters` 查询缓存](../../rust/crates/mradm-dsp/src/hrtf_filters/cache.rs)、[`PreparedHrtfs`](../../rust/crates/mradm-dsp/src/live_binaural/prepared.rs)保留原有邻居和乘加顺序，缓存保存已计算结果。 | 缓存容量或命中本身未发现新的数值算法切换；需继续保持命中与未命中逐位回归。 |
 | WAV float32 | [`Writer::write_frames`](../../rust/crates/mradm-wav/src/writer.rs#L136)直接 `sample.to_le_bytes()`。 | 有限样本位模式相同就写出相同样本字节。NaN payload 若在上游不同，writer 不会替上游统一它。 |
 | WAV 整数 PCM | 同一 writer：f32 裁剪到 [-1,1]，转 f64 乘 32767 / 8388607 / 2147483647，再向零截断；NaN 拒绝。 | 无随机 dither，无平台 `lrint`。相同 f32 输入在默认浮点环境下有明确结果；不同上游样本在整数阈值附近可能相差 1 LSB，也可能量化成相同整数。 |
-| CAF float32 | [`FloatCafWriter::write`](../../src/adm_audio/caf_io.cpp#L400)直接 `fwrite(float)`，文件声明 little-endian float32。 | 现有 macOS arm64、Linux x64、Windows x64 均为小端；若新增大端平台需改为显式小端序列化。当前三平台上没有额外 DSP。 |
+| CAF float32 | [`FloatCafWriter::write`](../../src/adm_audio/caf_io.cpp#L400)：3.6 起把位模式显式按小端序列化（读取同样显式解析），文件声明 little-endian float32。 | 不再依赖主机字节序；三平台输出字节不变，没有额外 DSP。`final-caf-*` 用例设为门禁。 |
 | 后处理重写 | `apply_gain_to_file`、trim、`downconvert_to_int` 使用同一 WAVE 读写层；增益是单独的 f32 乘法。 | 增益来源见 N15，帧边界见 S06。成功完成后的样本比较不应包含临时路径、metadata 或文件头差异。 |
 
 ## 本轮实施优先级
@@ -395,6 +395,14 @@ CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十
 Linux x64 上原有 228 个 PCM id 不变；`75e38ae` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过，
 233 个 PCM id 与 231 个内核文件三平台相同，253 项门禁无失败，诊断检查点全部相同；同起点块修正后，`c89e81a` 的 Consistency 38907550214
 与 CI 38907555184 再次确认 233 个 PCM id（含新的 `params-*` 结果）与 231 个内核文件三平台相同。见 [3.5 记录](RUST_PARAMETER_ENTRY.md)。
+
+**3.6 状态**：输出裁剪、预览窗口与 Monitor 定位 / 循环共用 Rust `timeline::seconds_to_frame`（最近帧，半帧远离零），Monitor 由截断改为
+最近帧（S06）；CAF float32 显式按小端序列化。增益重写与整数量化原已在 Rust 且确定，本切片补边界覆盖：新增 9 个 `final-*` 离线用例
+（16 / 24 位整数 WAVE、满幅钳位、7.1.4 置换与 ADM BW64、float32 CAF、半帧边界裁剪）与 4 个 `timeline` / `wav-quantize` 内核文件，
+PCM 门禁增至 242 个，内核文件 235 个中 230 个设为门禁。Linux x64 上原有 233 个 PCM id 与 231 个内核文件不变。见 [3.6 记录](RUST_FINAL_PCM.md)。
+
+**三期结项**：六个切片完成，N01—N18 全部处理，S01、S02、S06、S08 已处理；S03 保留为分块条件（文件流式对象平滑依赖请求分块，无门禁），
+S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿主浮点环境条件。各项依据与门禁规模见 [3.6 记录](RUST_FINAL_PCM.md#三期结项)。
 
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。

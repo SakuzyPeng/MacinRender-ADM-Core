@@ -12,6 +12,8 @@ use std::{
 mod coverage;
 #[path = "phase2/ear_gains.rs"]
 mod ear_gains;
+#[path = "phase2/final_pcm.rs"]
+mod final_pcm;
 #[path = "phase2/hoa.rs"]
 mod hoa;
 #[path = "phase2/meter.rs"]
@@ -328,6 +330,7 @@ fn run(out: &Path, fixtures: &Path) {
     hoa::run(out);
     triple_balance::run(out);
     params::run(out);
+    final_pcm::run(out);
 }
 
 fn main() {
