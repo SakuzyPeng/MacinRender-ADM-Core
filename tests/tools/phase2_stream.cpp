@@ -68,6 +68,11 @@ mradm::LiveOverrides overrides(const Json& objects, const mradm::AdmScene& scene
 
 std::vector<float>
 replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmScene& scene, uint32_t& sample_rate) {
+    phase2::require(spec.at("version").get<int>() == 2, "unsupported file-streaming replay version");
+    phase2::require(scene.info.num_frames == spec.at("input_frames").get<uint64_t>(),
+                    "file-streaming input frame count differs from the case");
+    phase2::require(scene.info.sample_rate == spec.at("sample_rate").get<uint32_t>(),
+                    "file-streaming input sample rate differs from the case");
     Log logs;
     auto renderer = mradm::create_binaural_renderer();
     mradm::RenderPlan plan;
@@ -82,6 +87,7 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
     auto stream = std::move(*opened);
     phase2::require(stream->out_channels() == 2U, "binaural stream must be stereo");
     sample_rate = stream->sample_rate();
+    phase2::require(sample_rate == scene.info.sample_rate, "file-streaming output sample rate differs from the input");
 
     const auto partition = spec.at("partition").get<std::vector<std::size_t>>();
     phase2::require(!partition.empty() && std::ranges::none_of(partition, [](std::size_t n) { return n == 0U; }),
@@ -91,6 +97,7 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
     std::vector<float> delivered;
     std::vector<float> block;
     uint64_t position = 0;
+    uint64_t media_position = 0;
     uint64_t revision = 0;
     std::size_t next_event = 0;
     std::size_t request = 0;
@@ -108,19 +115,27 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
                 stream->set_listener_orientation({angles[0], angles[1], angles[2]});
             }
             if (event.contains("seek")) {
-                phase2::require(stream->seek(event.at("seek").get<uint64_t>()).has_value(), "seek failed");
+                const auto target = event.at("seek").get<uint64_t>();
+                phase2::require(stream->seek(target).has_value(), "seek failed");
+                media_position = std::min(target, scene.info.num_frames);
             }
         }
         phase2::require(next_event == events.size() || events[next_event].at("frame").get<uint64_t>() > position,
                         "events must be ordered by output frame");
-        const uint64_t limit = next_event < events.size() ? events[next_event].at("frame").get<uint64_t>() : total;
+        const uint64_t limit =
+            next_event < events.size() ? std::min(total, events[next_event].at("frame").get<uint64_t>()) : total;
         const auto frames =
             static_cast<std::size_t>(std::min<uint64_t>(partition[request++ % partition.size()], limit - position));
         block.assign(frames * 2U, 0.0F);
         const auto produced = stream->process(block, frames);
         phase2::require(produced.has_value(), "stream process failed");
+        // Check the media timeline independently of the stream's reported progress. In particular,
+        // a seek that reports success without moving must not pass as a shorter, repeatable replay.
+        const auto expected = std::min<uint64_t>(frames, scene.info.num_frames - media_position);
+        phase2::require(*produced == expected, "file-streaming frame count differs from replay timeline");
         delivered.insert(delivered.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * 2U));
         position += *produced;
+        media_position += *produced;
         if (*produced < frames) {
             break; // end of material
         }

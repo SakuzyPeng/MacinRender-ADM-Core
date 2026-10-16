@@ -115,8 +115,11 @@ def validate(root):
     disk_pcm = {p.name for p in (root / 'pcm').glob('*.pcmbits')}
     if disk_pcm != {Path(v['path']).name for v in manifest['outputs'].values()}:
         raise ValueError('PCM inventory differs from manifest')
+    stream_by_id = {row['id']: row for row in manifest['stream']}
     for name, row in manifest['outputs'].items():
         shape, bits = common.pcm_bytes(safe_file(root, row['path']))
+        if name in stream_by_id:
+            common.validate_stream_shape(stream_by_id[name], shape)
         if name.startswith(('sofa-', 'scene-sofa-')):
             common.validate_sofa_pcm(safe_file(root, row['path']))
         if list(shape) != row['shape'] or common.digest(bits) != row['sha256']:
