@@ -24,6 +24,7 @@
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
+#include "adm/live_override.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -165,7 +166,10 @@ struct Output {
     std::vector<float> streaming;
 };
 
-std::optional<Output> render(const mradm::RenderPlan& base, mradm::IRenderer& renderer, std::string_view label) {
+std::optional<Output> render(const mradm::RenderPlan& base,
+                             mradm::IRenderer& renderer,
+                             std::string_view label,
+                             const mradm::LiveOverrides* overrides = nullptr) {
     const auto path = std::filesystem::temp_directory_path() / "mr_same_start_blocks_output.wav";
     FileGuard guard(path);
     mradm::RenderPlan plan = base;
@@ -191,6 +195,9 @@ std::optional<Output> render(const mradm::RenderPlan& base, mradm::IRenderer& re
     if (!check(stream.has_value(), std::string{label} + ": file streaming opens")) {
         return std::nullopt;
     }
+    if (overrides != nullptr) {
+        (*stream)->set_overrides(*overrides);
+    }
     const std::array<std::size_t, 4> chunks{7U, 333U, 1024U, 19U};
     std::size_t chunk = 0;
     for (std::size_t remaining = k_frames; remaining > 0;) {
@@ -206,6 +213,9 @@ std::optional<Output> render(const mradm::RenderPlan& base, mradm::IRenderer& re
         output.streaming.insert(
             output.streaming.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*got * channels));
         remaining -= *got;
+    }
+    if (!check(output.streaming.size() == output.offline.size(), std::string{label} + ": complete file stream")) {
+        return std::nullopt;
     }
     return output;
 }
@@ -227,6 +237,61 @@ struct Backend {
     mradm::LfeRoutingMode lfe_mode{mradm::LfeRoutingMode::direct};
 };
 
+bool verify_live_label(mradm::RenderPlan plan, const Backend& backend) {
+    auto& track = plan.scene.objects.front().tracks.front();
+    track.blocks.clear();
+    plan.lfe_routing_mode = mradm::LfeRoutingMode::direct;
+    bool ok = true;
+    for (const std::string_view winning_label : {"M+030", ""}) {
+        mradm::SceneDirectSpeakersBlock first;
+        first.end_sample = 2048U;
+        first.has_position = true;
+        first.azimuth = 30.0F;
+        if (!winning_label.empty()) {
+            first.speaker_labels = {std::string{winning_label}};
+        }
+        auto second = first;
+        second.start_sample = first.end_sample;
+        second.end_sample = k_frames;
+        auto overwritten_first = first;
+        overwritten_first.speaker_labels = {"M-030"};
+        overwritten_first.azimuth = -30.0F;
+        auto overwritten_second = overwritten_first;
+        overwritten_second.start_sample = second.start_sample;
+        overwritten_second.end_sample = k_frames;
+
+        for (const std::string_view override_label : {"M+030", "M-030", ""}) {
+            for (const bool mute : {false, true}) {
+                mradm::LiveObjectOverride item;
+                item.object_id = plan.scene.objects.front().id;
+                item.speaker_label = override_label;
+                item.gain_db = -12.0F;
+                item.mute = mute;
+                const mradm::LiveOverrides overrides{{item}, 1U};
+                const std::string label = std::string{backend.name} + " live label='" + std::string{winning_label} +
+                                          "' override='" + std::string{override_label} +
+                                          "' mute=" + std::to_string(mute);
+                track.ds_blocks = {first, second};
+                const auto expected = render(plan, *backend.create(), label + " (winners only)", &overrides);
+                // Reverse chronological order, with a stale label at both starts. An unlabeled
+                // winner must also discard the overwritten label and retain whole-object controls.
+                track.ds_blocks = {overwritten_second, overwritten_first, second, first};
+                const auto actual = render(plan, *backend.create(), label, &overrides);
+                if (!actual || !expected) {
+                    ok = false;
+                    continue;
+                }
+                const bool should_mute = mute && (override_label.empty() || override_label == winning_label);
+                ok &= check(nonzero(expected->offline), label + ": unmodified output has signal");
+                ok &= check(nonzero(expected->streaming) != should_mute, label + ": override targets the winner");
+                ok &= check(bit_equal(actual->streaming, expected->streaming),
+                            label + ": file-streaming override equals the last blocks");
+            }
+        }
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() try {
@@ -247,6 +312,13 @@ int main() try {
     };
     bool ok = true;
     for (const auto& backend : backends) {
+        if (backend.kind == Kind::direct_speakers) {
+            mradm::RenderPlan plan;
+            plan.input_path = input.string();
+            plan.output_layout = std::string{backend.layout};
+            plan.scene = *scene;
+            ok &= verify_live_label(std::move(plan), backend);
+        }
         for (const uint32_t smoothing : {0U, 1024U}) {
             const std::string label = std::string{backend.name} + " " + std::string{backend.layout} +
                                       (backend.kind == Kind::objects ? " objects" : " direct-speakers") +
