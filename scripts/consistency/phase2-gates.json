@@ -39,6 +39,12 @@
     },
     {
       "kind": "kernel",
+      "pattern": "ear-gains.*",
+      "reason": "EAR point-source, polar extent and DirectSpeakers gains on fixed metadata with the libm port for every elementary function (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
@@ -1257,6 +1263,42 @@
       "pattern": "stream-binaural-point-fragmented",
       "reason": "binaural file-streaming replay with live gain, mute and topology overrides, head orientation and a seek; the gain sum and topology crossfade run in Rust (PCM consistency 3.1)",
       "reference": "docs/architecture/RUST_FILE_STREAM_BINAURAL.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-point-fixed",
+      "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-point-fragmented",
+      "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-extent-fixed",
+      "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-extent-fragmented",
+      "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-bed-fixed",
+      "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-bed-fragmented",
+      "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
+      "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
     }
   ]
 }

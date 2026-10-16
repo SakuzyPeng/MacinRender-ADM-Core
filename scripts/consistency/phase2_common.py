@@ -116,13 +116,14 @@ def offline_cases():
 
 
 def stream_cases():
-    """File-streaming replays (PCM consistency 3.1).
+    """File-streaming replays (PCM consistency 3.1 binaural, 3.2 EAR).
 
-    A binaural IRenderStream is pulled in a fixed or fragmented request partition while live
-    gain, mute and topology overrides, a head orientation and a seek land at fixed output frames.
+    An IRenderStream is pulled in a fixed or fragmented request partition while live gain, mute
+    and (binaural) topology overrides, a head orientation and a seek land at fixed output frames.
     The IRenderStream contract makes the delivered PCM independent of the request partition.
+    Version 3 names the renderer, the requested output layout and the channel count.
     """
-    events = [
+    binaural_events = [
         {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
         {'frame': 7001, 'objects': [{'index': 0, 'gain_db': -14.5}]},
         {'frame': 12345, 'objects': [{'index': 0, 'gain_db': 2.25, 'extent_scale': 0.5, 'diffuse_scale': 1.5}]},
@@ -133,15 +134,45 @@ def stream_cases():
         {'frame': 40000, 'objects': [{'index': 0, 'mute': True}]},
         {'frame': 44000, 'objects': []},
     ]
+    # EAR streams apply live gain and mute per input channel; DirectSpeakers beds also take
+    # per-channel overrides by speaker label, which win over the whole-object entry.
+    object_events = [
+        {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
+        {'frame': 7001, 'objects': [{'index': 0, 'gain_db': -14.5}]},
+        {'frame': 12345, 'objects': [{'index': 0, 'gain_db': 2.25}]},
+        {'frame': 26000, 'objects': [{'index': 0, 'gain_db': -6.0}]},
+        {'frame': 31000, 'seek': 4800},
+        {'frame': 40000, 'objects': [{'index': 0, 'mute': True}]},
+        {'frame': 44000, 'objects': []},
+    ]
+    bed_events = [
+        {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
+        {'frame': 7001, 'objects': [{'index': 0, 'gain_db': -1.5},
+                                    {'index': 0, 'speaker_label': 'M+030', 'gain_db': -12.0},
+                                    {'index': 0, 'speaker_label': 'M-110', 'mute': True}]},
+        {'frame': 12345, 'objects': [{'index': 0, 'speaker_label': 'M+000', 'gain_db': -20.0}]},
+        {'frame': 26000, 'objects': [{'index': 0, 'gain_db': 2.25}]},
+        {'frame': 31000, 'seek': 4800},
+        {'frame': 40000, 'objects': [{'index': 0, 'mute': True},
+                                     {'index': 0, 'speaker_label': 'M-030', 'gain_db': -6.0}]},
+        {'frame': 44000, 'objects': []},
+    ]
+    variants = [('binaural-cloud', 'objects-extent-multi', 'saf-binaural', 'binaural', 2, 'cloud', binaural_events),
+                ('binaural-cartesian', 'objects-cartesian', 'saf-binaural', 'binaural', 2, 'cloud', binaural_events),
+                ('binaural-point', 'objects-point', 'saf-binaural', 'binaural', 2, 'none', binaural_events),
+                ('ear-point', 'objects-point', 'ear', '7.1.4', 12, None, object_events),
+                ('ear-extent', 'objects-extent-multi', 'ear', '9.1.6', 16, None, object_events),
+                ('ear-bed', 'directspeakers', 'ear', '7.1.4', 12, None, bed_events)]
     result = []
-    for name, fixture, spread in [('cloud', 'objects-extent-multi', 'cloud'),
-                                  ('cartesian', 'objects-cartesian', 'cloud'),
-                                  ('point', 'objects-point', 'none')]:
+    for name, fixture, renderer, layout, channels, spread, events in variants:
         for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
-            result.append({'id': f'stream-binaural-{name}-{partition_name}', 'version': 2, 'fixture': fixture,
-                           'renderer': 'saf-binaural', 'spread': spread, 'partition': partition,
-                           'input_frames': 48000, 'sample_rate': 48000,
-                           'frames': 96000, 'events': events})
+            case = {'id': f'stream-{name}-{partition_name}', 'version': 3, 'fixture': fixture,
+                    'renderer': renderer, 'output_layout': layout, 'channels': channels}
+            if spread is not None:
+                case['spread'] = spread
+            case.update({'partition': partition, 'input_frames': 48000, 'sample_rate': 48000,
+                         'frames': 96000, 'events': events})
+            result.append(case)
     return result
 
 
@@ -163,7 +194,7 @@ def stream_output_shape(case):
                 raise ValueError('negative file-streaming seek target')
             media_position = min(event['seek'], input_frames)
     frames = position + min(limit - position, input_frames - media_position)
-    return (2, case['sample_rate'], frames)
+    return (case['channels'], case['sample_rate'], frames)
 
 
 def validate_stream_shape(case, shape):
@@ -308,6 +339,7 @@ def kernel_outputs():
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     names += [f'meter-{rate}.05-k-weighting.f64' for rate in METER_RATES]
     names += [f'stream-dsp.{part}' for part in ('10-spread.f32', '20-fold.f32', '30-live-gain.f32', '40-mix.f32')]
+    names += [f'ear-gains.{part}' for part in ('10-point.f64', '20-extent.f64', '30-direct.f64')]
     names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS
