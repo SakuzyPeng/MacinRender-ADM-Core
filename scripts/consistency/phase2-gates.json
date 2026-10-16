@@ -57,6 +57,12 @@
     },
     {
       "kind": "kernel",
+      "pattern": "triple-balance.*",
+      "reason": "Triple Balance point, 22.2 room, size lattice and mixes shared by every standard-mode path, and the D-mode gains, all with the libm port (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
@@ -1359,6 +1365,78 @@
       "pattern": "stream-ear-hoa3-fragmented",
       "reason": "EAR file-streaming replay of third-order HOA input with a seek (PCM consistency 3.3)",
       "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-size-714",
+      "reason": "Triple Balance 7.1.4 size path on a moving equal-size Cartesian object (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-size-916",
+      "reason": "Triple Balance 9.1.6 size path on a moving equal-size Cartesian object (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-size-222",
+      "reason": "Triple Balance 22.2 room size path on a moving equal-size Cartesian object (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-size-window",
+      "reason": "Triple Balance 9.1.6 size path rendered as a window with preroll (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-d-916",
+      "reason": "Triple Balance D mode, 9.1.6 (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-d-222",
+      "reason": "Triple Balance D mode, 22.2 (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-triple-714-fixed",
+      "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-triple-714-fragmented",
+      "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-triple-916-fixed",
+      "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-triple-916-fragmented",
+      "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-triple-222-fixed",
+      "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-triple-222-fragmented",
+      "reason": "Triple Balance file-streaming replay with live gain, mute, linked size scale and a seek (PCM consistency 3.4)",
+      "reference": "docs/architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md"
     }
   ]
 }
