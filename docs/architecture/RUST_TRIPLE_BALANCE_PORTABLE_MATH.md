@@ -65,3 +65,9 @@ PCM：216 个原有 PCM id 全部不变（原有 Triple Balance 离线用例都�
 24 个文件流式重放的同进程两遍、新进程与固定/碎片分块比较全部相同。比较器自检 228 个 PCM id、246 项门禁无失败。
 ctest 79 项全部通过（`realtime_allocations` 曾因格点在首次处理时构建而失败，改为在 `Processor::new` 构建后通过）；
 Rust fmt / clippy、源码扫描测试、许可证校验、clang-format 与 clang-tidy 无告警。
+
+**三平台验收。** `e0ef382` 的 Consistency 38874020588、CI 38874023487 与 Quality 38874026573 通过：
+
+- A/B 两种配置下 228 个 PCM id 三平台相同，包括 6 个 size / D 模式离线用例与 24 个文件流式重放（6 个 Triple Balance）；246 项门禁无失败；
+- 228 个内核文件全部三平台相同，包括 4 个 `triple-balance` 内核文件；
+- 诊断检查点 76,761 个全部三平台相同。
