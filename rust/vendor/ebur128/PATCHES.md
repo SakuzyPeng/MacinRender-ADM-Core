@@ -26,5 +26,13 @@ Loudness (2.2):
 - `src/filter.rs` adds `k_weighting_coefficients(rate)`, re-exported from `src/lib.rs`, which returns the K-weighting
   numerator and denominator the meter builds for that rate so the kernel probe can record them.
 
+Chunking (2.4):
+
+- Filter states below `f64::EPSILON` are no longer zeroed at the end of every `Filter::process` call, which made
+  momentary and short-term readings of near-silence depend on how the caller split its input. `Filter` gains
+  `clear_small_states`, and `add_frames` in `src/ebur128.rs` calls it each time a 100 ms block completes: the zeroing
+  points depend only on the frame count since the last reset. `Filter::seed` (not used by the project) keeps the
+  per-call zeroing.
+
 The histogram tables, block energies, gating order and summation order are unchanged. The phase-two kernel probe gates
 the coefficients, true peak and loudness of the production meter at 44.1, 48, 96 and 192 kHz.
