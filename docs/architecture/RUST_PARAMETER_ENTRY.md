@@ -80,3 +80,9 @@ Cartesian 位置 (0.5, 0.75, 0.25)，增益为 −3.5 dB。
 EAR、VBAP、HOA 与双耳的输出都因生效块不同而明显改变（S08）。比较器自检 233 个 PCM id、253 项门禁无失败。ctest 79 项全部通过；
 Rust fmt / clippy、`decimal` 单元测试（含一次舍入与二次舍入结果不同的例子）、源码扫描测试、FFI 头校验（271 个函数）、许可证校验、
 clang-format 与 clang-tidy 无告警；命令行越界与非数字的取值仍被拒绝。
+
+**三平台验收。** `75e38ae` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过：
+
+- A/B 两种配置下 233 个 PCM id 三平台相同，包括 5 个 `params-*` 用例（含经命令行解析听者朝向的 `params-binaural-rotated`）；253 项门禁无失败；
+- 231 个内核文件全部三平台相同，包括 `adm-import.10-gain.f32`、`adm-import.20-cartesian.f32` 与 `decimal.10-parse.f64`；
+- 诊断检查点 78,459 个（每对平台 25,952 个用例检查点与 201 个内核检查点）全部三平台相同。

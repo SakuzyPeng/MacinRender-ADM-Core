@@ -387,6 +387,13 @@ PCM 门禁增至 216 个，内核文件 224 个中 219 个设为门禁。Linux x
 Linux x64 上原有 216 个 PCM id 不变；`e0ef382` 的 Consistency 38874020588、CI 38874023487 与 Quality 38874026573 通过，
 228 个 PCM id 与 228 个内核文件三平台相同，246 项门禁无失败，诊断检查点全部相同。见 [3.4 记录](RUST_TRIPLE_BALANCE_PORTABLE_MATH.md)。
 
+**3.5 状态**：ADM 导入的 dB 增益与 Cartesian DirectSpeakers 投影改用 `libm`（N02），各 Rust crate 的生产代码不再调用平台初等函数；
+CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十进制解析，标签 / UID 规范化只看 ASCII（N01）；核对后 N03 不再有需要迁移的
+增益入口；同起点块改为按 ADM 文档顺序稳定排序、最后一块生效（S08，在 libstdc++ 上复现了旧实现的错误生效块）。新增 `params` 夹具、
+5 个 `params-*` 离线用例与 3 个 `adm-import` / `decimal` 内核文件，PCM 门禁增至 233 个，内核文件 231 个中 226 个设为门禁。
+Linux x64 上原有 228 个 PCM id 不变；`75e38ae` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过，
+233 个 PCM id 与 231 个内核文件三平台相同，253 项门禁无失败，诊断检查点全部相同。见 [3.5 记录](RUST_PARAMETER_ENTRY.md)。
+
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。
 
