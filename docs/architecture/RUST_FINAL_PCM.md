@@ -74,6 +74,22 @@ EAR 的 `wav71` 只交换样本位置，不含运算。原有离线用例只覆�
 比较器自检 242 个 PCM id、264 项门禁无失败。ctest 80 项全部通过；Rust 单元测试（含半帧、饱和与非法输入）、fmt / clippy、
 FFI 头校验（272 个函数）、一致性工具测试、clang-format 与 clang-tidy 无告警。
 
+### 审查与诊断采集修正
+
+公开 C++ `RenderService` / `PreviewSession` 的裁剪入口必须保留时间换算失败，不能用第 0 帧或素材末尾代替。
+现在非有限的起止时间及负起点返回 `invalid_argument`，不创建输出；未指定终点时的 NaN / 负起点也进入校验。
+有限的极大终点仍按饱和换算后钳位到素材长度。`render_trim_fixture_test` 对两个入口覆盖 9 组非法窗口，并覆盖
+有限终点乘以采样率溢出的情况；新增测试在修正前失败，修正后 12 项 fixture 检查全部通过。
+
+`d07f4cd` 的 [Consistency 38932508634](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38932508634)
+在六个平台 / 配置组合中均因 `final-caf-ear-714-trim-gain` 缺少 writer 检查点而失败：普通采集完成，但 CAF writer
+尚未像 WAVE writer 一样记录诊断 PCM。CAF 现在在诊断构建中记录每次成功写出的完整帧，按 writer pass 与帧位置命名；
+WAVE / CAF 共用 pass ID，避免同一进程混用容器时覆盖检查点。普通构建不包含这些诊断操作。
+
+macOS 的 Release 定向验证复用已有依赖、重编译音频读写模块：两个 `final-caf-*` 用例分别产生 45 / 59 个 writer
+检查点，最后一轮检查点拼接后与最终文件 PCM 逐位相同，诊断开关前后 PCM 不变。另验证混用 WAVE / CAF 的 pass ID、
+分块帧位置、零长度写入及带符号零 / 次正规数位模式；此项本机验证不替代完整三平台矩阵。
+
 ## 三期结项
 
 三期按审计的分期处理文件流式渲染与离线渲染，六个切片的门禁规模如下：
