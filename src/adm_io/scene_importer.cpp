@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -31,7 +30,8 @@ std::string normalize_uid(std::string raw) {
     while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\0')) {
         raw.pop_back();
     }
-    std::ranges::transform(raw, raw.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    std::ranges::transform(
+        raw, raw.begin(), [](char c) { return (c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c); });
     return raw;
 }
 

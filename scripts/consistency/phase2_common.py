@@ -132,6 +132,20 @@ def offline_cases():
          'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '9.1.6', '--triple-balance-mode', 'd']},
         {'id': 'triple-d-222', 'fixture': 'objects-room', 'slice': '3.4',
          'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '22.2', '--triple-balance-mode', 'd']},
+        # PCM consistency 3.5: ADM dB gains, a Cartesian DirectSpeakers channel and 40 blocks sharing a
+        # start (the last in document order is in effect), plus decimal command-line values that sit
+        # next to binary32 rounding boundaries.
+        {'id': 'params-ear', 'fixture': 'params', 'slice': '3.5',
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '7.1.4']},
+        {'id': 'params-saf', 'fixture': 'params', 'slice': '3.5',
+         'args': ['--no-peak-limit', '--renderer', 'saf', '--output-layout', '5.1']},
+        {'id': 'params-hoa', 'fixture': 'params', 'slice': '3.5',
+         'args': ['--no-peak-limit', '--renderer', 'hoa', '--output-layout', 'hoa3']},
+        {'id': 'params-binaural', 'fixture': 'params', 'slice': '3.5',
+         'args': ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural']},
+        {'id': 'params-binaural-rotated', 'fixture': 'params', 'slice': '3.5',
+         'args': ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural',
+                  '--listener-yaw', '37.000001', '--listener-pitch', '1.25e1', '--listener-roll', '-9.9999999']},
     ]
     return result
 
@@ -382,6 +396,7 @@ def kernel_outputs():
     names += [f'hoa-encode.{part}' for part in ('10-point.f32', '20-extent.f32', '30-direct.f32')]
     names += ['ear-hoa.10-decode.f64']
     names += [f'triple-balance.{part}' for part in ('10-point.f32', '20-room.f32', '30-size.f32', '40-d-mode.f32')]
+    names += ['adm-import.10-gain.f32', 'adm-import.20-cartesian.f32', 'decimal.10-parse.f64']
     names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS

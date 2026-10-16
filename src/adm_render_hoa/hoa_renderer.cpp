@@ -14,6 +14,7 @@
 #include <string_view>
 #include <vector>
 
+#include "decimal.h"
 #include "hoa.h"
 #include "meter.h"
 #include "post_gain.h"
@@ -65,16 +66,12 @@ std::optional<std::pair<float, float>> parse_speaker_label(const std::string& la
         return std::nullopt;
     }
     const float sign = (label[1] == '+') ? 1.0F : -1.0F;
-    try {
-        std::size_t consumed = 0;
-        const float az = std::stof(label.substr(2), &consumed) * sign;
-        if (2U + consumed != label.size()) {
-            return std::nullopt; // trailing garbage (e.g. "M+030foo")
-        }
-        return std::make_pair(az, el);
-    } catch (...) {
+    // Locale-independent and correctly rounded; trailing garbage (e.g. "M+030foo") is rejected.
+    const auto az = dsp::parse_decimal<float>(std::string_view{label}.substr(2));
+    if (!az) {
         return std::nullopt;
     }
+    return std::make_pair(*az * sign, el);
 }
 
 struct ChannelBinding {
@@ -203,7 +200,8 @@ Result<void> build_gain_matrix(const AdmScene& scene, LogSink& logs, HoaPrepared
     std::vector<MradmHoaRow> rows;
     std::vector<std::size_t> order;
     for (auto& [channel, cg] : by_channel) {
-        std::ranges::sort(cg.order, {}, &BlockOrder::start_sample);
+        // Blocks sharing a start keep their scene (ADM document) order; the last one is in effect.
+        std::ranges::stable_sort(cg.order, {}, &BlockOrder::start_sample);
         rows.push_back({channel, order.size(), cg.order.size()});
         std::ranges::transform(cg.order, std::back_inserter(order), [](const auto& block) { return block.index; });
         prepared.gain_matrix.push_back(std::move(cg.binding));

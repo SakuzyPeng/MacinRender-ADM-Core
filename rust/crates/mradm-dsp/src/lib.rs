@@ -4,6 +4,7 @@
 pub mod convolution;
 pub mod data;
 pub mod dataset;
+pub mod decimal;
 pub mod decorrelator;
 pub mod diagnostics;
 pub mod diffuse;

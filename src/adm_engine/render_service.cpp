@@ -692,7 +692,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     const auto final_path = std::filesystem::path(output_path);
     auto final_ext = final_path.extension().string();
     std::ranges::transform(final_ext, final_ext.begin(), [](char c) {
-        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c);
     });
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
@@ -1006,7 +1006,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     if (!is_lossy_final && request.options.output_bit_depth != OutputBitDepth::f32) {
         auto render_ext = std::filesystem::path(render_path).extension().string();
         std::ranges::transform(render_ext, render_ext.begin(), [](char c) {
-            return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c);
         });
         if (render_ext != ".caf") {
             const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;

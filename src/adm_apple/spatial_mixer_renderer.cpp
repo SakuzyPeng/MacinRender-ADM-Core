@@ -525,7 +525,8 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     }
 
     for (auto& bp : buses) {
-        std::ranges::sort(bp.events, {}, &BusEvent::start_sample);
+        // Blocks sharing a start keep their scene (ADM document) order; the last one is in effect.
+        std::ranges::stable_sort(bp.events, {}, &BusEvent::start_sample);
     }
     return buses;
 }

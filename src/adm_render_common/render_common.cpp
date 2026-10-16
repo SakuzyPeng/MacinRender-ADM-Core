@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <charconv>
 #include <string>
 #include <utility>
@@ -71,14 +70,23 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
     }
 }
 
+// Speaker labels are ASCII protocol text: classify and fold case without the C locale, whose
+// tables may treat bytes of UTF-8 sequences as letters (PCM consistency 3.5).
+[[nodiscard]] constexpr bool ascii_alnum(char c) noexcept {
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+[[nodiscard]] constexpr char ascii_upper(char c) noexcept {
+    return c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
+}
+
 } // namespace
 
 std::string normalise_speaker_label_key(std::string_view raw) {
     std::string key;
     key.reserve(raw.size());
     for (const char c : raw) {
-        if (std::isalnum(static_cast<unsigned char>(c)) != 0) {
-            key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        if (ascii_alnum(c)) {
+            key.push_back(ascii_upper(c));
         }
     }
     return key;
@@ -88,8 +96,8 @@ std::string canonicalise_speaker_label(std::string_view raw) {
     std::string key;
     key.reserve(raw.size());
     for (const char c : raw) {
-        if (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '+' || c == '-') {
-            key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        if (ascii_alnum(c) || c == '+' || c == '-') {
+            key.push_back(ascii_upper(c));
         }
     }
     return key;

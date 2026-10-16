@@ -363,7 +363,8 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     std::vector<ChannelGainInfo> result;
     result.reserve(by_channel.size());
     for (auto& [ch, cg] : by_channel) {
-        std::ranges::sort(cg.blocks, {}, &BlockGains::start_sample);
+        // Blocks sharing a start keep their scene (ADM document) order; the last one is in effect.
+        std::ranges::stable_sort(cg.blocks, {}, &BlockGains::start_sample);
         result.push_back(std::move(cg));
     }
     return result;

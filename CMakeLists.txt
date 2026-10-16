@@ -779,6 +779,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             MacinRender::ADMRenderBinaural
             MacinRender::ADMRenderRoom
             MacinRender::ADMAudio
+            MacinRender::ADMDsp
             CLI11::CLI11
             spdlog::spdlog
     )
@@ -1067,7 +1068,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     foreach(_probe IN ITEMS scene render stream)
         add_executable(mr_adm_phase2_${_probe} EXCLUDE_FROM_ALL tests/tools/phase2_${_probe}.cpp)
         target_link_libraries(mr_adm_phase2_${_probe} PRIVATE MacinRender::ADMEngine
-            MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio nlohmann_json::nlohmann_json)
+            MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp
+            nlohmann_json::nlohmann_json)
         target_include_directories(mr_adm_phase2_${_probe} PRIVATE src/adm_engine)
         mr_adm_core_apply_warnings(mr_adm_phase2_${_probe})
     endforeach()

@@ -24,6 +24,8 @@
 //   hoa              HOA1 (4 channels) — HOA-typed input path
 //   objects-room     1 Cartesian Objects channel with equal-size extent moving over four blocks —
 //                    the Triple Balance size path (PCM consistency 3.4)
+//   params           40 same-start Objects blocks and a Cartesian DirectSpeakers channel, both with
+//                    dB gains — block order and import projections (PCM consistency 3.5)
 //   hoa3             HOA3 (16 channels) — higher-order decoding, whose AllRAD products once took
 //                    nalgebra's runtime-dispatched SIMD path (PCM consistency 3.3)
 //   objects-cartesian  1 Objects channel with CartesianPosition + extent — the only fixture that
@@ -286,6 +288,51 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
     return {doc, uid_strs};
 }
 
+// Parameter entry points (PCM consistency 3.5). Channel 0 is an Objects channel whose 40 blocks
+// all start at zero with different directions (more than the insertion-sort threshold of every
+// standard library): blocks sharing a start keep their document order and the last one is in
+// effect. Both channels carry dB gains, and channel 1 is a label-free DirectSpeakers channel with
+// a Cartesian position, so the import's dB conversion and Cartesian projection reach the PCM.
+[[nodiscard]] BuiltDoc build_params() {
+    auto doc = fixture::Document::create();
+    auto objects = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"ParamsObjCF"},
+                                                       fixture::TypeDefinition::objects);
+    for (int i = 0; i < 40; ++i) {
+        fixture::AudioBlockFormatObjects block{fixture::SphericalPosition{
+            fixture::Azimuth{-97.5F + (5.0F * static_cast<float>(i))}, fixture::Elevation{i % 2 == 0 ? 0.0F : 15.0F}}};
+        block.set(fixture::Rtime{fixture::Time{std::chrono::seconds{0}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::seconds{1}}});
+        block.set(fixture::Gain::from_db(-6.25));
+        objects->add(block);
+    }
+    doc->add(objects);
+    auto objects_pack =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ParamsObjPF"}, fixture::TypeDefinition::objects);
+    objects_pack->add_reference(objects);
+    doc->add(objects_pack);
+
+    auto direct = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"ParamsDsCF"},
+                                                      fixture::TypeDefinition::direct_speakers);
+    fixture::AudioBlockFormatDirectSpeakers block{
+        fixture::CartesianSpeakerPosition{fixture::X{0.5F}, fixture::Y{0.75F}, fixture::Z{0.25F}}};
+    block.set(fixture::Gain::from_db(-3.5));
+    direct->add(block);
+    doc->add(direct);
+    auto direct_pack = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ParamsDsPF"},
+                                                        fixture::TypeDefinition::direct_speakers);
+    direct_pack->add_reference(direct);
+    doc->add(direct_pack);
+
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids{wire_channel(doc, objects, objects_pack, "ParamsObj"),
+                                                              wire_channel(doc, direct, direct_pack, "ParamsDs")};
+    finish_doc(doc, uids, "Params");
+    std::vector<std::string> uid_strs;
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
+    });
+    return {doc, uid_strs};
+}
+
 [[nodiscard]] BuiltDoc build_hoa(int max_order) {
     // Full ACN order up to max_order: (0,0) (1,-1) (1,0) (1,1) (2,-2) ...
     struct Component {
@@ -348,7 +395,7 @@ void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
               << "kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n"
-              << "     | objects-room | directspeakers | hoa | hoa3\n";
+              << "     | objects-room | params | directspeakers | hoa | hoa3\n";
 }
 
 } // namespace
@@ -386,6 +433,9 @@ int main(int argc, char** argv) try {
     } else if (kind == "objects-room") {
         built = build_objects_room();
         seed = 0x88888888U;
+    } else if (kind == "params") {
+        built = build_params();
+        seed = 0x99999999U;
     } else if (kind == "hoa3") {
         built = build_hoa(3);
         seed = 0x77777777U;

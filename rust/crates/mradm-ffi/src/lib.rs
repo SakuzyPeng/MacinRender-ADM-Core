@@ -11,6 +11,7 @@ use std::{
 mod adm;
 mod checked;
 mod convolution;
+mod decimal;
 mod ear;
 mod ear_post;
 mod hoa;
