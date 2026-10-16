@@ -138,10 +138,37 @@ def stream_cases():
                                   ('cartesian', 'objects-cartesian', 'cloud'),
                                   ('point', 'objects-point', 'none')]:
         for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
-            result.append({'id': f'stream-binaural-{name}-{partition_name}', 'version': 1, 'fixture': fixture,
+            result.append({'id': f'stream-binaural-{name}-{partition_name}', 'version': 2, 'fixture': fixture,
                            'renderer': 'saf-binaural', 'spread': spread, 'partition': partition,
+                           'input_frames': 48000, 'sample_rate': 48000,
                            'frames': 96000, 'events': events})
     return result
+
+
+def stream_output_shape(case):
+    """Expected PCM shape from the pinned input and seek timeline, independent of measured output."""
+    input_frames, limit = case['input_frames'], case['frames']
+    position, media_position = 0, 0
+    for event in case['events']:
+        frame = event['frame']
+        if not position <= frame < limit:
+            raise ValueError('file-streaming event outside the ordered replay timeline')
+        advance = frame - position
+        if advance > input_frames - media_position:
+            raise ValueError('file-streaming event after expected EOS')
+        media_position += advance
+        position = frame
+        if 'seek' in event:
+            if event['seek'] < 0:
+                raise ValueError('negative file-streaming seek target')
+            media_position = min(event['seek'], input_frames)
+    frames = position + min(limit - position, input_frames - media_position)
+    return (2, case['sample_rate'], frames)
+
+
+def validate_stream_shape(case, shape):
+    if tuple(shape) != stream_output_shape(case):
+        raise ValueError('file-streaming PCM shape/frame count differs from replay timeline: ' + case['id'])
 
 
 def case_ids():

@@ -154,6 +154,51 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 common.pcm_bytes(b)
 
+    def test_stream_frame_counts_follow_input_and_seek_timeline(self):
+        for case in common.stream_cases():
+            self.assertEqual(common.stream_output_shape(case), (2, 48000, 74200))
+            common.validate_stream_shape(case, (2, 48000, 74200))
+        case = dict(common.stream_cases()[0], input_frames=100, frames=200)
+        for events, limit, expected in [
+            ([], 200, 100),
+            ([{'frame': 50, 'seek': 10}], 200, 140),
+            ([{'frame': 50, 'seek': 90}], 200, 60),
+            ([{'frame': 50, 'seek': 500}], 200, 50),
+            ([{'frame': 50, 'seek': 10}, {'frame': 75, 'seek': 5}], 200, 170),
+            ([{'frame': 50, 'seek': 10}], 80, 80),
+            ([{'frame': 100, 'seek': 0}], 200, 200),
+        ]:
+            with self.subTest(events=events, limit=limit):
+                self.assertEqual(common.stream_output_shape(dict(case, events=events, frames=limit)),
+                                 (2, 48000, expected))
+        with self.assertRaisesRegex(ValueError, 'after expected EOS'):
+            common.stream_output_shape(dict(case, events=[{'frame': 101, 'seek': 0}]))
+
+    def test_stream_comparator_rejects_self_consistent_wrong_frame_counts(self):
+        # Corrupt both the PCM and its manifest shape/hash. File integrity and repeatability alone
+        # cannot detect a seek that was silently ignored, an early EOS, or excess output.
+        case = common.stream_cases()[0]
+        for channels, rate, frames in [(2, 48000, 48000), (2, 48000, 74200 - 1),
+                                       (2, 48000, 74200 + 1), (1, 48000, 74200), (2, 44100, 74200)]:
+            with self.subTest(channels=channels, rate=rate, frames=frames), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                pcm = root / 'pcm' / (case['id'] + '.pcmbits'); pcm.parent.mkdir()
+                bits = b'\0' * (channels * frames * 4)
+                pcm.write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, channels, rate, frames) + bits)
+                common.save(root / 'manifest.json', {
+                    'schema': 'mradm.phase2.v1', 'complete': True,
+                    'source': {'files': {}, 'sha256': common.json_digest({})},
+                    'offline': [], 'scene': [], 'stream': [case], 'sofa': common.SOFA_FIXTURES,
+                    'outputs': {case['id']: {'path': pcm.relative_to(root).as_posix(),
+                                             'shape': [channels, rate, frames], 'sha256': common.digest(bits)}},
+                })
+                with patch.object(common, 'offline_cases', return_value=[]), \
+                        patch.object(common, 'scene_cases', return_value=[]), \
+                        patch.object(common, 'stream_cases', return_value=[case]), \
+                        patch.object(common, 'validate_sofa_fixtures'), \
+                        self.assertRaisesRegex(ValueError, 'frame count differs from replay timeline'):
+                    comparator.validate(root)
+
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
         self.assertEqual(len(offline), 40)

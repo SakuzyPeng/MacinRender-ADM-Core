@@ -65,6 +65,7 @@ def main():
     common.validate_build_stamp(build, source, binaries)
     baseline = load_uninstrumented_baseline(args.baseline, source, args.config) if diagnostics else None
     offline, scenes, streams = common.offline_cases(), common.scene_cases(), common.stream_cases()
+    stream_by_id = {row['id']: row for row in streams}
     sofa_root = common.ROOT / 'tests/fixtures/sofa'
     common.validate_sofa_fixtures(sofa_root)
     build_record, build_errors = collect(build)
@@ -82,6 +83,8 @@ def main():
     common.save(out / 'manifest.json', manifest)
     def record(name, path):
         shape, bits = common.pcm_bytes(path)
+        if name in stream_by_id:
+            common.validate_stream_shape(stream_by_id[name], shape)
         if name.startswith(('sofa-', 'scene-sofa-')):
             common.validate_sofa_pcm(path)
         manifest['outputs'][name] = {'path': path.relative_to(out).as_posix(), 'shape': shape, 'sha256': common.digest(bits)}
