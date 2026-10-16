@@ -1495,6 +1495,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMRenderEar
             MacinRender::ADMRenderVBAP
             MacinRender::ADMRenderHOA
+            MacinRender::ADMRenderBinaural
             MacinRender::ADMIo
             MacinRender::ADMAudio
     )

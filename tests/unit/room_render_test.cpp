@@ -4,8 +4,13 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <numeric>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -117,14 +122,119 @@ void screened_file_test(mradm::RenderPlan plan, const std::vector<float>& refere
     require(take(stream->process(output, 349)) == 349, "screen seek produces requested frames");
     require(std::equal(output.begin(), output.end(), expected.begin() + 40222), "screen seek retains authored ramp");
 }
-// Same-start blocks (S08): only the last block at each start is in effect. Two starts, each with
-// overwritten peers written first, must render exactly like the winners alone: no ramp from a
-// skipped peer, no LFE role or label from an overwritten DirectSpeakers block.
-// NOLINTNEXTLINE(readability-function-size): both block kinds share one fixture and comparison.
-void same_start_test(const std::filesystem::path& root, const mradm::RoomConfig& config) {
+// Same-start blocks (S08): only the last block at each start is in effect, for its whole interval.
+// Two starts, each with overwritten peers written first; every case must render exactly like the
+// winners alone, offline and in fragmented file streaming. The winners end halfway through their
+// peers' interval, so a peer that resumed afterwards would show up as signal where the winners are
+// silent.
+struct SameStartFixture {
+    mradm::RenderPlan plan;
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
-    mradm::RenderPlan plan;
+};
+
+struct SameStartOutput {
+    std::vector<float> offline;
+    std::vector<float> streaming;
+};
+
+SameStartOutput render_same_start(SameStartFixture& fixture,
+                                  const mradm::SceneTrackRef& track,
+                                  const std::filesystem::path& output,
+                                  const mradm::LiveOverrides* overrides = nullptr) {
+    auto request = fixture.plan;
+    request.output_path = utf8(output);
+    request.scene.objects.front().tracks = {track};
+    auto renderer = mradm::create_room_renderer();
+    auto prepared = take(renderer->prepare(request, fixture.logs));
+    take(renderer->render_window(*prepared, request, fixture.progress, fixture.logs));
+    SameStartOutput result{read(request.output_path), {}};
+    auto stream = take(renderer->open_stream(*prepared, request, fixture.logs));
+    if (overrides != nullptr) {
+        stream->set_overrides(*overrides);
+    }
+    constexpr std::array<std::size_t, 4> chunks{7, 333, 1024, 19};
+    std::array<float, 2048> out{};
+    for (std::size_t i = 0;; ++i) {
+        const auto frames = take(stream->process(out, chunks.at(i % chunks.size())));
+        if (frames == 0) {
+            break;
+        }
+        result.streaming.insert(
+            result.streaming.end(), out.begin(), out.begin() + static_cast<std::ptrdiff_t>(frames * 2));
+    }
+    require(result.streaming.size() == result.offline.size(), "same-start file stream covers the offline render");
+    return result;
+}
+
+double same_start_energy(const std::vector<float>& samples) {
+    return std::accumulate(
+        samples.begin(), samples.end(), 0.0, [](double sum, float v) { return sum + (static_cast<double>(v) * v); });
+}
+
+enum class SameStartKind : std::uint8_t { objects, lfe, labels };
+
+// Builds the winners-only track and the same track with five overwritten peers per start.
+// objects: peers carry extent and screenRef; lfe: peers are LFE DirectSpeakers next to full-band
+// winners; labels: peers carry M-030 while the winners carry `winning_label` (possibly none).
+std::pair<mradm::SceneTrackRef, mradm::SceneTrackRef> same_start_tracks(SameStartKind kind,
+                                                                        std::string_view winning_label = {}) {
+    mradm::SceneTrackRef winners;
+    winners.channel_index = 0;
+    mradm::SceneTrackRef overwritten = winners;
+    for (int i = 0; i < 6; ++i) {
+        for (const std::uint64_t start : {std::uint64_t{4800}, std::uint64_t{0}}) {
+            const bool winner = i == 5;
+            const bool first = start == 0;
+            const std::uint64_t end = start + (winner ? 2400 : 4800);
+            if (kind == SameStartKind::objects) {
+                const float winning_x = first ? 0.6F : -0.4F;
+                mradm::SceneObjectBlock block;
+                block.start_sample = start;
+                block.end_sample = end;
+                block.position.cartesian = true;
+                block.position.x = winner ? winning_x : -1.0F + (0.3F * static_cast<float>(i));
+                block.position.y = 1;
+                block.gain = winner ? 0.5F : 0.9F;
+                block.width = winner ? 0.0F : 0.4F;
+                block.screen_ref = !winner;
+                (winner ? winners : overwritten).blocks.push_back(block);
+                if (winner) {
+                    overwritten.blocks.push_back(block);
+                }
+                continue;
+            }
+            const float winning_azimuth = first ? 30.0F : -110.0F;
+            mradm::SceneDirectSpeakersBlock block;
+            block.start_sample = start;
+            block.end_sample = end;
+            block.has_position = true;
+            block.azimuth = winner ? winning_azimuth : -30.0F;
+            block.gain = winner ? 0.5F : 0.9F;
+            if (winner && !winning_label.empty()) {
+                block.speaker_labels = {std::string{winning_label}};
+            } else if (!winner && kind == SameStartKind::lfe) {
+                block.low_pass_hz = 120.0F;
+                block.speaker_labels = {"LFE1"};
+            } else if (!winner) {
+                block.speaker_labels = {"M-030"};
+            }
+            (winner ? winners : overwritten).ds_blocks.push_back(block);
+            if (winner) {
+                overwritten.ds_blocks.push_back(block);
+            }
+        }
+    }
+    // The reference lists the winners chronologically, as a renderer that walks scene order expects.
+    std::ranges::sort(winners.blocks, {}, &mradm::SceneObjectBlock::start_sample);
+    std::ranges::sort(winners.ds_blocks, {}, &mradm::SceneDirectSpeakersBlock::start_sample);
+    return {winners, overwritten};
+}
+
+// NOLINTNEXTLINE(readability-function-size): the three block kinds share one fixture and comparison.
+void same_start_test(const std::filesystem::path& root, const mradm::RoomConfig& config) {
+    SameStartFixture fixture;
+    auto& plan = fixture.plan;
     plan.input_path = utf8(root / "same_start_input.wav");
     plan.output_layout = "binaural";
     plan.room = config;
@@ -138,66 +248,67 @@ void same_start_test(const std::filesystem::path& root, const mradm::RoomConfig&
     auto writer = take(mradm::audio::FloatWavWriter::open(plan.input_path, 1, 48000));
     require(writer.write(input.data(), input.size()) == input.size(), "write same-start input");
     ok(writer.finish());
-    const auto render = [&](const mradm::SceneTrackRef& track, const char* stem) {
-        auto request = plan;
-        request.output_path = utf8(root / stem);
-        mradm::SceneObject object;
-        object.id = "same-start";
-        object.tracks = {track};
-        request.scene.objects = {object};
-        auto renderer = mradm::create_room_renderer();
-        auto prepared = take(renderer->prepare(request, logs));
-        take(renderer->render_window(*prepared, request, progress, logs));
-        return read(request.output_path);
-    };
-    for (const bool direct : {false, true}) {
-        mradm::SceneTrackRef winners;
-        winners.channel_index = 0;
-        mradm::SceneTrackRef overwritten = winners;
-        for (int i = 0; i < 6; ++i) {
-            for (const std::uint64_t start : {std::uint64_t{4800}, std::uint64_t{0}}) {
-                const bool winner = i == 5;
-                const bool first = start == 0;
-                const float winning_x = first ? 0.6F : -0.4F;
-                const float winning_azimuth = first ? 30.0F : -110.0F;
-                const float x = winner ? winning_x : -1.0F + (0.3F * static_cast<float>(i));
-                if (direct) {
-                    mradm::SceneDirectSpeakersBlock block;
-                    block.start_sample = start;
-                    block.end_sample = start + 4800;
-                    block.has_position = true;
-                    block.azimuth = winner ? winning_azimuth : 0.0F;
-                    block.gain = winner ? 0.5F : 0.9F;
-                    if (!winner) {
-                        block.low_pass_hz = 120.0F;
-                        block.speaker_labels = {"LFE1"};
-                    }
-                    (winner ? winners : overwritten).ds_blocks.push_back(block);
-                    if (winner) {
-                        overwritten.ds_blocks.push_back(block);
-                    }
-                    continue;
-                }
-                mradm::SceneObjectBlock block;
-                block.start_sample = start;
-                block.end_sample = start + 4800;
-                block.position.cartesian = true;
-                block.position.x = x;
-                block.position.y = 1;
-                block.gain = winner ? 0.5F : 0.9F;
-                block.width = winner ? 0.0F : 0.4F;
-                (winner ? winners : overwritten).blocks.push_back(block);
-                if (winner) {
-                    overwritten.blocks.push_back(block);
+    mradm::SceneObject object;
+    object.id = "same-start";
+    plan.scene.objects = {object};
+    const auto expected_path = root / "same_start_expected.wav";
+    const auto actual_path = root / "same_start_actual.wav";
+
+    // screenRef: with a reproduction screen configured, a screenRef block makes the renderer
+    // resolve the object's reference screen, which fails for an object in two programmes with
+    // different screens. Only overwritten blocks carry screenRef, so the scene must still render.
+    plan.screens = take(mradm::parse_screen_config_json(k_screen_json));
+    mradm::SceneContent content;
+    content.id = "same-start-content";
+    content.object_ids = {object.id};
+    plan.scene.contents = {content};
+    for (const float width : {60.0F, 70.0F}) {
+        mradm::SceneProgramme programme;
+        programme.id = "same-start-" + std::to_string(static_cast<int>(width));
+        programme.content_ids = {content.id};
+        programme.has_reference_screen = true;
+        programme.reference_screen = mradm::ScreenGeometry{};
+        programme.reference_screen->width = width;
+        plan.scene.programmes.push_back(programme);
+    }
+    for (const auto kind : {SameStartKind::objects, SameStartKind::lfe}) {
+        const auto [winners, overwritten] = same_start_tracks(kind);
+        const auto expected = render_same_start(fixture, winners, expected_path);
+        const auto actual = render_same_start(fixture, overwritten, actual_path);
+        require(std::ranges::any_of(expected.offline, [](float v) { return v != 0; }),
+                "same-start winners produce output");
+        require(actual.offline == expected.offline,
+                kind == SameStartKind::objects ? "same-start Objects equal the last blocks"
+                                               : "same-start LFE peers equal the full-band winners");
+        require(actual.streaming == expected.streaming, "same-start file streaming equals the last blocks");
+    }
+
+    // Live labels: overrides bind to the winning label (or, without one, to the whole object only);
+    // the overwritten M-030 must not match.
+    for (const std::string_view winning_label : {"M+030", ""}) {
+        const auto [winners, overwritten] = same_start_tracks(SameStartKind::labels, winning_label);
+        const auto base = render_same_start(fixture, winners, expected_path);
+        for (const std::string_view override_label : {"M+030", "M-030", ""}) {
+            for (const bool mute : {false, true}) {
+                mradm::LiveObjectOverride item;
+                item.object_id = object.id;
+                item.speaker_label = override_label;
+                item.gain_db = -12.0F;
+                item.mute = mute;
+                const mradm::LiveOverrides overrides{{item}, 1U};
+                const auto expected = render_same_start(fixture, winners, expected_path, &overrides);
+                const auto actual = render_same_start(fixture, overwritten, actual_path, &overrides);
+                require(actual.streaming == expected.streaming, "same-start live override equals the last blocks");
+                const bool targets_winner = override_label.empty() || override_label == winning_label;
+                if (!targets_winner) {
+                    require(actual.streaming == base.streaming, "overwritten label does not match a live override");
+                } else {
+                    const double limit = mute ? 0.01 : 0.5;
+                    require(same_start_energy(actual.streaming) < limit * same_start_energy(base.streaming),
+                            "live override reaches the winning block");
                 }
             }
         }
-        const auto expected = render(winners, "same_start_expected.wav");
-        const auto actual = render(overwritten, "same_start_actual.wav");
-        require(std::ranges::any_of(expected, [](float v) { return v != 0; }), "same-start winners produce output");
-        require(actual == expected,
-                direct ? "same-start DirectSpeakers equal the last blocks"
-                       : "same-start Objects equal the last blocks");
     }
 }
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
