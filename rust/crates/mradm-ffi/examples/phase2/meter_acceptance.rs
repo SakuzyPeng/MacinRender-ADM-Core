@@ -119,6 +119,10 @@ impl Pair {
             }
         })
     }
+
+    fn bits(&self) -> [u64; 6] {
+        self.readings().map(f64::to_bits)
+    }
 }
 
 const CHUNKINGS: [&[usize]; 6] = [
@@ -134,16 +138,18 @@ pub(super) fn run(out: &Path) {
     for rate in RATES {
         let prefix = format!("meter-acceptance-{rate}");
 
-        // Gates: levels straddling the -70 LUFS absolute and the -10 LU relative gate
-        // (a 1 kHz stereo sine at x dBFS reads close to x LUFS), then one entirely below -70.
+        // Gates: absolute -70 LUFS and relative -10 LU. Equal-duration high/low segments
+        // cross the relative gate at L = 0.1 * (H + L) / 2 = H / 19, about -32.79 dBFS
+        // for a -20 dBFS high segment. The independent accuracy test checks both sides.
+        let relative_low = -20.0 - 10.0 * libm::log10(19.0);
         let mut gates = Vec::new();
         for levels in [
             [-69.9, -70.1],
             [-69.98, -70.02],
-            [-20.0, -29.9],
-            [-20.0, -30.1],
-            [-20.0, -29.98],
-            [-20.0, -30.02],
+            [-20.0, relative_low + 0.1],
+            [-20.0, relative_low - 0.1],
+            [-20.0, relative_low + 0.02],
+            [-20.0, relative_low - 0.02],
             [-70.5, -70.5],
         ] {
             let mut pair = Pair::new(rate);
@@ -207,10 +213,15 @@ pub(super) fn run(out: &Path) {
         doubles(out, &format!("{prefix}.30-long-silence.f64"), &silence);
 
         // Chunking: the same programme split six ways.
+        let mut fresh = Pair::new(rate);
+        let empty = fresh.bits();
+        fresh.add_chunked(&samples, &[4800]);
+        let expected = fresh.bits();
         let mut chunking = Vec::new();
         for pattern in CHUNKINGS {
             let mut pair = Pair::new(rate);
             pair.add_chunked(&samples, pattern);
+            assert_eq!(pair.bits(), expected, "{prefix} chunking {pattern:?}");
             chunking.extend(pair.readings());
         }
         doubles(out, &format!("{prefix}.40-chunking.f64"), &chunking);
@@ -220,14 +231,24 @@ pub(super) fn run(out: &Path) {
         let mut pair = Pair::new(rate);
         pair.add(&sine(rate as usize, 440, fs, 0.0, 0.9));
         pair.reset();
+        assert_eq!(pair.bits(), empty, "{prefix} empty reset");
         pair.add_chunked(&samples, &[4800]);
+        assert_eq!(pair.bits(), expected, "{prefix} reset versus fresh");
         reset.extend(pair.readings());
         let mut pair = Pair::new(rate);
         let (head, tail) = samples.split_at(2 * (rate as usize * 2 + rate as usize / 20));
         pair.add_chunked(head, &[4800]);
         reset.extend(pair.readings());
         pair.reset();
+        assert_eq!(pair.bits(), empty, "{prefix} empty seek reset");
         pair.add_chunked(tail, &[4800]);
+        let mut fresh = Pair::new(rate);
+        fresh.add_chunked(tail, &[4800]);
+        assert_eq!(
+            pair.bits(),
+            fresh.bits(),
+            "{prefix} seek reset versus fresh tail"
+        );
         reset.extend(pair.readings());
         doubles(out, &format!("{prefix}.50-reset.f64"), &reset);
     }
