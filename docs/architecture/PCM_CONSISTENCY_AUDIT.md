@@ -133,7 +133,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | --- | --- | --- |
 | N01 | 部分 | Scene 策略 JSON 数字仍经 nlohmann（C 运行时 `strtod`），1.6 登记为依赖运行时正确舍入；CLI11 浮点选项、HOA 标签 `std::stof`、标签大小写规范化属三期 |
 | N02 | 未处理 | ADM 导入的 `powf` 与 Cartesian `atan2`（`mradm-adm` `project.rs`）；三期 |
-| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；`resolve_live_channel_gain` 与 HOA `set_overrides` 的 `std::pow` 只服务文件流式与离线后端，三期 |
+| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；其余参数入口属 3.5 |
 | N04 | 已处理 | Scene 空间数学改用 `libm`（1.3） |
 | N05 | 已处理 | `geometry::direction` 与 VBAP spread 环改用 `libm::sincos`（1.3） |
 | N06 | 未处理 | EAR 几何、extent 与立体声 panner；三期 |
@@ -148,14 +148,14 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | N15 | 已处理 | 2.3：峰值转 dB、合成增益判定、两个公开后处理 API 的增益与逐样本乘法移入 Rust（`libm`）；对象增益覆盖的 dB 换算留在三期 |
 | N16 | 已处理 | HpTF 设计改用 `libm`（1.4），设计内核设为门禁 |
 | N17 | 已处理 | 峰值保护释放系数改用 `libm::expf`（1.4） |
-| N18 | 未处理 | Monitor 折叠矩阵 `std::sin/cos`；三期 |
+| N18 | 已处理 | 3.1：Monitor 折叠矩阵改用 `libm::sinf/cosf`，`stream-dsp.20-fold.f32` 设为门禁 |
 | S01 | 已处理 | 2.2：去掉 x86 FTZ，所有架构统一清零低于 `f64::EPSILON` 的滤波器状态；2.4：清零改在 100 ms 块网格上，读数与分块无关 |
 | S02 | 已处理 | HpTF 尾音清理改为自 reset 起的 1024 帧网格（1.4） |
 | S03 | 部分 | Scene 的分块条件已在 1.5 逐环节记录，并对 11 个用例设分块无关门禁；双耳卷积与分数比率重采样依赖分块，是否消除待决定；文件流式 `Mixer` 平滑属三期 |
 | S04 | 部分 | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；Monitor 快照属三期 |
 | S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
 | S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
-| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；双耳 `extent_spread_deg` 与 `BinauralStream` 归约属三期 |
+| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；其余后端的 C++ 乘加随 3.2—3.4 处理 |
 | S08 | 未处理 | 尚未复现；三期，复现后可提前修复 |
 
 ## C++ 剩余执行点
@@ -359,6 +359,13 @@ Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`d836744` 的 Consistency 38
 | 3.4 | Triple Balance | 非 D 模式离线与文件流式入口改用可移植数学函数（N12），D 模式建立独立精确门禁。 |
 | 3.5 | 参数入口 | ADM 增益与坐标投影（N02），CLI 数字与标签解析（N01），尚未复用公共入口的策略与覆盖项（N03 剩余），明确同起点块顺序（S08）。 |
 | 3.6 | 最终 PCM 与三期验收 | trim 与秒到帧换算（S06）、增益重写、整数量化、float 写出与声道排列的边界覆盖；三平台 Release 验收与结项。 |
+
+**3.1 状态**：`BinauralStream` 的逐源增益求和与拓扑淡化、双耳 extent 锥角改由 Rust `stream_dsp` 分别舍入计算，
+Monitor 立体声折叠矩阵改用 `libm::sinf/cosf`，实时覆盖增益的 dB 换算（EAR、VBAP、Triple Balance、HOA、双耳与两处溢出检查）
+统一为 `libm::powf`。一致性采集新增 `mr_adm_phase2_stream` 与 6 个双耳文件流式重放（实时增益、静音、拓扑、头部朝向与 seek，
+固定与碎片请求分块），PCM 门禁增至 202 个；内核探针新增 4 个 `stream-dsp` 文件（217 个内核文件中 212 个设为门禁）。
+Linux x64 上原有 196 个 PCM id 不变；`b20a365` 的 Consistency 38844929927、CI 38844932172 与 Quality 38844933977 通过，
+202 个 PCM id 与全部 217 个内核文件三平台相同，216 项门禁无失败。见 [3.1 记录](RUST_FILE_STREAM_BINAURAL.md)。
 
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。
