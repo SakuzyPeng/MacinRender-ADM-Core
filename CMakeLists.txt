@@ -1487,6 +1487,21 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
     add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)
 
+    # Same-start blocks (PCM consistency S08): only the last block at each start leaves a trace.
+    add_executable(mr_adm_same_start_blocks_tests tests/unit/same_start_blocks_test.cpp)
+    target_link_libraries(mr_adm_same_start_blocks_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMRenderEar
+            MacinRender::ADMRenderVBAP
+            MacinRender::ADMRenderHOA
+            MacinRender::ADMIo
+            MacinRender::ADMAudio
+    )
+    mr_adm_core_apply_warnings(mr_adm_same_start_blocks_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_same_start_blocks_tests)
+    add_test(NAME mr_adm_same_start_blocks_tests COMMAND mr_adm_same_start_blocks_tests)
+
     # Fixture test: True Peak limiting — renders a near-full-scale Objects file and
     # verifies the limiter brings output below the target dBTP.
     add_executable(mr_adm_peak_fixture_tests tests/unit/peak_limiter_fixture_test.cpp)

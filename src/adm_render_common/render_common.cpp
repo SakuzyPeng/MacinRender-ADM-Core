@@ -436,7 +436,8 @@ Result<LfeRoutingPlan> resolve_lfe_routing(const RenderPlan& plan, LogSink& logs
 
     for (const auto& object : plan.scene.objects) {
         for (const auto& track : object.tracks) {
-            for (const auto& block : track.ds_blocks) {
+            for (const auto* resolved_block : last_blocks_at_each_start(track.ds_blocks)) {
+                const auto& block = *resolved_block;
                 switch (direct_speakers_lfe_target(block)) {
                 case LfeTarget::lfe1:
                     routing.has_lfe1 = true;

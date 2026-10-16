@@ -401,7 +401,8 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
                 std::vector<BlockEvents> blocks;
                 blocks.reserve(track.blocks.size());
                 std::size_t max_slots = 1;
-                for (const auto& raw : track.blocks) {
+                for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.blocks)) {
+                    const auto& raw = *resolved_block;
                     auto pb = render_common::prepare_object_block(raw, obj, speakers, logs, "apple", screen_ref_warned);
                     BlockEvents be{pb.start_sample, pb.end_sample, object_block_events(pb, obj, apply_extent)};
                     max_slots = std::max(max_slots, be.events.size());
@@ -447,7 +448,8 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
                 lfe_bus.source_mode = kSpatialMixerSourceMode_Bypass;
                 lfe_bus.is_lfe = true;
                 lfe_bus.object_id = obj.id;
-                for (const auto& ds : track.ds_blocks) {
+                for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.ds_blocks)) {
+                    const auto& ds = *resolved_block;
                     const auto lfe_target = render_common::direct_speakers_lfe_target(ds);
                     BusPlan* bus = nullptr;
                     BusEvent ev;
