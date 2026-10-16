@@ -381,6 +381,12 @@ PCM 门禁增至 216 个，内核文件 224 个中 219 个设为门禁。Linux x
 `5c00c47` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过，216 个 PCM id 与 224 个内核文件三平台相同，
 233 项门禁无失败，诊断检查点全部相同。见 [3.3 记录](RUST_HOA_PORTABLE_MATH.md)。
 
+**3.4 状态**：去掉 Triple Balance 的 `PORTABLE` 泛型，标准模式的离线、文件流式与 Scene 入口共用同一份 `libm` 实现与 size 积分格点，
+平滑常量改用 `libm::expf`（N12）；D 模式自引入起即用 `libm`，本切片为它建立独立门禁。新增 `objects-room` 夹具、6 个 size / D 模式离线用例、
+6 个 Triple Balance 文件流式重放与 4 个 `triple-balance` 内核文件，PCM 门禁增至 228 个，内核文件 228 个中 223 个设为门禁。
+Linux x64 上原有 216 个 PCM id 不变；`e0ef382` 的 Consistency 38874020588、CI 38874023487 与 Quality 38874026573 通过，
+228 个 PCM id 与 228 个内核文件三平台相同，246 项门禁无失败，诊断检查点全部相同。见 [3.4 记录](RUST_TRIPLE_BALANCE_PORTABLE_MATH.md)。
+
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。
 
