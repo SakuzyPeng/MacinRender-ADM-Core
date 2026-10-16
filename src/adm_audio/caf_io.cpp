@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -77,7 +78,30 @@ struct FloatCafReader::Impl {
     uint64_t frame_count{0};
     long data_start{0}; // file offset of first sample (after edit_count)
     uint64_t frames_read{0};
+    std::vector<unsigned char> bytes; // little-endian sample bytes of one read
 };
+
+namespace {
+// CAF PCM here is little-endian float32 on every host (PCM consistency 3.6): the sample bytes are
+// serialized explicitly instead of copying the host's float representation.
+void float32_le_to_samples(const unsigned char* bytes, std::size_t count, float* out) {
+    for (std::size_t i = 0; i < count; ++i) {
+        const unsigned char* raw = bytes + (i * 4U);
+        out[i] = std::bit_cast<float>(static_cast<uint32_t>(raw[0]) | (static_cast<uint32_t>(raw[1]) << 8U) |
+                                      (static_cast<uint32_t>(raw[2]) << 16U) | (static_cast<uint32_t>(raw[3]) << 24U));
+    }
+}
+void samples_to_float32_le(const float* samples, std::size_t count, unsigned char* bytes) {
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto bits = std::bit_cast<uint32_t>(samples[i]);
+        unsigned char* raw = bytes + (i * 4U);
+        raw[0] = static_cast<unsigned char>(bits & 0xFFU);
+        raw[1] = static_cast<unsigned char>((bits >> 8U) & 0xFFU);
+        raw[2] = static_cast<unsigned char>((bits >> 16U) & 0xFFU);
+        raw[3] = static_cast<unsigned char>(bits >> 24U);
+    }
+}
+} // namespace
 
 // NOLINTBEGIN(clang-analyzer-unix.Stream,readability-function-size)
 Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
@@ -226,9 +250,10 @@ uint64_t FloatCafReader::read(float* out, uint64_t frames) {
         return 0;
     }
     const std::size_t samples = static_cast<std::size_t>(to_read) * impl_->channels;
-    // Samples are float32 LE — on any LE host (macOS) fread gives correct values directly.
-    const std::size_t got = std::fread(out, sizeof(float), samples, impl_->file);
+    impl_->bytes.resize(samples * 4U);
+    const std::size_t got = std::fread(impl_->bytes.data(), 4U, samples, impl_->file);
     const uint64_t frames_got = static_cast<uint64_t>(got) / impl_->channels;
+    float32_le_to_samples(impl_->bytes.data(), static_cast<std::size_t>(frames_got) * impl_->channels, out);
     impl_->frames_read += frames_got;
     return frames_got;
 }
@@ -322,6 +347,7 @@ struct FloatCafWriter::Impl {
     uint32_t channels{0};
     long data_size_offset{0}; // ftell position of the data chunk's int64 size field
     uint64_t pcm_bytes_written{0};
+    std::vector<unsigned char> bytes; // little-endian sample bytes of one write
 };
 
 Result<FloatCafWriter>
@@ -398,10 +424,11 @@ FloatCafWriter::FloatCafWriter(FloatCafWriter&&) noexcept = default;
 FloatCafWriter& FloatCafWriter::operator=(FloatCafWriter&&) noexcept = default;
 
 uint64_t FloatCafWriter::write(const float* samples, uint64_t frame_count) {
-    const uint64_t sample_count = frame_count * impl_->channels;
-    const std::size_t written =
-        std::fwrite(samples, sizeof(float), static_cast<std::size_t>(sample_count), impl_->file);
-    impl_->pcm_bytes_written += written * sizeof(float);
+    const auto sample_count = static_cast<std::size_t>(frame_count * impl_->channels);
+    impl_->bytes.resize(sample_count * 4U);
+    samples_to_float32_le(samples, sample_count, impl_->bytes.data());
+    const std::size_t written = std::fwrite(impl_->bytes.data(), 4U, sample_count, impl_->file);
+    impl_->pcm_bytes_written += written * 4U;
     return written / impl_->channels;
 }
 

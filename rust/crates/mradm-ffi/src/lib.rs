@@ -37,6 +37,7 @@ mod spreader;
 mod stream_dsp;
 #[cfg(test)]
 mod test_alloc;
+mod timeline;
 mod triple_balance;
 mod wav;
 

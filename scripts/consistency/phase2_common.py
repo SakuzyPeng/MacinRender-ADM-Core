@@ -146,6 +146,33 @@ def offline_cases():
         {'id': 'params-binaural-rotated', 'fixture': 'params', 'slice': '3.5',
          'args': ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural',
                   '--listener-yaw', '37.000001', '--listener-pitch', '1.25e1', '--listener-roll', '-9.9999999']},
+        # PCM consistency 3.6: the final file. Integer WAV (16 / 24-bit quantization and clipping),
+        # the 7.1.4 WAVE channel permutation and ADM BW64 metadata on integer PCM, the final gain
+        # rewrite past 0 dBFS, float32 CAF, and trims whose seconds land on (or next to) half a frame.
+        {'id': 'final-ear-714-i24', 'fixture': 'objects-extent', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '7.1.4', '--output-bit-depth', 'i24']},
+        {'id': 'final-ear-51-i16-clip', 'fixture': 'objects-point', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '5.1', '--final-gain-db', '6.5',
+                  '--output-bit-depth', 'i16']},
+        {'id': 'final-ear-51-f32-gain', 'fixture': 'objects-point', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '5.1', '--final-gain-db', '6.5']},
+        {'id': 'final-hoa3-i24-trim', 'fixture': 'objects-point', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'hoa', '--output-layout', 'hoa3',
+                  '--start', '0.25001041666666666', '--end', '0.7000104166666667', '--output-bit-depth', 'i24']},
+        {'id': 'final-binaural-i16-trim-gain', 'fixture': 'objects-extent', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural',
+                  '--binaural-spread-mode', 'cloud', '--start', '0.1', '--end', '0.65', '--final-gain-db', '-3.25',
+                  '--output-bit-depth', 'i16']},
+        {'id': 'final-saf-222-i24', 'fixture': 'directspeakers', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'saf', '--output-layout', '22.2', '--output-bit-depth', 'i24']},
+        {'id': 'final-triple-916-i24', 'fixture': 'objects-room', 'slice': '3.6',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '9.1.6',
+                  '--output-bit-depth', 'i24']},
+        {'id': 'final-caf-ear-714-trim-gain', 'fixture': 'objects-extent', 'slice': '3.6', 'container': 'caf',
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '7.1.4',
+                  '--start', '0.25001041666666666', '--final-gain-db', '2.5']},
+        {'id': 'final-caf-binaural-postproc', 'fixture': 'objects-point', 'slice': '3.6', 'container': 'caf',
+         'args': ['--renderer', 'saf-binaural', '--output-layout', 'binaural']},
     ]
     return result
 
@@ -397,6 +424,7 @@ def kernel_outputs():
     names += ['ear-hoa.10-decode.f64']
     names += [f'triple-balance.{part}' for part in ('10-point.f32', '20-room.f32', '30-size.f32', '40-d-mode.f32')]
     names += ['adm-import.10-gain.f32', 'adm-import.20-cartesian.f32', 'decimal.10-parse.f64']
+    names += ['timeline.10-seconds-to-frame.f64'] + [f'wav-quantize.{part}' for part in ('10-pcm16.i32', '20-pcm24.i32', '30-pcm32.i32')]
     names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS

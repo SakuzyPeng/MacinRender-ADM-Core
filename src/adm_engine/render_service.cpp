@@ -31,6 +31,7 @@
 #include "renderer_factory.h"
 #include "scene_json.h"
 #include "support_matrix.h"
+#include "timeline.h"
 #include "wav_output.h"
 
 namespace mradm {
@@ -496,14 +497,16 @@ RenderResult RenderService::render(const RenderRequest& request,
                 return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
             }
             const auto sr = static_cast<double>(trim_sample_rate);
-            trim_start_frame = static_cast<uint64_t>(std::llround(start_sec * sr));
+            // Nearest frame, ties away from zero (PCM consistency 3.6); shared with Monitor seek.
+            trim_start_frame = dsp::seconds_to_frame(start_sec, trim_sample_rate).value_or(0);
             if (trim_start_frame >= trim_total_frames) {
                 const auto msg = fmt::format("--start ({:.6g}s) is at or beyond the input duration ({:.6g}s)",
                                              start_sec,
                                              static_cast<double>(trim_total_frames) / sr);
                 return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
             }
-            uint64_t end_frame = has_end ? static_cast<uint64_t>(std::llround(end_sec * sr)) : trim_total_frames;
+            uint64_t end_frame = has_end ? dsp::seconds_to_frame(end_sec, trim_sample_rate).value_or(trim_total_frames)
+                                         : trim_total_frames;
             end_frame = std::min(end_frame, trim_total_frames);
             // The seconds-level "--end > --start" check above can still collapse to
             // an empty frame range once rounded (e.g. both endpoints land in the same

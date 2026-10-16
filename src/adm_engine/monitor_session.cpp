@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -22,24 +23,20 @@
 #include "renderer_factory.h"
 #include "speaker_layouts.h"
 #include "stream_dsp.h"
+#include "timeline.h"
 
 namespace mradm {
 
 namespace {
 
-// Seconds → absolute output frame, clamped to [0, total_frames]. Compares against the
-// material duration before casting so an arbitrarily large (but finite) `seconds` never
-// produces an out-of-range double→uint64_t conversion (which is UB). NaN maps to 0.
+// Seconds → absolute output frame, clamped to [0, total_frames]. The nearest frame, ties away
+// from zero, as for the output trim and the preview window (PCM consistency 3.6); the conversion
+// saturates, so any finite time is safe. Negative times and NaN map to 0, +inf to the end.
 [[nodiscard]] uint64_t clamp_frame(double seconds, uint32_t sample_rate, uint64_t total_frames) {
-    if (!(seconds > 0.0) || sample_rate == 0) {
-        return 0;
-    }
-    const double duration_sec = static_cast<double>(total_frames) / static_cast<double>(sample_rate);
-    if (seconds >= duration_sec) {
+    if (seconds == std::numeric_limits<double>::infinity()) {
         return total_frames;
     }
-    // seconds < duration ⇒ seconds * sample_rate < total_frames, so the cast is in range.
-    return static_cast<uint64_t>(seconds * static_cast<double>(sample_rate));
+    return std::min(dsp::seconds_to_frame(seconds, sample_rate).value_or(0), total_frames);
 }
 
 // Constant-power stereo fold of one source speaker at `azimuth` (degrees, +ve = left,

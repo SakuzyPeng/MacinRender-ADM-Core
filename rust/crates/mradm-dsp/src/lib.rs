@@ -33,6 +33,7 @@ pub mod scene_transition;
 pub mod semantic_policy;
 pub mod spreader;
 pub mod stream_dsp;
+pub mod timeline;
 pub mod triple_balance;
 pub mod vbap;
 
