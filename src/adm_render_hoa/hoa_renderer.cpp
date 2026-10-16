@@ -138,11 +138,14 @@ Result<void> build_gain_matrix(const AdmScene& scene, LogSink& logs, HoaPrepared
             }
             auto& cg = by_channel[in_ch];
             cg.binding = {in_ch, obj.id, {}};
-            if (!track.ds_blocks.empty() && !track.ds_blocks.front().speaker_labels.empty()) {
+            // Bind live controls after resolving overwritten labels, just like the channel's gains.
+            const auto direct_blocks = render_common::last_blocks_at_each_start(track.ds_blocks);
+            if (!direct_blocks.empty() && !direct_blocks.front()->speaker_labels.empty()) {
                 cg.binding.speaker_label_key =
-                    render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
+                    render_common::canonicalise_speaker_label(direct_blocks.front()->speaker_labels.front());
             }
-            for (const auto& raw : track.blocks) {
+            for (const auto* resolved_block : render_common::last_blocks_at_each_start(track.blocks)) {
+                const auto& raw = *resolved_block;
                 SceneObjectBlock base = raw;
                 if (obj.position_offset) {
                     base.position = apply_position_offset(base.position, *obj.position_offset);
@@ -160,7 +163,8 @@ Result<void> build_gain_matrix(const AdmScene& scene, LogSink& logs, HoaPrepared
                                   0U,
                                   (raw.jump_position ? 1U : 0U) | (raw.interp_length_samples ? 2U : 0U)});
             }
-            for (const auto& ds : track.ds_blocks) {
+            for (const auto* resolved_block : direct_blocks) {
+                const auto& ds = *resolved_block;
                 const bool lfe = render_common::direct_speakers_block_is_lfe(ds);
                 float azimuth = ds.azimuth;
                 float elevation = ds.elevation;

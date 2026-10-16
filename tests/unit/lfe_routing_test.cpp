@@ -116,6 +116,8 @@ bool verify_shared_semantics() {
     for (int i = 0; i < 2; ++i) {
         mradm::SceneDirectSpeakersBlock block;
         block.speaker_labels = {"LFE1"};
+        // Distinct starts: same-start blocks collapse to the last one (S08).
+        block.start_sample = static_cast<uint64_t>(i) * 1024U;
         append_lfe_block(repeated, std::move(block));
     }
     CapturingLogSink repeated_logs;
@@ -145,6 +147,8 @@ bool verify_shared_semantics() {
          ok;
 
     mradm::RenderPlan dual = repeated;
+    // The second semantic LFE is another channel, not a block overwriting LFE1 at the same start.
+    dual.scene.objects.back().tracks.emplace_back();
     mradm::SceneDirectSpeakersBlock second;
     second.speaker_labels = {"LFE2"};
     append_lfe_block(dual, std::move(second));

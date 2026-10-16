@@ -57,6 +57,24 @@ diffuse、divergence 与 spreader 分量之前，按起点稳定排序并只保�
 `binaural_render_fixture_test` 使用两组乱序、每组 40 个同起点块，与仅含各组最后一块的场景逐位比较 PCM。覆盖 point、cloud / diffuse / divergence、
 全 diffuse 与 DirectSpeakers（含被覆盖的 LFE），两种平滑长度，以及离线渲染、文件流式渲染和离线 SAF spreader；获胜块较短，另检查被覆盖块不会恢复。
 
+其他后端也有被覆盖块残留的情况：
+- **EAR、VBAP 与 HOA：** Rust `pcm_mix` 与 `hoa` 的取块器会推进到同起点的最后一块，所以稳定排序后生效的是正确的块。但获胜块的插值前驱仍是同起点被覆盖的那一块：不是 jump 的获胜块从被覆盖块的增益渐变，而不是从上一个起点的生效块渐变。
+- **Apple：** Apple 后端把 DirectSpeakers 的 LFE 块与非 LFE 块分到不同的总线，被覆盖的 LFE 块会在自己的总线上继续生效。
+- **22.2 LFE 路由与 VBAP 高度判断：** 两者都统计被覆盖块。例如被覆盖的 LFE1 加上生效的 LFE2，会让 split-power 判定场景同时含两个语义 LFE 而拒绝渲染。
+
+因此双耳的处理移入 `render_common::last_blocks_at_each_start`。EAR、VBAP、HOA、Apple、22.2 LFE 路由与 VBAP 高度判断都在建立增益、
+总线或路由之前调用它，只保留每个起点的最后一块。
+
+EAR、VBAP 与 HOA 的文件流式渲染也从这组生效块中绑定声道级实时增益标签。若同起点的 `M-030` 被 `M+030` 覆盖，
+针对 `M+030` 的增益与静音会作用于该声道，`M-030` 不再匹配；若获胜块没有标签，则只匹配整个对象的实时覆盖。
+
+`same_start_blocks_test` 对其余后端做同样的比较：
+- 覆盖 EAR 与 VBAP（4+5+0 Objects，以及 9+10+3 split-power 的 DirectSpeakers）和 HOA3（Objects 与 DirectSpeakers）。
+- 每例用两组乱序、每组 40 个同起点块，与只含各组获胜块的场景比较，覆盖两种平滑长度。离线渲染与碎片分块的文件流式渲染都要求逐位相同。
+- 文件流式渲染另覆盖获胜块有标签或无标签，以及按获胜标签、被覆盖标签和整个对象设置增益或静音，共 36 组实时覆盖比较。
+- 修改前，EAR、VBAP 与 HOA 的 Objects 用例全部不同，EAR 与 VBAP 的 split-power 用例准备失败。
+- Apple 后端只在 macOS 上编译，没有加 PCM 回归。
+
 ## 新增用例与内核门禁
 
 一致性夹具新增 `params`：声道 0 是 Objects，40 个块都从 0 开始、方向各不相同，增益为 −6.25 dB；声道 1 是没有标签的 DirectSpeakers，
@@ -93,3 +111,20 @@ clang-format 与 clang-tidy 无告警；命令行越界与非数字的取值仍�
 - A/B 两种配置下 233 个 PCM id 三平台相同，包括 5 个 `params-*` 用例（含经命令行解析听者朝向的 `params-binaural-rotated`）；253 项门禁无失败；
 - 231 个内核文件全部三平台相同，包括 `adm-import.10-gain.f32`、`adm-import.20-cartesian.f32` 与 `decimal.10-parse.f64`；
 - 诊断检查点 78,459 个（每对平台 25,952 个用例检查点与 201 个内核检查点）全部三平台相同。
+
+**同起点块修正后（本机，Linux x64，config A）。** 合并后双耳与其余后端改为只保留每个起点的最后一块。与 3.5 的采集相比，
+原有 228 个 PCM id 与 231 个内核文件全部不变，只有 5 个 `params-*` 用例改变：
+- EAR、VBAP 与 HOA 只有开头 5 ms 默认插值段改变（分别 960、480 与 3,600 个样本，最大差 0.21），获胜块不再从被覆盖块渐变；
+- 两个双耳用例的全部样本改变，生效块由同起点的第一块改为最后一块。
+
+比较器自检 233 个 PCM id、253 项门禁无失败。ctest 80 项全部通过（新增 `mr_adm_same_start_blocks_tests`）。
+`lfe_routing_test` 原先把 LFE1 与 LFE2 块放在同一轨道的同一起点上；按本规则 LFE2 会覆盖 LFE1。因此“两个语义 LFE”的用例改为把
+LFE2 放在另一条轨道上，重复的 LFE1 块改用不同起点。clang-format 与 clang-tidy 无告警。上面的三平台结果对应修正前的 `75e38ae`。
+
+**同起点块修正后的三平台验收。** `c89e81a` 的 Consistency 38907550214 与 CI 38907555184 通过：
+- A/B 两种配置下 233 个 PCM id 三平台相同。5 个 `params-*` 用例的新结果与本机采集逐位相同；253 项门禁无失败。
+- 231 个内核文件全部三平台相同。
+- 诊断检查点 78,459 个全部三平台相同。
+
+同一提交的 Quality 38907559281 因 cppcheck（`uninitMemberVarNoCtor`）报告新测试的后端表成员没有默认初始化而失败；`5686243` 补上初始化，
+只改动这一个测试文件。
