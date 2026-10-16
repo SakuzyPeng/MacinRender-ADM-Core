@@ -221,10 +221,10 @@ bool nonzero(std::span<const float> samples) {
 
 struct Backend {
     std::string_view name;
-    std::unique_ptr<mradm::IRenderer> (*create)();
+    std::unique_ptr<mradm::IRenderer> (*create)(){nullptr};
     std::string_view layout;
-    Kind kind;
-    mradm::LfeRoutingMode lfe_mode;
+    Kind kind{Kind::objects};
+    mradm::LfeRoutingMode lfe_mode{mradm::LfeRoutingMode::direct};
 };
 
 } // namespace
