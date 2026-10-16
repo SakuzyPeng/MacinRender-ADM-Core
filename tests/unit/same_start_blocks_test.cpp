@@ -2,8 +2,8 @@
 // order is in effect for its whole interval. Overwritten blocks must leave nothing behind: no
 // interpolation predecessor, no lane resuming after a shorter winner ends, and no LFE routing
 // decision. Each case renders a track with 40 blocks at each of two starts and compares the PCM
-// bit for bit against the same track holding only the winning blocks. Binaural is covered by
-// binaural_render_fixture_test.
+// bit for bit against the same track holding only the winning blocks. Binaural PCM is covered by
+// binaural_render_fixture_test; its live label binding is checked here with the other backends.
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -26,6 +26,7 @@
 #include "adm/io.h"
 #include "adm/live_override.h"
 #include "adm/render.h"
+#include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
 #include "adm/render_vbap.h"
@@ -269,8 +270,7 @@ bool verify_live_label(mradm::RenderPlan plan, const Backend& backend) {
                 item.mute = mute;
                 const mradm::LiveOverrides overrides{{item}, 1U};
                 const std::string label = std::string{backend.name} + " live label='" + std::string{winning_label} +
-                                          "' override='" + std::string{override_label} +
-                                          "' mute=" + std::to_string(mute);
+                                          "' override='" + std::string{override_label} + "' mute=" + (mute ? "1" : "0");
                 track.ds_blocks = {first, second};
                 const auto expected = render(plan, *backend.create(), label + " (winners only)", &overrides);
                 // Reverse chronological order, with a stale label at both starts. An unlabeled
@@ -311,6 +311,19 @@ int main() try {
         Backend{"hoa", mradm::create_hoa_renderer, "hoa3", Kind::direct_speakers, mradm::LfeRoutingMode::direct},
     };
     bool ok = true;
+    {
+        // Binaural PCM is covered by binaural_render_fixture_test; this adds its live label binding.
+        const Backend binaural{"binaural",
+                               mradm::create_binaural_renderer,
+                               "binaural",
+                               Kind::direct_speakers,
+                               mradm::LfeRoutingMode::direct};
+        mradm::RenderPlan plan;
+        plan.input_path = input.string();
+        plan.output_layout = std::string{binaural.layout};
+        plan.scene = *scene;
+        ok &= verify_live_label(std::move(plan), binaural);
+    }
     for (const auto& backend : backends) {
         if (backend.kind == Kind::direct_speakers) {
             mradm::RenderPlan plan;
