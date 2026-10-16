@@ -430,3 +430,25 @@ fn encoder_and_meter_share_only_immutable_data_across_threads() {
         metering.join().unwrap();
     });
 }
+/// PCM consistency 3.3: HOA encoding takes its elementary functions from the libm port, not the
+/// platform C library behind the inherent `f32::sin` and friends.
+#[test]
+fn hoa_sources_use_the_libm_port() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/hoa");
+    for name in ["mod.rs", "coefficients.rs"] {
+        let text = std::fs::read_to_string(src.join(name)).unwrap();
+        for (line, code) in text.lines().enumerate() {
+            let code = code.split("//").next().unwrap();
+            for function in [
+                "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "hypot", "powf", "exp", "ln",
+                "log10", "sin_cos",
+            ] {
+                assert!(
+                    !code.contains(&format!(".{function}(")),
+                    "{name}:{}: platform `{function}` instead of libm",
+                    line + 1
+                );
+            }
+        }
+    }
+}

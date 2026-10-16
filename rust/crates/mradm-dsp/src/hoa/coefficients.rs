@@ -49,12 +49,25 @@ fn sh([x, y, z]: Vec3) -> [f32; 16] {
 fn polar(az_deg: f32, el_deg: f32, trace: &mut Trace) -> Vec3 {
     let az = az_deg * RAD;
     let el = el_deg * RAD;
-    let cos_el = el.cos();
+    let cos_el = libm::cosf(el);
     if trace.flags & 1 == 0 {
-        trace.polar = [az_deg, el_deg, az, el, cos_el, az.cos(), az.sin(), el.sin()];
+        trace.polar = [
+            az_deg,
+            el_deg,
+            az,
+            el,
+            cos_el,
+            libm::cosf(az),
+            libm::sinf(az),
+            libm::sinf(el),
+        ];
         trace.flags |= 1;
     }
-    [cos_el * az.cos(), cos_el * az.sin(), el.sin()]
+    [
+        cos_el * libm::cosf(az),
+        cos_el * libm::sinf(az),
+        libm::sinf(el),
+    ]
 }
 fn direction(source: &Source, trace: &mut Trace) -> Vec3 {
     let [x, y, z] = source.position;
@@ -102,8 +115,8 @@ pub fn extent(source: &Source, trace: &mut Trace) -> [f32; 16] {
     let vertical = normalize(cross(center, horizontal));
     let mut result = [0.; 16];
     for sample in DISK {
-        let h = (sample[0] * width * RAD).tan();
-        let v = (sample[1] * height * RAD).tan();
+        let h = libm::tanf(sample[0] * width * RAD);
+        let v = libm::tanf(sample[1] * height * RAD);
         let dir = normalize(add(add(center, scale(horizontal, h)), scale(vertical, v)));
         let coeff = encode(dir, trace);
         for i in 0..16 {

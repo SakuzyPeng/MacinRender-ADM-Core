@@ -45,6 +45,18 @@
     },
     {
       "kind": "kernel",
+      "pattern": "hoa-encode.*",
+      "reason": "HOA3 encoding coefficients for point, extent, Cartesian, diffuse and divergent sources and DirectSpeakers channels with the libm port (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "ear-hoa.*",
+      "reason": "EAR AllRAD decoders of orders 1-3 in every normalization with libm spherical harmonics and fixed-order matrix products instead of the runtime-dispatched matrixmultiply kernels (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
@@ -1299,6 +1311,54 @@
       "pattern": "stream-ear-bed-fragmented",
       "reason": "EAR file-streaming replay with live object and per-speaker gain, mute and a seek; EAR geometry, extent and decorrelation use the libm port (PCM consistency 3.2)",
       "reference": "docs/architecture/RUST_EAR_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-hoa3",
+      "reason": "third-order HOA input decoded by EAR AllRAD to 7.1.4; the decoder products no longer use runtime-dispatched SIMD (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "hoa-loudness-minus23",
+      "reason": "HOA3 encoding normalized to -23 LUFS through the 7.1.4 metering decode (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-hoa-extent-fixed",
+      "reason": "HOA file-streaming replay with live object gain, mute and a seek (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-hoa-extent-fragmented",
+      "reason": "HOA file-streaming replay with live object gain, mute and a seek (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-hoa-bed-fixed",
+      "reason": "HOA file-streaming replay of a 5.1 bed with whole-object and per-speaker live gain, mute and a seek (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-hoa-bed-fragmented",
+      "reason": "HOA file-streaming replay of a 5.1 bed with whole-object and per-speaker live gain, mute and a seek (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-hoa3-fixed",
+      "reason": "EAR file-streaming replay of third-order HOA input with a seek (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-ear-hoa3-fragmented",
+      "reason": "EAR file-streaming replay of third-order HOA input with a seek (PCM consistency 3.3)",
+      "reference": "docs/architecture/RUST_HOA_PORTABLE_MATH.md"
     }
   ]
 }
