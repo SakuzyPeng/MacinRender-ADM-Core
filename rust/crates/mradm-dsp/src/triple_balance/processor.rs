@@ -287,6 +287,9 @@ pub struct Snapshot {
 }
 impl Processor {
     pub fn new(track: Arc<Track>) -> Self {
+        // The size lattice is shared and built once; build it here, before the allocation-free
+        // process boundary, as the Scene renderer does.
+        panner::prepare_lattice();
         let mut p = Self {
             track,
             state: State::default(),

@@ -14,7 +14,7 @@
 | 位置 | 原实现（离线、文件流式） | 3.4（全部标准模式入口） |
 | --- | --- | --- |
 | `point`、`room`、`room_mix`、`raw`、`size_mix` | `PORTABLE=false`：平台 `sin/cos/powf` | 唯一实现：`libm::sin/cos/sinf/cosf/powf` |
-| size 积分格点 | 每次调用重新积分 | 与 Scene 共用一次构建、跨会话共享的格点（`OnceLock`，Scene 在进入无分配处理边界前预先构建） |
+| size 积分格点 | 每次调用重新积分 | 与 Scene 共用一次构建、跨会话共享的格点（`OnceLock`；Scene 渲染器与标准模式 `Processor::new` 在进入无分配处理边界前构建，`realtime_allocations` 测试约束） |
 | `Position::advance`、`Processor::control` 的平滑系数 | `f32::exp` | `libm::expf` |
 
 `live_*` 入口随之并入同名函数，Scene、离线与文件流式渲染从此是同一份代码。D 模式（`d_mode`）自引入起就使用 `libm`，
@@ -28,7 +28,8 @@ C++ 侧（`src/adm_render_triple_balance/`）只做输入校验、床路由与�
 内核探针在迁移前后对比：size 积分格点 72,900 个值中 46 个改变（最大差 6.0e-8）；点声源、22.2 room、混合与 D 模式的值不变。
 两个平滑常量的 `libm::expf` 与 `f32::exp` 结果逐位相同。
 
-PCM：见下文验证。
+PCM：216 个原有 PCM id 全部不变（原有 Triple Balance 离线用例都关闭 size，点声源的值不变）。新增的 size 用例用迁移前的代码渲染作对照：
+`triple-size-714` 与 `triple-size-916` 各有 7,494 个样本改变，`triple-size-222` 有 8,713 个，最大差 1.2e-7。
 
 ## 新增用例
 
@@ -59,3 +60,8 @@ PCM：见下文验证。
 4 个文件全部设为门禁（模式 `triple-balance.*`）。内核文件由 224 个增至 228 个，门禁由 219 个增至 223 个。
 
 ## 验证
+
+**本机（Linux x64，config A）。** 与 3.3 的采集相比，216 个原有 PCM id 与 224 个内核文件全部不变，4 个 `triple-balance` 内核文件为新增。
+24 个文件流式重放的同进程两遍、新进程与固定/碎片分块比较全部相同。比较器自检 228 个 PCM id、246 项门禁无失败。
+ctest 79 项全部通过（`realtime_allocations` 曾因格点在首次处理时构建而失败，改为在 `Processor::new` 构建后通过）；
+Rust fmt / clippy、源码扫描测试、许可证校验、clang-format 与 clang-tidy 无告警。
