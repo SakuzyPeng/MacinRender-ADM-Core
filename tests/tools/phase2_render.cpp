@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -17,7 +18,9 @@ namespace {
 // The same locale-independent, correctly rounded parser as the mradm command line (PCM consistency 3.5).
 template <typename T> T decimal(const std::string& text) {
     const auto value = mradm::dsp::parse_decimal<T>(text);
-    phase2::require(value.has_value(), "invalid decimal option value");
+    if (!value) {
+        throw std::runtime_error("invalid decimal option value: " + text);
+    }
     return *value;
 }
 using Json = nlohmann::json;
