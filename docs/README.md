@@ -71,6 +71,7 @@
 - [计量与归一化验收（二期 2.4）](architecture/RUST_METER_ACCEPTANCE.md)
 - [文件流式双耳与监听适配（三期 3.1）](architecture/RUST_FILE_STREAM_BINAURAL.md)
 - [EAR 可移植数学函数与文件流式重放（三期 3.2）](architecture/RUST_EAR_PORTABLE_MATH.md)
+- [HOA 可移植数学函数与文件流式重放（三期 3.3）](architecture/RUST_HOA_PORTABLE_MATH.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)

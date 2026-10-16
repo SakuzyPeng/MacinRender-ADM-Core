@@ -22,6 +22,8 @@
 //   objects-extent-multi  3 Objects tracks — enables multiple OLA sources / spreader groups
 //   directspeakers   5.1 bed — DirectSpeakers gain calculation plus LFE routing
 //   hoa              HOA1 (4 channels) — HOA-typed input path
+//   hoa3             HOA3 (16 channels) — higher-order decoding, whose AllRAD products once took
+//                    nalgebra's runtime-dispatched SIMD path (PCM consistency 3.3)
 //   objects-cartesian  1 Objects channel with CartesianPosition + extent — the only fixture that
 //                    leaves block.position.cartesian == true, which is what distance_from_position
 //                    (hoa/vbap/binaural) and mdap_spread_degrees branch on. Without it those
@@ -238,13 +240,18 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
     return {doc, uid_strs};
 }
 
-[[nodiscard]] BuiltDoc build_hoa1() {
-    // ACN order for first-order: (0,0) (1,-1) (1,0) (1,1).
+[[nodiscard]] BuiltDoc build_hoa(int max_order) {
+    // Full ACN order up to max_order: (0,0) (1,-1) (1,0) (1,1) (2,-2) ...
     struct Component {
         int order;
         int degree;
     };
-    constexpr std::array<Component, 4> k_components{{{0, 0}, {1, -1}, {1, 0}, {1, 1}}};
+    std::vector<Component> components;
+    for (int order = 0; order <= max_order; ++order) {
+        for (int degree = -order; degree <= order; ++degree) {
+            components.push_back({order, degree});
+        }
+    }
 
     auto doc = fixture::Document::create();
     // HOA packs must be created through the dedicated factory; the generic
@@ -254,8 +261,8 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
 
     std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids;
     std::vector<std::string> uid_strs;
-    for (std::size_t i = 0; i < k_components.size(); ++i) {
-        const auto& c = k_components.at(i);
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        const auto& c = components.at(i);
         const std::string suffix = "Hoa" + std::to_string(i);
         auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"CF_" + suffix},
                                                       fixture::TypeDefinition::hoa);
@@ -265,7 +272,7 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
         uids.push_back(wire_channel(doc, cf, pf, suffix));
     }
 
-    finish_doc(doc, uids, "Hoa1");
+    finish_doc(doc, uids, "Hoa" + std::to_string(max_order));
     uid_strs.reserve(uids.size());
     std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
         return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
@@ -295,7 +302,7 @@ void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
               << "kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n"
-              << "     | directspeakers | hoa\n";
+              << "     | directspeakers | hoa | hoa3\n";
 }
 
 } // namespace
@@ -328,8 +335,11 @@ int main(int argc, char** argv) try {
         built = build_direct_speakers();
         seed = 0x33333333U;
     } else if (kind == "hoa") {
-        built = build_hoa1();
+        built = build_hoa(1);
         seed = 0x44444444U;
+    } else if (kind == "hoa3") {
+        built = build_hoa(3);
+        seed = 0x77777777U;
     } else {
         print_usage();
         return 2;

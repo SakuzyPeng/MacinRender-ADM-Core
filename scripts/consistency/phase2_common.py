@@ -112,11 +112,18 @@ def offline_cases():
             if mode != 'point':
                 args += ['--binaural-spread-mode', mode]
             result.append({'id': f'sofa-{Path(sofa).stem}-{mode}', 'fixture': fixture, 'args': args, 'sofa': sofa})
+    # Later slices extend the matrix outside the frozen phase-two parameter set.
+    result += [
+        {'id': 'ear-hoa3', 'fixture': 'hoa3', 'slice': '3.3',
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '7.1.4']},
+        {'id': 'hoa-loudness-minus23', 'fixture': 'objects-extent-multi', 'slice': '3.3',
+         'args': ['--no-peak-limit', '--renderer', 'hoa', '--output-layout', 'hoa3', '--loudness-target', '-23']},
+    ]
     return result
 
 
 def stream_cases():
-    """File-streaming replays (PCM consistency 3.1 binaural, 3.2 EAR).
+    """File-streaming replays (PCM consistency 3.1 binaural, 3.2 EAR, 3.3 HOA).
 
     An IRenderStream is pulled in a fixed or fragmented request partition while live gain, mute
     and (binaural) topology overrides, a head orientation and a seek land at fixed output frames.
@@ -157,12 +164,17 @@ def stream_cases():
                                      {'index': 0, 'speaker_label': 'M-030', 'gain_db': -6.0}]},
         {'frame': 44000, 'objects': []},
     ]
+    # HOA input packs carry no AudioObject that a live override could address.
+    seek_events = [{'frame': 31000, 'seek': 4800}]
     variants = [('binaural-cloud', 'objects-extent-multi', 'saf-binaural', 'binaural', 2, 'cloud', binaural_events),
                 ('binaural-cartesian', 'objects-cartesian', 'saf-binaural', 'binaural', 2, 'cloud', binaural_events),
                 ('binaural-point', 'objects-point', 'saf-binaural', 'binaural', 2, 'none', binaural_events),
                 ('ear-point', 'objects-point', 'ear', '7.1.4', 12, None, object_events),
                 ('ear-extent', 'objects-extent-multi', 'ear', '9.1.6', 16, None, object_events),
-                ('ear-bed', 'directspeakers', 'ear', '7.1.4', 12, None, bed_events)]
+                ('ear-bed', 'directspeakers', 'ear', '7.1.4', 12, None, bed_events),
+                ('hoa-extent', 'objects-extent-multi', 'hoa', 'hoa3', 16, None, object_events),
+                ('hoa-bed', 'directspeakers', 'hoa', 'hoa3', 16, None, bed_events),
+                ('ear-hoa3', 'hoa3', 'ear', '7.1.4', 12, None, seek_events)]
     result = []
     for name, fixture, renderer, layout, channels, spread, events in variants:
         for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
@@ -340,6 +352,8 @@ def kernel_outputs():
     names += [f'meter-{rate}.05-k-weighting.f64' for rate in METER_RATES]
     names += [f'stream-dsp.{part}' for part in ('10-spread.f32', '20-fold.f32', '30-live-gain.f32', '40-mix.f32')]
     names += [f'ear-gains.{part}' for part in ('10-point.f64', '20-extent.f64', '30-direct.f64')]
+    names += [f'hoa-encode.{part}' for part in ('10-point.f32', '20-extent.f32', '30-direct.f32')]
+    names += ['ear-hoa.10-decode.f64']
     names += [f'post-gain.{part}' for part in ('10-conversions.f64', '20-render-plan.f64', '21-render-gain.f32',
                                                 '30-standalone.f64', '31-standalone-gain.f32')]
     names += [f'meter-{rate}-{channels}.{part}' for rate in METER_RATES for channels in METER_CHANNELS

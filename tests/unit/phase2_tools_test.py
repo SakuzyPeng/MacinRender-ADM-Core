@@ -155,7 +155,7 @@ class EvidenceTests(unittest.TestCase):
                 common.pcm_bytes(b)
 
     def test_stream_frame_counts_follow_input_and_seek_timeline(self):
-        channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16}
+        channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16, 'hoa3': 16}
         for case in common.stream_cases():
             shape = (channels[case['output_layout']], 48000, 74200)
             self.assertEqual(common.stream_output_shape(case), shape)
@@ -205,13 +205,14 @@ class EvidenceTests(unittest.TestCase):
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 40)
-        self.assertEqual(len({r['id'] for r in offline}), 40)
+        self.assertEqual(len(offline), 42)
+        self.assertEqual(len({r['id'] for r in offline}), 42)
         self.assertEqual(len(scene), 78)
         streams = common.stream_cases()
-        self.assertEqual(len(streams), 12)
-        self.assertEqual(len(common.case_ids()), 208)
-        self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear'})
+        self.assertEqual(len(streams), 18)
+        self.assertEqual(len(common.case_ids()), 216)
+        self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear', 'hoa'})
+        self.assertIn('hoa3', {r['fixture'] for r in offline + streams})
         self.assertTrue(any(o.get('speaker_label') for r in streams for e in r['events'] for o in e.get('objects', [])))
         for row in streams:
             frames = [event['frame'] for event in row['events']]
@@ -239,7 +240,8 @@ class EvidenceTests(unittest.TestCase):
                           if row['version'] == 1 and row['layout'] != '9+10+3'
                           and max(row['input_rate'], row['output_rate']) <= 48000]
         self.assertEqual(len(original_scene), closeout['inventory']['scene_configurations'])
-        self.assertEqual(common.json_digest([row for row in common.offline_cases() if 'sofa' not in row]),
+        self.assertEqual(common.json_digest([row for row in common.offline_cases()
+                                            if 'sofa' not in row and 'slice' not in row]),
                          closeout['inventory']['offline_parameters_sha256'])
         self.assertEqual(common.json_digest(original_scene),
                          closeout['inventory']['scene_parameters_sha256'])
@@ -416,7 +418,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 220)
+        self.assertEqual(len(names), 224)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -489,6 +491,10 @@ class EvidenceTests(unittest.TestCase):
         ear = [n for n in names if n.startswith('ear-gains.')]
         self.assertEqual(len(ear), 3)
         self.assertTrue(all(gated(n) for n in ear))
+        # Phase 3.3 gates the HOA encoding coefficients and the EAR HOA decoders.
+        hoa = [n for n in names if n.startswith(('hoa-encode.', 'ear-hoa.'))]
+        self.assertEqual(len(hoa), 4)
+        self.assertTrue(all(gated(n) for n in hoa))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

@@ -133,11 +133,11 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | --- | --- | --- |
 | N01 | 部分 | Scene 策略 JSON 数字仍经 nlohmann（C 运行时 `strtod`），1.6 登记为依赖运行时正确舍入；CLI11 浮点选项、HOA 标签 `std::stof`、标签大小写规范化属三期 |
 | N02 | 未处理 | ADM 导入的 `powf` 与 Cartesian `atan2`（`mradm-adm` `project.rs`）；三期 |
-| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；其余参数入口属 3.5 |
+| N03 | 部分 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；3.3：HOA 文件流式改用共用的按声道解析（扬声器标签优先于整体覆盖）；其余参数入口属 3.5 |
 | N04 | 已处理 | Scene 空间数学改用 `libm`（1.3） |
 | N05 | 已处理 | `geometry::direction` 与 VBAP spread 环改用 `libm::sincos`（1.3） |
 | N06 | 已处理 | 3.2：EAR 几何、extent 权重与立体声 panner 改用 `libm`，`ear-gains.*` 内核设为门禁；EAR HOA 解码的球谐与采样方向属 N07（3.3） |
-| N07 | 未处理 | HOA 编码与 EAR HOA 解码；三期 |
+| N07 | 已处理 | 3.3：HOA 编码与 EAR HOA 解码改用 `libm`，解码器的矩阵乘积改为固定顺序的标量计算（不再走 matrixmultiply 的运行时 SIMD 内核），`hoa-encode.*` 与 `ear-hoa.*` 内核设为门禁 |
 | N08 | 已处理 | twiddle 部分随 N09 处理；3.2：去相关随机相位改用 `libm::sin/cos`，`ear-*.20-fir.f32` 继续门禁 |
 | N09 | 已处理 | RustFFT 与 RealFFT twiddle 改用 `libm`（1.3），f64 twiddle 列设为门禁 |
 | N10 | 已处理 | HRTF 幅度改用 `libm::hypotf`（1.3）；`1e-9` 相位回退是固定规则 |
@@ -155,7 +155,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | S04 | 部分 | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；Monitor 快照属三期 |
 | S05 | 部分 | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；Monitor 属三期 |
 | S06 | 部分 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；Monitor `clamp_frame` 与 `RenderService` trim 换算属三期 |
-| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；HOA 与 Triple Balance 随 3.3—3.4 处理 |
+| S07 | 部分 | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；Triple Balance 随 3.4 处理 |
 | S08 | 未处理 | 尚未复现；三期，复现后可提前修复 |
 
 ## C++ 剩余执行点
@@ -367,6 +367,12 @@ Monitor 立体声折叠矩阵改用 `libm::sinf/cosf`，实时覆盖增益的 dB
 Linux x64 上原有 196 个 PCM id 不变；`b20a365` 的 Consistency 38844929927、CI 38844932172 与 Quality 38844933977 通过，
 202 个 PCM id 与全部 217 个内核文件三平台相同，216 项门禁无失败。合并审查补上的用例版本 2（独立帧数校验）
 输出与版本 1 逐位相同，`e7accaa` 的 Consistency 38857339402 重新验收通过。见 [3.1 记录](RUST_FILE_STREAM_BINAURAL.md)。
+
+**3.2 状态**：`mradm-ear` 的几何、extent 权重、立体声 panner 与去相关随机相位改用 `libm`（N06、N08），EAR 在 C++ 中剩下的增益运算
+经核对只有单独的加法与乘法。内核探针新增 3 个 `ear-gains` 文件，文件流式重放经共享渲染器工厂新增 6 个 EAR 用例（含按扬声器标签的覆盖），
+PCM 门禁增至 208 个，内核文件 220 个中 215 个设为门禁。Linux x64 上只有 3 个使用 extent 的 EAR 离线用例在最后几位改变；
+`c931750` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过，208 个 PCM id 与 220 个内核文件三平台相同，
+223 项门禁无失败。见 [3.2 记录](RUST_EAR_PORTABLE_MATH.md)。
 
 相关审计项：N02、N06—N08、N12、N18、S08，以及 N01/N03/S03—S07 的其余部分。
 一期和二期完成的共享实现继续受门禁保护，三期新增路径不能重新引入平台数学函数或不同乘加规则。

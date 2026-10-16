@@ -79,3 +79,10 @@ macOS arm64 与 Windows x64 的平台数学库此前可能在其他输入上与 
 新进程与固定/碎片分块比较全部相同；EAR 重放的事件按预期生效（−3 dB 段的 RMS 比 0.708，`M+030` 在整体 −1.5 dB 上
 单独 −12 dB 时为 0.253，`M-110` 静音后降至 0.018）。比较器自检 208 个 PCM id、223 项门禁无失败。ctest 79 项全部通过；
 Rust fmt / clippy、`tests/portable_math.rs`、许可证校验（`NOTICE.txt` 已同步到 bundle）、clang-format 与 clang-tidy 无告警。
+
+**三平台验收。** `c931750` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过：
+
+- A/B 两种配置下 208 个 PCM id 三平台相同，包括 12 个文件流式重放（6 个 EAR）；223 项门禁无失败；
+- 220 个内核文件全部三平台相同，包括 3 个 `ear-gains` 文件；
+- 诊断检查点的相同 / 不同分布与 3.1 一致：EAR 对象路径（`ear.01`—`ear.03`）全部相同，仍不同的只有
+  一阶 HOA 解码行 `ear.hoa-decode-row-*`（3 组平台对共 22 个），来自 `hoa.rs` 的平台 `sin/cos/atan2`，由 3.3 处理。
