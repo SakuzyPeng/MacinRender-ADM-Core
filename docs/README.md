@@ -74,6 +74,7 @@
 - [HOA 可移植数学函数与文件流式重放（三期 3.3）](architecture/RUST_HOA_PORTABLE_MATH.md)
 - [Triple Balance 可移植数学函数与文件流式重放（三期 3.4）](architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md)
 - [参数入口（三期 3.5）](architecture/RUST_PARAMETER_ENTRY.md)
+- [最终 PCM 与三期结项（三期 3.6）](architecture/RUST_FINAL_PCM.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)

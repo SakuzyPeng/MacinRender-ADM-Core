@@ -75,6 +75,18 @@
     },
     {
       "kind": "kernel",
+      "pattern": "timeline.*",
+      "reason": "seconds-to-frame conversion shared by the output trim, the preview window and Monitor seek: nearest frame of the binary64 product, ties away from zero (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "wav-quantize.*",
+      "reason": "16-, 24- and 32-bit WAVE quantization in the production writer: f32 clipping, f64 scale, truncation toward zero (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "fft-[0-9]*",
       "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
       "reference": "docs/adr/0015-rust-fft-scalar-path.md"
@@ -1479,6 +1491,60 @@
       "pattern": "params-binaural-rotated",
       "reason": "binaural with decimal listener orientation values near binary32 rounding boundaries of ADM dB gains, a Cartesian DirectSpeakers channel and 40 same-start blocks resolved in document order (PCM consistency 3.5)",
       "reference": "docs/architecture/RUST_PARAMETER_ENTRY.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-ear-714-i24",
+      "reason": "EAR 7.1.4 written as 24-bit WAVE: integer quantization after the 7.1.4 WAVE channel permutation (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-ear-51-i16-clip",
+      "reason": "EAR 5.1 with a +6.5 dB final gain written as 16-bit WAVE: gain rewrite and clipping at full scale (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-ear-51-f32-gain",
+      "reason": "EAR 5.1 with a +6.5 dB final gain written as float32 WAVE, keeping samples above full scale (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-hoa3-i24-trim",
+      "reason": "HOA3 trimmed at half-frame boundaries and written as 24-bit BW64 with ADM metadata (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-binaural-i16-trim-gain",
+      "reason": "binaural cloud trimmed, with a -3.25 dB final gain, written as 16-bit WAVE (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-saf-222-i24",
+      "reason": "VBAP 22.2 written as 24-bit BW64 with ADM metadata (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-triple-916-i24",
+      "reason": "Triple Balance 9.1.6 speaker re-render profile written as 24-bit WAVE (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-caf-ear-714-trim-gain",
+      "reason": "EAR 7.1.4 trimmed at a half-frame boundary with a +2.5 dB final gain, written as float32 CAF (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "final-caf-binaural-postproc",
+      "reason": "binaural with automatic peak limiting, written as float32 CAF (PCM consistency 3.6)",
+      "reference": "docs/architecture/RUST_FINAL_PCM.md"
     }
   ]
 }
