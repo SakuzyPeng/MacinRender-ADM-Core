@@ -1,12 +1,14 @@
-// Release replay of file-streaming renders (PCM consistency 3.1). A binaural IRenderStream is pulled
-// in a fixed request partition while live overrides, head orientations and seeks land at fixed
-// output frames, so the delivered PCM is a deterministic function of the case file.
+// Release replay of file-streaming renders (PCM consistency 3.1 binaural, 3.2 EAR). The backend
+// comes from the renderer factory shared with RenderService and the monitor; its IRenderStream is
+// pulled in a fixed request partition while live overrides, head orientations and seeks land at
+// fixed output frames, so the delivered PCM is a deterministic function of the case file.
 #include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -17,9 +19,9 @@
 #include "adm/io.h"
 #include "adm/live_override.h"
 #include "adm/render.h"
-#include "adm/render_binaural.h"
 
 #include "phase2_io.h"
+#include "renderer_factory.h"
 
 namespace {
 using Json = nlohmann::json;
@@ -32,6 +34,13 @@ class Log final : public mradm::LogSink {
         }
     }
 };
+
+mradm::RendererSelection renderer(const std::string& name) {
+    static const std::map<std::string, mradm::RendererSelection> names{
+        {"ear", mradm::RendererSelection::ear}, {"saf-binaural", mradm::RendererSelection::saf_binaural}};
+    phase2::require(names.contains(name), "unsupported file-streaming renderer");
+    return names.at(name);
+}
 
 mradm::BinauralSpreadMode spread_mode(const std::string& name) {
     if (name == "none") {
@@ -60,6 +69,7 @@ mradm::LiveOverrides overrides(const Json& objects, const mradm::AdmScene& scene
         item.extent_width_scale = row.value("width_scale", 1.0F);
         item.extent_height_scale = row.value("height_scale", 1.0F);
         item.extent_depth_scale = row.value("depth_scale", 1.0F);
+        item.speaker_label = row.value("speaker_label", std::string{});
         item.mute = row.value("mute", false);
         result.objects.push_back(std::move(item));
     }
@@ -68,24 +78,30 @@ mradm::LiveOverrides overrides(const Json& objects, const mradm::AdmScene& scene
 
 std::vector<float>
 replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmScene& scene, uint32_t& sample_rate) {
-    phase2::require(spec.at("version").get<int>() == 2, "unsupported file-streaming replay version");
+    phase2::require(spec.at("version").get<int>() == 3, "unsupported file-streaming replay version");
     phase2::require(scene.info.num_frames == spec.at("input_frames").get<uint64_t>(),
                     "file-streaming input frame count differs from the case");
     phase2::require(scene.info.sample_rate == spec.at("sample_rate").get<uint32_t>(),
                     "file-streaming input sample rate differs from the case");
     Log logs;
-    auto renderer = mradm::create_binaural_renderer();
+    auto resolved = mradm::resolve_renderer(renderer(spec.at("renderer").get<std::string>()),
+                                            mradm::normalize_output_layout(spec.at("output_layout").get<std::string>()),
+                                            false);
+    phase2::require(resolved.has_value(), "cannot resolve the file-streaming renderer");
     mradm::RenderPlan plan;
     plan.input_path = input.string();
-    plan.output_layout = "binaural";
+    plan.output_layout = resolved->effective_output_layout;
     plan.scene = scene;
-    plan.binaural_spread_mode = spread_mode(spec.at("spread").get<std::string>());
-    auto prepared = renderer->prepare(plan, logs);
-    phase2::require(prepared.has_value(), "binaural prepare failed");
-    auto opened = renderer->open_stream(**prepared, plan, logs);
-    phase2::require(opened.has_value(), "binaural open_stream failed");
+    if (spec.contains("spread")) {
+        plan.binaural_spread_mode = spread_mode(spec.at("spread").get<std::string>());
+    }
+    auto prepared = resolved->renderer->prepare(plan, logs);
+    phase2::require(prepared.has_value(), "prepare failed");
+    auto opened = resolved->renderer->open_stream(**prepared, plan, logs);
+    phase2::require(opened.has_value(), "open_stream failed");
     auto stream = std::move(*opened);
-    phase2::require(stream->out_channels() == 2U, "binaural stream must be stereo");
+    const auto channels = stream->out_channels();
+    phase2::require(channels == spec.at("channels").get<uint32_t>(), "stream channel count differs from the case");
     sample_rate = stream->sample_rate();
     phase2::require(sample_rate == scene.info.sample_rate, "file-streaming output sample rate differs from the input");
 
@@ -126,14 +142,15 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
             next_event < events.size() ? std::min(total, events[next_event].at("frame").get<uint64_t>()) : total;
         const auto frames =
             static_cast<std::size_t>(std::min<uint64_t>(partition[request++ % partition.size()], limit - position));
-        block.assign(frames * 2U, 0.0F);
+        block.assign(frames * channels, 0.0F);
         const auto produced = stream->process(block, frames);
         phase2::require(produced.has_value(), "stream process failed");
         // Check the media timeline independently of the stream's reported progress. In particular,
         // a seek that reports success without moving must not pass as a shorter, repeatable replay.
         const auto expected = std::min<uint64_t>(frames, scene.info.num_frames - media_position);
         phase2::require(*produced == expected, "file-streaming frame count differs from replay timeline");
-        delivered.insert(delivered.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * 2U));
+        delivered.insert(
+            delivered.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * channels));
         position += *produced;
         media_position += *produced;
         if (*produced < frames) {
@@ -159,7 +176,10 @@ int main(int argc, char** argv) {
         for (int pass = 1; pass <= 2; ++pass) {
             uint32_t sample_rate = 0;
             const auto pcm = replay(spec, input, *scene, sample_rate);
-            phase2::pcm(directory / ("pass-" + std::to_string(pass) + ".pcmbits"), 2U, sample_rate, pcm);
+            phase2::pcm(directory / ("pass-" + std::to_string(pass) + ".pcmbits"),
+                        spec.at("channels").get<uint32_t>(),
+                        sample_rate,
+                        pcm);
         }
         return 0;
     } catch (const std::exception& e) {

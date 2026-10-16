@@ -155,9 +155,13 @@ class EvidenceTests(unittest.TestCase):
                 common.pcm_bytes(b)
 
     def test_stream_frame_counts_follow_input_and_seek_timeline(self):
+        channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16}
         for case in common.stream_cases():
-            self.assertEqual(common.stream_output_shape(case), (2, 48000, 74200))
-            common.validate_stream_shape(case, (2, 48000, 74200))
+            shape = (channels[case['output_layout']], 48000, 74200)
+            self.assertEqual(common.stream_output_shape(case), shape)
+            common.validate_stream_shape(case, shape)
+            with self.assertRaisesRegex(ValueError, 'frame count differs'):
+                common.validate_stream_shape(case, (shape[0] + 1, *shape[1:]))
         case = dict(common.stream_cases()[0], input_frames=100, frames=200)
         for events, limit, expected in [
             ([], 200, 100),
@@ -205,8 +209,10 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len({r['id'] for r in offline}), 40)
         self.assertEqual(len(scene), 78)
         streams = common.stream_cases()
-        self.assertEqual(len(streams), 6)
-        self.assertEqual(len(common.case_ids()), 202)
+        self.assertEqual(len(streams), 12)
+        self.assertEqual(len(common.case_ids()), 208)
+        self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear'})
+        self.assertTrue(any(o.get('speaker_label') for r in streams for e in r['events'] for o in e.get('objects', [])))
         for row in streams:
             frames = [event['frame'] for event in row['events']]
             self.assertEqual(frames, sorted(set(frames)))
@@ -410,7 +416,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 217)
+        self.assertEqual(len(names), 220)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -479,6 +485,10 @@ class EvidenceTests(unittest.TestCase):
         stream = [n for n in names if n.startswith('stream-dsp.')]
         self.assertEqual(len(stream), 4)
         self.assertTrue(all(gated(n) for n in stream))
+        # Phase 3.2 gates the EAR point, extent and DirectSpeakers gains.
+        ear = [n for n in names if n.startswith('ear-gains.')]
+        self.assertEqual(len(ear), 3)
+        self.assertTrue(all(gated(n) for n in ear))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

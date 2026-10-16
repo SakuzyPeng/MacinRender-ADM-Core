@@ -12,7 +12,7 @@ impl Extent {
         let mut gains = Vec::new();
         for row in 0..37 {
             let el = -90.0 + row as f64 * 5.0;
-            let n = (el.to_radians().cos() * 72.0).round().max(1.0) as usize;
+            let n = (libm::cos(el.to_radians()) * 72.0).round().max(1.0) as usize;
             for i in 0..n {
                 let p = cart([i as f64 * (360.0 / n as f64), el, 1.0]);
                 points.push([p.x as f32, p.y as f32, p.z as f32]);
@@ -86,9 +86,9 @@ impl Extent {
 }
 fn extent_mod(extent: f64, distance: f64) -> f64 {
     let size = interp(extent, &[0.0, 360.0], &[0.2, 1.0]);
-    let e1 = 4.0 * size.atan2(1.0).to_degrees();
+    let e1 = 4.0 * libm::atan2(size, 1.0).to_degrees();
     interp(
-        4.0 * size.atan2(distance).to_degrees(),
+        4.0 * libm::atan2(size, distance).to_degrees(),
         &[0.0, e1, 360.0],
         &[0.0, extent, 360.0],
     )
@@ -142,18 +142,22 @@ impl Weight {
         let m = (1.0 / (h - end)) as f32;
         Self {
             basis: basis.map(|p| [p.x as f32, p.y as f32, p.z as f32]),
-            circle: [cp.sin() as f32, cp.cos() as f32],
-            test: [-cp.cos() as f32, cp.sin() as f32],
+            circle: [libm::sin(cp) as f32, libm::cos(cp) as f32],
+            test: [-libm::cos(cp) as f32, libm::sin(cp) as f32],
             circular: w - h < 1e-6,
-            cos_start: if h < PI { h.cos() as f32 } else { -1.0 },
+            cos_start: if h < PI { libm::cos(h) as f32 } else { -1.0 },
             cos_end: if end < PI {
-                end.cos() as f32
+                libm::cos(end) as f32
             } else {
                 -(1.0 + 1e-6)
             },
-            sin_start: if h < PI / 2.0 { h.sin() as f32 } else { 1.0 },
+            sin_start: if h < PI / 2.0 {
+                libm::sin(h) as f32
+            } else {
+                1.0
+            },
             sin_end: if end < PI / 2.0 {
-                end.sin() as f32
+                libm::sin(end) as f32
             } else {
                 1.0 + 1e-6
             },
@@ -167,7 +171,7 @@ impl Weight {
         } else if x <= self.cos_end {
             0.0
         } else {
-            self.m * x.acos() + self.c
+            self.m * libm::acosf(x) + self.c
         }
     }
     fn weight(&self, p: [f32; 3]) -> f32 {
@@ -183,7 +187,7 @@ impl Weight {
             } else if s >= self.sin_end {
                 0.0
             } else {
-                self.m * s.asin() + self.c
+                self.m * libm::asinf(s) + self.c
             }
         } else {
             self.cosine(x * self.circle[0] + t[1] * self.circle[1])
