@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cctype>
 #include <string>
 #include <string_view>
 
@@ -21,7 +20,7 @@ namespace {
 
 std::string lower_copy(std::string value) {
     std::ranges::transform(
-        value, value.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        value, value.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
     return value;
 }
 

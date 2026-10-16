@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <iterator>
@@ -57,14 +56,14 @@ enum class AxmlState : uint8_t {
     const auto last = value.find_last_not_of(" \t\r\n");
     std::string out{value.substr(first, last - first + 1)};
     std::ranges::transform(
-        out, out.begin(), [](char c) { return static_cast<char>(std::toupper(static_cast<unsigned char>(c))); });
+        out, out.begin(), [](char c) { return (c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c); });
     return out;
 }
 
 [[nodiscard]] std::string lower(std::string_view value) {
     std::string out{value};
     std::ranges::transform(
-        out, out.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        out, out.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
     return out;
 }
 

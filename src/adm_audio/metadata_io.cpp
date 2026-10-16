@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -288,7 +287,7 @@ Result<void> write_mp4_metadata(const std::string& path, const MetadataFields& m
 Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta) {
     auto ext = std::filesystem::path(path).extension().string();
     std::ranges::transform(
-        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        ext, ext.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
     if (ext == ".caf") {
         return write_caf_metadata(path, meta);
     }

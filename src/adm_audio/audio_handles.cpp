@@ -138,7 +138,7 @@ Result<void> RenderInputReader::seek_frame(uint64_t frame) {
 Result<ReaderHandle> ReaderHandle::open(const std::string& path) {
     auto ext = std::filesystem::path(path).extension().string();
     std::ranges::transform(
-        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        ext, ext.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
 
     if (ext == ".caf") {
         auto res = FloatCafReader::open(path);
@@ -379,7 +379,7 @@ Result<WriterHandle>
 WriterHandle::open(const std::string& path, uint32_t channels, uint32_t sample_rate, const std::string& layout_id) {
     auto ext = std::filesystem::path(path).extension().string();
     std::ranges::transform(
-        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        ext, ext.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
 
     if (ext == ".caf") {
         auto res = FloatCafWriter::open(path, channels, sample_rate, layout_id);

@@ -651,7 +651,8 @@ std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink&
                 }
             }
             if (!st.blocks.empty()) {
-                std::ranges::sort(st.blocks, {}, &SpreaderBlock::start_sample);
+                // Blocks sharing a start keep their scene (ADM document) order; the last one is in effect.
+                std::ranges::stable_sort(st.blocks, {}, &SpreaderBlock::start_sample);
                 tracks.push_back(std::move(st));
             }
         }
@@ -737,7 +738,8 @@ void init_source_bank(BinauralSourceBank& bank,
 void append_source_bank(std::span<BinauralSource> bank, std::vector<BinauralSource>& srcs) {
     for (auto& src : bank) {
         if (!src.blocks.empty()) {
-            std::ranges::sort(src.blocks, {}, &BinauralSource::Block::start_sample);
+            // Blocks sharing a start keep their scene (ADM document) order; the last one is in effect.
+            std::ranges::stable_sort(src.blocks, {}, &BinauralSource::Block::start_sample);
             srcs.push_back(std::move(src));
         }
     }

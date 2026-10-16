@@ -15,6 +15,7 @@
 #include "adm/render.h"
 
 #include "commands.h"
+#include "decimal_option.h"
 
 namespace {
 
@@ -296,31 +297,34 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     add_input_mapping_options(*render_cmd, opts);
     add_output_selection_options(*render_cmd, opts);
     render_cmd->add_flag("--no-peak-limit", opts.no_peak_limit, "Disable True Peak limiting");
-    render_cmd->add_option("--peak-limit-dbtp", opts.peak_limit_dbtp, "True Peak target in dBTP")
-        ->check(CLI::Range(-60.0F, 0.0F));
+    mradm::cli::add_decimal_option(
+        *render_cmd, "--peak-limit-dbtp", opts.peak_limit_dbtp, "True Peak target in dBTP", -60.0F, 0.0F);
     render_cmd->add_flag("--peak-normalize-to-limit",
                          opts.peak_normalize_to_limit,
                          "Raise global gain up to --peak-limit-dbtp when measured True Peak is below the ceiling");
-    render_cmd->add_option("--final-gain-db",
-                           opts.final_gain_db,
-                           "Unconstrained final gain in dB, applied after loudness/peak staging; bypasses peak "
-                           "limiting and may exceed 0 dBFS (default: 0)");
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--final-gain-db",
+                                   opts.final_gain_db,
+                                   "Unconstrained final gain in dB, applied after loudness/peak staging; bypasses peak "
+                                   "limiting and may exceed 0 dBFS (default: 0)");
     render_cmd
         ->add_option("--output-bit-depth",
                      opts.output_bit_depth_str,
                      "Output bit depth: f32, i24, i16; use i24 for PCM BW64 ADM delivery")
         ->check(CLI::IsMember({"f32", "i24", "i16"}));
-    render_cmd
-        ->add_option("--loudness-target",
-                     opts.loudness_target,
-                     "Normalise integrated loudness to this LUFS target (enables loudness normalisation)")
-        ->check(CLI::Range(-70.0F, 0.0F));
-    render_cmd
-        ->add_option("--start",
-                     opts.render_start,
-                     "Trim output to start at this time in seconds (default: 0 = from the beginning)")
-        ->check(CLI::NonNegativeNumber);
-    render_cmd->add_option(
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--loudness-target",
+                                   opts.loudness_target,
+                                   "Normalise integrated loudness to this LUFS target (enables loudness normalisation)",
+                                   -70.0F,
+                                   0.0F);
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--start",
+                                   opts.render_start,
+                                   "Trim output to start at this time in seconds (default: 0 = from the beginning)",
+                                   0.0);
+    mradm::cli::add_decimal_option(
+        *render_cmd,
         "--end",
         opts.render_end,
         "Trim output to end at this absolute time in seconds (default: render to the end); must be > --start. "
@@ -368,9 +372,12 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                            "Personal SOFA, prepared HRIR or distance collection manifest (room-binaural)");
     render_cmd->add_option(
         "--screen-config", opts.screen_config_path, "Reference/reproduction screen JSON (room-binaural)");
-    render_cmd
-        ->add_option("--room-metres-per-unit", opts.room_metres_per_unit, "Room coordinate scale; default 1.5 m/unit")
-        ->check(CLI::Range(0.01, 100.0));
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--room-metres-per-unit",
+                                   opts.room_metres_per_unit,
+                                   "Room coordinate scale; default 1.5 m/unit",
+                                   0.01,
+                                   100.0);
     render_cmd->add_option("--semantic-policy", opts.semantic_policy_path, "ADM semantic render policy JSON");
     render_cmd->add_option("--write-semantic-report",
                            opts.semantic_report_path,
@@ -423,21 +430,24 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                          opts.apple_speaker_rendering_flags,
                          "Enable Apple speaker InterAuralDelay and DistanceAttenuation rendering flags "
                          "(legacy behavior; default: disabled for ADM/SAF-style gains)");
-    render_cmd
-        ->add_option("--listener-yaw",
-                     opts.listener_yaw,
-                     "Listener head yaw in degrees, +left (binaural backends: Apple macOS / SAF)")
-        ->check(CLI::Range(-180.0, 180.0));
-    render_cmd
-        ->add_option("--listener-pitch",
-                     opts.listener_pitch,
-                     "Listener head pitch in degrees, +up (binaural backends: Apple macOS / SAF)")
-        ->check(CLI::Range(-90.0, 90.0));
-    render_cmd
-        ->add_option("--listener-roll",
-                     opts.listener_roll,
-                     "Listener head roll in degrees (binaural backends: Apple macOS / SAF)")
-        ->check(CLI::Range(-180.0, 180.0));
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--listener-yaw",
+                                   opts.listener_yaw,
+                                   "Listener head yaw in degrees, +left (binaural backends: Apple macOS / SAF)",
+                                   -180.0F,
+                                   180.0F);
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--listener-pitch",
+                                   opts.listener_pitch,
+                                   "Listener head pitch in degrees, +up (binaural backends: Apple macOS / SAF)",
+                                   -90.0F,
+                                   90.0F);
+    mradm::cli::add_decimal_option(*render_cmd,
+                                   "--listener-roll",
+                                   opts.listener_roll,
+                                   "Listener head roll in degrees (binaural backends: Apple macOS / SAF)",
+                                   -180.0F,
+                                   180.0F);
     render_cmd
         ->add_option("--iamf-container",
                      opts.iamf_container_str,
@@ -503,13 +513,13 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);
     request.options.apple_speaker_rendering_flags = opts.apple_speaker_rendering_flags;
     if (!std::isnan(opts.listener_yaw)) {
-        request.options.listener_orientation.yaw_deg = static_cast<float>(opts.listener_yaw);
+        request.options.listener_orientation.yaw_deg = opts.listener_yaw;
     }
     if (!std::isnan(opts.listener_pitch)) {
-        request.options.listener_orientation.pitch_deg = static_cast<float>(opts.listener_pitch);
+        request.options.listener_orientation.pitch_deg = opts.listener_pitch;
     }
     if (!std::isnan(opts.listener_roll)) {
-        request.options.listener_orientation.roll_deg = static_cast<float>(opts.listener_roll);
+        request.options.listener_orientation.roll_deg = opts.listener_roll;
     }
     request.options.iamf_container = (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
                                                                         : mradm::RenderOptions::IamfContainer::obu;
