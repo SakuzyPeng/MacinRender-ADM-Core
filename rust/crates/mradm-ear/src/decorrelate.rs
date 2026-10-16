@@ -56,7 +56,7 @@ pub fn filters(layout: &Layout) -> Vec<f32> {
             let angle = std::f64::consts::TAU * (rng.next() as f64 / 4294967296.0);
             #[cfg(feature = "diagnostics")]
             angles.push(angle);
-            spectrum[i] = Complex::new(angle.cos(), angle.sin());
+            spectrum[i] = Complex::new(libm::cos(angle), libm::sin(angle));
             spectrum[TAPS - i] = spectrum[i].conj();
         }
         #[cfg(feature = "diagnostics")]

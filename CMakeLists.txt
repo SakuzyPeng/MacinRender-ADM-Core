@@ -1073,7 +1073,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endforeach()
 
     target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMRenderBinaural)
-    target_link_libraries(mr_adm_phase2_stream PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMIo)
+    target_link_libraries(mr_adm_phase2_stream PRIVATE MacinRender::ADMRendererFactory MacinRender::ADMIo)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
     add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp src/adm_render_common/live_scene_trace.cpp)
     target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
