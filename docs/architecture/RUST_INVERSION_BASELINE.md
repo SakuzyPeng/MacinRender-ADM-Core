@@ -78,4 +78,4 @@
 - 本切片没有改动私有 FFI，`mr_adm_ffi_header_check` 无需重跑。
 
 **三平台。** 已在本分支手动触发 [Consistency 38990075874](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38990075874)，
-结果待确认，不借用三期的运行结果。
+按四期集中验收的约定不单独等待，结果回填到本节；未回填前不借用三期的运行结果。
