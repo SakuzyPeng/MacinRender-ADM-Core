@@ -97,6 +97,23 @@ def validate_experiments(root, manifest):
                 raise ValueError('worker comparison does not match artifact bytes')
 
 
+def validate_scene_status(manifest):
+    """Check both repeated passes against the scripted timeline and renderer tail."""
+    status_keys = {r['id'] + f'-process{i}' for r in manifest['scene'] for i in (1, 2)}
+    if set(manifest['replay_status']) != status_keys:
+        raise ValueError('Scene health evidence inventory is incomplete')
+    for row in manifest['scene']:
+        expected_epochs = [
+            {'epoch': e['epoch'],
+             'frames': ((e['end'] - e['target']) * row['output_rate'] + row['input_rate'] - 1) // row['input_rate']
+                       + row.get('tail_frames', 0)}
+            for e in row['epochs']]
+        for process in (1, 2):
+            records = manifest['replay_status'][row['id'] + f'-process{process}']
+            if len(records) != 2 or any(r != {'epochs': expected_epochs, 'status': 'passed', 'underruns': 0} for r in records):
+                raise ValueError('invalid Scene state/frame-count evidence')
+
+
 def validate(root):
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
@@ -178,16 +195,7 @@ def validate(root):
     repeat_keys.update(r['id'] + '-partition' for r in manifest['stream'] if r['id'].endswith('-fixed'))
     if repeat_keys != set(manifest['comparisons']):
         raise ValueError('repeat/partition evidence inventory is incomplete')
-    status_keys = {r['id'] + f'-process{i}' for r in manifest['scene'] for i in (1, 2)}
-    if set(manifest['replay_status']) != status_keys:
-        raise ValueError('Scene health evidence inventory is incomplete')
-    for row in manifest['scene']:
-        expected_epochs = [{'epoch': e['epoch'], 'frames': ((e['end'] - e['target']) * row['output_rate'] + row['input_rate'] - 1) // row['input_rate']}
-                           for e in row['epochs']]
-        for process in (1, 2):
-            records = manifest['replay_status'][row['id'] + f'-process{process}']
-            if len(records) != 2 or any(r != {'epochs': expected_epochs, 'status': 'passed', 'underruns': 0} for r in records):
-                raise ValueError('invalid Scene state/frame-count evidence')
+    validate_scene_status(manifest)
     for name, row in manifest['comparisons'].items():
         if ('-partition-' not in name or row.get('required')) and not row['identical']:
             raise ValueError('repeatability failure was marked complete')
