@@ -13,6 +13,8 @@
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
+#include "adm/room.h"
+#include "adm/screen.h"
 
 #include "decimal.h"
 #include "phase2_io.h"
@@ -55,7 +57,8 @@ mradm::RenderOptions options(const Json& args) {
                 {"saf", mradm::RendererSelection::saf},
                 {"saf-binaural", mradm::RendererSelection::saf_binaural},
                 {"hoa", mradm::RendererSelection::hoa},
-                {"triple-balance", mradm::RendererSelection::triple_balance}};
+                {"triple-balance", mradm::RendererSelection::triple_balance},
+                {"room-binaural", mradm::RendererSelection::room_binaural}};
             result.renderer = names.at(v);
         } else if (key == "--output-layout") {
             result.output_layout = v;
@@ -89,6 +92,12 @@ mradm::RenderOptions options(const Json& args) {
                                                                              {"i24", mradm::OutputBitDepth::i24},
                                                                              {"i16", mradm::OutputBitDepth::i16}};
             result.output_bit_depth = depths.at(v);
+        } else if (key == "--direct-speakers-routing") {
+            phase2::require(v == "matrix", "unsupported DirectSpeakers routing");
+            result.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
+        } else if (key == "--room-quality") {
+            phase2::require(v == "exact" || v == "realtime", "unsupported room quality");
+            result.room.quality = v == "realtime" ? mradm::RoomQuality::realtime : mradm::RoomQuality::exact;
         } else if (key == "--triple-balance-mode") {
             phase2::require(v == "standard" || v == "d", "unsupported Triple Balance mode");
             result.triple_balance_mode = v == "d" ? mradm::TripleBalanceMode::d : mradm::TripleBalanceMode::standard;
@@ -97,6 +106,33 @@ mradm::RenderOptions options(const Json& args) {
         }
     }
     return result;
+}
+// Fixture files named by the case (PCM consistency 4.2): the same RenderOptions fields the mradm
+// command line fills from these flags, resolved inside the collection's fixtures directory.
+void apply_files(const Json& files, const std::filesystem::path& fixtures, mradm::RenderOptions& render_options) {
+    for (const auto& [flag, value] : files.items()) {
+        const std::filesystem::path name(value.get<std::string>());
+        phase2::require(name.is_relative() && name.lexically_normal() == name && *name.begin() != "..",
+                        "invalid fixture file name");
+        const auto path = fixtures / name;
+        if (flag == "--semantic-policy") {
+            render_options.semantic_policy_path = path;
+        } else if (flag == "--direct-speakers-matrix") {
+            render_options.direct_speakers_matrix_path = path;
+        } else if (flag == "--screen-config") {
+            auto screens = mradm::load_screen_config(path);
+            phase2::require(screens.has_value(), "cannot load screen configuration");
+            render_options.screens = *screens;
+        } else if (flag == "--room") {
+            auto room = mradm::RoomProfile::load(path);
+            phase2::require(room.has_value(), "cannot load room profile");
+            render_options.room.profile = *room;
+        } else if (flag == "--room-hrir") {
+            render_options.room.hrir_manifest = path;
+        } else {
+            throw std::runtime_error("unsupported fixture file option: " + flag);
+        }
+    }
 }
 // The final file's samples as float32. Integer WAV must keep the requested depth; 16- and 24-bit
 // samples convert to float32 exactly, so equal floats mean equal integers.
@@ -140,6 +176,11 @@ int main(int argc, char** argv) {
                 phase2::require(name == name.filename() && name.extension() == ".sofa", "invalid SOFA fixture name");
                 request.options.sofa_path =
                     std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures" / name;
+            }
+            if (spec.contains("files")) {
+                apply_files(spec.at("files"),
+                            std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures",
+                            request.options);
             }
             const auto result = service.render(request, progress, logs);
             if (!result.success()) {

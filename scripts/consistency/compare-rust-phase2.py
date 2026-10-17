@@ -97,6 +97,23 @@ def validate_experiments(root, manifest):
                 raise ValueError('worker comparison does not match artifact bytes')
 
 
+def validate_scene_status(manifest):
+    """Check both repeated passes against the scripted timeline and renderer tail."""
+    status_keys = {r['id'] + f'-process{i}' for r in manifest['scene'] for i in (1, 2)}
+    if set(manifest['replay_status']) != status_keys:
+        raise ValueError('Scene health evidence inventory is incomplete')
+    for row in manifest['scene']:
+        expected_epochs = [
+            {'epoch': e['epoch'],
+             'frames': ((e['end'] - e['target']) * row['output_rate'] + row['input_rate'] - 1) // row['input_rate']
+                       + row.get('tail_frames', 0)}
+            for e in row['epochs']]
+        for process in (1, 2):
+            records = manifest['replay_status'][row['id'] + f'-process{process}']
+            if len(records) != 2 or any(r != {'epochs': expected_epochs, 'status': 'passed', 'underruns': 0} for r in records):
+                raise ValueError('invalid Scene state/frame-count evidence')
+
+
 def validate(root):
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
@@ -109,6 +126,12 @@ def validate(root):
     if manifest.get('sofa') != common.SOFA_FIXTURES:
         raise ValueError('baseline does not cover the pinned SOFA inputs')
     common.validate_sofa_fixtures(root / 'fixtures')
+    if manifest.get('json_fixtures') != common.JSON_FIXTURES:
+        raise ValueError('baseline does not cover the versioned JSON inputs')
+    common.validate_json_fixtures(root / 'fixtures')
+    if manifest.get('room') != common.ROOM_FIXTURES:
+        raise ValueError('baseline does not cover the pinned room pack')
+    common.validate_room_fixtures(root / 'fixtures/room')
     expected = ([c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
                 + [c['id'] for c in manifest['stream']])
     if not expected or len(set(expected)) != len(expected) or set(expected) != set(manifest['outputs']):
@@ -125,7 +148,8 @@ def validate(root):
             common.validate_sofa_pcm(safe_file(root, row['path']))
         if list(shape) != row['shape'] or common.digest(bits) != row['sha256']:
             raise ValueError('PCM shape/hash differs from manifest')
-    if not manifest['fixtures'] or set(manifest['fixtures']) != {p.name for p in (root / 'fixtures').iterdir()}:
+    if not manifest['fixtures'] or set(manifest['fixtures']) != {
+            p.relative_to(root / 'fixtures').as_posix() for p in (root / 'fixtures').rglob('*') if p.is_file()}:
         raise ValueError('fixture inventory differs from manifest')
     for name, sha in manifest['fixtures'].items():
         path = safe_file(root, 'fixtures/' + name)
@@ -171,16 +195,7 @@ def validate(root):
     repeat_keys.update(r['id'] + '-partition' for r in manifest['stream'] if r['id'].endswith('-fixed'))
     if repeat_keys != set(manifest['comparisons']):
         raise ValueError('repeat/partition evidence inventory is incomplete')
-    status_keys = {r['id'] + f'-process{i}' for r in manifest['scene'] for i in (1, 2)}
-    if set(manifest['replay_status']) != status_keys:
-        raise ValueError('Scene health evidence inventory is incomplete')
-    for row in manifest['scene']:
-        expected_epochs = [{'epoch': e['epoch'], 'frames': ((e['end'] - e['target']) * row['output_rate'] + row['input_rate'] - 1) // row['input_rate']}
-                           for e in row['epochs']]
-        for process in (1, 2):
-            records = manifest['replay_status'][row['id'] + f'-process{process}']
-            if len(records) != 2 or any(r != {'epochs': expected_epochs, 'status': 'passed', 'underruns': 0} for r in records):
-                raise ValueError('invalid Scene state/frame-count evidence')
+    validate_scene_status(manifest)
     for name, row in manifest['comparisons'].items():
         if ('-partition-' not in name or row.get('required')) and not row['identical']:
             raise ValueError('repeatability failure was marked complete')
@@ -229,7 +244,8 @@ def compare(directories, require_platforms=True, gates=()):
     manifests = [validate(p) for p in directories]
     first = manifests[0]
     for manifest in manifests[1:]:
-        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'fixtures'):
+        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'json_fixtures', 'room',
+                      'fixtures'):
             if manifest[field] != first[field]:
                 raise ValueError('incompatible baseline: ' + field)
         if compiler_identity(manifest['build']) != compiler_identity(first['build']):
