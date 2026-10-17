@@ -444,9 +444,9 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 | --- | --- | --- |
 | 4.1 | 方向与基线 | ADR 0021、[逆转路线](RUST_INVERSION_ROADMAP.md)、本节与上文“C++ 剩余执行点”的四期归属；C/C++ 规模指标与棘轮；Rust 侧生产路径检查点写出器；离线渲染在导入后与语义策略后的场景检查点。PCM 与内核输出不变。 |
 | 4.2 | 覆盖先行 | ① `room-binaural` exact 档：提交并钉住非个人的合成房间包（外部 HRIR 用已钉住的 `simple.sofa`），增加离线、文件流式（头姿、seek）、Scene 用例与 `room.*` 内核探针；换房是异步的，没有固定的开始帧，未纳入。② 策略矩阵：`objects[]` 身份规则、`channel_lock`、`direct_speakers` 过滤、`lock_*` 与 DirectSpeakers 矩阵 JSON 的离线与 Scene 用例。③ VBAP / HOA / 双耳的离线对象平滑，VBAP 与 Triple Balance 的自动响度与峰值。④ 5 份观察内核设为门禁。 |
-| 4.3 | Rust 渲染场景：导入投影与声道床 | 新 crate 持有渲染场景：`src/adm_metadata` 的复制、CHNA 与 UID 规范化、声道床目录与布局迁入。C++ `AdmScene` 改为由 Rust 场景生成的只读视图，`RenderPlan` 携带 Rust 场景句柄。场景检查点与 PCM 逐位相同。 |
-| 4.4 | 语义策略与参数 JSON | 语义策略的解析、匹配、合并、应用、报告与模板，以及 DirectSpeakers 矩阵与屏幕 JSON 迁入 Rust，N01 的 JSON 残留随之消除。`SceneStreamEngine` 的逐更新应用改调 Rust。报告与模板 JSON 保持逐字节相同。 |
-| 4.5 | 扬声器后端与公共渲染层 | EAR、VBAP（含 Scene 胶水）、HOA，DirectSpeakers 路由与矩阵、标签别名、布局表（含 Apple 覆盖几何）、LFE / 22.2 路由与 `speaker_pcm` 离线驱动迁入 Rust。渲染循环由 Rust 驱动，进度、日志、取消与 PCM sink 经 C 回调接口，计量顺序不变。 |
+| 4.3 | Rust 渲染场景：导入投影与声道床 | 新 crate `mradm-scene` 持有渲染场景：WAVE 格式读取、CHNA 与 UID 规范化、`src/adm_metadata` 的导入复制、声道床预设 / 目录 / 标签解析 / 场景合成迁入，扬声器布局表（含 Apple 几何，原列 4.5）一并迁入。C++ `AdmScene` 改为由 Rust 场景视图生成，`05-import` 场景检查点改由 Rust 场景发出。场景检查点与 PCM 逐位相同。`RenderPlan` 的 Rust 场景句柄推迟到 4.4（维护者 2026-10-17 决定）。 |
+| 4.4 | 语义策略与参数 JSON | 语义策略的解析、匹配、合并、应用、报告与模板，以及 DirectSpeakers 矩阵与屏幕 JSON 迁入 Rust，N01 的 JSON 残留随之消除。`SceneStreamEngine` 的逐更新应用改调 Rust。`RenderPlan` 携带策略后的 Rust 场景句柄，`06-policy` 检查点改由 Rust 发出。报告与模板 JSON 保持逐字节相同。 |
+| 4.5 | 扬声器后端与公共渲染层 | EAR、VBAP（含 Scene 胶水）、HOA，DirectSpeakers 路由与矩阵、标签别名、LFE / 22.2 路由与 `speaker_pcm` 离线驱动迁入 Rust。渲染循环由 Rust 驱动，进度、日志、取消与 PCM sink 经 C 回调接口，计量顺序不变。 |
 | 4.6 | Triple Balance 与 room | Triple Balance 的场景改写、床、文件流式与 Scene 胶水，room 的准备、准备线程状态机与 Scene 胶水迁入 Rust。只被冻结参考使用的 C++（`panner` / `size_*`）连同参考冻结进 `tests/reference/`。 |
 | 4.7 | 双耳 | 计划构建（channelLock 参考对、cloud、divergence×extent 槽、种子、ADR 0017 分组）、OLA 源归约、LFE 旁路、spreader 适配器 / 延迟环 / 排空、工作池、HRTF 网格缓存与 Scene 胶水迁入 Rust，保持源索引归约顺序。 |
 | 4.8 | PCM 写出与后处理 IO | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据与 peak / loudness 公共 API 迁入 Rust；编码器沿用同一 sink 接口，留在 C 岛；删除失去调用者的私有 FFI 头。 |
