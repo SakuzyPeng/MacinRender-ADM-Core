@@ -3,8 +3,9 @@
 
 Lines are newline counts (as `wc -l`). Production C/C++ is `src/` plus `include/`, excluding the
 platform islands; islands are ratcheted separately. Tests, frozen references and Rust are reported
-only. `--check` fails when a ratcheted area grows past the committed baseline; after deleting C++,
-run `--update` in the same commit to tighten it. See docs/architecture/RUST_INVERSION_ROADMAP.md.
+only. `--check` requires an up-to-date baseline; after deleting C++, run `--update` in the same
+commit to tighten it. Existing limits cannot be raised by `--update`. CI also uses `--base-ref`
+to reject limits raised in the candidate commit. See docs/architecture/RUST_INVERSION_ROADMAP.md.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -84,32 +86,61 @@ def check(current: dict, baseline: dict) -> list[str]:
     return errors
 
 
+def baseline_at(root: Path, path: Path, ref: str) -> dict | None:
+    """Allow first introduction, but never mistake an unavailable Git ref for no baseline."""
+    relative = path.resolve().relative_to(root.resolve()).as_posix()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+        if result.returncode:
+            raise ValueError(f"无法读取基准提交 {ref}：{result.stderr.strip()}")
+        return result.stdout.strip()
+
+    commit = git("rev-parse", "--verify", ref + "^{commit}")
+    if not git("ls-tree", "--name-only", commit, "--", relative):
+        return None
+    return json.loads(git("show", f"{commit}:{relative}"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO_ROOT)
     parser.add_argument("--baseline", type=Path, default=BASELINE)
+    parser.add_argument("--base-ref", help="also require limits not to exceed this Git revision's baseline")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--check", action="store_true", help="fail when a ratcheted area grows past the baseline")
-    mode.add_argument("--update", action="store_true", help="write the current measurement as the baseline")
+    mode.add_argument("--check", action="store_true", help="verify current counts and monotonic limits")
+    mode.add_argument("--update", action="store_true", help="create or tighten the baseline without raising limits")
     args = parser.parse_args(argv)
+    if args.base_ref and not (args.check or args.update):
+        parser.error("--base-ref requires --check or --update")
     current = measure(args.root)
-    if args.update:
-        args.baseline.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"已写入 {args.baseline}")
-        return 0
-    if not args.check:
+    if not args.check and not args.update:
         print(json.dumps(current, ensure_ascii=False, indent=2))
         return 0
-    baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
-    errors = check(current, baseline)
+    try:
+        baseline = (json.loads(args.baseline.read_text(encoding="utf-8"))
+                    if args.baseline.exists() or args.check else None)
+        errors = check(current, baseline) if baseline is not None else []
+        candidate = current if args.update else baseline
+        if args.base_ref:
+            previous = baseline_at(args.root, args.baseline, args.base_ref)
+            if previous is not None:
+                errors.extend(f"相对 {args.base_ref} 的基线上限：{error}" for error in check(candidate, previous))
+        if args.check and not errors:
+            for area in RATCHETED:
+                now, before = current["areas"][area]["lines"], baseline["areas"][area]["lines"]
+                if now < before:
+                    errors.append(f"{area} C/C++ 由 {before} 行减至 {now} 行；请在同一提交运行 --update 收紧基线")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        errors = [str(error)]
     for error in errors:
         print(f"错误：{error}", file=sys.stderr)
     if errors:
         return 1
-    for area in RATCHETED:
-        now, before = current["areas"][area]["lines"], baseline["areas"][area]["lines"]
-        if now < before:
-            print(f"{area} C/C++ 由 {before} 行减至 {now} 行；请在同一提交运行 --update 收紧基线")
+    if args.update:
+        args.baseline.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"已写入 {args.baseline}")
+        return 0
     print("C/C++ 规模棘轮通过")
     return 0
 

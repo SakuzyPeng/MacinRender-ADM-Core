@@ -21,7 +21,7 @@
 
 | Job | Runner | 内容 | 说明 |
 |---|---|---|---|
-| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`check-reference-retention.py`、`language-surface.py --check` | 见下文版本与 GUI 国际化门禁；参考代码登记见 `docs/architecture/RUST_REFERENCE_RETENTION.md`；C/C++ 规模棘轮见 `docs/architecture/RUST_INVERSION_ROADMAP.md`（ADR 0021：生产 C/C++ 与平台岛只减不增） |
+| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`check-reference-retention.py`、`language-surface.py --check --base-ref <基准提交>` | 见下文版本与 GUI 国际化门禁；参考代码登记见 `docs/architecture/RUST_REFERENCE_RETENTION.md`；C/C++ 规模棘轮校验实测行数与基线一致，并拒绝相对目标提交放宽上限，见 `docs/architecture/RUST_INVERSION_ROADMAP.md` |
 | `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`check-capi-exports.py`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
 | `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | 生产构建无需 Boost；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |

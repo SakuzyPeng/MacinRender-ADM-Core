@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Verify source metadata
         run: python3 scripts/release/version_metadata.py --check
@@ -31,7 +33,12 @@ jobs:
 
       # ADR 0021: production C/C++ and the platform islands only shrink.
       - name: Verify C/C++ surface ratchet
-        run: python3 scripts/quality/language-surface.py --check
+        env:
+          SURFACE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: |
+          base_ref="${SURFACE_BASE_REF:-HEAD^}"
+          if [[ "$base_ref" =~ ^0+$ ]]; then base_ref=HEAD^; fi
+          python3 scripts/quality/language-surface.py --check --base-ref "$base_ref"
 
   debug:
     name: ${{ matrix.name }}
