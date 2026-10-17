@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressions for private FFI array contracts and reference retirement."""
+"""Regressions for private FFI array contracts, reference retirement and the C/C++ surface ratchet."""
 
 from contextlib import redirect_stderr, redirect_stdout
 import hashlib
@@ -26,6 +26,7 @@ def load_check(name):
 
 ffi = load_check("check-ffi-headers")
 retention = load_check("check-reference-retention")
+surface = load_check("language-surface")
 
 
 class FfiArrayTests(unittest.TestCase):
@@ -144,6 +145,68 @@ class ReferenceRetirementTests(unittest.TestCase):
         result, output = self.check()
         self.assertEqual(result, 1)
         self.assertIn(self.provenance, output)
+
+
+class LanguageSurfaceTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.addCleanup(self.temporary.cleanup)
+        self.write("src/adm_core/a.cpp", 10)
+        self.write("include/adm/a.h", 2)
+        self.write("src/adm_apple/b.mm", 4)
+        self.write("tests/unit/c.cpp", 7)
+        self.write("tests/reference/hoa/d.h", 3)
+        self.write("rust/crates/mradm-dsp/src/lib.rs", 5)
+        self.baseline = self.root / "baseline.json"
+        self.run_surface("--update")
+
+    def write(self, relative, count):
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n" * count, encoding="utf-8")
+
+    def run_surface(self, *args):
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(output):
+            result = surface.main(["--root", str(self.root), "--baseline", str(self.baseline), *args])
+        return result, output.getvalue()
+
+    def test_areas_separate_production_islands_tests_and_rust(self):
+        areas = surface.measure(self.root)["areas"]
+        self.assertEqual(areas["production"]["lines"], 12)
+        self.assertEqual(areas["islands"]["lines"], 4)
+        self.assertEqual(areas["tests"]["lines"], 7)
+        self.assertEqual(areas["reference"]["lines"], 3)
+        self.assertEqual(areas["rust"]["lines"], 5)
+
+    def test_unchanged_surface_passes(self):
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 0, output)
+
+    def test_growing_production_fails_and_names_the_module(self):
+        self.write("src/adm_engine/new.cpp", 3)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("src/adm_engine +3", output)
+
+    def test_growing_islands_fails(self):
+        self.write("src/adm_windows/sink.cpp", 1)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("islands", output)
+
+    def test_tests_and_rust_are_reported_only(self):
+        self.write("tests/unit/more.cpp", 50)
+        self.write("rust/crates/mradm-dsp/src/more.rs", 50)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 0, output)
+
+    def test_shrinking_production_passes_and_asks_to_tighten(self):
+        self.write("src/adm_core/a.cpp", 4)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 0, output)
+        self.assertIn("--update", output)
 
 
 if __name__ == "__main__":

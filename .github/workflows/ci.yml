@@ -29,6 +29,10 @@ jobs:
       - name: Verify migration references
         run: python3 scripts/quality/check-reference-retention.py
 
+      # ADR 0021: production C/C++ and the platform islands only shrink.
+      - name: Verify C/C++ surface ratchet
+        run: python3 scripts/quality/language-surface.py --check
+
   debug:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
