@@ -4,6 +4,12 @@
 > 日期：2026-09-07
 > 适用范围：同仓库 `rust/` Cargo workspace、SAF 数学模块替换、C ABI 与 GUI 边界，以及跨平台 PCM 逐位一致的验收契约。本 ADR 是 ADR 0002 第二阶段的具体化。
 
+## 2026-10-16 方向更新
+
+[ADR 0021](0021-rust-primary-project.md) 确定项目逆转为 Rust 主导，取代本文决策三“当前集成方向为 C++ 调 Rust”与决策四
+“`AdmScene` 和渲染编排继续由 C++ 持有”。四期起，数据链路、编排与 C ABI 实现按 ADR 0021 的分期迁入 Rust；
+决策六的确定性契约、FFI 约定与参考保留规则继续有效。
+
 ## 2026-10-04 一期决议更新
 
 用户确认完整替换项目已用 SAF 子集，SOFA 也采用纯 Rust；不要求复现 SAF 位模式，跨平台逐位一致留到二期。默认生产路径已采用 `mradm-dsp` / `mradm-ffi`，Rust 是必需工具链。SAF 仅通过默认关闭的 `MR_ADM_BUILD_SAF_REFERENCE_TESTS` 提供历史参考工具。

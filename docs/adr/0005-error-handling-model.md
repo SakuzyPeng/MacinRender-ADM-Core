@@ -3,6 +3,7 @@
 > 状态：已接受  
 > 日期：2026-05-17  
 > 适用范围：`adm_core`、`adm_io`、`adm_render*`、`adm_process`、`adm_c_api`、`adm_cli` 中所有可恢复错误路径。OOM（Out Of Memory，内存不足）和编程错误（assertion 失败）走 C++ 异常 / `std::terminate`，不受本 ADR 约束。
+> 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 保留错误码数值一一对应；`tl::expected` 与 `noexcept` 模板随 C++ 代码退出，改为“不跨 C 展开”。
 
 ## 背景
 

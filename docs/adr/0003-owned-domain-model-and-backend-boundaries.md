@@ -3,6 +3,7 @@
 > 状态：已接受  
 > 日期：2026-05-17  
 > 适用范围：`adm_core`、`adm_io`、`adm_render_*`、`adm_apple` 以及所有未来渲染后端。
+> 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 把输入边界改为 Rust 渲染场景，`include/adm/*` 只有 `c_api.h` 保留对外含义；自有领域模型与不泄漏第三方类型两条继续有效。
 
 ## 背景
 
