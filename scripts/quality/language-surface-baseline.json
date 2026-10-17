@@ -19,7 +19,7 @@
     },
     "rust": {
       "files": 198,
-      "lines": 63099
+      "lines": 63155
     },
     "rust-vendor": {
       "files": 175,
@@ -35,7 +35,7 @@
     "rust/crates/mradm-json": 1260,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
-    "rust/crates/mradm-scene": 3610,
+    "rust/crates/mradm-scene": 3666,
     "rust/crates/mradm-wav": 2413,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,

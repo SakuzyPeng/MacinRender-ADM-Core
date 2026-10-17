@@ -32,7 +32,7 @@
 {"i":30,"report_fnv":"969399261dbb0fc7","report_len":13394,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
 {"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'interpolation' must be an object"},"i":31}
 {"i":32,"report_fnv":"a5119fe2cb0251e7","report_len":13335,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
-{"i":33,"report_fnv":"f5391477ca94d9d7","report_len":13371,"warnings":[],"words":418,"words_fnv":"8d9ec463f4f8ff8e"}
+{"i":33,"nan_words":[95,120],"report_fnv":"f5391477ca94d9d7","report_len":13371,"warnings":[],"words":418,"words_fnv":"8d9ec463f4f8ff8e"}
 {"i":34,"report_fnv":"8bf319349adc6636","report_len":13542,"warnings":["semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: importance=[,5]"],"words":417,"words_fnv":"58eaa55395be270b"}
 {"i":35,"report_fnv":"e43fe932a7ce94c5","report_len":13335,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
 {"i":36,"report_fnv":"364c6dc3df1f6059","report_len":13595,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
