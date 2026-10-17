@@ -99,6 +99,24 @@
     },
     {
       "kind": "kernel",
+      "pattern": "ear-*.10-layout.f64",
+      "reason": "EAR nominal layout positions and real loudspeaker table data; identical on all platforms in every run since the phase-two baseline, gated in PCM consistency 4.2",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "scene.*",
+      "reason": "Scene spatial math (polar/Cartesian conversion and rotation) on the libm port; identical on all platforms in every run since PCM consistency 1.3, gated in PCM consistency 4.2",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "room.*",
+      "reason": "room-binaural exact-tier preparation of the pinned synthetic room pack: time-domain HRIR queries and direct/early source responses (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "kernel",
       "pattern": "trig.*",
       "reason": "portable musl-derived sin/cos behind the resampler's sinc and window tables",
       "reference": "docs/adr/0016-deterministic-resampling.md"
@@ -1545,6 +1563,252 @@
       "pattern": "final-caf-binaural-postproc",
       "reason": "binaural with automatic peak limiting, written as float32 CAF (PCM consistency 3.6)",
       "reference": "docs/architecture/RUST_FINAL_PCM.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "smoothing-saf-714",
+      "reason": "VBAP 7.1.4 with 2048-frame offline object smoothing over four moving Cartesian blocks (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "smoothing-hoa3",
+      "reason": "HOA3 with 2048-frame offline object smoothing over four moving Cartesian blocks (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "smoothing-binaural",
+      "reason": "binaural with 2048-frame offline object smoothing over four moving Cartesian blocks (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "saf-loudness-minus23",
+      "reason": "VBAP 7.1.4 normalized to -23 LUFS (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "saf-peak-minus6",
+      "reason": "VBAP 5.1 peak-normalized to the -6 dBTP limit (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-loudness-minus23",
+      "reason": "Triple Balance 7.1.4 normalized to -23 LUFS (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-peak-minus6",
+      "reason": "Triple Balance 9.1.6 peak-normalized to the -6 dBTP limit (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "policy-identity-ear-714",
+      "reason": "EAR 7.1.4 with semantic policy object rules matched by id, name glob, content, programme, importance, dialogue and track UID, merged in order (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "policy-lock-saf-714",
+      "reason": "VBAP 7.1.4 with semantic policy channelLock, divergence and interpolation rules (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "policy-position-binaural",
+      "reason": "binaural with semantic policy absolute positions, offsets, azimuth/elevation locks and head locking (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "policy-direct-speakers-ear-51",
+      "reason": "EAR 5.1 with semantic policy DirectSpeakers rules filtered by label and ADM lowPass LFE (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "policy-triple-714",
+      "reason": "Triple Balance 7.1.4 with semantic policy extent, gain and diffuse rules (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ds-matrix-ear-51",
+      "reason": "EAR 5.1 DirectSpeakers matrix routing with weighted, split and muted routes (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ds-matrix-saf-51",
+      "reason": "VBAP 5.1 DirectSpeakers matrix routing with weighted, split and muted routes (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-triple-balance-7.1.4-size1-48000-48000-fixed-epoch1",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-triple-balance-7.1.4-size1-48000-48000-fixed-epoch2",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-triple-balance-7.1.4-size1-48000-48000-fragmented-epoch1",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-policy-triple-balance-7.1.4-size1-48000-48000-fragmented-epoch2",
+      "reason": "Scene replay with an identity-matched semantic policy applied per update (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "room-exact",
+      "reason": "room-binaural exact tier (ADR 0020) on the pinned synthetic room pack and its HRIR, with extent spread (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "room-exact-sofa",
+      "reason": "room-binaural exact tier with the pinned simple.sofa as listener HRIR, moving Cartesian source (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "room-exact-screen",
+      "reason": "room-binaural exact tier with screen-referenced objects and a reference/reproduction screen configuration (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-room-extent-fixed",
+      "reason": "room-binaural exact-tier file stream with live overrides, a head orientation, a seek and the room tail; partition-invariant (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-room-extent-fragmented",
+      "reason": "room-binaural exact-tier file stream with live overrides, a head orientation, a seek and the room tail; partition-invariant (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-room-cartesian-fixed",
+      "reason": "room-binaural exact-tier file stream with live overrides, a head orientation, a seek and the room tail; partition-invariant (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-room-cartesian-fragmented",
+      "reason": "room-binaural exact-tier file stream with live overrides, a head orientation, a seek and the room tail; partition-invariant (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud0-48000-48000-fixed-epoch1",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud0-48000-48000-fixed-epoch2",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud1-48000-48000-fixed-epoch1",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud1-48000-48000-fixed-epoch2",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud1-48000-48000-fragmented-epoch1",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-room-binaural-cloud1-48000-48000-fragmented-epoch2",
+      "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
+      "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
     }
   ]
 }

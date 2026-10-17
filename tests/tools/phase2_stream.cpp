@@ -1,5 +1,5 @@
 // Release replay of file-streaming renders (PCM consistency 3.1 binaural, 3.2 EAR, 3.3 HOA,
-// 3.4 Triple Balance). The backend
+// 3.4 Triple Balance, 4.2 room-binaural exact tier). The backend
 // comes from the renderer factory shared with RenderService and the monitor; its IRenderStream is
 // pulled in a fixed request partition while live overrides, head orientations and seeks land at
 // fixed output frames, so the delivered PCM is a deterministic function of the case file.
@@ -20,6 +20,7 @@
 #include "adm/io.h"
 #include "adm/live_override.h"
 #include "adm/render.h"
+#include "adm/room.h"
 
 #include "phase2_io.h"
 #include "renderer_factory.h"
@@ -41,7 +42,8 @@ mradm::RendererSelection renderer(const std::string& name) {
         {"ear", mradm::RendererSelection::ear},
         {"hoa", mradm::RendererSelection::hoa},
         {"saf-binaural", mradm::RendererSelection::saf_binaural},
-        {"triple-balance", mradm::RendererSelection::triple_balance}};
+        {"triple-balance", mradm::RendererSelection::triple_balance},
+        {"room-binaural", mradm::RendererSelection::room_binaural}};
     phase2::require(names.contains(name), "unsupported file-streaming renderer");
     return names.at(name);
 }
@@ -80,9 +82,28 @@ mradm::LiveOverrides overrides(const Json& objects, const mradm::AdmScene& scene
     return result;
 }
 
-std::vector<float>
-replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmScene& scene, uint32_t& sample_rate) {
-    phase2::require(spec.at("version").get<int>() == 3, "unsupported file-streaming replay version");
+// Version 4: the room pack at the exact tier; returns the tail the case expects after EOS.
+uint64_t configure_room(const Json& spec, const std::filesystem::path& fixtures, mradm::RenderPlan& plan) {
+    const std::filesystem::path name(spec.at("room").get<std::string>());
+    phase2::require(name.is_relative() && name.lexically_normal() == name && *name.begin() != "..",
+                    "invalid room fixture name");
+    auto room = mradm::RoomProfile::load(fixtures / name);
+    phase2::require(room.has_value(), "cannot load the room fixture");
+    plan.room.profile = *room;
+    plan.room.quality = mradm::RoomQuality::exact;
+    return spec.at("tail_frames").get<uint64_t>();
+}
+
+std::vector<float> replay(const Json& spec,
+                          const std::filesystem::path& input,
+                          const std::filesystem::path& fixtures,
+                          const mradm::AdmScene& scene,
+                          uint32_t& sample_rate) {
+    // Version 4 (PCM consistency 4.2) adds a room pack and the tail the room appends after EOS.
+    const auto version = spec.at("version").get<int>();
+    phase2::require(version == 3 || version == 4, "unsupported file-streaming replay version");
+    phase2::require((version == 4) == (spec.contains("room") && spec.contains("tail_frames")),
+                    "room replays are version 4 and name their room pack and tail");
     phase2::require(scene.info.num_frames == spec.at("input_frames").get<uint64_t>(),
                     "file-streaming input frame count differs from the case");
     phase2::require(scene.info.sample_rate == spec.at("sample_rate").get<uint32_t>(),
@@ -99,6 +120,8 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
     if (spec.contains("spread")) {
         plan.binaural_spread_mode = spread_mode(spec.at("spread").get<std::string>());
     }
+    const auto tail = version == 4 ? configure_room(spec, fixtures, plan) : uint64_t{0};
+    const auto media_frames = scene.info.num_frames + tail;
     auto prepared = resolved->renderer->prepare(plan, logs);
     phase2::require(prepared.has_value(), "prepare failed");
     auto opened = resolved->renderer->open_stream(**prepared, plan, logs);
@@ -137,7 +160,7 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
             if (event.contains("seek")) {
                 const auto target = event.at("seek").get<uint64_t>();
                 phase2::require(stream->seek(target).has_value(), "seek failed");
-                media_position = std::min(target, scene.info.num_frames);
+                media_position = std::min(target, media_frames);
             }
         }
         phase2::require(next_event == events.size() || events[next_event].at("frame").get<uint64_t>() > position,
@@ -151,7 +174,7 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
         phase2::require(produced.has_value(), "stream process failed");
         // Check the media timeline independently of the stream's reported progress. In particular,
         // a seek that reports success without moving must not pass as a shorter, repeatable replay.
-        const auto expected = std::min<uint64_t>(frames, scene.info.num_frames - media_position);
+        const auto expected = std::min<uint64_t>(frames, media_frames - media_position);
         phase2::require(*produced == expected, "file-streaming frame count differs from replay timeline");
         delivered.insert(
             delivered.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * channels));
@@ -162,6 +185,7 @@ replay(const Json& spec, const std::filesystem::path& input, const mradm::AdmSce
         }
     }
     phase2::require(next_event == events.size(), "replay ended before every event was applied");
+    phase2::require(stream->appended_tail_frames() == tail, "room tail differs from the case");
     stream.reset(); // streams borrow the prepared state
     return delivered;
 }
@@ -179,7 +203,11 @@ int main(int argc, char** argv) {
         phase2::require(scene.has_value(), "cannot import the replay fixture");
         for (int pass = 1; pass <= 2; ++pass) {
             uint32_t sample_rate = 0;
-            const auto pcm = replay(spec, input, *scene, sample_rate);
+            const auto pcm = replay(spec,
+                                    input,
+                                    std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures",
+                                    *scene,
+                                    sample_rate);
             phase2::pcm(directory / ("pass-" + std::to_string(pass) + ".pcmbits"),
                         spec.at("channels").get<uint32_t>(),
                         sample_rate,
