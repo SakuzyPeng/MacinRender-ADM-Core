@@ -117,6 +117,7 @@
 | `libadm-common-definitions` @ 0.14.0 | 嵌入 Rust 的 ADM common definitions 标准引用数据 | Apache-2.0 | 可用 | 资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。 |
 | `libear-derived-rust-ear` @ 2db69f8f-subset | Rust EAR 增益算法、布局、路由与 HOA 采样数据来源 | Apache-2.0 | 可用 | 移植 EBU libear 实际使用的算法；保留上游归属与球面采样来源，不链接 libear。 |
 | `musl-derived-rust-math` @ musl-1.2.5-subset | 可移植 sin/cos（重采样 sinc 与窗函数系数表） | MIT | 可用 | 移植 musl 1.2.5 的 sin/cos 内核与中等区间约简（源自 FreeBSD msun，保留 Sun 许可声明）；只用 IEEE 基本运算，跨平台逐位一致。 |
+| `nlohmann-derived-rust-json` @ nlohmann-3.12.0-subset | 与 nlohmann/json 3.12.0 一致的 JSON 解析与 dump（语义策略报告、模板与参数 JSON） | MIT | 可用 | 移植 nlohmann/json 3.12.0 的 Grisu2 双精度格式化（dtoa_impl / to_chars）；解析与输出布局按其行为重写，语法错误描述为项目自有文本。 |
 | `rust-block-buffer-0.10.4` @ 0.10.4 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
 | `rust-cfg-if-1.0.5` @ 1.0.5 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
 | `rust-cpufeatures-0.2.17` @ 0.2.17 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |

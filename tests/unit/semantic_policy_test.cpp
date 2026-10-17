@@ -46,6 +46,13 @@ std::filesystem::path write_temp_json(const std::string& name, const std::string
     return path;
 }
 
+// The C++ path parses in-memory text; files are read here (the offline policy is Rust since 4.4).
+mradm::Result<mradm::SemanticPolicy> load_policy(const std::filesystem::path& path) {
+    std::ifstream in(path);
+    const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    return mradm::parse_semantic_policy(text, path.string());
+}
+
 mradm::AdmScene make_scene() {
     mradm::AdmScene scene;
     scene.info.sample_rate = 48000U;
@@ -113,7 +120,7 @@ bool verify_policy_parse_and_apply() {
 })json");
     const FileGuard guard{path};
 
-    auto policy = mradm::load_semantic_policy_file(path);
+    auto policy = load_policy(path);
     if (!check(policy.has_value(), "policy parses")) {
         if (!policy) {
             std::cerr << policy.error().message << "\n";
@@ -155,12 +162,17 @@ bool verify_invalid_policy_rejected() {
   "global": { "diffuse": { "scle": 1.0 } }
 })json");
     const FileGuard guard{path};
-    const auto policy = mradm::load_semantic_policy_file(path);
+    const auto policy = load_policy(path);
     bool ok = true;
     ok &= check(!policy.has_value(), "unknown field rejected");
     if (!policy) {
         ok &= check(policy.error().code == mradm::ErrorCode::invalid_argument, "invalid policy error code");
     }
+    // A number outside double range is an invalid policy, not an escaping exception.
+    const auto overflow = mradm::parse_semantic_policy(
+        R"json({"schema":"mradm.semantic-policy.v1","global":{"gain":{"gain_db":1e400}}})json", "<memory>");
+    ok &= check(!overflow.has_value() && overflow.error().code == mradm::ErrorCode::invalid_argument,
+                "number overflow rejected as invalid policy");
     return ok;
 }
 
@@ -181,7 +193,7 @@ bool verify_policy_id_matching_is_case_insensitive() {
 })json");
     const FileGuard guard{path};
 
-    auto policy = mradm::load_semantic_policy_file(path);
+    auto policy = load_policy(path);
     if (!check(policy.has_value(), "case-insensitive id policy parses")) {
         return false;
     }
@@ -203,52 +215,6 @@ bool verify_policy_id_matching_is_case_insensitive() {
     return ok;
 }
 
-bool verify_semantic_report() {
-    const auto path = std::filesystem::temp_directory_path() / "mr_semantic_report_test.json";
-    const FileGuard guard{path};
-    const auto original = make_scene();
-    auto effective = original;
-    effective.objects.at(0).tracks.at(0).blocks.at(0).diffuse = 0.0F;
-    effective.objects.at(0).tracks.at(0).blocks.at(0).head_locked = true;
-
-    mradm::SemanticPolicy policy;
-    mradm::SemanticObjectRule rule;
-    rule.name_glob = "*kick*";
-    policy.objects.push_back(rule);
-
-    mradm::SemanticPolicyReportOptions options;
-    options.renderer = "binaural";
-    options.policy_path = "policy.json";
-    options.capabilities.supports_diffuse = true;
-    const auto result = mradm::write_semantic_report_file(path, original, effective, &policy, options);
-    bool ok = true;
-    ok &= check(result.has_value(), "semantic report writes");
-    ok &= check(std::filesystem::exists(path), "semantic report file exists");
-    std::ifstream in(path);
-    const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
-    ok &= check(text.find("\"head_locked\"") != std::string::npos,
-                "semantic report includes original/effective head_locked values");
-    return ok;
-}
-
-bool verify_semantic_template_round_trips() {
-    const auto path = std::filesystem::temp_directory_path() / "mr_semantic_template_test.json";
-    const FileGuard guard{path};
-    const auto scene = make_scene();
-    const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
-    bool ok = true;
-    ok &= check(write_result.has_value(), "semantic policy template writes");
-
-    const auto policy = mradm::load_semantic_policy_file(path);
-    ok &= check(policy.has_value(), "semantic policy template parses as policy");
-    if (policy) {
-        ok &= check(policy->objects.size() == scene.objects.size(), "semantic policy template includes all objects");
-        ok &= check(policy->global.has_value(), "semantic policy template includes global defaults");
-    }
-    return ok;
-}
-
-// Scene with content / programme / importance / dialogue for match-dimension tests.
 mradm::AdmScene make_rich_scene() {
     mradm::AdmScene scene;
     scene.info.sample_rate = 48000U;
@@ -347,7 +313,7 @@ mradm::AdmScene make_hoa_scene() {
 bool apply_inline(mradm::AdmScene& scene, const std::string& json, const std::string& tag) {
     const auto path = write_temp_json("mr_semantic_" + tag + ".json", json);
     const FileGuard guard{path};
-    auto policy = mradm::load_semantic_policy_file(path);
+    auto policy = load_policy(path);
     if (!check(policy.has_value(), tag + ": policy parses")) {
         if (!policy) {
             std::cerr << policy.error().message << "\n";
@@ -674,7 +640,7 @@ bool verify_head_locked() {
                                           R"json({"schema":"mradm.semantic-policy.v1",
   "global": { "head_locked": "false" } })json");
         const FileGuard guard{path};
-        ok &= check(!mradm::load_semantic_policy_file(path).has_value(), "non-boolean head_locked is rejected");
+        ok &= check(!load_policy(path).has_value(), "non-boolean head_locked is rejected");
     }
 
     return ok;
@@ -724,7 +690,7 @@ bool verify_hoa() {
         const auto path = write_temp_json("mr_semantic_hoa_warn.json", R"json({"schema":"mradm.semantic-policy.v1",
   "objects": [ { "pack_format": "AP_00031001", "gain": { "scale": 0.9 } } ] })json");
         const FileGuard guard{path};
-        auto policy = mradm::load_semantic_policy_file(path);
+        auto policy = load_policy(path);
         ok &= check(policy.has_value(), "hoa-only rule parses");
         std::vector<std::string> warnings;
         if (policy) {
@@ -732,122 +698,6 @@ bool verify_hoa() {
         }
         ok &= check(warnings.empty(), "hoa-only rule is not flagged unmatched");
     }
-    // HOA report should expose the matched rule, not just the effective values.
-    {
-        const auto original = make_hoa_scene();
-        const auto policy_path = write_temp_json("mr_semantic_hoa_report_policy.json",
-                                                 R"json({"schema":"mradm.semantic-policy.v1",
-  "objects": [ { "pack_format": "AP_00031001", "gain": { "scale": 0.5 } } ] })json");
-        const FileGuard policy_guard{policy_path};
-        const auto report_path = std::filesystem::temp_directory_path() / "mr_semantic_hoa_report.json";
-        const FileGuard report_guard{report_path};
-        auto policy = mradm::load_semantic_policy_file(policy_path);
-        ok &= check(policy.has_value(), "hoa report policy parses");
-        if (policy) {
-            auto effective = original;
-            (void) mradm::apply_semantic_policy(effective, *policy, effective.info.sample_rate, nullptr);
-            mradm::SemanticPolicyReportOptions options;
-            auto result = mradm::write_semantic_report_file(report_path, original, effective, &*policy, options);
-            ok &= check(result.has_value(), "hoa report writes");
-            std::ifstream in(report_path);
-            std::string text;
-            for (std::string line; std::getline(in, line);) {
-                text += line;
-            }
-            ok &= check(text.find("\"hoa_tracks\"") != std::string::npos &&
-                            text.find("\"matched_rules\"") != std::string::npos &&
-                            text.find("\"objects[0]\"") != std::string::npos,
-                        "hoa report includes matched rule names");
-        }
-    }
-    return ok;
-}
-
-// The generated neutral template, applied unmodified, must not change the scene
-// — including muted objects, channel_lock=false blocks, and Cartesian positions.
-bool verify_template_apply_is_identity() {
-    const auto path = std::filesystem::temp_directory_path() / "mr_semantic_identity_test.json";
-    const FileGuard guard{path};
-
-    mradm::AdmScene scene;
-    scene.info.sample_rate = 48000U;
-    mradm::SceneObject obj;
-    obj.id = "AO_3001";
-    obj.name = "Muted Cartesian";
-    obj.gain = 0.75F;
-    obj.mute = true; // originally muted — must stay muted
-    mradm::SceneTrackRef track;
-    track.track_uid = "ATU_00000001";
-    mradm::SceneObjectBlock block;
-    block.channel_lock = false;      // must stay off
-    block.position.cartesian = true; // must stay Cartesian
-    block.position.x = 0.3F;
-    block.position.y = 0.6F;
-    block.position.z = -0.2F;
-    block.head_locked = true;
-    track.blocks.push_back(block);
-    obj.tracks.push_back(track);
-    scene.objects.push_back(obj);
-
-    // A DirectSpeakers LFE channel: must keep its gain and stay unmuted.
-    mradm::SceneObject bed;
-    bed.id = "AO_3002";
-    bed.name = "LFE";
-    mradm::SceneTrackRef bed_track;
-    bed_track.track_uid = "ATU_00000002";
-    mradm::SceneDirectSpeakersBlock ds;
-    ds.speaker_labels = {"LFE"};
-    ds.gain = 0.9F;
-    ds.low_pass_hz = 120.0F;
-    ds.head_locked = true;
-    bed_track.ds_blocks.push_back(ds);
-    bed.tracks.push_back(bed_track);
-    scene.objects.push_back(bed);
-
-    // A HOA pack: its gain/mute must survive an unmodified template.
-    mradm::SceneHOATracks pack;
-    pack.object_id = "AO_3003";
-    pack.pack_format_id = "AP_00031001";
-    pack.gain = 0.8F;
-    pack.mute = false;
-    mradm::SceneHOAChannel hoa_channel;
-    mradm::SceneHOAChannelBlock hoa_block;
-    hoa_block.head_locked = true;
-    hoa_channel.blocks.push_back(hoa_block);
-    pack.channels.push_back(hoa_channel);
-    scene.hoa_tracks.push_back(pack);
-
-    const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
-    bool ok = check(write_result.has_value(), "identity: template writes");
-    std::ifstream template_in(path);
-    const std::string template_text{std::istreambuf_iterator<char>{template_in}, std::istreambuf_iterator<char>{}};
-    ok &= check(template_text.find("\"head_locked\"") == std::string::npos,
-                "identity: neutral template omits head_locked");
-    auto policy = mradm::load_semantic_policy_file(path);
-    ok &= check(policy.has_value(), "identity: template parses");
-    if (!policy) {
-        return false;
-    }
-
-    auto applied = scene;
-    auto result = mradm::apply_semantic_policy(applied, *policy, applied.info.sample_rate, nullptr);
-    ok &= check(result.has_value(), "identity: template applies");
-
-    const auto& a = applied.objects.at(0);
-    const auto& b = a.tracks.at(0).blocks.at(0);
-    ok &= check(a.mute, "identity: muted object stays muted");
-    ok &= check(near(a.gain, 0.75F), "identity: object gain unchanged");
-    ok &= check(!b.channel_lock, "identity: channel_lock stays off");
-    ok &= check(b.head_locked, "identity: Objects head_locked stays on");
-    ok &= check(b.position.cartesian, "identity: Cartesian position stays Cartesian");
-    ok &= check(near(b.position.x, 0.3F) && near(b.position.y, 0.6F) && near(b.position.z, -0.2F),
-                "identity: Cartesian coordinates unchanged");
-    const auto& ds_eff = applied.objects.at(1).tracks.at(0).ds_blocks.at(0);
-    ok &= check(near(ds_eff.gain, 0.9F), "identity: DS LFE gain unchanged");
-    ok &= check(ds_eff.head_locked, "identity: DS head_locked stays on");
-    const auto& hoa_eff = applied.hoa_tracks.at(0);
-    ok &= check(near(hoa_eff.gain, 0.8F) && !hoa_eff.mute, "identity: HOA pack gain/mute unchanged");
-    ok &= check(hoa_eff.channels.at(0).blocks.at(0).head_locked, "identity: HOA block head_locked stays on");
     return ok;
 }
 
@@ -1063,8 +913,6 @@ int main() {
     ok &= verify_policy_parse_and_apply();
     ok &= verify_invalid_policy_rejected();
     ok &= verify_policy_id_matching_is_case_insensitive();
-    ok &= verify_semantic_report();
-    ok &= verify_semantic_template_round_trips();
     ok &= verify_gain_and_mute();
     ok &= verify_position_override();
     ok &= verify_match_dimensions();
@@ -1072,7 +920,6 @@ int main() {
     ok &= verify_direct_speakers();
     ok &= verify_head_locked();
     ok &= verify_hoa();
-    ok &= verify_template_apply_is_identity();
     ok &= verify_numeric_matches_original();
     if (ok) {
         std::cout << "semantic policy test passed\n";

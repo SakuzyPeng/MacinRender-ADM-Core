@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 197,
-      "lines": 44632
+      "files": 196,
+      "lines": 44213
     },
     "islands": {
       "files": 5,
@@ -11,15 +11,15 @@
     },
     "tests": {
       "files": 101,
-      "lines": 48020
+      "lines": 47867
     },
     "reference": {
       "files": 38,
       "lines": 12042
     },
     "rust": {
-      "files": 192,
-      "lines": 59563
+      "files": 198,
+      "lines": 63155
     },
     "rust-vendor": {
       "files": 175,
@@ -27,14 +27,15 @@
     }
   },
   "modules": {
-    "include/adm": 4601,
+    "include/adm": 4583,
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 34439,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 13950,
+    "rust/crates/mradm-ffi": 14171,
+    "rust/crates/mradm-json": 1260,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
-    "rust/crates/mradm-scene": 1555,
+    "rust/crates/mradm-scene": 3666,
     "rust/crates/mradm-wav": 2413,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,
@@ -45,13 +46,13 @@
     "src/adm_apple": 2504,
     "src/adm_audio": 4909,
     "src/adm_c_api": 3613,
-    "src/adm_cli": 1655,
-    "src/adm_core": 2225,
+    "src/adm_cli": 1642,
+    "src/adm_core": 1829,
     "src/adm_dsp": 3475,
-    "src/adm_engine": 4347,
-    "src/adm_io": 284,
+    "src/adm_engine": 4095,
+    "src/adm_io": 462,
     "src/adm_loudness": 165,
-    "src/adm_metadata": 876,
+    "src/adm_metadata": 958,
     "src/adm_peak": 143,
     "src/adm_realtime": 5419,
     "src/adm_render_binaural": 3486,
@@ -87,6 +88,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 1014,
     "tests/tools": 2820,
-    "tests/unit": 41868
+    "tests/unit": 41715
   }
 }

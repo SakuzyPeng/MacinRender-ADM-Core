@@ -1,0 +1,12 @@
+MacinRender nlohmann-compatible JSON (mradm-json)
+
+The double formatting (src/dtoa.rs) is translated to Rust from nlohmann/json v3.12.0
+(single_include/nlohmann/json.hpp: detail::dtoa_impl and detail::to_chars), which implements
+Grisu2 after Florian Loitsch, "Printing Floating-Point Numbers Quickly and Accurately with
+Integers", PLDI 2010. https://github.com/nlohmann/json — nlohmann/json is licensed under the MIT
+license (see LICENSE), Copyright (c) 2013-2025 Niels Lohmann. Upstream source fingerprints are
+recorded in PROVENANCE.json.
+
+The parser, the serializer layout and the error texts are written for this project to reproduce
+the observable behaviour of nlohmann/json 3.12.0 as the project used it (default parse options,
+dump() / dump(indent) with ensure_ascii off). Syntax-error descriptions are the project's own.

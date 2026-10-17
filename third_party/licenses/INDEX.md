@@ -25,6 +25,7 @@
 | libsamplerate | 0.2.2 | BSD-2-Clause | `COPYING` |
 | miniaudio | 0.11.21 | Unlicense OR MIT-0 | `LICENSE` |
 | musl-derived-rust-math | musl-1.2.5-subset | MIT | `LICENSE`, `NOTICE.txt` |
+| nlohmann-derived-rust-json | nlohmann-3.12.0-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann_json | v3.12.0 | MIT | `LICENSE.MIT` |
 | rust-adler2-2.0.1 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |

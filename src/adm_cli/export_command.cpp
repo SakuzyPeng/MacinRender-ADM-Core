@@ -1,12 +1,10 @@
 #include <cstdlib>
-#include <string>
-#include <vector>
+#include <string_view>
 
 #include <spdlog/spdlog.h>
 
-#include "adm/io.h"
-#include "adm/scene.h"
-#include "adm/semantic_policy.h"
+#include "adm/logging.h"
+#include "adm/render.h"
 
 #include "commands.h"
 
@@ -21,33 +19,27 @@ CLI::App* add_export_command(CLI::App& app, ExportCliOptions& opts) {
     return export_cmd;
 }
 
+namespace {
+// Export output stays as before the policy moved to Rust: policy warnings as plain warnings and
+// no importer or engine diagnostics.
+class ExportLogs final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel /*level*/, std::string_view module, std::string_view message) override {
+        if (module == "semantic-policy") {
+            spdlog::warn("{}", message);
+        }
+    }
+};
+} // namespace
+
 int run_export(const ExportCliOptions& opts) {
-    auto imported = mradm::io::import_scene(opts.input);
-    if (!imported.has_value()) {
-        spdlog::error("{}", imported.error().message);
-        return EXIT_FAILURE;
-    }
-    const mradm::AdmScene original = imported.value();
-    mradm::AdmScene effective = original;
-
+    mradm::RenderOptions options;
     if (!opts.semantic_policy_path.empty()) {
-        auto policy = mradm::load_semantic_policy_file(opts.semantic_policy_path);
-        if (!policy.has_value()) {
-            spdlog::error("{}", policy.error().message);
-            return EXIT_FAILURE;
-        }
-        std::vector<std::string> warnings;
-        auto applied = mradm::apply_semantic_policy(effective, policy.value(), effective.info.sample_rate, &warnings);
-        if (!applied.has_value()) {
-            spdlog::error("{}", applied.error().message);
-            return EXIT_FAILURE;
-        }
-        for (const auto& warning : warnings) {
-            spdlog::warn("{}", warning);
-        }
+        options.semantic_policy_path = opts.semantic_policy_path;
     }
-
-    auto written = mradm::io::write_scene(opts.input, original, effective, opts.output);
+    ExportLogs logs;
+    const mradm::RenderService service;
+    auto written = service.export_file(opts.input, opts.output, options, logs);
     if (!written.has_value()) {
         spdlog::error("{}", written.error().message);
         return EXIT_FAILURE;

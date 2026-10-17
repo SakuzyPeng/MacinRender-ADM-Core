@@ -1975,6 +1975,30 @@
     },
     {
       "type": "library",
+      "name": "nlohmann-derived-rust-json",
+      "version": "nlohmann-3.12.0-subset",
+      "description": "与 nlohmann/json 3.12.0 一致的 JSON 解析与 dump（语义策略报告、模板与参数 JSON）",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:generic/mradm-json@0.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "local"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-block-buffer-0.10.4",
       "version": "0.10.4",
       "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",

@@ -1,0 +1,728 @@
+{"fnv":"f04f1aa5ee25ed20","len":2038,"template":"directspeakers-lfe"}
+{"i":0,"report_fnv":"363bca8033799cea","report_len":13344,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":1,"report_fnv":"78bf0236df013b8e","report_len":13490,"warnings":[],"words":418,"words_fnv":"9bbcab6f526ef0e2"}
+{"i":2,"report_fnv":"1f9de182408f13cc","report_len":13874,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian"],"words":418,"words_fnv":"560ec3af736273ba"}
+{"i":3,"report_fnv":"e173b94574dfc4e2","report_len":13790,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":4,"report_fnv":"1beb0862eef68836","report_len":13786,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":5,"report_fnv":"80dbe34252146967","report_len":13389,"warnings":[],"words":417,"words_fnv":"f897d06a7bc7c217"}
+{"i":6,"report_fnv":"7f169c2b10c21cc7","report_len":13531,"warnings":["semantic policy object rule did not match: pack_format=AP_00011001"],"words":419,"words_fnv":"8403ad5391ebe5bb"}
+{"i":7,"report_fnv":"6600067cd9f84789","report_len":13683,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: dialogue_id=-1","semantic policy object rule did not match: id=Ao_9999","semantic policy object rule did not match: id=AO_9999"],"words":417,"words_fnv":"c81deda7b071d3d4"}
+{"i":8,"report_fnv":"f2c366ffea9001e6","report_len":13501,"warnings":[],"words":417,"words_fnv":"4cac995c72c560d0"}
+{"i":9,"report_fnv":"8b8831644bd92385","report_len":13479,"warnings":["semantic policy object rule did not match: id=AO_9999"],"words":417,"words_fnv":"b08d3c187e46edcf"}
+{"i":10,"report_fnv":"8411b4a5441ea24a","report_len":13414,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":11,"report_fnv":"fe72fa1d94a9b9cf","report_len":13540,"warnings":["semantic policy object rule did not match: name=nobOdy"],"words":418,"words_fnv":"fb6f460969740d4e"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'diffuse' must be an object"},"i":12}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown interpolation field 'aaa'"},"i":13}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'range_scale' must be finite"},"i":14}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'position' must be an object"},"i":15}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":16}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'range_scale' must be >= 0"},"i":17}
+{"i":18,"report_fnv":"ddb342281fb54e8f","report_len":13357,"warnings":[],"words":418,"words_fnv":"053825ccfda9f2a1"}
+{"i":19,"report_fnv":"ac4805a5220a561e","report_len":13524,"warnings":["semantic policy object rule did not match: importance=[2,4]"],"words":418,"words_fnv":"b46844014546586a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":20}
+{"i":21,"report_fnv":"5f9c59fd6c978961","report_len":13676,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: importance=[4,-2147483648]","semantic policy object rule did not match: importance=[,2]","semantic policy object rule did not match: pack_format=AP_00011001"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'gain_db' must be finite"},"i":22}
+{"i":23,"report_fnv":"04aff2803f809bfc","report_len":13938,"warnings":["semantic policy object rule did not match: dialogue_id=6","semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: id=Ao_9999","semantic policy object rule did not match: pack_format=Ap_00011001"],"words":417,"words_fnv":"3ffd6354c7a3cc2e"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 45: syntax error while parsing object key - invalid string: missing closing quote; last read: '\"obje'; expected string literal"},"i":24}
+{"i":25,"report_fnv":"bf85495ceb0f4b98","report_len":13458,"warnings":["semantic policy object rule did not match: dialogue_id=1"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":26,"report_fnv":"a4d509ecdbe25f6d","report_len":13630,"warnings":["semantic policy object rule did not match: dialogue_id=5","semantic policy object rule did not match: id=AO_9999"],"words":417,"words_fnv":"52a039ae9b1c2f6b"}
+{"i":27,"report_fnv":"74e5c2ff6f7ff457","report_len":13463,"warnings":[],"words":417,"words_fnv":"31a05bba285a35ad"}
+{"i":28,"report_fnv":"0a01ca08a8453eb2","report_len":13643,"warnings":["semantic policy object rule did not match: name=NoboDy","semantic policy object rule did not match: importance=[,4]","semantic policy object rule did not match: name=nobodY"],"words":418,"words_fnv":"5744bc2e53867f26"}
+{"i":29,"report_fnv":"de98994b558711b9","report_len":13547,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: importance=[,5]"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":30,"report_fnv":"969399261dbb0fc7","report_len":13394,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'interpolation' must be an object"},"i":31}
+{"i":32,"report_fnv":"a5119fe2cb0251e7","report_len":13335,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":33,"nan_words":[95,120],"report_fnv":"f5391477ca94d9d7","report_len":13371,"warnings":[],"words":418,"words_fnv":"8d9ec463f4f8ff8e"}
+{"i":34,"report_fnv":"8bf319349adc6636","report_len":13542,"warnings":["semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: importance=[,5]"],"words":417,"words_fnv":"58eaa55395be270b"}
+{"i":35,"report_fnv":"e43fe932a7ce94c5","report_len":13335,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":36,"report_fnv":"364c6dc3df1f6059","report_len":13595,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be numeric"},"i":37}
+{"i":38,"report_fnv":"99bf2ccda14e84c9","report_len":13580,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":39,"report_fnv":"13397e0aaca2aff8","report_len":13529,"warnings":[],"words":418,"words_fnv":"b56a539064956efe"}
+{"i":40,"report_fnv":"59d6a9668e6e89bc","report_len":13537,"warnings":["semantic policy object rule did not match: name=nobOdY","semantic policy object rule did not match: id=Ao_9999"],"words":417,"words_fnv":"80000d5ffb2f2cf7"}
+{"i":41,"report_fnv":"c539fcb0e1f3f1c5","report_len":13427,"warnings":["semantic policy object rule did not match: dialogue_id=0"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":42}
+{"i":43,"report_fnv":"316cf959d274085c","report_len":13368,"warnings":[],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":44,"report_fnv":"9fd7a7fbc805c193","report_len":13613,"warnings":["semantic policy object rule did not match: pack_format=Ap_00011001","semantic policy object rule did not match: name=NoboDy"],"words":419,"words_fnv":"1a413e6aee448b43"}
+{"i":45,"report_fnv":"745dbc9e209e0175","report_len":13429,"warnings":["semantic policy object rule did not match: importance=[,6]"],"words":417,"words_fnv":"b08d3c187e46edcf"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":46}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'depth_scale' must be >= 0"},"i":47}
+{"i":48,"report_fnv":"a93bc224f855147a","report_len":13618,"warnings":["semantic policy object rule did not match: dialogue_id=3","semantic policy object rule did not match: id=AO_9999"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":49,"report_fnv":"3059439e71f9b669","report_len":13683,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: pack_format=AP_00011001"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"i":50,"report_fnv":"7369173acfb7fae7","report_len":13622,"warnings":["semantic policy object rule did not match: dialogue_id=3"],"words":417,"words_fnv":"39d8d3c19869eecf"}
+{"fnv":"cab7a041027656c9","len":2035,"template":"directspeakers"}
+{"i":51,"report_fnv":"3377892f21a352be","report_len":13551,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":52,"report_fnv":"8b4e9c9a94db8472","report_len":13410,"warnings":[],"words":415,"words_fnv":"ac0602c364e826a1"}
+{"i":53,"report_fnv":"fad2e319ea4c1ef9","report_len":14090,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian"],"words":415,"words_fnv":"5518f7b058456075"}
+{"i":54,"report_fnv":"8dd9117fa49f8d9e","report_len":13796,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":55,"report_fnv":"344925573dce8d62","report_len":13589,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":56,"report_fnv":"3957862b5569d113","report_len":13433,"warnings":[],"words":414,"words_fnv":"a525427095471100"}
+{"i":57,"report_fnv":"8a47d467b13beb82","report_len":13637,"warnings":[],"words":415,"words_fnv":"598dd41adb77689d"}
+{"i":58,"report_fnv":"f10163db4a1262bb","report_len":13694,"warnings":[],"words":414,"words_fnv":"ef5480224e71fd1c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be finite"},"i":59}
+{"i":60,"report_fnv":"84ed8156407dce00","report_len":13425,"warnings":["semantic policy object rule did not match: name=nobody"],"words":414,"words_fnv":"10e57ea654b7cb14"}
+{"i":61,"report_fnv":"98d7afd68c736364","report_len":13592,"warnings":["semantic policy object rule did not match: dialogue_id=-1","semantic policy object rule did not match: name_glob=*x*"],"words":415,"words_fnv":"21ac15cd831ba675"}
+{"i":62,"report_fnv":"9dbc0374d2c06e92","report_len":13599,"warnings":["semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: name_glob=*x*"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":63}
+{"i":64,"report_fnv":"d64b21cff1eeb282","report_len":13584,"warnings":["semantic policy object rule did not match: pack_format=aP_00011001","semantic policy object rule did not match: dialogue_id=5"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":65,"report_fnv":"15b9dfb2b510ee9e","report_len":13365,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 93: syntax error while parsing object key - invalid string: missing closing quote; last read: '\"con'; expected string literal"},"i":66}
+{"i":67,"report_fnv":"028553745c743d9b","report_len":13510,"warnings":["semantic policy object rule did not match: track_uid=AtU_99999999"],"words":415,"words_fnv":"4b713e0c80e916c5"}
+{"i":68,"report_fnv":"14932d506cd50a16","report_len":13312,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max' must be finite"},"i":69}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects' must be an array"},"i":70}
+{"i":71,"report_fnv":"ee6c987fdad74141","report_len":13386,"warnings":["semantic policy object rule did not match: all"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":72,"report_fnv":"937bd3d4b3364143","report_len":13578,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: pack_format=Ap_00011001"],"words":415,"words_fnv":"60853fbab0338945"}
+{"i":73,"report_fnv":"433d340855a65bdf","report_len":13321,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":74,"report_fnv":"b851d5cccfdbaa48","report_len":13372,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":75,"report_fnv":"c937822b39b16822","report_len":13629,"warnings":["semantic policy object rule did not match: name=NObody","semantic policy object rule did not match: all","semantic policy object rule did not match: importance=[,-2147483648]","semantic policy object rule did not match: all"],"words":414,"words_fnv":"f47bbf1881cd17f8"}
+{"i":76,"report_fnv":"ad7cced0cb29ed9a","report_len":13820,"warnings":["semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: importance=[,4]","semantic policy object rule did not match: id=AO_9999"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":77,"report_fnv":"1b7a97f85f2fe15c","report_len":13535,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":78,"report_fnv":"45f8bd87701a67bf","report_len":13599,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":79,"report_fnv":"613081e89fd7d0da","report_len":13332,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":80,"report_fnv":"2607c403e6025070","report_len":13530,"warnings":["semantic policy object rule did not match: pack_format=Ap_00011001","semantic policy object rule did not match: id=Ao_9999"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_distance' must be >= 0"},"i":81}
+{"i":82,"report_fnv":"d438a429c4c8de36","report_len":13405,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":83,"report_fnv":"3ebb1379f0abeb2c","report_len":13799,"warnings":["semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: dialogue_id=5"],"words":414,"words_fnv":"10e57ea654b7cb14"}
+{"i":84,"report_fnv":"a79e5fb72c693801","report_len":13532,"warnings":["semantic policy object rule did not match: id=Ao_9999","semantic policy object rule did not match: name=nobOdy"],"words":415,"words_fnv":"e6c9bccee9e62139"}
+{"i":85,"report_fnv":"577d89fb1b2faeb7","report_len":13541,"warnings":["semantic policy object rule did not match: pack_format=aP_00011001","semantic policy object rule did not match: pack_format=AP_00011001"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unsupported schema 'mradm.semantic-policy.v2'"},"i":86}
+{"i":87,"report_fnv":"b293b68b189d28be","report_len":13789,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999"],"words":414,"words_fnv":"aa4812b2c54eae54"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":88}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_range' must be finite"},"i":89}
+{"i":90,"report_fnv":"fefa00aebc69fec3","report_len":13409,"warnings":[],"words":415,"words_fnv":"b3c53c7910e30f71"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[1]' must define a match field"},"i":91}
+{"i":92,"report_fnv":"2deef8124361cdf9","report_len":13537,"warnings":["semantic policy object rule did not match: name_glob=*x*"],"words":415,"words_fnv":"a54909d6b9c4c121"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 37: syntax error while parsing object separator - unexpected string literal; expected ':'"},"i":93}
+{"i":94,"report_fnv":"25a0d6d9bc99a9cc","report_len":13422,"warnings":[],"words":414,"words_fnv":"10e57ea654b7cb14"}
+{"i":95,"report_fnv":"4fca64310180fc23","report_len":13396,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[4]' must define a match field"},"i":96}
+{"i":97,"report_fnv":"7792c72785351d47","report_len":13446,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":98,"report_fnv":"3707fb2b468b47c7","report_len":13524,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":99,"report_fnv":"0b873cf40eb82bb1","report_len":13363,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":100,"report_fnv":"e6e0e53b74c1c5a8","report_len":13345,"warnings":[],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"i":101,"report_fnv":"f29c0954ba397048","report_len":13669,"warnings":["semantic policy object rule did not match: dialogue_id=4"],"words":414,"words_fnv":"3d763296d9cedc30"}
+{"fnv":"e65ff5e1a974d981","len":2157,"template":"hoa-pack-attributes"}
+{"i":102,"report_fnv":"cf5eff3fc63398f1","report_len":3181,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":103,"report_fnv":"023d852b7006885a","report_len":3061,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":104,"report_fnv":"177bb2b81599ce8b","report_len":3507,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian"],"words":190,"words_fnv":"d3dfbbc13902e2b5"}
+{"i":105,"report_fnv":"bba3d95c7105678a","report_len":3254,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":106,"report_fnv":"4db65350ee1d5fab","report_len":3201,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":107,"report_fnv":"16c54c1f08ebe477","report_len":3060,"warnings":[],"words":189,"words_fnv":"08340d17a5d2b7a3"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":108}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown diffuse field 'scle'"},"i":109}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown gain field 'aaa'"},"i":110}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":111}
+{"i":112,"report_fnv":"701467ddcb093ac5","report_len":3064,"warnings":["semantic policy object rule did not match: dialogue_id=5"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":113,"report_fnv":"52ba8f6935cc78a7","report_len":3035,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":114,"report_fnv":"96a2a2501259e480","report_len":3280,"warnings":["semantic policy object rule did not match: dialogue_id=0","semantic policy object rule did not match: id=aO_9999","semantic policy object rule did not match: track_uid=aTU_99999999"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":115,"report_fnv":"d647fe16f3abbd22","report_len":3227,"warnings":["semantic policy object rule did not match: name_glob=?*?"],"words":190,"words_fnv":"a7f6ea19851523ae"}
+{"i":116,"report_fnv":"bde4047ebcf16481","report_len":2960,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":117,"report_fnv":"48e1a58e0c404be1","report_len":3041,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown gain field 'Max'"},"i":118}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'distance' must be >= 0"},"i":119}
+{"i":120,"report_fnv":"a043e924d6859d1c","report_len":3216,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":121}
+{"i":122,"report_fnv":"5b4a17e8f6e1b95f","report_len":3120,"warnings":["semantic policy object rule did not match: name_glob=*x*"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":123,"report_fnv":"7e704a7aa5ae5a8f","report_len":2962,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":124,"report_fnv":"d1da1a8c888af42f","report_len":3088,"warnings":[],"words":189,"words_fnv":"0396a8fb028bdf3a"}
+{"i":125,"report_fnv":"2fb4e3f70ab49dd8","report_len":3362,"warnings":["semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: all"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max' must be finite"},"i":126}
+{"i":127,"report_fnv":"8d667e3afb9ec6c0","report_len":3344,"warnings":["semantic policy object rule did not match: importance=[-3,1]","semantic policy object rule did not match: id=aO_9999"],"words":190,"words_fnv":"9077e9071d0d7682"}
+{"i":128,"report_fnv":"8a60c7257e506557","report_len":3170,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: name=noBOdy"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":129,"report_fnv":"358fe49c15f4c039","report_len":2970,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":130,"report_fnv":"9fd43b18d4384e06","report_len":3127,"warnings":[],"words":190,"words_fnv":"38370863db43d5d0"}
+{"i":131,"report_fnv":"4fef851eb4cff117","report_len":2977,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":132,"report_fnv":"cb39c06f65f536f6","report_len":3143,"warnings":["semantic policy object rule did not match: all"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":133}
+{"i":134,"report_fnv":"ee37af3edb082d01","report_len":3038,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":135,"report_fnv":"60e1f8c4b65a3e90","report_len":3103,"warnings":["semantic policy object rule did not match: importance=[4,]"],"words":189,"words_fnv":"4713e7b3ce3ea276"}
+{"i":136,"report_fnv":"1d0498831b93b9cc","report_len":3164,"warnings":["semantic policy object rule did not match: dialogue_id=10","semantic policy object rule did not match: all"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":137,"report_fnv":"15085948c42c6971","report_len":3198,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects' must be an array"},"i":138}
+{"i":139,"report_fnv":"f808283cd8f807d3","report_len":3219,"warnings":["semantic policy object rule did not match: dialogue_id=0","semantic policy object rule did not match: importance=[,5]"],"words":190,"words_fnv":"73829cc59507a87e"}
+{"i":140,"report_fnv":"42b58dc491fc908d","report_len":3328,"warnings":["semantic policy object rule did not match: importance=[,5]"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":141,"report_fnv":"25d6ebf84bcf9625","report_len":3350,"warnings":["semantic policy object rule did not match: all"],"words":189,"words_fnv":"872c2ab6f817520c"}
+{"i":142,"report_fnv":"401c903dc647fe84","report_len":3041,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":143,"report_fnv":"1ca277d209517120","report_len":3240,"warnings":["semantic policy object rule did not match: all"],"words":189,"words_fnv":"b3cd153d227ca47c"}
+{"i":144,"report_fnv":"19d2955fc1549e87","report_len":3187,"warnings":["semantic policy object rule did not match: name_glob=*x*"],"words":189,"words_fnv":"1ccc35c9a6ee0cc2"}
+{"i":145,"report_fnv":"3775bda5feff7505","report_len":3271,"warnings":[],"words":189,"words_fnv":"895e7bb5abd8fe0f"}
+{"i":146,"report_fnv":"6dcbc63b7b32e6f2","report_len":3192,"warnings":[],"words":190,"words_fnv":"54e9c7f0b4b932fb"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":147}
+{"i":148,"report_fnv":"e4a641a7252eca14","report_len":3167,"warnings":["semantic policy object rule did not match: dialogue_id=10","semantic policy object rule did not match: importance=[6,]"],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":149,"report_fnv":"264a67215df34bc1","report_len":3163,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":150,"report_fnv":"3ca0e87e43c6a887","report_len":3286,"warnings":[],"words":189,"words_fnv":"d2d592e5c9787d5f"}
+{"i":151,"report_fnv":"5b6c7e7369e643a7","report_len":3017,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"i":152,"report_fnv":"d789dfee3c863f40","report_len":3063,"warnings":[],"words":189,"words_fnv":"a5f4d70c8477dc13"}
+{"fnv":"dd4a0f2fe3da4a10","len":2166,"template":"hoa"}
+{"i":153,"report_fnv":"d168effd58879a72","report_len":2971,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":154,"report_fnv":"62f102949fc2f744","report_len":3059,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":155,"report_fnv":"1847f17bf6aec246","report_len":3576,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian"],"words":197,"words_fnv":"ba64b995f4ecd06e"}
+{"i":156,"report_fnv":"cc3c64e3f10d024e","report_len":3194,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":157,"report_fnv":"9cac1faf7dadfab1","report_len":3259,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":158,"report_fnv":"8a9925c8e2ae5d3b","report_len":3062,"warnings":[],"words":196,"words_fnv":"6d442cfc6a4917ac"}
+{"i":159,"report_fnv":"01beca24cc54a7d4","report_len":3013,"warnings":[],"words":196,"words_fnv":"addb761ec2a4c300"}
+{"i":160,"report_fnv":"3a871cdb1579fbdf","report_len":3044,"warnings":[],"words":196,"words_fnv":"23f7943daa0f948c"}
+{"i":161,"report_fnv":"f4fb1580c9366cea","report_len":3045,"warnings":[],"words":197,"words_fnv":"c034aa8d0853befc"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'schema' must be a string"},"i":162}
+{"i":163,"report_fnv":"f228d0411d631b83","report_len":3046,"warnings":["semantic policy object rule did not match: dialogue_id=5"],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":164,"report_fnv":"7ba099de4b858ce3","report_len":3315,"warnings":[],"words":197,"words_fnv":"96b6f1481cb6f26a"}
+{"i":165,"report_fnv":"3be7a7c71351fc69","report_len":3205,"warnings":["semantic policy object rule did not match: dialogue_id=-2147483648","semantic policy object rule did not match: dialogue_id=1"],"words":196,"words_fnv":"8293bd8ebc277474"}
+{"i":166,"report_fnv":"d674201dd724c3f0","report_len":3059,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":167}
+{"i":168,"report_fnv":"0813873b9be50766","report_len":3172,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":169,"report_fnv":"e072f24c457ee493","report_len":2993,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":170,"report_fnv":"a91561e3c6dd03d3","report_len":3038,"warnings":[],"words":196,"words_fnv":"90ac0edb6fb9248c"}
+{"i":171,"report_fnv":"585ee1a4cd9c51d0","report_len":2993,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":172,"report_fnv":"215b3f277ae30a19","report_len":3037,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":173,"report_fnv":"b4777178f37787fb","report_len":3361,"warnings":["semantic policy object rule did not match: dialogue_id=10"],"words":196,"words_fnv":"d7b119b400272534"}
+{"i":174,"report_fnv":"c7fe522fc1a035a3","report_len":3124,"warnings":["semantic policy object rule did not match: id=ao_9999"],"words":196,"words_fnv":"addb761ec2a4c300"}
+{"i":175,"report_fnv":"2840b570385421ff","report_len":3215,"warnings":["semantic policy object rule did not match: name_glob=*x*","semantic policy object rule did not match: name=NoBody"],"words":197,"words_fnv":"fe18ee496bab5d91"}
+{"i":176,"report_fnv":"2a27e2b5c758e770","report_len":3015,"warnings":[],"words":196,"words_fnv":"addb761ec2a4c300"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":177}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'width_scale' must be finite"},"i":178}
+{"i":179,"report_fnv":"f70978d2e7ead87d","report_len":3126,"warnings":[],"words":197,"words_fnv":"aac2541eb68a29c8"}
+{"i":180,"report_fnv":"802672755b08cd6c","report_len":3171,"warnings":[],"words":197,"words_fnv":"35dce15b8843368c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'schema' must be a string"},"i":181}
+{"i":182,"report_fnv":"aa18b2303653b0a8","report_len":3347,"warnings":["semantic policy object rule did not match: importance=[,6]"],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":183}
+{"i":184,"report_fnv":"d19b21fa28d98395","report_len":3035,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":185,"report_fnv":"846a64a18ade8040","report_len":3090,"warnings":[],"words":196,"words_fnv":"2160cef666593597"}
+{"i":186,"report_fnv":"8483ef9ac3ec0576","report_len":3017,"warnings":[],"words":197,"words_fnv":"6355a0f7a4a8f36c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unsupported schema 'mradm.semantic-policy.v2'"},"i":187}
+{"i":188,"report_fnv":"52894dbd4b22bb00","report_len":3272,"warnings":["semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: name=noBODy","semantic policy object rule did not match: name=noBOdy"],"words":196,"words_fnv":"72443cb1b26f856b"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'range_scale' must be >= 0"},"i":189}
+{"i":190,"report_fnv":"434506096d818e58","report_len":2984,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":191,"report_fnv":"6724925db0d534aa","report_len":3336,"warnings":[],"words":196,"words_fnv":"0249fc4913b4b0a3"}
+{"i":192,"report_fnv":"e46c214ad5255fc7","report_len":3347,"warnings":["semantic policy object rule did not match: all"],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":193,"report_fnv":"63bd7472ded5fcd8","report_len":3278,"warnings":[],"words":196,"words_fnv":"addb761ec2a4c300"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":194}
+{"i":195,"report_fnv":"86c0f9dd0583af69","report_len":3214,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":196,"report_fnv":"42b4454f588b3f74","report_len":3087,"warnings":[],"words":197,"words_fnv":"aac2541eb68a29c8"}
+{"i":197,"report_fnv":"227a91260e4bd387","report_len":2960,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":198,"report_fnv":"567c28d36f865169","report_len":2962,"warnings":[],"words":196,"words_fnv":"b9ec4c226c8f6f8c"}
+{"i":199,"report_fnv":"ba757e49421ba436","report_len":3015,"warnings":[],"words":197,"words_fnv":"93f2c9eaee9d92ad"}
+{"i":200,"report_fnv":"ca2af669c48b762c","report_len":3068,"warnings":[],"words":196,"words_fnv":"d7e32cb9e0b91555"}
+{"i":201,"report_fnv":"a7009e3de69ca4ea","report_len":3099,"warnings":[],"words":196,"words_fnv":"4ebd43ccb8395486"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_distance' must be numeric"},"i":202}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":203}
+{"fnv":"2fd105cd13f12d8a","len":2166,"template":"hoa3"}
+{"i":204,"report_fnv":"d4f68ccc6ec8fd3c","report_len":7868,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":205,"report_fnv":"f9e4c20200452b34","report_len":7900,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":206,"report_fnv":"cff9c55905ef2ce2","report_len":8373,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian"],"words":473,"words_fnv":"cc7c93b573d99020"}
+{"i":207,"report_fnv":"0356329a929e39fb","report_len":8325,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":208,"report_fnv":"82464629b6866409","report_len":8056,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":209,"report_fnv":"b5c9d00471674f23","report_len":7917,"warnings":[],"words":472,"words_fnv":"f3c9ae52ff21d04a"}
+{"i":210,"report_fnv":"2b3beee1c498da80","report_len":8039,"warnings":["semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: dialogue_id=2"],"words":473,"words_fnv":"ef56fb2a8d99a973"}
+{"i":211,"report_fnv":"daebe84d8f42a94a","report_len":7910,"warnings":[],"words":472,"words_fnv":"e6cba4cd118b234e"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":212}
+{"i":213,"report_fnv":"9f348267d74d2232","report_len":7942,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":214,"report_fnv":"9e077363d81e4f58","report_len":7929,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":215,"report_fnv":"12561dbc4f8feced","report_len":8267,"warnings":["semantic policy object rule did not match: importance=[5,]"],"words":472,"words_fnv":"04be76ddaeca3f1a"}
+{"i":216,"report_fnv":"d350089ee228a7c0","report_len":8077,"warnings":["semantic policy object rule did not match: name=nobody","semantic policy object rule did not match: name_glob=*x*"],"words":472,"words_fnv":"c900e4ed1d8d05fe"}
+{"i":217,"report_fnv":"22b788ecc354aae6","report_len":8021,"warnings":["semantic policy object rule did not match: dialogue_id=-3","semantic policy object rule did not match: name=nobody"],"words":473,"words_fnv":"f97a0559481d93b7"}
+{"i":218,"report_fnv":"9a88f22353f5b8f9","report_len":8023,"warnings":["semantic policy object rule did not match: importance=[4,-2147483648]"],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":219,"report_fnv":"b77986e048948f62","report_len":7958,"warnings":["semantic policy object rule did not match: importance=[2,]"],"words":472,"words_fnv":"2a5a7902cc30feae"}
+{"i":220,"report_fnv":"5f9ec5253fef3dfb","report_len":7925,"warnings":[],"words":472,"words_fnv":"51c806664e6eaeb1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":221}
+{"i":222,"report_fnv":"5ccd98847c058c0a","report_len":7973,"warnings":[],"words":472,"words_fnv":"278cafc6c3766cff"}
+{"i":223,"report_fnv":"d2c9d1573606a24c","report_len":7896,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":224,"report_fnv":"81c0bca7cd051633","report_len":8002,"warnings":["semantic policy object rule did not match: all"],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":225,"report_fnv":"2d4ac52ae1576ee1","report_len":7819,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":226,"report_fnv":"e6aa16737c54b63e","report_len":8089,"warnings":["semantic policy object rule did not match: importance=[-3,]","semantic policy object rule did not match: dialogue_id=-2147483648"],"words":473,"words_fnv":"65d1b3c7dc5e5c4d"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":227}
+{"i":228,"report_fnv":"f14e46ab393426e7","report_len":7996,"warnings":["semantic policy object rule did not match: id=Ao_9999"],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown interpolation field 'scle'"},"i":229}
+{"i":230,"report_fnv":"f8312c81d11a685a","report_len":7959,"warnings":[],"words":472,"words_fnv":"e6cba4cd118b234e"}
+{"i":231,"report_fnv":"28bb310014ff9745","report_len":7799,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":232,"report_fnv":"6fd5a5afd49aa0c5","report_len":7966,"warnings":[],"words":473,"words_fnv":"ef56fb2a8d99a973"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":233}
+{"i":234,"report_fnv":"f2ade1bae4d2c114","report_len":7891,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":235,"report_fnv":"baeecee5ebe7d120","report_len":7982,"warnings":["semantic policy object rule did not match: importance=[1,]"],"words":473,"words_fnv":"ef56fb2a8d99a973"}
+{"i":236,"report_fnv":"641c28c1c09623ed","report_len":7982,"warnings":["semantic policy object rule did not match: name=noboDy"],"words":472,"words_fnv":"b62959889c9eb3ce"}
+{"i":237,"report_fnv":"ea221bf91787dd84","report_len":7874,"warnings":[],"words":473,"words_fnv":"5c3eb02dc4ede450"}
+{"i":238,"report_fnv":"28bb310014ff9745","report_len":7799,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":239,"report_fnv":"79fc9f9ef2d29117","report_len":7847,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":240,"report_fnv":"59b29abdbf078e2f","report_len":7874,"warnings":[],"words":472,"words_fnv":"c5ee1e65f555f4ce"}
+{"i":241,"report_fnv":"6917a00104c2496b","report_len":8160,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: dialogue_id=3"],"words":473,"words_fnv":"c215b401e4e4dc1d"}
+{"i":242,"report_fnv":"e0c380ed39986e64","report_len":8191,"warnings":[],"words":473,"words_fnv":"d504ab7fb6882c87"}
+{"i":243,"report_fnv":"bba76d59340d838b","report_len":7893,"warnings":[],"words":472,"words_fnv":"e6cba4cd118b234e"}
+{"i":244,"report_fnv":"73348b6302727db7","report_len":7856,"warnings":[],"words":472,"words_fnv":"4a1260367aaad2d1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown channel_lock field 'Max'"},"i":245}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":246}
+{"i":247,"report_fnv":"77a3fb27ba855612","report_len":7902,"warnings":[],"words":472,"words_fnv":"e6cba4cd118b234e"}
+{"i":248,"report_fnv":"ff6dfd40544f3025","report_len":8112,"warnings":[],"words":472,"words_fnv":"e6cba4cd118b234e"}
+{"i":249,"report_fnv":"6337b6aeb1e61e5e","report_len":7940,"warnings":[],"words":473,"words_fnv":"ba60442009660da7"}
+{"i":250,"report_fnv":"e65ed2a86a0278c3","report_len":7941,"warnings":[],"words":473,"words_fnv":"322b0955b58b3eaa"}
+{"i":251,"report_fnv":"756047d2489aff62","report_len":8281,"warnings":["semantic policy object rule did not match: name_glob=*x*","semantic policy object rule did not match: track_uid=ATu_99999999"],"words":473,"words_fnv":"cebbd47609c68dc3"}
+{"i":252,"report_fnv":"9937bd503b611899","report_len":8069,"warnings":["semantic policy object rule did not match: importance=[-3,]"],"words":472,"words_fnv":"f373616e2f074608"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":253}
+{"i":254,"report_fnv":"38518b27bc88e62e","report_len":8029,"warnings":["semantic policy object rule did not match: importance=[,2]","semantic policy object rule did not match: name=noboDy"],"words":473,"words_fnv":"24dd63991acde2a3"}
+{"fnv":"96782e65904b4772","len":2037,"template":"objects-cartesian"}
+{"i":255,"report_fnv":"d2a4ee872ce7a44a","report_len":3431,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":256,"report_fnv":"70499b766d61790f","report_len":3490,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":257,"report_fnv":"31d5520e6f1f4271","report_len":3959,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":136,"words_fnv":"2c5e037c65fe33cd"}
+{"i":258,"report_fnv":"966637746563742f","report_len":3683,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":259,"report_fnv":"16b79248bab031b9","report_len":3650,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":136,"words_fnv":"082b859badac5476"}
+{"i":260,"report_fnv":"76a924f135ea0102","report_len":3515,"warnings":[],"words":136,"words_fnv":"2141105b9d00c7ea"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":261}
+{"i":262,"report_fnv":"a2d5cc88bc97f0ab","report_len":3463,"warnings":[],"words":137,"words_fnv":"63edc3ed507b4926"}
+{"i":263,"report_fnv":"d052be4c2929075b","report_len":3440,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":264,"report_fnv":"e6e95f1add5b934f","report_len":3903,"warnings":["semantic policy object rule did not match: dialogue_id=10","semantic policy object rule did not match: dialogue_id=0","semantic policy object rule did not match: importance=[1,5]"],"words":136,"words_fnv":"c8c0caaf11bb8ddf"}
+{"i":265,"report_fnv":"8c9fce43507b13e7","report_len":3578,"warnings":["semantic policy object rule did not match: name=nOboDY","semantic policy object rule did not match: dialogue_id=10"],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":266,"report_fnv":"0d89230e01c61553","report_len":3436,"warnings":[],"words":136,"words_fnv":"398e05c30535fd8f"}
+{"i":267,"report_fnv":"51fffaeb9fdba6f3","report_len":3918,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999","semantic policy object rule did not match: pack_format=AP_00031001"],"words":136,"words_fnv":"1a5394a3d31fe170"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'lock_elevation' must be numeric"},"i":268}
+{"i":269,"report_fnv":"08f637fcaece6a84","report_len":3521,"warnings":[],"words":136,"words_fnv":"68abe221ddea8098"}
+{"i":270,"report_fnv":"afc1f14cbd0eb1b2","report_len":3484,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":271,"report_fnv":"692fffdc82468031","report_len":3661,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":272,"report_fnv":"a0453bcbb77a6eea","report_len":3449,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":273,"report_fnv":"73884f99051ebbdb","report_len":3624,"warnings":["semantic policy object rule did not match: id=Ao_9999","semantic policy object rule did not match: name=noBody"],"words":136,"words_fnv":"43210ec367294e23"}
+{"i":274,"report_fnv":"accec4438ec855fc","report_len":3553,"warnings":["semantic policy object rule did not match: pack_format=ap_00031001"],"words":136,"words_fnv":"1a571bad8a85c73e"}
+{"i":275,"report_fnv":"b29631d8dcfd0ee6","report_len":3451,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 160: syntax error while parsing object key - invalid string: missing closing quote; last read: '\"i'; expected string literal"},"i":276}
+{"i":277,"report_fnv":"d7694dfe2f1ad7ff","report_len":3703,"warnings":["semantic policy object rule did not match: importance=[3,]","semantic policy object rule did not match: all"],"words":137,"words_fnv":"62e180e8a5ce0b64"}
+{"i":278,"report_fnv":"3420a8969aaa157f","report_len":3678,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":279,"report_fnv":"ad3b7026a70cf1bd","report_len":3442,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":280,"report_fnv":"83749445f2e3347b","report_len":3713,"warnings":[],"words":136,"words_fnv":"630ae6ca305b4113"}
+{"i":281,"report_fnv":"c736f9b56d3df0ac","report_len":3536,"warnings":["semantic policy object rule did not match: dialogue_id=-2147483648"],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown diffuse field 'aaa'"},"i":282}
+{"i":283,"report_fnv":"984f785ed2ad3f4b","report_len":3491,"warnings":[],"words":136,"words_fnv":"8044b4904d66545c"}
+{"i":284,"report_fnv":"accde597aa154dcf","report_len":3469,"warnings":[],"words":137,"words_fnv":"dc366cbff3cf73d7"}
+{"i":285,"report_fnv":"e0996340075ae75c","report_len":3623,"warnings":["semantic policy object rule did not match: name=nObody","semantic policy object rule did not match: importance=[-1,]"],"words":136,"words_fnv":"c40886fba4a94ace"}
+{"i":286,"report_fnv":"d1b11d0cc19725b4","report_len":3567,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999"],"words":136,"words_fnv":"5502db644240b578"}
+{"i":287,"report_fnv":"0a20d4e558d744a8","report_len":3634,"warnings":[],"words":137,"words_fnv":"45d0ac8c0085b99f"}
+{"i":288,"report_fnv":"d4fbe63be0147e7e","report_len":3568,"warnings":[],"words":137,"words_fnv":"daa9021ae535ca17"}
+{"i":289,"report_fnv":"d052be4c2929075b","report_len":3440,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":290,"report_fnv":"c9ec3ed4ff572e82","report_len":3430,"warnings":[],"words":136,"words_fnv":"5ac74da2ae816c7a"}
+{"i":291,"report_fnv":"77435fe648cb3172","report_len":3465,"warnings":["semantic policy object rule did not match: dialogue_id=-3"],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":292,"report_fnv":"81805863fc79810e","report_len":3692,"warnings":["semantic policy object rule did not match: importance=[,-2147483648]","semantic policy object rule did not match: importance=[,4]"],"words":136,"words_fnv":"5ad7d3f186528f19"}
+{"i":293,"report_fnv":"e9093577fc389082","report_len":3656,"warnings":["semantic policy object rule did not match: pack_format=Ap_00031001"],"words":137,"words_fnv":"2a0fc158d03403a0"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":294}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 12: syntax error while parsing object separator - unexpected '{'; expected ':'"},"i":295}
+{"i":296,"report_fnv":"09ca1f67994a4c2d","report_len":3611,"warnings":["semantic policy object rule did not match: all"],"words":137,"words_fnv":"336bfd735f9cc660"}
+{"i":297,"report_fnv":"9da4527a2ba56c5f","report_len":3634,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":298,"report_fnv":"1cdac83c3e1dc308","report_len":3389,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"i":299,"report_fnv":"82244dd45ed18bc0","report_len":3843,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: dialogue_id=6","semantic policy object rule did not match: name=noBody","semantic policy object rule did not match: id=Ao_9999","semantic policy object rule did not match: dialogue_id=5"],"words":136,"words_fnv":"c98816def9a420aa"}
+{"i":300,"report_fnv":"02a6af98213ee41a","report_len":3680,"warnings":["semantic policy object rule did not match: name_glob=*x*","semantic policy object rule did not match: id=Ao_9999"],"words":136,"words_fnv":"8d4243e4b358478f"}
+{"i":301,"report_fnv":"6c87de8d2af5824b","report_len":3548,"warnings":["semantic policy object rule did not match: importance=[,0]"],"words":136,"words_fnv":"3c457f5687d9e6c9"}
+{"i":302,"report_fnv":"1cdac83c3e1dc308","report_len":3389,"warnings":[],"words":136,"words_fnv":"dc6c2be79571a96f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":303}
+{"i":304,"report_fnv":"1d04e0a5fe885a6e","report_len":3431,"warnings":[],"words":136,"words_fnv":"18ea944a53bd7716"}
+{"i":305,"report_fnv":"d08e9354209fcc9d","report_len":3584,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: dialogue_id=4"],"words":136,"words_fnv":"cf364c2c678f3caf"}
+{"fnv":"816c9f495c0acedf","len":2039,"template":"objects-extent-multi"}
+{"i":306,"report_fnv":"d84d6c1e799d2e00","report_len":8072,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":307,"report_fnv":"5c69137f4e9f321a","report_len":8186,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":308,"report_fnv":"89fd162d79d128be","report_len":8603,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":223,"words_fnv":"5698da920e8451c5"}
+{"i":309,"report_fnv":"45da070a72b9021a","report_len":8297,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":310,"report_fnv":"c87c2708c10b22ef","report_len":8372,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":223,"words_fnv":"f36fedc4062e0eb6"}
+{"i":311,"report_fnv":"904fcf64174e05a3","report_len":8124,"warnings":[],"words":223,"words_fnv":"8b6cd586533ac100"}
+{"i":312,"report_fnv":"b6098ff0ca956c54","report_len":8138,"warnings":[],"words":223,"words_fnv":"a5863e870fe88edd"}
+{"i":313,"report_fnv":"f55854c2e72e252f","report_len":8063,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":314,"report_fnv":"0b57116c032a0a3d","report_len":8313,"warnings":["semantic policy object rule did not match: importance=[,-3]"],"words":224,"words_fnv":"12b0f4798669384b"}
+{"i":315,"report_fnv":"aed169be02d17e35","report_len":8087,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":316}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'schema' must be a string"},"i":317}
+{"i":318,"report_fnv":"e1d9f63f03fbd063","report_len":8195,"warnings":[],"words":224,"words_fnv":"9325378dc4fe3a95"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":319}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'range_scale' must be >= 0"},"i":320}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.out_of_range.406] number overflow parsing '1e400'"},"i":321}
+{"i":322,"report_fnv":"5c888fdcce93c7e8","report_len":8111,"warnings":[],"words":223,"words_fnv":"1b9fed86b280f21d"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":323}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be numeric"},"i":324}
+{"i":325,"report_fnv":"f749be48ed9c436b","report_len":8187,"warnings":[],"words":223,"words_fnv":"93cb471092ff3d36"}
+{"i":326,"report_fnv":"58da24eeb0a88607","report_len":8301,"warnings":[],"words":223,"words_fnv":"1b9fed86b280f21d"}
+{"i":327,"report_fnv":"4d9ab0f672c008f6","report_len":8385,"warnings":[],"words":223,"words_fnv":"1480d8188d93833a"}
+{"i":328,"report_fnv":"8ff013e80eb6d393","report_len":8045,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":329,"report_fnv":"34a6b51260348f8d","report_len":8063,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":330,"report_fnv":"e0d25bbe9b534254","report_len":8188,"warnings":[],"words":224,"words_fnv":"a5d29fcf5439a68a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":331}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_ms' must be an unsigned integer"},"i":332}
+{"i":333,"report_fnv":"6a3df94e198818ab","report_len":8421,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: id=aO_9999"],"words":223,"words_fnv":"b559a254b69b6ebb"}
+{"i":334,"report_fnv":"a6fdeb248f8ce3b4","report_len":8203,"warnings":[],"words":226,"words_fnv":"45d226ef6f0b0d58"}
+{"i":335,"report_fnv":"4c22d9a0ee61e2f8","report_len":8351,"warnings":[],"words":223,"words_fnv":"04f03b41ec44ecc2"}
+{"i":336,"report_fnv":"b7521550dc0f711f","report_len":8219,"warnings":["semantic policy object rule did not match: dialogue_id=2"],"words":223,"words_fnv":"0be91bc4ffda37dd"}
+{"i":337,"report_fnv":"a2b311e5165ff2d9","report_len":8354,"warnings":[],"words":224,"words_fnv":"1a628dfc6b92a03d"}
+{"i":338,"report_fnv":"cba9ab272291562b","report_len":8326,"warnings":["semantic policy object rule did not match: id=aO_9999","semantic policy object rule did not match: dialogue_id=0"],"words":224,"words_fnv":"dfb08899cba7e8aa"}
+{"i":339,"report_fnv":"8c451e82bc14640a","report_len":8116,"warnings":[],"words":223,"words_fnv":"bb67e4e8e4881e90"}
+{"i":340,"report_fnv":"5f5c0d8c32893bc0","report_len":8291,"warnings":["semantic policy object rule did not match: pack_format=Ap_00031003","semantic policy object rule did not match: name=nObody"],"words":224,"words_fnv":"636f6512cf52b951"}
+{"i":341,"report_fnv":"95be0d25d3ab94ec","report_len":8480,"warnings":["semantic policy object rule did not match: name=nobOdy","semantic policy object rule did not match: dialogue_id=-3"],"words":223,"words_fnv":"07db2f1123f80ab6"}
+{"i":342,"report_fnv":"644666ca75a680fc","report_len":8054,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":343,"report_fnv":"b3a0a79693f0dce0","report_len":8140,"warnings":[],"words":223,"words_fnv":"39dfc2aeeb5da3db"}
+{"i":344,"report_fnv":"5b23be059b222bf9","report_len":8256,"warnings":["semantic policy object rule did not match: id=AO_9999"],"words":224,"words_fnv":"527941272f27f4c5"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":345}
+{"i":346,"report_fnv":"dd25cf2bd8e0a683","report_len":8310,"warnings":[],"words":223,"words_fnv":"2aba73c3f0d9fb90"}
+{"i":347,"report_fnv":"e36f8e83aa50f33e","report_len":8496,"warnings":["semantic policy object rule did not match: pack_format=AP_00031002","semantic policy object rule did not match: name=NoboDy"],"words":223,"words_fnv":"02a5d2ea874cb745"}
+{"i":348,"report_fnv":"0ca1963aa31754d4","report_len":8233,"warnings":["semantic policy object rule did not match: importance=[,4]","semantic policy object rule did not match: all"],"words":223,"words_fnv":"bc59ae2979afd5db"}
+{"i":349,"report_fnv":"6c262911a690dd86","report_len":8202,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001"],"words":223,"words_fnv":"55595230e46baa9d"}
+{"i":350,"report_fnv":"7dcafa38fe9be461","report_len":8070,"warnings":[],"words":223,"words_fnv":"6331fb950bfbdfcb"}
+{"i":351,"report_fnv":"f1cb461686ec5816","report_len":8087,"warnings":[],"words":223,"words_fnv":"735123486951c65b"}
+{"i":352,"report_fnv":"1946583f3db60f48","report_len":8299,"warnings":["semantic policy object rule did not match: name=noboDy"],"words":227,"words_fnv":"5e4c8a5bcd9aae35"}
+{"i":353,"report_fnv":"77a1d8b126acfc69","report_len":8266,"warnings":[],"words":223,"words_fnv":"55595230e46baa9d"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[1]' must define a match field"},"i":354}
+{"i":355,"report_fnv":"39dcd3ab7bd1b9b5","report_len":8220,"warnings":["semantic policy object rule did not match: name=nobodY"],"words":227,"words_fnv":"33722930b1e96539"}
+{"i":356,"report_fnv":"4778d9898808865f","report_len":8327,"warnings":["semantic policy object rule did not match: track_uid=ATu_99999999","semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: all"],"words":223,"words_fnv":"e88afd1227415de1"}
+{"fnv":"0841fc9a4f7e84b8","len":2034,"template":"objects-extent"}
+{"i":357,"report_fnv":"f6efbe71557ca689","report_len":3369,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":358,"report_fnv":"47ffd483efca7754","report_len":3466,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":359,"report_fnv":"99ca79116d267dea","report_len":3953,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":133,"words_fnv":"6b6e16e86f6f80e6"}
+{"i":360,"report_fnv":"6470c2432b0e54cf","report_len":3652,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":361,"report_fnv":"637e44b75529706a","report_len":3619,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":133,"words_fnv":"c01882ca8a470204"}
+{"i":362,"report_fnv":"2a2ad0a76a9de2db","report_len":3490,"warnings":[],"words":133,"words_fnv":"feae7a3aaa867293"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":363}
+{"i":364,"report_fnv":"6d517848f73196db","report_len":3409,"warnings":[],"words":134,"words_fnv":"0f51ba69189a78a7"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max' must be >= 0"},"i":365}
+{"i":366,"report_fnv":"bc9ee37399002265","report_len":3563,"warnings":["semantic policy object rule did not match: dialogue_id=4","semantic policy object rule did not match: dialogue_id=1"],"words":133,"words_fnv":"fee7768e4d891aa5"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":367}
+{"i":368,"report_fnv":"f23a85924949c4f2","report_len":3418,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":369,"report_fnv":"8db2ca65f6012d2e","report_len":3770,"warnings":["semantic policy object rule did not match: id=Ao_9999"],"words":134,"words_fnv":"8ce7198ad9f41919"}
+{"i":370,"report_fnv":"df85dd8f43197c4e","report_len":3620,"warnings":[],"words":133,"words_fnv":"f626ec0e674e0007"}
+{"i":371,"report_fnv":"c84279c21a37764c","report_len":3627,"warnings":["semantic policy object rule did not match: name=NobOdy","semantic policy object rule did not match: track_uid=Atu_99999999"],"words":134,"words_fnv":"c50548b9f20322b3"}
+{"i":372,"report_fnv":"e782006fd939c875","report_len":3418,"warnings":[],"words":133,"words_fnv":"cb35c0ad923e203f"}
+{"i":373,"report_fnv":"15f96f6307422093","report_len":3443,"warnings":[],"words":133,"words_fnv":"42ff46929843b0b6"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":374}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown divergence field 'scle'"},"i":375}
+{"i":376,"report_fnv":"d3eec68c0d45b4f2","report_len":3691,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: name=nobody","semantic policy object rule did not match: id=AO_9999"],"words":133,"words_fnv":"c62bf86e81fb8140"}
+{"i":377,"report_fnv":"2bf935818668c693","report_len":3677,"warnings":[],"words":133,"words_fnv":"4cdce37cae29b3a4"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":378}
+{"i":379,"report_fnv":"532b6888896f9d50","report_len":3605,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: track_uid=ATu_99999999"],"words":134,"words_fnv":"33a79c97a17e4a0d"}
+{"i":380,"report_fnv":"e5d75620a2ae0139","report_len":3832,"warnings":["semantic policy object rule did not match: dialogue_id=3"],"words":134,"words_fnv":"16b83c96e44b3341"}
+{"i":381,"report_fnv":"2000255161f7b25b","report_len":3411,"warnings":[],"words":133,"words_fnv":"6463d91cb611062a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 268: syntax error while parsing object key - unexpected end of input; expected string literal"},"i":382}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":383}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'distance' must be >= 0"},"i":384}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":385}
+{"i":386,"report_fnv":"7ec71fb956ad694e","report_len":3358,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":387,"report_fnv":"7eef6aa5a8694d7c","report_len":3514,"warnings":[],"words":133,"words_fnv":"60402b93949847ef"}
+{"i":388,"report_fnv":"852a2b4bed2bd82d","report_len":3623,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: dialogue_id=-2147483648"],"words":134,"words_fnv":"9a9f508cfd44b58f"}
+{"i":389,"report_fnv":"af1d757876d329ed","report_len":3442,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'schema' must be a string"},"i":390}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 167: syntax error while parsing object - unexpected end of input; expected '}'"},"i":391}
+{"i":392,"report_fnv":"66c9b6a2f9afa0aa","report_len":3443,"warnings":[],"words":133,"words_fnv":"c20c36905755465b"}
+{"i":393,"report_fnv":"bb75ecb13525e713","report_len":3643,"warnings":[],"words":133,"words_fnv":"6463d91cb611062a"}
+{"i":394,"report_fnv":"29771dfcbc399aeb","report_len":3489,"warnings":["semantic policy object rule did not match: name=nObody"],"words":133,"words_fnv":"42ff46929843b0b6"}
+{"i":395,"report_fnv":"56d3b3bc4dbddbdc","report_len":3526,"warnings":[],"words":134,"words_fnv":"26839245645c8a74"}
+{"i":396,"report_fnv":"08407dd0dbafa335","report_len":3442,"warnings":[],"words":134,"words_fnv":"3dd6d3083188c053"}
+{"i":397,"report_fnv":"9e6d27adc0087a0b","report_len":3590,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":398,"report_fnv":"914d544ff15f61ea","report_len":3637,"warnings":[],"words":133,"words_fnv":"fc22010eb32f02b6"}
+{"i":399,"report_fnv":"fc06ef71a7911ad1","report_len":3759,"warnings":["semantic policy object rule did not match: importance=[,5]","semantic policy object rule did not match: name=nobody"],"words":134,"words_fnv":"172235e9675adb5a"}
+{"i":400,"report_fnv":"fc8aa195ee0aadef","report_len":3642,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: dialogue_id=5","semantic policy object rule did not match: name=noboDY","semantic policy object rule did not match: name=noboDY"],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":401,"report_fnv":"a2559b570ea4156f","report_len":3668,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: dialogue_id=1"],"words":134,"words_fnv":"eee5d93f6a9fcbcb"}
+{"i":402,"report_fnv":"68ff5af00f013396","report_len":3549,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999","semantic policy object rule did not match: pack_format=AP_00031001"],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":403,"report_fnv":"d381e140d5efd5e6","report_len":3554,"warnings":["semantic policy object rule did not match: dialogue_id=1"],"words":134,"words_fnv":"e77bc0814985522b"}
+{"i":404,"report_fnv":"8b65b83f5ece4169","report_len":3619,"warnings":["semantic policy object rule did not match: importance=[-3,6]"],"words":135,"words_fnv":"eda70253b949b89b"}
+{"i":405,"report_fnv":"d0ca166929c273fe","report_len":3697,"warnings":["semantic policy object rule did not match: pack_format=aP_00031001"],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"i":406,"report_fnv":"2bafdc1549669580","report_len":3505,"warnings":[],"words":133,"words_fnv":"c2f0b933e57bd724"}
+{"i":407,"report_fnv":"02a2965a8c894dd5","report_len":3409,"warnings":[],"words":133,"words_fnv":"dbaeb8b4d265831a"}
+{"fnv":"8cbc4cbd836fba4a","len":2033,"template":"objects-point"}
+{"i":408,"report_fnv":"1bac6984008b1b25","report_len":3364,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":409,"report_fnv":"a50a9d7506f9d713","report_len":3452,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":410,"report_fnv":"6f7b5166ce87eacf","report_len":3959,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":133,"words_fnv":"652a7417496a7b80"}
+{"i":411,"report_fnv":"bef23c45218534c6","report_len":3616,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":412,"report_fnv":"573bbeffe2cffdd4","report_len":3674,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":133,"words_fnv":"6a7cc30bc2670de2"}
+{"i":413,"report_fnv":"d2ad463990d22663","report_len":3677,"warnings":[],"words":133,"words_fnv":"d02f1dc23a8e6d94"}
+{"i":414,"report_fnv":"6f5710aef07ff859","report_len":3607,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":415,"report_fnv":"70bc2aeb0801d156","report_len":3754,"warnings":["semantic policy object rule did not match: dialogue_id=4"],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":416,"report_fnv":"095bd4cee8e94b56","report_len":3545,"warnings":["semantic policy object rule did not match: id=Ao_9999"],"words":133,"words_fnv":"e6cd6a0414e761b9"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 42, column 5: syntax error while parsing object - unexpected end of input; expected '}'"},"i":417}
+{"i":418,"report_fnv":"f50f1ce3b4928b31","report_len":3651,"warnings":[],"words":134,"words_fnv":"3f6852c36520a285"}
+{"i":419,"report_fnv":"b722153c8e3b350b","report_len":3634,"warnings":["semantic policy object rule did not match: dialogue_id=3","semantic policy object rule did not match: dialogue_id=-2147483648"],"words":133,"words_fnv":"8b90c746e1338f9f"}
+{"i":420,"report_fnv":"b28b1fb03df2d807","report_len":3429,"warnings":[],"words":133,"words_fnv":"034688da5418484d"}
+{"i":421,"report_fnv":"c3f94650830e636c","report_len":3668,"warnings":["semantic policy object rule did not match: id=ao_9999","semantic policy object rule did not match: track_uid=ATU_99999999"],"words":133,"words_fnv":"cf07401dd9d6d294"}
+{"i":422,"report_fnv":"815ba235b3259abf","report_len":3585,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":423}
+{"i":424,"report_fnv":"5be2e37e4b593f56","report_len":3597,"warnings":["semantic policy object rule did not match: id=aO_9999"],"words":134,"words_fnv":"da4ba45a45111bcd"}
+{"i":425,"report_fnv":"afc8fecad37af8de","report_len":3485,"warnings":["semantic policy object rule did not match: id=AO_9999"],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":426,"report_fnv":"3885fe898ccfb5f1","report_len":3595,"warnings":["semantic policy object rule did not match: name_glob=*x*"],"words":134,"words_fnv":"3e211031746f2637"}
+{"i":427,"report_fnv":"39c5d8778fa14048","report_len":3819,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: name=nobody"],"words":133,"words_fnv":"c2e2cbed45703e96"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'gain_db' must be finite"},"i":428}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 37: syntax error while parsing object separator - unexpected string literal; expected ':'"},"i":429}
+{"i":430,"report_fnv":"b9a925591412453d","report_len":3611,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_distance' must be numeric"},"i":431}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.out_of_range.406] number overflow parsing '1e400'"},"i":432}
+{"i":433,"report_fnv":"087146ca94e585a5","report_len":3422,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":434,"report_fnv":"5598ff2055b512be","report_len":3592,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001"],"words":134,"words_fnv":"fe4c40abaa4e1dbf"}
+{"i":435,"report_fnv":"51cabd80413317c7","report_len":3406,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":436,"report_fnv":"19428797195de0b1","report_len":3566,"warnings":["semantic policy object rule did not match: importance=[,-3]"],"words":134,"words_fnv":"be2e3db3337c001c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 702: syntax error while parsing value - invalid literal; last read: '\"honor_jump_position\": f'"},"i":437}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'width_scale' must be >= 0"},"i":438}
+{"i":439,"report_fnv":"907a7cee59521f9c","report_len":3615,"warnings":["semantic policy object rule did not match: importance=[10,3]","semantic policy object rule did not match: name=NOBoDY","semantic policy object rule did not match: dialogue_id=10"],"words":133,"words_fnv":"7caddb6022ba0939"}
+{"i":440,"report_fnv":"ce52c28062850e00","report_len":3681,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: track_uid=ATU_99999999","semantic policy object rule did not match: pack_format=Ap_00031001"],"words":135,"words_fnv":"4792d9469149ee77"}
+{"i":441,"report_fnv":"ff0f7a40c2b3b1c2","report_len":3428,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_range' must be >= 0"},"i":442}
+{"i":443,"report_fnv":"1ee198a9ae33219d","report_len":3601,"warnings":["semantic policy object rule did not match: name=nObOdy","semantic policy object rule did not match: name=NobOdy"],"words":133,"words_fnv":"034688da5418484d"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'lock_elevation' must be finite"},"i":444}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'schema' must be a string"},"i":445}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown top-level field 'extra'"},"i":446}
+{"i":447,"report_fnv":"a41aac7ea16dad83","report_len":3484,"warnings":["semantic policy object rule did not match: name_glob=*x*"],"words":133,"words_fnv":"62dd7238a7fcf4d7"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":448}
+{"i":449,"report_fnv":"9135c0af0a05715a","report_len":3579,"warnings":["semantic policy object rule did not match: name_glob=*x*","semantic policy object rule did not match: track_uid=ATU_99999999","semantic policy object rule did not match: importance=[,-3]"],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":450,"report_fnv":"ab61ad0e147727f0","report_len":3413,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'range_scale' must be finite"},"i":451}
+{"i":452,"report_fnv":"82e6a23138072276","report_len":3546,"warnings":["semantic policy object rule did not match: dialogue_id=3"],"words":135,"words_fnv":"2ae2c0fab988c5ba"}
+{"i":453,"report_fnv":"a285867de9599a26","report_len":3406,"warnings":[],"words":133,"words_fnv":"18eb8a67b7cfbb65"}
+{"i":454,"report_fnv":"2d24553c57ee46ec","report_len":3432,"warnings":[],"words":133,"words_fnv":"f0a81903340e8644"}
+{"i":455,"report_fnv":"f332fe6228462b6f","report_len":3488,"warnings":["semantic policy object rule did not match: dialogue_id=1"],"words":133,"words_fnv":"e9b4112a3928e25b"}
+{"i":456,"report_fnv":"815ba235b3259abf","report_len":3585,"warnings":[],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":457,"report_fnv":"b5878bdc4deb56e9","report_len":3516,"warnings":["semantic policy object rule did not match: name=NobOdy"],"words":133,"words_fnv":"8d5b65de989c508c"}
+{"i":458,"report_fnv":"ff7c0c07ccab15c4","report_len":3579,"warnings":["semantic policy object rule did not match: name=nobodY","semantic policy object rule did not match: importance=[,-1]"],"words":133,"words_fnv":"b54ec67420b43d6c"}
+{"fnv":"f8fe3bdcc7dd4635","len":2032,"template":"objects-room"}
+{"i":459,"report_fnv":"89d606febb3a3f42","report_len":10608,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":460,"report_fnv":"95180d5658701fe5","report_len":10729,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":461,"report_fnv":"2c328801d638bfcc","report_len":11214,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":245,"words_fnv":"36bf812b391d9f17"}
+{"i":462,"report_fnv":"660e47273a80319a","report_len":10891,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":463,"report_fnv":"9318330d5f4b646b","report_len":10961,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":245,"words_fnv":"bab23acd3f7cec3e"}
+{"i":464,"report_fnv":"77de2173d12b7dcc","report_len":10924,"warnings":[],"words":245,"words_fnv":"8683dd4cea2d2135"}
+{"i":465,"report_fnv":"6f536ab04ab52417","report_len":10753,"warnings":[],"words":245,"words_fnv":"dbf0e981bbd4f4e0"}
+{"i":466,"report_fnv":"830b1ab178cfcac0","report_len":11024,"warnings":[],"words":245,"words_fnv":"1c9f561f527c0366"}
+{"i":467,"report_fnv":"adc82e65fe3d1d59","report_len":10793,"warnings":[],"words":245,"words_fnv":"1e125f7aa305cb1c"}
+{"i":468,"report_fnv":"62ab7060c30d6fd9","report_len":11121,"warnings":["semantic policy object rule did not match: pack_format=ap_00031001","semantic policy object rule did not match: importance=[10,]"],"words":246,"words_fnv":"51294260f0b67101"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":469}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":470}
+{"i":471,"report_fnv":"5d69740f5b6118ca","report_len":10721,"warnings":["semantic policy object rule did not match: name=nobODy"],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_distance' must be >= 0"},"i":472}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unsupported schema 'mradm.semantic-policy.v2'"},"i":473}
+{"i":474,"report_fnv":"a4ad5b5f32b781f0","report_len":10668,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":475,"report_fnv":"ef081a0521039fe4","report_len":10744,"warnings":["semantic policy object rule did not match: track_uid=ATu_99999999"],"words":246,"words_fnv":"44c0c693de19ae91"}
+{"i":476,"report_fnv":"91ce58dd5ce0a3b7","report_len":10694,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":477,"report_fnv":"2bca1d8c599a6105","report_len":10740,"warnings":["semantic policy object rule did not match: name=noBODy"],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":478,"report_fnv":"5f488f34cf123ba1","report_len":10889,"warnings":[],"words":245,"words_fnv":"f21d28767bf5bf41"}
+{"i":479,"report_fnv":"e0ddc7446e525438","report_len":10969,"warnings":[],"words":245,"words_fnv":"28d8967217429835"}
+{"i":480,"report_fnv":"439115e295dd7940","report_len":10641,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":481,"report_fnv":"17474942c049e0a0","report_len":10930,"warnings":["semantic policy object rule did not match: importance=[,1]"],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max' must be >= 0"},"i":482}
+{"i":483,"report_fnv":"eaaef2d142979e6c","report_len":11064,"warnings":["semantic policy object rule did not match: dialogue_id=-1","semantic policy object rule did not match: name=nobody"],"words":246,"words_fnv":"451d42049549a088"}
+{"i":484,"report_fnv":"efcd472cf4f79a81","report_len":11093,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999","semantic policy object rule did not match: all"],"words":246,"words_fnv":"4abc73f3248cff8a"}
+{"i":485,"report_fnv":"2b2c355fa18d14b9","report_len":10851,"warnings":["semantic policy object rule did not match: importance=[4,]"],"words":249,"words_fnv":"2c57980ee512c1cd"}
+{"i":486,"report_fnv":"f62538b37b2b869d","report_len":10682,"warnings":["semantic policy object rule did not match: pack_format=Ap_00031001"],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[3]' must define a match field"},"i":487}
+{"i":488,"report_fnv":"4e76949890a0009d","report_len":10942,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: dialogue_id=6","semantic policy object rule did not match: dialogue_id=10"],"words":246,"words_fnv":"fa6f1027f0c82639"}
+{"i":489,"report_fnv":"beb476cf9e3661e9","report_len":10769,"warnings":["semantic policy object rule did not match: importance=[,-1]"],"words":246,"words_fnv":"44c0c693de19ae91"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":490}
+{"i":491,"report_fnv":"97457de1a04f40ea","report_len":10648,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":492,"report_fnv":"54fa1188d913b821","report_len":10801,"warnings":["semantic policy object rule did not match: track_uid=AtU_99999999"],"words":246,"words_fnv":"de0e27a8c0e8210a"}
+{"i":493,"report_fnv":"fa0aaf2cb78cb242","report_len":10808,"warnings":["semantic policy object rule did not match: importance=[,5]"],"words":245,"words_fnv":"6838641eccac6836"}
+{"i":494,"report_fnv":"24af3e250ea65c69","report_len":10801,"warnings":["semantic policy object rule did not match: name=nOboDy"],"words":245,"words_fnv":"611cdfe291890267"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 106: syntax error while parsing object key - invalid string: missing closing quote; last read: '\"m'; expected string literal"},"i":495}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":496}
+{"i":497,"report_fnv":"5213cf9181179f11","report_len":10615,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":498,"report_fnv":"89d606febb3a3f42","report_len":10608,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unsupported schema 'mradm.semantic-policy.v2'"},"i":499}
+{"i":500,"report_fnv":"e37b20c9e31e7061","report_len":10659,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'width_scale' must be >= 0"},"i":501}
+{"i":502,"report_fnv":"81a7a29c62b1b31c","report_len":10827,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"i":503,"report_fnv":"1a1eb6e1485c798e","report_len":11009,"warnings":["semantic policy object rule did not match: name_glob=*x*","semantic policy object rule did not match: track_uid=aTU_99999999"],"words":245,"words_fnv":"f8d98d4022133cac"}
+{"i":504,"report_fnv":"094f86c362a5e495","report_len":11052,"warnings":["semantic policy object rule did not match: importance=[1,-1]","semantic policy object rule did not match: importance=[-3,]","semantic policy object rule did not match: importance=[5,6]","semantic policy object rule did not match: pack_format=AP_00031001"],"words":245,"words_fnv":"d9a93f9717018506"}
+{"i":505,"report_fnv":"dd2d827cee4b2bb2","report_len":10783,"warnings":["semantic policy object rule did not match: pack_format=Ap_00031001"],"words":250,"words_fnv":"8e9bf3f73ec0b51c"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max' must be >= 0"},"i":506}
+{"i":507,"report_fnv":"38150d9eb6746382","report_len":11207,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: pack_format=AP_00031001"],"words":245,"words_fnv":"e24ceba087b94614"}
+{"i":508,"report_fnv":"b230546516495b3f","report_len":10597,"warnings":[],"words":245,"words_fnv":"b2912fde024dacf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":509}
+{"fnv":"730b8ef5c6a4d86a","len":2016,"template":"objects-stream-only"}
+{"i":510,"report_fnv":"8fcdc3bbda070e9d","report_len":5682,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":511,"report_fnv":"34e8a596ef73ece9","report_len":5995,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":512,"report_fnv":"558385c0c0dcc1d7","report_len":6219,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":163,"words_fnv":"79da38f075e8476b"}
+{"i":513,"report_fnv":"51ec8e844d756720","report_len":5976,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":514,"report_fnv":"2beb046334ad1768","report_len":5996,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":163,"words_fnv":"3635c6c557f32e37"}
+{"i":515,"report_fnv":"a4ad242ca6e867e3","report_len":5754,"warnings":[],"words":163,"words_fnv":"855aae1d9abb159b"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'head_locked' must be boolean"},"i":516}
+{"i":517,"report_fnv":"3d09b9f67b333354","report_len":5750,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'azimuth' must be finite"},"i":518}
+{"i":519,"report_fnv":"4a36e36b520b9d3c","report_len":5929,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001"],"words":164,"words_fnv":"0ec582fee3c00e5e"}
+{"i":520,"report_fnv":"02626db6d286c446","report_len":5726,"warnings":[],"words":163,"words_fnv":"e1f807586c794dff"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":521}
+{"i":522,"report_fnv":"66349e2c605e6d04","report_len":5858,"warnings":["semantic policy object rule did not match: importance=[,6]"],"words":163,"words_fnv":"2ba69d9c4f8b4bf3"}
+{"i":523,"report_fnv":"190228d24252f3e4","report_len":5780,"warnings":[],"words":163,"words_fnv":"e563cb6e0d69c13f"}
+{"i":524,"report_fnv":"712e5646abd3cd15","report_len":5905,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":525,"report_fnv":"af73d31e5d529e6e","report_len":5707,"warnings":[],"words":163,"words_fnv":"a0642c8591a66a67"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[2]' must define a match field"},"i":526}
+{"i":527,"report_fnv":"7601cf04a5182c90","report_len":6079,"warnings":["semantic policy object rule did not match: name=NobOdY"],"words":163,"words_fnv":"8d42659a4f49512f"}
+{"i":528,"report_fnv":"ac7b8ed0e250eac1","report_len":5719,"warnings":[],"words":165,"words_fnv":"fa38ff3c7ebc216b"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown extent field 'Max'"},"i":529}
+{"i":530,"report_fnv":"c48177b074044008","report_len":6065,"warnings":["semantic policy object rule did not match: name_glob=?*?","semantic policy object rule did not match: track_uid=AtU_99999999","semantic policy object rule did not match: name=nOBOdY"],"words":163,"words_fnv":"cd06283d9902954b"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":531}
+{"i":532,"report_fnv":"7734986d80d3b139","report_len":5980,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":533,"report_fnv":"f80ed6e1ec925465","report_len":6318,"warnings":["semantic policy object rule did not match: importance=[10,6]","semantic policy object rule did not match: dialogue_id=-2147483648","semantic policy object rule did not match: dialogue_id=3"],"words":164,"words_fnv":"ef00f51402f88a56"}
+{"i":534,"report_fnv":"59a74beac1c29d6d","report_len":5732,"warnings":[],"words":163,"words_fnv":"0ebb8f1b9160e1fb"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'width_scale' must be >= 0"},"i":535}
+{"i":536,"report_fnv":"8d70c51c6328431a","report_len":5959,"warnings":["semantic policy object rule did not match: name=NoboDY","semantic policy object rule did not match: all","semantic policy object rule did not match: importance=[,-3]"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":537,"report_fnv":"54a6d2397aeae461","report_len":5726,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":538,"report_fnv":"74eff95af58e327a","report_len":5721,"warnings":[],"words":164,"words_fnv":"80994bcf08184dca"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 4: syntax error while parsing object key - invalid string: missing closing quote; last read: '\"s'; expected string literal"},"i":539}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be >= 0"},"i":540}
+{"i":541,"report_fnv":"f7581acf9c874d0f","report_len":5754,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":542,"report_fnv":"5f6bfeda4b838b60","report_len":5887,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999"],"words":164,"words_fnv":"02a4ba35fe5b362e"}
+{"i":543,"report_fnv":"2bc96b8116623619","report_len":5973,"warnings":[],"words":164,"words_fnv":"e2fe38ccf0b88156"}
+{"i":544,"report_fnv":"da40ae4f2b526801","report_len":5805,"warnings":["semantic policy object rule did not match: dialogue_id=-3"],"words":163,"words_fnv":"fa31db067fcf967f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":545}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be numeric"},"i":546}
+{"i":547,"report_fnv":"205d9d20e5bff0f4","report_len":5691,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":548,"report_fnv":"6771acfd643e420b","report_len":6023,"warnings":["semantic policy object rule did not match: dialogue_id=4"],"words":163,"words_fnv":"202048929d047e2b"}
+{"i":549,"report_fnv":"527ca3a4777646d3","report_len":5773,"warnings":[],"words":163,"words_fnv":"41671ada80f8e3db"}
+{"i":550,"report_fnv":"400a2cd4adb70daf","report_len":5742,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":551,"report_fnv":"5e02ead7dafc3d0d","report_len":5834,"warnings":["semantic policy object rule did not match: all","semantic policy object rule did not match: pack_format=AP_00031001"],"words":163,"words_fnv":"159b4fed92814197"}
+{"i":552,"report_fnv":"471a2d2d9e74dd32","report_len":6148,"warnings":["semantic policy object rule did not match: importance=[,6]","semantic policy object rule did not match: pack_format=aP_00031001"],"words":164,"words_fnv":"e71ad5202ae83636"}
+{"i":553,"report_fnv":"51d538c944fd9da1","report_len":5744,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":554,"report_fnv":"fe4af34f0c472050","report_len":5821,"warnings":["semantic policy object rule did not match: name=noboDY"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 13: syntax error while parsing object separator - unexpected '['; expected ':'"},"i":555}
+{"i":556,"report_fnv":"fea169d1378f5d30","report_len":5987,"warnings":["semantic policy object rule did not match: pack_format=aP_00031001","semantic policy object rule did not match: all","semantic policy object rule did not match: id=Ao_9999"],"words":164,"words_fnv":"7b5f883a2a1d35ea"}
+{"i":557,"report_fnv":"631f107df2d1357c","report_len":5772,"warnings":[],"words":163,"words_fnv":"c77ad3e763ab6d0f"}
+{"i":558,"report_fnv":"5485197d8ab73ce9","report_len":5721,"warnings":[],"words":163,"words_fnv":"1d379e0c4c810237"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 63: syntax error while parsing object - unexpected end of input; expected '}'"},"i":559}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":560}
+{"fnv":"96bbb9b7d363e95a","len":2027,"template":"params"}
+{"i":561,"report_fnv":"70a2aa3434100232","report_len":98706,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":562,"report_fnv":"2d5e9079062dea6b","report_len":98867,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":563,"report_fnv":"5ddae386b793afb8","report_len":99303,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":1624,"words_fnv":"4ee496c946ec316a"}
+{"i":564,"report_fnv":"36015a644bcc11f2","report_len":98967,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":565,"report_fnv":"0c55d7505b2be92e","report_len":99071,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":1624,"words_fnv":"97a50c076c347e4a"}
+{"i":566,"report_fnv":"b1ce8070a494045c","report_len":98794,"warnings":[],"words":1624,"words_fnv":"b70a5da175257006"}
+{"i":567,"report_fnv":"ffa956ddb94e3d09","report_len":100346,"warnings":["semantic policy object rule did not match: all"],"words":1624,"words_fnv":"d4c64b2d4dbe941a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'distance' must be >= 0"},"i":568}
+{"i":569,"report_fnv":"2718c4479f6d64dc","report_len":99044,"warnings":["semantic policy object rule did not match: pack_format=AP_00011001"],"words":1625,"words_fnv":"6d4665e2b9860e13"}
+{"i":570,"report_fnv":"73370fa5e41b775c","report_len":98724,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":571,"report_fnv":"f7dd519092a20885","report_len":98735,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":572,"report_fnv":"532163ca17df5392","report_len":98724,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":573,"report_fnv":"45e300db0a2a564f","report_len":98823,"warnings":["semantic policy object rule did not match: pack_format=aP_00011001"],"words":1624,"words_fnv":"17a0b144e3fd6b02"}
+{"i":574,"report_fnv":"ff8eac732d92cdfc","report_len":100099,"warnings":[],"words":1664,"words_fnv":"fc0c9e95e741b68a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 4: syntax error while parsing object key - invalid string: missing closing quote; last read: '\"s'; expected string literal"},"i":575}
+{"i":576,"report_fnv":"3582ebe37898ef31","report_len":100460,"warnings":["semantic policy object rule did not match: importance=[,4]","semantic policy object rule did not match: id=AO_9999"],"words":1624,"words_fnv":"5da222169f0b141a"}
+{"i":577,"report_fnv":"5baa143660b26054","report_len":98856,"warnings":[],"words":1624,"words_fnv":"019294289b98fce6"}
+{"i":578,"report_fnv":"148be10b9145bde0","report_len":100136,"warnings":[],"words":1624,"words_fnv":"d316974b71704d06"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects' must be an array"},"i":579}
+{"i":580,"report_fnv":"b906f32d13514015","report_len":99133,"warnings":["semantic policy object rule did not match: name=noBody","semantic policy object rule did not match: id=ao_9999","semantic policy object rule did not match: pack_format=aP_00031001"],"words":1625,"words_fnv":"0151eb183d2ff30c"}
+{"i":581,"report_fnv":"c233707b55bd26d3","report_len":98790,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":582,"report_fnv":"3c2cf1b5c23d8359","report_len":98760,"warnings":[],"words":1624,"words_fnv":"d48b3ee41a43ea33"}
+{"i":583,"report_fnv":"788d942b8890369c","report_len":98943,"warnings":[],"words":1625,"words_fnv":"5a520552fa36305f"}
+{"i":584,"report_fnv":"88dacc9bb5aeed3d","report_len":99036,"warnings":["semantic policy object rule did not match: importance=[4,]","semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: pack_format=AP_00011001"],"words":1624,"words_fnv":"901f984e6b67b08a"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must be an object"},"i":585}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown policy field 'bogus'"},"i":586}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown diffuse field 'scle'"},"i":587}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown extent field 'zzz'"},"i":588}
+{"i":589,"report_fnv":"532163ca17df5392","report_len":98724,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":590,"report_fnv":"ff1297d55f17115d","report_len":99136,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: track_uid=Atu_99999999"],"words":1624,"words_fnv":"9d7b10fd528119c6"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[1]' must define a match field"},"i":591}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'extent' must be an object"},"i":592}
+{"i":593,"report_fnv":"e33bfa537a6ab3d7","report_len":99012,"warnings":["semantic policy object rule did not match: id=AO_9999","semantic policy object rule did not match: id=AO_9999"],"words":1625,"words_fnv":"62ecf64eededbe1f"}
+{"i":594,"report_fnv":"f6afd31ae1bb5cfb","report_len":99003,"warnings":[],"words":1625,"words_fnv":"7b8cacf881a9275f"}
+{"i":595,"report_fnv":"841020c286fc7e85","report_len":98770,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":596,"report_fnv":"08416bdde83496a9","report_len":98867,"warnings":["semantic policy object rule did not match: importance=[,2]"],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":597,"report_fnv":"dca17317082c67b6","report_len":99060,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999","semantic policy object rule did not match: pack_format=AP_00011001","semantic policy object rule did not match: id=AO_9999"],"words":1625,"words_fnv":"fd6619494892ff77"}
+{"i":598,"report_fnv":"8226385d2b5e2f17","report_len":99011,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":599,"report_fnv":"ade1776fd9f3a6d6","report_len":98974,"warnings":["semantic policy object rule did not match: track_uid=AtU_99999999","semantic policy object rule did not match: id=AO_9999"],"words":1624,"words_fnv":"bcbf4bfa9ac5f20a"}
+{"i":600,"report_fnv":"7ac15bd8ab7e0a1d","report_len":98776,"warnings":["semantic policy object rule did not match: all"],"words":1625,"words_fnv":"59119c4fb4d3d46e"}
+{"i":601,"report_fnv":"b95f29871f08f6bd","report_len":98951,"warnings":[],"words":1625,"words_fnv":"f83430985eb460df"}
+{"i":602,"report_fnv":"c28951ef9de91174","report_len":98952,"warnings":[],"words":1664,"words_fnv":"d03e4fa1087af75e"}
+{"i":603,"report_fnv":"7ae42c9c912ef73f","report_len":98938,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":604,"report_fnv":"57f67304834fc9ef","report_len":98993,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":605,"report_fnv":"d449f95dda23fff1","report_len":98775,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":606,"report_fnv":"915e301c4be9bcf3","report_len":98759,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"i":607,"report_fnv":"674c97e07abd1bae","report_len":98759,"warnings":[],"words":1624,"words_fnv":"ad27dbc6936685be"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: missing required field 'schema'"},"i":608}
+{"i":609,"report_fnv":"93a9fba9fb9a5de4","report_len":98791,"warnings":[],"words":1624,"words_fnv":"8bcaf7a765f108d6"}
+{"i":610,"report_fnv":"5658089d0188ffcd","report_len":99079,"warnings":["semantic policy object rule did not match: name=noBOdY"],"words":1665,"words_fnv":"cde11329de39dd5f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'range_scale' must be >= 0"},"i":611}
+{"fnv":"a3db8cae8ea93c64","len":5242,"template":"policy-objects"}
+{"i":612,"report_fnv":"c60878bfb9164be1","report_len":22010,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":613,"report_fnv":"c1f5ac1bbcfd54e4","report_len":22421,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":614,"report_fnv":"4c0cb7f3492ea455","report_len":22547,"warnings":[],"words":553,"words_fnv":"f210de3b3420d100"}
+{"i":615,"report_fnv":"99fa7722d9fed80f","report_len":22192,"warnings":[],"words":554,"words_fnv":"9fe5c67b12082ae1"}
+{"i":616,"report_fnv":"bc532e8c6d6de2d0","report_len":22527,"warnings":[],"words":552,"words_fnv":"1ce13225ae04aea9"}
+{"i":617,"report_fnv":"7fb57bbe3074b763","report_len":22461,"warnings":[],"words":552,"words_fnv":"81013579735603b1"}
+{"i":618,"report_fnv":"a2edfe88c389f165","report_len":22351,"warnings":["semantic policy object rule did not match: name=noBOdy"],"words":552,"words_fnv":"03f6edcedc693339"}
+{"i":619,"report_fnv":"6ef1ffcadb9ccd42","report_len":22600,"warnings":["semantic policy object rule did not match: track_uid=aTU_99999999","semantic policy object rule did not match: all"],"words":552,"words_fnv":"4f3cb133a4fe6270"}
+{"i":620,"report_fnv":"632b25be7a611a41","report_len":22124,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":621,"report_fnv":"9cbe635a3e5d6521","report_len":22364,"warnings":[],"words":552,"words_fnv":"f791787f16dfe9dc"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown interpolation field 'scle'"},"i":622}
+{"i":623,"report_fnv":"93658899024f5322","report_len":22648,"warnings":[],"words":556,"words_fnv":"33f45ad1d21f6fad"}
+{"i":624,"report_fnv":"4c0ba6db0b21a86b","report_len":22408,"warnings":["semantic policy object rule did not match: pack_format=AP_00031003"],"words":553,"words_fnv":"dfed59a0d57623d4"}
+{"i":625,"report_fnv":"58c10faa8943bcb1","report_len":22228,"warnings":[],"words":552,"words_fnv":"2fc59ec0f25db001"}
+{"i":626,"report_fnv":"c12a5ad832aae0a8","report_len":22482,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: pack_format=AP_00031004","semantic policy object rule did not match: all"],"words":552,"words_fnv":"11c15d3d228b0305"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[3]' must define a match field"},"i":627}
+{"i":628,"report_fnv":"baa238c76f37c966","report_len":22470,"warnings":["semantic policy object rule did not match: importance=[,-2147483648]","semantic policy object rule did not match: id=aO_9999"],"words":551,"words_fnv":"4c4eb05599201dcc"}
+{"i":629,"report_fnv":"dcd4958666661392","report_len":22115,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":630,"report_fnv":"94e73660bcc85686","report_len":22388,"warnings":[],"words":552,"words_fnv":"4b26975529c7cd71"}
+{"i":631,"report_fnv":"e32619da739f4fe7","report_len":22377,"warnings":["semantic policy object rule did not match: dialogue_id=2"],"words":552,"words_fnv":"d38619a23edaaca3"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown diffuse field 'Max'"},"i":632}
+{"i":633,"report_fnv":"a2980667857b9341","report_len":22461,"warnings":["semantic policy object rule did not match: importance=[,-1]","semantic policy object rule did not match: pack_format=ap_00031001"],"words":554,"words_fnv":"1a89de06e108b24c"}
+{"i":634,"report_fnv":"345bda1b0e0da9f0","report_len":22412,"warnings":["semantic policy object rule did not match: pack_format=AP_00031004","semantic policy object rule did not match: name=nobOdy"],"words":552,"words_fnv":"b1de9ecbb2932c2d"}
+{"i":635,"report_fnv":"62463ae63fe0ded9","report_len":22345,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":636,"report_fnv":"4004ad3ca7db349e","report_len":22627,"warnings":[],"words":560,"words_fnv":"11f4104dc7b7db01"}
+{"i":637,"report_fnv":"3a067d8793b78c7b","report_len":22224,"warnings":[],"words":554,"words_fnv":"b1a7e8e49ee807d2"}
+{"i":638,"report_fnv":"464b4c06b8d0cd74","report_len":22001,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":639,"report_fnv":"972b6d64320fba4e","report_len":22383,"warnings":["semantic policy object rule did not match: all"],"words":556,"words_fnv":"dbe3d7c54637d9e7"}
+{"i":640,"report_fnv":"e5c06618843155a5","report_len":22314,"warnings":["semantic policy object rule did not match: pack_format=aP_00031002","semantic policy object rule did not match: id=AO_9999"],"words":552,"words_fnv":"17b7aa24f4bb21dc"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown extent field 'aaa'"},"i":641}
+{"i":642,"report_fnv":"ef93bd89793c8201","report_len":22567,"warnings":["semantic policy object rule did not match: dialogue_id=-1","semantic policy object rule did not match: all"],"words":562,"words_fnv":"270b4f9875e35682"}
+{"i":643,"report_fnv":"6f3b30fa159aa0a3","report_len":22502,"warnings":[],"words":552,"words_fnv":"33fa4ecfb491d39e"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max_distance' must be finite"},"i":644}
+{"i":645,"report_fnv":"a72819a281215718","report_len":22559,"warnings":[],"words":552,"words_fnv":"8d25558084de67fa"}
+{"i":646,"report_fnv":"df05bfc38bad2f2c","report_len":22258,"warnings":["semantic policy object rule did not match: dialogue_id=-2147483648"],"words":556,"words_fnv":"ceb01080e6d442a0"}
+{"i":647,"report_fnv":"7025a39e4412c21c","report_len":22077,"warnings":["semantic policy object rule did not match: dialogue_id=-1"],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown policy field 'bogus'"},"i":648}
+{"i":649,"report_fnv":"041e91c75eb8abf4","report_len":22269,"warnings":["semantic policy object rule did not match: name=nObOdy"],"words":552,"words_fnv":"f31338dc77fe2bf4"}
+{"i":650,"report_fnv":"aa6e3c085da7f883","report_len":22268,"warnings":["semantic policy object rule did not match: pack_format=Ap_00031004"],"words":550,"words_fnv":"5c1cab30d95f046d"}
+{"i":651,"report_fnv":"759ea5281177546a","report_len":22324,"warnings":["semantic policy object rule did not match: dialogue_id=2","semantic policy object rule did not match: pack_format=AP_00031004"],"words":552,"words_fnv":"8e448663ce67eb49"}
+{"i":652,"report_fnv":"c5e8c47e496fd139","report_len":22326,"warnings":["semantic policy object rule did not match: importance=[0,0]"],"words":552,"words_fnv":"cf3e4224ef5b51a0"}
+{"i":653,"report_fnv":"c45892d31ea8c2d5","report_len":22398,"warnings":[],"words":552,"words_fnv":"9660e26120ed8ce5"}
+{"i":654,"report_fnv":"4ea31b7135985182","report_len":22336,"warnings":[],"words":554,"words_fnv":"f58a3c6ed30ff655"}
+{"i":655,"report_fnv":"d2d090318e2b6182","report_len":22063,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"i":656,"report_fnv":"464b4c06b8d0cd74","report_len":22001,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":657}
+{"i":658,"report_fnv":"f0dff40ba82b2896","report_len":22223,"warnings":[],"words":552,"words_fnv":"85b0425a69c72de1"}
+{"i":659,"report_fnv":"584b0c230ebdeaad","report_len":22473,"warnings":[],"words":552,"words_fnv":"fd4cf1f5e3579fbd"}
+{"i":660,"report_fnv":"d5b1bc1de493e1d9","report_len":22054,"warnings":[],"words":552,"words_fnv":"d1592b127db0adf1"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown gain field 'aaa'"},"i":661}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'width_scale' must be >= 0"},"i":662}
+{"fnv":"730b8ef5c6a4d86a","len":2016,"template":"types-from-ids"}
+{"i":663,"report_fnv":"06c6e3ca0fbc8b41","report_len":5700,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":664,"report_fnv":"00f793541846acea","report_len":5825,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":665,"report_fnv":"567b5aa31c921016","report_len":6248,"warnings":["semantic policy object rule did not match: name_glob=dialogue*","semantic policy object rule did not match: content=Ambience","semantic policy object rule did not match: importance=[4,6]","semantic policy object rule did not match: dialogue_id=1","semantic policy object rule did not match: programme=main mix","semantic policy object rule did not match: name_glob=FX ?artesian","semantic policy object rule did not match: track_uid=ATU_00000004"],"words":163,"words_fnv":"79da38f075e8476b"}
+{"i":666,"report_fnv":"5788cb29fbe234a2","report_len":5916,"warnings":["semantic policy object rule did not match: name=Dialogue Alt","semantic policy object rule did not match: importance=[,3]","semantic policy object rule did not match: id=AO_1004"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":667,"report_fnv":"59eb30d867e04566","report_len":5998,"warnings":["semantic policy object rule did not match: name_glob=*alt","semantic policy object rule did not match: name=FX Cartesian","semantic policy object rule did not match: content=Ambience"],"words":163,"words_fnv":"3635c6c557f32e37"}
+{"i":668,"report_fnv":"305f2e86c19ffd8a","report_len":5785,"warnings":[],"words":163,"words_fnv":"855aae1d9abb159b"}
+{"i":669,"report_fnv":"d49aa993c2c8cd14","report_len":5801,"warnings":["semantic policy object rule did not match: track_uid=ATU_99999999"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":670,"report_fnv":"2f938e1d99404c12","report_len":5933,"warnings":["semantic policy object rule did not match: id=aO_9999"],"words":165,"words_fnv":"f860eaa4ca538ecf"}
+{"i":671,"report_fnv":"5531adb74981cf86","report_len":5733,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":672,"report_fnv":"7a0d5330a5ee8e4f","report_len":5702,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":673,"report_fnv":"7fb95ed3fd86e5c4","report_len":5953,"warnings":["semantic policy object rule did not match: pack_format=Ap_00031001","semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: dialogue_id=6"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":674,"report_fnv":"d2334645c2942d0e","report_len":5854,"warnings":["semantic policy object rule did not match: name=nObodY"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":675,"report_fnv":"06b941b6f7aa4316","report_len":6055,"warnings":["semantic policy object rule did not match: id=Ao_9999"],"words":164,"words_fnv":"a3fc79e8b9b36cbe"}
+{"i":676,"report_fnv":"6208ba8ca37371d6","report_len":5820,"warnings":["semantic policy object rule did not match: name=NoBody"],"words":163,"words_fnv":"598913cd73b4d653"}
+{"i":677,"report_fnv":"2da37e14e77163b9","report_len":5913,"warnings":["semantic policy object rule did not match: id=Ao_9999"],"words":163,"words_fnv":"826a804dd1f6e87f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":678}
+{"i":679,"report_fnv":"54a6d2397aeae461","report_len":5726,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":680,"report_fnv":"d15cf6cbb504d5e4","report_len":5873,"warnings":[],"words":165,"words_fnv":"6ad08cf480edeeef"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unknown offset field 'x'"},"i":681}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'height_scale' must be finite"},"i":682}
+{"i":683,"report_fnv":"d7ac9e25dad26b76","report_len":5808,"warnings":["semantic policy object rule did not match: track_uid=aTU_99999999"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":684,"report_fnv":"4725187703800119","report_len":5790,"warnings":[],"words":163,"words_fnv":"8b24a3ddf9e7bd8b"}
+{"i":685,"report_fnv":"7d0d35d28f566ffd","report_len":5779,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'objects[0]' must define a match field"},"i":686}
+{"i":687,"report_fnv":"3b6dbaa6c0153e80","report_len":5757,"warnings":[],"words":163,"words_fnv":"84c2f9e544c250ab"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be finite"},"i":688}
+{"i":689,"report_fnv":"bd91c66f8a634896","report_len":5826,"warnings":[],"words":163,"words_fnv":"371995e059708baf"}
+{"i":690,"report_fnv":"06c6e3ca0fbc8b41","report_len":5700,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":691,"report_fnv":"1c164f23537823cb","report_len":5757,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":692,"report_fnv":"54a6d2397aeae461","report_len":5726,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":693,"report_fnv":"465955764a0efe92","report_len":5691,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":694,"report_fnv":"c1e01a3ae6e18c3c","report_len":5946,"warnings":["semantic policy object rule did not match: dialogue_id=3","semantic policy object rule did not match: dialogue_id=5","semantic policy object rule did not match: name_glob=?*?","semantic policy object rule did not match: id=aO_9999"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be >= 0"},"i":695}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'schema' must be a string"},"i":696}
+{"i":697,"report_fnv":"465955764a0efe92","report_len":5691,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":698,"report_fnv":"c818ba703c10a7f7","report_len":5946,"warnings":[],"words":163,"words_fnv":"5fb97c84b760948f"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: [json.exception.parse_error.101] parse error at line 1, column 268: syntax error while parsing object key - unexpected end of input; expected string literal"},"i":699}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: policy section must be an object"},"i":700}
+{"i":701,"report_fnv":"f55028545fc86091","report_len":5895,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: track_uid=ATU_99999999"],"words":165,"words_fnv":"79f4adb1cc27be77"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: unsupported schema 'mradm.semantic-policy.v2'"},"i":702}
+{"i":703,"report_fnv":"03d4f263c514a9df","report_len":5946,"warnings":["semantic policy object rule did not match: name=noboDy","semantic policy object rule did not match: name=nobody","semantic policy object rule did not match: id=AO_9999"],"words":163,"words_fnv":"03d14a46457f088f"}
+{"i":704,"report_fnv":"665caa8e17fcc617","report_len":5927,"warnings":[],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":705,"report_fnv":"e9a56b330e4f7946","report_len":5708,"warnings":[],"words":163,"words_fnv":"1d379e0c4c810237"}
+{"i":706,"report_fnv":"2f5f3e0592ebb0ee","report_len":5940,"warnings":["semantic policy object rule did not match: importance=[,-3]","semantic policy object rule did not match: id=AO_9999"],"words":164,"words_fnv":"1ec5c59b502ebf8a"}
+{"i":707,"report_fnv":"db3db066640cbd43","report_len":5986,"warnings":["semantic policy object rule did not match: importance=[,1]","semantic policy object rule did not match: pack_format=AP_00031001"],"words":163,"words_fnv":"14d942efd87f5843"}
+{"i":708,"report_fnv":"db3d7d1cf6190d89","report_len":5852,"warnings":["semantic policy object rule did not match: importance=[6,-3]"],"words":164,"words_fnv":"0112096d835310be"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'azimuth' must be finite"},"i":709}
+{"i":710,"report_fnv":"4dbe9161cd189be0","report_len":5873,"warnings":["semantic policy object rule did not match: id=Ao_9999","semantic policy object rule did not match: track_uid=ATU_99999999"],"words":163,"words_fnv":"b7c15798d4a2e767"}
+{"i":711,"report_fnv":"7b04936bd09a8023","report_len":6135,"warnings":["semantic policy object rule did not match: pack_format=AP_00031001","semantic policy object rule did not match: id=AO_9999"],"words":163,"words_fnv":"29992d7a5254afbf"}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'scale' must be numeric"},"i":712}
+{"error":{"code":1,"context":"<memory>","message":"invalid semantic policy: 'max' must be >= 0"},"i":713}

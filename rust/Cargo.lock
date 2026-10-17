@@ -315,6 +315,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mradm-json"
+version = "0.1.0"
+
+[[package]]
 name = "mradm-math"
 version = "0.1.0"
 
@@ -332,6 +336,7 @@ version = "0.1.0"
 dependencies = [
  "mradm-adm",
  "mradm-dsp",
+ "mradm-json",
  "mradm-wav",
 ]
 
