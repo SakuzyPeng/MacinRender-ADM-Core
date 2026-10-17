@@ -1,6 +1,7 @@
 # PCM 一致性审计与 Rust 迁移路线
 
 统计日期：2026-10-09。源码与门禁基准：`456a3baaa338c8b7cc3da74951f28a8d5dfe5cc8`。
+四期自 2026-10-16 起，基准为 `0a3b362`（三期结项），方向见 [ADR 0021](../adr/0021-rust-primary-project.md)。
 
 从 ADM / 参数输入到最终 PCM，项目自有渲染链路仍有 **18 组数值实现依赖、8 组状态或环境条件**需要纳入一致性管理。
 这些是按生产入口和影响机制归并的 26 个审计条目，不代表发现了 26 个已复现的跨平台 PCM 缺陷。
@@ -29,6 +30,7 @@ Windows SpatialAudioClient 等设备端空间化发生在应用提交床或对�
 目标边界是：自有数值求值、系数生成和样本运算集中在 Rust；C++ 保留公开 ABI、对象与资源管理、请求和规则匹配、
 队列、线程、设备、文件生命周期、进度及取消。常量数据和纯整数计数不自动构成一致性缺陷；
 会决定帧边界、顺序或语义选择的规则仍须明确并测试。
+2026-10-16 起，这一边界由 [ADR 0021](../adr/0021-rust-primary-project.md) 推进：四期把 PCM 写出为止的数据链路整体迁入 Rust，C++ 只保留适配壳与调度；五期起编排、实时调度、C ABI 实现与 CLI 也按 [Rust 主导逆转路线](RUST_INVERSION_ROADMAP.md) 迁入 Rust。
 
 ## 当前门禁与证据
 
@@ -170,13 +172,13 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | Scene Triple Balance | 床系数由 Rust `triple_balance::bed` 生成，C++ 只识别床声道和布局。 | 文件、文件流式和 Scene 共用；系数为精确常数。 | 一期（已结项） |
 | Scene 输出 | 1.4 起 `SceneOutputSession` 不再有决定样本值的 C++ 浮点运算；无保护路径的音量在 Rust `gain::scale` 中相乘。 | 只剩缓冲清零和拷贝；回调路径无锁、无 C++ 分配（1.6）。 | 一期（已结项） |
 | Scene 帧计数 | `SceneStreamEngine` 的输入/输出帧边界有理数累加。 | S06；纯整数运算，规则与测试在 1.5 锁定。 | 一期（已结项） |
-| 公共路由与布局 | [`direct_speakers_matrix`](../../src/adm_core/direct_speakers_matrix.cpp#L135) 的权重归一化；声道床/布局常量；标签规范化。 | N01；`sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。1.6 核对确认 Scene 不调用 `direct_speakers_matrix`。 | 三期 |
-| 文件流式及离线后端准备 | EAR double 增益乘积与发散累加、VBAP 增益表组装、HOA 元数据分组、Triple Balance 床增益、5 处块排序。 | N03/N06/N07/N12/S08；包括确定性运算与顺序风险。 | 三期 |
-| 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期 |
-| 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期 |
-| 文件流式渲染的监听适配 | Monitor 折叠矩阵、实时覆盖增益、`clamp_frame` 秒到帧换算。 | N03/N18/S06；实时监听用途不改变其所属渲染流程。 | 三期 |
-| 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移） |
-| PCM 输出控制 | 写出块循环与临时文件替换。3.6 起秒到帧换算在 Rust `timeline`；WAVE 样本量化和序列化在 Rust；CAF float32 由 C++ 显式按小端序列化。 | S06 已处理；I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期（3.6 已完成） |
+| 公共路由与布局 | [`direct_speakers_matrix`](../../src/adm_core/direct_speakers_matrix.cpp#L135) 的权重归一化；声道床/布局常量；标签规范化。 | N01；`sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。1.6 核对确认 Scene 不调用 `direct_speakers_matrix`。 | 三期核对为确定性运算；四期 4.4（DS 矩阵 JSON）、4.5（路由、布局与标签）迁入 Rust |
+| 文件流式及离线后端准备 | EAR double 增益乘积与发散累加、VBAP 增益表组装、HOA 元数据分组、Triple Balance 床增益、5 处块排序。 | N03/N06/N07/N12/S08；包括确定性运算与顺序风险。 | 三期已收敛数学函数与同起点块；四期 4.5–4.7 整体迁入 Rust |
+| 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期（3.1 已迁移）；四期 4.7 迁移其余编排 |
+| 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期核对为确定性运算；四期 4.7 迁入 Rust |
+| 文件流式渲染的监听适配 | Monitor 折叠矩阵、实时覆盖增益、`clamp_frame` 秒到帧换算。 | N03/N18/S06；实时监听用途不改变其所属渲染流程。 | 三期（3.1、3.6 已迁移） |
+| 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移）；四期 4.8 迁移文件编排 |
+| PCM 输出控制 | 写出块循环与临时文件替换。3.6 起秒到帧换算在 Rust `timeline`；WAVE 样本量化和序列化在 Rust；CAF float32 由 C++ 显式按小端序列化。 | S06 已处理；I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期（3.6 已完成）；四期 4.8 迁移 WAV / CAF 写出编排 |
 
 ## 已收敛的实现与 PCM 写出
 
@@ -206,6 +208,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | 一期 | Scene 流式渲染及其全部实际数值依赖，从 Scene 参数输入到应用侧输出 PCM。 | Scene 所用的数值计算集中在 Rust；共享数学函数、系数、输出 DSP 和状态规则纳入统一实现与三平台精确门禁。 |
 | 二期 | 响度、True Peak 及其归一化反馈。 | 计量器、反馈增益与样本增益处理形成可重复的数值链路，兼顾计量准确性和最终 PCM 一致性。 |
 | 三期 | 文件流式渲染、离线渲染及其余专用入口。 | 收走其余自有 C++ 数值运算，完成 EAR、HOA、Triple Balance 相应路径及最终 PCM 转换的覆盖。 |
+| 四期 | PCM 写出为止的数据链路（2026-10-16 增补）。 | 导入投影、语义策略、全部自有后端、公共渲染层与 PCM 写出编排迁入 Rust，C++ 只留适配壳与调度；`room-binaural` exact 档进矩阵；S03、观察内核、N01 JSON 残留与覆盖缺口收尾。 |
 
 分期按实际调用链确定。**Scene 调用到的共享实现属于一期**，即使它同时服务于文件流式渲染或离线渲染。
 不能把 Scene 依赖的 FFT、HRTF、SOFA、增益换算或输出 DSP 推迟到“公共模块”阶段。
@@ -415,6 +418,47 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 各阶段都保存候选的有效参数位模式、系数、适用的反馈增益、最终 float PCM 和整数 PCM，并将数值分歧与事件/帧数分歧分开定位。
 跨平台精确比较的对象是同一候选版本；历史生产实现与独立参考用于准确性和行为对照。预期数值变化需要记录依据和误差，不能直接刷新期望值或放宽门禁来代替验收。
 每一批新增精确门禁均附对应的三平台 Release 结果。
+
+## 四期 PCM 写出为止的数据链路迁入 Rust
+
+四期按 [ADR 0021](../adr/0021-rust-primary-project.md) 推进项目逆转为 Rust 主导，是这条路线的第一期。范围截止到 PCM 写出，与本文“比较范围”相同：
+- 包含 WAV float32 / 整数 PCM 与 CAF float32 的样本写出，以及文件流式渲染、Scene 流式渲染交给设备的应用侧 PCM；
+- FLAC、Opus、APAC、IAMF 编码与 Apple AUSpatialMixer 后端继续排除；
+- Linux arm64 不进矩阵。
+
+主线有三条：
+1. 把 PCM 写出为止的数据处理整体迁入 Rust，C++ 只保留适配壳与调度。
+2. `room-binaural` 的 exact 档进统一矩阵；realtime 档使用原生 SIMD FFT，没有跨平台契约，不纳入。
+3. 收尾保留条件与覆盖缺口：S03、5 份观察内核、N01 的 JSON 残留、策略矩阵与后置增益。
+
+`SceneStreamEngine`、`RenderService`、Monitor、C ABI 与 CLI 在四期保留在 C++。它们是一致性工具的驱动面，见[逆转路线](RUST_INVERSION_ROADMAP.md#oracle-的驱动面)。
+
+四期的切片遵守 ADR 0021 的迁移纪律：
+- 结构迁移逐位不变：锁定矩阵的 PCM id、内核文件与既有诊断检查点逐位相同，迁移后的代码继续发出同名检查点；
+- 先补覆盖，再迁移它保护的路径；
+- 有意的数值变化单独成片；
+- 迁出即删除，生产 C/C++ 由 `scripts/quality/language-surface.py --check` 设棘轮，每个切片报告变化。
+
+| 执行顺序 | 工作 | 具体范围与交付 |
+| --- | --- | --- |
+| 4.1 | 方向与基线 | ADR 0021、[逆转路线](RUST_INVERSION_ROADMAP.md)、本节与上文“C++ 剩余执行点”的四期归属；C/C++ 规模指标与棘轮；Rust 侧生产路径检查点写出器；离线渲染在导入后与语义策略后的场景检查点。PCM 与内核输出不变。 |
+| 4.2 | 覆盖先行 | ① `room-binaural` exact 档：提交并钉住非个人的合成房间包与房间 SOFA，增加离线、文件流式（头姿、seek、换房）、Scene 用例与 `room.*` 内核探针。② 策略矩阵：`objects[]` 身份规则、`channel_lock`、`direct_speakers` 过滤、`lock_*` 与 DirectSpeakers 矩阵 JSON 的离线与 Scene 用例。③ VBAP / HOA / 双耳的离线对象平滑，VBAP 与 Triple Balance 的自动响度与峰值。④ 5 份观察内核设为门禁。 |
+| 4.3 | Rust 渲染场景：导入投影与声道床 | 新 crate 持有渲染场景：`src/adm_metadata` 的复制、CHNA 与 UID 规范化、声道床目录与布局迁入。C++ `AdmScene` 改为由 Rust 场景生成的只读视图，`RenderPlan` 携带 Rust 场景句柄。场景检查点与 PCM 逐位相同。 |
+| 4.4 | 语义策略与参数 JSON | 语义策略的解析、匹配、合并、应用、报告与模板，以及 DirectSpeakers 矩阵与屏幕 JSON 迁入 Rust，N01 的 JSON 残留随之消除。`SceneStreamEngine` 的逐更新应用改调 Rust。报告与模板 JSON 保持逐字节相同。 |
+| 4.5 | 扬声器后端与公共渲染层 | EAR、VBAP（含 Scene 胶水）、HOA，DirectSpeakers 路由与矩阵、标签别名、布局表（含 Apple 覆盖几何）、LFE / 22.2 路由与 `speaker_pcm` 离线驱动迁入 Rust。渲染循环由 Rust 驱动，进度、日志、取消与 PCM sink 经 C 回调接口，计量顺序不变。 |
+| 4.6 | Triple Balance 与 room | Triple Balance 的场景改写、床、文件流式与 Scene 胶水，room 的准备、准备线程状态机与 Scene 胶水迁入 Rust。只被冻结参考使用的 C++ 按参考保留规则处理。 |
+| 4.7 | 双耳 | 计划构建（channelLock 参考对、cloud、divergence×extent 槽、种子、ADR 0017 分组）、OLA 源归约、LFE 旁路、spreader 适配器 / 延迟环 / 排空、工作池、HRTF 网格缓存与 Scene 胶水迁入 Rust，保持源索引归约顺序。 |
+| 4.8 | PCM 写出与后处理 IO | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据与 peak / loudness 公共 API 迁入 Rust；编码器沿用同一 sink 接口，留在 C 岛；删除失去调用者的私有 FFI 头。 |
+| 4.9 | S03 对象平滑规则 | 有意的数值变化：文件流式对象平滑改为按绝对样本网格的内部块插值，与离线渲染一致、与请求分块无关；增加开平滑的文件流式重放（固定与碎片分块逐位相同）并设门禁。离线平滑输出不变。 |
+| 4.10 | 三平台验收与结项 | 全矩阵三平台 Release 验收，记录 C/C++ 规模变化，准备五期。 |
+
+排序依据：
+- 4.2 先补 4.3–4.8 要保护的路径。
+- 渲染场景先于后端：迁入 Rust 的后端直接读取 Rust 场景，不需要临时的 C++→Rust 场景编组。
+- S03 放在后端迁移之后：届时它只改 Rust 代码，也不影响既有门禁。
+- 双耳卷积与分数比率重采样的分块依赖仍按分块配置分别门禁；S04、S05 的运行时条件不变。
+
+**4.1 状态**：本机实施中，见 [4.1 记录](RUST_INVERSION_BASELINE.md)。
 
 ## 每个迁移切片的验证
 
