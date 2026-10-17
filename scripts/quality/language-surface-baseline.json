@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 196,
-      "lines": 44213
+      "lines": 44209
     },
     "islands": {
       "files": 5,
@@ -50,7 +50,7 @@
     "src/adm_core": 1829,
     "src/adm_dsp": 3475,
     "src/adm_engine": 4095,
-    "src/adm_io": 462,
+    "src/adm_io": 458,
     "src/adm_loudness": 165,
     "src/adm_metadata": 958,
     "src/adm_peak": 143,

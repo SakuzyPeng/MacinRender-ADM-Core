@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <span>
 #include <sstream>
@@ -45,9 +47,7 @@ Error scene_error(int32_t code, const std::array<uint8_t, 1024>& message, uint32
 std::vector<MradmAdmText> texts(const std::vector<std::string>& values) {
     std::vector<MradmAdmText> out;
     out.reserve(values.size());
-    for (const auto& value : values) {
-        out.push_back(text(value));
-    }
+    std::ranges::transform(values, std::back_inserter(out), [](const auto& value) { return text(value); });
     return out;
 }
 
@@ -119,13 +119,13 @@ Result<void> RenderScene::refresh() {
         return tl::unexpected{scene_error(code, message, 1U, path_)};
     }
     const bool channel_bed = info.source_kind == 1U;
-    auto scene = metadata::scene_from_view(view, !channel_bed, &overlay);
-    if (!scene) {
-        auto error = scene.error();
+    auto refreshed_scene = metadata::scene_from_view(view, !channel_bed, &overlay);
+    if (!refreshed_scene) {
+        auto error = refreshed_scene.error();
         error.context = "input=" + path_;
         return tl::unexpected{std::move(error)};
     }
-    auto& scene_info = scene->info;
+    auto& scene_info = refreshed_scene->info;
     scene_info.sample_rate = info.sample_rate;
     scene_info.num_channels = static_cast<uint16_t>(info.channels);
     scene_info.num_frames = info.frames;
@@ -135,7 +135,7 @@ Result<void> RenderScene::refresh() {
     for (const auto& label : std::span{info.input_channel_labels, info.input_channel_labels_len}) {
         scene_info.input_channel_labels.push_back(copy(label));
     }
-    scene_ = std::move(*scene);
+    scene_ = std::move(*refreshed_scene);
     return {};
 }
 
@@ -315,9 +315,7 @@ Result<std::vector<InputChannelDefinition>> resolve_input_channel_labels(const s
     const auto& catalog = input_channel_catalog();
     std::vector<InputChannelDefinition> out;
     out.reserve(indices.size());
-    for (const auto index : indices) {
-        out.push_back(catalog.at(index));
-    }
+    std::ranges::transform(indices, std::back_inserter(out), [&catalog](auto index) { return catalog.at(index); });
     return out;
 }
 
@@ -331,10 +329,8 @@ Result<std::string> get_axml(const std::string& path) {
             error.context = "input=" + path;
             return tl::unexpected{std::move(error)};
         }
-        for (const auto& record : chunks->chna) {
-            if (record.track_index == 0U) {
-                return make_error(ErrorCode::io_error, "CHNA trackIndex 必须从 1 开始", "input=" + path);
-            }
+        if (std::ranges::any_of(chunks->chna, [](const auto& record) { return record.track_index == 0U; })) {
+            return make_error(ErrorCode::io_error, "CHNA trackIndex 必须从 1 开始", "input=" + path);
         }
         if (chunks->axml.empty()) {
             return make_error(ErrorCode::io_error, "axml chunk 缺失或为空", "input=" + path);

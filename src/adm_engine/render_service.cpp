@@ -597,7 +597,6 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
     }
 
-    std::vector<std::string> semantic_warnings;
     // A preview session has already imported + applied the policy; it does not
     // re-derive the semantic report per window. The Rust scene keeps the original.
     const bool needs_semantic_report =
@@ -615,6 +614,7 @@ RenderResult RenderService::render(const RenderRequest& request,
                       0.10,
                       0.0,
                       "applying semantic policy");
+        std::vector<std::string> semantic_warnings;
         auto policy_res = resolve_and_apply_policy(*render_scene, request.options, semantic_warnings, logs);
         if (!policy_res) {
             return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
