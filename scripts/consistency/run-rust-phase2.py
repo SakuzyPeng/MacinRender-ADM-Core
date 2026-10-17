@@ -9,6 +9,7 @@ import subprocess
 import sys
 import phase2_common as common
 from build_info import collect, read_cache
+from render_scene_checkpoint import RENDER_SCENE_STAGES, require_render_scene_checkpoints
 
 
 def run(command, log, trace=None, extra_env=None):
@@ -230,21 +231,6 @@ def main():
     finally:
         shutil.rmtree(work)
     print('baseline complete:', out, flush=True)
-
-
-RENDER_SCENE_STAGES = ('05-import', '06-policy')
-
-
-def require_render_scene_checkpoints(root, case_id):
-    """Phase 4.1: the scene after import and after the semantic policy, so the Rust render scene
-    can be compared word for word (encoding: docs/architecture/RUST_INVERSION_BASELINE.md)."""
-    for stage in RENDER_SCENE_STAGES:
-        path = root / 'render-scene' / f'offline.{stage}.i32'
-        if not path.is_file():
-            raise ValueError(f'missing render-scene checkpoint {stage}: {case_id}')
-        words = common.validate_words(path.read_bytes(), '.i32')
-        if not words or words[0] != 1:
-            raise ValueError(f'unknown render-scene checkpoint encoding {stage}: {case_id}')
 
 
 def require_scene_checkpoints(root, row):

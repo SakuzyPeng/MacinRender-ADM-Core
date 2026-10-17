@@ -13,7 +13,7 @@
 | C/C++ 规模棘轮 | `scripts/quality/language-surface.py` 与基线 `language-surface-baseline.json`；CI `version-metadata` job 执行 `--check`；测试在 `tests/unit/quality_scripts_test.py` |
 | Rust 生产路径检查点 | `mradm-dsp` `diagnostics::process`：无需 scope，`MR_ADM_TRACE_DIR/<name>`，进程内首写有效，显式小端字，只在 `diagnostics` feature 下写出 |
 | 场景检查点 | 离线渲染经 `RenderService` 时，在导入后与语义策略后写出 `render-scene/offline.05-import.i32`、`render-scene/offline.06-policy.i32`（只在诊断构建中编译） |
-| 采集与比较 | `run-rust-phase2.py` 在诊断采集中要求每个离线用例都有两份场景检查点且编码版本为 1；`compare-rust-phase2.py` 按文件名把它们排在第 5、6 阶段，先于所有渲染阶段 |
+| 采集与比较 | 诊断采集与比较均要求每个离线用例有两份完整的版本 1 场景检查点；共享解析器 `render_scene_checkpoint.py` 检查嵌套字段、长度、存在标志和完整消费；比较时按文件名排在第 5、6 阶段，先于所有渲染阶段 |
 
 ### 检查点写出器为什么不合并
 
@@ -53,6 +53,11 @@
 - 警告正文：可能含路径，只记条数。
 
 预览会话复用已导入的场景，不发出这两份检查点；一致性采集只经 CLI 路径（每个离线用例的首个进程）取得它们。
+
+校验器只检查编码结构，不改写浮点位模式或重新解释 ADM 语义。只含版本号、字边界截断、异常长度、非法
+布尔值 / 存在标志、无效 UTF-8、非零字符串填充和尾随数据都会被拒绝；比较阶段即使遇到哈希自洽的无效文件也失败。
+`tests/fixtures/render-scene-v1/` 保存由本切片 C++ 写出器生成的空场景、默认字段和完整字段样本，
+`phase2_tools_test.py` 对每个字边界截断及各嵌套结构的损坏做回归检查。
 
 ## C/C++ 规模基线
 
