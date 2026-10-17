@@ -29,6 +29,7 @@ mod post_gain;
 mod resampler;
 mod room;
 mod room_environment;
+mod scene;
 mod scene_math;
 mod scene_transition;
 mod semantic_policy;
