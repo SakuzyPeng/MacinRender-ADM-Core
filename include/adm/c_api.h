@@ -516,10 +516,11 @@ void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabl
 void adm_render_options_set_apple_speaker_rendering_flags(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
 
 /* v1.24: monitor-only. Route the multichannel monitor output through the OS spatial-audio stack for
- * system HRTF, instead of a stereo downmix on a raw device. macOS: AVSampleBufferAudioRenderer (with
+ * system HRTF, instead of requiring a multichannel raw device. macOS: AVSampleBufferAudioRenderer (with
  * dynamic head tracking). Windows: ISpatialAudioClient (Windows Sonic / Dolby Atmos / DTS for
  * headphones; static, no OS head tracking; requires a spatial format enabled in Sound settings or
- * monitoring returns unsupported). enabled: 1 = system-spatial, 0 = stereo downmix (default).
+ * monitoring returns unsupported). enabled: 1 = system-spatial, 0 = raw device (default).
+ * Multichannel output to a raw stereo device is rejected; headphones require binaural output.
  * Requires a supported multichannel speaker output_layout; ignored on other platforms / offline. */
 void adm_render_options_set_monitor_system_spatial(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
 
@@ -1244,10 +1245,9 @@ adm_error_code_t adm_monitor_set_listener_orientation(adm_monitor_t* monitor,
  * v1.17: hot-switch the rendering backend / layout live, reusing the already-imported +
  * policy-applied scene. `opts` selects the new renderer + output layout (other fields as in
  * adm_render_options); NULL uses defaults. The new backend is prepared off the audio thread
- * and crossfaded in. The new stream must run at the current monitor sample rate. A different
- * channel count is folded into the monitor output when the monitor is stereo (multichannel
- * speaker layouts by geometry, HOA by a first-order decode); other channel-count changes
- * return ADM_ERROR_UNSUPPORTED. Returns the resolve / prepare error otherwise.
+ * and crossfaded in. The new stream must keep the current monitor sample rate and channel count.
+ * A channel-count change returns ADM_ERROR_UNSUPPORTED and preserves the current stream.
+ * Speaker and HOA output is never downmixed to stereo. Returns the resolve / prepare error otherwise.
  */
 adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) ADM_API_NOEXCEPT;
 
@@ -1514,8 +1514,9 @@ typedef enum adm_scene_diagnostic_code_t {
 #define ADM_SCENE_PULL_EOS (UINT32_C(1) << 2)
 #define ADM_SCENE_PULL_FAILED (UINT32_C(1) << 3)
 
-/* Renderer-only settings shared by create and adm_scene_stream_switch_backend.
- * output_layout may be NULL only for ADM_RENDERER_SAF_BINAURAL ("binaural").
+/* Renderer settings shared by all Scene creation and backend-switch entry points (including _ex).
+ * Two-channel output is binaural only; speaker stereo returns ADM_ERROR_UNSUPPORTED.
+ * output_layout may be NULL for SAF_BINAURAL or ROOM_BINAURAL ("binaural").
  * sofa_path NULL/"" selects the built-in KEMAR dataset. */
 typedef struct adm_scene_renderer_config_t {
     uint32_t struct_size;

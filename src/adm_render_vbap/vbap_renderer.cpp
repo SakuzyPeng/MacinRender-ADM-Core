@@ -627,7 +627,7 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
 } // namespace
 
 bool register_vbap_layout(std::string id, std::string display_name, std::vector<VbapSpeakerSpec> speakers) {
-    if (id.empty() || speakers.empty()) {
+    if (id.empty() || speakers.empty() || speakers.size() == 2U) {
         return false;
     }
     if (std::ranges::all_of(speakers, [](const auto& s) { return s.is_lfe; })) {

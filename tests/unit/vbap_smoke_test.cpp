@@ -2163,16 +2163,31 @@ bool verify_register_vbap_layout() {
     ok &= check(registered, "register_vbap_layout: valid layout should succeed");
 
     // ── Duplicate rejection (same id, different speakers) ──────────────────────
-    const bool dup = mradm::register_vbap_layout("test+custom", "Dup", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}});
+    const bool dup =
+        mradm::register_vbap_layout("test+custom", "Dup", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}, {0.0F, 0.0F, "C"}});
     ok &= check(!dup, "register_vbap_layout: duplicate id must return false");
 
     // ── Built-in id is immutable ───────────────────────────────────────────────
     const bool builtin_dup =
-        mradm::register_vbap_layout("0+2+0", "Override", {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}});
+        mradm::register_vbap_layout("0+5+0", "Override", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}, {0.0F, 0.0F, "C"}});
     ok &= check(!builtin_dup, "register_vbap_layout: built-in id must not be overridden");
+
+    for (const auto* id : {"test+stereo", "binaural"}) {
+        ok &= check(!mradm::register_vbap_layout(id, "Speaker stereo", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}}),
+                    "register_vbap_layout: a custom name cannot enable speaker stereo");
+    }
+    ok &= check(
+        !mradm::register_vbap_layout("test+mono-lfe", "Two outputs", {{0.0F, 0.0F, "C"}, {0.0F, 0.0F, "LFE", true}}),
+        "register_vbap_layout: a two-channel layout with one LFE is also rejected");
 
     // ── Registered layout visible in capabilities with correct metadata ─────────
     const auto caps = mradm::vbap_capabilities();
+    ok &= check(std::ranges::none_of(caps.supported_layouts,
+                                     [](const auto& layout) {
+                                         return layout.id == "test+stereo" || layout.id == "binaural" ||
+                                                layout.id == "test+mono-lfe";
+                                     }),
+                "register_vbap_layout: rejected stereo layouts do not enter the registry");
     const auto it = std::ranges::find_if(caps.supported_layouts, [](const auto& l) { return l.id == "test+custom"; });
     ok &= check(it != caps.supported_layouts.end(), "register_vbap_layout: registered layout appears in capabilities");
     if (it != caps.supported_layouts.end()) {
@@ -2186,8 +2201,7 @@ bool verify_register_vbap_layout() {
                 "register_vbap_layout: empty id rejected");
     ok &= check(!mradm::register_vbap_layout("test+empty-speakers", "Empty speakers", {}),
                 "register_vbap_layout: empty speakers rejected");
-    ok &= check(!mradm::register_vbap_layout(
-                    "test+all-lfe", "All LFE", {{30.0F, -30.0F, "LFE1", true}, {-30.0F, -30.0F, "LFE2", true}}),
+    ok &= check(!mradm::register_vbap_layout("test+all-lfe", "All LFE", {{0.0F, 0.0F, "LFE1", true}}),
                 "register_vbap_layout: all-LFE layout rejected");
     ok &= check(!mradm::register_vbap_layout(
                     "test+nan-az", "NaN azimuth", {{std::numeric_limits<float>::quiet_NaN(), 0.0F, "L"}}),

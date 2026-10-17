@@ -2575,7 +2575,9 @@ bool verify_triple_balance_monitor_abi(adm_context_t* ctx) {
     if (created != ADM_ERROR_OK) {
         const std::string message = adm_context_last_error_message(ctx);
         std::cout << "Triple Balance monitor device unavailable: " << message << '\n';
-        return check(created != ADM_ERROR_UNSUPPORTED, "Triple Balance realtime stream is supported");
+        return check(created != ADM_ERROR_UNSUPPORTED ||
+                         message.find("multichannel monitoring requires a multichannel device") != std::string::npos,
+                     "Triple Balance stream is supported but raw stereo devices are rejected");
     }
     adm_monitor_override_t edit{};
     edit.struct_size = sizeof(edit);
@@ -2880,14 +2882,27 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
         check(adm_monitor_switch_backend(monitor, sw_same) == ADM_ERROR_OK, "monitor same-format backend switch") && ok;
     adm_destroy_render_options(sw_same);
 
-    // Cross-format switch (stereo monitor ← 5.1) is folded to stereo by the downmix layer.
-    adm_render_options_t* sw_diff = adm_create_render_options();
-    adm_render_options_set_renderer(sw_diff, ADM_RENDERER_SAF);
-    adm_render_options_set_output_layout(sw_diff, "0+5+0");
-    ok = check(adm_monitor_switch_backend(monitor, sw_diff) == ADM_ERROR_OK,
-               "monitor cross-format switch downmixes 5.1 → stereo monitor") &&
-         ok;
-    adm_destroy_render_options(sw_diff);
+    // A speaker or HOA stream must not replace binaural output with a plain stereo fold.
+    const auto reject_speaker_switch = [&](adm_renderer_t backend, const char* layout) {
+        auto* sw_diff = adm_create_render_options();
+        adm_render_options_set_renderer(sw_diff, backend);
+        adm_render_options_set_output_layout(sw_diff, layout);
+        const auto rejected = adm_monitor_switch_backend(monitor, sw_diff);
+        adm_destroy_render_options(sw_diff);
+        return check(rejected == ADM_ERROR_UNSUPPORTED &&
+                         std::string_view{adm_monitor_last_error_message(monitor)}.find("channel count") !=
+                             std::string_view::npos,
+                     "monitor rejects speaker/HOA downmix to binaural output");
+    };
+    ok &= reject_speaker_switch(ADM_RENDERER_EAR, "0+5+0");
+    ok &= reject_speaker_switch(ADM_RENDERER_SAF, "0+5+0");
+    ok &= reject_speaker_switch(ADM_RENDERER_HOA, "hoa3");
+#ifdef __APPLE__
+    ok &= reject_speaker_switch(ADM_RENDERER_APPLE, "0+5+0");
+#endif
+    ok &= check(adm_monitor_get_status(monitor, &status) == ADM_ERROR_OK && status.failed == 0 &&
+                    adm_monitor_get_levels(monitor, &levels) == ADM_ERROR_OK && levels.out_count == 2U,
+                "rejected cross-format switches preserve the working binaural monitor");
 
     // v1.21 live output-device switch: "" = default device (no-op, monitor opened on default);
     // a bogus token rebuilds on the default device (graceful fallback) rather than failing.

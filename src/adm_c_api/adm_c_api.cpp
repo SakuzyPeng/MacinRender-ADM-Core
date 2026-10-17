@@ -584,30 +584,29 @@ to_scene_renderer_config(const adm_scene_renderer_config_t* config, std::uint32_
         input.object_smoothing_frames > 48000U) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument, "invalid live Scene renderer configuration value");
     }
-    if (input.renderer != ADM_RENDERER_SAF_BINAURAL && input.renderer != ADM_RENDERER_ROOM_BINAURAL &&
-        (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
+    const bool binaural = input.renderer == ADM_RENDERER_SAF_BINAURAL || input.renderer == ADM_RENDERER_ROOM_BINAURAL;
+    const std::string_view layout = input.output_layout != nullptr ? input.output_layout : "";
+    if (!binaural && layout.empty()) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument,
                                  "Speaker live Scene rendering requires an output layout");
     }
-    if (input.renderer != ADM_RENDERER_SAF_BINAURAL && input.renderer != ADM_RENDERER_ROOM_BINAURAL &&
-        input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
+    if (!binaural && layout == "0+2+0") {
+        return mradm::make_error(mradm::ErrorCode::unsupported,
+                                 "two-channel loudspeaker rendering is unavailable; use binaural output instead");
+    }
+    if (!binaural && input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
         return mradm::make_error(mradm::ErrorCode::unsupported,
                                  "a live Scene SOFA path is valid only for SAF binaural rendering");
     }
-    if ((input.renderer == ADM_RENDERER_SAF_BINAURAL || input.renderer == ADM_RENDERER_ROOM_BINAURAL) &&
-        input.output_layout != nullptr && input.output_layout[0] != '\0' &&
-        std::string_view{input.output_layout} != "binaural") {
+    if (binaural && !layout.empty() && layout != "binaural") {
         return mradm::make_error(mradm::ErrorCode::unsupported,
                                  "SAF binaural live Scene output layout must be 'binaural'");
     }
 
     mradm::live_scene::RendererConfig converted;
     converted.renderer = static_cast<mradm::RendererSelection>(input.renderer);
-    converted.output_layout =
-        input.output_layout != nullptr && input.output_layout[0] != '\0' ? input.output_layout : "binaural";
-    if (input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
-        converted.sofa_path = input.sofa_path;
-    }
+    converted.output_layout = layout.empty() ? "binaural" : layout;
+    converted.sofa_path = input.sofa_path != nullptr ? input.sofa_path : "";
     converted.speaker_geometry = static_cast<mradm::SpeakerGeometry>(input.speaker_geometry);
     converted.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(input.speaker_spread_mode);
     converted.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(input.binaural_spread_mode);

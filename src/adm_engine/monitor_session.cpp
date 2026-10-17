@@ -17,12 +17,9 @@
 #include "adm/render.h"
 
 #include "audio_output_device.h"
-#include "downmix_stream.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 #include "renderer_factory.h"
-#include "speaker_layouts.h"
-#include "stream_dsp.h"
 #include "timeline.h"
 
 namespace mradm {
@@ -37,64 +34,6 @@ namespace {
         return total_frames;
     }
     return std::min(dsp::seconds_to_frame(seconds, sample_rate).value_or(0), total_frames);
-}
-
-// Constant-power stereo fold of one source speaker at `azimuth` (degrees, +ve = left,
-// BS.2051). az is clamped to ±90° so rear speakers fold to the nearest side. Returns the
-// {L, R} gains, computed in Rust with the libm port (PCM consistency 3.1).
-[[nodiscard]] std::pair<float, float> stereo_pan_for_azimuth(float azimuth) {
-    return dsp::monitor_stereo_fold(azimuth);
-}
-
-// Build a downmix / upmix matrix [monitor_channels × src_channels] (row-major) mapping a
-// source layout to the fixed monitor output. Returns nullopt when the conversion is not
-// supported (cross-format to a non-stereo monitor). Equal channel counts → identity.
-// Stereo monitor: speaker layouts fold by geometry (LFE → both at −6 dB), HOA3 uses a
-// first-order horizontal W/Y decode, plain stereo passes through.
-[[nodiscard]] std::optional<std::vector<float>> build_downmix_matrix(uint32_t src_channels,
-                                                                     std::string_view src_layout,
-                                                                     uint32_t monitor_channels,
-                                                                     SpeakerGeometry geometry) {
-    if (src_channels == 0 || monitor_channels == 0) {
-        return std::nullopt;
-    }
-    if (src_channels == monitor_channels) {
-        std::vector<float> identity(static_cast<std::size_t>(monitor_channels) * src_channels, 0.0F);
-        for (uint32_t c = 0; c < monitor_channels; ++c) {
-            identity[(static_cast<std::size_t>(c) * src_channels) + c] = 1.0F;
-        }
-        return identity;
-    }
-    if (monitor_channels != 2) {
-        return std::nullopt; // only stereo monitor folds are implemented
-    }
-
-    std::vector<float> m(std::size_t{2U} * src_channels, 0.0F);
-    auto set_lr = [&](uint32_t s, float l, float r) {
-        m[s] = l;                // L row
-        m[src_channels + s] = r; // R row
-    };
-
-    if (src_layout == "hoa3" && src_channels >= 4) {
-        // ACN/SN3D: W = ch0, Y(left) = ch1. First-order horizontal stereo decode.
-        set_lr(0, 0.7071F, 0.7071F); // W → both
-        set_lr(1, 0.5F, -0.5F);      // Y → L positive, R negative
-        return m;
-    }
-    if (const auto* layout = render_layouts::find_speaker_layout(src_layout, geometry);
-        layout != nullptr && layout->speakers.size() == src_channels) {
-        for (uint32_t s = 0; s < src_channels; ++s) {
-            const auto& spk = layout->speakers[s];
-            if (spk.is_lfe) {
-                set_lr(s, 0.5F, 0.5F); // fold LFE into both at −6 dB
-                continue;
-            }
-            const auto [l, r] = stereo_pan_for_azimuth(spk.azimuth);
-            set_lr(s, l, r);
-        }
-        return m;
-    }
-    return std::nullopt; // unknown source layout → cannot fold safely
 }
 
 // Thread-safe, append-only diagnostics buffer. The monitor renders on a worker thread and
@@ -229,8 +168,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
     std::vector<BackendKeepAlive> keepalive_;
 };
 
-// Rebuilding a monitor must retain its output width, including a speaker backend
-// that was previously folded into the existing stereo headphone monitor.
+// Rebuilding a monitor must retain its output width; no speaker/HOA downmix is allowed.
 class MonitorOutputFactory final : public realtime::IRenderStreamFactory {
   public:
     MonitorOutputFactory(RealtimeStreamFactory& source, uint32_t channels) : source_(source), channels_(channels) {}
@@ -241,16 +179,9 @@ class MonitorOutputFactory final : public realtime::IRenderStreamFactory {
         if (!stream || (*stream)->out_channels() == channels_) {
             return stream;
         }
-        const auto geometry =
-            options.renderer == RendererSelection::apple ? SpeakerGeometry::apple : options.speaker_geometry;
-        auto matrix = build_downmix_matrix((*stream)->out_channels(), (*stream)->output_layout(), channels_, geometry);
-        if (!matrix) {
-            stream->reset();
-            source_.forget_last_backend();
-            return make_error(ErrorCode::unsupported, "monitor cannot preserve its output channel count");
-        }
-        return std::unique_ptr<IRenderStream>{
-            std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), channels_)};
+        stream->reset();
+        source_.forget_last_backend();
+        return make_error(ErrorCode::unsupported, "monitor cannot change its output channel count");
     }
 
   private:
@@ -555,6 +486,13 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         return tl::unexpected{valid_overrides.error()};
     }
     const uint32_t monitor_channels = impl_->engine->out_channels();
+    if ((*stream)->out_channels() != monitor_channels) {
+        stream->reset();
+        impl_->factory->forget_last_backend();
+        return make_error(
+            ErrorCode::unsupported,
+            "monitor backend switches cannot change the output channel count; use binaural output for headphones");
+    }
     // No resampling across a switch: the monitor device runs at a fixed rate.
     if ((*stream)->sample_rate() != impl_->engine->sample_rate()) {
         stream->reset();
@@ -562,11 +500,10 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         return make_error(ErrorCode::unsupported, "monitor backend switch requires the same sample rate");
     }
     // The engine's ring layout (intermediate vs output PCM) is fixed at create from the stream's
-    // output-stage mode. A switch that flips that mode (e.g. Apple binaural output-stage ↔ a
-    // downmixed speaker stream) can't be hot-swapped — rebuild the engine on the same device,
+    // output-stage mode. A switch that flips that mode (e.g. Apple binaural ↔ SAF binaural)
+    // requires rebuilding the engine on the same device,
     // preserving the playhead / edits / play state (mirrors set_output_device).
-    const bool channels_match = (*stream)->out_channels() == monitor_channels;
-    const bool new_output_stage = channels_match && (*stream)->renders_orientation_at_output();
+    const bool new_output_stage = (*stream)->renders_orientation_at_output();
     if (new_output_stage != impl_->engine->output_stage()) {
         stream->reset(); // the factory re-opens the new backend inside MonitorEngine::create below
         const realtime::MonitorStatus snap = impl_->engine->status();
@@ -619,26 +556,6 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         if (switch_error.has_value()) {
             return tl::unexpected{*switch_error};
         }
-        return {};
-    }
-    // Same channel count → hand the stream straight to the engine. Otherwise wrap it in a
-    // DownmixStream that folds the new layout into the fixed monitor channel count (e.g.
-    // 7.1.4 / HOA → stereo headphones), so the engine still sees a monitor-format stream.
-    if ((*stream)->out_channels() != monitor_channels) {
-        const auto geometry =
-            options.renderer == RendererSelection::apple ? SpeakerGeometry::apple : options.speaker_geometry;
-        auto matrix =
-            build_downmix_matrix((*stream)->out_channels(), (*stream)->output_layout(), monitor_channels, geometry);
-        if (!matrix) {
-            stream->reset();
-            impl_->factory->forget_last_backend();
-            return make_error(ErrorCode::unsupported,
-                              "monitor cannot fold this layout to the current monitor output "
-                              "(only stereo-monitor downmix of speaker / HOA layouts is supported)");
-        }
-        impl_->queue_stream(
-            std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), monitor_channels),
-            options);
         return {};
     }
     impl_->queue_stream(std::move(*stream), options);
