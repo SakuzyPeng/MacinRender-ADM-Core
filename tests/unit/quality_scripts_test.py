@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -202,11 +203,66 @@ class LanguageSurfaceTests(unittest.TestCase):
         result, output = self.run_surface("--check")
         self.assertEqual(result, 0, output)
 
-    def test_shrinking_production_passes_and_asks_to_tighten(self):
+    def test_shrinking_production_requires_tightening_before_check_passes(self):
         self.write("src/adm_core/a.cpp", 4)
         result, output = self.run_surface("--check")
-        self.assertEqual(result, 0, output)
+        self.assertEqual(result, 1, output)
         self.assertIn("--update", output)
+        self.assertEqual(self.run_surface("--update")[0], 0)
+        self.assertEqual(self.run_surface("--check")[0], 0)
+        self.write("src/adm_core/a.cpp", 5)
+        self.assertEqual(self.run_surface("--check")[0], 1)
+
+    def test_update_cannot_raise_existing_limits_or_overwrite_on_failure(self):
+        original = self.baseline.read_bytes()
+        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp"):
+            with self.subTest(path=relative):
+                self.write(relative, 1)
+                result, output = self.run_surface("--update")
+                self.assertEqual(result, 1, output)
+                self.assertEqual(self.baseline.read_bytes(), original)
+                (self.root / relative).unlink()
+
+    def git(self, *args):
+        return subprocess.run(["git", "-c", "user.name=Surface test", "-c", "user.email=test@example.invalid",
+                               "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={self.root / 'no-hooks'}",
+                               *args], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
+
+    def commit_baseline(self):
+        self.git("init", "-q")
+        self.git("add", ".")
+        self.git("commit", "-qm", "baseline")
+        return self.git("rev-parse", "HEAD")
+
+    def test_base_ref_rejects_manually_raised_limits(self):
+        ref = self.commit_baseline()
+        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp"):
+            with self.subTest(path=relative):
+                self.write(relative, 1)
+                self.baseline.write_text(json.dumps(surface.measure(self.root)))
+                for mode in ("--check", "--update"):
+                    result, output = self.run_surface(mode, "--base-ref", ref)
+                    self.assertEqual(result, 1, output)
+                    self.assertIn("基线上限", output)
+                (self.root / relative).unlink()
+
+    def test_base_ref_allows_tightening_and_first_introduction(self):
+        self.baseline.unlink()
+        ref = self.commit_baseline()
+        self.assertEqual(self.run_surface("--update", "--base-ref", ref)[0], 0)
+        self.assertEqual(self.run_surface("--check", "--base-ref", ref)[0], 0)
+        self.git("add", ".")
+        self.git("commit", "-qm", "first baseline")
+        ref = self.git("rev-parse", "HEAD")
+        self.write("src/adm_core/a.cpp", 4)
+        self.assertEqual(self.run_surface("--update", "--base-ref", ref)[0], 0)
+        self.assertEqual(self.run_surface("--check", "--base-ref", ref)[0], 0)
+
+    def test_base_ref_must_exist(self):
+        self.commit_baseline()
+        result, output = self.run_surface("--check", "--base-ref", "missing-ref")
+        self.assertEqual(result, 1, output)
+        self.assertIn("无法读取基准提交", output)
 
 
 if __name__ == "__main__":
