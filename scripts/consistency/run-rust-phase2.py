@@ -69,11 +69,13 @@ def main():
     stream_by_id = {row['id']: row for row in streams}
     sofa_root = common.ROOT / 'tests/fixtures/sofa'
     common.validate_sofa_fixtures(sofa_root)
+    common.validate_room_fixtures(common.ROOT / common.ROOM_FIXTURE_DIR)
     build_record, build_errors = collect(build)
     if build_errors:
         raise ValueError('invalid build provenance: ' + '; '.join(build_errors))
     manifest = {'schema': 'mradm.phase2.v1', 'complete': False, 'config': args.config, 'diagnostics': diagnostics,
-                'source': source, 'offline': offline, 'scene': scenes, 'stream': streams, 'sofa': common.SOFA_FIXTURES, 'build': build_record,
+                'source': source, 'offline': offline, 'scene': scenes, 'stream': streams, 'sofa': common.SOFA_FIXTURES,
+                'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES, 'build': build_record,
                 'binaries': {k: common.digest(v.read_bytes()) for k, v in binaries.items()},
                 'comparisons': {}, 'outputs': {}, 'fixtures': {}, 'replay_status': {}}
     if manifest['build'].get('rust.compiler_verbose') == 'unavailable':
@@ -93,6 +95,10 @@ def main():
     try:
         for name in common.SOFA_FIXTURES:
             shutil.copyfile(sofa_root / name, out / 'fixtures' / name)
+        common.write_json_fixtures(out / 'fixtures')
+        (out / 'fixtures/room').mkdir()
+        for name in common.ROOM_FIXTURES:
+            shutil.copyfile(common.ROOT / common.ROOM_FIXTURE_DIR / name, out / 'fixtures/room' / name)
         for fixture in sorted({c['fixture'] for c in offline + streams}):
             run([binaries['mr_adm_make_fixture'], fixture, out / 'fixtures' / (fixture + '.wav')], out / 'logs' / (fixture + '.log'))
         for row in offline:
@@ -102,6 +108,8 @@ def main():
             destination = out / 'pcm' / (name + '.pcmbits')
             trace = out / 'checkpoints' / name if diagnostics else None
             sofa_args = ['--sofa', out / 'fixtures' / row['sofa']] if 'sofa' in row else []
+            # Fixture files named by the case (PCM consistency 4.2), in the order the case lists them.
+            sofa_args += [arg for flag, file in row.get('files', {}).items() for arg in (flag, out / 'fixtures' / file)]
             # Float32 WAV unless the case names its own depth or a CAF container (3.6).
             depth = [] if '--output-bit-depth' in row['args'] else ['--output-bit-depth', 'f32']
             for process in (1, 2):
@@ -220,7 +228,9 @@ def main():
                     raise ValueError('kernel diagnostic noninterference failed: ' + path.name)
             manifest['noninterference'] = {'passed': True, 'baseline_manifest_sha256': common.digest((args.baseline / 'manifest.json').read_bytes())}
         common.validate_sofa_fixtures(out / 'fixtures')
-        manifest['fixtures'] = {p.name: common.digest(p.read_bytes()) for p in sorted((out / 'fixtures').iterdir())}
+        common.validate_room_fixtures(out / 'fixtures/room')
+        manifest['fixtures'] = {p.relative_to(out / 'fixtures').as_posix(): common.digest(p.read_bytes())
+                                for p in sorted((out / 'fixtures').rglob('*')) if p.is_file()}
         manifest['artifacts'] = {p.relative_to(out).as_posix(): common.digest(p.read_bytes())
                                  for folder in ('kernels', 'checkpoints', 'kernel-checkpoints')
                                  for p in sorted((out / folder).rglob('*')) if p.is_file()}
@@ -238,15 +248,18 @@ def require_scene_checkpoints(root, row):
     backend_patterns = {'vbap': ['.30-vbap*-commands.i32', '.30-vbap*-levels.f32', '.30-vbap*-coefficients.f32'],
                         'binaural': ['.30-binaural-commands.i32', '.30-binaural-directions.f32'],
                         'triple-balance': ['.30-triple-lane-kinds.i32', '.30-triple-lane-gains.f32',
-                                           '.30-triple-commands.i32', '.30-triple-values.f32']}
+                                           '.30-triple-commands.i32', '.30-triple-values.f32'],
+                        # The room renderer's DSP is in Rust and emits no backend checkpoints of its own.
+                        'room-binaural': []}
     patterns = []
     for epoch in row['epochs']:
         prefix = f'scene/e{epoch["epoch"]}-*'
         patterns += [prefix + suffix for suffix in ('.15-producer.f32', '.15-producer-fields.i32',
                                                     '.21-effective.f32', '.21-effective-fields.i32', '.40-render.f32')]
         patterns += [prefix + '-current' + suffix for suffix in backend_patterns[row['backend']]]
-    # The replay switches backend only for stereo outputs and Triple Balance (phase2_scene.cpp).
-    if row['backend'] == 'triple-balance' or row['layout'] in ('0+2+0', 'binaural'):
+    # The replay switches backend only for stereo outputs and Triple Balance, never for a room
+    # (phase2_scene.cpp).
+    if row['backend'] != 'room-binaural' and (row['backend'] == 'triple-balance' or row['layout'] in ('0+2+0', 'binaural')):
         patterns += ['scene/e1-*.35-outgoing.f32', 'scene/e1-*.36-incoming.f32']
         incoming = 'binaural' if row['backend'] == 'vbap' or 'sofa' in row else 'vbap'
         patterns += ['scene/e1-*-incoming' + suffix for suffix in backend_patterns[incoming]]

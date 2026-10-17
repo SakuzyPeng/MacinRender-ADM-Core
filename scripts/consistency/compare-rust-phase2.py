@@ -109,6 +109,12 @@ def validate(root):
     if manifest.get('sofa') != common.SOFA_FIXTURES:
         raise ValueError('baseline does not cover the pinned SOFA inputs')
     common.validate_sofa_fixtures(root / 'fixtures')
+    if manifest.get('json_fixtures') != common.JSON_FIXTURES:
+        raise ValueError('baseline does not cover the versioned JSON inputs')
+    common.validate_json_fixtures(root / 'fixtures')
+    if manifest.get('room') != common.ROOM_FIXTURES:
+        raise ValueError('baseline does not cover the pinned room pack')
+    common.validate_room_fixtures(root / 'fixtures/room')
     expected = ([c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
                 + [c['id'] for c in manifest['stream']])
     if not expected or len(set(expected)) != len(expected) or set(expected) != set(manifest['outputs']):
@@ -125,7 +131,8 @@ def validate(root):
             common.validate_sofa_pcm(safe_file(root, row['path']))
         if list(shape) != row['shape'] or common.digest(bits) != row['sha256']:
             raise ValueError('PCM shape/hash differs from manifest')
-    if not manifest['fixtures'] or set(manifest['fixtures']) != {p.name for p in (root / 'fixtures').iterdir()}:
+    if not manifest['fixtures'] or set(manifest['fixtures']) != {
+            p.relative_to(root / 'fixtures').as_posix() for p in (root / 'fixtures').rglob('*') if p.is_file()}:
         raise ValueError('fixture inventory differs from manifest')
     for name, sha in manifest['fixtures'].items():
         path = safe_file(root, 'fixtures/' + name)
@@ -229,7 +236,8 @@ def compare(directories, require_platforms=True, gates=()):
     manifests = [validate(p) for p in directories]
     first = manifests[0]
     for manifest in manifests[1:]:
-        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'fixtures'):
+        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'json_fixtures', 'room',
+                      'fixtures'):
             if manifest[field] != first[field]:
                 raise ValueError('incompatible baseline: ' + field)
         if compiler_identity(manifest['build']) != compiler_identity(first['build']):

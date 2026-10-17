@@ -12,7 +12,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 FORMATS = {'.f32': (4, 'f'), '.f64': (8, 'd'), '.c32': (4, 'f'), '.i32': (4, 'i')}
-SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support', 'tests/fixtures/sofa', 'scripts/consistency')
+SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support', 'tests/fixtures/sofa',
+               'tests/fixtures/room/phase2', 'scripts/consistency')
+BINARY_SUFFIXES = {'.bin', '.sofa', '.f32le', '.f32', '.f64', '.u32'}
 TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml', '.dat'}
 
 
@@ -34,7 +36,7 @@ def source_files(root=ROOT):
     for directory in SOURCE_DIRS:
         paths.extend(p for p in (root / directory).rglob('*') if p.is_file()
                      and not any(part in {'target', '__pycache__', '.git'} for part in p.relative_to(root).parts)
-                     and (p.suffix in TEXT_SUFFIXES or p.suffix in {'.bin', '.sofa', '.f32le'}))
+                     and (p.suffix in TEXT_SUFFIXES or p.suffix in BINARY_SUFFIXES))
     return sorted(set(paths))
 
 
@@ -43,7 +45,8 @@ def source_fingerprint(root=ROOT):
     rows = {}
     for p in source_files(root):
         data = p.read_bytes()
-        if p.suffix in TEXT_SUFFIXES:
+        # The room pack's manifests are pinned bytes (.gitattributes -text), like its assets.
+        if p.suffix in TEXT_SUFFIXES and not p.is_relative_to(root / ROOM_FIXTURE_DIR):
             data = data.replace(b'\r\n', b'\n')
         rows[p.relative_to(root).as_posix()] = digest(data)
     return {'sha256': json_digest(rows), 'files': rows}
@@ -69,6 +72,137 @@ def validate_sofa_fixtures(directory):
         path = directory / name
         if not path.is_file() or digest(path.read_bytes()) != expected:
             raise ValueError('missing or modified pinned SOFA fixture: ' + name)
+
+
+# JSON inputs of PCM consistency 4.2 (semantic policies, a DirectSpeakers matrix and a screen
+# configuration), written by the collector into fixtures/ with save() and hashed with the other fixtures. IDs are those make_fixture assigns:
+# policy-objects holds AO_1001 "Dialogue Lead", AO_1002 "Dialogue Alt" (content "Dialogue"), AO_1003
+# "Ambience Wide" and AO_1004 "FX Cartesian" (content "Ambience"), tracks ATU_00000001-4, programme
+# "Main Mix". Every object rule matches, so no case renders with an unmatched-rule warning.
+POLICY_SCHEMA = 'mradm.semantic-policy.v1'
+JSON_FIXTURES = {
+    # Identity matching and merge order: global first, then each matching rule in array order with
+    # last-write-wins leaves (FX is muted by name, unmuted again by track UID).
+    'policy-identity.json': {
+        'schema': POLICY_SCHEMA,
+        'global': {'gain': {'scale': 0.875}, 'extent': {'scale': 0.75}},
+        'objects': [
+            {'id': 'ao_1001', 'gain': {'gain_db': -2.5}},
+            {'name_glob': 'dialogue*', 'diffuse': {'scale': 0.5}, 'position': {'offset': {'azimuth': 7.5}}},
+            {'content': 'Ambience', 'extent': {'width_scale': 0.5, 'max': 30}},
+            {'importance_min': 4, 'importance_max': 6, 'gain': {'scale': 0.5}},
+            {'dialogue_id': 1, 'divergence': {'scale': 0.5}},
+            {'programme': 'main mix', 'head_locked': False},
+            {'name_glob': 'FX ?artesian', 'gain': {'mute': True}},
+            {'track_uid': 'ATU_00000004', 'gain': {'mute': False, 'gain_db': 1.25}},
+        ],
+    },
+    # channelLock (tighter distance, enabling on unlocked objects), divergence scale and range clamp,
+    # and the interpolation limit with jumpPosition honoured.
+    'policy-lock.json': {
+        'schema': POLICY_SCHEMA,
+        'global': {'interpolation': {'max_ms': 20}},
+        'objects': [
+            {'id': 'AO_1001', 'channel_lock': {'max_distance': 0.25},
+             'interpolation': {'honor_jump_position': True, 'max_ms': 30}},
+            {'name': 'Dialogue Alt', 'divergence': {'scale': 1.5, 'range_scale': 2, 'max_range': 45},
+             'channel_lock': {'enabled': True, 'max_distance': 1.0}},
+            {'importance_max': 3, 'channel_lock': {'enabled': True}},
+            {'id': 'AO_1004', 'channel_lock': {'enabled': False}},
+        ],
+    },
+    # Absolute positions, offsets and azimuth/elevation locks, including the Cartesian object that the
+    # policy turns polar, with jumpPosition ignored and head locking by content.
+    'policy-position.json': {
+        'schema': POLICY_SCHEMA,
+        'global': {'interpolation': {'honor_jump_position': False}},
+        'objects': [
+            {'id': 'AO_1001', 'position': {'azimuth': -60, 'elevation': 20}},
+            {'name_glob': '*alt', 'position': {'lock_azimuth': 45, 'offset': {'azimuth': 10, 'elevation': -5, 'distance': 0.5}}},
+            {'name': 'FX Cartesian', 'position': {'lock_elevation': 30, 'offset': {'azimuth': -15}}},
+            {'content': 'Ambience', 'head_locked': True},
+        ],
+    },
+    # DirectSpeakers filters on the 5.1 bed whose LFE1 carries an ADM lowPass: a global LFE rule and
+    # per-label rules, applied in order and each with its own filter.
+    'policy-direct-speakers.json': {
+        'schema': POLICY_SCHEMA,
+        'global': {'direct_speakers': {'lfe': True, 'gain': {'gain_db': -6}}},
+        'objects': [
+            {'all': True, 'direct_speakers': {'speaker_label': 'm+110', 'gain': {'scale': 0.5},
+                                              'position': {'azimuth': 120}}},
+            {'name_glob': '*', 'direct_speakers': {'speaker_label': 'M+000', 'head_locked': True}},
+            {'all': True, 'direct_speakers': {'lfe': False, 'speaker_label': 'M-030', 'gain': {'mute': True}}},
+        ],
+    },
+    # Triple Balance keeps equal-size extent inside the room cube: uniform extent scale and clamp, gain.
+    'policy-triple-balance.json': {
+        'schema': POLICY_SCHEMA,
+        'global': {'extent': {'scale': 1.5, 'max': 0.75}, 'gain': {'gain_db': -1.5}},
+        'objects': [{'all': True, 'diffuse': {'enabled': False}}],
+    },
+    # Weighted, split and muted routes covering every non-LFE channel of the directspeakers bed.
+    'ds-matrix-51.json': {
+        'schema': 'mradm.direct-speakers-matrix.v1',
+        'output_layout': '5.1',
+        'routes': [
+            {'source_label': 'M+000', 'targets': [{'label': 'M+030', 'weight': 1}, {'label': 'M-030', 'weight': 3}]},
+            {'source_label': 'M+030', 'targets': [{'label': 'M+030', 'weight': 1}]},
+            {'source_label': 'M-030', 'targets': [{'label': 'M-030', 'weight': 2}, {'label': 'M+000', 'weight': 1}]},
+            {'source_label': 'M+110', 'targets': [{'label': 'M+110', 'weight': 2}, {'label': 'M+030', 'weight': 1}]},
+            {'source_label': 'M-110', 'mute': True},
+        ],
+    },
+    # Reference and reproduction screens for the room renderer's screen-referenced object.
+    'screen-config.json': {
+        'schema': 'mradm.screen-config', 'version': 1,
+        'reference': {'coordinates': 'polar', 'centre': [0, 0, 1], 'width': 58, 'aspect_ratio': 1.78},
+        'reproduction': {'coordinates': 'polar', 'centre': [5, -2, 1], 'width': 90, 'aspect_ratio': 1.6},
+    },
+}
+
+
+# The synthetic room pack (tests/tools/make_room_phase2_fixtures.py). Its phase table came from the
+# platform libm, so these committed bytes are the input on every platform, never regenerated.
+ROOM_FIXTURE_DIR = 'tests/fixtures/room/phase2'
+ROOM_FIXTURES = {
+    'bands.f64': '65c5345153d2f48b057ce282be27f774447677c4afb9cde391a88c6bd1acdb29',
+    'delays.f64': 'f5a9165f9a4852698b1b7bd7512f2f602da6b2688a9a4106be78a67455a7b044',
+    'directions.f64': '919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8',
+    'eq.f64': '36d1f313e90cb0d038c0fad2f3775286629b047f0d32ca64a6d6e27a1472e5d1',
+    'faces.u32': '2b01153bd81c50c9bde2f118c9053419f74c889e72618efa5e27555c4168e1e5',
+    'hrir.f32': 'ae6e48971ac2408354aa765e02909cb146432c9a1c71d5cce0bb01578463b1ca',
+    'hrir.json': 'b920747e2e6b704207e74e7ede3ebf1c7f16955f8852817ebb16fbe2b6f9b4cf',
+    'late-directions.f64': '919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8',
+    'late.f32': '1ddeebc4b02202fd13ff29514d72fac33da349c241eb5aa4076d02d3412bfc97',
+    'phases.f32': '741062476d4f6cb9394484bf0b281a39ed8e2df9712d5ea6ff24f803a4d8322d',
+    'room.json': '8a21e8afcb6b6d00c7b196889ed2d00c9ee67afc85048dc5081887ee03974696',
+}
+
+
+# Frames the pinned room appends after the end of the material (late reverberation and alignment).
+ROOM_TAIL_FRAMES = 4441
+
+
+def validate_room_fixtures(directory):
+    names = {p.name for p in directory.iterdir()} if directory.is_dir() else set()
+    if names != set(ROOM_FIXTURES):
+        raise ValueError('room fixture inventory differs from the pinned pack')
+    for name, expected in ROOM_FIXTURES.items():
+        if digest((directory / name).read_bytes()) != expected:
+            raise ValueError('modified pinned room fixture: ' + name)
+
+
+def write_json_fixtures(directory):
+    for name, value in JSON_FIXTURES.items():
+        save(directory / name, value)
+
+
+def validate_json_fixtures(directory):
+    for name, value in JSON_FIXTURES.items():
+        path = directory / name
+        if not path.is_file() or json.loads(path.read_text(encoding='utf-8')) != value:
+            raise ValueError('missing or modified JSON fixture: ' + name)
 
 
 def offline_cases():
@@ -173,6 +307,63 @@ def offline_cases():
                   '--start', '0.25001041666666666', '--final-gain-db', '2.5']},
         {'id': 'final-caf-binaural-postproc', 'fixture': 'objects-point', 'slice': '3.6', 'container': 'caf',
          'args': ['--renderer', 'saf-binaural', '--output-layout', 'binaural']},
+        # PCM consistency 4.2: offline object smoothing across the four moving blocks of objects-room
+        # for VBAP, HOA and binaural (EAR has ear-window; Triple Balance rejects smoothing), and the
+        # automatic loudness and peak gains on VBAP and Triple Balance.
+        {'id': 'smoothing-saf-714', 'fixture': 'objects-room', 'slice': '4.2',
+         'args': ['--no-peak-limit', '--renderer', 'saf', '--output-layout', '7.1.4',
+                  '--object-smoothing-frames', '2048']},
+        {'id': 'smoothing-hoa3', 'fixture': 'objects-room', 'slice': '4.2',
+         'args': ['--no-peak-limit', '--renderer', 'hoa', '--output-layout', 'hoa3',
+                  '--object-smoothing-frames', '2048']},
+        {'id': 'smoothing-binaural', 'fixture': 'objects-room', 'slice': '4.2',
+         'args': ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural',
+                  '--object-smoothing-frames', '2048']},
+        {'id': 'saf-loudness-minus23', 'fixture': 'objects-extent-multi', 'slice': '4.2',
+         'args': ['--no-peak-limit', '--renderer', 'saf', '--output-layout', '7.1.4', '--loudness-target', '-23']},
+        {'id': 'saf-peak-minus6', 'fixture': 'objects-point', 'slice': '4.2',
+         'args': ['--renderer', 'saf', '--output-layout', '5.1', '--peak-normalize-to-limit', '--peak-limit-dbtp', '-6']},
+        {'id': 'triple-loudness-minus23', 'fixture': 'objects-room', 'slice': '4.2',
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '7.1.4',
+                  '--loudness-target', '-23']},
+        {'id': 'triple-peak-minus6', 'fixture': 'objects-room', 'slice': '4.2',
+         'args': ['--renderer', 'triple-balance', '--output-layout', '9.1.6', '--peak-normalize-to-limit',
+                  '--peak-limit-dbtp', '-6']},
+        # PCM consistency 4.2: the semantic policy matrix (JSON_FIXTURES) and DirectSpeakers matrix
+        # routing, the paths phase 4.4 moves to Rust. The policy cases are the first whose 06-policy
+        # render-scene checkpoint differs from 05-import.
+        {'id': 'policy-identity-ear-714', 'fixture': 'policy-objects', 'slice': '4.2',
+         'files': {'--semantic-policy': 'policy-identity.json'},
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '7.1.4']},
+        {'id': 'policy-lock-saf-714', 'fixture': 'policy-objects', 'slice': '4.2',
+         'files': {'--semantic-policy': 'policy-lock.json'},
+         'args': ['--no-peak-limit', '--renderer', 'saf', '--output-layout', '7.1.4']},
+        {'id': 'policy-position-binaural', 'fixture': 'policy-objects', 'slice': '4.2',
+         'files': {'--semantic-policy': 'policy-position.json'},
+         'args': ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural']},
+        {'id': 'policy-direct-speakers-ear-51', 'fixture': 'directspeakers-lfe', 'slice': '4.2',
+         'files': {'--semantic-policy': 'policy-direct-speakers.json'},
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '5.1']},
+        {'id': 'policy-triple-714', 'fixture': 'objects-room', 'slice': '4.2',
+         'files': {'--semantic-policy': 'policy-triple-balance.json'},
+         'args': ['--no-peak-limit', '--renderer', 'triple-balance', '--output-layout', '7.1.4']},
+        {'id': 'ds-matrix-ear-51', 'fixture': 'directspeakers', 'slice': '4.2',
+         'files': {'--direct-speakers-matrix': 'ds-matrix-51.json'},
+         'args': ['--no-peak-limit', '--renderer', 'ear', '--output-layout', '5.1', '--direct-speakers-routing', 'matrix']},
+        {'id': 'ds-matrix-saf-51', 'fixture': 'directspeakers', 'slice': '4.2',
+         'files': {'--direct-speakers-matrix': 'ds-matrix-51.json'},
+         'args': ['--no-peak-limit', '--renderer', 'saf', '--output-layout', '5.1', '--direct-speakers-routing', 'matrix']},
+        # PCM consistency 4.2: room-binaural at the exact tier (ADR 0020) on the pinned synthetic room
+        # pack: its own HRIR, a pinned SOFA set, and screen-referenced objects with a screen configuration.
+        {'id': 'room-exact', 'fixture': 'objects-extent-multi', 'slice': '4.2',
+         'files': {'--room': 'room/room.json'},
+         'args': ['--no-peak-limit', '--renderer', 'room-binaural', '--output-layout', 'binaural', '--room-quality', 'exact']},
+        {'id': 'room-exact-sofa', 'fixture': 'objects-room', 'slice': '4.2', 'sofa': 'simple.sofa',
+         'files': {'--room': 'room/room.json'},
+         'args': ['--no-peak-limit', '--renderer', 'room-binaural', '--output-layout', 'binaural', '--room-quality', 'exact']},
+        {'id': 'room-exact-screen', 'fixture': 'policy-objects', 'slice': '4.2',
+         'files': {'--room': 'room/room.json', '--screen-config': 'screen-config.json'},
+         'args': ['--no-peak-limit', '--renderer', 'room-binaural', '--output-layout', 'binaural', '--room-quality', 'exact']},
     ]
     return result
 
@@ -183,7 +374,8 @@ def stream_cases():
     An IRenderStream is pulled in a fixed or fragmented request partition while live gain, mute
     and (binaural) topology overrides, a head orientation and a seek land at fixed output frames.
     The IRenderStream contract makes the delivered PCM independent of the request partition.
-    Version 3 names the renderer, the requested output layout and the channel count.
+    Version 3 names the renderer, the requested output layout and the channel count; version 4
+    (PCM consistency 4.2) adds the room pack of a room-binaural replay and the tail it appends.
     """
     binaural_events = [
         {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
@@ -253,12 +445,22 @@ def stream_cases():
             case.update({'partition': partition, 'input_frames': 48000, 'sample_rate': 48000,
                          'frames': 96000, 'events': events})
             result.append(case)
+    # room-binaural at the exact tier with live overrides, a head orientation and a seek. Room
+    # switches are asynchronous (a preparation thread decides when the new room starts), so they
+    # have no fixed output frame and stay outside the replay.
+    for name, fixture, spread in [('room-extent', 'objects-extent-multi', 'cloud'), ('room-cartesian', 'objects-cartesian', 'none')]:
+        for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+            result.append({'id': f'stream-{name}-{partition_name}', 'version': 4, 'fixture': fixture,
+                           'renderer': 'room-binaural', 'output_layout': 'binaural', 'channels': 2, 'spread': spread,
+                           'room': 'room/room.json', 'tail_frames': ROOM_TAIL_FRAMES, 'partition': partition,
+                           'input_frames': 48000, 'sample_rate': 48000, 'frames': 96000, 'events': binaural_events})
     return result
 
 
 def stream_output_shape(case):
     """Expected PCM shape from the pinned input and seek timeline, independent of measured output."""
-    input_frames, limit = case['input_frames'], case['frames']
+    # A room-binaural stream continues past EOS with its room tail (version 4).
+    input_frames, limit = case['input_frames'] + case.get('tail_frames', 0), case['frames']
     position, media_position = 0, 0
     for event in case['events']:
         frame = event['frame']
@@ -373,6 +575,40 @@ def scene_cases():
                             if row['id'] == f'scene-vbap-4+7+0-cloud0-{rate}-{rate}-{partition_name}')
             result.append(dict(template, id=f'scene-vbap-9+10+3-cloud0-{rate}-{rate}-{partition_name}',
                                layout='9+10+3'))
+    # Version 5 (PCM consistency 4.2): the element carries an ADM identity and the case its own policy,
+    # so SceneStreamEngine's per-update policy application is covered by identity-matched object rules.
+    # Triple Balance keeps Cartesian room positions, so its policy has no polar offset.
+    identity = {'object_id': 'AO_1001', 'object_name': 'Dialogue Lead', 'track_uid': 'ATU_00000001',
+                'importance': 9, 'dialogue_id': 1, 'contents': [{'id': 'ACO_1001', 'name': 'Dialogue'}],
+                'programmes': [{'id': 'APR_1001', 'name': 'Main Mix'}]}
+    rules = [{'name_glob': 'dialogue*', 'gain': {'gain_db': -3.5}, 'extent': {'scale': 1.25, 'max': 0.5}},
+             {'content': 'dialogue', 'diffuse': {'scale': 0.5}},
+             {'importance_min': 8, 'divergence': {'range_scale': 0.5}},
+             {'track_uid': 'atu_00000001', 'gain': {'scale': 0.75}}]
+    for template_id, offset in [('scene-vbap-4+7+0-cloud0-48000-48000', True),
+                                ('scene-binaural-binaural-cloud1-48000-48000', True),
+                                ('scene-triple-balance-7.1.4-size1-48000-48000', False)]:
+        # The binaural replay switches to stereo VBAP at 8192, whose two-speaker pair renders silence
+        # outside +-30 degrees; the offset keeps the replayed source inside the pair.
+        objects = rules + ([{'programme': 'Main Mix', 'position': {'offset': {'azimuth': 5.5, 'elevation': 6}}}]
+                           if offset else [])
+        policy = {'schema': POLICY_SCHEMA, 'global': {'gain': {'scale': 0.875}}, 'objects': objects}
+        for partition_name in ('fixed', 'fragmented'):
+            template = next(row for row in result if row['id'] == f'{template_id}-{partition_name}')
+            row = dict(template, id=template_id.replace('scene-', 'scene-policy-', 1) + '-' + partition_name,
+                       version=5, semantic={'identity': identity, 'policy': policy})
+            row['controls'] = dict(row['controls'], **{'6144': 'semantic policy and identity from the case'})
+            result.append(row)
+    # Version 6 (PCM consistency 4.2): room-binaural at the exact tier on the pinned room pack, with
+    # and without extent spread. Room switches are asynchronous, so the replay keeps one room.
+    for cloud in (False, True):
+        for partition_name in ('fixed', 'fragmented'):
+            template = next(row for row in result
+                            if row['id'] == f'scene-binaural-binaural-cloud{int(cloud)}-48000-48000-{partition_name}')
+            row = dict(template, id=f'scene-room-binaural-cloud{int(cloud)}-48000-48000-{partition_name}', version=6,
+                       backend='room-binaural', room='room/room.json', tail_frames=ROOM_TAIL_FRAMES)
+            row['controls'] = dict(row['controls'], **{'8192': 'no backend switch'})
+            result.append(row)
     return result
 
 
@@ -435,6 +671,7 @@ def kernel_outputs():
     names += [f'sofa-{Path(sofa).stem}.{part}' for sofa in SOFA_FIXTURES for part in
               ('10-parameters.i32', '11-directions.f32', '12-hrir.f32', '20-grid-weights.f32',
                '21-grid-indices.i32', '30-spectra.c32', '40-queries.f32', '50-quantized.c32', '60-continuous.c32')]
+    names += ['room.10-hrir.f32', 'room.20-impulse.f32']
     return sorted(names)
 
 

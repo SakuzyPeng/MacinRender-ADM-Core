@@ -158,7 +158,7 @@ class EvidenceTests(unittest.TestCase):
     def test_stream_frame_counts_follow_input_and_seek_timeline(self):
         channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16, '22.2': 24, 'hoa3': 16}
         for case in common.stream_cases():
-            shape = (channels[case['output_layout']], 48000, 74200)
+            shape = (channels[case['output_layout']], 48000, 74200 + case.get('tail_frames', 0))
             self.assertEqual(common.stream_output_shape(case), shape)
             common.validate_stream_shape(case, shape)
             with self.assertRaisesRegex(ValueError, 'frame count differs'):
@@ -194,6 +194,7 @@ class EvidenceTests(unittest.TestCase):
                     'schema': 'mradm.phase2.v1', 'complete': True,
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': [], 'scene': [], 'stream': [case], 'sofa': common.SOFA_FIXTURES,
+                    'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES, 'room': common.ROOM_FIXTURES,
                     'outputs': {case['id']: {'path': pcm.relative_to(root).as_posix(),
                                              'shape': [channels, rate, frames], 'sha256': common.digest(bits)}},
                 })
@@ -201,18 +202,21 @@ class EvidenceTests(unittest.TestCase):
                         patch.object(common, 'scene_cases', return_value=[]), \
                         patch.object(common, 'stream_cases', return_value=[case]), \
                         patch.object(common, 'validate_sofa_fixtures'), \
+                        patch.object(common, 'validate_json_fixtures'), \
+                        patch.object(common, 'validate_room_fixtures'), \
                         self.assertRaisesRegex(ValueError, 'frame count differs from replay timeline'):
                     comparator.validate(root)
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 62)
-        self.assertEqual(len({r['id'] for r in offline}), 62)
-        self.assertEqual(len(scene), 78)
+        self.assertEqual(len(offline), 79)
+        self.assertEqual(len({r['id'] for r in offline}), 79)
+        self.assertEqual(len(scene), 88)
         streams = common.stream_cases()
-        self.assertEqual(len(streams), 24)
-        self.assertEqual(len(common.case_ids()), 242)
-        self.assertEqual({r['renderer'] for r in streams}, {'saf-binaural', 'ear', 'hoa', 'triple-balance'})
+        self.assertEqual(len(streams), 28)
+        self.assertEqual(len(common.case_ids()), 283)
+        self.assertEqual({r['renderer'] for r in streams},
+                         {'saf-binaural', 'ear', 'hoa', 'triple-balance', 'room-binaural'})
         self.assertIn('objects-room', {r['fixture'] for r in offline + streams})
         self.assertTrue(any('--triple-balance-mode' in r['args'] for r in offline))
         # Phase 3.6: integer WAVE and float32 CAF final files.
@@ -254,7 +258,7 @@ class EvidenceTests(unittest.TestCase):
                          closeout['inventory']['scene_parameters_sha256'])
         self.assertEqual(common.json_digest([row for row in common.scene_cases()
                                             if 'sofa' not in row and row['layout'] != '9+10+3'
-                                            and row['version'] != 4]),
+                                            and row['version'] not in (4, 5, 6)]),
                          '4af0ffe8691c5287445862e3336ceab8e98a359c60b274acf7952584db3bf46c')
 
     def test_release_matrix_runs_device_dsp_behind_resampling(self):
@@ -279,7 +283,7 @@ class EvidenceTests(unittest.TestCase):
     def test_partition_invariance_is_limited_to_absolute_position_renderers(self):
         rows = {row['id']: row for row in common.scene_cases()}
         invariant = [row for row in rows.values() if common.partition_invariant(row)]
-        self.assertEqual(len(invariant), 11)
+        self.assertEqual(len(invariant), 13)
         for row in invariant:
             sibling = rows[row['id'][:-len('fixed')] + 'fragmented']
             self.assertEqual({k: v for k, v in sibling.items() if k not in ('id', 'partition')},
@@ -315,7 +319,8 @@ class EvidenceTests(unittest.TestCase):
     def test_sofa_catalog_covers_offline_modes_and_live_conversion(self):
         offline = [r for r in common.offline_cases() if 'sofa' in r]
         scene = [r for r in common.scene_cases() if 'sofa' in r and r['version'] == 3]
-        self.assertEqual(len(offline), 6)
+        # Six SOFA modes, plus a pinned SOFA as the room renderer's listener HRIR (4.2).
+        self.assertEqual(len(offline), 7)
         self.assertEqual(len(scene), 12)
         self.assertEqual({r['sofa'] for r in scene}, set(common.SOFA_FIXTURES))
         for row in scene:
@@ -425,7 +430,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 235)
+        self.assertEqual(len(names), 237)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -514,6 +519,12 @@ class EvidenceTests(unittest.TestCase):
         final = [n for n in names if n.startswith(('timeline.', 'wav-quantize.'))]
         self.assertEqual(len(final), 4)
         self.assertTrue(all(gated(n) for n in final))
+        # Phase 4.2 gates the last observation files (the EAR layout tables and the Scene math) and
+        # the room-binaural exact-tier kernels, so every kernel file is gated.
+        observed = [n for n in names if n.startswith('scene.') or n.endswith('.10-layout.f64')]
+        self.assertEqual(len(observed), 5)
+        self.assertEqual(len([n for n in names if n.startswith('room.')]), 2)
+        self.assertTrue(all(gated(n) for n in names))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'
@@ -752,6 +763,7 @@ class RenderSceneCheckpointTests(unittest.TestCase):
                 'noninterference': {'passed': True},
                 'source': {'files': {}, 'sha256': common.json_digest({})},
                 'offline': [case], 'scene': [], 'stream': [], 'sofa': common.SOFA_FIXTURES,
+                'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
                 'outputs': {'case': {'path': 'pcm/case.pcmbits', 'shape': [2, 48000, 1],
                                      'sha256': common.digest(samples)}},
                 'fixtures': {'input.bin': common.digest(b'input')},
@@ -771,6 +783,8 @@ class RenderSceneCheckpointTests(unittest.TestCase):
                         patch.object(common, 'stream_cases', return_value=[]), \
                         patch.object(common, 'kernel_outputs', return_value=[]), \
                         patch.object(common, 'validate_sofa_fixtures'), \
+                        patch.object(common, 'validate_json_fixtures'), \
+                        patch.object(common, 'validate_room_fixtures'), \
                         self.assertRaisesRegex(ValueError, 'render-scene checkpoint'):
                     comparator.validate(root)
 
@@ -792,6 +806,10 @@ class ReplayTests(unittest.TestCase):
                         shutil.copyfile(ROOT / 'tests/fixtures/sofa' / name, tmp / 'fixtures' / name)
                         if corrupt_sofa:
                             (tmp / 'fixtures' / name).write_bytes(b'not a SOFA file')
+            if 'room' in case:
+                (tmp / 'fixtures/room').mkdir(parents=True)
+                for name in common.ROOM_FIXTURES:
+                    shutil.copyfile(ROOT / common.ROOM_FIXTURE_DIR / name, tmp / 'fixtures/room' / name)
             common.save(tmp / 'cases/case.json', case)
             env = dict(os.environ)
             if OPTIONS.diagnostic_checkpoints and success:
