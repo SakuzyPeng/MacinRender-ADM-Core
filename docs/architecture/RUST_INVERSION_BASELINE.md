@@ -77,5 +77,11 @@
   本机没有 cppcheck，未运行。
 - 本切片没有改动私有 FFI，`mr_adm_ffi_header_check` 无需重跑。
 
-**三平台。** 已在本分支手动触发 [Consistency 38990075874](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38990075874)，
-按四期集中验收的约定不单独等待，结果回填到本节；未回填前不借用三期的运行结果。
+**三平台。** [Consistency 38990075874](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38990075874)
+在本分支 `7950cfb` 上运行，macOS arm64 / Linux x64 / Windows x64 各采集 config A、B 的普通与诊断结果，全部成功。
+`7950cfb` 之后的提交只改文档，结果适用于 4.1 的全部代码。
+
+- 四份比较报告（A、A 诊断、B、B 诊断）都是 242 个 PCM id 三平台相同、0 个不同、平台集完整、门禁失败 0。
+- 两种配置的诊断报告中，三个平台对各有 235 份内核、201 个内核检查点、26,800 条用例检查点全部相同。
+- 26,800 条中包含新增的场景检查点：每个平台对 62 个离线用例 × 2 = 124 条，全部相同。场景检查点只写进诊断构建，
+  普通构建的 PCM 不受影响，诊断报告的 242 个 PCM 同样三平台相同。
