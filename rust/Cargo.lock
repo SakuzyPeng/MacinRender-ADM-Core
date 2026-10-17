@@ -309,6 +309,7 @@ dependencies = [
  "mradm-ear",
  "mradm-math",
  "mradm-osc",
+ "mradm-scene",
  "mradm-wav",
  "serde_json",
 ]
@@ -324,6 +325,10 @@ dependencies = [
  "mradm-dsp",
  "serde_json",
 ]
+
+[[package]]
+name = "mradm-scene"
+version = "0.1.0"
 
 [[package]]
 name = "mradm-wav"

@@ -1,0 +1,9 @@
+[package]
+name = "mradm-scene"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Render scene: input import, channel beds and loudspeaker layout tables"
+
+[dependencies]

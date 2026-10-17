@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 195,
-      "lines": 45026
+      "files": 196,
+      "lines": 44852
     },
     "islands": {
       "files": 5,
@@ -18,8 +18,8 @@
       "lines": 12042
     },
     "rust": {
-      "files": 182,
-      "lines": 57494
+      "files": 186,
+      "lines": 58008
     },
     "rust-vendor": {
       "files": 175,
@@ -31,9 +31,10 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 34439,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 13436,
+    "rust/crates/mradm-ffi": 13592,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
+    "rust/crates/mradm-scene": 358,
     "rust/crates/mradm-wav": 2413,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,
@@ -54,7 +55,7 @@
     "src/adm_peak": 143,
     "src/adm_realtime": 5419,
     "src/adm_render_binaural": 3486,
-    "src/adm_render_common": 2777,
+    "src/adm_render_common": 2603,
     "src/adm_render_ear": 1039,
     "src/adm_render_hoa": 770,
     "src/adm_render_room": 1344,
