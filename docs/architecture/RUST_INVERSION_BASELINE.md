@@ -62,4 +62,20 @@
 
 ## 验证
 
-待本机验证完成后补充。
+**本机（Linux x64，GCC 13，Rust 1.98.0，config A）。** 基线为 `0a3b362`（独立 worktree），候选为本切片的工作树；
+两边各做一次普通采集，再在原构建树打开 `MR_ADM_CONSISTENCY_DIAGNOSTICS` 做一次诊断采集：
+
+- 普通采集：候选的 242 个 PCM id 与全部内核文件和基线逐字节相同，`run-rust-phase2.py` 的同进程 / 新进程重复性与分块检查通过。
+- 诊断采集：两边的诊断无扰动检查都通过（诊断构建的 PCM 与普通构建相同）。
+  - 基线已有的 26,358 个检查点文件和 201 个内核检查点在候选中全部存在且逐字节相同。
+  - 候选另有 124 个新文件，即 62 个离线用例各两份场景检查点，编码版本均为 1。
+  - 现有离线用例都不带语义策略，因此每个用例的 `06-policy` 都与 `05-import` 相同；带策略的覆盖属于 4.2。
+- 诊断采集之后，`scene_checkpoint.h` 为消除 clang-tidy 告警把回调改为常量引用（`7950cfb`），编码不变。
+- `ctest`（config A，Release）80 项全部通过，含 `phase2_tools_test`、`quality_scripts_test` 与 Rust 单元测试。
+  `mr_adm_rust_quality`（rustfmt / clippy）、clang-format、新代码的 clang-tidy（打开诊断宏）、
+  `check-reference-retention.py`、`version_metadata.py --check` 与 `language-surface.py --check` 通过。
+  本机没有 cppcheck，未运行。
+- 本切片没有改动私有 FFI，`mr_adm_ffi_header_check` 无需重跑。
+
+**三平台。** 已在本分支手动触发 [Consistency 38990075874](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38990075874)，
+结果待确认，不借用三期的运行结果。
