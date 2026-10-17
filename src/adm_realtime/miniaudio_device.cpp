@@ -85,6 +85,9 @@ class MiniaudioDevice final : public IAudioOutputDevice {
         ma_device_config config = ma_device_config_init(ma_device_type_playback);
         config.playback.format = ma_format_f32;
         config.playback.channels = channels;
+        // Expose the native device width instead of letting WASAPI/ALSA hide a stereo fold.
+        config.wasapi.noAutoConvertSRC = static_cast<ma_bool8>(channels > 2U);
+        config.alsa.noAutoChannels = static_cast<ma_bool32>(channels > 2U);
         config.sampleRate = sample_rate;
         config.dataCallback = &data_callback;
         config.pUserData = this;
@@ -112,6 +115,20 @@ class MiniaudioDevice final : public IAudioOutputDevice {
             return make_error(ErrorCode::internal_error, "miniaudio device init failed");
         }
         have_device_ = true;
+        if (channels > 2U) {
+            ma_device_info info{};
+            const bool native_stereo =
+                ma_device_get_info(&device_, ma_device_type_playback, &info) == MA_SUCCESS &&
+                info.nativeDataFormatCount != 0U &&
+                std::ranges::all_of(std::span{info.nativeDataFormats}.first(info.nativeDataFormatCount),
+                                    [](const auto& format) { return format.channels > 0U && format.channels <= 2U; });
+            if (device_.playback.internalChannels <= 2U || native_stereo) {
+                teardown();
+                return make_error(ErrorCode::unsupported,
+                                  "multichannel monitoring requires a multichannel device or system spatial audio; use "
+                                  "binaural output for headphones");
+            }
+        }
         actual_sample_rate_ = device_.sampleRate;
 
         if (ma_device_start(&device_) != MA_SUCCESS) {

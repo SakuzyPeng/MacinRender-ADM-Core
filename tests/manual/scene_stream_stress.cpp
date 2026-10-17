@@ -109,7 +109,7 @@ struct StreamGuard {
     config.struct_size = sizeof(config);
     config.rendering.struct_size = sizeof(config.rendering);
     config.rendering.renderer = binaural ? ADM_RENDERER_SAF_BINAURAL : ADM_RENDERER_SAF;
-    config.rendering.output_layout = binaural ? "binaural" : "0+2+0";
+    config.rendering.output_layout = binaural ? "binaural" : "0+5+0";
     config.rendering.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
     config.rendering.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
     config.rendering.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
@@ -127,7 +127,7 @@ struct StreamGuard {
     adm_scene_renderer_config_t config{};
     config.struct_size = sizeof(config);
     config.renderer = binaural ? ADM_RENDERER_SAF_BINAURAL : ADM_RENDERER_SAF;
-    config.output_layout = binaural ? "binaural" : "0+2+0";
+    config.output_layout = binaural ? "binaural" : "0+5+0";
     config.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
     config.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
     config.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
@@ -263,8 +263,8 @@ pull_frames(adm_scene_stream_t* stream, std::vector<float>& output, adm_scene_pu
     return call_ok(adm_scene_stream_pull(stream, output.data(), k_chunk_frames, &result), stream, "pull");
 }
 
-[[nodiscard]] bool drain_to_eos(adm_scene_stream_t* stream) {
-    std::vector<float> output(static_cast<std::size_t>(k_chunk_frames) * 2U);
+[[nodiscard]] bool drain_to_eos(adm_scene_stream_t* stream, bool binaural) {
+    std::vector<float> output(static_cast<std::size_t>(k_chunk_frames) * (binaural ? 2U : 6U));
     for (std::uint32_t attempt = 0U; attempt < 10000U; ++attempt) {
         adm_scene_pull_result_t pulled{};
         if (!pull_frames(stream, output, pulled)) {
@@ -292,7 +292,7 @@ pull_frames(adm_scene_stream_t* stream, std::vector<float>& output, adm_scene_pu
     }
 
     FramePayload payload;
-    std::vector<float> output(static_cast<std::size_t>(k_chunk_frames) * 2U);
+    std::vector<float> output(static_cast<std::size_t>(k_chunk_frames) * (binaural ? 2U : 6U));
     std::vector<double> latencies_us;
     latencies_us.reserve(iterations);
     std::int64_t next_sample = 0;
@@ -339,12 +339,12 @@ pull_frames(adm_scene_stream_t* stream, std::vector<float>& output, adm_scene_pu
     }
 
     if (!call_ok(adm_scene_stream_signal_end(stream.value, 1U, next_sample), stream.value, "benchmark EOS") ||
-        !drain_to_eos(stream.value)) {
+        !drain_to_eos(stream.value, binaural)) {
         return false;
     }
     const double p99_us = percentile_99(std::move(latencies_us));
-    std::cout << "worker renderer=" << renderer_name(binaural) << " blocks=" << iterations
-              << " completion_p99_us=" << p99_us << " budget_us=10000\n";
+    std::cout << "worker renderer=" << renderer_name(binaural) << " channels=" << (binaural ? 2U : 6U)
+              << " blocks=" << iterations << " completion_p99_us=" << p99_us << " budget_us=10000\n";
     if (p99_us >= 10000.0) {
         std::cerr << "FAIL: worker completion p99 exceeds one input block budget\n";
         return false;
@@ -496,7 +496,7 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
     });
 
     const std::uint64_t pull_count = static_cast<std::uint64_t>(seconds) * 100U;
-    std::vector<float> output(static_cast<std::size_t>(k_chunk_frames) * 2U);
+    std::vector<float> output(static_cast<std::size_t>(k_chunk_frames) * (binaural ? 2U : 6U));
     std::vector<double> pull_latencies_us;
     pull_latencies_us.reserve(static_cast<std::size_t>(pull_count));
     bool pull_failed = false;
@@ -563,13 +563,14 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
         }
     }
 
-    std::cout << "continuous renderer=" << renderer_name(binaural) << " seconds=" << seconds
-              << " media_frames=" << status.media_frames_pulled << " underruns=" << status.underruns
-              << " policy_revision=" << status.semantic_policy_revision << " pull_p99_us=" << pull_p99_us
-              << " rss_baseline=" << rss_baseline << " rss_end=" << rss_end << " rss_peak=" << rss_peak << '\n';
+    std::cout << "continuous renderer=" << renderer_name(binaural) << " channels=" << (binaural ? 2U : 6U)
+              << " seconds=" << seconds << " media_frames=" << status.media_frames_pulled
+              << " underruns=" << status.underruns << " policy_revision=" << status.semantic_policy_revision
+              << " pull_p99_us=" << pull_p99_us << " rss_baseline=" << rss_baseline << " rss_end=" << rss_end
+              << " rss_peak=" << rss_peak << '\n';
 
     if (!call_ok(adm_scene_stream_signal_end(stream.value, 2U, producer_next_sample), stream.value, "stress EOS") ||
-        !drain_to_eos(stream.value)) {
+        !drain_to_eos(stream.value, binaural)) {
         ok = false;
     }
     return ok;

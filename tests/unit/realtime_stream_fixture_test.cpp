@@ -84,15 +84,17 @@ class PatternStream final : public mradm::IRenderStream {
 
 class PatternStreamFactory final : public mradm::realtime::IRenderStreamFactory {
   public:
-    explicit PatternStreamFactory(uint64_t total_frames = 0) : total_(total_frames) {}
+    explicit PatternStreamFactory(uint64_t total_frames = 0, uint32_t channels = 2U)
+        : total_(total_frames), channels_(channels) {}
 
     mradm::Result<std::unique_ptr<mradm::IRenderStream>>
     open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*opts*/, mradm::LogSink& /*logs*/) override {
-        return std::make_unique<PatternStream>(2U, total_);
+        return std::make_unique<PatternStream>(channels_, total_);
     }
 
   private:
     uint64_t total_{0};
+    uint32_t channels_{2U};
 };
 
 // A steady 1 kHz sine (oscillating, non-silent) for the loudness meter: ebur128's K-weighting
@@ -1217,9 +1219,9 @@ bool test_monitor_override_survives_switch() {
 // End-to-end with the real device sink on miniaudio's null backend (no hardware; the
 // callback is timer-driven). Validates the device plumbing + lifecycle: the playhead
 // advances and the engine tears down the device + worker cleanly on destruction.
-bool test_monitor_miniaudio_null_device() {
+bool test_monitor_miniaudio_null_device(uint32_t channels = 2U) {
     bool ok = true;
-    PatternStreamFactory factory;
+    PatternStreamFactory factory(0U, channels);
     auto device = mradm::realtime::make_miniaudio_device(/*use_null_backend=*/true);
     mradm::NullLogSink logs;
     mradm::AdmScene scene;
@@ -2005,6 +2007,7 @@ int main() {
     ok &= test_downmix_stream();
     ok &= test_downmix_short_reads_and_validation();
     ok &= test_monitor_miniaudio_null_device();
+    ok &= test_monitor_miniaudio_null_device(6U);
     ok &= test_monitor_lufs();
     ok &= test_monitor_hptf_applies();
     ok &= test_monitor_hptf_bypass_bit_identical();

@@ -110,8 +110,8 @@ struct RenderOptions {
     std::vector<std::string> input_channel_labels;
     // Monitor-only: route the multichannel monitor output through the macOS system Spatial
     // Audio stack (AVSampleBufferAudioRenderer) for system HRTF + dynamic head tracking,
-    // instead of folding to a stereo downmix on a raw device. Requires a supported multichannel
-    // speaker output_layout (5.1 … 22.2); ignored off-macOS and by offline rendering.
+    // instead of requiring a multichannel raw device. Raw stereo devices require binaural output.
+    // Requires a supported speaker output_layout (5.1 … 22.2); ignored by offline rendering.
     bool monitor_system_spatial{false};
     bool measure_loudness{false};       // opt-in: loudness norm applies global gain
     float loudness_target_lufs{-23.0F}; // EBU R128 broadcast standard
