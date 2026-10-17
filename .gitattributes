@@ -9,6 +9,9 @@
 /rust/rust-toolchain.toml text eol=lf
 # Frozen migration references are pinned by SHA-256 in tests/reference/retention.json.
 /tests/reference/** -text
+# Rust layout/policy goldens are compared byte for byte with the C++ output.
+/rust/crates/mradm-scene/tests/layouts-v1.txt -text
+/rust/crates/mradm-scene/tests/policy-v1/** -text
 
 # EAR source tables and spherical points are fingerprinted in PROVENANCE.json.
 /rust/crates/mradm-ear/src/data.rs text eol=lf
