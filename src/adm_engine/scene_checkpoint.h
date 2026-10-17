@@ -39,13 +39,13 @@ class Words {
             u32(word);
         }
     }
-    template <class T, class F> void optional(const std::optional<T>& v, F&& write) {
+    template <class T, class F> void optional(const std::optional<T>& v, const F& write) {
         boolean(v.has_value());
         if (v) {
             write(*v);
         }
     }
-    template <class T, class F> void list(const std::vector<T>& v, F&& write) {
+    template <class T, class F> void list(const std::vector<T>& v, const F& write) {
         u32(static_cast<std::uint32_t>(v.size()));
         for (const auto& item : v) {
             write(item);
