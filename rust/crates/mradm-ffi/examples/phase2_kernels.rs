@@ -24,6 +24,8 @@ mod meter_acceptance;
 mod params;
 #[path = "phase2/post_gain.rs"]
 mod post_gain;
+#[path = "phase2/room.rs"]
+mod room;
 #[path = "phase2/sofa.rs"]
 mod sofa;
 #[path = "phase2/stream_dsp.rs"]
@@ -322,6 +324,7 @@ fn run(out: &Path, fixtures: &Path) {
     capabilities.push("fft_dispatch=scalar (RustFFT SIMD features disabled)".into());
     fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
     sofa::run(out, fixtures);
+    room::run(out, fixtures);
     meter::run(out);
     meter_acceptance::run(out);
     post_gain::run(out);

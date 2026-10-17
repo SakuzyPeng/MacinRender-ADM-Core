@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include "adm/render_binaural.h"
+#include "adm/room.h"
 
 #include "phase2_io.h"
 #include "scene_output_session.h"
@@ -42,6 +43,9 @@ void validate_spec(const Json& spec) {
     const bool triple = spec.at("backend") == "triple-balance";
     const bool sofa = spec.contains("sofa");
     require(!sofa || spec.at("backend") == "binaural", "SOFA replay requires binaural rendering");
+    const bool room = spec.at("backend") == "room-binaural";
+    require(room == spec.contains("room") && room == spec.contains("tail_frames"),
+            "room replay names its room pack and tail");
     int version = triple ? 2 : 1;
     std::string switch_control = triple ? "switch speaker backend" : "switch stereo backend";
     if (sofa) {
@@ -51,6 +55,27 @@ void validate_spec(const Json& spec) {
     // Version 4: device DSP with an external SOFA set, a VBAP feed or resampled output.
     if (device_dsp && (sofa || spec.at("backend") == "vbap" || spec.at("input_rate") != spec.at("output_rate"))) {
         version = 4;
+    }
+    // Version 5 (PCM consistency 4.2): the case carries its own semantic policy and the element's
+    // semantic identity, so object rules match by id, name, content, programme, importance and dialogue.
+    // Version 6 (PCM consistency 4.2): room-binaural at the exact tier. Room switches are asynchronous,
+    // so the replay keeps one room and makes no backend switch.
+    if (room) {
+        require(!device_dsp && !sofa && spec.at("input_rate") == 48000 && spec.at("output_rate") == 48000,
+                "room replay renders 48 kHz to the application output");
+        version = 6;
+        switch_control = "no backend switch";
+    }
+    const bool semantic = spec.contains("semantic");
+    std::string semantic_control = "semantic gain scale=0.5";
+    if (semantic) {
+        require(!device_dsp && !sofa, "semantic replay uses the application output");
+        const auto& value = spec.at("semantic");
+        require(value.is_object() && value.size() == 2 && value.contains("identity") && value.contains("policy") &&
+                    value.at("policy").is_object(),
+                "invalid semantic replay field");
+        version = 5;
+        semantic_control = "semantic policy and identity from the case";
     }
     Json fixed{{"version", version},
                {"clock", "epoch*2s + input_sample/input_rate; +1s at sample 10240"},
@@ -62,7 +87,7 @@ void validate_spec(const Json& spec) {
                {"controls",
                 {{"2048", "pose(37,23,-19)"},
                  {"4096", "generation=2"},
-                 {"6144", "semantic gain scale=0.5"},
+                 {"6144", semantic_control},
                  {"8192", switch_control},
                  {"10240", "advance virtual clock by 1s; expire tracking"}}}};
     if (device_dsp) {
@@ -80,7 +105,8 @@ void validate_spec(const Json& spec) {
             throw std::runtime_error("unsupported replay field: " + field);
         }
     }
-    require(triple || spec.at("backend") == "vbap" || spec.at("backend") == "binaural", "unknown replay backend");
+    require(triple || room || spec.at("backend") == "vbap" || spec.at("backend") == "binaural",
+            "unknown replay backend");
 }
 
 template <class T> T take(Result<T> result) {
@@ -93,6 +119,22 @@ void done(Result<void> result) {
     if (!result) {
         throw std::runtime_error(result.error().message);
     }
+}
+// The replayed element's ADM identity (version 5), as SceneStreamEngine receives it from an import.
+live_scene::SemanticIdentity identity(const Json& value) {
+    live_scene::SemanticIdentity result;
+    result.object_id = value.at("object_id").get<std::string>();
+    result.object_name = value.at("object_name").get<std::string>();
+    result.track_uid = value.at("track_uid").get<std::string>();
+    result.importance = value.at("importance").get<int>();
+    result.dialogue_id = value.at("dialogue_id").get<int>();
+    for (const auto& [field, target] :
+         {std::pair{"contents", &result.contents}, std::pair{"programmes", &result.programmes}}) {
+        for (const auto& entity : value.at(field)) {
+            target->push_back({entity.at("id").get<std::string>(), entity.at("name").get<std::string>()});
+        }
+    }
+    return result;
 }
 void save_json(const std::filesystem::path& path, const Json& data) {
     std::ofstream out(path, std::ios::binary);
@@ -118,12 +160,17 @@ class Capture final : public IAudioOutputDevice {
 };
 class Replay {
   public:
-    Replay(const Json& case_spec, const std::filesystem::path& sofa_path)
+    Replay(const Json& case_spec, const std::filesystem::path& sofa_path, const std::filesystem::path& room_path)
         : spec(case_spec), device_dsp(case_spec.at("device_dsp").get<bool>()) {
         config.renderer.renderer =
             spec.at("backend") == "vbap" ? RendererSelection::saf : RendererSelection::saf_binaural;
         if (spec.at("backend") == "triple-balance") {
             config.renderer.renderer = RendererSelection::triple_balance;
+        }
+        if (spec.at("backend") == "room-binaural") {
+            config.renderer.renderer = RendererSelection::room_binaural;
+            config.renderer.room.profile = take(RoomProfile::load(room_path));
+            config.renderer.room.quality = RoomQuality::exact;
         }
         config.renderer.output_layout = spec.at("layout").get<std::string>();
         config.renderer.sofa_path = sofa_path;
@@ -279,7 +326,9 @@ class Replay {
                 done(stream->configure_generation(epoch, generation, std::span{&element, 1U}));
                 reconfigure = true;
             }
-            if (position == 6144) {
+            if (position == 6144 && spec.contains("semantic")) {
+                done(stream->set_semantic_policy_json(spec.at("semantic").at("policy").dump(), 99));
+            } else if (position == 6144) {
                 // Exercises the Rust policy arithmetic: scale, a dB value where libm and glibc powf
                 // differ by one ulp, the extent/diffuse/divergence products and clamps, and a polar
                 // position offset through the portable scene_math (PCM consistency 1.2 and 1.3).
@@ -304,7 +353,7 @@ class Replay {
                 }
                 done(stream->switch_backend(next));
             }
-            if (position == 8192 && channels == 2) {
+            if (position == 8192 && channels == 2 && config.renderer.renderer != RendererSelection::room_binaural) {
                 auto next = config.renderer;
                 if (spec.contains("sofa")) {
                     next.sofa_path.clear();
@@ -340,6 +389,9 @@ class Replay {
         live_scene::ElementDescriptor element;
         element.element_id = 1;
         element.role = live_scene::ElementRole::object;
+        if (spec.contains("semantic")) {
+            element.semantic_identity = identity(spec.at("semantic").at("identity"));
+        }
         uint64_t generation = 1;
         done(stream->configure_generation(epoch, generation, std::span{&element, 1U}));
         live_scene::StateEntry initial;
@@ -410,9 +462,11 @@ class Replay {
             std::this_thread::yield();
         }
         healthy();
+        // A room-binaural replay (version 6, 48 kHz) also delivers the room tail after EOS.
         const auto expected =
-            (static_cast<uint64_t>(end - target) * config.output_sample_rate + config.renderer.sample_rate - 1) /
-            config.renderer.sample_rate;
+            ((static_cast<uint64_t>(end - target) * config.output_sample_rate + config.renderer.sample_rate - 1) /
+             config.renderer.sample_rate) +
+            spec.value("tail_frames", uint64_t{0});
         require(captured.size() == expected * channels, "replay rational frame count mismatch");
         if (epoch == 1) {
             for (uint32_t input_start : {1024U, 3072U, 6144U, 10240U}) {
@@ -505,6 +559,14 @@ int main(int argc, char** argv) {
             sofa_path = std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures" / name;
             require(std::filesystem::is_regular_file(sofa_path), "missing replay SOFA fixture");
         }
+        std::filesystem::path room_path;
+        if (spec.contains("room")) {
+            const std::filesystem::path name(spec.at("room").get<std::string>());
+            require(name.is_relative() && name.lexically_normal() == name && *name.begin() != "..",
+                    "invalid replay room fixture name");
+            room_path = std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures" / name;
+            require(std::filesystem::is_regular_file(room_path), "missing replay room fixture");
+        }
         const std::filesystem::path directory(argv[2]);
         std::filesystem::create_directories(directory);
         save_json(directory / "events.json", spec);
@@ -520,7 +582,7 @@ int main(int argc, char** argv) {
                 require(unsetenv("MR_ADM_TRACE_DIR") == 0, "cannot disable repeat trace");
 #endif
             }
-            Replay replay(spec, sofa_path);
+            Replay replay(spec, sofa_path, room_path);
             Json lengths = Json::array();
             for (uint64_t epoch : {1U, 2U}) {
                 replay.run_epoch(epoch, epoch == 1 ? 0U : k_seek_target, epoch == 1 ? k_main_epoch_end : k_seek_end);
