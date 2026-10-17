@@ -446,7 +446,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 | 4.3 | Rust 渲染场景：导入投影与声道床 | 新 crate 持有渲染场景：`src/adm_metadata` 的复制、CHNA 与 UID 规范化、声道床目录与布局迁入。C++ `AdmScene` 改为由 Rust 场景生成的只读视图，`RenderPlan` 携带 Rust 场景句柄。场景检查点与 PCM 逐位相同。 |
 | 4.4 | 语义策略与参数 JSON | 语义策略的解析、匹配、合并、应用、报告与模板，以及 DirectSpeakers 矩阵与屏幕 JSON 迁入 Rust，N01 的 JSON 残留随之消除。`SceneStreamEngine` 的逐更新应用改调 Rust。报告与模板 JSON 保持逐字节相同。 |
 | 4.5 | 扬声器后端与公共渲染层 | EAR、VBAP（含 Scene 胶水）、HOA，DirectSpeakers 路由与矩阵、标签别名、布局表（含 Apple 覆盖几何）、LFE / 22.2 路由与 `speaker_pcm` 离线驱动迁入 Rust。渲染循环由 Rust 驱动，进度、日志、取消与 PCM sink 经 C 回调接口，计量顺序不变。 |
-| 4.6 | Triple Balance 与 room | Triple Balance 的场景改写、床、文件流式与 Scene 胶水，room 的准备、准备线程状态机与 Scene 胶水迁入 Rust。只被冻结参考使用的 C++ 按参考保留规则处理。 |
+| 4.6 | Triple Balance 与 room | Triple Balance 的场景改写、床、文件流式与 Scene 胶水，room 的准备、准备线程状态机与 Scene 胶水迁入 Rust。只被冻结参考使用的 C++（`panner` / `size_*`）连同参考冻结进 `tests/reference/`。 |
 | 4.7 | 双耳 | 计划构建（channelLock 参考对、cloud、divergence×extent 槽、种子、ADR 0017 分组）、OLA 源归约、LFE 旁路、spreader 适配器 / 延迟环 / 排空、工作池、HRTF 网格缓存与 Scene 胶水迁入 Rust，保持源索引归约顺序。 |
 | 4.8 | PCM 写出与后处理 IO | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据与 peak / loudness 公共 API 迁入 Rust；编码器沿用同一 sink 接口，留在 C 岛；删除失去调用者的私有 FFI 头。 |
 | 4.9 | S03 对象平滑规则 | 有意的数值变化：文件流式对象平滑改为按绝对样本网格的内部块插值，与离线渲染一致、与请求分块无关；增加开平滑的文件流式重放（固定与碎片分块逐位相同）并设门禁。离线平滑输出不变。 |
@@ -457,6 +457,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 - 渲染场景先于后端：迁入 Rust 的后端直接读取 Rust 场景，不需要临时的 C++→Rust 场景编组。
 - S03 放在后端迁移之后：届时它只改 Rust 代码，也不影响既有门禁。
 - 双耳卷积与分数比率重采样的分块依赖仍按分块配置分别门禁；S04、S05 的运行时条件不变。
+- 4.5–4.7 删除被冻结参考引用的生产 C++ 时，把旧实现连同参考冻结进 `tests/reference/` 并登记哈希（维护者 2026-10-16 决定），见[逆转路线](RUST_INVERSION_ROADMAP.md#c-删除与冻结参考)。
 
 **4.1 状态**：ADR 0021、逆转路线、C/C++ 规模棘轮（生产 45,090 行、岛 3,213 行起算）、Rust 生产路径检查点写出器与离线场景检查点已提交。Linux x64 本机上，候选的 242 个 PCM id、全部内核文件与既有 26,358 个诊断检查点都与 `0a3b362` 逐字节相同，新增 124 个场景检查点；三平台 Consistency 38990075874 结果待确认。见 [4.1 记录](RUST_INVERSION_BASELINE.md)。
 

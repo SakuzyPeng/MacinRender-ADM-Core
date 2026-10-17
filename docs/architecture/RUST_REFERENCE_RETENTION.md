@@ -53,7 +53,8 @@
 2026-10-16：登记表现有 18 个单元、49 个文件（下文 2026-10-07 之后新增 `osc_protocol` 与 `hptf_parse`），全部保留，
 三个退役条件均未解除。[ADR 0021](../adr/0021-rust-primary-project.md) 起，冻结参考引用的生产头（如 `render_common.h`、
 `speaker_layouts.h`、`speaker_pcm.h`、Triple Balance 的 `panner.h` / `size_*`、`adm/scene.h`）所属的 C++ 在迁出前，
-须把被比较的旧实现连同参考一起冻结，或按本文条件退役该单元，见 [Rust 主导逆转路线](RUST_INVERSION_ROADMAP.md#c-删除与冻结参考)。
+须把被比较的旧实现连同参考一起冻结进 `tests/reference/` 并登记哈希（维护者 2026-10-16 决定，不为退役安排发布），
+做法见 [Rust 主导逆转路线](RUST_INVERSION_ROADMAP.md#c-删除与冻结参考)。
 
 2026-10-07 [二期限定矩阵已结项](RUST_PHASE2_CLOSEOUT.md)。本次决定继续保留全部 16 个单元、
 45 个文件，不批量解除登记表的三个退出条件。跨平台 PCM 相等不能替代各参考的旧算法行为、

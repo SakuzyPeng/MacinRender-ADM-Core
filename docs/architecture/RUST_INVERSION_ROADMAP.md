@@ -88,10 +88,18 @@ C ABI 目前替代不了这些路径：离线没有 listener orientation；文�
 
 `tests/reference/` 的冻结参考引用若干生产头，例如 `render_common.h`、`speaker_layouts.h`、`speaker_pcm.h`、
 Triple Balance 的 `panner.h` / `size_panner.h` / `size_processor.h` 与 `adm/scene.h`。删除这些 C++ 之前，
-按 [参考实现保留与退役](RUST_REFERENCE_RETENTION.md) 二选一：
+按 [参考实现保留与退役](RUST_REFERENCE_RETENTION.md) 有两条路：把被比较的旧实现连同参考一起冻结，或满足三条退役条件后退役该单元。
+后者的 `released` 要求正式 `v*` tag，而最新 tag v1.9.1 早于这些迁移。
 
-- 把被比较的旧实现连同参考一起冻结进 `tests/reference/`，登记新哈希；
-- 满足三条退役条件后退役该单元。其中 `released` 要求正式 `v*` tag，而最新 tag v1.9.1 早于这些迁移，需要维护者安排发布。
+**维护者决定（2026-10-16）：冻结进 `tests/reference/`。** 四期各切片删除被参考引用的生产 C++ 时：
+
+1. 把参考实际用到的旧实现（头文件及其依赖的最小实现）复制进对应单元的 `tests/reference/<unit>/`，
+   参考改为包含这份冻结副本，不再包含生产头；
+2. 在 `tests/reference/retention.json` 登记新文件与 SHA-256，`check-reference-retention.py` 校验；
+3. 只做使其脱离生产头所需的机械改动，不改被比较的算法；改动写进该切片的记录；
+4. 冻结副本计入 `reference` 区域，不计入生产 C/C++ 棘轮；参考退役时随单元一起删除。
+
+不为此安排正式发布；退役仍按原有三条条件另行审查。
 
 ## 与 PCM 一致性审计的关系
 
