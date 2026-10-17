@@ -161,6 +161,11 @@ bool verify_invalid_policy_rejected() {
     if (!policy) {
         ok &= check(policy.error().code == mradm::ErrorCode::invalid_argument, "invalid policy error code");
     }
+    // A number outside double range is an invalid policy, not an escaping exception.
+    const auto overflow = mradm::parse_semantic_policy(
+        R"json({"schema":"mradm.semantic-policy.v1","global":{"gain":{"gain_db":1e400}}})json", "<memory>");
+    ok &= check(!overflow.has_value() && overflow.error().code == mradm::ErrorCode::invalid_argument,
+                "number overflow rejected as invalid policy");
     return ok;
 }
 
@@ -228,6 +233,12 @@ bool verify_semantic_report() {
     const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
     ok &= check(text.find("\"head_locked\"") != std::string::npos,
                 "semantic report includes original/effective head_locked values");
+    ok &=
+        check(text.find("\"policy\": \"policy.json\"") != std::string::npos, "semantic report policy path is a string");
+    options.policy_path.clear();
+    const auto anonymous = mradm::build_semantic_report(original, effective, &policy, options);
+    ok &= check(anonymous.find("\"policy\": null") != std::string::npos,
+                "semantic report without a path has null policy");
     return ok;
 }
 
@@ -758,6 +769,9 @@ bool verify_hoa() {
                             text.find("\"matched_rules\"") != std::string::npos &&
                             text.find("\"objects[0]\"") != std::string::npos,
                         "hoa report includes matched rule names");
+            ok &= check(text.find("\"end_sample\": null") != std::string::npos &&
+                            text.find("\"end_sample\": [") == std::string::npos,
+                        "hoa report writes an unbounded end_sample as null");
         }
     }
     return ok;
