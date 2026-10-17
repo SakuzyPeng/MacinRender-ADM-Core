@@ -6,11 +6,9 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
-#include <fstream>
 #include <limits>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
@@ -39,10 +37,6 @@ constexpr std::string_view k_head_locked_key = "head_locked";
 
 [[nodiscard]] Error invalid_policy(const std::string& path, const std::string& message) {
     return {ErrorCode::invalid_argument, "invalid semantic policy: " + message, path};
-}
-
-[[nodiscard]] Error io_policy(const std::filesystem::path& path, const std::string& message) {
-    return {ErrorCode::io_error, "semantic policy I/O error: " + message, path.string()};
 }
 
 [[nodiscard]] bool
@@ -775,20 +769,6 @@ rule_matches(const SceneObject& object, const ObjectMembership& membership, cons
     return false;
 }
 
-[[nodiscard]] std::vector<std::string>
-matched_rule_names(const SceneObject& object, const ObjectMembership& membership, const SemanticPolicy& policy) {
-    std::vector<std::string> out;
-    if (policy.global.has_value()) {
-        out.emplace_back("global");
-    }
-    for (std::size_t i = 0; i < policy.objects.size(); ++i) {
-        if (rule_matches(object, membership, policy.objects.at(i))) {
-            out.push_back(fmt::format("objects[{}]", i));
-        }
-    }
-    return out;
-}
-
 // Policy arithmetic lives in Rust (mradm-dsp `semantic_policy`); these helpers only pack the
 // optional parameters and copy block fields. Booleans and filters stay here.
 void policy_check(int status) noexcept {
@@ -866,21 +846,6 @@ void apply_object_override(SceneObject& object, const SemanticPolicyOverride& po
         return true;
     }
     return false;
-}
-
-[[nodiscard]] std::vector<std::string> matched_hoa_rule_names(const SceneHOATracks& pack,
-                                                              const SemanticPolicy& policy) {
-    std::vector<std::string> out;
-    if (policy.global && (policy.global->gain || policy.global->head_locked)) {
-        out.emplace_back("global");
-    }
-    for (std::size_t i = 0; i < policy.objects.size(); ++i) {
-        if ((policy.objects.at(i).gain || policy.objects.at(i).head_locked) &&
-            hoa_rule_matches(pack, policy.objects.at(i))) {
-            out.push_back(fmt::format("objects[{}]", i));
-        }
-    }
-    return out;
 }
 
 // Effective gain for a HOA pack: global gain first, then each matching rule's gain
@@ -1045,163 +1010,6 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     }
 }
 
-[[nodiscard]] Json source_gain_value(double value) {
-    if (std::isfinite(value)) {
-        return value;
-    }
-    return std::isnan(value) ? Json("NaN") : Json(std::signbit(value) ? "-Infinity" : "Infinity");
-}
-
-[[nodiscard]] Json block_json(const SceneObjectBlock& block) {
-    Json out = Json::object();
-    out["gain"] = block.gain;
-    out["start_sample"] = block.start_sample;
-    out["end_sample"] = block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{} : Json(block.end_sample);
-    out["cartesian"] = block.position.cartesian;
-    out["position"] = block.position.cartesian
-                          ? Json{{"X", block.position.x}, {"Y", block.position.y}, {"Z", block.position.z}}
-                          : Json{{"azimuth", block.position.azimuth},
-                                 {"elevation", block.position.elevation},
-                                 {"distance", block.position.distance}};
-    if (block.adm_source) {
-        const auto& source = *block.adm_source;
-        out["source"] = {{"gain_present", source.gain.present},
-                         {"gain_unit", source.gain.decibels ? "dB" : "linear"},
-                         {"gain_value", source_gain_value(source.gain.value)},
-                         {"gain_linear", source.gain.linear},
-                         {"rtime_present", source.rtime_present},
-                         {"rtime_samples", source.rtime_samples},
-                         {"duration_samples", source.duration_samples ? Json(*source.duration_samples) : Json{}}};
-    }
-    out["diffuse"] = block.diffuse;
-    out["head_locked"] = block.head_locked;
-    out["width"] = block.width;
-    out["height"] = block.height;
-    out["depth"] = block.depth;
-    out["divergence"] = block.divergence;
-    out["divergence_azimuth_range"] = block.divergence_azimuth_range;
-    out["divergence_position_range"] = block.divergence_position_range;
-    out["channel_lock"] = block.channel_lock;
-    if (block.channel_lock_max_distance) {
-        out["channel_lock_max_distance"] = *block.channel_lock_max_distance;
-    } else {
-        out["channel_lock_max_distance"] = nullptr;
-    }
-    out["jump_position"] = block.jump_position;
-    if (block.interp_length_samples) {
-        out["interp_length_samples"] = *block.interp_length_samples;
-    } else {
-        out["interp_length_samples"] = nullptr;
-    }
-    // Position (always reported as polar for stable diffing).
-    const SceneBlockPosition polar = scene_position_to_polar(block.position);
-    out["azimuth"] = polar.azimuth;
-    out["elevation"] = polar.elevation;
-    out["distance"] = polar.distance;
-    return out;
-}
-
-[[nodiscard]] Json ds_block_json(const SceneDirectSpeakersBlock& ds) {
-    Json out = Json::object();
-    out["speaker_labels"] = ds.speaker_labels;
-    out["gain"] = ds.gain;
-    out["head_locked"] = ds.head_locked;
-    out["has_position"] = ds.has_position;
-    out["azimuth"] = ds.azimuth;
-    out["elevation"] = ds.elevation;
-    out["distance"] = ds.distance;
-    out["start_sample"] = ds.start_sample;
-    out["end_sample"] = ds.end_sample == std::numeric_limits<uint64_t>::max() ? Json(nullptr) : Json(ds.end_sample);
-    if (ds.adm_source) {
-        const auto& source = *ds.adm_source;
-        out["source"] = {
-            {"gain_present", source.gain.present},
-            {"gain_unit", source.gain.decibels ? "dB" : "linear"},
-            {"gain_value", source.gain.value},
-            {"gain_linear", source.gain.linear},
-            {"rtime_present", source.rtime_present},
-            {"rtime_samples", source.rtime_samples},
-            {"duration_samples", source.duration_samples ? Json(*source.duration_samples) : Json(nullptr)}};
-    }
-    if (ds.source_position) {
-        const auto& position = *ds.source_position;
-        out["source_position"] = {{"cartesian", position.cartesian},
-                                  {"xyz", Json::array({position.x, position.y, position.z})},
-                                  {"polar", Json::array({position.azimuth, position.elevation, position.distance})}};
-    }
-    if (ds.low_pass_hz) {
-        out["low_pass_hz"] = *ds.low_pass_hz;
-    } else {
-        out["low_pass_hz"] = nullptr;
-    }
-    return out;
-}
-
-[[nodiscard]] Json capability_json(const CapabilityReport& caps) {
-    Json out = Json::object();
-    out["supports_channel_lock"] = caps.supports_channel_lock;
-    out["supports_object_divergence"] = caps.supports_object_divergence;
-    out["supports_diffuse"] = caps.supports_diffuse;
-    out["hrtf_sources"] = caps.hrtf_sources;
-    return out;
-}
-
-[[nodiscard]] Json neutral_diffuse_policy() {
-    return Json{{"enabled", true}, {"scale", 1.0F}, {"max", 1.0F}};
-}
-
-[[nodiscard]] Json neutral_extent_policy() {
-    return Json{{"enabled", true},
-                {"scale", 1.0F},
-                {"width_scale", 1.0F},
-                {"height_scale", 1.0F},
-                {"depth_scale", 1.0F},
-                {"max", 1.0F}};
-}
-
-[[nodiscard]] Json neutral_divergence_policy() {
-    return Json{{"enabled", true}, {"scale", 1.0F}, {"range_scale", 1.0F}, {"max_range", 120.0F}};
-}
-
-[[nodiscard]] Json neutral_interpolation_policy() {
-    return Json{{"honor_jump_position", true}, {"max_ms", 0U}};
-}
-
-// Neutral gain = identity. mute is intentionally omitted: its mere presence
-// would force object.mute, un-muting originally muted objects.
-[[nodiscard]] Json neutral_gain_policy() {
-    return Json{{"scale", 1.0F}, {"gain_db", 0.0F}};
-}
-
-// Neutral position = zero offset only (a no-op under the position-change guard).
-// Absolute / lock keys are intentionally omitted: their mere presence would
-// overwrite the block position.
-[[nodiscard]] Json neutral_position_policy() {
-    return Json{{"offset", {{"azimuth", 0.0F}, {"elevation", 0.0F}, {"distance", 0.0F}}}};
-}
-
-// Neutral DirectSpeakers = identity. No speaker_label/lfe filter (applies to all
-// DS blocks), no mute; gain x1 and zero-offset position are both no-ops.
-[[nodiscard]] Json neutral_direct_speakers_policy() {
-    return Json{{"gain", neutral_gain_policy()}, {"position", neutral_position_policy()}};
-}
-
-// The generated template, applied unmodified, must be an identity (no scene
-// change). channel_lock is intentionally omitted: it has no neutral value —
-// `enabled` forces the lock on/off either way — so users add it explicitly.
-// head_locked is likewise omitted because both boolean values are active edits.
-[[nodiscard]] Json neutral_override_template() {
-    Json out = Json::object();
-    out["diffuse"] = neutral_diffuse_policy();
-    out["extent"] = neutral_extent_policy();
-    out["divergence"] = neutral_divergence_policy();
-    out["interpolation"] = neutral_interpolation_policy();
-    out["gain"] = neutral_gain_policy();
-    out["position"] = neutral_position_policy();
-    out["direct_speakers"] = neutral_direct_speakers_policy();
-    return out;
-}
-
 [[nodiscard]] std::string rule_label(const SemanticObjectRule& rule) {
     if (!rule.id.empty()) {
         return "id=" + rule.id;
@@ -1233,54 +1041,6 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
                            rule.importance_max.has_value() ? std::to_string(*rule.importance_max) : "");
     }
     return "all";
-}
-
-[[nodiscard]] Json hoa_block_json(const SceneHOAChannelBlock& block) {
-    return Json{
-        {"gain", block.gain},
-        {"head_locked", block.head_locked},
-        {"start_sample", block.start_sample},
-        {"end_sample", block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{} : Json(block.end_sample)}};
-}
-
-// HOA packs (separate from objects): report pack gain/mute plus every block's
-// original/effective headLocked value.
-[[nodiscard]] Json
-hoa_tracks_report_json(const AdmScene& original, const AdmScene& effective, const SemanticPolicy* policy) {
-    Json out = Json::array();
-    const std::size_t hoa_count = std::min(original.hoa_tracks.size(), effective.hoa_tracks.size());
-    for (std::size_t hi = 0; hi < hoa_count; ++hi) {
-        const auto& orig_pack = original.hoa_tracks.at(hi);
-        const auto& eff_pack = effective.hoa_tracks.at(hi);
-        Json pack = Json::object();
-        pack["object_id"] = eff_pack.object_id;
-        pack["pack_format_id"] = eff_pack.pack_format_id;
-        pack["matched_rules"] =
-            policy != nullptr ? matched_hoa_rule_names(orig_pack, *policy) : std::vector<std::string>{};
-        pack["original_gain"] = orig_pack.gain;
-        pack["effective_gain"] = eff_pack.gain;
-        pack["original_mute"] = orig_pack.mute;
-        pack["effective_mute"] = eff_pack.mute;
-        pack["original_head_locked"] = orig_pack.head_locked;
-        pack["effective_head_locked"] = eff_pack.head_locked;
-        pack["blocks"] = Json::array();
-        const std::size_t channel_count = std::min(orig_pack.channels.size(), eff_pack.channels.size());
-        for (std::size_t ci = 0; ci < channel_count; ++ci) {
-            const auto& orig_channel = orig_pack.channels.at(ci);
-            const auto& eff_channel = eff_pack.channels.at(ci);
-            const std::size_t block_count = std::min(orig_channel.blocks.size(), eff_channel.blocks.size());
-            for (std::size_t bi = 0; bi < block_count; ++bi) {
-                Json block = Json::object();
-                block["track_uid"] = eff_channel.track_uid;
-                block["block_index"] = bi;
-                block["original"] = hoa_block_json(orig_channel.blocks.at(bi));
-                block["effective"] = hoa_block_json(eff_channel.blocks.at(bi));
-                pack["blocks"].push_back(std::move(block));
-            }
-        }
-        out.push_back(std::move(pack));
-    }
-    return out;
 }
 
 } // namespace
@@ -1399,16 +1159,6 @@ Result<SemanticPolicy> parse_semantic_policy(std::string_view json, std::string 
         }
     }
     return out;
-}
-
-Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& path) {
-    std::ifstream in(path);
-    if (!in) {
-        return tl::unexpected{io_policy(path, "cannot open file")};
-    }
-    std::stringstream buf;
-    buf << in.rdbuf();
-    return parse_semantic_policy(buf.str(), path.string());
 }
 
 ResolvedSemanticPolicy resolve_semantic_policy(const SemanticPolicy& policy, const SemanticPolicyIdentity& identity) {
@@ -1554,152 +1304,6 @@ Result<void> apply_semantic_policy(AdmScene& scene,
                 }
             }
         }
-    }
-    return {};
-}
-
-std::string build_semantic_report(const AdmScene& original,
-                                  const AdmScene& effective,
-                                  const SemanticPolicy* policy,
-                                  const SemanticPolicyReportOptions& options,
-                                  const std::vector<std::string>& warnings) {
-    Json doc = Json::object();
-    doc["schema"] = "mradm.semantic-report.v1";
-    doc["renderer"] = options.renderer;
-    doc["policy"] = options.policy_path.empty() ? Json{} : Json(options.policy_path);
-    doc["capabilities"] = capability_json(options.capabilities);
-    doc["warnings"] = warnings;
-    if (!options.renderer_effective_json.empty()) {
-        doc["renderer_effective"] = Json::parse(options.renderer_effective_json);
-    }
-    doc["objects"] = Json::array();
-
-    const auto membership = build_membership(original);
-    const ObjectMembership empty_membership;
-
-    const std::size_t object_count = std::min(original.objects.size(), effective.objects.size());
-    for (std::size_t oi = 0; oi < object_count; ++oi) {
-        const auto& orig_obj = original.objects.at(oi);
-        const auto& eff_obj = effective.objects.at(oi);
-        const auto mem_it = membership.find(orig_obj.id);
-        const ObjectMembership& mem = mem_it != membership.end() ? mem_it->second : empty_membership;
-        Json obj = Json::object();
-        obj["id"] = eff_obj.id;
-        obj["name"] = eff_obj.name;
-        obj["matched_rules"] =
-            policy != nullptr ? matched_rule_names(orig_obj, mem, *policy) : std::vector<std::string>{};
-        // Object-level gain/mute (changed by gain policy; not part of per-block detail).
-        obj["original_gain"] = orig_obj.gain;
-        obj["effective_gain"] = eff_obj.gain;
-        obj["original_mute"] = orig_obj.mute;
-        obj["effective_mute"] = eff_obj.mute;
-        obj["original_head_locked"] = orig_obj.head_locked;
-        obj["effective_head_locked"] = eff_obj.head_locked;
-        obj["end_sample"] =
-            eff_obj.end_sample == std::numeric_limits<uint64_t>::max() ? Json{} : Json(eff_obj.end_sample);
-        if (orig_obj.adm_source) {
-            const auto& source = *orig_obj.adm_source;
-            obj["source"] = {{"gain_present", source.gain.present},
-                             {"gain_unit", source.gain.decibels ? "dB" : "linear"},
-                             {"gain_value", source_gain_value(source.gain.value)},
-                             {"gain_linear", source.gain.linear},
-                             {"mute_present", source.mute_present},
-                             {"mute", source.mute},
-                             {"start_present", source.start_present},
-                             {"start_samples", source.start_samples},
-                             {"absolute_start_samples", source.absolute_start_samples},
-                             {"duration_samples", source.duration_samples ? Json(*source.duration_samples) : Json{}},
-                             {"child_objects", source.child_objects},
-                             {"has_parent", source.has_parent}};
-        }
-        obj["blocks"] = Json::array();
-
-        const std::size_t track_count = std::min(orig_obj.tracks.size(), eff_obj.tracks.size());
-        for (std::size_t ti = 0; ti < track_count; ++ti) {
-            const auto& orig_track = orig_obj.tracks.at(ti);
-            const auto& eff_track = eff_obj.tracks.at(ti);
-            const std::size_t block_count = std::min(orig_track.blocks.size(), eff_track.blocks.size());
-            for (std::size_t bi = 0; bi < block_count; ++bi) {
-                Json block = Json::object();
-                block["kind"] = "objects";
-                block["track_uid"] = eff_track.track_uid;
-                block["pcm_channel"] = eff_track.channel_index ? Json(*eff_track.channel_index) : Json{};
-                block["block_index"] = bi;
-                block["original"] = block_json(orig_track.blocks.at(bi));
-                block["effective"] = block_json(eff_track.blocks.at(bi));
-                obj["blocks"].push_back(std::move(block));
-            }
-            const std::size_t ds_count = std::min(orig_track.ds_blocks.size(), eff_track.ds_blocks.size());
-            for (std::size_t bi = 0; bi < ds_count; ++bi) {
-                Json block = Json::object();
-                block["kind"] = "directspeakers";
-                block["track_uid"] = eff_track.track_uid;
-                block["block_index"] = bi;
-                block["original"] = ds_block_json(orig_track.ds_blocks.at(bi));
-                block["effective"] = ds_block_json(eff_track.ds_blocks.at(bi));
-                obj["blocks"].push_back(std::move(block));
-            }
-        }
-        doc["objects"].push_back(std::move(obj));
-    }
-
-    doc["hoa_tracks"] = hoa_tracks_report_json(original, effective, policy);
-
-    return doc.dump(2);
-}
-
-Result<void> write_semantic_report_file(const std::filesystem::path& path,
-                                        const AdmScene& original,
-                                        const AdmScene& effective,
-                                        const SemanticPolicy* policy,
-                                        const SemanticPolicyReportOptions& options,
-                                        const std::vector<std::string>& warnings) {
-    std::ofstream out(path);
-    if (!out) {
-        return tl::unexpected{io_policy(path, "cannot open report for writing")};
-    }
-    out << build_semantic_report(original, effective, policy, options, warnings) << '\n';
-    if (!out) {
-        return tl::unexpected{io_policy(path, "failed to write report")};
-    }
-    return {};
-}
-
-std::string build_semantic_policy_template(const AdmScene& scene) {
-    Json doc = Json::object();
-    doc["schema"] = SemanticPolicy::schema_id;
-    doc["global"] = neutral_override_template();
-    doc["objects"] = Json::array();
-
-    for (const auto& object : scene.objects) {
-        Json rule = neutral_override_template();
-        rule["id"] = object.id;
-        rule["name"] = object.name;
-        if (!object.tracks.empty()) {
-            rule["track_uid"] = object.tracks.front().track_uid;
-        }
-        doc["objects"].push_back(std::move(rule));
-    }
-    // HOA packs: only gain/mute apply, so emit a lean neutral rule (no position /
-    // diffuse / etc. that are meaningless for a soundfield).
-    for (const auto& pack : scene.hoa_tracks) {
-        Json rule = Json::object();
-        rule["id"] = pack.object_id;
-        rule["pack_format"] = pack.pack_format_id;
-        rule["gain"] = neutral_gain_policy();
-        doc["objects"].push_back(std::move(rule));
-    }
-    return doc.dump(2);
-}
-
-Result<void> write_semantic_policy_template_file(const std::filesystem::path& path, const AdmScene& scene) {
-    std::ofstream out(path);
-    if (!out) {
-        return tl::unexpected{io_policy(path, "cannot open policy template for writing")};
-    }
-    out << build_semantic_policy_template(scene) << '\n';
-    if (!out) {
-        return tl::unexpected{io_policy(path, "failed to write policy template")};
     }
     return {};
 }

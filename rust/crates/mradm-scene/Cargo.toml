@@ -4,11 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Render scene: input import, channel beds and loudspeaker layout tables"
+description = "Render scene: input import, channel beds, loudspeaker layout tables and the semantic policy"
 
 [dependencies]
 mradm-adm = { path = "../mradm-adm" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
+mradm-json = { path = "../mradm-json" }
 mradm-wav = { path = "../mradm-wav" }
 
 [dev-dependencies]

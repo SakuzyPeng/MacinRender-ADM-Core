@@ -7,8 +7,8 @@
 #include <spdlog/spdlog.h>
 
 #include "adm/io.h"
+#include "adm/render.h"
 #include "adm/scene.h"
-#include "adm/semantic_policy.h"
 
 #include "commands.h"
 
@@ -238,13 +238,8 @@ int run_inspect(const InspectCliOptions& opts) {
         }
         fmt::print("{}", result.value());
     } else if (!opts.semantic_policy_template_path.empty()) {
-        auto result = mradm::io::import_scene(opts.input, {});
-        if (!result.has_value()) {
-            spdlog::error("{}", result.error().message);
-            return EXIT_FAILURE;
-        }
-        auto write_result =
-            mradm::write_semantic_policy_template_file(opts.semantic_policy_template_path, result.value());
+        const mradm::RenderService service;
+        auto write_result = service.write_policy_template(opts.input, opts.semantic_policy_template_path, {});
         if (!write_result.has_value()) {
             spdlog::error("{}", write_result.error().message);
             return EXIT_FAILURE;

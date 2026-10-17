@@ -10,6 +10,7 @@
 #include "speaker_layouts.h"
 
 struct MradmAdmView;
+struct MradmSceneOverlay;
 
 namespace mradm::metadata {
 struct OutputMetadata {
@@ -17,8 +18,11 @@ struct OutputMetadata {
     std::vector<audio::WavChnaEntry> chna;
 };
 // The public scene of a borrowed record view (scene_ffi.h / adm_ffi.h). Without ADM provenance
-// (a synthesized channel bed) the source records are not read and adm_source stays empty.
-Result<AdmScene> scene_from_view(const MradmAdmView& view, bool adm_provenance);
+// (a synthesized channel bed) the source records are not read and adm_source stays empty. A render
+// scene's overlay supplies the semantic-policy state the records do not carry (user levels, the
+// effective object mute and DirectSpeakers position flags).
+Result<AdmScene>
+scene_from_view(const MradmAdmView& view, bool adm_provenance, const MradmSceneOverlay* overlay = nullptr);
 Result<std::string> patch_axml(std::string_view xml, const AdmScene& original, const AdmScene& effective);
 Result<OutputMetadata>
 generate(uint32_t kind, std::string_view name, const std::vector<render_layouts::SpeakerSpec>& speakers);

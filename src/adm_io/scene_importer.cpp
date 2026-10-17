@@ -1,7 +1,9 @@
 #include <array>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -20,8 +22,6 @@ namespace mradm::io {
 // The import itself is Rust (mradm-scene, PCM consistency 4.3): WAVE format, the CHNA channel policy,
 // the ADM projection and channel-bed synthesis. This adapter builds the public scene from its view.
 namespace {
-
-using SceneHandle = std::unique_ptr<MradmSceneHandle, decltype(&mradm_scene_destroy)>;
 
 MradmAdmText text(std::string_view value) {
     return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
@@ -51,7 +51,30 @@ std::vector<MradmAdmText> texts(const std::vector<std::string>& values) {
     return out;
 }
 
-Result<AdmScene> import(const std::string& path, const SceneImportOptions* options, const char* checkpoint) {
+std::string message_text(const std::array<uint8_t, 1024>& message) {
+    return reinterpret_cast<const char*>(message.data());
+}
+
+} // namespace
+} // namespace mradm::io
+
+namespace mradm::detail {
+struct RenderSceneHandle {
+    explicit RenderSceneHandle(MradmSceneHandle* scene) : raw(scene) {}
+    RenderSceneHandle(const RenderSceneHandle&) = delete;
+    RenderSceneHandle& operator=(const RenderSceneHandle&) = delete;
+    RenderSceneHandle(RenderSceneHandle&&) = delete;
+    RenderSceneHandle& operator=(RenderSceneHandle&&) = delete;
+    ~RenderSceneHandle() { mradm_scene_destroy(raw); }
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter owning one Rust handle.
+    MradmSceneHandle* raw;
+};
+} // namespace mradm::detail
+
+namespace mradm::io {
+
+Result<RenderScene>
+RenderScene::import(const std::string& path, const SceneImportOptions* options, const char* checkpoint) {
     const auto utf8_path = audio::wav_path_utf8(path);
     const auto labels = options != nullptr ? texts(options->input_channel_labels) : std::vector<MradmAdmText>{};
     const bool has_layout = options != nullptr && options->input_layout.has_value();
@@ -70,43 +93,148 @@ Result<AdmScene> import(const std::string& path, const SceneImportOptions* optio
                                          &context,
                                          message.data(),
                                          message.size());
-    SceneHandle handle{raw, mradm_scene_destroy};
+    RenderScene scene{std::make_shared<detail::RenderSceneHandle>(raw), path};
     if (code != 0) {
         return tl::unexpected{scene_error(code, message, context, path)};
     }
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     if (checkpoint != nullptr) {
-        // Diagnostic only; a failed write is detected by the collector's checkpoint inventory.
-        (void) mradm_scene_checkpoint(handle.get(), text(checkpoint), message.data(), message.size());
+        scene.checkpoint(checkpoint);
     }
-#else
-    (void) checkpoint;
-#endif
+    if (auto refreshed = scene.refresh(); !refreshed) {
+        return tl::unexpected{refreshed.error()};
+    }
+    return scene;
+}
+
+Result<void> RenderScene::refresh() {
+    std::array<uint8_t, 1024> message{};
     MradmSceneImportInfo info{};
     MradmAdmView view{};
-    if (const auto view_code = mradm_scene_view(handle.get(), &info, &view, message.data(), message.size());
-        view_code != 0) {
-        return tl::unexpected{scene_error(view_code, message, 1U, path)};
+    MradmSceneOverlay overlay{};
+    auto code = mradm_scene_view(handle_->raw, &info, &view, message.data(), message.size());
+    if (code == 0) {
+        code = mradm_scene_overlay(handle_->raw, &overlay, message.data(), message.size());
+    }
+    if (code != 0) {
+        return tl::unexpected{scene_error(code, message, 1U, path_)};
     }
     const bool channel_bed = info.source_kind == 1U;
-    auto scene = metadata::scene_from_view(view, !channel_bed);
+    auto scene = metadata::scene_from_view(view, !channel_bed, &overlay);
     if (!scene) {
         auto error = scene.error();
-        error.context = "input=" + path;
+        error.context = "input=" + path_;
         return tl::unexpected{std::move(error)};
     }
     auto& scene_info = scene->info;
     scene_info.sample_rate = info.sample_rate;
     scene_info.num_channels = static_cast<uint16_t>(info.channels);
     scene_info.num_frames = info.frames;
-    scene_info.file_path = path;
+    scene_info.file_path = path_;
     scene_info.source_kind = channel_bed ? SceneSourceKind::channel_bed : SceneSourceKind::adm;
     scene_info.input_layout = copy(info.input_layout);
     for (const auto& label : std::span{info.input_channel_labels, info.input_channel_labels_len}) {
         scene_info.input_channel_labels.push_back(copy(label));
     }
-    return scene;
+    scene_ = std::move(*scene);
+    return {};
 }
+
+void RenderScene::checkpoint(const char* stage) const {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    // Diagnostic only; a failed write is detected by the collector's checkpoint inventory.
+    std::array<uint8_t, 1024> message{};
+    (void) mradm_scene_checkpoint(handle_->raw, text(stage), message.data(), message.size());
+#else
+    (void) stage;
+#endif
+}
+
+Result<void> RenderScene::apply_policy(std::string_view json, const std::string& label) {
+    std::array<uint8_t, 1024> message{};
+    uint32_t context = 0;
+    const auto code = mradm_scene_apply_policy(handle_->raw,
+                                               reinterpret_cast<const uint8_t*>(json.data()),
+                                               json.size(),
+                                               &context,
+                                               message.data(),
+                                               message.size());
+    if (code != 0) {
+        auto error = scene_error(code, message, context, path_);
+        if (context == 3U) {
+            error.context = label;
+        }
+        return tl::unexpected{std::move(error)};
+    }
+    return refresh();
+}
+
+std::vector<std::string> RenderScene::policy_warnings() const {
+    std::array<uint8_t, 1024> message{};
+    const MradmAdmText* warnings = nullptr;
+    size_t count = 0;
+    std::vector<std::string> out;
+    if (mradm_scene_policy_warnings(handle_->raw, &warnings, &count, message.data(), message.size()) == 0) {
+        for (const auto& warning : std::span{warnings, count}) {
+            out.push_back(copy(warning));
+        }
+    }
+    return out;
+}
+
+Result<std::string> RenderScene::semantic_report(const SemanticReportOptions& options) const {
+    const auto hrtf_sources = texts(options.capabilities.hrtf_sources);
+    const MradmSceneReportOptions report{text(options.renderer),
+                                         text(options.policy_path),
+                                         options.capabilities.supports_channel_lock ? 1U : 0U,
+                                         options.capabilities.supports_object_divergence ? 1U : 0U,
+                                         options.capabilities.supports_diffuse ? 1U : 0U,
+                                         hrtf_sources.data(),
+                                         hrtf_sources.size(),
+                                         text(options.renderer_effective_json)};
+    std::array<uint8_t, 1024> message{};
+    MradmAdmText output{};
+    if (const auto code = mradm_scene_report(handle_->raw, &report, &output, message.data(), message.size());
+        code != 0) {
+        return make_error(static_cast<ErrorCode>(code), message_text(message), {});
+    }
+    return copy(output);
+}
+
+Result<std::string> RenderScene::policy_template() const {
+    std::array<uint8_t, 1024> message{};
+    MradmAdmText output{};
+    if (const auto code = mradm_scene_template(handle_->raw, &output, message.data(), message.size()); code != 0) {
+        return make_error(static_cast<ErrorCode>(code), message_text(message), {});
+    }
+    return copy(output);
+}
+
+Result<std::string> read_policy_file(const std::filesystem::path& path) {
+    std::ifstream in(path);
+    if (!in) {
+        return make_error(ErrorCode::io_error, "semantic policy I/O error: cannot open file", path.string());
+    }
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
+
+Result<void> write_policy_json(const std::filesystem::path& path, std::string_view json, std::string_view what) {
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        return make_error(ErrorCode::io_error,
+                          "semantic policy I/O error: cannot open " + std::string{what} + " for writing",
+                          path.string());
+    }
+    out << json << '\n';
+    if (!out) {
+        return make_error(
+            ErrorCode::io_error, "semantic policy I/O error: failed to write " + std::string{what}, path.string());
+    }
+    return {};
+}
+
+namespace {
 
 InputChannelDefinition channel(const MradmInputChannelRecord& record) {
     return {copy(record.token), copy(record.speaker_label), record.azimuth, record.elevation, record.is_lfe != 0};
@@ -131,7 +259,7 @@ void check_table(int32_t code, const std::array<uint8_t, 1024>& message) {
 
 Result<AdmScene> import_scene(const std::string& path) {
     try {
-        return import(path, nullptr, nullptr);
+        return RenderScene::import(path, nullptr).map([](const RenderScene& scene) { return scene.scene(); });
     } catch (const std::exception& e) {
         return make_error(ErrorCode::io_error, std::string("解析 BW64/ADM 文件失败：") + e.what(), "input=" + path);
     } catch (...) {
@@ -140,11 +268,7 @@ Result<AdmScene> import_scene(const std::string& path) {
 }
 
 Result<AdmScene> import_scene(const std::string& path, const SceneImportOptions& options) {
-    return import(path, &options, nullptr);
-}
-
-Result<AdmScene> import_scene_for_render(const std::string& path, const SceneImportOptions& options) {
-    return import(path, &options, "05-import");
+    return RenderScene::import(path, &options).map([](const RenderScene& scene) { return scene.scene(); });
 }
 
 const std::vector<InputLayoutDefinition>& input_layouts() {
