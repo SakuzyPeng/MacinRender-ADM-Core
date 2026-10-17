@@ -3,6 +3,7 @@
 > 状态：已接受（PoseBridge 与 MacinRender 原生 OSC 接口已实现；GUI 适配、各平台实机与音频验收分别记录）。
 > 日期：2026-09-17；更新：2026-09-19。
 > 适用范围：独立 PoseBridge 项目、MacinRender 原生 OSC 接收与后续 GUI 来源、OSC 协议及双方 C ABI。
+> 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 计划在实时调度迁移期把 socket 收发、快照与 C ABI 实现迁入 Rust；设备侧依赖边界不变。
 
 ## 背景
 

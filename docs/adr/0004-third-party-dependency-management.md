@@ -3,6 +3,7 @@
 > 状态：已接受  
 > 日期：2026-05-17  
 > 适用范围：`CMakeLists.txt`、`cmake/MRDependencies.cmake`、所有 `adm_*` 模块对外部 C/C++ 库的接入路径。CI（持续集成）配置、`docs/SAF_LINKING_AND_LICENSE.md` 类许可证清单与本 ADR 配合。
+> 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 规定 `mr_adm_core_find_or_fetch()` 只用于保留的 C 库，Rust 依赖走 Cargo；迁出 C++ 后不再使用的 C++ 依赖随之移除。
 
 ## 背景
 

@@ -20,6 +20,7 @@ OPTIONS = None
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/consistency'))
 import phase2_common as common
+from render_scene_checkpoint import validate_render_scene
 comparator = common.load_module('phase2_comparator', ROOT / 'scripts/consistency/compare-rust-phase2.py')
 collector = common.load_module('phase2_collector', ROOT / 'scripts/consistency/run-rust-phase2.py')
 
@@ -644,6 +645,24 @@ class EvidenceTests(unittest.TestCase):
                   'scene/e1-g1-s0.40-render.f32']
         self.assertEqual(sorted(stages, key=comparator.checkpoint_order), stages)
         self.assertLess(comparator.checkpoint_order('ear.02-direct.f64'), comparator.checkpoint_order('post/loudness.10-measurement.f64'))
+        # Phase 4.1: the render scene precedes every renderer stage.
+        scene = ['render-scene/offline.05-import.i32', 'render-scene/offline.06-policy.i32',
+                 'speaker/s0.10-input.f32', 'ear.01-layout.f64', 'writer/pass0-s0.80-pcm.f32']
+        self.assertEqual(sorted(reversed(scene), key=comparator.checkpoint_order), scene)
+
+    def test_render_scene_checkpoints_are_required_for_offline_cases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(ValueError, 'missing render-scene checkpoint 05-import'):
+                collector.require_render_scene_checkpoints(root, 'case')
+            (root / 'render-scene').mkdir()
+            for stage in collector.RENDER_SCENE_STAGES:
+                (root / 'render-scene' / f'offline.{stage}.i32').write_bytes(
+                    (ROOT / 'tests/fixtures/render-scene-v1/empty.i32').read_bytes())
+            collector.require_render_scene_checkpoints(root, 'case')
+            (root / 'render-scene' / 'offline.06-policy.i32').write_bytes(struct.pack('<i', 2))
+            with self.assertRaisesRegex(ValueError, 'unknown render-scene checkpoint encoding: 06-policy'):
+                collector.require_render_scene_checkpoints(root, 'case')
 
     def test_topology_difference_is_not_equality(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -652,6 +671,108 @@ class EvidenceTests(unittest.TestCase):
             rows = comparator.checkpoints(a, b)
             self.assertEqual(rows[0]['status'], 'different-observation-topology')
             self.assertFalse(rows[0]['identical'])
+
+
+class RenderSceneCheckpointTests(unittest.TestCase):
+    FIXTURES = ROOT / 'tests/fixtures/render-scene-v1'
+    HASHES = {
+        'empty': 'e3ca0b8071648c4eae84569cd9c1afa94d3595c829d67d9398513d056e22dc61',
+        'defaults': '1b0d78d0cc85b39a14ea46e2bbe7b9334aa18b2c2a89b373c6b1d7c35f18f89b',
+        'populated': '08860bc719883099cb8217cc87da731217e938f3710dde9eb0b607282de94c7f',
+    }
+
+    def test_production_writer_fixtures_are_valid(self):
+        for name, sha in self.HASHES.items():
+            with self.subTest(fixture=name):
+                data = (self.FIXTURES / f'{name}.i32').read_bytes()
+                self.assertEqual(common.digest(data), sha)
+                validate_render_scene(data)
+
+    def test_every_word_boundary_truncation_and_trailing_data_are_rejected(self):
+        for name in self.HASHES:
+            data = (self.FIXTURES / f'{name}.i32').read_bytes()
+            for end in range(0, len(data), 4):
+                with self.subTest(fixture=name, end=end), self.assertRaises(ValueError):
+                    validate_render_scene(data[:end])
+            for suffix in (b'\0', b'\0' * 4, data):
+                with self.subTest(fixture=name, suffix_length=len(suffix)), self.assertRaises(ValueError):
+                    validate_render_scene(data + suffix)
+
+    def test_invalid_presence_flags_booleans_and_lengths_are_rejected(self):
+        data = (self.FIXTURES / 'defaults.i32').read_bytes()
+        # Word offsets in the frozen C++ output, including nested Objects, DirectSpeakers and HOA.
+        flags = (12, 16, 17, 18, 19, 24, 26, 27, 28, 33, 36, 38, 41, 57, 58, 59, 60, 64, 65, 66,
+                 73, 74, 75, 76, 77, 78, 79, 81, 86, 87, 88, 90, 91, 93, 94, 95, 96, 98,
+                 106, 108, 114, 124, 125)
+        lengths = (6, 7, 8, 9, 11, 13, 20, 29, 37, 40, 67, 68, 69, 92, 99, 102, 113, 115, 118)
+        for offsets, value in ((flags, 2), (lengths, 0xffffffff)):
+            for offset in offsets:
+                damaged = bytearray(data)
+                struct.pack_into('<I', damaged, offset * 4, value)
+                with self.subTest(word=offset, value=value), self.assertRaises(ValueError):
+                    validate_render_scene(damaged)
+
+    def test_strings_and_narrow_fields_follow_the_wire_encoding(self):
+        data = (self.FIXTURES / 'populated.i32').read_bytes()
+        for offset, value in ((28, 0xff), (34, 1)):  # input_layout UTF-8 and padding
+            damaged = bytearray(data); damaged[offset] = value
+            with self.subTest(byte=offset), self.assertRaises(ValueError):
+                validate_render_scene(damaged)
+        for offset, value in ((2, 65536), (5, 2)):  # num_channels and source_kind
+            damaged = bytearray(data); struct.pack_into('<I', damaged, 4 * offset, value)
+            with self.subTest(word=offset), self.assertRaises(ValueError):
+                validate_render_scene(damaged)
+
+    def test_collection_rejects_version_only_files_in_either_stage(self):
+        data = (self.FIXTURES / 'populated.i32').read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / 'render-scene').mkdir()
+            paths = [root / 'render-scene' / f'offline.{stage}.i32' for stage in collector.RENDER_SCENE_STAGES]
+            for path in paths:
+                path.write_bytes(data)
+            collector.require_render_scene_checkpoints(root, 'case')
+            for path in paths:
+                path.write_bytes(struct.pack('<I', 1))
+                with self.subTest(stage=path.name), self.assertRaisesRegex(ValueError, 'truncated render-scene'):
+                    collector.require_render_scene_checkpoints(root, 'case')
+                path.write_bytes(data)
+
+    def test_comparator_rejects_invalid_checkpoints_even_with_matching_hashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pcm = root / 'pcm/case.pcmbits'; pcm.parent.mkdir()
+            samples = struct.pack('<ff', 0., 0.)
+            pcm.write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, 2, 48000, 1) + samples)
+            (root / 'fixtures').mkdir(); (root / 'fixtures/input.bin').write_bytes(b'input')
+            case = {'id': 'case'}
+            common.save(root / 'cases/case.json', case)
+            checkpoint_root = root / 'checkpoints/case/render-scene'; checkpoint_root.mkdir(parents=True)
+            manifest = {
+                'schema': 'mradm.phase2.v1', 'complete': True, 'diagnostics': True,
+                'noninterference': {'passed': True},
+                'source': {'files': {}, 'sha256': common.json_digest({})},
+                'offline': [case], 'scene': [], 'stream': [], 'sofa': common.SOFA_FIXTURES,
+                'outputs': {'case': {'path': 'pcm/case.pcmbits', 'shape': [2, 48000, 1],
+                                     'sha256': common.digest(samples)}},
+                'fixtures': {'input.bin': common.digest(b'input')},
+            }
+            for missing in (False, True):
+                for stage in collector.RENDER_SCENE_STAGES:
+                    path = checkpoint_root / f'offline.{stage}.i32'
+                    path.write_bytes(struct.pack('<I', 1))
+                    if missing:
+                        path.unlink()
+                manifest['artifacts'] = {p.relative_to(root).as_posix(): common.digest(p.read_bytes())
+                                         for p in checkpoint_root.iterdir()}
+                common.save(root / 'manifest.json', manifest)
+                with self.subTest(missing=missing), \
+                        patch.object(common, 'offline_cases', return_value=[case]), \
+                        patch.object(common, 'scene_cases', return_value=[]), \
+                        patch.object(common, 'stream_cases', return_value=[]), \
+                        patch.object(common, 'kernel_outputs', return_value=[]), \
+                        patch.object(common, 'validate_sofa_fixtures'), \
+                        self.assertRaisesRegex(ValueError, 'render-scene checkpoint'):
+                    comparator.validate(root)
 
 
 class ReplayTests(unittest.TestCase):

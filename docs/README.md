@@ -19,8 +19,9 @@
 
 ## 架构文档
 
-- [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)
-- [PCM 一致性审计与 Rust 迁移路线](architecture/PCM_CONSISTENCY_AUDIT.md) — 剩余数值运算与本轮分期的统一入口，一期为 Scene 流式渲染及其实际共享依赖
+- [Rust 主导逆转路线](architecture/RUST_INVERSION_ROADMAP.md) — ADR 0021 的终态、模块去向、期次与 C/C++ 规模棘轮
+- [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)（历史规划，已被 ADR 0021 取代）
+- [PCM 一致性审计与 Rust 迁移路线](architecture/PCM_CONSISTENCY_AUDIT.md) — 剩余数值运算与各期切片的统一入口，一期为 Scene 流式渲染及其实际共享依赖，四期为 PCM 写出为止的数据链路迁入 Rust
 - [ADM 特性覆盖审计](architecture/ADM_FEATURE_COVERAGE.md)
 - [adm_apple 后端实现说明（AUSpatialMixer）](architecture/ADM_APPLE_BACKEND.md)
 - [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)
@@ -75,6 +76,7 @@
 - [Triple Balance 可移植数学函数与文件流式重放（三期 3.4）](architecture/RUST_TRIPLE_BALANCE_PORTABLE_MATH.md)
 - [参数入口（三期 3.5）](architecture/RUST_PARAMETER_ENTRY.md)
 - [最终 PCM 与三期结项（三期 3.6）](architecture/RUST_FINAL_PCM.md)
+- [方向与基线（四期 4.1）](architecture/RUST_INVERSION_BASELINE.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
@@ -82,7 +84,7 @@
 ## 架构决策记录
 
 - [ADR 0001：新 C++ 核心采用 C++20](adr/0001-cpp-standard.md)
-- [ADR 0002：先建立 C++ 地基，后续渐进引入 Rust](adr/0002-cpp-first-rust-later.md)
+- [ADR 0002：先建立 C++ 地基，后续渐进引入 Rust](adr/0002-cpp-first-rust-later.md)（已被 ADR 0021 取代）
 - [ADR 0003：自有 ADM 领域模型与后端边界](adr/0003-owned-domain-model-and-backend-boundaries.md)
 - [ADR 0004：第三方依赖管理策略](adr/0004-third-party-dependency-management.md)
 - [ADR 0005：错误处理模型与 ABI 错误码翻译](adr/0005-error-handling-model.md)
@@ -101,6 +103,7 @@
 - [ADR 0018：Scene 流式渲染的数值与重放规则](adr/0018-scene-numeric-replay-rules.md)
 - [ADR 0019：房间渲染按声源自身的事件网格更新滤波器](adr/0019-room-per-source-update-grid.md)
 - [ADR 0020：房间渲染的精确与实时档位](adr/0020-room-quality-tiers.md)
+- [ADR 0021：项目逆转为 Rust 主导](adr/0021-rust-primary-project.md)
 
 ## 使用指南
 

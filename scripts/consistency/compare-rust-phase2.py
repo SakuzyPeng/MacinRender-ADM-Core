@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import phase2_common as common
+from render_scene_checkpoint import require_render_scene_checkpoints
 
 REQUIRED_PLATFORMS = {('Darwin', 'arm64'), ('Windows', 'x86_64'), ('Linux', 'x86_64')}
 DEFAULT_GATES = Path(__file__).with_name('phase2-gates.json')
@@ -151,6 +152,8 @@ def validate(root):
     if manifest['diagnostics'] and not manifest.get('noninterference', {}).get('passed'):
         raise ValueError('diagnostic noninterference was not verified')
     if manifest['diagnostics']:
+        for row in manifest['offline']:
+            require_render_scene_checkpoints(root / 'checkpoints' / row['id'], row['id'])
         validate_experiments(root, manifest)
     build = manifest['build']
     validate_sofa_build(build)
