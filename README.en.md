@@ -170,14 +170,14 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
-C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc
+C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene
 All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
 
 | Component | Responsibility |
 |---|---|
 | `ADMCore` | Project-owned ADM domain model (`AdmScene`), errors, logging, options, capabilities, and semantic policy |
-| `ADMMetadata` / `ADMIo` | ADM AXML parsing and write-back, channel-bed scene synthesis, producing `AdmScene` |
+| `ADMMetadata` / `ADMIo` | `AdmScene` built from the Rust render scene, and ADM AXML write-back |
 | `ADMRender*` | EAR, VBAP, Triple Balance, HOA, HRTF binaural, and Apple AUSpatialMixer backends |
 | `ADMRendererFactory` | Backend selection shared by offline rendering and realtime monitoring |
 | `ADMAudio` / `ADMPeak` / `ADMLoudness` | Container encoding and metadata, loudness and True Peak |
@@ -188,6 +188,7 @@ All modules ──→ ADMCore (domain model, errors, options, capabilities)
 | `rust/crates/mradm-adm` / `mradm-wav` | ADM XML metadata; WAVE / RF64 / BW64 I/O and container editing |
 | `rust/crates/mradm-math` | Portable, cross-platform bit-identical sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC head-tracking datagram decoding (loopback UDP input) |
+| `rust/crates/mradm-scene` | Render scene: input import, CHNA mapping, channel beds and loudspeaker layout tables |
 | `rust/crates/mradm-ffi` | The only private C boundary containing `unsafe` |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT desktop GUI calling the C ABI through P/Invoke |
 

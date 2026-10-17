@@ -160,14 +160,14 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
-C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc
+C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene
 所有模块 ──→ ADMCore（领域模型、错误、选项、能力）
 ```
 
 | 组件 | 职责 |
 |---|---|
 | `ADMCore` | 自有 ADM 领域模型（`AdmScene`）、错误、日志、选项、能力与语义策略 |
-| `ADMMetadata` / `ADMIo` | ADM AXML 解析与回写、声道床场景合成，产出 `AdmScene` |
+| `ADMMetadata` / `ADMIo` | 由 Rust 渲染场景生成 `AdmScene`，以及 ADM AXML 回写 |
 | `ADMRender*` | EAR、VBAP、Triple Balance、HOA、HRTF 双耳与 Apple AUSpatialMixer 后端 |
 | `ADMRendererFactory` | 离线渲染与实时监听共用的后端选择 |
 | `ADMAudio` / `ADMPeak` / `ADMLoudness` | 容器编码与元数据、响度与 True Peak |
@@ -178,6 +178,7 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 | `rust/crates/mradm-adm` / `mradm-wav` | ADM XML 元数据；WAVE / RF64 / BW64 读写与容器编辑 |
 | `rust/crates/mradm-math` | 跨平台逐位一致的可移植 sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC 头追踪数据报解码（回环 UDP 输入） |
+| `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表 |
 | `rust/crates/mradm-ffi` | 唯一含 `unsafe` 的私有 C 边界 |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT 桌面 GUI，经 P/Invoke 调用 C ABI |
 
