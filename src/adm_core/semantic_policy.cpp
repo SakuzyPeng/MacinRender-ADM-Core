@@ -1236,11 +1236,11 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
 }
 
 [[nodiscard]] Json hoa_block_json(const SceneHOAChannelBlock& block) {
-    return Json{{"gain", block.gain},
-                {"head_locked", block.head_locked},
-                {"start_sample", block.start_sample},
-                {"end_sample",
-                 block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{nullptr} : Json(block.end_sample)}};
+    return Json{
+        {"gain", block.gain},
+        {"head_locked", block.head_locked},
+        {"start_sample", block.start_sample},
+        {"end_sample", block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{} : Json(block.end_sample)}};
 }
 
 // HOA packs (separate from objects): report pack gain/mute plus every block's
@@ -1290,7 +1290,7 @@ Result<SemanticPolicy> parse_semantic_policy(std::string_view json, std::string 
     Json doc;
     try {
         doc = Json::parse(json);
-    } catch (const Json::parse_error& e) {
+    } catch (const Json::exception& e) {
         return tl::unexpected{invalid_policy(source_label, e.what())};
     }
     // Report problems against the source location: a file path (load_semantic_policy_file)
@@ -1566,7 +1566,7 @@ std::string build_semantic_report(const AdmScene& original,
     Json doc = Json::object();
     doc["schema"] = "mradm.semantic-report.v1";
     doc["renderer"] = options.renderer;
-    doc["policy"] = options.policy_path.empty() ? nullptr : Json{options.policy_path};
+    doc["policy"] = options.policy_path.empty() ? Json{} : Json(options.policy_path);
     doc["capabilities"] = capability_json(options.capabilities);
     doc["warnings"] = warnings;
     if (!options.renderer_effective_json.empty()) {
