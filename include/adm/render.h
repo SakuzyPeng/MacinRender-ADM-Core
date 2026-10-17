@@ -21,6 +21,11 @@
 
 namespace mradm {
 
+namespace detail {
+// The imported Rust render scene behind RenderPlan::scene; opaque outside the engine.
+struct RenderSceneHandle;
+} // namespace detail
+
 struct DirectSpeakersMatrix;
 
 struct Diagnostic {
@@ -82,7 +87,10 @@ struct RenderPlan {
     std::string input_path;
     std::string output_path;
     std::string output_layout;
-    AdmScene scene;                                 // populated by RenderService; backends must not re-parse ADM
+    AdmScene scene; // populated by RenderService; backends must not re-parse ADM
+    // The policy-applied Rust render scene that `scene` was built from (PCM consistency 4.4). Null
+    // when the caller supplied a pre-imported scene (preview and monitor sessions).
+    std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
     std::optional<std::filesystem::path> sofa_path; // binaural renderer only; empty = built-in KEMAR
     // Default gain-interpolation ramp in milliseconds (from RenderOptions).
     uint32_t default_interp_ms{5};
@@ -464,6 +472,14 @@ class RenderService {
     // string (UTF-8). Mirrors `mradm inspect --write-semantic-policy-template` but
     // returned in-memory. Returns io_error if the file is missing or invalid.
     [[nodiscard]] Result<std::string> policy_template_json(const std::string& input_path) const;
+
+    // Write the template of `input_path` imported with the channel-bed routing of
+    // `options` (ADM when the file carries AXML and no input layout or labels are
+    // given) to `output_path`, with a trailing newline. Backs
+    // `mradm inspect --write-semantic-policy-template`.
+    [[nodiscard]] Result<void> write_policy_template(const std::filesystem::path& input_path,
+                                                     const std::filesystem::path& output_path,
+                                                     const RenderOptions& options) const;
 
     // Apply the semantic policy from `options` (in-memory JSON preferred over file
     // path) and write a new ADM BWF at output_path, reusing the source PCM and chna

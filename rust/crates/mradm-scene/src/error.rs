@@ -7,6 +7,8 @@ pub enum Context {
     Input,
     /// `path=<path>`, the locator of the WAVE reader errors that pass through unchanged.
     Path,
+    /// The caller's source label as given: a policy file path or `<memory>`.
+    Label,
 }
 
 /// Codes follow `adm::ErrorCode`; messages are the user-visible text.

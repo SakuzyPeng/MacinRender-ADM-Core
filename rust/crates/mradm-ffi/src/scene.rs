@@ -1,6 +1,8 @@
-//! Private render-scene boundary (PCM consistency 4.3). Layout and input-preset tables are
-//! process-lifetime views of `mradm-scene` static data and are never freed; an imported scene is
-//! owned by its handle and its views are borrowed until `mradm_scene_destroy`.
+//! Private render-scene boundary (PCM consistency 4.3, the semantic policy since 4.4). Layout and
+//! input-preset tables are process-lifetime views of `mradm-scene` static data and are never freed;
+//! an imported scene is owned by its handle and its views are borrowed until the next call that
+//! changes it (`mradm_scene_apply_policy`, `mradm_scene_report`, `mradm_scene_template`) or until
+//! `mradm_scene_destroy`.
 use crate::adm::{Text, View};
 use crate::boundary;
 use mradm_dsp::Error;
@@ -8,6 +10,8 @@ use mradm_scene::{
     Context, ImportOptions, RenderScene, SourceKind,
     input::{InputChannel, channel_catalog, input_layouts, resolve_input_channel_labels},
     layouts::{Geometry, Layout, layouts},
+    policy::{self, UserLevel},
+    report,
 };
 use std::{
     borrow::Cow,
@@ -131,6 +135,112 @@ pub struct SceneHandle {
     scene: RenderScene,
     texts: Vec<Text>,
     labels: Vec<Text>,
+    objects: Vec<SceneObjectState>,
+    direct_blocks: Vec<SceneDirectState>,
+    warnings: Vec<Text>,
+    output: String,
+}
+
+/// `user_mute`: 0 unset, 1 false, 2 true.
+#[repr(C)]
+pub struct SceneObjectState {
+    user_gain: f32,
+    user_mute: u32,
+    mute: u32,
+}
+
+#[repr(C)]
+pub struct SceneDirectState {
+    user_gain: f32,
+    user_mute: u32,
+    position_override: u32,
+    has_position: u32,
+}
+
+/// The per-element state beside the records, aligned with the view's objects and DirectSpeakers
+/// blocks.
+#[repr(C)]
+pub struct SceneOverlay {
+    objects: *const SceneObjectState,
+    objects_len: usize,
+    direct_blocks: *const SceneDirectState,
+    direct_blocks_len: usize,
+}
+
+#[repr(C)]
+pub struct SceneReportOptions {
+    renderer: Text,
+    policy_path: Text,
+    supports_channel_lock: u32,
+    supports_object_divergence: u32,
+    supports_diffuse: u32,
+    hrtf_sources: *const Text,
+    hrtf_sources_len: usize,
+    renderer_effective: Text,
+}
+
+fn user_mute(user: UserLevel) -> u32 {
+    match user.mute {
+        None => 0,
+        Some(false) => 1,
+        Some(true) => 2,
+    }
+}
+
+impl SceneHandle {
+    fn new(scene: RenderScene) -> Self {
+        let mut handle = Self {
+            texts: scene
+                .snapshot
+                .strings
+                .iter()
+                .map(|s| Text::new(s))
+                .collect(),
+            labels: scene
+                .info
+                .input_channel_labels
+                .iter()
+                .map(|s| Text::new(s))
+                .collect(),
+            scene,
+            objects: Vec::new(),
+            direct_blocks: Vec::new(),
+            warnings: Vec::new(),
+            output: String::new(),
+        };
+        handle.refresh();
+        handle
+    }
+
+    /// Rebuilds the C records of the overlay and the warnings after the scene changed.
+    fn refresh(&mut self) {
+        let overlay = &self.scene.overlay;
+        self.objects = overlay
+            .objects
+            .iter()
+            .map(|o| SceneObjectState {
+                user_gain: o.user.gain_multiplier,
+                user_mute: user_mute(o.user),
+                mute: u32::from(o.mute),
+            })
+            .collect();
+        self.direct_blocks = overlay
+            .direct_blocks
+            .iter()
+            .map(|b| SceneDirectState {
+                user_gain: b.user.gain_multiplier,
+                user_mute: user_mute(b.user),
+                position_override: u32::from(b.position_override),
+                has_position: u32::from(b.has_position),
+            })
+            .collect();
+        self.warnings = self
+            .scene
+            .policy_warnings
+            .iter()
+            .map(|w| Text::new(w))
+            .collect();
+    }
 }
 
 #[repr(C)]
@@ -159,7 +269,8 @@ struct Static<T>(T);
 unsafe impl<T> Send for Static<T> {}
 unsafe impl<T> Sync for Static<T> {}
 
-/// Like `boundary`, plus the locator kind: 0 none, 1 `input=<path>`, 2 `path=<path>`.
+/// Like `boundary`, plus the locator kind: 0 none, 1 `input=<path>`, 2 `path=<path>`, 3 the
+/// caller's source label.
 fn scene_boundary(
     context: *mut u32,
     message: *mut u8,
@@ -180,6 +291,7 @@ fn scene_boundary(
             None | Some(Context::None) => 0,
             Some(Context::Input) => 1,
             Some(Context::Path) => 2,
+            Some(Context::Label) => 3,
         };
         unsafe {
             *context = kind;
@@ -272,24 +384,8 @@ pub unsafe extern "C" fn mradm_scene_import(
                 },
             )?
         };
-        let texts = scene
-            .snapshot
-            .strings
-            .iter()
-            .map(|s| Text::new(s))
-            .collect();
-        let labels = scene
-            .info
-            .input_channel_labels
-            .iter()
-            .map(|s| Text::new(s))
-            .collect();
         unsafe {
-            *output = Box::into_raw(Box::new(SceneHandle {
-                scene,
-                texts,
-                labels,
-            }));
+            *output = Box::into_raw(Box::new(SceneHandle::new(scene)));
         }
         Ok(())
     })
@@ -323,6 +419,131 @@ pub unsafe extern "C" fn mradm_scene_view(
                 input_channel_labels_len: handle.labels.len(),
             };
             *view = View::new(&handle.scene.snapshot, &handle.texts);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_overlay(
+    handle: *const SceneHandle,
+    overlay: *mut SceneOverlay,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if handle.is_null() || overlay.is_null() {
+            return Err(invalid("无效场景 overlay 参数"));
+        }
+        let handle = unsafe { &*handle };
+        unsafe {
+            *overlay = SceneOverlay {
+                objects: handle.objects.as_ptr(),
+                objects_len: handle.objects.len(),
+                direct_blocks: handle.direct_blocks.as_ptr(),
+                direct_blocks_len: handle.direct_blocks.len(),
+            };
+        }
+        Ok(())
+    })
+}
+
+/// Parses `mradm.semantic-policy.v1` JSON and applies it to the scene. Errors carry context 3:
+/// the caller attaches its source label (`<memory>` or the policy file path).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_apply_policy(
+    handle: *mut SceneHandle,
+    json: *const u8,
+    json_len: usize,
+    context: *mut u32,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(context, message, capacity, || {
+        if handle.is_null() {
+            return Err(invalid("无效场景句柄"));
+        }
+        let handle = unsafe { &mut *handle };
+        let policy = policy::parse(unsafe { bytes(json, json_len)? })?;
+        handle.scene.apply_policy(policy);
+        handle.refresh();
+        Ok(())
+    })
+}
+
+/// The "rule did not match" warnings of the applied policy, in rule order.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_policy_warnings(
+    handle: *const SceneHandle,
+    warnings: *mut *const Text,
+    warnings_len: *mut usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if handle.is_null() || warnings.is_null() || warnings_len.is_null() {
+            return Err(invalid("无效场景 warnings 参数"));
+        }
+        let handle = unsafe { &*handle };
+        unsafe {
+            *warnings = handle.warnings.as_ptr();
+            *warnings_len = handle.warnings.len();
+        }
+        Ok(())
+    })
+}
+
+/// The semantic report (`mradm.semantic-report.v1`, nlohmann `dump(2)` bytes, no trailing newline).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_report(
+    handle: *mut SceneHandle,
+    options: *const SceneReportOptions,
+    output: *mut Text,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if handle.is_null() || options.is_null() || output.is_null() {
+            return Err(invalid("无效语义报告参数"));
+        }
+        let handle = unsafe { &mut *handle };
+        let o = unsafe { &*options };
+        let text = |value: Text| -> mradm_scene::Result<String> {
+            Ok(unsafe { lossy(value)? }.into_owned())
+        };
+        let options = report::ReportOptions {
+            renderer: text(o.renderer)?,
+            policy_path: text(o.policy_path)?,
+            supports_channel_lock: o.supports_channel_lock != 0,
+            supports_object_divergence: o.supports_object_divergence != 0,
+            supports_diffuse: o.supports_diffuse != 0,
+            hrtf_sources: unsafe { labels(o.hrtf_sources, o.hrtf_sources_len)? },
+            renderer_effective: text(o.renderer_effective)?,
+        };
+        handle.output = report::report(&handle.scene, &options)?;
+        unsafe {
+            *output = Text::new(&handle.output);
+        }
+        Ok(())
+    })
+}
+
+/// The neutral policy template of the scene (nlohmann `dump(2)` bytes, no trailing newline).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_template(
+    handle: *mut SceneHandle,
+    output: *mut Text,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if handle.is_null() || output.is_null() {
+            return Err(invalid("无效策略模板参数"));
+        }
+        let handle = unsafe { &mut *handle };
+        handle.output = report::template(&handle.scene);
+        unsafe {
+            *output = Text::new(&handle.output);
         }
         Ok(())
     })

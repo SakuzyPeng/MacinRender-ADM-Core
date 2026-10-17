@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "adm_ffi.h"
+#include "scene_ffi.h"
 
 namespace mradm::metadata {
 namespace {
@@ -139,7 +139,13 @@ SceneObjectBlock object_block(const MradmAdmObjectBlock& v) {
     b.adm_source = block_source(v.source);
     return b;
 }
-SceneDirectSpeakersBlock direct_block(const Records& p, const MradmAdmDirectBlock& v, bool provenance) {
+SceneUserLevel user_level(float gain, uint32_t mute) {
+    return {gain, mute == 0U ? std::nullopt : std::optional{mute == 2U}};
+}
+// A semantic policy's state beside the records (PCM consistency 4.4): the record keeps the authored
+// has_position, which gates the source position, and the effective one comes from the overlay.
+SceneDirectSpeakersBlock
+direct_block(const Records& p, const MradmAdmDirectBlock& v, bool provenance, const MradmSceneDirectState* state) {
     SceneDirectSpeakersBlock b;
     b.speaker_labels = p.strings(v.labels);
     b.pack_format_id = p.string(v.pack_id);
@@ -160,17 +166,25 @@ SceneDirectSpeakersBlock direct_block(const Records& p, const MradmAdmDirectBloc
     b.head_locked = v.head_locked != 0;
     if (provenance) {
         b.adm_source = block_source(v.source);
-        if (b.has_position) {
+        if (v.has_position != 0) {
             b.source_position = position(v.position);
         }
+    }
+    if (state != nullptr) {
+        b.has_position = state->has_position != 0;
+        b.user_level = user_level(state->user_gain, state->user_mute);
+        b.user_position_override = state->position_override != 0;
     }
     return b;
 }
 // A synthesized channel bed has no ADM provenance: its source records are not read.
 // NOLINTNEXTLINE(readability-function-size): explicit field mapping keeps Rust types outside the public scene.
-AdmScene scene(const Records& p, bool provenance) {
+AdmScene scene(const Records& p, bool provenance, const MradmSceneOverlay* overlay = nullptr) {
     AdmScene output;
     const auto& view = p.view;
+    require(overlay == nullptr ||
+                (overlay->objects_len == view.objects_len && overlay->direct_blocks_len == view.direct_blocks_len),
+            "无效场景 overlay");
     for (const auto& v : std::span{view.programmes, view.programmes_len}) {
         output.programmes.push_back(
             {p.string(v.id),
@@ -200,7 +214,8 @@ AdmScene scene(const Records& p, bool provenance) {
                                    p.optional_string(v.dialogue_kind),
                                    p.optional_string(v.content_kind)});
     }
-    for (const auto& v : std::span{view.objects, view.objects_len}) {
+    for (std::size_t oi = 0; oi < view.objects_len; ++oi) {
+        const auto& v = view.objects[oi];
         SceneObject o;
         o.id = p.string(v.id);
         o.name = p.string(v.name);
@@ -216,6 +231,11 @@ AdmScene scene(const Records& p, bool provenance) {
         o.labels = p.strings(v.labels);
         o.importance = optional(v.importance_present, static_cast<int>(v.importance));
         o.dialogue_id = optional(v.dialogue_present, static_cast<unsigned int>(v.dialogue));
+        if (overlay != nullptr) {
+            const auto& state = overlay->objects[oi];
+            o.mute = state.mute != 0;
+            o.user_level = user_level(state.user_gain, state.user_mute);
+        }
         if (provenance) {
             o.adm_source = SceneObjectSource{gain_source(v.source_gain),
                                              v.mute_present != 0,
@@ -236,8 +256,10 @@ AdmScene scene(const Records& p, bool provenance) {
             for (const auto& b : Records::subset(view.object_blocks, view.object_blocks_len, t.blocks)) {
                 track.blocks.push_back(object_block(b));
             }
-            for (const auto& b : Records::subset(view.direct_blocks, view.direct_blocks_len, t.ds_blocks)) {
-                track.ds_blocks.push_back(direct_block(p, b, provenance));
+            const auto ds_blocks = Records::subset(view.direct_blocks, view.direct_blocks_len, t.ds_blocks);
+            for (std::size_t bi = 0; bi < ds_blocks.size(); ++bi) {
+                const auto* state = overlay != nullptr ? &overlay->direct_blocks[t.ds_blocks.offset + bi] : nullptr;
+                track.ds_blocks.push_back(direct_block(p, ds_blocks[bi], provenance, state));
             }
             o.tracks.push_back(std::move(track));
         }
@@ -417,9 +439,9 @@ OutputMetadata output(Buffer buffer) {
     return result;
 }
 } // namespace
-Result<AdmScene> scene_from_view(const MradmAdmView& view, bool adm_provenance) {
+Result<AdmScene> scene_from_view(const MradmAdmView& view, bool adm_provenance, const MradmSceneOverlay* overlay) {
     try {
-        return scene(Records{view}, adm_provenance);
+        return scene(Records{view}, adm_provenance, overlay);
     } catch (const Failure& e) {
         return make_error(e.code(), e.what());
     }

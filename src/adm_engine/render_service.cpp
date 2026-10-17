@@ -21,7 +21,6 @@
 #include "adm/io.h"
 #include "adm/options.h"
 #include "adm/render.h"
-#include "adm/semantic_policy.h"
 
 #include "../adm_io/scene_import_internal.h"
 #include "capability_json.h"
@@ -30,7 +29,6 @@
 #include "layout_table.h"
 #include "post_gain.h"
 #include "renderer_factory.h"
-#include "scene_checkpoint.h"
 #include "scene_json.h"
 #include "support_matrix.h"
 #include "timeline.h"
@@ -359,42 +357,38 @@ class OutputCleanupGuard {
 };
 
 // Resolve the semantic policy from options (in-memory JSON preferred over a file
-// path) and apply it to the scene in place. Returns the applied policy (for the
-// report) or nullopt when no policy was requested. Shared by render() and
+// path) and apply it to the Rust render scene (PCM consistency 4.4), which keeps the
+// policy and the original scene for the report. Shared by render(), export_file() and
 // prepare_preview_scene() so the json/path precedence stays in one place.
-[[nodiscard]] Result<std::optional<SemanticPolicy>> resolve_and_apply_policy(AdmScene& scene,
-                                                                             const RenderOptions& options,
-                                                                             std::vector<std::string>& warnings,
-                                                                             LogSink& logs) {
-    std::optional<SemanticPolicy> policy;
+[[nodiscard]] Result<void> resolve_and_apply_policy(io::RenderScene& scene,
+                                                    const RenderOptions& options,
+                                                    std::vector<std::string>& warnings,
+                                                    LogSink& logs) {
+    Result<void> applied;
     if (options.semantic_policy_json.has_value()) {
         if (options.semantic_policy_path.has_value()) {
             logs.log(LogLevel::warning,
                      "semantic-policy",
                      "in-memory semantic policy supplied; ignoring semantic_policy_path");
         }
-        auto res = parse_semantic_policy(*options.semantic_policy_json, "<memory>");
-        if (!res) {
-            return tl::unexpected{res.error()};
-        }
-        policy = std::move(*res);
+        applied = scene.apply_policy(*options.semantic_policy_json, "<memory>");
     } else if (options.semantic_policy_path.has_value()) {
-        auto res = load_semantic_policy_file(*options.semantic_policy_path);
-        if (!res) {
-            return tl::unexpected{res.error()};
+        auto text = io::read_policy_file(*options.semantic_policy_path);
+        if (!text) {
+            return tl::unexpected{text.error()};
         }
-        policy = std::move(*res);
+        applied = scene.apply_policy(*text, options.semantic_policy_path->string());
+    } else {
+        return {};
     }
-    if (policy.has_value()) {
-        auto applied = apply_semantic_policy(scene, *policy, scene.info.sample_rate, &warnings);
-        if (!applied) {
-            return tl::unexpected{applied.error()};
-        }
-        for (const auto& warning : warnings) {
-            logs.log(LogLevel::warning, "semantic-policy", warning);
-        }
+    if (!applied) {
+        return applied;
     }
-    return policy;
+    warnings = scene.policy_warnings();
+    for (const auto& warning : warnings) {
+        logs.log(LogLevel::warning, "semantic-policy", warning);
+    }
+    return {};
 }
 
 } // anonymous namespace
@@ -448,9 +442,19 @@ RenderResult RenderService::render(const RenderRequest& request,
                   0.0,
                   preimported_scene != nullptr ? "using cached scene" : "importing scene");
     const io::SceneImportOptions import_options{request.options.input_layout, request.options.input_channel_labels};
-    Result<AdmScene> scene_result = (preimported_scene != nullptr)
-                                        ? Result<AdmScene>{*preimported_scene}
-                                        : io::import_scene_for_render(request.input_path.string(), import_options);
+    // The offline import records the render-scene checkpoint 05-import (PCM consistency 4.3).
+    std::optional<io::RenderScene> render_scene;
+    Result<AdmScene> scene_result = [&]() -> Result<AdmScene> {
+        if (preimported_scene != nullptr) {
+            return *preimported_scene;
+        }
+        auto imported = io::RenderScene::import(request.input_path.string(), &import_options, "05-import");
+        if (!imported) {
+            return tl::unexpected{imported.error()};
+        }
+        render_scene = std::move(*imported);
+        return render_scene->scene();
+    }();
     if (!scene_result) {
         return {scene_result.error(), std::nullopt, std::nullopt, {{LogLevel::error, scene_result.error().message}}};
     }
@@ -593,33 +597,30 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
     }
 
-    std::optional<SemanticPolicy> semantic_policy;
     std::vector<std::string> semantic_warnings;
     // A preview session has already imported + applied the policy; it does not
-    // re-derive the semantic report per window.
+    // re-derive the semantic report per window. The Rust scene keeps the original.
     const bool needs_semantic_report =
         (preimported_scene == nullptr) &&
         (request.options.semantic_report_path.has_value() || request.options.capture_semantic_report);
-    const AdmScene original_scene = needs_semantic_report ? *scene_result : AdmScene{};
     // Effective semantic report captured in-memory when requested; surfaced via RenderResult.
     std::optional<std::string> semantic_report_json;
 
-    // Resolve + apply the semantic policy (skipped when a preview session already did).
-    if (preimported_scene == nullptr) {
+    // Resolve + apply the semantic policy (skipped when a preview session already did, which
+    // supplies its scene without the Rust render scene).
+    if (render_scene.has_value()) {
         emit_progress(progress,
                       RenderStage::importing_scene,
                       RenderOperation::apply_semantic_policy,
                       0.10,
                       0.0,
                       "applying semantic policy");
-        auto policy_res = resolve_and_apply_policy(*scene_result, request.options, semantic_warnings, logs);
+        auto policy_res = resolve_and_apply_policy(*render_scene, request.options, semantic_warnings, logs);
         if (!policy_res) {
             return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
         }
-        semantic_policy = std::move(*policy_res);
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-        scene_checkpoint::dump("06-policy", *scene_result);
-#endif
+        *scene_result = render_scene->scene();
+        render_scene->checkpoint("06-policy");
     }
 
     // From here on the semantic report may be captured; every error path must carry
@@ -672,30 +673,33 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
     }
 
-    if (needs_semantic_report) {
-        const SemanticPolicyReportOptions report_options{
+    // The report from the Rust scene; file and in-memory copies are the same bytes.
+    const auto emit_semantic_report = [&](std::string renderer_effective_json) -> Result<void> {
+        const io::SemanticReportOptions report_options{
             .renderer = renderer_name(sel),
             .policy_path =
                 request.options.semantic_policy_path ? request.options.semantic_policy_path->string() : std::string{},
             .capabilities = caps,
+            .renderer_effective_json = std::move(renderer_effective_json),
         };
+        if (!render_scene.has_value()) {
+            return {};
+        }
+        auto report = render_scene->semantic_report(report_options);
+        if (!report) {
+            return tl::unexpected{report.error()};
+        }
         if (request.options.capture_semantic_report) {
-            semantic_report_json = build_semantic_report(original_scene,
-                                                         *scene_result,
-                                                         semantic_policy ? &*semantic_policy : nullptr,
-                                                         report_options,
-                                                         semantic_warnings);
+            semantic_report_json = *report;
         }
         if (request.options.semantic_report_path.has_value()) {
-            auto report_res = write_semantic_report_file(*request.options.semantic_report_path,
-                                                         original_scene,
-                                                         *scene_result,
-                                                         semantic_policy ? &*semantic_policy : nullptr,
-                                                         report_options,
-                                                         semantic_warnings);
-            if (!report_res) {
-                return fail_with_report(report_res.error());
-            }
+            return io::write_policy_json(*request.options.semantic_report_path, *report, "report");
+        }
+        return {};
+    };
+    if (needs_semantic_report) {
+        if (auto report_res = emit_semantic_report({}); !report_res) {
+            return fail_with_report(report_res.error());
         }
     }
 
@@ -857,31 +861,9 @@ RenderResult RenderService::render(const RenderRequest& request,
         // A rejected preparation still carries the same diagnostics to the file
         // and in-memory reports. "effective" continues to mean policy output;
         // the separately named section describes actual backend interpretation.
-        if (!renderer_semantics.empty()) {
-            const SemanticPolicyReportOptions report_options{
-                .renderer = renderer_name(sel),
-                .policy_path = request.options.semantic_policy_path ? request.options.semantic_policy_path->string()
-                                                                    : std::string{},
-                .capabilities = caps,
-                .renderer_effective_json = renderer_semantics,
-            };
-            if (request.options.capture_semantic_report) {
-                semantic_report_json = build_semantic_report(original_scene,
-                                                             plan.scene,
-                                                             semantic_policy ? &*semantic_policy : nullptr,
-                                                             report_options,
-                                                             semantic_warnings);
-            }
-            if (request.options.semantic_report_path) {
-                const auto written = write_semantic_report_file(*request.options.semantic_report_path,
-                                                                original_scene,
-                                                                plan.scene,
-                                                                semantic_policy ? &*semantic_policy : nullptr,
-                                                                report_options,
-                                                                semantic_warnings);
-                if (!written) {
-                    return fail_with_report(written.error());
-                }
+        if (!renderer_semantics.empty() && needs_semantic_report) {
+            if (const auto written = emit_semantic_report(renderer_semantics); !written) {
+                return fail_with_report(written.error());
             }
         }
         if (!prep_res) {
@@ -1331,42 +1313,38 @@ Result<std::string> RenderService::axml(const std::string& input_path) const {
 }
 
 Result<std::string> RenderService::policy_template_json(const std::string& input_path) const {
-    auto scene_result = io::import_scene(input_path);
-    if (!scene_result) {
-        return tl::unexpected(scene_result.error());
+    auto scene = io::RenderScene::import(input_path, nullptr);
+    if (!scene) {
+        return tl::unexpected(scene.error());
     }
-    return build_semantic_policy_template(*scene_result);
+    return scene->policy_template();
+}
+
+Result<void> RenderService::write_policy_template(const std::filesystem::path& input_path,
+                                                  const std::filesystem::path& output_path,
+                                                  const RenderOptions& options) const {
+    const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
+    auto scene = io::RenderScene::import(input_path.string(), &import_options);
+    if (!scene) {
+        return tl::unexpected(scene.error());
+    }
+    auto json = scene->policy_template();
+    if (!json) {
+        return tl::unexpected(json.error());
+    }
+    return io::write_policy_json(output_path, *json, "policy template");
 }
 
 Result<void> RenderService::export_file(const std::string& input_path,
                                         const std::string& output_path,
                                         const RenderOptions& options,
                                         LogSink& logs) const {
-    auto original = io::import_scene(input_path);
-    if (!original) {
-        return tl::unexpected(original.error());
-    }
-    for (const auto& w : original->import_warnings) {
-        logs.log(LogLevel::warning, "importer", w);
-    }
-    AdmScene effective = *original;
-    std::vector<std::string> warnings;
-    auto policy_res = resolve_and_apply_policy(effective, options, warnings, logs);
-    if (!policy_res) {
-        return tl::unexpected(policy_res.error());
-    }
-    return io::write_scene(input_path, *original, effective, output_path);
-}
-
-Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,
-                                                      const RenderOptions& options,
-                                                      LogSink& logs) const {
-    const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
-    auto scene = io::import_scene(input_path.string(), import_options);
+    auto scene = io::RenderScene::import(input_path, nullptr);
     if (!scene) {
         return tl::unexpected(scene.error());
     }
-    for (const auto& w : scene->import_warnings) {
+    const AdmScene original = scene->scene();
+    for (const auto& w : original.import_warnings) {
         logs.log(LogLevel::warning, "importer", w);
     }
     std::vector<std::string> warnings;
@@ -1374,7 +1352,26 @@ Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::pat
     if (!policy_res) {
         return tl::unexpected(policy_res.error());
     }
-    return scene;
+    return io::write_scene(input_path, original, scene->scene(), output_path);
+}
+
+Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,
+                                                      const RenderOptions& options,
+                                                      LogSink& logs) const {
+    const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
+    auto scene = io::RenderScene::import(input_path.string(), &import_options);
+    if (!scene) {
+        return tl::unexpected(scene.error());
+    }
+    for (const auto& w : scene->scene().import_warnings) {
+        logs.log(LogLevel::warning, "importer", w);
+    }
+    std::vector<std::string> warnings;
+    auto policy_res = resolve_and_apply_policy(*scene, options, warnings, logs);
+    if (!policy_res) {
+        return tl::unexpected(policy_res.error());
+    }
+    return scene->scene();
 }
 
 // ── PreviewSession ──────────────────────────────────────────────────────────────

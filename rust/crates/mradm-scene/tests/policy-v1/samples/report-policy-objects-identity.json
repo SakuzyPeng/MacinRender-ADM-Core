@@ -1,0 +1,761 @@
+{
+  "capabilities": {
+    "hrtf_sources": [
+      "builtin",
+      "user-sofa"
+    ],
+    "supports_channel_lock": false,
+    "supports_diffuse": false,
+    "supports_object_divergence": true
+  },
+  "hoa_tracks": [],
+  "objects": [
+    {
+      "blocks": [
+        {
+          "block_index": 0,
+          "effective": {
+            "azimuth": 27.5,
+            "cartesian": false,
+            "channel_lock": true,
+            "channel_lock_max_distance": 0.5,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 0.0,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": 2400,
+            "jump_position": true,
+            "position": {
+              "azimuth": 27.5,
+              "distance": 1.0,
+              "elevation": 0.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 0.0
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": 20.0,
+            "cartesian": false,
+            "channel_lock": true,
+            "channel_lock_max_distance": 0.5,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 0.0,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": 2400,
+            "jump_position": true,
+            "position": {
+              "azimuth": 20.0,
+              "distance": 1.0,
+              "elevation": 0.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 0.0
+          },
+          "pcm_channel": 0,
+          "track_uid": "ATU_00000001"
+        },
+        {
+          "block_index": 1,
+          "effective": {
+            "azimuth": -27.5,
+            "cartesian": false,
+            "channel_lock": true,
+            "channel_lock_max_distance": 0.5,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 15.0,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": 2400,
+            "jump_position": true,
+            "position": {
+              "azimuth": -27.5,
+              "distance": 1.0,
+              "elevation": 15.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 0.0
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": -35.0,
+            "cartesian": false,
+            "channel_lock": true,
+            "channel_lock_max_distance": 0.5,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 15.0,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": 2400,
+            "jump_position": true,
+            "position": {
+              "azimuth": -35.0,
+              "distance": 1.0,
+              "elevation": 15.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 0.0
+          },
+          "pcm_channel": 0,
+          "track_uid": "ATU_00000001"
+        }
+      ],
+      "effective_gain": 0.6561574339866638,
+      "effective_head_locked": false,
+      "effective_mute": false,
+      "end_sample": null,
+      "id": "AO_1001",
+      "matched_rules": [
+        "global",
+        "objects[0]",
+        "objects[1]",
+        "objects[4]",
+        "objects[5]"
+      ],
+      "name": "Dialogue Lead",
+      "original_gain": 1.0,
+      "original_head_locked": false,
+      "original_mute": false,
+      "source": {
+        "absolute_start_samples": 0,
+        "child_objects": [],
+        "duration_samples": null,
+        "gain_linear": 1.0,
+        "gain_present": false,
+        "gain_unit": "linear",
+        "gain_value": 1.0,
+        "has_parent": false,
+        "mute": false,
+        "mute_present": false,
+        "start_present": false,
+        "start_samples": 0
+      }
+    },
+    {
+      "blocks": [
+        {
+          "block_index": 0,
+          "effective": {
+            "azimuth": -32.5,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.25,
+            "divergence_azimuth_range": 30.0,
+            "divergence_position_range": 0.0,
+            "elevation": 10.0,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": -32.5,
+              "distance": 1.0,
+              "elevation": 10.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 0.0
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": -40.0,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.5,
+            "divergence_azimuth_range": 30.0,
+            "divergence_position_range": 0.0,
+            "elevation": 10.0,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": -40.0,
+              "distance": 1.0,
+              "elevation": 10.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 0.0
+          },
+          "pcm_channel": 1,
+          "track_uid": "ATU_00000002"
+        },
+        {
+          "block_index": 1,
+          "effective": {
+            "azimuth": 57.5,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.25,
+            "divergence_azimuth_range": 30.0,
+            "divergence_position_range": 0.0,
+            "elevation": 5.0,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": 57.5,
+              "distance": 1.0,
+              "elevation": 5.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 0.0
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": 50.0,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.0,
+            "distance": 1.0,
+            "divergence": 0.5,
+            "divergence_azimuth_range": 30.0,
+            "divergence_position_range": 0.0,
+            "elevation": 5.0,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.0,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": 50.0,
+              "distance": 1.0,
+              "elevation": 5.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 0.0
+          },
+          "pcm_channel": 1,
+          "track_uid": "ATU_00000002"
+        }
+      ],
+      "effective_gain": 0.5,
+      "effective_head_locked": false,
+      "effective_mute": false,
+      "end_sample": null,
+      "id": "AO_1002",
+      "matched_rules": [
+        "global",
+        "objects[1]",
+        "objects[3]",
+        "objects[4]",
+        "objects[5]"
+      ],
+      "name": "Dialogue Alt",
+      "original_gain": 1.0,
+      "original_head_locked": false,
+      "original_mute": false,
+      "source": {
+        "absolute_start_samples": 0,
+        "child_objects": [],
+        "duration_samples": null,
+        "gain_linear": 1.0,
+        "gain_present": false,
+        "gain_unit": "linear",
+        "gain_value": 1.0,
+        "has_parent": false,
+        "mute": false,
+        "mute_present": false,
+        "start_present": false,
+        "start_samples": 0
+      }
+    },
+    {
+      "blocks": [
+        {
+          "block_index": 0,
+          "effective": {
+            "azimuth": 110.0,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.25,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 0.0,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 11.25,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": 110.0,
+              "distance": 1.0,
+              "elevation": 0.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 15.0
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": 110.0,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.25,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 0.0,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 15.0,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": 110.0,
+              "distance": 1.0,
+              "elevation": 0.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 40.0
+          },
+          "pcm_channel": 2,
+          "track_uid": "ATU_00000003"
+        },
+        {
+          "block_index": 1,
+          "effective": {
+            "azimuth": 150.0,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.25,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 30.0,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 11.25,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": 150.0,
+              "distance": 1.0,
+              "elevation": 30.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 15.0
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": 150.0,
+            "cartesian": false,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.0,
+            "diffuse": 0.25,
+            "distance": 1.0,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 30.0,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": true,
+            "height": 15.0,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "azimuth": 150.0,
+              "distance": 1.0,
+              "elevation": 30.0
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 40.0
+          },
+          "pcm_channel": 2,
+          "track_uid": "ATU_00000003"
+        }
+      ],
+      "effective_gain": 0.875,
+      "effective_head_locked": false,
+      "effective_mute": false,
+      "end_sample": null,
+      "id": "AO_1003",
+      "matched_rules": [
+        "global",
+        "objects[2]",
+        "objects[5]"
+      ],
+      "name": "Ambience Wide",
+      "original_gain": 1.0,
+      "original_head_locked": false,
+      "original_mute": false,
+      "source": {
+        "absolute_start_samples": 0,
+        "child_objects": [],
+        "duration_samples": null,
+        "gain_linear": 1.0,
+        "gain_present": false,
+        "gain_unit": "linear",
+        "gain_value": 1.0,
+        "has_parent": false,
+        "mute": false,
+        "mute_present": false,
+        "start_present": false,
+        "start_samples": 0
+      }
+    },
+    {
+      "blocks": [
+        {
+          "block_index": 0,
+          "effective": {
+            "azimuth": -45.0,
+            "cartesian": true,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.1875,
+            "diffuse": 0.0,
+            "distance": 0.75,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 19.471220016479492,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.1875,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "X": 0.5,
+              "Y": 0.5,
+              "Z": 0.25
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 0.09375
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": -45.0,
+            "cartesian": true,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.25,
+            "diffuse": 0.0,
+            "distance": 0.75,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 19.471220016479492,
+            "end_sample": 24000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.25,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "X": 0.5,
+              "Y": 0.5,
+              "Z": 0.25
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 0
+            },
+            "start_sample": 0,
+            "width": 0.25
+          },
+          "pcm_channel": 3,
+          "track_uid": "ATU_00000004"
+        },
+        {
+          "block_index": 1,
+          "effective": {
+            "azimuth": 18.434947967529297,
+            "cartesian": true,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.1875,
+            "diffuse": 0.0,
+            "distance": 0.9354143738746643,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 32.3115348815918,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.1875,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "X": -0.25,
+              "Y": 0.75,
+              "Z": 0.5
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 0.09375
+          },
+          "kind": "objects",
+          "original": {
+            "azimuth": 18.434947967529297,
+            "cartesian": true,
+            "channel_lock": false,
+            "channel_lock_max_distance": null,
+            "depth": 0.25,
+            "diffuse": 0.0,
+            "distance": 0.9354143738746643,
+            "divergence": 0.0,
+            "divergence_azimuth_range": 45.0,
+            "divergence_position_range": 0.0,
+            "elevation": 32.3115348815918,
+            "end_sample": 48000,
+            "gain": 1.0,
+            "head_locked": false,
+            "height": 0.25,
+            "interp_length_samples": null,
+            "jump_position": false,
+            "position": {
+              "X": -0.25,
+              "Y": 0.75,
+              "Z": 0.5
+            },
+            "source": {
+              "duration_samples": 24000,
+              "gain_linear": 1.0,
+              "gain_present": false,
+              "gain_unit": "linear",
+              "gain_value": 1.0,
+              "rtime_present": true,
+              "rtime_samples": 24000
+            },
+            "start_sample": 24000,
+            "width": 0.25
+          },
+          "pcm_channel": 3,
+          "track_uid": "ATU_00000004"
+        }
+      ],
+      "effective_gain": 0.5773909687995911,
+      "effective_head_locked": false,
+      "effective_mute": false,
+      "end_sample": null,
+      "id": "AO_1004",
+      "matched_rules": [
+        "global",
+        "objects[2]",
+        "objects[3]",
+        "objects[5]",
+        "objects[6]",
+        "objects[7]"
+      ],
+      "name": "FX Cartesian",
+      "original_gain": 1.0,
+      "original_head_locked": false,
+      "original_mute": false,
+      "source": {
+        "absolute_start_samples": 0,
+        "child_objects": [],
+        "duration_samples": null,
+        "gain_linear": 1.0,
+        "gain_present": false,
+        "gain_unit": "linear",
+        "gain_value": 1.0,
+        "has_parent": false,
+        "mute": false,
+        "mute_present": false,
+        "start_present": false,
+        "start_samples": 0
+      }
+    }
+  ],
+  "policy": "C:\\policies\\p.json",
+  "renderer": "saf-binaural",
+  "schema": "mradm.semantic-report.v1",
+  "warnings": []
+}
