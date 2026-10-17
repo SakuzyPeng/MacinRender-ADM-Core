@@ -56,6 +56,37 @@ C++ 侧只剩适配：
 
 ## 验证
 
-待本机对照完成后填写。
+**本机对照（Linux x64，config A）。** 基线为 `main` 的 `f277b64`，候选为 `a602277`（含布局表与导入迁移，生产代码与本记录提交相同）。
+两者各做一次普通采集与诊断采集，采集自带的重复性与分块检查均通过：
+
+- 283 个 PCM id、237 份内核测量逐字节相同；
+- 诊断采集中 201 份内核检查点、30,772 个场景与渲染检查点全部相同。其中 79 个 `05-import` 现由 Rust 写出，
+  恰好 5 个策略用例的 `06-policy` 与 `05-import` 不同，与 4.2 相同；
+- 候选的普通与诊断采集 PCM 相同，诊断无扰动。两者只有记录构建选项的 `kernels/capabilities.txt` 不同，基线同样如此；
+- 比较器 `compare-rust-phase2.py` 的 `validate()` 对两份候选输出均通过。
+
+**CLI 行为。** 用 46 个用例对照基线与候选的 `mradm`，比较退出码、标准输出、标准错误与写出的策略模板：
+- ADM fixture 的 `inspect` 与 `--write-semantic-policy-template`；
+- 合成 WAVE 的 `inspect`：带 / 不带掩码、7.1.4 掩码、掩码与声道数不符、未知掩码、8 位、float32、零帧、
+  非 WAVE、空文件、缺失文件；
+- `input-layouts`；
+- 声道床 `render` 的布局与标签选项：预设、未知布局、`AUTO`、别名、歧义、带仰角 token、空标签、布局与标签同时给出，
+  以及对 ADM 文件强制声道床。
+
+全部相同。渲染输出的 PCM 由上面的采集覆盖；CHNA trackIndex 0 与缺失 axml 由 `mradm-scene` 单元测试和既有 io 测试覆盖。
+
+**布局表。** 新表由 C++ 旧表生成的规范转储 `rust/crates/mradm-scene/tests/layouts-v1.txt` 固定，标签、顺序、角度与范围的每个 f32
+逐位相同（标准与 Apple 两套几何）。
+
+**质量。**
+- Debug ctest 80/80；
+- `mr_adm_rust_unit_tests` 含 `mradm-scene` 的布局、导入与检查点测试；
+- `mr_adm_rust_quality`（fmt + clippy）与 `mr_adm_ffi_header_check`（cbindgen 0.29.2，280 个函数、99 个结构体一致）；
+- 变更 C++ 的 clang-format 与 clang-tidy；
+- `check-licenses.sh`、`check-reference-retention.py`、`version_metadata.py`。
+
+本机没有 cppcheck，留给 CI。
+
+**规模。** 生产 C/C++ 由 45,026 行降到 44,632 行（布局表 −174，导入与声道床 −220）。
 
 **三平台。** 按四期集中验收的约定，4.3 不单独触发；合入 `main` 后 push 触发的 Consistency 结果回填到本节。
