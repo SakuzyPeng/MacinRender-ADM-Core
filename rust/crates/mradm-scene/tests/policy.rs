@@ -2,7 +2,9 @@
 //! the C++ implementation this module replaced (`semantic_policy.cpp` after the 4.4 report fixes,
 //! the C++ `06-policy` encoder and nlohmann `dump(2)`) over `policy-v1/policies.jsonl`: the five
 //! consistency policies and seeded random policies on 14 ADM scenes; see RUST_INVERSION_POLICY.md.
-//! Digests are FNV-1a 64; JSON syntax errors only keep their code and prefix.
+//! Digests are FNV-1a 64; JSON syntax errors only keep their code and prefix. A golden's optional
+//! `nan_words` lists only floating-point words whose arithmetic result is NaN: assert that class
+//! and normalize those words to the C++ golden's NaN, whose sign is not portable.
 use mradm_json::Value;
 use mradm_scene::{Context, policy, report};
 use mradm_wav::{Chna, ChnaEntry, Format, SampleFormat, Writer, WriterOptions};
@@ -21,6 +23,47 @@ fn fnv(bytes: &[u8]) -> String {
         h = h.wrapping_mul(0x100_0000_01b3);
     }
     format!("{h:016x}")
+}
+
+fn checkpoint_bytes(words: &[i32], nan_words: &[usize]) -> Vec<u8> {
+    let mut words = words.to_vec();
+    for &index in nan_words {
+        assert!(
+            f32::from_bits(words[index] as u32).is_nan(),
+            "checkpoint word {index} must be NaN"
+        );
+        // The reference's negative quiet NaN. Do not inspect every word as a float:
+        // integers such as the unbounded-end sentinel also have NaN bit patterns.
+        words[index] = 0xffc0_0000_u32 as i32;
+    }
+    words.iter().flat_map(|w| w.to_le_bytes()).collect()
+}
+
+#[test]
+fn checkpoint_nan_normalization_preserves_other_words() {
+    let expected = [0xffff_ffff_u32, 0xffc0_0000, 1.0_f32.to_bits()]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect::<Vec<_>>();
+    for nan in [0x7fc0_0000_u32, 0xffc0_0000, 0x7fc0_1234, 0xffc0_1234] {
+        let words = [-1, nan as i32, 1.0_f32.to_bits() as i32];
+        assert_eq!(checkpoint_bytes(&words, &[1]), expected);
+        assert_eq!(
+            checkpoint_bytes(&words, &[]),
+            words
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn checkpoint_nan_normalization_rejects_finite_values_and_infinity() {
+    for value in [0.0_f32, -0.0, 1.0, f32::INFINITY, f32::NEG_INFINITY] {
+        let words = [value.to_bits() as i32];
+        assert!(std::panic::catch_unwind(|| checkpoint_bytes(&words, &[0])).is_err());
+    }
 }
 
 fn fixed<const N: usize>(text: &str) -> [u8; N] {
@@ -188,7 +231,20 @@ fn policies_reproduce_the_cpp_goldens() {
             .collect();
         assert_eq!(scene.policy_warnings, warnings, "case {index} warnings");
         let words = mradm_scene::checkpoint::encode(&scene);
-        let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
+        let nan_words: Vec<usize> = want
+            .as_object()
+            .unwrap()
+            .get("nan_words")
+            .map(|indices| {
+                indices
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|i| i.as_unsigned_u32().unwrap() as usize)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let bytes = checkpoint_bytes(&words, &nan_words);
         assert_eq!(
             (words.len(), fnv(&bytes)),
             (
