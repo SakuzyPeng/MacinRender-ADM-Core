@@ -28,6 +28,10 @@
 //                    dB gains — block order and import projections (PCM consistency 3.5)
 //   hoa3             HOA3 (16 channels) — higher-order decoding, whose AllRAD products once took
 //                    nalgebra's runtime-dispatched SIMD path (PCM consistency 3.3)
+//   policy-objects   4 named AudioObjects in two contents with importance, dialogue, channelLock,
+//                    divergence, jumpPosition, headLocked and a Cartesian screenRef object — the
+//                    semantic policy matrix and the screen configuration (PCM consistency 4.2)
+//   directspeakers-lfe  the 5.1 bed with an ADM lowPass on LFE1 (PCM consistency 4.2)
 //   objects-cartesian  1 Objects channel with CartesianPosition + extent — the only fixture that
 //                    leaves block.position.cartesian == true, which is what distance_from_position
 //                    (hoa/vbap/binaural) and mdap_spread_degrees branch on. Without it those
@@ -202,7 +206,109 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
     return {doc, uid_strs};
 }
 
-[[nodiscard]] BuiltDoc build_direct_speakers() {
+// Semantic policy matrix (PCM consistency 4.2). Four AudioObjects with distinct names, importance
+// and dialogue ids in two contents of one programme, so policy rules can match on id, name glob,
+// content, programme, importance and dialogue. Each object moves over two 500 ms blocks and carries
+// one of the semantic dimensions the policy rewrites: channelLock with maxDistance, objectDivergence
+// with an azimuth range, a jumpPosition with an interpolation length, extent with diffuse, headLocked,
+// and a Cartesian screen-referenced position.
+[[nodiscard]] BuiltDoc build_policy_objects() {
+    struct Spec {
+        const char* name;
+        int importance;
+        int dialogue;
+        bool cartesian;
+        std::array<std::array<float, 3>, 2> positions;
+    };
+    constexpr std::array<Spec, 4> k_objects{
+        {{"Dialogue Lead", 9, 1, false, {{{20.0F, 0.0F, 1.0F}, {-35.0F, 15.0F, 1.0F}}}},
+         {"Dialogue Alt", 6, 1, false, {{{-40.0F, 10.0F, 1.0F}, {50.0F, 5.0F, 1.0F}}}},
+         {"Ambience Wide", 3, 0, false, {{{110.0F, 0.0F, 1.0F}, {150.0F, 30.0F, 1.0F}}}},
+         {"FX Cartesian", 5, 0, true, {{{0.5F, 0.5F, 0.25F}, {-0.25F, 0.75F, 0.5F}}}}}};
+    auto doc = fixture::Document::create();
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids;
+    std::vector<std::shared_ptr<fixture::AudioObject>> objects;
+    for (std::size_t i = 0; i < k_objects.size(); ++i) {
+        const auto& spec = k_objects.at(i);
+        const std::string suffix = "Pol" + std::to_string(i);
+        auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"CF_" + suffix},
+                                                      fixture::TypeDefinition::objects);
+        for (std::size_t b = 0; b < spec.positions.size(); ++b) {
+            const auto& p = spec.positions.at(b);
+            fixture::AudioBlockFormatObjects block;
+            if (spec.cartesian) {
+                block.set(fixture::CartesianPosition{fixture::X{p[0]}, fixture::Y{p[1]}, fixture::Z{p[2]}});
+                block.set(fixture::Cartesian{true});
+                block.set(fixture::ScreenRef{true});
+            } else {
+                block.set(fixture::SphericalPosition{
+                    fixture::Azimuth{p[0]}, fixture::Elevation{p[1]}, fixture::Distance{p[2]}});
+            }
+            block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{500} * static_cast<int>(b)}});
+            block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{500}}});
+            if (i == 0) {
+                fixture::ChannelLock lock;
+                lock.set(fixture::ChannelLockFlag{true});
+                lock.set(fixture::MaxDistance{0.5F});
+                block.set(lock);
+                block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true},
+                                                fixture::InterpolationLength{std::chrono::milliseconds{50}}});
+            } else if (i == 1) {
+                fixture::ObjectDivergence divergence;
+                divergence.set(fixture::Divergence{0.5F});
+                divergence.set(fixture::AzimuthRange{30.0F});
+                block.set(divergence);
+            } else if (i == 2) {
+                block.set(fixture::Width{40.0F});
+                block.set(fixture::Height{15.0F});
+                block.set(fixture::Diffuse{0.25F});
+                block.set(fixture::HeadLocked{b == 1});
+            } else {
+                block.set(fixture::Width{0.25F});
+                block.set(fixture::Height{0.25F});
+                block.set(fixture::Depth{0.25F});
+            }
+            cf->add(block);
+        }
+        doc->add(cf);
+        auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"PF_" + suffix},
+                                                   fixture::TypeDefinition::objects);
+        pf->add_reference(cf);
+        doc->add(pf);
+        auto uid = wire_channel(doc, cf, pf, suffix);
+        uids.push_back(uid);
+        auto obj =
+            fixture::AudioObject::create(fixture::AudioObjectName{spec.name}, fixture::Importance{spec.importance});
+        if (spec.dialogue != 0) {
+            obj->set(fixture::DialogueId{spec.dialogue});
+        }
+        obj->add_reference(uid);
+        doc->add(obj);
+        objects.push_back(obj);
+    }
+    auto dialogue = fixture::AudioContent::create(fixture::AudioContentName{"Dialogue"});
+    dialogue->add_reference(objects[0]);
+    dialogue->add_reference(objects[1]);
+    doc->add(dialogue);
+    auto ambience = fixture::AudioContent::create(fixture::AudioContentName{"Ambience"});
+    ambience->add_reference(objects[2]);
+    ambience->add_reference(objects[3]);
+    doc->add(ambience);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"Main Mix"});
+    prog->add_reference(dialogue);
+    prog->add_reference(ambience);
+    doc->add(prog);
+    fixture::reassign_ids(doc);
+    std::vector<std::string> uid_strs;
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
+    });
+    return {doc, uid_strs};
+}
+
+// lfe_low_pass marks LFE1 with an ADM lowPass frequency, which is what the semantic policy's
+// direct_speakers `lfe` filter tests (PCM consistency 4.2); the renderers detect LFE by label.
+[[nodiscard]] BuiltDoc build_direct_speakers(bool lfe_low_pass = false) {
     struct Speaker {
         const char* label;
         float azimuth;
@@ -231,13 +337,17 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
         fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
             fixture::Azimuth{sp.azimuth}, fixture::Elevation{sp.elevation}, fixture::Distance{1.0F}}};
         block.add(fixture::SpeakerLabel{sp.label});
+        if (lfe_low_pass && std::string_view{sp.label} == "LFE1") {
+            // BS.2076 carries the lowPass frequency on the audioChannelFormat.
+            cf->set(fixture::Frequency{fixture::LowPass{120.0F}});
+        }
         cf->add(block);
         doc->add(cf);
         pf->add_reference(cf);
         uids.push_back(wire_channel(doc, cf, pf, suffix));
     }
 
-    finish_doc(doc, uids, "DirectSpeakers");
+    finish_doc(doc, uids, lfe_low_pass ? "DirectSpeakersLfe" : "DirectSpeakers");
     uid_strs.reserve(uids.size());
     std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
         return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
@@ -395,7 +505,8 @@ void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
               << "kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n"
-              << "     | objects-room | params | directspeakers | hoa | hoa3\n";
+              << "     | objects-room | params | directspeakers | directspeakers-lfe | hoa | hoa3\n"
+              << "     | policy-objects\n";
 }
 
 } // namespace
@@ -439,6 +550,12 @@ int main(int argc, char** argv) try {
     } else if (kind == "hoa3") {
         built = build_hoa(3);
         seed = 0x77777777U;
+    } else if (kind == "policy-objects") {
+        built = build_policy_objects();
+        seed = 0xAAAAAAAAU;
+    } else if (kind == "directspeakers-lfe") {
+        built = build_direct_speakers(true);
+        seed = 0xBBBBBBBBU;
     } else {
         print_usage();
         return 2;
