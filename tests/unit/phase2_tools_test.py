@@ -644,6 +644,23 @@ class EvidenceTests(unittest.TestCase):
                   'scene/e1-g1-s0.40-render.f32']
         self.assertEqual(sorted(stages, key=comparator.checkpoint_order), stages)
         self.assertLess(comparator.checkpoint_order('ear.02-direct.f64'), comparator.checkpoint_order('post/loudness.10-measurement.f64'))
+        # Phase 4.1: the render scene precedes every renderer stage.
+        scene = ['render-scene/offline.05-import.i32', 'render-scene/offline.06-policy.i32',
+                 'speaker/s0.10-input.f32', 'ear.01-layout.f64', 'writer/pass0-s0.80-pcm.f32']
+        self.assertEqual(sorted(reversed(scene), key=comparator.checkpoint_order), scene)
+
+    def test_render_scene_checkpoints_are_required_for_offline_cases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(ValueError, 'missing render-scene checkpoint 05-import'):
+                collector.require_render_scene_checkpoints(root, 'case')
+            (root / 'render-scene').mkdir()
+            for stage in collector.RENDER_SCENE_STAGES:
+                (root / 'render-scene' / f'offline.{stage}.i32').write_bytes(struct.pack('<3i', 1, 0, 0))
+            collector.require_render_scene_checkpoints(root, 'case')
+            (root / 'render-scene' / 'offline.06-policy.i32').write_bytes(struct.pack('<i', 2))
+            with self.assertRaisesRegex(ValueError, 'unknown render-scene checkpoint encoding 06-policy'):
+                collector.require_render_scene_checkpoints(root, 'case')
 
     def test_topology_difference_is_not_equality(self):
         with tempfile.TemporaryDirectory() as tmp:
