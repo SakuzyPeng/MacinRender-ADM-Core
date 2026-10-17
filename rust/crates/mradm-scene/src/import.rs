@@ -6,6 +6,7 @@ use crate::input::{
     InputChannel, MAX_INPUT_CHANNELS, channel_catalog, find_input_layout, input_layouts, lower,
     resolve_input_channel_labels,
 };
+use crate::policy::{Overlay, Policy};
 use mradm_adm::{Document, Snapshot, records::*};
 use mradm_wav::{Chna, ChunkReader, Reader, has_chunk};
 use std::collections::BTreeMap;
@@ -30,10 +31,39 @@ pub struct Info {
 
 /// The imported scene. Element records use the `mradm-adm` projection layout; a channel bed has
 /// no ADM provenance, so its source records are left at their defaults and must not be read.
+/// A semantic policy edits the records in place and the state they do not carry in `overlay`;
+/// the pre-policy scene is kept for the report and the export patches.
 #[derive(Debug)]
 pub struct RenderScene {
     pub info: Info,
     pub snapshot: Snapshot,
+    pub overlay: Overlay,
+    pub original: Option<(Snapshot, Overlay)>,
+    pub policy: Option<Policy>,
+    pub policy_warnings: Vec<String>,
+}
+
+impl RenderScene {
+    pub fn new(info: Info, snapshot: Snapshot) -> Self {
+        Self {
+            overlay: Overlay::of(&snapshot),
+            info,
+            snapshot,
+            original: None,
+            policy: None,
+            policy_warnings: Vec::new(),
+        }
+    }
+
+    /// Applies a semantic policy (once per import) and returns its warnings.
+    pub fn apply_policy(&mut self, policy: Policy) -> &[String] {
+        if self.original.is_none() {
+            self.original = Some((self.snapshot.clone(), self.overlay.clone()));
+        }
+        self.policy_warnings = crate::policy::apply(self, &policy);
+        self.policy = Some(policy);
+        &self.policy_warnings
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -126,8 +156,8 @@ pub fn import_adm(path: &[u8]) -> Result<RenderScene> {
     let document = Document::parse(xml).map_err(Error::adm)?;
     let rate = info.format.sample_rate;
     let snapshot = Snapshot::extract(&document, rate, &entries).map_err(Error::adm)?;
-    Ok(RenderScene {
-        info: Info {
+    Ok(RenderScene::new(
+        Info {
             sample_rate: rate,
             channels: info.format.channels,
             frames: info.frames,
@@ -136,7 +166,7 @@ pub fn import_adm(path: &[u8]) -> Result<RenderScene> {
             input_channel_labels: Vec::new(),
         },
         snapshot,
-    })
+    ))
 }
 
 fn explicit_layout(layout: Option<&str>) -> Option<&str> {
@@ -203,7 +233,7 @@ fn channel_bed(path: &[u8], options: ImportOptions<'_>, ignored_axml: bool) -> R
         input_channel_labels: mapping.iter().map(|c| c.token.clone()).collect(),
     };
     let snapshot = channel_bed_snapshot(&mapping, info.frames, ignored_axml);
-    Ok(RenderScene { info, snapshot })
+    Ok(RenderScene::new(info, snapshot))
 }
 
 fn input_mapping(

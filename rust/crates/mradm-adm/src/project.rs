@@ -5,7 +5,7 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Snapshot {
     pub strings: Vec<String>,
     pub indices: Vec<u32>,

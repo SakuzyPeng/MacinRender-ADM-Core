@@ -5,8 +5,8 @@ use mradm_scene::{Info, RenderScene, SourceKind, checkpoint::encode};
 /// 0x100000003 frames (tests/fixtures/render-scene-v1/README.md).
 #[test]
 fn empty_scene_matches_the_frozen_cpp_encoding() {
-    let scene = RenderScene {
-        info: Info {
+    let scene = RenderScene::new(
+        Info {
             sample_rate: 48000,
             channels: 3,
             frames: 0x1_0000_0003,
@@ -14,8 +14,8 @@ fn empty_scene_matches_the_frozen_cpp_encoding() {
             input_layout: String::new(),
             input_channel_labels: Vec::new(),
         },
-        snapshot: Snapshot::default(),
-    };
+        Snapshot::default(),
+    );
     let fixture = include_bytes!("../../../../tests/fixtures/render-scene-v1/empty.i32");
     let expected: Vec<i32> = fixture
         .chunks(4)

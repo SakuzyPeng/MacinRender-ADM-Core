@@ -1,0 +1,262 @@
+{
+  "global": {
+    "diffuse": {
+      "enabled": true,
+      "max": 1.0,
+      "scale": 1.0
+    },
+    "direct_speakers": {
+      "gain": {
+        "gain_db": 0.0,
+        "scale": 1.0
+      },
+      "position": {
+        "offset": {
+          "azimuth": 0.0,
+          "distance": 0.0,
+          "elevation": 0.0
+        }
+      }
+    },
+    "divergence": {
+      "enabled": true,
+      "max_range": 120.0,
+      "range_scale": 1.0,
+      "scale": 1.0
+    },
+    "extent": {
+      "depth_scale": 1.0,
+      "enabled": true,
+      "height_scale": 1.0,
+      "max": 1.0,
+      "scale": 1.0,
+      "width_scale": 1.0
+    },
+    "gain": {
+      "gain_db": 0.0,
+      "scale": 1.0
+    },
+    "interpolation": {
+      "honor_jump_position": true,
+      "max_ms": 0
+    },
+    "position": {
+      "offset": {
+        "azimuth": 0.0,
+        "distance": 0.0,
+        "elevation": 0.0
+      }
+    }
+  },
+  "objects": [
+    {
+      "diffuse": {
+        "enabled": true,
+        "max": 1.0,
+        "scale": 1.0
+      },
+      "direct_speakers": {
+        "gain": {
+          "gain_db": 0.0,
+          "scale": 1.0
+        },
+        "position": {
+          "offset": {
+            "azimuth": 0.0,
+            "distance": 0.0,
+            "elevation": 0.0
+          }
+        }
+      },
+      "divergence": {
+        "enabled": true,
+        "max_range": 120.0,
+        "range_scale": 1.0,
+        "scale": 1.0
+      },
+      "extent": {
+        "depth_scale": 1.0,
+        "enabled": true,
+        "height_scale": 1.0,
+        "max": 1.0,
+        "scale": 1.0,
+        "width_scale": 1.0
+      },
+      "gain": {
+        "gain_db": 0.0,
+        "scale": 1.0
+      },
+      "id": "AO_1001",
+      "interpolation": {
+        "honor_jump_position": true,
+        "max_ms": 0
+      },
+      "name": "Dialogue Lead",
+      "position": {
+        "offset": {
+          "azimuth": 0.0,
+          "distance": 0.0,
+          "elevation": 0.0
+        }
+      },
+      "track_uid": "ATU_00000001"
+    },
+    {
+      "diffuse": {
+        "enabled": true,
+        "max": 1.0,
+        "scale": 1.0
+      },
+      "direct_speakers": {
+        "gain": {
+          "gain_db": 0.0,
+          "scale": 1.0
+        },
+        "position": {
+          "offset": {
+            "azimuth": 0.0,
+            "distance": 0.0,
+            "elevation": 0.0
+          }
+        }
+      },
+      "divergence": {
+        "enabled": true,
+        "max_range": 120.0,
+        "range_scale": 1.0,
+        "scale": 1.0
+      },
+      "extent": {
+        "depth_scale": 1.0,
+        "enabled": true,
+        "height_scale": 1.0,
+        "max": 1.0,
+        "scale": 1.0,
+        "width_scale": 1.0
+      },
+      "gain": {
+        "gain_db": 0.0,
+        "scale": 1.0
+      },
+      "id": "AO_1002",
+      "interpolation": {
+        "honor_jump_position": true,
+        "max_ms": 0
+      },
+      "name": "Dialogue Alt",
+      "position": {
+        "offset": {
+          "azimuth": 0.0,
+          "distance": 0.0,
+          "elevation": 0.0
+        }
+      },
+      "track_uid": "ATU_00000002"
+    },
+    {
+      "diffuse": {
+        "enabled": true,
+        "max": 1.0,
+        "scale": 1.0
+      },
+      "direct_speakers": {
+        "gain": {
+          "gain_db": 0.0,
+          "scale": 1.0
+        },
+        "position": {
+          "offset": {
+            "azimuth": 0.0,
+            "distance": 0.0,
+            "elevation": 0.0
+          }
+        }
+      },
+      "divergence": {
+        "enabled": true,
+        "max_range": 120.0,
+        "range_scale": 1.0,
+        "scale": 1.0
+      },
+      "extent": {
+        "depth_scale": 1.0,
+        "enabled": true,
+        "height_scale": 1.0,
+        "max": 1.0,
+        "scale": 1.0,
+        "width_scale": 1.0
+      },
+      "gain": {
+        "gain_db": 0.0,
+        "scale": 1.0
+      },
+      "id": "AO_1003",
+      "interpolation": {
+        "honor_jump_position": true,
+        "max_ms": 0
+      },
+      "name": "Ambience Wide",
+      "position": {
+        "offset": {
+          "azimuth": 0.0,
+          "distance": 0.0,
+          "elevation": 0.0
+        }
+      },
+      "track_uid": "ATU_00000003"
+    },
+    {
+      "diffuse": {
+        "enabled": true,
+        "max": 1.0,
+        "scale": 1.0
+      },
+      "direct_speakers": {
+        "gain": {
+          "gain_db": 0.0,
+          "scale": 1.0
+        },
+        "position": {
+          "offset": {
+            "azimuth": 0.0,
+            "distance": 0.0,
+            "elevation": 0.0
+          }
+        }
+      },
+      "divergence": {
+        "enabled": true,
+        "max_range": 120.0,
+        "range_scale": 1.0,
+        "scale": 1.0
+      },
+      "extent": {
+        "depth_scale": 1.0,
+        "enabled": true,
+        "height_scale": 1.0,
+        "max": 1.0,
+        "scale": 1.0,
+        "width_scale": 1.0
+      },
+      "gain": {
+        "gain_db": 0.0,
+        "scale": 1.0
+      },
+      "id": "AO_1004",
+      "interpolation": {
+        "honor_jump_position": true,
+        "max_ms": 0
+      },
+      "name": "FX Cartesian",
+      "position": {
+        "offset": {
+          "azimuth": 0.0,
+          "distance": 0.0,
+          "elevation": 0.0
+        }
+      },
+      "track_uid": "ATU_00000004"
+    }
+  ],
+  "schema": "mradm.semantic-policy.v1"
+}

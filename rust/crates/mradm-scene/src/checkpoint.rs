@@ -1,13 +1,16 @@
 //! Version-1 render-scene checkpoint (PCM consistency 4.1, emitted here from 4.3): the canonical
 //! word stream of the public `AdmScene` this scene becomes, specified in
 //! docs/architecture/RUST_INVERSION_BASELINE.md. It follows the C++ view mapping field by field,
-//! including the public defaults the import never sets (user levels, overrides). The input path
-//! and warning text are excluded; only the warning count is recorded.
+//! including the user state a semantic policy keeps beside the records (user levels, the
+//! effective mute and position flags). The input path and warning text are excluded; only the
+//! warning count is recorded.
 use crate::import::{RenderScene, SourceKind};
+use crate::policy::{Overlay, UserLevel};
 use mradm_adm::{Snapshot, records::*};
 
 struct Words<'a> {
     s: &'a Snapshot,
+    overlay: &'a Overlay,
     words: Vec<i32>,
 }
 
@@ -110,10 +113,12 @@ impl Words<'_> {
         }
         self.optional_string(l.method);
     }
-    /// A user level the import never sets: gain multiplier 1, mute unset.
-    fn default_user_level(&mut self) {
-        self.f32(1.0);
-        self.boolean(false);
+    fn user_level(&mut self, user: UserLevel) {
+        self.f32(user.gain_multiplier);
+        self.boolean(user.mute.is_some());
+        if let Some(mute) = user.mute {
+            self.boolean(mute);
+        }
     }
     fn object_block(&mut self, b: &ObjectBlock) {
         self.position(&b.position);
@@ -135,13 +140,16 @@ impl Words<'_> {
         self.boolean(true);
         self.block_source(&b.source);
     }
-    fn direct_block(&mut self, b: &DirectBlock, provenance: bool) {
+    fn direct_block(&mut self, index: usize, provenance: bool) {
+        let s = self.s;
+        let b = &s.direct_blocks[index];
+        let state = self.overlay.direct_blocks[index];
         self.strings(b.labels);
         self.string(b.pack_id);
         self.f32(b.azimuth);
         self.f32(b.elevation);
         self.f32(b.distance);
-        self.flag(b.has_position);
+        self.boolean(state.has_position);
         for (bit, v) in [
             (1, b.azimuth_min),
             (2, b.azimuth_max),
@@ -161,20 +169,23 @@ impl Words<'_> {
         if provenance {
             self.block_source(&b.source);
         }
+        // The ADM source position follows the authored position, not a policy re-aim.
         let source_position = provenance && b.has_position != 0;
         self.boolean(source_position);
         if source_position {
             self.position(&b.position);
         }
-        self.default_user_level();
-        self.boolean(false); // user_position_override
+        self.user_level(state.user);
+        self.boolean(state.position_override);
     }
-    fn object(&mut self, o: &Object, provenance: bool) {
+    fn object(&mut self, index: usize, provenance: bool) {
         let s = self.s;
+        let o = &s.objects[index];
+        let state = self.overlay.objects[index];
         self.string(o.id);
         self.string(o.name);
         self.f32(o.gain);
-        self.flag(o.mute);
+        self.boolean(state.mute);
         self.u64(o.end);
         self.flag(o.offset_present);
         if o.offset_present != 0 {
@@ -193,9 +204,8 @@ impl Words<'_> {
             for b in blocks {
                 self.object_block(b);
             }
-            let blocks = &s.direct_blocks[t.ds_blocks.offset..t.ds_blocks.offset + t.ds_blocks.len];
-            self.u32(blocks.len() as u32);
-            for b in blocks {
+            self.u32(t.ds_blocks.len as u32);
+            for b in t.ds_blocks.offset..t.ds_blocks.offset + t.ds_blocks.len {
                 self.direct_block(b, provenance);
             }
         }
@@ -221,7 +231,7 @@ impl Words<'_> {
             self.strings(o.child_objects);
             self.flag(o.has_parent);
         }
-        self.default_user_level();
+        self.user_level(state.user);
     }
 }
 
@@ -231,6 +241,7 @@ pub fn encode(scene: &RenderScene) -> Vec<i32> {
     let provenance = info.source_kind == SourceKind::Adm;
     let mut w = Words {
         s,
+        overlay: &scene.overlay,
         words: Vec::new(),
     };
     w.u32(1); // encoding version
@@ -277,7 +288,7 @@ pub fn encode(scene: &RenderScene) -> Vec<i32> {
         w.optional_string(c.content_kind);
     }
     w.u32(s.objects.len() as u32);
-    for o in &s.objects {
+    for o in 0..s.objects.len() {
         w.object(o, provenance);
     }
     w.u32(s.hoa.len() as u32);
