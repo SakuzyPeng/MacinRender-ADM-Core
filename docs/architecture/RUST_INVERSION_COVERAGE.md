@@ -111,6 +111,17 @@ VBAP 4+7+0、双耳 cloud、Triple Balance 7.1.4 size 各一，固定与碎片�
 
 ## 验证
 
-待本机最终采集完成后填写。
+**本机复核（2026-10-16，macOS arm64）。** 修正比较器漏计 Scene 房间尾声、JSON 输入在 Windows
+文本模式下产生 CRLF，以及三个回放工具缺少 `ADMRenderRoom` 直接链接依赖的问题。JSON 统一按 UTF-8/LF
+字节写出；新增回归测试覆盖 LF/CRLF 环境下的文件字节一致性，以及两个进程、两次重复、两个 epoch 的尾声帧数。
+
+Debug 和 Release 均以 `BUILD_SHARED_LIBS=ON` 成功构建 `mr_adm_phase2_tools`。Debug 的
+`mr_adm_phase2_tool_tests` 与 `mr_adm_consistency_build_tests` 两套 CTest 通过；变更文件的 clang-format、
+clang-tidy、cppcheck，以及 Rust fmt、C/C++ 规模棘轮检查通过。
+
+Release 使用 config A（额外开启共享库）完成非诊断采集：79 个离线用例、88 个 Scene 配置、28 个文件流式用例，
+共 283 个 PCM 输出、237 个内核文件。同进程/新进程重复性、规定的分块一致性及比较器 `validate()` 全部通过。
+源码指纹为 `5b31e7c167bba07171c39e8a684b7894a11052861a55ab2d81880e821580e2f8`。
+此次复核未执行诊断无扰动采集或三平台比较。
 
 **三平台。** 按四期集中验收的约定，4.2 不单独等待三平台运行，结果回填到本节。

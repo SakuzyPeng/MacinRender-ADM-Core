@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
@@ -130,9 +131,9 @@ live_scene::SemanticIdentity identity(const Json& value) {
     result.dialogue_id = value.at("dialogue_id").get<int>();
     for (const auto& [field, target] :
          {std::pair{"contents", &result.contents}, std::pair{"programmes", &result.programmes}}) {
-        for (const auto& entity : value.at(field)) {
-            target->push_back({entity.at("id").get<std::string>(), entity.at("name").get<std::string>()});
-        }
+        std::ranges::transform(value.at(field), std::back_inserter(*target), [](const Json& entity) {
+            return live_scene::SemanticEntity{entity.at("id").get<std::string>(), entity.at("name").get<std::string>()};
+        });
     }
     return result;
 }

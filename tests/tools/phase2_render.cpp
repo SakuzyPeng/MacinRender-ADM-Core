@@ -109,26 +109,26 @@ mradm::RenderOptions options(const Json& args) {
 }
 // Fixture files named by the case (PCM consistency 4.2): the same RenderOptions fields the mradm
 // command line fills from these flags, resolved inside the collection's fixtures directory.
-void apply_files(const Json& files, const std::filesystem::path& fixtures, mradm::RenderOptions& options) {
+void apply_files(const Json& files, const std::filesystem::path& fixtures, mradm::RenderOptions& render_options) {
     for (const auto& [flag, value] : files.items()) {
         const std::filesystem::path name(value.get<std::string>());
         phase2::require(name.is_relative() && name.lexically_normal() == name && *name.begin() != "..",
                         "invalid fixture file name");
         const auto path = fixtures / name;
         if (flag == "--semantic-policy") {
-            options.semantic_policy_path = path;
+            render_options.semantic_policy_path = path;
         } else if (flag == "--direct-speakers-matrix") {
-            options.direct_speakers_matrix_path = path;
+            render_options.direct_speakers_matrix_path = path;
         } else if (flag == "--screen-config") {
             auto screens = mradm::load_screen_config(path);
             phase2::require(screens.has_value(), "cannot load screen configuration");
-            options.screens = *screens;
+            render_options.screens = *screens;
         } else if (flag == "--room") {
             auto room = mradm::RoomProfile::load(path);
             phase2::require(room.has_value(), "cannot load room profile");
-            options.room.profile = *room;
+            render_options.room.profile = *room;
         } else if (flag == "--room-hrir") {
-            options.room.hrir_manifest = path;
+            render_options.room.hrir_manifest = path;
         } else {
             throw std::runtime_error("unsupported fixture file option: " + flag);
         }

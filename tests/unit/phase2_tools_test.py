@@ -118,6 +118,47 @@ class CollectionTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_json_fixtures_have_identical_bytes_with_windows_newlines(self):
+        open_path = Path.open
+
+        def platform_open(path, mode='r', buffering=-1, encoding=None, errors=None, newline=None):
+            if 'b' not in mode and newline is None:
+                newline = line_ending
+            return open_path(path, mode, buffering, encoding, errors, newline)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            posix, windows = Path(tmp) / 'posix', Path(tmp) / 'windows'
+            for directory, line_ending in ((posix, '\n'), (windows, '\r\n')):
+                with patch.object(Path, 'open', platform_open):
+                    common.write_json_fixtures(directory)
+            for directory in (posix, windows):
+                common.validate_json_fixtures(directory)
+            for name in common.JSON_FIXTURES:
+                with self.subTest(fixture=name):
+                    self.assertEqual((posix / name).read_bytes(), (windows / name).read_bytes())
+
+    def test_scene_status_accounts_for_room_tail_in_every_pass(self):
+        cases = [next(row for row in common.scene_cases() if row['backend'] == backend
+                      and row['input_rate'] == row['output_rate'] == 48000)
+                 for backend in ('binaural', 'room-binaural')]
+        for case, frames in zip(cases, ((12289, 33), (16730, 4474))):
+            with self.subTest(case=case['id']):
+                status = {'epochs': [{'epoch': 1, 'frames': frames[0]}, {'epoch': 2, 'frames': frames[1]}],
+                          'status': 'passed', 'underruns': 0}
+                manifest = {'scene': [case], 'replay_status': {
+                    case['id'] + f'-process{process}': [copy.deepcopy(status), copy.deepcopy(status)]
+                    for process in (1, 2)}}
+                comparator.validate_scene_status(manifest)
+                for process in (1, 2):
+                    for repeat in (0, 1):
+                        for epoch in (0, 1):
+                            for delta in (-4441, -1, 1):
+                                corrupt = copy.deepcopy(manifest)
+                                record = corrupt['replay_status'][case['id'] + f'-process{process}'][repeat]
+                                record['epochs'][epoch]['frames'] += delta
+                                with self.assertRaisesRegex(ValueError, 'Scene state/frame-count evidence'):
+                                    comparator.validate_scene_status(corrupt)
+
     def test_signed_zero_subnormal_and_ulp(self):
         a = struct.pack('<III', 0x80000000, 1, 0x3f800000)
         b = struct.pack('<III', 0, 2, 0x3f800001)
@@ -194,7 +235,7 @@ class EvidenceTests(unittest.TestCase):
                     'schema': 'mradm.phase2.v1', 'complete': True,
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': [], 'scene': [], 'stream': [case], 'sofa': common.SOFA_FIXTURES,
-                    'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES, 'room': common.ROOM_FIXTURES,
+                    'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
                     'outputs': {case['id']: {'path': pcm.relative_to(root).as_posix(),
                                              'shape': [channels, rate, frames], 'sha256': common.digest(bits)}},
                 })

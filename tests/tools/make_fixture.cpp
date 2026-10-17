@@ -214,11 +214,11 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
 // and a Cartesian screen-referenced position.
 [[nodiscard]] BuiltDoc build_policy_objects() {
     struct Spec {
-        const char* name;
-        int importance;
-        int dialogue;
-        bool cartesian;
-        std::array<std::array<float, 3>, 2> positions;
+        const char* name{};
+        int importance{};
+        int dialogue{};
+        bool cartesian{};
+        std::array<std::array<float, 3>, 2> positions{};
     };
     constexpr std::array<Spec, 4> k_objects{
         {{"Dialogue Lead", 9, 1, false, {{{20.0F, 0.0F, 1.0F}, {-35.0F, 15.0F, 1.0F}}}},
