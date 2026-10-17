@@ -1,0 +1,9 @@
+[package]
+name = "mradm-json"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+description = "JSON parsing and serialization compatible with nlohmann/json 3.12.0"
+
+[dependencies]
