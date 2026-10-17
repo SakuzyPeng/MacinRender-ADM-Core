@@ -7,3 +7,9 @@ license.workspace = true
 description = "Render scene: input import, channel beds and loudspeaker layout tables"
 
 [dependencies]
+mradm-adm = { path = "../mradm-adm" }
+mradm-dsp = { path = "../mradm-dsp", default-features = false }
+mradm-wav = { path = "../mradm-wav" }
+
+[dev-dependencies]
+mradm-wav = { path = "../mradm-wav" }

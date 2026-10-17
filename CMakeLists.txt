@@ -203,7 +203,6 @@ add_library(MacinRender::ADMIo ALIAS mr_adm_io)
 target_sources(
     mr_adm_io
     PRIVATE
-        src/adm_io/channel_bed_importer.cpp
         src/adm_io/scene_importer.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -215,7 +214,7 @@ target_sources(
 
 target_link_libraries(mr_adm_io
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMMetadata MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMMetadata MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_io)
 mr_adm_core_apply_static_analysis(mr_adm_io)
@@ -1137,7 +1136,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_loudness mr_adm_peak mr_adm_render_triple_balance mr_adm_audio mr_adm_render_common)
+        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_loudness mr_adm_peak mr_adm_render_triple_balance mr_adm_audio mr_adm_render_common)
             target_compile_definitions(${_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
         endforeach()
     endif()

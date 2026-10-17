@@ -329,6 +329,11 @@ dependencies = [
 [[package]]
 name = "mradm-scene"
 version = "0.1.0"
+dependencies = [
+ "mradm-adm",
+ "mradm-dsp",
+ "mradm-wav",
+]
 
 [[package]]
 name = "mradm-wav"

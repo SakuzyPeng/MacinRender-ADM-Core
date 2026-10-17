@@ -23,6 +23,7 @@
 #include "adm/render.h"
 #include "adm/semantic_policy.h"
 
+#include "../adm_io/scene_import_internal.h"
 #include "capability_json.h"
 #include "format_table.h"
 #include "input_layout_json.h"
@@ -449,7 +450,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     const io::SceneImportOptions import_options{request.options.input_layout, request.options.input_channel_labels};
     Result<AdmScene> scene_result = (preimported_scene != nullptr)
                                         ? Result<AdmScene>{*preimported_scene}
-                                        : io::import_scene(request.input_path.string(), import_options);
+                                        : io::import_scene_for_render(request.input_path.string(), import_options);
     if (!scene_result) {
         return {scene_result.error(), std::nullopt, std::nullopt, {{LogLevel::error, scene_result.error().message}}};
     }
@@ -464,9 +465,6 @@ RenderResult RenderService::render(const RenderRequest& request,
         for (const auto& w : scene_result->import_warnings) {
             logs.log(LogLevel::warning, "importer", w);
         }
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-        scene_checkpoint::dump("05-import", *scene_result);
-#endif
     }
 
     if (request.options.cancel_token.stop_requested()) {
