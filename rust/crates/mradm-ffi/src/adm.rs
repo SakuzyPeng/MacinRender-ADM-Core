@@ -8,11 +8,11 @@ use std::{
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Text {
-    data: *const u8,
-    len: usize,
+    pub(crate) data: *const u8,
+    pub(crate) len: usize,
 }
 impl Text {
-    fn new(s: &str) -> Self {
+    pub(crate) fn new(s: &str) -> Self {
         Self {
             data: s.as_ptr(),
             len: s.len(),
@@ -57,6 +57,37 @@ pub struct View {
     hoa_blocks_len: usize,
     warnings: *const u32,
     warnings_len: usize,
+}
+impl View {
+    /// Borrows `snapshot` and its string views; valid while both stay alive and unmodified.
+    pub(crate) fn new(s: &Snapshot, texts: &[Text]) -> Self {
+        View {
+            strings: texts.as_ptr(),
+            strings_len: texts.len(),
+            indices: s.indices.as_ptr(),
+            indices_len: s.indices.len(),
+            programmes: s.programmes.as_ptr(),
+            programmes_len: s.programmes.len(),
+            contents: s.contents.as_ptr(),
+            contents_len: s.contents.len(),
+            objects: s.objects.as_ptr(),
+            objects_len: s.objects.len(),
+            tracks: s.tracks.as_ptr(),
+            tracks_len: s.tracks.len(),
+            object_blocks: s.object_blocks.as_ptr(),
+            object_blocks_len: s.object_blocks.len(),
+            direct_blocks: s.direct_blocks.as_ptr(),
+            direct_blocks_len: s.direct_blocks.len(),
+            hoa: s.hoa.as_ptr(),
+            hoa_len: s.hoa.len(),
+            hoa_channels: s.hoa_channels.as_ptr(),
+            hoa_channels_len: s.hoa_channels.len(),
+            hoa_blocks: s.hoa_blocks.as_ptr(),
+            hoa_blocks_len: s.hoa_blocks.len(),
+            warnings: s.warnings.as_ptr(),
+            warnings_len: s.warnings.len(),
+        }
+    }
 }
 pub struct Handle {
     document: Document,
@@ -172,34 +203,8 @@ pub unsafe extern "C" fn mradm_adm_view(
             return Err(Error::invalid("无效 ADM view 参数"));
         }
         let handle = unsafe { &*handle };
-        let s = &handle.snapshot;
         unsafe {
-            *output = View {
-                strings: handle.texts.as_ptr(),
-                strings_len: handle.texts.len(),
-                indices: s.indices.as_ptr(),
-                indices_len: s.indices.len(),
-                programmes: s.programmes.as_ptr(),
-                programmes_len: s.programmes.len(),
-                contents: s.contents.as_ptr(),
-                contents_len: s.contents.len(),
-                objects: s.objects.as_ptr(),
-                objects_len: s.objects.len(),
-                tracks: s.tracks.as_ptr(),
-                tracks_len: s.tracks.len(),
-                object_blocks: s.object_blocks.as_ptr(),
-                object_blocks_len: s.object_blocks.len(),
-                direct_blocks: s.direct_blocks.as_ptr(),
-                direct_blocks_len: s.direct_blocks.len(),
-                hoa: s.hoa.as_ptr(),
-                hoa_len: s.hoa.len(),
-                hoa_channels: s.hoa_channels.as_ptr(),
-                hoa_channels_len: s.hoa_channels.len(),
-                hoa_blocks: s.hoa_blocks.as_ptr(),
-                hoa_blocks_len: s.hoa_blocks.len(),
-                warnings: s.warnings.as_ptr(),
-                warnings_len: s.warnings.len(),
-            };
+            *output = View::new(&handle.snapshot, &handle.texts);
         }
         Ok(())
     })

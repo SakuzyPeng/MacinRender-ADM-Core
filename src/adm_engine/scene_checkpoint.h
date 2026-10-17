@@ -1,10 +1,10 @@
 #pragma once
 
 // Diagnostic-only canonical word stream of an AdmScene (PCM consistency 4.1). RenderService
-// records it after import and after the semantic policy so the Rust render scene (phase 4.3/4.4)
-// can be compared word for word. The encoding is specified in
-// docs/architecture/RUST_INVERSION_BASELINE.md; environment-dependent content (the input path,
-// warning text) is excluded. Temporary: removed once Rust emits the same checkpoints.
+// records it after the semantic policy (`06-policy`); since 4.3 the import checkpoint
+// (`05-import`) is written by the Rust render scene (mradm-scene `checkpoint`) with the same
+// encoding, specified in docs/architecture/RUST_INVERSION_BASELINE.md. Environment-dependent
+// content (the input path, warning text) is excluded. Removed when the policy moves to Rust (4.4).
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
 #include <bit>
 #include <cstdint>

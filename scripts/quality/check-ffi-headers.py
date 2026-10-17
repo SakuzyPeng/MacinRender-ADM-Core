@@ -43,6 +43,7 @@ FFI_HEADERS = [
     "src/adm_dsp/triple_balance_ffi.h",
     "src/adm_render_common/layout_ffi.h",
     "src/adm_metadata/adm_ffi.h",
+    "src/adm_metadata/scene_ffi.h",
     "src/adm_audio/wav_ffi.h",
     "src/adm_realtime/osc_ffi.h",
 ]

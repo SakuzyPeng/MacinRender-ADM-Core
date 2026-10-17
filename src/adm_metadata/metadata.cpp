@@ -40,31 +40,11 @@ std::string copy(MradmAdmText value) {
 }
 using Handle = std::unique_ptr<MradmAdmHandle, decltype(&mradm_adm_destroy)>;
 using Buffer = std::unique_ptr<MradmAdmBuffer, decltype(&mradm_adm_buffer_destroy)>;
-struct Parsed {
-    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter aggregate owns its borrowed view.
-    Handle handle{nullptr, mradm_adm_destroy};
-    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): view lifetime is bounded by the handle above.
-    MradmAdmView view{};
-    Parsed(std::string_view xml, const std::map<std::string, uint16_t>& channels, uint32_t rate) {
-        std::vector<MradmAdmChna> chna;
-        chna.reserve(channels.size());
-        for (const auto& [uid, channel] : channels) {
-            chna.push_back({text(uid), channel});
-        }
-        std::array<uint8_t, 1024> error{};
-        MradmAdmHandle* raw = nullptr;
-        const auto code = mradm_adm_parse(reinterpret_cast<const uint8_t*>(xml.data()),
-                                          xml.size(),
-                                          rate,
-                                          chna.data(),
-                                          chna.size(),
-                                          &raw,
-                                          error.data(),
-                                          error.size());
-        handle.reset(raw);
-        checked(code, error);
-        checked(mradm_adm_view(handle.get(), &view, error.data(), error.size()), error);
-    }
+// Bounds-checked reads of a borrowed record view (an ADM document or an imported render scene). The
+// view is a plain set of pointers; the records stay owned by its handle.
+struct Records {
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter aggregate over a borrowed view.
+    MradmAdmView view;
     [[nodiscard]] std::string string(uint32_t id) const {
         require(id < view.strings_len, "无效 ADM 字符串索引");
         return copy(view.strings[id]);
@@ -88,6 +68,28 @@ struct Parsed {
         return output;
     }
 };
+// The parsed source document of a scene being exported; its records carry the patchable nodes.
+struct Parsed {
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter aggregate owns its borrowed view.
+    Handle handle{nullptr, mradm_adm_destroy};
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): view lifetime is bounded by the handle above.
+    MradmAdmView view{};
+    Parsed(std::string_view xml, uint32_t rate) {
+        std::array<uint8_t, 1024> error{};
+        MradmAdmHandle* raw = nullptr;
+        const auto code = mradm_adm_parse(reinterpret_cast<const uint8_t*>(xml.data()),
+                                          xml.size(),
+                                          rate,
+                                          nullptr,
+                                          0,
+                                          &raw,
+                                          error.data(),
+                                          error.size());
+        handle.reset(raw);
+        checked(code, error);
+        checked(mradm_adm_view(handle.get(), &view, error.data(), error.size()), error);
+    }
+};
 template <class T> std::optional<T> optional(uint32_t present, T value) {
     return present != 0 ? std::optional<T>{value} : std::nullopt;
 }
@@ -103,7 +105,7 @@ SceneBlockSource block_source(const MradmAdmBlockSource& source) {
             source.rtime_samples,
             optional(source.duration_present, source.duration_samples)};
 }
-std::optional<SceneLoudnessMetadata> loudness(const Parsed& parsed, const MradmAdmLoudness& v) {
+std::optional<SceneLoudnessMetadata> loudness(const Records& parsed, const MradmAdmLoudness& v) {
     if (v.present == 0) {
         return std::nullopt;
     }
@@ -137,7 +139,7 @@ SceneObjectBlock object_block(const MradmAdmObjectBlock& v) {
     b.adm_source = block_source(v.source);
     return b;
 }
-SceneDirectSpeakersBlock direct_block(const Parsed& p, const MradmAdmDirectBlock& v) {
+SceneDirectSpeakersBlock direct_block(const Records& p, const MradmAdmDirectBlock& v, bool provenance) {
     SceneDirectSpeakersBlock b;
     b.speaker_labels = p.strings(v.labels);
     b.pack_format_id = p.string(v.pack_id);
@@ -156,14 +158,17 @@ SceneDirectSpeakersBlock direct_block(const Parsed& p, const MradmAdmDirectBlock
     b.start_sample = v.start;
     b.end_sample = v.end;
     b.head_locked = v.head_locked != 0;
-    b.adm_source = block_source(v.source);
-    if (b.has_position) {
-        b.source_position = position(v.position);
+    if (provenance) {
+        b.adm_source = block_source(v.source);
+        if (b.has_position) {
+            b.source_position = position(v.position);
+        }
     }
     return b;
 }
+// A synthesized channel bed has no ADM provenance: its source records are not read.
 // NOLINTNEXTLINE(readability-function-size): explicit field mapping keeps Rust types outside the public scene.
-AdmScene scene(const Parsed& p) {
+AdmScene scene(const Records& p, bool provenance) {
     AdmScene output;
     const auto& view = p.view;
     for (const auto& v : std::span{view.programmes, view.programmes_len}) {
@@ -211,26 +216,28 @@ AdmScene scene(const Parsed& p) {
         o.labels = p.strings(v.labels);
         o.importance = optional(v.importance_present, static_cast<int>(v.importance));
         o.dialogue_id = optional(v.dialogue_present, static_cast<unsigned int>(v.dialogue));
-        o.adm_source = SceneObjectSource{gain_source(v.source_gain),
-                                         v.mute_present != 0,
-                                         v.mute != 0,
-                                         v.start_present != 0,
-                                         v.start,
-                                         v.absolute_start,
-                                         optional(v.duration_present, v.duration),
-                                         p.strings(v.child_objects),
-                                         v.has_parent != 0};
-        for (const auto& t : Parsed::subset(view.tracks, view.tracks_len, v.tracks)) {
+        if (provenance) {
+            o.adm_source = SceneObjectSource{gain_source(v.source_gain),
+                                             v.mute_present != 0,
+                                             v.mute != 0,
+                                             v.start_present != 0,
+                                             v.start,
+                                             v.absolute_start,
+                                             optional(v.duration_present, v.duration),
+                                             p.strings(v.child_objects),
+                                             v.has_parent != 0};
+        }
+        for (const auto& t : Records::subset(view.tracks, view.tracks_len, v.tracks)) {
             SceneTrackRef track;
             track.track_uid = p.string(t.uid);
             if (t.channel >= 0) {
                 track.channel_index = static_cast<uint16_t>(t.channel);
             }
-            for (const auto& b : Parsed::subset(view.object_blocks, view.object_blocks_len, t.blocks)) {
+            for (const auto& b : Records::subset(view.object_blocks, view.object_blocks_len, t.blocks)) {
                 track.blocks.push_back(object_block(b));
             }
-            for (const auto& b : Parsed::subset(view.direct_blocks, view.direct_blocks_len, t.ds_blocks)) {
-                track.ds_blocks.push_back(direct_block(p, b));
+            for (const auto& b : Records::subset(view.direct_blocks, view.direct_blocks_len, t.ds_blocks)) {
+                track.ds_blocks.push_back(direct_block(p, b, provenance));
             }
             o.tracks.push_back(std::move(track));
         }
@@ -248,7 +255,7 @@ AdmScene scene(const Parsed& p) {
         pack.head_locked = v.head_locked != 0;
         pack.start_sample = v.start;
         pack.end_sample = v.end;
-        for (const auto& c : Parsed::subset(view.hoa_channels, view.hoa_channels_len, v.channels)) {
+        for (const auto& c : Records::subset(view.hoa_channels, view.hoa_channels_len, v.channels)) {
             SceneHOAChannel channel;
             channel.track_uid = p.string(c.uid);
             channel.order = c.order;
@@ -256,7 +263,7 @@ AdmScene scene(const Parsed& p) {
             if (c.channel >= 0) {
                 channel.channel_index = static_cast<uint16_t>(c.channel);
             }
-            for (const auto& b : Parsed::subset(view.hoa_blocks, view.hoa_blocks_len, c.blocks)) {
+            for (const auto& b : Records::subset(view.hoa_blocks, view.hoa_blocks_len, c.blocks)) {
                 channel.blocks.push_back({b.gain, b.start, b.end, b.head_locked != 0});
             }
             pack.channels.push_back(std::move(channel));
@@ -309,7 +316,7 @@ template <class T> void same_time(const T& baseline, const T& original, const T&
 }
 // NOLINTNEXTLINE(readability-function-size): validate and map the complete supported semantic field set together.
 Patches collect_patches(const Parsed& parsed, const AdmScene& original, const AdmScene& effective) {
-    const auto baseline = scene(parsed);
+    const auto baseline = scene(Records{parsed.view}, true);
     same_size(baseline.objects, original.objects, effective.objects);
     same_size(baseline.hoa_tracks, original.hoa_tracks, effective.hoa_tracks);
     Patches patches;
@@ -410,9 +417,9 @@ OutputMetadata output(Buffer buffer) {
     return result;
 }
 } // namespace
-Result<AdmScene> import_axml(std::string_view xml, const std::map<std::string, uint16_t>& channels, uint32_t rate) {
+Result<AdmScene> scene_from_view(const MradmAdmView& view, bool adm_provenance) {
     try {
-        return scene(Parsed{xml, channels, rate});
+        return scene(Records{view}, adm_provenance);
     } catch (const Failure& e) {
         return make_error(e.code(), e.what());
     }
@@ -420,7 +427,7 @@ Result<AdmScene> import_axml(std::string_view xml, const std::map<std::string, u
 Result<std::string> patch_axml(std::string_view xml, const AdmScene& original, const AdmScene& effective) {
     try {
         require(original.info.sample_rate == effective.info.sample_rate, "ADM 采样率不一致");
-        Parsed parsed{xml, {}, original.info.sample_rate};
+        Parsed parsed{xml, original.info.sample_rate};
         const auto patches = collect_patches(parsed, original, effective);
         std::array<uint8_t, 1024> error{};
         MradmAdmBuffer* raw = nullptr;
