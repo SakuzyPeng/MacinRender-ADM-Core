@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressions for private FFI array contracts and reference retirement."""
+"""Regressions for private FFI array contracts, reference retirement and the C/C++ surface ratchet."""
 
 from contextlib import redirect_stderr, redirect_stdout
 import hashlib
@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,6 +27,7 @@ def load_check(name):
 
 ffi = load_check("check-ffi-headers")
 retention = load_check("check-reference-retention")
+surface = load_check("language-surface")
 
 
 class FfiArrayTests(unittest.TestCase):
@@ -144,6 +146,123 @@ class ReferenceRetirementTests(unittest.TestCase):
         result, output = self.check()
         self.assertEqual(result, 1)
         self.assertIn(self.provenance, output)
+
+
+class LanguageSurfaceTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.addCleanup(self.temporary.cleanup)
+        self.write("src/adm_core/a.cpp", 10)
+        self.write("include/adm/a.h", 2)
+        self.write("src/adm_apple/b.mm", 4)
+        self.write("tests/unit/c.cpp", 7)
+        self.write("tests/reference/hoa/d.h", 3)
+        self.write("rust/crates/mradm-dsp/src/lib.rs", 5)
+        self.baseline = self.root / "baseline.json"
+        self.run_surface("--update")
+
+    def write(self, relative, count):
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n" * count, encoding="utf-8")
+
+    def run_surface(self, *args):
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(output):
+            result = surface.main(["--root", str(self.root), "--baseline", str(self.baseline), *args])
+        return result, output.getvalue()
+
+    def test_areas_separate_production_islands_tests_and_rust(self):
+        areas = surface.measure(self.root)["areas"]
+        self.assertEqual(areas["production"]["lines"], 12)
+        self.assertEqual(areas["islands"]["lines"], 4)
+        self.assertEqual(areas["tests"]["lines"], 7)
+        self.assertEqual(areas["reference"]["lines"], 3)
+        self.assertEqual(areas["rust"]["lines"], 5)
+
+    def test_unchanged_surface_passes(self):
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 0, output)
+
+    def test_growing_production_fails_and_names_the_module(self):
+        self.write("src/adm_engine/new.cpp", 3)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("src/adm_engine +3", output)
+
+    def test_growing_islands_fails(self):
+        self.write("src/adm_windows/sink.cpp", 1)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("islands", output)
+
+    def test_tests_and_rust_are_reported_only(self):
+        self.write("tests/unit/more.cpp", 50)
+        self.write("rust/crates/mradm-dsp/src/more.rs", 50)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 0, output)
+
+    def test_shrinking_production_requires_tightening_before_check_passes(self):
+        self.write("src/adm_core/a.cpp", 4)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1, output)
+        self.assertIn("--update", output)
+        self.assertEqual(self.run_surface("--update")[0], 0)
+        self.assertEqual(self.run_surface("--check")[0], 0)
+        self.write("src/adm_core/a.cpp", 5)
+        self.assertEqual(self.run_surface("--check")[0], 1)
+
+    def test_update_cannot_raise_existing_limits_or_overwrite_on_failure(self):
+        original = self.baseline.read_bytes()
+        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp"):
+            with self.subTest(path=relative):
+                self.write(relative, 1)
+                result, output = self.run_surface("--update")
+                self.assertEqual(result, 1, output)
+                self.assertEqual(self.baseline.read_bytes(), original)
+                (self.root / relative).unlink()
+
+    def git(self, *args):
+        return subprocess.run(["git", "-c", "user.name=Surface test", "-c", "user.email=test@example.invalid",
+                               "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={self.root / 'no-hooks'}",
+                               *args], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
+
+    def commit_baseline(self):
+        self.git("init", "-q")
+        self.git("add", ".")
+        self.git("commit", "-qm", "baseline")
+        return self.git("rev-parse", "HEAD")
+
+    def test_base_ref_rejects_manually_raised_limits(self):
+        ref = self.commit_baseline()
+        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp"):
+            with self.subTest(path=relative):
+                self.write(relative, 1)
+                self.baseline.write_text(json.dumps(surface.measure(self.root)))
+                for mode in ("--check", "--update"):
+                    result, output = self.run_surface(mode, "--base-ref", ref)
+                    self.assertEqual(result, 1, output)
+                    self.assertIn("基线上限", output)
+                (self.root / relative).unlink()
+
+    def test_base_ref_allows_tightening_and_first_introduction(self):
+        self.baseline.unlink()
+        ref = self.commit_baseline()
+        self.assertEqual(self.run_surface("--update", "--base-ref", ref)[0], 0)
+        self.assertEqual(self.run_surface("--check", "--base-ref", ref)[0], 0)
+        self.git("add", ".")
+        self.git("commit", "-qm", "first baseline")
+        ref = self.git("rev-parse", "HEAD")
+        self.write("src/adm_core/a.cpp", 4)
+        self.assertEqual(self.run_surface("--update", "--base-ref", ref)[0], 0)
+        self.assertEqual(self.run_surface("--check", "--base-ref", ref)[0], 0)
+
+    def test_base_ref_must_exist(self):
+        self.commit_baseline()
+        result, output = self.run_surface("--check", "--base-ref", "missing-ref")
+        self.assertEqual(result, 1, output)
+        self.assertIn("无法读取基准提交", output)
 
 
 if __name__ == "__main__":

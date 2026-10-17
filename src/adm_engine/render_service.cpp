@@ -29,6 +29,7 @@
 #include "layout_table.h"
 #include "post_gain.h"
 #include "renderer_factory.h"
+#include "scene_checkpoint.h"
 #include "scene_json.h"
 #include "support_matrix.h"
 #include "timeline.h"
@@ -463,6 +464,9 @@ RenderResult RenderService::render(const RenderRequest& request,
         for (const auto& w : scene_result->import_warnings) {
             logs.log(LogLevel::warning, "importer", w);
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        scene_checkpoint::dump("05-import", *scene_result);
+#endif
     }
 
     if (request.options.cancel_token.stop_requested()) {
@@ -615,6 +619,9 @@ RenderResult RenderService::render(const RenderRequest& request,
             return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
         }
         semantic_policy = std::move(*policy_res);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        scene_checkpoint::dump("06-policy", *scene_result);
+#endif
     }
 
     // From here on the semantic report may be captured; every error path must carry

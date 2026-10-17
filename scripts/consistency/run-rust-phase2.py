@@ -9,6 +9,7 @@ import subprocess
 import sys
 import phase2_common as common
 from build_info import collect, read_cache
+from render_scene_checkpoint import RENDER_SCENE_STAGES, require_render_scene_checkpoints
 
 
 def run(command, log, trace=None, extra_env=None):
@@ -204,6 +205,7 @@ def main():
             for row in offline:
                 if not list((out / 'checkpoints' / row['id'] / 'writer').glob('*.f32')):
                     raise ValueError('missing offline PCM checkpoint: ' + row['id'])
+                require_render_scene_checkpoints(out / 'checkpoints' / row['id'], row['id'])
             for row in scenes:
                 require_scene_checkpoints(out / 'checkpoints' / row['id'], row)
             if not list((out / 'kernel-checkpoints').rglob('*.f32')):

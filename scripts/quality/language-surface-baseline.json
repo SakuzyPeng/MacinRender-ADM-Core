@@ -1,0 +1,91 @@
+{
+  "schema": "mradm.language-surface.v1",
+  "areas": {
+    "production": {
+      "files": 195,
+      "lines": 45090
+    },
+    "islands": {
+      "files": 5,
+      "lines": 3213
+    },
+    "tests": {
+      "files": 101,
+      "lines": 47649
+    },
+    "reference": {
+      "files": 38,
+      "lines": 12042
+    },
+    "rust": {
+      "files": 181,
+      "lines": 57413
+    },
+    "rust-vendor": {
+      "files": 175,
+      "lines": 94573
+    }
+  },
+  "modules": {
+    "include/adm": 4598,
+    "rust/crates/mradm-adm": 2676,
+    "rust/crates/mradm-dsp": 34439,
+    "rust/crates/mradm-ear": 3421,
+    "rust/crates/mradm-ffi": 13355,
+    "rust/crates/mradm-math": 300,
+    "rust/crates/mradm-osc": 809,
+    "rust/crates/mradm-wav": 2413,
+    "rust/vendor/ebur128": 9931,
+    "rust/vendor/rayon-core": 7427,
+    "rust/vendor/realfft": 1225,
+    "rust/vendor/rubato": 9711,
+    "rust/vendor/rustfft": 59632,
+    "rust/vendor/sofar": 6647,
+    "src/adm_apple": 2504,
+    "src/adm_audio": 4909,
+    "src/adm_c_api": 3614,
+    "src/adm_cli": 1655,
+    "src/adm_core": 2225,
+    "src/adm_dsp": 3475,
+    "src/adm_engine": 4432,
+    "src/adm_io": 590,
+    "src/adm_loudness": 165,
+    "src/adm_metadata": 788,
+    "src/adm_peak": 143,
+    "src/adm_realtime": 5402,
+    "src/adm_render_binaural": 3486,
+    "src/adm_render_common": 2777,
+    "src/adm_render_ear": 1039,
+    "src/adm_render_hoa": 770,
+    "src/adm_render_room": 1344,
+    "src/adm_render_triple_balance": 2055,
+    "src/adm_render_vbap": 1236,
+    "src/adm_renderer_factory": 387,
+    "src/adm_windows": 709,
+    "tests/manual": 2317,
+    "tests/reference/dr_wav_reference_test.cpp": 274,
+    "tests/reference/ear_post_legacy.h": 147,
+    "tests/reference/ebur128_reference_test.cpp": 207,
+    "tests/reference/hoa": 654,
+    "tests/reference/hptf_parse": 243,
+    "tests/reference/libadm": 1994,
+    "tests/reference/libbw64": 168,
+    "tests/reference/libear": 402,
+    "tests/reference/live_vbap": 660,
+    "tests/reference/monitor": 108,
+    "tests/reference/osc_protocol": 407,
+    "tests/reference/output_dsp_legacy.h": 222,
+    "tests/reference/pcm_mix_legacy.h": 438,
+    "tests/reference/resampler_reference_test.cpp": 167,
+    "tests/reference/saf_reference_test.cpp": 152,
+    "tests/reference/scene_numeric": 1531,
+    "tests/reference/spreader_mr.c": 955,
+    "tests/reference/spreader_mr.h": 85,
+    "tests/reference/spreader_mr_internal.h": 153,
+    "tests/reference/triple_balance": 1619,
+    "tests/reference/wav_container": 1456,
+    "tests/support": 1014,
+    "tests/tools": 2571,
+    "tests/unit": 41747
+  }
+}
