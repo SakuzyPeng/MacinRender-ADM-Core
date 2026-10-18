@@ -42,8 +42,53 @@ fn thread_cpu_ns() -> Option<u64> {
     Some(unsafe { clock_gettime_nsec_np(16) })
 }
 
+#[cfg(target_os = "windows")]
+fn thread_cpu_ns() -> Option<u64> {
+    #[repr(C)]
+    #[derive(Default)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentThread() -> *mut std::ffi::c_void;
+        fn GetThreadTimes(
+            thread: *mut std::ffi::c_void,
+            creation: *mut FileTime,
+            exit: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
+    }
+    let (mut creation, mut exit, mut kernel, mut user) = (
+        FileTime::default(),
+        FileTime::default(),
+        FileTime::default(),
+        FileTime::default(),
+    );
+    // The pseudo-handle needs no close. All output structures remain valid for
+    // this synchronous call. Windows reports CPU totals in 100 ns units;
+    // individual short intervals may be below the OS accounting resolution.
+    if unsafe {
+        GetThreadTimes(
+            GetCurrentThread(),
+            &mut creation,
+            &mut exit,
+            &mut kernel,
+            &mut user,
+        )
+    } == 0
+    {
+        return None;
+    }
+    let ticks = |v: FileTime| u64::from(v.low) | (u64::from(v.high) << 32);
+    ticks(kernel).checked_add(ticks(user))?.checked_mul(100)
+}
+
 #[cfg(not(any(
     target_os = "macos",
+    target_os = "windows",
     all(target_os = "linux", target_pointer_width = "64")
 )))]
 fn thread_cpu_ns() -> Option<u64> {

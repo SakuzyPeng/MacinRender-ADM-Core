@@ -370,6 +370,7 @@ impl ResponseWork {
         let fill_direct = cache && direct && stale(self.cached_direct);
         let fill_early = cache && early && stale(self.cached_early);
         if fill_direct || fill_early {
+            let _profile = super::profile::Guard::new(super::profile::Stage::PathTransfers);
             let source = sources[0];
             for index in images.clone() {
                 let image = room.images[index];
@@ -506,6 +507,8 @@ impl ResponseWork {
                 }
             }
         }
+        let _transform_profile =
+            super::profile::Guard::new(super::profile::Stage::ResponseTransform);
         for (branch, (spectrum, used)) in [
             (&self.direct, &self.direct_buckets),
             (&self.early, &self.early_buckets),

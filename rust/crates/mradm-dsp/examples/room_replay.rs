@@ -1,27 +1,22 @@
 //! Release room-scoped numerical checkpoints. Resource bytes and event times
 //! are fixed; wall clocks and devices are deliberately absent from the input.
 use mradm_dsp::{
-    Error, Result, geometry,
+    Result, geometry,
     room::{
         control::{RoomCommand, RoomDescription, State},
         geometry::{self as room_geometry, Rotation},
         hrir::HrirBank,
         prepared::{PreparedRoom, ResponseWork},
         quality::Quality,
-        resources::{HrirData, RoomProfile, sha256},
+        resources::sha256,
         screen::{RoomScreenGeometry, RoomScreens},
         session::{Instance, PreparedSet, Session},
     },
 };
 use std::{fs, io::Write, path::Path, sync::Arc};
+#[path = "room_support/assets.rs"]
+mod assets;
 
-fn asset(root: &Path, name: &str, expected: usize) -> Result<Vec<u8>> {
-    let bytes = fs::read(root.join(name)).map_err(|_| Error::Io("Cannot read replay asset"))?;
-    if bytes.len() != expected {
-        return Err(Error::Io("Replay asset size mismatch"));
-    }
-    Ok(bytes)
-}
 fn save(root: &Path, name: &str, samples: &[f32]) -> std::io::Result<serde_json::Value> {
     let bytes: Vec<_> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
     let mut out = fs::OpenOptions::new()
@@ -239,6 +234,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for numerical acceptance".into());
     }
     let mut args: Vec<_> = std::env::args().collect();
+    let hrir_path = if let Some(index) = args.iter().position(|v| v == "--hrir") {
+        let path = args
+            .get(index + 1)
+            .ok_or("--hrir needs a resource path")?
+            .clone();
+        args.drain(index..index + 2);
+        Some(std::path::PathBuf::from(path))
+    } else {
+        None
+    };
     let quality = if let Some(index) = args.iter().position(|v| v == "--quality") {
         let value = args
             .get(index + 1)
@@ -266,19 +271,15 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let dense = args.iter().any(|v| v == "--dense");
     args.retain(|v| v != "--screens" && v != "--dense");
     if args.len() != 3 {
-        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens] [--dense] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
+        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--hrir SOFA_OR_COLLECTION] [--screens] [--dense] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
     }
     let file = Path::new(&args[1]);
     let root = file.parent().ok_or("missing parent")?;
     let out = Path::new(&args[2]);
     fs::create_dir(out)?;
-    let profile = Arc::new(RoomProfile::parse(&fs::read(file)?, |n, s| {
-        asset(root, n, s)
-    })?);
-    let hrir = Arc::new(HrirData::parse(
-        &fs::read(root.join(&profile.default_hrir))?,
-        |n, s| asset(root, n, s),
-    )?);
+    let profile = Arc::new(assets::profile(file)?);
+    let selected = hrir_path.unwrap_or_else(|| root.join(&profile.default_hrir));
+    let hrir = Arc::new(assets::hrir_at_rate(&selected, profile.sample_rate)?);
     let (length, _, _) = PreparedRoom::required_fft(&profile, &hrir)?;
     let bank = Arc::new(HrirBank::with_policy(hrir, length, quality.fft())?);
     let room = Arc::new(PreparedRoom::with_quality(

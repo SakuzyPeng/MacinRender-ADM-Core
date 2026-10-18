@@ -48,7 +48,9 @@ headLocked 分支加入同样的保护延迟。参考包为 256 帧（5.33 ms）
 同一二进制／CPU 能力下的分块位一致性，允许不同架构的 PCM 位差。seek 预热增加一个
 反射周期，处理 FIFO 与有限尾声不变。详见 [ADR 0020](../adr/0020-room-quality-tiers.md)；
 性能、波形误差和当前边界见 [第一版验证](ROOM_QUALITY_V1.md)。
-v2 的参数对照与头姿误差见 [头姿预算验证](ROOM_POSE_BUDGET.md)。
+v2 的参数对照与头姿误差见 [头姿预算验证](ROOM_POSE_BUDGET.md)。2026-10-18 采用了
+[准备并行与活动缓存优化](ROOM_PREPARATION_OPTIMIZATION.md)。同轮 v3 算术候选因 Windows
+短测失败而撤回，运行时仍为 v2。
 
 ```sh
 build/release/mradm room-check /path/to/room.json --quality realtime
@@ -101,7 +103,8 @@ C++ 使用 `RoomConfig::quality = RoomQuality::realtime`。C ABI v1.48 提供：
 
 固定输入资源、声源 PCM / 状态、事件样本位置与初始状态，比较房间输出，
 不要求本任务处理上游或设备侧的一致性。几何 / 时延为 f64，PCM / 卷积为 f32，
-固定归约顺序、分别舍入乘加，超越函数使用锁定 libm。C 边界为房间操作建立 RNE / 渐进下溢
+exact 固定归约顺序、分别舍入乘加；realtime 候选允许 FMA 与固定分组重排，须通过 ADR 0020 的
+舍入误差和性能门槛才可采用。超越函数使用锁定 libm。C 边界为房间操作建立 RNE / 渐进下溢
 环境，并恢复调用方的浮点控制寄存器；不修改其它后端的数值策略。
 
 22.2 的 22 个参考全频位置和 6 补点是回归数据，不是运行方向网格。

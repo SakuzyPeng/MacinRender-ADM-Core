@@ -20,8 +20,10 @@ pub enum Stage {
     VoiceRender,
     VoiceBatch,
     VoiceSegment,
+    PathTransfers,
+    ResponseTransform,
 }
-pub const STAGE_COUNT: usize = 15;
+pub const STAGE_COUNT: usize = 17;
 pub const NAMES: [&str; STAGE_COUNT] = [
     "session_process",
     "canonical_block",
@@ -38,6 +40,8 @@ pub const NAMES: [&str; STAGE_COUNT] = [
     "voice_render",
     "voice_batch",
     "voice_segment",
+    "path_transfers",
+    "response_transform",
 ];
 #[cfg(feature = "room-profile")]
 mod enabled {
@@ -94,6 +98,8 @@ mod enabled {
                         | Stage::EmitterConvolution
                         | Stage::SourceReduction
                         | Stage::VoiceSegment
+                        | Stage::PathTransfers
+                        | Stage::ResponseTransform
                 )
             {
                 return Self {

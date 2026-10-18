@@ -149,6 +149,22 @@ pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
 }
 
 pub fn prepare_at_rate(bytes: &[u8], target_rate: u32) -> Result<HrirData> {
+    prepare_inner(bytes, target_rate, None)
+}
+
+pub(super) fn prepare_authenticated(
+    bytes: &[u8],
+    target_rate: u32,
+    hash: String,
+) -> Result<HrirData> {
+    prepare_inner(bytes, target_rate, Some(hash))
+}
+
+fn prepare_inner(
+    bytes: &[u8],
+    target_rate: u32,
+    authenticated_hash: Option<String>,
+) -> Result<HrirData> {
     super::validate_sample_rate(target_rate)?;
     if bytes.len() > MAX_BYTES {
         return Err(invalid("SOFA 文件超过 256 MiB"));
@@ -317,7 +333,7 @@ pub fn prepare_at_rate(bytes: &[u8], target_rate: u32) -> Result<HrirData> {
     if guard > 4096 || output_taps > 8192 {
         return Err(invalid("SOFA 完整插值响应超过 v1 支持预算"));
     }
-    let source_hash = sha256(bytes);
+    let source_hash = authenticated_hash.unwrap_or_else(|| sha256(bytes));
     Ok(HrirData {
         sample_rate: target_rate,
         source_sample_rate: Some(rate as u32),
@@ -575,87 +591,221 @@ impl Fft {
         }
     }
 }
-fn estimate_delays(ir: &[f32], taps: usize, target: usize) -> Result<Vec<f64>> {
-    let n = (4 * taps).next_power_of_two().max(2048);
-    let fft = Fft::new(n);
-    let mut original = vec![[0.; 2]; n];
-    let mut work = original.clone();
-    let first = (300 * n).div_ceil(target);
-    let last = 1500 * n / target;
-    let x: Vec<_> = (first..=last)
-        .map(|k| std::f64::consts::TAU * k as f64 / n as f64)
-        .collect();
-    let mean = x.iter().sum::<f64>() / x.len() as f64;
-    let denominator = x.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
-    let mut delays = Vec::with_capacity(ir.len() / taps);
-    for row in ir.chunks_exact(taps) {
-        original.fill([0.; 2]);
-        for (v, x) in original.iter_mut().zip(row) {
-            v[0] = f64::from(*x);
+struct DelayPlan {
+    fft: Fft,
+    n: usize,
+    first: usize,
+    last: usize,
+    x: Vec<f64>,
+    mean: f64,
+    denominator: f64,
+}
+impl DelayPlan {
+    fn new(taps: usize, target: usize) -> Self {
+        let n = (4 * taps).next_power_of_two().max(2048);
+        let first = (300 * n).div_ceil(target);
+        let last = 1500 * n / target;
+        let x: Vec<_> = (first..=last)
+            .map(|k| std::f64::consts::TAU * k as f64 / n as f64)
+            .collect();
+        let mean = x.iter().sum::<f64>() / x.len() as f64;
+        let denominator = x.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
+        Self {
+            fft: Fft::new(n),
+            n,
+            first,
+            last,
+            x,
+            mean,
+            denominator,
         }
-        fft.run(&mut original, false);
-        let peak = original[..=n / 2]
-            .iter()
-            .map(|v| libm::hypot(v[0], v[1]))
-            .fold(0., f64::max);
-        if peak == 0. {
-            return Err(invalid("SOFA 每个方向的每只耳都必须有非零响应"));
-        }
-        for k in 0..=n / 2 {
-            let value = libm::log(libm::hypot(original[k][0], original[k][1]).max(peak * 1e-12));
-            work[k] = [value, 0.];
-            if k > 0 && k < n / 2 {
-                work[n - k] = [value, 0.];
+    }
+    fn estimate(&self, ir: &[f32], taps: usize, delays: &mut [f64]) -> Result<()> {
+        let Self {
+            fft,
+            n,
+            first,
+            last,
+            x,
+            mean,
+            denominator,
+        } = self;
+        let (n, first, last, mean, denominator) = (*n, *first, *last, *mean, *denominator);
+        let mut original = vec![[0.; 2]; n];
+        let mut work = original.clone();
+        for (row, destination) in ir.chunks_exact(taps).zip(delays) {
+            original.fill([0.; 2]);
+            for (v, x) in original.iter_mut().zip(row) {
+                v[0] = f64::from(*x);
             }
-        }
-        fft.run(&mut work, true);
-        for (k, v) in work.iter_mut().enumerate() {
-            *v = [
-                v[0] * if k == 0 || k == n / 2 {
-                    1.
-                } else if k < n / 2 {
-                    2.
-                } else {
-                    0.
-                },
-                0.,
-            ];
-        }
-        fft.run(&mut work, false);
-        let mut previous = 0.;
-        let mut offset = 0.;
-        let mut numerator = 0.;
-        for k in 0..=last {
-            let phase = libm::atan2(original[k][1], original[k][0]) - work[k][1];
-            if k > 0 {
-                let diff = phase - previous;
-                if diff.abs() >= std::f64::consts::PI {
-                    let mut wrapped = diff
-                        - std::f64::consts::TAU
-                            * libm::floor((diff + std::f64::consts::PI) / std::f64::consts::TAU);
-                    if wrapped == -std::f64::consts::PI && diff > 0. {
-                        wrapped = std::f64::consts::PI;
-                    }
-                    offset += wrapped - diff;
+            fft.run(&mut original, false);
+            let peak = original[..=n / 2]
+                .iter()
+                .map(|v| libm::hypot(v[0], v[1]))
+                .fold(0., f64::max);
+            if peak == 0. {
+                return Err(invalid("SOFA 每个方向的每只耳都必须有非零响应"));
+            }
+            for k in 0..=n / 2 {
+                let value =
+                    libm::log(libm::hypot(original[k][0], original[k][1]).max(peak * 1e-12));
+                work[k] = [value, 0.];
+                if k > 0 && k < n / 2 {
+                    work[n - k] = [value, 0.];
                 }
             }
-            previous = phase;
-            if k >= first {
-                numerator += (phase + offset) * (x[k - first] - mean);
+            fft.run(&mut work, true);
+            for (k, v) in work.iter_mut().enumerate() {
+                *v = [
+                    v[0] * if k == 0 || k == n / 2 {
+                        1.
+                    } else if k < n / 2 {
+                        2.
+                    } else {
+                        0.
+                    },
+                    0.,
+                ];
             }
+            fft.run(&mut work, false);
+            let mut previous = 0.;
+            let mut offset = 0.;
+            let mut numerator = 0.;
+            for k in 0..=last {
+                let phase = libm::atan2(original[k][1], original[k][0]) - work[k][1];
+                if k > 0 {
+                    let diff = phase - previous;
+                    if diff.abs() >= std::f64::consts::PI {
+                        let mut wrapped = diff
+                            - std::f64::consts::TAU
+                                * libm::floor(
+                                    (diff + std::f64::consts::PI) / std::f64::consts::TAU,
+                                );
+                        if wrapped == -std::f64::consts::PI && diff > 0. {
+                            wrapped = std::f64::consts::PI;
+                        }
+                        offset += wrapped - diff;
+                    }
+                }
+                previous = phase;
+                if k >= first {
+                    numerator += (phase + offset) * (x[k - first] - mean);
+                }
+            }
+            let delay = -numerator / denominator;
+            if !delay.is_finite() || delay.abs() > taps as f64 {
+                return Err(invalid("SOFA 超额相位时延超出完整响应长度"));
+            }
+            *destination = delay;
         }
-        let delay = -numerator / denominator;
-        if !delay.is_finite() || delay.abs() > taps as f64 {
-            return Err(invalid("SOFA 超额相位时延超出完整响应长度"));
+        Ok(())
+    }
+}
+
+fn estimate_delays_with_workers(
+    ir: &[f32],
+    taps: usize,
+    target: usize,
+    workers: usize,
+) -> Result<Vec<f64>> {
+    let plan = DelayPlan::new(taps, target);
+    let count = ir.len() / taps;
+    let mut delays = vec![0.; count];
+    let workers = workers.clamp(1, 4).min(count.max(1));
+    if workers == 1 {
+        plan.estimate(ir, taps, &mut delays)?;
+    } else {
+        use rayon::prelude::*;
+        // One private pool bounds preparation concurrency across simultaneous
+        // loads as well as within a layer. Audio workers never enter this pool.
+        // Each task owns its scratch; indexed collection keeps first-row errors.
+        static POOL: std::sync::Mutex<Option<std::sync::Arc<rayon::ThreadPool>>> =
+            std::sync::Mutex::new(None);
+        let pool = {
+            let mut slot = POOL
+                .lock()
+                .map_err(|_| Error::RenderFailed("HRIR preparation pool failed"))?;
+            if let Some(pool) = &*slot {
+                pool.clone()
+            } else {
+                // A transient thread-creation error must not become a cached
+                // failure for every subsequent load in this process.
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(
+                        std::thread::available_parallelism()
+                            .map_or(1, usize::from)
+                            .min(4),
+                    )
+                    .thread_name(|i| format!("mradm-hrir-prepare-{i}"))
+                    .build()
+                    .map_err(|_| Error::RenderFailed("Cannot start HRIR preparation workers"))?;
+                let pool = std::sync::Arc::new(pool);
+                *slot = Some(pool.clone());
+                pool
+            }
+        };
+        let chunk = count.div_ceil(workers);
+        let results: Vec<Result<()>> = pool.install(|| {
+            ir.par_chunks(chunk * taps)
+                .zip(delays.par_chunks_mut(chunk))
+                .map(|(input, output)| plan.estimate(input, taps, output))
+                .collect()
+        });
+        for result in results {
+            result?;
         }
-        delays.push(delay);
     }
     Ok(delays)
+}
+
+fn estimate_delays(ir: &[f32], taps: usize, target: usize) -> Result<Vec<f64>> {
+    let workers = if ir.len() / taps >= 128 {
+        std::thread::available_parallelism()
+            .map_or(1, usize::from)
+            .min(4)
+    } else {
+        1
+    };
+    estimate_delays_with_workers(ir, taps, target, workers)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preparation_workers_preserve_every_delay_bit_and_first_error() {
+        let taps = 128;
+        let mut ir = vec![0.; taps * 133];
+        for (index, row) in ir.chunks_exact_mut(taps).enumerate() {
+            row[3 + index % 47] = 0.8;
+            row[70 + index % 31] = -0.03;
+        }
+        for rate in [48000, 96000] {
+            let expected = estimate_delays_with_workers(&ir, taps, rate, 1).unwrap();
+            for workers in [2, 3, 4] {
+                let actual = estimate_delays_with_workers(&ir, taps, rate, workers).unwrap();
+                assert!(
+                    expected
+                        .iter()
+                        .zip(actual)
+                        .all(|(a, b)| a.to_bits() == b.to_bits())
+                );
+            }
+        }
+        ir[taps * 11..taps * 12].fill(0.);
+        ir[taps * 100..taps * 101].fill(0.);
+        let expected = estimate_delays_with_workers(&ir, taps, 96000, 1)
+            .unwrap_err()
+            .to_string();
+        for workers in [2, 3, 4] {
+            assert_eq!(
+                estimate_delays_with_workers(&ir, taps, 96000, workers)
+                    .unwrap_err()
+                    .to_string(),
+                expected
+            );
+        }
+    }
     #[test]
     fn complete_resampling_and_fractional_delay_keep_gain_and_time() {
         for target in [48000, 96000] {
