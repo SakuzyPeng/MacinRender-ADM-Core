@@ -3,26 +3,47 @@ use crate::{Error, Result};
 
 pub const DELAY_LENGTH: usize = 32;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct DiffuseDelay {
-    delay: [f32; DELAY_LENGTH],
+    delay: [f32; DELAY_LENGTH * 2],
     position: usize,
+    step: usize,
+}
+
+impl Default for DiffuseDelay {
+    fn default() -> Self {
+        Self {
+            delay: [0.; DELAY_LENGTH * 2],
+            position: 0,
+            step: 1,
+        }
+    }
 }
 
 impl DiffuseDelay {
+    /// Preserve the eight physical delays for a 48/96 kHz room session.
+    pub fn with_sample_rate(sample_rate: u32) -> Result<Self> {
+        crate::room::validate_sample_rate(sample_rate)?;
+        Ok(Self {
+            step: (sample_rate / 48000) as usize,
+            ..Self::default()
+        })
+    }
     pub fn reset(&mut self) {
-        *self = Self::default();
+        self.delay.fill(0.);
+        self.position = 0;
     }
 
     fn next(&mut self, input: f32) -> f32 {
         const OFFSETS: [usize; 8] = [3, 7, 11, 17, 19, 23, 29, 31];
         const POLARITY: [f32; 8] = [1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0];
+        let length = DELAY_LENGTH * self.step;
         self.delay[self.position] = input;
         let mut sum = 0.0;
         for (offset, polarity) in OFFSETS.into_iter().zip(POLARITY) {
-            sum += self.delay[(self.position + DELAY_LENGTH - offset) % DELAY_LENGTH] * polarity;
+            sum += self.delay[(self.position + length - offset * self.step) % length] * polarity;
         }
-        self.position = (self.position + 1) % DELAY_LENGTH;
+        self.position = (self.position + 1) % length;
         sum * 0.35355339
     }
 

@@ -31,7 +31,7 @@ def read_asset(root, entry):
     return array
 
 
-def orthogonal_mix(field, weights, decay_rate=0.):
+def orthogonal_mix(field, weights, decay_rate=0., sample_rate=48000):
     """One common orthogonal transform of directional FIRs; never row-normalize.
 
     The Householder reflection maps the omni sum vector to the requested vector,
@@ -55,11 +55,11 @@ def orthogonal_mix(field, weights, decay_rate=0.):
                   / max(float(np.max(original_energy)), 1e-30))
     if error > 1e-12:
         raise ValueError("orthogonal late-field energy check failed")
-    mixed *= np.exp(-decay_rate * np.arange(field.shape[1], dtype=np.float64) / 48000.)
+    mixed *= np.exp(-decay_rate * np.arange(field.shape[1], dtype=np.float64) / sample_rate)
     return mixed, error
 
 
-def noise_field(late, bands, directions):
+def noise_field(late, bands, directions, sample_rate=48000):
     rt = np.asarray(late["rt60_seconds"], dtype=np.float64)
     energy = np.asarray(late["band_energy"], dtype=np.float64)
     if rt.shape != (8,) or energy.shape != (8,) or not np.isfinite(rt).all() or not np.isfinite(energy).all():
@@ -69,9 +69,9 @@ def noise_field(late, bands, directions):
     duration = float(late["duration_seconds"])
     if not np.isfinite(duration) or not 0.1 <= duration <= 10 or duration < rt.max():
         raise ValueError("finite tail duration must be 0.1..10 seconds and at least the longest RT60")
-    frames = int(round(duration * 48000))
+    frames = int(round(duration * sample_rate))
     rng = np.random.Generator(np.random.PCG64(int(late["seed"])))
-    time = np.arange(frames, dtype=np.float64) / 48000
+    time = np.arange(frames, dtype=np.float64) / sample_rate
     field = np.zeros((len(directions), frames), dtype=np.float64)
     # No feedback network is exported: all state has explicit finite support.
     for channel in range(len(directions)):
@@ -79,7 +79,7 @@ def noise_field(late, bands, directions):
             noise = rng.standard_normal(frames + bands.shape[1] - 1)
             filtered = fftconvolve(noise, bands[band], mode="valid")
             field[channel] += filtered * np.exp(-np.log(1000.) * time / rt[band]) * np.sqrt(energy[band])
-    fade = min(240, frames)
+    fade = min(sample_rate // 200, frames)
     field[:, -fade:] *= np.linspace(1., 0., fade, dtype=np.float64)
     # One shared calibration of the late field, not per-direction/ear HRIR normalization.
     mean_energy = np.mean(np.sum(field * field, axis=1))
@@ -99,8 +99,8 @@ def main():
     base = json.loads(args.template_package.read_text(encoding="utf-8"))
     definition_bytes = args.definition.read_bytes()
     definition = json.loads(definition_bytes)
-    if (base.get("schema"), base.get("version"), base.get("kind"), base.get("sample_rate")) != (
-            "mradm.room", 1, "hybrid-shoebox-v1", 48000):
+    if ((base.get("schema"), base.get("version"), base.get("kind")) != (
+            "mradm.room", 1, "hybrid-shoebox-v1") or base.get("sample_rate") not in (48000, 96000)):
         raise ValueError("unsupported template package")
     if definition.get("schema") != "mradm.room-definition" or definition.get("version") != 1:
         raise ValueError("unsupported room definition")
@@ -126,12 +126,12 @@ def main():
     arrays = {name: read_asset(source, entry) for name, entry in base["assets"].items()}
     mix_error = None
     if late["generator"] == "octave-decay-noise-v1":
-        field = noise_field(late, arrays["bands"], arrays["late_directions"])
+        field = noise_field(late, arrays["bands"], arrays["late_directions"], base["sample_rate"])
     elif late["generator"] == "template-orthogonal-mix-v1":
         if late.get("template_late_sha256") != base["assets"]["late"]["sha256"]:
             raise ValueError("orthogonal mix requires the exact declared template late field")
         field, mix_error = orthogonal_mix(arrays["late"], late["mix_vector"],
-                                         float(late.get("decay_rate_per_second", 0.)))
+                                         float(late.get("decay_rate_per_second", 0.)), base["sample_rate"])
     else:
         raise ValueError("unsupported offline late-field generator")
     encoded = np.asarray(field, dtype="<f4", order="C")

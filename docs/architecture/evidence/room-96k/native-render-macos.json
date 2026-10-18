@@ -1,0 +1,358 @@
+{
+  "schema": "mradm.room-native-96k-validation",
+  "version": 1,
+  "passed": true,
+  "source_collection": "SkinRLC_96k_AllDistances_v1",
+  "sample_rate": 96000,
+  "prepared": {
+    "alignment_guard_frames": 40,
+    "fft_policy": "scalar",
+    "hrir_bank_bytes": 825275648,
+    "hrir_directions": 1850,
+    "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+    "hrir_interpolation_guard_frames": 121,
+    "hrir_preprocessing_guard_frames": 0,
+    "hrir_resampled": false,
+    "hrir_taps": 1920,
+    "hrtf_collection": {
+      "direct_interpolation": "delay-aligned-linear-radius",
+      "early_interpolation": "delay-aligned-image-path-radius",
+      "late_interpolation": "fixed-reference-layer",
+      "layers": [
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1693,
+              "3": 157
+            },
+            "low_band": {
+              "1": 1287,
+              "2": 406,
+              "3": 157
+            }
+          },
+          "radius_m": 0.2
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1813,
+              "3": 37
+            },
+            "low_band": {
+              "1": 1432,
+              "2": 381,
+              "3": 37
+            }
+          },
+          "radius_m": 0.3
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 0.4
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 0.5
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 0.75
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 1.0
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 1.3
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 1.5
+        },
+        {
+          "provenance": {
+            "high_band": {
+              "2": 1850
+            },
+            "low_band": {
+              "1": 1850
+            }
+          },
+          "radius_m": 1.6
+        }
+      ],
+      "name": "SkinRLC_96k_AllDistances_v1",
+      "nearfield_review": {
+        "common_delay_samples": 84,
+        "compatibility_sofa_files": 9,
+        "completed_utc": "2026-10-18T05:12:02.234661+00:00",
+        "dfeq_48k_baseline_max_error": 0.0,
+        "eq_gain_above_24khz_db": 0,
+        "equalized_hrir_samples": 1920,
+        "low_band_bit_preserved": true,
+        "nyquist_policy": "HRIR uses real magnitude at exactly 48 kHz; complex Nyquist value remains in HRTF files. DC is unity.",
+        "packages": {
+          "h5py": "3.16.0",
+          "netCDF4": "1.7.5",
+          "numpy": "2.4.6",
+          "scipy": "1.18.1",
+          "sofar": "1.3.0"
+        },
+        "passed": true,
+        "radii": [
+          {
+            "both_band_direct": 406,
+            "eq_fft_error": 6.216268401178454e-14,
+            "high_band_direct": 1693,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0174536522470126,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1287,
+            "radius_m": 0.2,
+            "raw_fft_error": 5.370888243888439e-16,
+            "tail_last_1ms_max": 0.007301091434200474,
+            "tail_last_1ms_p95": 0.000991323235099662,
+            "tail_review_rows": [],
+            "virtual_dvf": 157
+          },
+          {
+            "both_band_direct": 381,
+            "eq_fft_error": 6.370870542032727e-14,
+            "high_band_direct": 1813,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0174195241420347,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1432,
+            "radius_m": 0.3,
+            "raw_fft_error": 5.120624745472278e-16,
+            "tail_last_1ms_max": 0.005855202926177704,
+            "tail_last_1ms_p95": 0.0007954658086673339,
+            "tail_review_rows": [],
+            "virtual_dvf": 37
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 5.978347980625465e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.018066657280735,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 0.4,
+            "raw_fft_error": 5.684596978321444e-16,
+            "tail_last_1ms_max": 0.004090110418784479,
+            "tail_last_1ms_p95": 0.0007426098582834277,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 6.370224272725497e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0185851644591648,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 0.5,
+            "raw_fft_error": 5.563810307586255e-16,
+            "tail_last_1ms_max": 0.005929819671012998,
+            "tail_last_1ms_p95": 0.000716365412754358,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 6.213797068582998e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0179226567389639,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 0.75,
+            "raw_fft_error": 6.060799475302863e-16,
+            "tail_last_1ms_max": 0.0053510649398744526,
+            "tail_last_1ms_p95": 0.0007673915240297272,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 6.08754508264908e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0184284751758077,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 1.0,
+            "raw_fft_error": 5.425044279196887e-16,
+            "tail_last_1ms_max": 0.005380347630334292,
+            "tail_last_1ms_p95": 0.00081807457765343,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 6.029737036390277e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0185902511987555,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 1.3,
+            "raw_fft_error": 5.276444202216514e-16,
+            "tail_last_1ms_max": 0.006456160888866023,
+            "tail_last_1ms_p95": 0.000826132164648955,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 6.127123730124953e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.018206877816433,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 1.5,
+            "raw_fft_error": 5.687068606862561e-16,
+            "tail_last_1ms_max": 0.006784019849871193,
+            "tail_last_1ms_p95": 0.0008457539071418423,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          },
+          {
+            "both_band_direct": 0,
+            "eq_fft_error": 6.028949553816362e-14,
+            "high_band_direct": 1850,
+            "join_review": false,
+            "join_step_over_neighbor_steps": 1.0180577917108014,
+            "low_band_bit_preserved": true,
+            "low_band_fmm": 1850,
+            "radius_m": 1.6,
+            "raw_fft_error": 6.547091748066374e-16,
+            "tail_last_1ms_max": 0.006827279384595043,
+            "tail_last_1ms_p95": 0.0008642799041476992,
+            "tail_review_rows": [],
+            "virtual_dvf": 0
+          }
+        ],
+        "raw_hrir_samples": 960,
+        "review_required": false,
+        "sampling_rate_hz": 96000,
+        "scope": "File/numerical and inherited-model checks; no new mesh-convergence or listening certification.",
+        "sofa_files": 36,
+        "total_sofa_files": 45
+      },
+      "outside_range": "clamp-hrtf-only",
+      "prepared_budget_bytes": 1073741824,
+      "radii_m": [
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.75,
+        1.0,
+        1.3,
+        1.5,
+        1.6
+      ],
+      "reference_radius_m": 1.5,
+      "variant": "HRIR_DFEQ100"
+    },
+    "id": "reference-7x6x3.2-fullband-96k-v1",
+    "late_directions": 32,
+    "latency_frames": 256,
+    "material_filter_guard_frames": 512,
+    "name": "Full-band 96 kHz reference listening room",
+    "preroll_frames": 137982,
+    "processing_policy": "room-exact-v1",
+    "propagation_guard_frames": 40,
+    "quality": "exact",
+    "reflection_paths": 129,
+    "reflection_pose_limit_degrees": 0.0,
+    "reflection_pose_update_frames": 0,
+    "reflection_update_frames": 0,
+    "room_hash": "89262945f99bb1297c6ab0c7660262450058f24e53f7cf891c2b4f10e4c78963",
+    "sample_rate": 96000,
+    "schema": "mradm.room-prepared",
+    "scope": "Validated resource integrity; acoustic and realtime acceptance are separate.",
+    "source_sample_rate": 96000,
+    "source_sofa_sha256": "89cb17d5c4b6694eb20948285a90db7e854a69cee18b05379288a22ff1443401",
+    "tail_frames": 135502,
+    "version": 1,
+    "windows_mmcss_workers": 0
+  },
+  "branch_order": [
+    "direct",
+    "early",
+    "late"
+  ],
+  "impulse_transfer_magnitude": {
+    "30000": [
+      0.9991018528293113,
+      0.11488304998164707,
+      0.43178857688148126
+    ],
+    "40000": [
+      0.9984021417084986,
+      0.07179371663096133,
+      0.3480790374785459
+    ]
+  },
+  "rendered_tone_amplitude": {
+    "30000": [
+      0.003283305410233148,
+      0.01699741801790868
+    ],
+    "40000": [
+      0.0023107088176325574,
+      0.004541897046354177
+    ]
+  },
+  "rendered_frames": 327502,
+  "scope": "Numerical full-band transfer and native-rate loading; synthetic high-band room model."
+}

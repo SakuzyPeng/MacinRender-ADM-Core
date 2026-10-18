@@ -1,0 +1,180 @@
+{
+  "schema": "mradm.room",
+  "version": 1,
+  "kind": "hybrid-shoebox-v1",
+  "id": "reference-7x6x3.2-fullband-96k-v1",
+  "name": "Full-band 96 kHz reference listening room",
+  "sample_rate": 96000,
+  "dimensions": [
+    7.0,
+    6.0,
+    3.2
+  ],
+  "listener": [
+    3.4,
+    3.0,
+    1.2
+  ],
+  "speed_of_sound": 344.02,
+  "reference_distance": 2.1,
+  "minimum_distance": 0.25,
+  "boundary_clearance": 0.15,
+  "reflection_order": 4,
+  "absorption": [
+    [
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94
+    ],
+    [
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94
+    ],
+    [
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94
+    ],
+    [
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94
+    ],
+    [
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94
+    ],
+    [
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.94
+    ]
+  ],
+  "source_directivity": "cosine2-listener",
+  "early_fade_seconds": [
+    0.015,
+    0.025
+  ],
+  "late_predelay_seconds": 0.012458333333333332,
+  "late_energy": 0.21496020132039353,
+  "alignment_guard_samples": 40,
+  "band_filter_offset": 512,
+  "default_hrir": "hrir.json",
+  "generator": "mradm-generate-96k-v1",
+  "assets": {
+    "bands": {
+      "file": "bands.f64",
+      "dtype": "<f8",
+      "shape": [
+        8,
+        1024
+      ],
+      "sha256": "0a6c7f7c8717c03e0891def41d6739a0c52265423320d93f3ae8a28e5fd9ce49",
+      "bytes": 65536
+    },
+    "late": {
+      "file": "late.f32",
+      "dtype": "<f4",
+      "shape": [
+        32,
+        97063
+      ],
+      "bytes": 12424064,
+      "sha256": "8bc35cce7186a23a7741d3c29477815eab1755a208264755fa2dc82e2427fecd"
+    },
+    "late_directions": {
+      "file": "late-directions.f64",
+      "dtype": "<f8",
+      "shape": [
+        32,
+        3
+      ],
+      "sha256": "404c306cea642631a44512ec51fbae50dc64e9e95da97b42837739474930e8c7",
+      "bytes": 768
+    },
+    "eq": {
+      "file": "eq.f64",
+      "dtype": "<f8",
+      "shape": [
+        32768
+      ],
+      "sha256": "8ac553991129d2e6a7a4d08ff0ab9639bb204c5d51ef04b69f905984a959910a",
+      "bytes": 262144
+    },
+    "propagation_phases": {
+      "file": "propagation-phases.f32",
+      "dtype": "<f4",
+      "shape": [
+        1025,
+        81
+      ],
+      "sha256": "689da737f9168cb0eba5f2e664198b12feae370f07fd47c4d9ec5dc70ca0a9ec",
+      "bytes": 332100
+    }
+  },
+  "validation_scope": "Synthetic 96 kHz extension. Acoustic acceptance is reported separately; no measured ultrasonic room data.",
+  "generation": {
+    "template_manifest_sha256": "40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec",
+    "tool_sha256": "51578df77a09677da6d85c9503cbb86d8e74da7afa1ef7369d8b42aa0afe4182",
+    "numpy": "2.3.2",
+    "scipy": "1.18.1",
+    "material_taps": 1024,
+    "material_high_band": "highest-band absorption to Nyquist",
+    "eq_taps": 32768,
+    "eq_above_300hz_db": 0,
+    "requested_late_predelay_seconds": 0.018,
+    "late": {
+      "seed": 1,
+      "generator": "retained-audible-native-high-band-v1",
+      "source_band_hz": [
+        12000,
+        20000
+      ],
+      "high_band_hz": [
+        24000,
+        48000
+      ],
+      "crossover_hz": [
+        20000,
+        24000
+      ],
+      "high_band_rt60_seconds": 0.22343543511340447,
+      "high_band_common_gain": 0.025289185235318385,
+      "target_omni_power": 31.64806345594221,
+      "common_guard_samples": 532,
+      "source_frames": 48000
+    }
+  }
+}

@@ -1,6 +1,7 @@
 # 原生实时房间渲染
 
-状态：v1 功能已实现，提供精确与实时两档；房间三平台数值与参考波形回归通过。
+状态：v1 功能已实现，提供精确与实时两档；48 kHz 三平台数值与参考波形回归通过。
+新增 96 kHz 处理和距离集合入口，独立证据见 [原生 96 kHz 房间](ROOM_NATIVE_96K.md)。
 实时容量按静态、头姿、换房和密集运动分别报告，档位本身不保证任意负载都满足截止时间。
 既有证据见 [验证记录](REALTIME_ROOM_VALIDATION.md)，档位对比见 [第一版档位验证](ROOM_QUALITY_V1.md)。
 Windows 实时档的 [设备长测](ROOM_WINDOWS_DEVICE_V2.md)已覆盖文件播放和高密度 Scene 输入；
@@ -11,7 +12,7 @@ Windows 实时档的 [设备长测](ROOM_WINDOWS_DEVICE_V2.md)已覆盖文件播
 
 `room-binaural` 使用项目自有 Rust 房间内核。离线渲染、文件流式渲染和 Scene 流式渲染
 共享该内核，直接接收 Objects / DirectSpeakers；不经过固定扬声器中间总线。
-首版为 48 kHz、固定监听位置、3DoF、worker 头追、CLI / C API，不包含 HOA 或 GUI。
+支持 48/96 kHz、固定监听位置、3DoF、worker 头追、CLI / C API，不包含生产 HOA 或 GUI。
 
 输入距离一单位默认对应 1.5 m；Scene `(x,y,z)` 转为房间 `(y,-x,z)`。
 沿射线把源限制到距边界 0.15 m 的室内，最近距离 0.25 m，并报告实际位置。
@@ -37,9 +38,9 @@ headLocked 分支加入同样的保护延迟。参考包为 256 帧（5.33 ms）
 
 默认 `exact` 保留现有标量 FFT、控制更新和跨平台数值基线。显式选择 `realtime` 时，
 房间实例启用原生 SIMD FFT，并在连续声源几何斜坡期间将早反射／晚场发送更新改为
-1024 帧周期（48 kHz 下约 21.33 ms），按声源 ID 错开相位。直达仍按原更新点处理；
+1024／2048 帧周期（48／96 kHz 下均约 21.33 ms），按声源 ID 错开相位。直达仍按原更新点处理；
 跳变、离散语义、字段清除等立即刷新。实时策略 `room-realtime-v2` 对纯头姿更新允许
-早反射目标最多保持 1024 帧、相对输入偏差最多 0.5°；较大头动立即刷新。
+早反射目标最多保持一个反射周期、相对输入偏差最多 0.5°；较大头动立即刷新。
 头姿变化若需要补齐声源几何，仍按原时刻完整更新。直达和晚场头姿解码保持原更新点。
 这些上限不包括既有 10 ms 滤波器淡化。镜像阶数、所有有效路径和 FIR 支持不变。
 
@@ -133,7 +134,7 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
   --room /path/to/room.json --room-hrir /path/to/hrir.json --room-metres-per-unit 1.5
 ```
 
-直接传 `--sofa personal.sofa` 会在创建会话时由原生 Rust 完成解析、48 kHz 完整支持重采样、
+直接传 `--sofa personal.sofa` 会在创建会话时由原生 Rust 完成解析、按房间采样率完整支持重采样、
 时延处理、时延估计及网格准备，不需要 Python 或预先导出 `hrir.json`。`--room-hrir` 也接受
 SOFA，原 JSON 入口继续兼容。两者均省略才使用包内默认绑定；显式 HRIR 与 SOFA 同时指定时
 仍核对来源哈希。原生导入独立于其它双耳后端的 SOFA 可选构建开关；它不访问处理回调，

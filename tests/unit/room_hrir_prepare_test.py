@@ -107,6 +107,16 @@ class HrirPreparation(unittest.TestCase):
         self.assertEqual(np.argmax(actual[0, 1]), 9)
         self.assertEqual(float(actual[0, 0].max()), float(np.float32(.8)))
 
+    def test_seconds_delay_uses_source_clock_before_resampling(self):
+        fixture(self.source, rate=96000, delays=[[-2/96000, 3/96000]])
+        with h5py.File(self.source, "r+") as file:
+            file["Data.Delay"].attrs["Units"] = "seconds"
+        result = self.build()
+        actual = array(self.output, result["assets"]["impulses"])[0].astype(float)
+        measured = (actual * np.arange(actual.shape[-1])).sum(axis=-1) / actual.sum(axis=-1)
+        expected = np.array([0., 3.5]) + result["preprocessing_guard_samples"]
+        np.testing.assert_allclose(measured, expected, atol=.002, rtol=0)
+
     def test_spherical_general_fir(self):
         fixture(self.source)
         polar = np.column_stack((np.degrees(np.arctan2(DIRECTIONS[:, 1], DIRECTIONS[:, 0])),

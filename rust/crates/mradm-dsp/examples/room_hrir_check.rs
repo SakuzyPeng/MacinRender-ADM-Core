@@ -22,19 +22,47 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let argument = std::env::args()
         .nth(1)
         .ok_or("usage: room_hrir_check SOFA_OR_HRIR_JSON")?;
-    let path = Path::new(&argument);
+    let supplied = Path::new(&argument);
+    let resolved = if supplied.is_dir() {
+        supplied.join("distance_index.json")
+    } else {
+        supplied.to_owned()
+    };
+    let path = resolved.as_path();
     let root = path.parent().ok_or("missing parent")?;
     let bytes = fs::read(path)?;
-    if serde_json::from_slice::<serde_json::Value>(&bytes)
-        .is_ok_and(|v| v["schema"] == "mradm.hrtf-collection")
-    {
-        return check_collection(root, &bytes);
+    let manifest = serde_json::from_slice::<serde_json::Value>(&bytes).ok();
+    let args: Vec<_> = std::env::args().collect();
+    let rate = if let Some(index) = args.iter().position(|v| v == "--sample-rate") {
+        args.get(index + 1)
+            .ok_or("Missing sample rate")?
+            .parse::<u32>()?
+    } else {
+        manifest
+            .as_ref()
+            .and_then(|v| {
+                v["sampling_rate_hz"]
+                    .as_u64()
+                    .or_else(|| v["sample_rate"].as_u64())
+            })
+            .unwrap_or(48000) as u32
+    };
+    if manifest.as_ref().is_some_and(|v| {
+        matches!(
+            v["schema"].as_str(),
+            Some("mradm.hrtf-collection" | "mradm.sofa-bank")
+        )
+    }) {
+        return check_collection(root, &bytes, rate);
     }
     let data = Arc::new(if bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
-        mradm_dsp::room::sofa::prepare(&bytes)?
+        mradm_dsp::room::sofa::prepare_at_rate(&bytes, rate)?
     } else {
         HrirData::parse(&bytes, |n, s| read(root, n, s))?
     });
+    if data.sample_rate != rate {
+        return Err("Prepared HRIR sample rate differs from the requested rate".into());
+    }
     let bank = Arc::new(HrirBank::new(
         data.clone(),
         data.output_taps.next_power_of_two(),
@@ -70,7 +98,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     }
     let passed = maximum <= 2e-5;
     let mut report = serde_json::json!({"schema":"mradm.hrir-node-validation", "version":1,
-        "hrir_hash":data.identity, "nodes":data.directions.len(), "passed":passed,
+        "sample_rate":data.sample_rate,"hrir_hash":data.identity, "nodes":data.directions.len(), "passed":passed,
         "maximum_relative_l2":maximum, "threshold_relative_l2":2e-5, "worst_node":worst_node,
         "preprocessing_guard_frames":data.preprocessing_guard, "interpolation_guard_frames":data.guard,
         "scope":"Measured-node amplitude/time reconstruction; no acoustic or device certification."});
@@ -93,10 +121,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 fn check_collection(
     root: &Path,
     bytes: &[u8],
+    rate: u32,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let started = std::time::Instant::now();
-    let mut data = collection::prepare(bytes, |n, s| read(root, n, s))?;
-    let review = root.join(collection::REVIEW_PATH);
+    let mut data = collection::prepare_at_rate(bytes, rate, |n, s| read(root, n, s))?;
+    let manifest: serde_json::Value = serde_json::from_slice(bytes)?;
+    let review = root.join(if manifest["schema"] == "mradm.sofa-bank" {
+        "quality_report.json"
+    } else {
+        collection::REVIEW_PATH
+    });
     if review.try_exists()? {
         collection::attach_reviews(&mut data, &fs::read(review)?)?;
     }
@@ -180,7 +214,7 @@ fn check_collection(
             "worst_node":worst_node,"passed":worst<=2e-5}));
     }
     let passed = maximum <= 2e-5 && continuity <= 2e-4;
-    let report = serde_json::json!({"schema":"mradm.hrtf-collection-validation","version":1,"passed":passed,
+    let report = serde_json::json!({"schema":"mradm.hrtf-collection-validation","version":1,"sample_rate":data.sample_rate,"passed":passed,
         "collection":collection.summary(),"layers":layers,"maximum_relative_l2":maximum,"threshold_relative_l2":2e-5,
         "boundary_probe_step_metres":1e-7,"maximum_boundary_relative_l2":continuity,"boundary_threshold_relative_l2":2e-4,
         "midpoint_queries":middle_count,"interpolation_guard_frames":data.guard,"output_taps":data.output_taps,

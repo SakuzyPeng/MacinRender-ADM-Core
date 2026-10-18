@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     std::string room_hrir;
     std::string room_quality{"exact"};
     room_check->add_option("manifest", room_path, "room.json")->required();
-    room_check->add_option("--hrir,--sofa", room_hrir, "Personal SOFA or prepared HRIR manifest");
+    room_check->add_option("--hrir,--sofa", room_hrir, "Personal SOFA, HRIR manifest or distance collection directory");
     room_check->add_option("--quality", room_quality, "Room processing quality: exact (default), realtime")
         ->check(CLI::IsMember({"exact", "realtime"}));
     app.require_subcommand(1);

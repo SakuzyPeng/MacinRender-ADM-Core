@@ -15,13 +15,17 @@ pub fn fixture() -> Arc<PreparedSet> {
     fixture_with_quality(Quality::Exact)
 }
 pub fn fixture_with_quality(quality: Quality) -> Arc<PreparedSet> {
-    build_fixture(quality, false)
+    build_fixture(quality, false, 48000)
 }
 #[allow(dead_code)]
 pub fn fixture_with_collection(quality: Quality) -> Arc<PreparedSet> {
-    build_fixture(quality, true)
+    build_fixture(quality, true, 48000)
 }
-fn build_fixture(quality: Quality, collection: bool) -> Arc<PreparedSet> {
+#[allow(dead_code)]
+pub fn fixture_at_rate(quality: Quality, rate: u32) -> Arc<PreparedSet> {
+    build_fixture(quality, true, rate)
+}
+fn build_fixture(quality: Quality, collection: bool, rate: u32) -> Arc<PreparedSet> {
     let directions = vec![
         [1., 0., 0.],
         [0., 1., 0.],
@@ -41,6 +45,8 @@ fn build_fixture(quality: Quality, collection: bool) -> Arc<PreparedSet> {
         impulses[direction * 16 + 8 + 4] = 0.75;
     }
     let mut hrir = HrirData {
+        sample_rate: rate,
+        source_sample_rate: None,
         identity: "synthetic-hrir".into(),
         source_sofa_sha256: None,
         collection: None,
@@ -57,6 +63,8 @@ fn build_fixture(quality: Quality, collection: bool) -> Arc<PreparedSet> {
     if collection {
         use mradm_dsp::room::collection::{Collection, Layer};
         let mut near = HrirData {
+            sample_rate: rate,
+            source_sample_rate: None,
             identity: "synthetic-near".into(),
             source_sofa_sha256: None,
             source_geometry: None,
@@ -118,6 +126,7 @@ fn build_fixture(quality: Quality, collection: bool) -> Arc<PreparedSet> {
         late[direction * 2301 + 2200 + direction * 9] = 0.01;
     }
     let profile = Arc::new(RoomProfile {
+        sample_rate: rate,
         identity: "synthetic-room".into(),
         id: "test".into(),
         name: "test".into(),

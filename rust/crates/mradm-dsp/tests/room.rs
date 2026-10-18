@@ -93,6 +93,8 @@ fn shared_world_decoder_preserves_both_tails_under_changing_pose() {
     let base = fixture();
     let data = &base.room.hrir.data;
     let mut hrir = HrirData {
+        sample_rate: 48000,
+        source_sample_rate: None,
         identity: "directional-test-hrir".into(),
         source_sofa_sha256: None,
         collection: None,
@@ -531,22 +533,28 @@ fn render(
 
 #[test]
 fn arbitrary_packets_and_sample_events_are_bit_identical() {
-    let prepared = fixture();
-    let fixed = render(prepared.clone(), &[1024], false, true);
-    let fragmented = render(prepared, &[1, 7, 31, 3, 257, 63], false, true);
-    let mismatch = fixed
-        .iter()
-        .zip(&fragmented)
-        .position(|(a, b)| a.to_bits() != b.to_bits());
-    assert!(
-        mismatch.is_none(),
-        "fragmented output first differs at {mismatch:?}"
-    );
-    assert!(fixed[..BLOCK * 2].iter().all(|v| *v == 0.));
-    assert!(
-        fixed[1711 * 2..].iter().any(|v| v.abs() > 1e-5),
-        "EOS must retain the room tail"
-    );
+    for rate in [48000, 96000] {
+        let prepared = if rate == 48000 {
+            fixture()
+        } else {
+            common::fixture_at_rate(Quality::Exact, rate)
+        };
+        let fixed = render(prepared.clone(), &[1024], false, true);
+        let fragmented = render(prepared, &[1, 7, 31, 3, 257, 63], false, true);
+        let mismatch = fixed
+            .iter()
+            .zip(&fragmented)
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(
+            mismatch.is_none(),
+            "fragmented output first differs at {mismatch:?}"
+        );
+        assert!(fixed[..BLOCK * 2].iter().all(|v| *v == 0.));
+        assert!(
+            fixed[1711 * 2..].iter().any(|v| v.abs() > 1e-5),
+            "EOS must retain the room tail"
+        );
+    }
 }
 
 #[test]
@@ -1544,64 +1552,70 @@ fn a_new_request_invalidates_pending_room_before_preparation_finishes() {
 
 #[test]
 fn identical_acoustics_switch_has_no_gain_step_and_completes() {
-    let a = fixture();
-    let b = alternate(&a, "same-acoustics", a.room.profile.late_energy);
-    let mut reference = Session::new(a.clone(), 1.5, true, true).unwrap();
-    let mut switched = Session::new(a, 1.5, true, true).unwrap();
-    let descriptions = [RoomDescription {
-        id: 1,
-        position: [0., 1., 0.],
-        ..RoomDescription::default()
-    }];
-    reference.configure(&descriptions).unwrap();
-    switched.configure(&descriptions).unwrap();
-    let mut maximum = 0f32;
-    let mut phases = [false; 4];
-    for block in 0..100 {
-        if block == 3 {
-            switched
-                .queue_room(Box::new(Instance::new(b.clone(), 1).unwrap()), 7)
+    for rate in [48000, 96000] {
+        let a = if rate == 48000 {
+            fixture()
+        } else {
+            common::fixture_at_rate(Quality::Exact, rate)
+        };
+        let b = alternate(&a, "same-acoustics", a.room.profile.late_energy);
+        let mut reference = Session::new(a.clone(), 1.5, true, true).unwrap();
+        let mut switched = Session::new(a, 1.5, true, true).unwrap();
+        let descriptions = [RoomDescription {
+            id: 1,
+            position: [0., 1., 0.],
+            ..RoomDescription::default()
+        }];
+        reference.configure(&descriptions).unwrap();
+        switched.configure(&descriptions).unwrap();
+        let mut maximum = 0f32;
+        let mut phases = [false; 4];
+        for block in 0..100 * (rate / 48000) as usize {
+            if block == 3 {
+                switched
+                    .queue_room(Box::new(Instance::new(b.clone(), 1).unwrap()), 7)
+                    .unwrap();
+            }
+            let input: Vec<_> = (0..BLOCK)
+                .map(|i| (((i + block * BLOCK) * 37 % 193) as f32 - 96.) / 384.)
+                .collect();
+            let mut x = [0.; BLOCK * 2];
+            let mut y = [0.; BLOCK * 2];
+            reference
+                .process(
+                    BLOCK,
+                    [Some(input.as_slice())].into_iter(),
+                    &[],
+                    &[],
+                    &mut x,
+                )
                 .unwrap();
+            let info = switched
+                .process(
+                    BLOCK,
+                    [Some(input.as_slice())].into_iter(),
+                    &[],
+                    &[],
+                    &mut y,
+                )
+                .unwrap();
+            phases[info.phase as usize] = true;
+            maximum = maximum.max(
+                x.iter()
+                    .zip(&y)
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0., f32::max),
+            );
+            drop(switched.take_retired());
         }
-        let input: Vec<_> = (0..BLOCK)
-            .map(|i| (((i + block * BLOCK) * 37 % 193) as f32 - 96.) / 384.)
-            .collect();
-        let mut x = [0.; BLOCK * 2];
-        let mut y = [0.; BLOCK * 2];
-        reference
-            .process(
-                BLOCK,
-                [Some(input.as_slice())].into_iter(),
-                &[],
-                &[],
-                &mut x,
-            )
-            .unwrap();
-        let info = switched
-            .process(
-                BLOCK,
-                [Some(input.as_slice())].into_iter(),
-                &[],
-                &[],
-                &mut y,
-            )
-            .unwrap();
-        phases[info.phase as usize] = true;
-        maximum = maximum.max(
-            x.iter()
-                .zip(&y)
-                .map(|(a, b)| (a - b).abs())
-                .fold(0., f32::max),
+        assert!(
+            maximum < 2e-6,
+            "equivalent room switch changed PCM by {maximum}"
         );
-        drop(switched.take_retired());
+        assert!(phases.into_iter().all(|v| v));
+        assert_eq!(switched.info().applied_request, 7);
+        assert_eq!(switched.info().phase, 0);
     }
-    assert!(
-        maximum < 2e-6,
-        "equivalent room switch changed PCM by {maximum}"
-    );
-    assert!(phases.into_iter().all(|v| v));
-    assert_eq!(switched.info().applied_request, 7);
-    assert_eq!(switched.info().phase, 0);
 }
 
 #[test]
@@ -1672,58 +1686,64 @@ fn room_switch_keeps_latest_request_and_rejects_underprepared_state() {
 
 #[test]
 fn finite_preroll_reproduces_a_continuously_moving_source() {
-    let prepared = fixture();
-    let mut full = Session::new(prepared.clone(), 1.5, true, true).unwrap();
-    let mut seek = Session::new(prepared.clone(), 1.5, true, true).unwrap();
-    let descriptions = [RoomDescription {
-        id: 1,
-        position: [0., 1., 0.],
-        ..RoomDescription::default()
-    }];
-    full.configure(&descriptions).unwrap();
-    seek.configure(&descriptions).unwrap();
-    let target = State {
-        position: [-0.7, 0.8, 0.2],
-        ..State::default()
-    };
-    let command = RoomCommand {
-        changed: 4,
-        duration: 16000,
-        state: target,
-        ..RoomCommand::default()
-    };
-    let goal = 12000usize;
-    let begin = (goal - prepared.preroll_frames()) / 2048 * 2048;
-    assert!(begin > 0);
-    seek.reset(begin as u64).unwrap();
-    seek.prime(&command, 0).unwrap();
-    let input: Vec<_> = (0..15000)
-        .map(|i| ((i * 31 % 127) as f32 - 63.) / 256.)
-        .collect();
-    let mut reference = vec![0.; input.len() * 2];
-    full.process(
-        input.len(),
-        [Some(input.as_slice())].into_iter(),
-        &[],
-        &[command],
-        &mut reference,
-    )
-    .unwrap();
-    let mut actual = vec![0.; (input.len() - begin) * 2];
-    seek.process(
-        input.len() - begin,
-        [Some(&input[begin..])].into_iter(),
-        &[],
-        &[],
-        &mut actual,
-    )
-    .unwrap();
-    let mismatch = reference[goal * 2..]
-        .iter()
-        .zip(&actual[(goal - begin) * 2..])
-        .position(|(a, b)| a.to_bits() != b.to_bits());
-    assert!(
-        mismatch.is_none(),
-        "finite preroll first differs at {mismatch:?}"
-    );
+    for rate in [48000, 96000] {
+        let prepared = if rate == 48000 {
+            fixture()
+        } else {
+            common::fixture_at_rate(Quality::Exact, rate)
+        };
+        let mut full = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        let mut seek = Session::new(prepared.clone(), 1.5, true, true).unwrap();
+        let descriptions = [RoomDescription {
+            id: 1,
+            position: [0., 1., 0.],
+            ..RoomDescription::default()
+        }];
+        full.configure(&descriptions).unwrap();
+        seek.configure(&descriptions).unwrap();
+        let target = State {
+            position: [-0.7, 0.8, 0.2],
+            ..State::default()
+        };
+        let command = RoomCommand {
+            changed: 4,
+            duration: 16000 * (rate / 48000),
+            state: target,
+            ..RoomCommand::default()
+        };
+        let goal = 12000usize * (rate / 48000) as usize;
+        let begin = (goal - prepared.preroll_frames()) / 2048 * 2048;
+        assert!(begin > 0);
+        seek.reset(begin as u64).unwrap();
+        seek.prime(&command, 0).unwrap();
+        let input: Vec<_> = (0..15000 * (rate / 48000) as usize)
+            .map(|i| ((i * 31 % 127) as f32 - 63.) / 256.)
+            .collect();
+        let mut reference = vec![0.; input.len() * 2];
+        full.process(
+            input.len(),
+            [Some(input.as_slice())].into_iter(),
+            &[],
+            &[command],
+            &mut reference,
+        )
+        .unwrap();
+        let mut actual = vec![0.; (input.len() - begin) * 2];
+        seek.process(
+            input.len() - begin,
+            [Some(&input[begin..])].into_iter(),
+            &[],
+            &[],
+            &mut actual,
+        )
+        .unwrap();
+        let mismatch = reference[goal * 2..]
+            .iter()
+            .zip(&actual[(goal - begin) * 2..])
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(
+            mismatch.is_none(),
+            "finite preroll first differs at {mismatch:?}"
+        );
+    }
 }

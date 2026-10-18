@@ -65,7 +65,7 @@ typedef struct MradmRoomPreparedInfo {
     uint64_t preroll_frames;
     uint64_t material_guard_frames;
     uint32_t sample_rate;
-    uint32_t reserved;
+    uint32_t reflection_update_frames;
 } MradmRoomPreparedInfo;
 typedef struct MradmRoomInfo {
     uint64_t input_frames;

@@ -145,6 +145,11 @@ fn unit(v: Vec3) -> Result<Vec3> {
 }
 
 pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
+    prepare_at_rate(bytes, RATE as u32)
+}
+
+pub fn prepare_at_rate(bytes: &[u8], target_rate: u32) -> Result<HrirData> {
+    super::validate_sample_rate(target_rate)?;
     if bytes.len() > MAX_BYTES {
         return Err(invalid("SOFA 文件超过 256 MiB"));
     }
@@ -288,7 +293,8 @@ pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
     let delays: Vec<_> = (0..count)
         .flat_map(|m| {
             order.map(|ear| {
-                delay[(if delay.len() == 2 { 0 } else { m * 2 }) + ear] * RATE as f64 / rate
+                delay[(if delay.len() == 2 { 0 } else { m * 2 }) + ear] * f64::from(target_rate)
+                    / rate
             })
         })
         .collect();
@@ -298,10 +304,11 @@ pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
             ordered.extend_from_slice(&ir[(m * 2 + ear) * taps..(m * 2 + ear + 1) * taps]);
         }
     }
-    let (resampled, taps, resample_guard) = resample(&ordered, taps, rate as usize)?;
+    let (resampled, taps, resample_guard) =
+        resample(&ordered, taps, rate as usize, target_rate as usize)?;
     let (impulses, taps, delay_guard) = apply_delays(&resampled, taps, &delays)?;
     let faces = mesh(&directions)?;
-    let delays = estimate_delays(&impulses, taps)?;
+    let delays = estimate_delays(&impulses, taps, target_rate as usize)?;
     let lo = delays.iter().copied().fold(f64::INFINITY, f64::min);
     let hi = delays.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let spread = libm::ceil(hi - lo) as usize;
@@ -312,14 +319,21 @@ pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
     }
     let source_hash = sha256(bytes);
     Ok(HrirData {
+        sample_rate: target_rate,
+        source_sample_rate: Some(rate as u32),
         collection: None,
         source_geometry: Some(super::collection::SourceGeometry {
             radius,
             sample_rate: rate as u32,
             receivers: [ears[0], ears[1]],
             order,
+            origins: point_origins(&file, count)?,
         }),
-        identity: sha256(format!("mradm-native-sofa-v1:{source_hash}").as_bytes()),
+        identity: if target_rate == RATE as u32 {
+            sha256(format!("mradm-native-sofa-v1:{source_hash}").as_bytes())
+        } else {
+            sha256(format!("mradm-native-sofa-v2:{target_rate}:{source_hash}").as_bytes())
+        },
         source_sofa_sha256: Some(source_hash),
         impulses,
         taps,
@@ -330,6 +344,26 @@ pub fn prepare(bytes: &[u8]) -> Result<HrirData> {
         preprocessing_guard: resample_guard + delay_guard,
         output_taps,
     })
+}
+
+fn point_origins(file: &ParsedHdf<'_>, count: usize) -> Result<serde_json::Value> {
+    let mut result = serde_json::Map::new();
+    for (name, band) in [
+        ("MRADMPointOrigin", "low_band"),
+        ("MRADMPointOriginHighBand", "high_band"),
+    ] {
+        if let Some(object) = child(file, name)? {
+            if shape(&object) != [count as u64] {
+                return Err(invalid("SOFA 来源标记与方向数不一致"));
+            }
+            let mut counts = std::collections::BTreeMap::<String, usize>::new();
+            for code in numbers(&object)? {
+                *counts.entry(code.to_string()).or_default() += 1;
+            }
+            result.insert(band.into(), serde_json::json!(counts));
+        }
+    }
+    Ok(result.into())
 }
 
 fn mesh(directions: &[Vec3]) -> Result<Vec<[u32; 3]>> {
@@ -374,18 +408,23 @@ fn i0(x: f64) -> f64 {
     }
     sum
 }
-fn resample(ir: &[f64], taps: usize, rate: usize) -> Result<(Vec<f64>, usize, usize)> {
-    if rate == RATE {
+fn resample(
+    ir: &[f64],
+    taps: usize,
+    rate: usize,
+    target: usize,
+) -> Result<(Vec<f64>, usize, usize)> {
+    if rate == target {
         return Ok((ir.to_vec(), taps, 0));
     }
-    let mut a = RATE;
+    let mut a = target;
     let mut b = rate;
     while b != 0 {
         let r = a % b;
         a = b;
         b = r;
     }
-    let up = RATE / a;
+    let up = target / a;
     let down = rate / a;
     let half = (10 * up.max(down)).div_ceil(down) * down;
     if 2 * half + 1 > 1_000_001 {
@@ -536,13 +575,13 @@ impl Fft {
         }
     }
 }
-fn estimate_delays(ir: &[f32], taps: usize) -> Result<Vec<f64>> {
+fn estimate_delays(ir: &[f32], taps: usize, target: usize) -> Result<Vec<f64>> {
     let n = (4 * taps).next_power_of_two().max(2048);
     let fft = Fft::new(n);
     let mut original = vec![[0.; 2]; n];
     let mut work = original.clone();
-    let first = (300 * n).div_ceil(RATE);
-    let last = 1500 * n / RATE;
+    let first = (300 * n).div_ceil(target);
+    let last = 1500 * n / target;
     let x: Vec<_> = (first..=last)
         .map(|k| std::f64::consts::TAU * k as f64 / n as f64)
         .collect();
@@ -619,29 +658,35 @@ mod tests {
     use super::*;
     #[test]
     fn complete_resampling_and_fractional_delay_keep_gain_and_time() {
-        for rate in [44100, 48000, 96000] {
-            let mut ir = vec![0.; 64];
-            ir[2] = 0.8;
-            ir[32 + 4] = 0.6;
-            let (resampled, n, resample_guard) = resample(&ir, 32, rate).unwrap();
-            let d = [-0.25 * 48000. / rate as f64, 2.5 * 48000. / rate as f64];
-            let (output, n, delay_guard) = apply_delays(&resampled, n, &d).unwrap();
-            for ear in 0..2 {
-                let row = &output[ear * n..(ear + 1) * n];
-                let sum = row.iter().map(|v| f64::from(*v)).sum::<f64>();
-                let moment = row
-                    .iter()
-                    .enumerate()
-                    .map(|(i, v)| i as f64 * f64::from(*v))
-                    .sum::<f64>()
-                    / sum;
-                assert!((sum - [0.8, 0.6][ear]).abs() < 1e-4);
-                let expected = ([2., 4.][ear] + [-0.25, 2.5][ear]) * 48000. / rate as f64
-                    + (resample_guard + delay_guard) as f64;
-                assert!(
-                    (moment - expected).abs() < 0.002,
-                    "{rate}: {moment} != {expected}"
-                );
+        for target in [48000, 96000] {
+            for rate in [44100, 48000, 96000] {
+                let mut ir = vec![0.; 64];
+                ir[2] = 0.8;
+                ir[32 + 4] = 0.6;
+                let (resampled, n, resample_guard) = resample(&ir, 32, rate, target).unwrap();
+                let d = [
+                    -0.25 * target as f64 / rate as f64,
+                    2.5 * target as f64 / rate as f64,
+                ];
+                let (output, n, delay_guard) = apply_delays(&resampled, n, &d).unwrap();
+                for ear in 0..2 {
+                    let row = &output[ear * n..(ear + 1) * n];
+                    let sum = row.iter().map(|v| f64::from(*v)).sum::<f64>();
+                    let moment = row
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| i as f64 * f64::from(*v))
+                        .sum::<f64>()
+                        / sum;
+                    assert!((sum - [0.8, 0.6][ear]).abs() < 1e-4);
+                    let expected = ([2., 4.][ear] + [-0.25, 2.5][ear]) * target as f64
+                        / rate as f64
+                        + (resample_guard + delay_guard) as f64;
+                    assert!(
+                        (moment - expected).abs() < 0.002,
+                        "{rate}: {moment} != {expected}"
+                    );
+                }
             }
         }
     }
@@ -650,7 +695,7 @@ mod tests {
         let mut ir = vec![0.; 2 * 128];
         ir[35] = 0.8;
         ir[128 + 51] = 0.6;
-        let delays = estimate_delays(&ir, 128).unwrap();
+        let delays = estimate_delays(&ir, 128, RATE).unwrap();
         assert!((delays[0] - 35.).abs() < 1e-10);
         assert!((delays[1] - 51.).abs() < 1e-10);
     }
@@ -779,6 +824,6 @@ mod tests {
         let points = [[1., 0., 0.], [0., 1., 0.], [-1., 0., 0.], [0., 0., 1.]];
         assert!(mesh(&points).is_err());
         assert!(apply_delays(&[1., 1.], 1, &[-5000., 0.]).is_err());
-        assert!(estimate_delays(&[0.; 32], 16).is_err());
+        assert!(estimate_delays(&[0.; 32], 16, RATE).is_err());
     }
 }

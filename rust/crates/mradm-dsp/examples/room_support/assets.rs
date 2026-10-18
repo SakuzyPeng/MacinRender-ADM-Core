@@ -27,7 +27,17 @@ pub fn profile(path: &Path) -> Result<RoomProfile> {
         |n, s| asset(root, n, s),
     )
 }
+#[allow(dead_code)]
 pub fn hrir(path: &Path) -> Result<HrirData> {
+    hrir_at_rate(path, 48000)
+}
+pub fn hrir_at_rate(path: &Path, rate: u32) -> Result<HrirData> {
+    let resolved = if path.is_dir() {
+        path.join("distance_index.json")
+    } else {
+        path.to_owned()
+    };
+    let path = resolved.as_path();
     let root = path.parent().unwrap_or(Path::new("."));
     let size = fs::metadata(path)
         .map_err(|_| Error::Io("Missing HRIR resource"))?
@@ -37,13 +47,20 @@ pub fn hrir(path: &Path) -> Result<HrirData> {
     }
     let bytes = fs::read(path).map_err(|_| Error::Io("Cannot read HRIR resource"))?;
     if bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
-        return sofa::prepare(&bytes);
+        return sofa::prepare_at_rate(&bytes, rate);
     }
     let manifest: serde_json::Value =
         serde_json::from_slice(&bytes).map_err(|_| Error::InvalidArgument("Invalid HRIR JSON"))?;
-    if manifest["schema"] == "mradm.hrtf-collection" {
-        let mut data = collection::prepare(&bytes, |n, s| asset(root, n, s))?;
-        let review = root.join(collection::REVIEW_PATH);
+    if matches!(
+        manifest["schema"].as_str(),
+        Some("mradm.hrtf-collection" | "mradm.sofa-bank")
+    ) {
+        let mut data = collection::prepare_at_rate(&bytes, rate, |n, s| asset(root, n, s))?;
+        let review = root.join(if manifest["schema"] == "mradm.sofa-bank" {
+            "quality_report.json"
+        } else {
+            collection::REVIEW_PATH
+        });
         if review
             .try_exists()
             .map_err(|_| Error::Io("Cannot check HRIR review"))?

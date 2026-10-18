@@ -109,7 +109,7 @@ Runtime::Runtime(std::shared_ptr<const Prepared> prepared, RoomConfig config, vo
     : prepared_(std::move(prepared)), config_(std::move(config)), session_(handle, mradm_room_session_destroy),
       preroll_(prepared_->info.preroll_frames) {
     status_.quality = config_.quality;
-    status_.reflection_update_frames = config_.quality == RoomQuality::realtime ? 1024U : 0U;
+    status_.reflection_update_frames = prepared_->info.reflection_update_frames;
     status_.tail_frames = prepared_->info.tail_frames;
     status_.material_filter_guard_frames = prepared_->info.material_guard_frames;
     preparer_ = std::jthread([this](const std::stop_token& stop) { prepare_loop(stop); });
@@ -118,9 +118,7 @@ Runtime::~Runtime() {
     preparer_.request_stop();
     cv_.notify_all();
     preparer_.join();
-    for (std::size_t i = 0; i < dispose_count_; ++i) {
-        mradm_room_instance_destroy(dispose_.at(i));
-    }
+    std::for_each_n(dispose_.begin(), dispose_count_, mradm_room_instance_destroy);
 }
 Result<std::shared_ptr<Runtime>>
 Runtime::create(std::shared_ptr<const Prepared> prepared, const RoomConfig& config, bool scene, bool spread) {

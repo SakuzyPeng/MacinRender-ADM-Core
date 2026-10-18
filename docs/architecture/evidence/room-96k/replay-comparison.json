@@ -1,0 +1,497 @@
+{
+  "schema": "mradm.room-96k-replay-comparison",
+  "version": 1,
+  "platforms": [
+    "macos-arm64",
+    "windows-x64"
+  ],
+  "passed": true,
+  "old_48k_baseline_unchanged": true,
+  "cases": [
+    {
+      "case": "48k",
+      "all_checkpoints_identical": true,
+      "frames": 100487,
+      "pcm_sha256": "d351653f3dd9437506d1f8f55f32bc17757aec70680fd43c97f6db1f070d10f4",
+      "manifest": {
+        "files": {
+          "branches-0.f32": {
+            "samples": 8752,
+            "sha256": "7d7c5b7d498cced554ee77bda2bbf1b565d6341d00547670d04ebe8abadf8947"
+          },
+          "branches-1.f32": {
+            "samples": 8752,
+            "sha256": "d1e7599c3fb5083469750f97bc83facabb2c02034a2c1e0dbd4a5f3622b1b2e4"
+          },
+          "branches-2.f32": {
+            "samples": 8752,
+            "sha256": "3b7476bbec19fde6b46938755ad04600ecf626e188ba4a63d641f3016745db07"
+          },
+          "branches-3.f32": {
+            "samples": 8752,
+            "sha256": "ce0d065d8b2eca5e45875745f22e774d6db38e5b433b8bbeecc56e68bd502baa"
+          },
+          "branches-4.f32": {
+            "samples": 8752,
+            "sha256": "f4a71da0274ef15e9cb282bac01e5928286dbe0991c5bf2925d93d0cdbfe0f31"
+          },
+          "branches-5.f32": {
+            "samples": 8752,
+            "sha256": "8822066e14d99f9ef119d2f376eba674cc1c6142f18eb3d894eed941fededdad"
+          },
+          "branches-6.f32": {
+            "samples": 8752,
+            "sha256": "6d8cc0f713cdce452a87f21e40f21582cf31ff4b89a058acc42e04cac15264ab"
+          },
+          "branches-7.f32": {
+            "samples": 8752,
+            "sha256": "48c1c68f7b7f17d90730bfaca9a315277f0b954f185f2dcef7103caa0f0bf553"
+          },
+          "hrir-0.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-1.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-2.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-3.f32": {
+            "samples": 384,
+            "sha256": "1950f7f4809123a01bdd48b36a77761f38cae13702c411923160ac150fa4d91b"
+          },
+          "hrir-4.f32": {
+            "samples": 384,
+            "sha256": "e959234f07073679c66044a02acea7b4be4360c55b24c15d905b3e33a0a5dd85"
+          },
+          "hrir-5.f32": {
+            "samples": 384,
+            "sha256": "2fb79cbd7af5cf1005c2788406324c21225ff09ced5b9b8a94d8ff784282f5b2"
+          },
+          "hrir-6.f32": {
+            "samples": 384,
+            "sha256": "bd14cc1dde656f83691de41cac930406b1cc97ac07fce451d61fa951309faadc"
+          },
+          "hrir-7.f32": {
+            "samples": 384,
+            "sha256": "0e726f1f152487a35d1a10e022d087c8d78dbd17f60164be2068b025e2a9b16c"
+          },
+          "session.f32": {
+            "samples": 200974,
+            "sha256": "d351653f3dd9437506d1f8f55f32bc17757aec70680fd43c97f6db1f070d10f4"
+          }
+        },
+        "frames": 100487,
+        "hrir_hash": "cdae48ee7fe5ae664115080ab34d801c96346620a8454982b0f8991cf2f89009",
+        "latency_frames": 256,
+        "lfe": {
+          "channels": 1,
+          "head": "a48a3f38b4c739b0ab4a421bc1eb4463dfc5240ed42d620b1011f08ca48cc711",
+          "tail": "04301370fa0771d1032f7618954b1952113736661386993e0a49025463b479cb",
+          "taps": 4155
+        },
+        "prepared": {
+          "decoder_hrir": {
+            "bvh": "90a2ef83cae86431c6aab71ac2acdf09f695924aee35dd57ab91cef2d92a6c1e",
+            "fft_length": 256,
+            "fractional": "2a8429f77cc4948690b2e5d7c258b99c1472cfeaf56897583242d6945e010930",
+            "integer_phases": "cb902fe99f60a6b0f3bccca802cc38a22cef1df95b9a17601844f226f6110de5",
+            "mesh_inverse": "b316bdb996a3ff7579261a2df6fb5092d516dac376991ffa4f2447651c5bea2e",
+            "phase_rows": "dac3045673f218b6347d3e9d1199eb63b57d7fdd4411e7e3ab93975b839b07aa",
+            "spectra": "15bf51e0b0d51fe23081f32ffb8964f5ba8c779746fc31545c5edf6cc7d8c4fd"
+          },
+          "eq": {
+            "channels": 1,
+            "head": "4ff294fa6bfdc91025e87d48d6664a93f832cdf170d6c6ba769afb114ba5941d",
+            "tail": null,
+            "taps": 4
+          },
+          "hrir": {
+            "bvh": "90a2ef83cae86431c6aab71ac2acdf09f695924aee35dd57ab91cef2d92a6c1e",
+            "fft_length": 1024,
+            "fractional": "e6f016bd49eacde0be245e0f39e41e61612c9bb884903bb496a8fa97702bbc10",
+            "integer_phases": "d227909dfd6d9c69364c8a7d2281145f24d6c3ec6cc82282b921e7f1c19c1779",
+            "mesh_inverse": "b316bdb996a3ff7579261a2df6fb5092d516dac376991ffa4f2447651c5bea2e",
+            "phase_rows": "f8f78ee1784d4c4bcd9a9841921a936f0c054bac6202c9dee60198fae7551ea2",
+            "spectra": "0946339d14a8f05a64645e85524379a1a9cd8b29156aebb89dcf61cd4b8f3669"
+          },
+          "late": [
+            {
+              "channels": 1,
+              "head": "84d651f4f629a85de04362e19877c7751813004e6f76014c51d2861ff04aa78b",
+              "tail": "cebfec577bfe7b66de27cb0f7d25196ddc527ea66cdf065b22b968f6f66f1648",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "26ebe10393677df0888921e9ef189a3b1af38589975a0fe8ec15f32e5257d995",
+              "tail": "a3a6c26baed0da773973ee084e10732658867451c5ae6231f254fc72e311b339",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "68216daf04f5ff48c2fcfe7fd4c83f86b17bf7c164b7b70e9a3d78c5e9e419c5",
+              "tail": "0e2cfaae04ffed556f61ca434a6bb5c7faaf2c317ea9c95ab2f576690f92f8ac",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "dd20b6a6f2c1ee458d55b8eb3045104c6686c07f2c8babf448011f4f52565a42",
+              "tail": "20256cea9d4f03d764ba7c04dcb9b98e5dee83ad02da3b03949383e907c58f1f",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "320405b545f02582d9f62a7d4505692975dcbebf26b21e9579a5cfb434398ee6",
+              "tail": "fc7db431c37210aeb060039223818ddbf13fb1967ef24a38f0f47a07d9883e44",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "d03ae995f25d48c09e74b6c5255cc75a4320e6448d1575baf8947747029f2e0a",
+              "tail": "b389bea513692e3073dfc3dce9d5e64b31e23ff84feccc03e4070d58fa6f6287",
+              "taps": 2301
+            }
+          ],
+          "materials": "9685398339793629f318719ca643867ad3062e2b4091e6a6c3f3e0e55c87e489",
+          "path_bucket_stride": 512,
+          "propagation": "e6f016bd49eacde0be245e0f39e41e61612c9bb884903bb496a8fa97702bbc10",
+          "send_taps": 1661,
+          "short_taps": 2188
+        },
+        "room_hash": "6f7ecd5678c891d8bcef301daf69e89c653a3aaffd83cd268043b3db11d2ed0c",
+        "scenario": "controls-distance-geometry-switch-v1",
+        "schema": "mradm.room-replay",
+        "tail_frames": 4441,
+        "version": 1
+      }
+    },
+    {
+      "case": "96k",
+      "all_checkpoints_identical": true,
+      "frames": 102091,
+      "pcm_sha256": "69053df305d32cef749f2f20a918a2c62d4798e4f9930e220e78b01764969722",
+      "manifest": {
+        "files": {
+          "branches-0.f32": {
+            "samples": 16256,
+            "sha256": "be88a898ed38e3f215f06ee172febfc62759b6f95b57f8465bef876afb205c71"
+          },
+          "branches-1.f32": {
+            "samples": 16256,
+            "sha256": "09acb470df4eb10d1addb5aeec79e8fc0120e1ffaa51ff756cd2f4afb5a87961"
+          },
+          "branches-2.f32": {
+            "samples": 16256,
+            "sha256": "dc5f2343fee1a0fbf3911e9f9ab124b7e3203ec51424f2364c321c4de3a36abf"
+          },
+          "branches-3.f32": {
+            "samples": 16256,
+            "sha256": "3ad81a84eaec7d72e5bd2fe31685566ee308aebe299a36b8acab2a388ca9c71f"
+          },
+          "branches-4.f32": {
+            "samples": 16256,
+            "sha256": "fb960c563ca350f366f63b49c29dfcf490053c878f48ecd515009834c3ee65ee"
+          },
+          "branches-5.f32": {
+            "samples": 16256,
+            "sha256": "5c2763d78d105de189d17f1b8fd14cb0e79223580e3a14430ee415de8266bcab"
+          },
+          "branches-6.f32": {
+            "samples": 16256,
+            "sha256": "7851386c0d553ec5334883eeebdf754a2f8417bae514be451ba4eded3f892c3e"
+          },
+          "branches-7.f32": {
+            "samples": 16256,
+            "sha256": "958aeb76778e3177546331d5a17ee6762556bd1593c5606e6420fe628b39f60f"
+          },
+          "hrir-0.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-1.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-2.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-3.f32": {
+            "samples": 384,
+            "sha256": "1950f7f4809123a01bdd48b36a77761f38cae13702c411923160ac150fa4d91b"
+          },
+          "hrir-4.f32": {
+            "samples": 384,
+            "sha256": "e959234f07073679c66044a02acea7b4be4360c55b24c15d905b3e33a0a5dd85"
+          },
+          "hrir-5.f32": {
+            "samples": 384,
+            "sha256": "2fb79cbd7af5cf1005c2788406324c21225ff09ced5b9b8a94d8ff784282f5b2"
+          },
+          "hrir-6.f32": {
+            "samples": 384,
+            "sha256": "bd14cc1dde656f83691de41cac930406b1cc97ac07fce451d61fa951309faadc"
+          },
+          "hrir-7.f32": {
+            "samples": 384,
+            "sha256": "0e726f1f152487a35d1a10e022d087c8d78dbd17f60164be2068b025e2a9b16c"
+          },
+          "session.f32": {
+            "samples": 204182,
+            "sha256": "69053df305d32cef749f2f20a918a2c62d4798e4f9930e220e78b01764969722"
+          }
+        },
+        "frames": 102091,
+        "hrir_hash": "b36747940ef2038a8eb7c1140d584443052d20e389fe6b63d9361d880ead9a1e",
+        "latency_frames": 256,
+        "lfe": {
+          "channels": 1,
+          "head": "7ec7d809d3fd82a323beb70dffb3f205f9fab63e4d52e583085b45ca57d959fd",
+          "tail": "fc998647a181df0c6bce5023b0d9bd4d99a0f6fde467ec4255b90c47cec31c22",
+          "taps": 5695
+        },
+        "prepared": {
+          "decoder_hrir": {
+            "bvh": "90a2ef83cae86431c6aab71ac2acdf09f695924aee35dd57ab91cef2d92a6c1e",
+            "fft_length": 256,
+            "fractional": "2a8429f77cc4948690b2e5d7c258b99c1472cfeaf56897583242d6945e010930",
+            "integer_phases": "cb902fe99f60a6b0f3bccca802cc38a22cef1df95b9a17601844f226f6110de5",
+            "mesh_inverse": "b316bdb996a3ff7579261a2df6fb5092d516dac376991ffa4f2447651c5bea2e",
+            "phase_rows": "dac3045673f218b6347d3e9d1199eb63b57d7fdd4411e7e3ab93975b839b07aa",
+            "spectra": "15bf51e0b0d51fe23081f32ffb8964f5ba8c779746fc31545c5edf6cc7d8c4fd"
+          },
+          "eq": {
+            "channels": 1,
+            "head": "4ff294fa6bfdc91025e87d48d6664a93f832cdf170d6c6ba769afb114ba5941d",
+            "tail": null,
+            "taps": 4
+          },
+          "hrir": {
+            "bvh": "90a2ef83cae86431c6aab71ac2acdf09f695924aee35dd57ab91cef2d92a6c1e",
+            "fft_length": 1024,
+            "fractional": "e6f016bd49eacde0be245e0f39e41e61612c9bb884903bb496a8fa97702bbc10",
+            "integer_phases": "d227909dfd6d9c69364c8a7d2281145f24d6c3ec6cc82282b921e7f1c19c1779",
+            "mesh_inverse": "b316bdb996a3ff7579261a2df6fb5092d516dac376991ffa4f2447651c5bea2e",
+            "phase_rows": "f8f78ee1784d4c4bcd9a9841921a936f0c054bac6202c9dee60198fae7551ea2",
+            "spectra": "0946339d14a8f05a64645e85524379a1a9cd8b29156aebb89dcf61cd4b8f3669"
+          },
+          "late": [
+            {
+              "channels": 1,
+              "head": "84d651f4f629a85de04362e19877c7751813004e6f76014c51d2861ff04aa78b",
+              "tail": "cebfec577bfe7b66de27cb0f7d25196ddc527ea66cdf065b22b968f6f66f1648",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "26ebe10393677df0888921e9ef189a3b1af38589975a0fe8ec15f32e5257d995",
+              "tail": "a3a6c26baed0da773973ee084e10732658867451c5ae6231f254fc72e311b339",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "68216daf04f5ff48c2fcfe7fd4c83f86b17bf7c164b7b70e9a3d78c5e9e419c5",
+              "tail": "0e2cfaae04ffed556f61ca434a6bb5c7faaf2c317ea9c95ab2f576690f92f8ac",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "dd20b6a6f2c1ee458d55b8eb3045104c6686c07f2c8babf448011f4f52565a42",
+              "tail": "20256cea9d4f03d764ba7c04dcb9b98e5dee83ad02da3b03949383e907c58f1f",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "320405b545f02582d9f62a7d4505692975dcbebf26b21e9579a5cfb434398ee6",
+              "tail": "fc7db431c37210aeb060039223818ddbf13fb1967ef24a38f0f47a07d9883e44",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "d03ae995f25d48c09e74b6c5255cc75a4320e6448d1575baf8947747029f2e0a",
+              "tail": "b389bea513692e3073dfc3dce9d5e64b31e23ff84feccc03e4070d58fa6f6287",
+              "taps": 2301
+            }
+          ],
+          "materials": "9685398339793629f318719ca643867ad3062e2b4091e6a6c3f3e0e55c87e489",
+          "path_bucket_stride": 512,
+          "propagation": "e6f016bd49eacde0be245e0f39e41e61612c9bb884903bb496a8fa97702bbc10",
+          "send_taps": 3201,
+          "short_taps": 4064
+        },
+        "room_hash": "c280af38c40c5c649a3b63443dd23f15ab853b9f9a8e9f9251c525512a2d8eaf",
+        "scenario": "controls-distance-geometry-switch-v1",
+        "schema": "mradm.room-replay",
+        "tail_frames": 6012,
+        "version": 1
+      }
+    },
+    {
+      "case": "96k-motion",
+      "all_checkpoints_identical": true,
+      "frames": 102091,
+      "pcm_sha256": "fe388501058a8c457589e0c57d25616b833337eaa54e06e390c3eeb6e2ad18ac",
+      "manifest": {
+        "dense_source_ramps": true,
+        "files": {
+          "branches-0.f32": {
+            "samples": 16256,
+            "sha256": "be88a898ed38e3f215f06ee172febfc62759b6f95b57f8465bef876afb205c71"
+          },
+          "branches-1.f32": {
+            "samples": 16256,
+            "sha256": "09acb470df4eb10d1addb5aeec79e8fc0120e1ffaa51ff756cd2f4afb5a87961"
+          },
+          "branches-2.f32": {
+            "samples": 16256,
+            "sha256": "dc5f2343fee1a0fbf3911e9f9ab124b7e3203ec51424f2364c321c4de3a36abf"
+          },
+          "branches-3.f32": {
+            "samples": 16256,
+            "sha256": "3ad81a84eaec7d72e5bd2fe31685566ee308aebe299a36b8acab2a388ca9c71f"
+          },
+          "branches-4.f32": {
+            "samples": 16256,
+            "sha256": "fb960c563ca350f366f63b49c29dfcf490053c878f48ecd515009834c3ee65ee"
+          },
+          "branches-5.f32": {
+            "samples": 16256,
+            "sha256": "5c2763d78d105de189d17f1b8fd14cb0e79223580e3a14430ee415de8266bcab"
+          },
+          "branches-6.f32": {
+            "samples": 16256,
+            "sha256": "7851386c0d553ec5334883eeebdf754a2f8417bae514be451ba4eded3f892c3e"
+          },
+          "branches-7.f32": {
+            "samples": 16256,
+            "sha256": "958aeb76778e3177546331d5a17ee6762556bd1593c5606e6420fe628b39f60f"
+          },
+          "hrir-0.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-1.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-2.f32": {
+            "samples": 384,
+            "sha256": "fd43703ab61df9badfdd741c1999af6af496d2644e36553635ad43e9e7f0bfb4"
+          },
+          "hrir-3.f32": {
+            "samples": 384,
+            "sha256": "1950f7f4809123a01bdd48b36a77761f38cae13702c411923160ac150fa4d91b"
+          },
+          "hrir-4.f32": {
+            "samples": 384,
+            "sha256": "e959234f07073679c66044a02acea7b4be4360c55b24c15d905b3e33a0a5dd85"
+          },
+          "hrir-5.f32": {
+            "samples": 384,
+            "sha256": "2fb79cbd7af5cf1005c2788406324c21225ff09ced5b9b8a94d8ff784282f5b2"
+          },
+          "hrir-6.f32": {
+            "samples": 384,
+            "sha256": "bd14cc1dde656f83691de41cac930406b1cc97ac07fce451d61fa951309faadc"
+          },
+          "hrir-7.f32": {
+            "samples": 384,
+            "sha256": "0e726f1f152487a35d1a10e022d087c8d78dbd17f60164be2068b025e2a9b16c"
+          },
+          "session.f32": {
+            "samples": 204182,
+            "sha256": "fe388501058a8c457589e0c57d25616b833337eaa54e06e390c3eeb6e2ad18ac"
+          }
+        },
+        "frames": 102091,
+        "head_motion": "wrap",
+        "hrir_hash": "b36747940ef2038a8eb7c1140d584443052d20e389fe6b63d9361d880ead9a1e",
+        "latency_frames": 256,
+        "lfe": {
+          "channels": 1,
+          "head": "7ec7d809d3fd82a323beb70dffb3f205f9fab63e4d52e583085b45ca57d959fd",
+          "tail": "fc998647a181df0c6bce5023b0d9bd4d99a0f6fde467ec4255b90c47cec31c22",
+          "taps": 5695
+        },
+        "prepared": {
+          "decoder_hrir": {
+            "bvh": "90a2ef83cae86431c6aab71ac2acdf09f695924aee35dd57ab91cef2d92a6c1e",
+            "fft_length": 256,
+            "fractional": "2a8429f77cc4948690b2e5d7c258b99c1472cfeaf56897583242d6945e010930",
+            "integer_phases": "cb902fe99f60a6b0f3bccca802cc38a22cef1df95b9a17601844f226f6110de5",
+            "mesh_inverse": "b316bdb996a3ff7579261a2df6fb5092d516dac376991ffa4f2447651c5bea2e",
+            "phase_rows": "dac3045673f218b6347d3e9d1199eb63b57d7fdd4411e7e3ab93975b839b07aa",
+            "spectra": "15bf51e0b0d51fe23081f32ffb8964f5ba8c779746fc31545c5edf6cc7d8c4fd"
+          },
+          "eq": {
+            "channels": 1,
+            "head": "4ff294fa6bfdc91025e87d48d6664a93f832cdf170d6c6ba769afb114ba5941d",
+            "tail": null,
+            "taps": 4
+          },
+          "hrir": {
+            "bvh": "90a2ef83cae86431c6aab71ac2acdf09f695924aee35dd57ab91cef2d92a6c1e",
+            "fft_length": 1024,
+            "fractional": "e6f016bd49eacde0be245e0f39e41e61612c9bb884903bb496a8fa97702bbc10",
+            "integer_phases": "d227909dfd6d9c69364c8a7d2281145f24d6c3ec6cc82282b921e7f1c19c1779",
+            "mesh_inverse": "b316bdb996a3ff7579261a2df6fb5092d516dac376991ffa4f2447651c5bea2e",
+            "phase_rows": "f8f78ee1784d4c4bcd9a9841921a936f0c054bac6202c9dee60198fae7551ea2",
+            "spectra": "0946339d14a8f05a64645e85524379a1a9cd8b29156aebb89dcf61cd4b8f3669"
+          },
+          "late": [
+            {
+              "channels": 1,
+              "head": "84d651f4f629a85de04362e19877c7751813004e6f76014c51d2861ff04aa78b",
+              "tail": "cebfec577bfe7b66de27cb0f7d25196ddc527ea66cdf065b22b968f6f66f1648",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "26ebe10393677df0888921e9ef189a3b1af38589975a0fe8ec15f32e5257d995",
+              "tail": "a3a6c26baed0da773973ee084e10732658867451c5ae6231f254fc72e311b339",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "68216daf04f5ff48c2fcfe7fd4c83f86b17bf7c164b7b70e9a3d78c5e9e419c5",
+              "tail": "0e2cfaae04ffed556f61ca434a6bb5c7faaf2c317ea9c95ab2f576690f92f8ac",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "dd20b6a6f2c1ee458d55b8eb3045104c6686c07f2c8babf448011f4f52565a42",
+              "tail": "20256cea9d4f03d764ba7c04dcb9b98e5dee83ad02da3b03949383e907c58f1f",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "320405b545f02582d9f62a7d4505692975dcbebf26b21e9579a5cfb434398ee6",
+              "tail": "fc7db431c37210aeb060039223818ddbf13fb1967ef24a38f0f47a07d9883e44",
+              "taps": 2301
+            },
+            {
+              "channels": 1,
+              "head": "d03ae995f25d48c09e74b6c5255cc75a4320e6448d1575baf8947747029f2e0a",
+              "tail": "b389bea513692e3073dfc3dce9d5e64b31e23ff84feccc03e4070d58fa6f6287",
+              "taps": 2301
+            }
+          ],
+          "materials": "9685398339793629f318719ca643867ad3062e2b4091e6a6c3f3e0e55c87e489",
+          "path_bucket_stride": 512,
+          "propagation": "e6f016bd49eacde0be245e0f39e41e61612c9bb884903bb496a8fa97702bbc10",
+          "send_taps": 3201,
+          "short_taps": 4064
+        },
+        "room_hash": "c280af38c40c5c649a3b63443dd23f15ab853b9f9a8e9f9251c525512a2d8eaf",
+        "scenario": "controls-screen-distance-geometry-switch-v1",
+        "schema": "mradm.room-replay",
+        "tail_frames": 6012,
+        "version": 1
+      }
+    }
+  ]
+}

@@ -22,6 +22,25 @@ pub const BLOCK: usize = 256;
 pub const FILTER_FADE: usize = 480;
 pub const ROOM_FADE: usize = 4_800;
 
+/// Supported processing clocks. Source SOFA rates may differ during preparation.
+pub fn validate_sample_rate(rate: u32) -> crate::Result<()> {
+    if matches!(rate, 48_000 | 96_000) {
+        Ok(())
+    } else {
+        Err(crate::Error::Unsupported("房间处理仅支持 48 或 96 kHz"))
+    }
+}
+
+pub fn filter_fade(rate: u32) -> usize {
+    rate as usize / 100
+}
+pub fn room_fade(rate: u32) -> usize {
+    rate as usize / 10
+}
+pub fn diffuse_tail(rate: u32) -> usize {
+    (crate::diffuse::DELAY_LENGTH - 1) * (rate / SAMPLE_RATE) as usize
+}
+
 // Preparation-only platform setup for the dedicated room worker threads.
 pub fn set_worker_start_hook(hook: fn()) {
     workers::set_start_hook(hook);

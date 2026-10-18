@@ -251,82 +251,84 @@ fn direct_propagation_gain_and_time_are_applied_once() {
 
 #[test]
 fn radial_scene_motion_head_lock_extent_and_reset_are_packet_independent() {
-    for quality in [Quality::Exact, Quality::Realtime] {
-        let prepared = common::fixture_with_collection(quality);
-        for head in [0, 1] {
-            let render = |chunks: &[usize]| {
-                let mut session = Session::new(prepared.clone(), 1., true, true).unwrap();
-                session
-                    .configure(&[RoomDescription {
-                        id: 7,
-                        position: [-1.5, 0., 0.],
+    for rate in [48000, 96000] {
+        for quality in [Quality::Exact, Quality::Realtime] {
+            let prepared = common::fixture_at_rate(quality, rate);
+            for head in [0, 1] {
+                let render = |chunks: &[usize]| {
+                    let mut session = Session::new(prepared.clone(), 1., true, true).unwrap();
+                    session
+                        .configure(&[RoomDescription {
+                            id: 7,
+                            position: [-1.5, 0., 0.],
+                            ..Default::default()
+                        }])
+                        .unwrap();
+                    let initial = RoomCommand {
+                        state: State {
+                            valid: 4 | 8 | 32 | 256,
+                            position: [-1.5, 0., 0.],
+                            head_locked: head,
+                            extent: [0.04, 0.02, 0.03],
+                            divergence: 0.15,
+                            divergence_range: [15., 0.],
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    }])
-                    .unwrap();
-                let initial = RoomCommand {
-                    state: State {
-                        valid: 4 | 8 | 32 | 256,
-                        position: [-1.5, 0., 0.],
-                        head_locked: head,
-                        extent: [0.04, 0.02, 0.03],
-                        divergence: 0.15,
-                        divergence_range: [15., 0.],
+                    };
+                    let event = RoomCommand {
+                        duration: 5000,
+                        changed: 4,
+                        state: State {
+                            position: [-0.2, 0., 0.],
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    },
-                    ..Default::default()
-                };
-                let event = RoomCommand {
-                    duration: 5000,
-                    changed: 4,
-                    state: State {
-                        position: [-0.2, 0., 0.],
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                };
-                let pcm: Vec<_> = (0..7000)
-                    .map(|i| ((i * 31 % 127) as f32 - 63.) / 4096.)
-                    .collect();
-                let mut first = Vec::new();
-                for pass in 0..2 {
-                    session.reset(0).unwrap();
-                    session.set_pose([19., 3., 0.]).unwrap();
-                    let mut at = 0;
-                    let mut sequence = 0;
-                    let mut result = Vec::new();
-                    while at < pcm.len() {
-                        let n = chunks[sequence % chunks.len()].min(pcm.len() - at);
-                        let mut out = vec![0.; n * 2];
-                        session
-                            .process(
-                                n,
-                                [Some(&pcm[at..at + n])].into_iter(),
-                                if at == 0 {
-                                    std::slice::from_ref(&initial)
-                                } else {
-                                    &[]
-                                },
-                                if at == 0 {
-                                    std::slice::from_ref(&event)
-                                } else {
-                                    &[]
-                                },
-                                &mut out,
-                            )
-                            .unwrap();
-                        result.extend(out);
-                        at += n;
-                        sequence += 1;
+                    };
+                    let pcm: Vec<_> = (0..7000)
+                        .map(|i| ((i * 31 % 127) as f32 - 63.) / 4096.)
+                        .collect();
+                    let mut first = Vec::new();
+                    for pass in 0..2 {
+                        session.reset(0).unwrap();
+                        session.set_pose([19., 3., 0.]).unwrap();
+                        let mut at = 0;
+                        let mut sequence = 0;
+                        let mut result = Vec::new();
+                        while at < pcm.len() {
+                            let n = chunks[sequence % chunks.len()].min(pcm.len() - at);
+                            let mut out = vec![0.; n * 2];
+                            session
+                                .process(
+                                    n,
+                                    [Some(&pcm[at..at + n])].into_iter(),
+                                    if at == 0 {
+                                        std::slice::from_ref(&initial)
+                                    } else {
+                                        &[]
+                                    },
+                                    if at == 0 {
+                                        std::slice::from_ref(&event)
+                                    } else {
+                                        &[]
+                                    },
+                                    &mut out,
+                                )
+                                .unwrap();
+                            result.extend(out);
+                            at += n;
+                            sequence += 1;
+                        }
+                        if pass == 0 {
+                            first = result;
+                        } else {
+                            assert_eq!(first, result);
+                        }
                     }
-                    if pass == 0 {
-                        first = result;
-                    } else {
-                        assert_eq!(first, result);
-                    }
-                }
-                first
-            };
-            assert_eq!(render(&[256]), render(&[1, 173, 777, 19, 512]));
+                    first
+                };
+                assert_eq!(render(&[256]), render(&[1, 173, 777, 19, 512]));
+            }
         }
     }
 }

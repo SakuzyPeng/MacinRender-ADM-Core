@@ -1,0 +1,1575 @@
+{
+  "schema": "mradm.room-windows-benchmark",
+  "version": 1,
+  "platform": "Windows-10-10.0.26200-SP0",
+  "binary_sha256": "c00b6a9b5786d7581678573b8bec0ff9075e6bdca529eb9b238231f8b547c16d",
+  "scope": "Fresh process per source count. Peak working set includes preparation and all scenarios; software timing, no device measurement.",
+  "cases": [
+    {
+      "sources": 1,
+      "peak_working_set_bytes": 1016369152,
+      "observations": 377,
+      "results": [
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": false,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 0.24956789999999993,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 1.4629,
+          "mean_ms": 0.48743730468749985,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 1.1865,
+          "p99_ms": 1.2857,
+          "peak": 0.002266625640913844,
+          "pose_update_hz": 0.0,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "static",
+          "source_ramps": false,
+          "sources": 1,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 9.139449462890623
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 0.6973231000000008,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.0421,
+          "mean_ms": 1.3619591796875015,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 2.4954,
+          "p99_ms": 2.6972,
+          "peak": 0.003531478112563491,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "pose",
+          "source_ramps": false,
+          "sources": 1,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 25.536734619140653
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 0.8429061,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 4.3245000000000005,
+          "mean_ms": 1.6463009765625,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.6303,
+          "p99_ms": 3.9747000000000003,
+          "peak": 0.003534163348376751,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 1.8e-06,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 1,
+          "room_transition": true,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "switch",
+          "source_ramps": false,
+          "sources": 1,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 30.868143310546877
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 1,
+          "dsp_seconds": 1.0638098999999999,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.455,
+          "mean_ms": 2.0777537109375,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.0654,
+          "p99_ms": 3.286,
+          "peak": 0.003980847541242838,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "source_ramps": true,
+          "sources": 1,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 38.95788208007812
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 1,
+          "dsp_seconds": 0.9671000000000002,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.4818000000000002,
+          "mean_ms": 1.8888671875000003,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 2.7853,
+          "p99_ms": 3.0745999999999998,
+          "peak": 0.03644493222236633,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "source_ramps": true,
+          "sources": 1,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 35.41625976562501
+        }
+      ]
+    },
+    {
+      "sources": 16,
+      "peak_working_set_bytes": 1324228608,
+      "observations": 518,
+      "results": [
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": false,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 0.4825562999999997,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 2.0078,
+          "mean_ms": 0.9424927734374995,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 1.7544,
+          "p99_ms": 1.8922999999999999,
+          "peak": 0.01480301097035408,
+          "pose_update_hz": 0.0,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "static",
+          "source_ramps": false,
+          "sources": 16,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 17.671739501953112
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 3,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 1.8802949999999987,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 5.4396,
+          "mean_ms": 3.6724511718749975,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 4.8005,
+          "p99_ms": 5.1668,
+          "peak": 0.015729688107967377,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "pose",
+          "source_ramps": false,
+          "sources": 16,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 68.85845947265621
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 107,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 2.349650499999996,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 9.7941,
+          "mean_ms": 4.589161132812492,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 7.0232,
+          "p99_ms": 8.1179,
+          "peak": 0.015729688107967377,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 2.6e-06,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 1,
+          "room_transition": true,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "switch",
+          "source_ramps": false,
+          "sources": 16,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 86.04677124023424
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 512,
+          "distinct_event_offsets": 16,
+          "dsp_seconds": 3.589593900000002,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 9.0374,
+          "mean_ms": 7.010925585937503,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 8.2906,
+          "p99_ms": 8.7219,
+          "peak": 0.015933822840452194,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "source_ramps": true,
+          "sources": 16,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 131.4548547363282
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 512,
+          "distinct_event_offsets": 16,
+          "dsp_seconds": 3.2811337000000003,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 8.1602,
+          "mean_ms": 6.408464257812501,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 7.5206,
+          "p99_ms": 7.9211,
+          "peak": 0.036392346024513245,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "source_ramps": true,
+          "sources": 16,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 120.15870483398439
+        }
+      ]
+    },
+    {
+      "sources": 32,
+      "peak_working_set_bytes": 1651630080,
+      "observations": 668,
+      "results": [
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": false,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 0.7371461,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 2.8518,
+          "mean_ms": 1.4397384765625,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 2.4871,
+          "p99_ms": 2.7263,
+          "peak": 0.029512809589505196,
+          "pose_update_hz": 0.0,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "static",
+          "source_ramps": false,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 26.995096435546877
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 423,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 3.059249400000001,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 7.5317,
+          "mean_ms": 5.975096484375002,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 6.9193,
+          "p99_ms": 7.2696000000000005,
+          "peak": 0.031080003827810287,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "pose",
+          "source_ramps": false,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 112.03305908203129
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 492,
+          "distinct_event_offsets": 0,
+          "dsp_seconds": 3.7892377999999978,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 15.9421,
+          "mean_ms": 7.400855078124995,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 10.344199999999999,
+          "p99_ms": 12.123,
+          "peak": 0.03116316720843315,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 3.5e-06,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 1,
+          "room_transition": true,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "switch",
+          "source_ramps": false,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 138.76603271484367
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 512,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 6.5038094999999965,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 17.294,
+          "mean_ms": 12.702752929687493,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 14.768,
+          "p99_ms": 16.0543,
+          "peak": 0.03095507062971592,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 238.1766174316405
+        },
+        {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 2.7306666666666666,
+          "blocks": 512,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 512,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 5.784278099999995,
+          "experiment": null,
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 14.6881,
+          "mean_ms": 11.29741816406249,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 13.023399999999999,
+          "p99_ms": 13.5158,
+          "peak": 0.05068739503622055,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 211.82659057617172
+        }
+      ]
+    }
+  ]
+}

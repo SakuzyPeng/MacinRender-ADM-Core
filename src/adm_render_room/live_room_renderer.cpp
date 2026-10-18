@@ -155,7 +155,7 @@ class LiveRoomRenderer final : public ILiveSceneRenderer {
         return static_cast<std::uint32_t>(runtime_->tail_frames());
     }
     [[nodiscard]] std::uint32_t output_channels() const noexcept override { return 2; }
-    [[nodiscard]] std::uint32_t sample_rate() const noexcept override { return 48000; }
+    [[nodiscard]] std::uint32_t sample_rate() const noexcept override { return runtime_->sample_rate(); }
 
   private:
     void warn_screen(const Frame& frame, const ObjectState& state, std::uint64_t element) {
@@ -190,15 +190,15 @@ Result<std::unique_ptr<ILiveSceneRenderer>> create_live_room_renderer(const Rend
     if (!screen_valid) {
         return tl::unexpected{screen_valid.error()};
     }
-    if (config.sample_rate != 48000 || config.output_layout != "binaural") {
-        return make_error(ErrorCode::unsupported, "room-binaural v1 仅支持 48 kHz 双耳输出");
-    }
-    if (config.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
-        return make_error(ErrorCode::unsupported, "room-binaural 不支持 SAF covariance spreader");
-    }
     auto prepared = room_internal::prepare(config.room, config.sofa_path);
     if (!prepared) {
         return tl::unexpected{prepared.error()};
+    }
+    if (config.sample_rate != (*prepared)->info.sample_rate || config.output_layout != "binaural") {
+        return make_error(ErrorCode::unsupported, "room-binaural 需要与房间包采样率一致的双耳输出");
+    }
+    if (config.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
+        return make_error(ErrorCode::unsupported, "room-binaural 不支持 SAF covariance spreader");
     }
     auto runtime = room_internal::Runtime::create(
         *prepared, config.room, true, config.binaural_spread_mode != BinauralSpreadMode::none);

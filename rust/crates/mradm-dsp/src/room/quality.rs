@@ -58,8 +58,8 @@ impl Quality {
             Self::Realtime => 1024,
         }
     }
-    pub(crate) fn reflection_due(self, sample: u64, id: u64) -> bool {
-        Self::periodic_due(sample, id, self.reflection_frames())
+    pub(crate) fn reflection_due(self, sample: u64, id: u64, rate: u32) -> bool {
+        Self::periodic_due(sample, id, self.reflection_frames_at(rate), rate)
     }
     /// Maximum held reflection-target pose error, before the existing filter fade.
     pub fn reflection_pose_degrees(self) -> f64 {
@@ -74,13 +74,22 @@ impl Quality {
             Self::Realtime => 1024,
         }
     }
-    pub(crate) fn reflection_pose_due(self, sample: u64, id: u64) -> bool {
-        Self::periodic_due(sample, id, self.reflection_pose_frames())
+    pub(crate) fn reflection_pose_due(self, sample: u64, id: u64, rate: u32) -> bool {
+        Self::periodic_due(sample, id, self.reflection_pose_frames_at(rate), rate)
     }
     pub fn reflection_history_frames(self) -> usize {
         self.reflection_frames().max(self.reflection_pose_frames())
     }
-    fn periodic_due(sample: u64, id: u64, period: usize) -> bool {
+    pub fn reflection_frames_at(self, rate: u32) -> usize {
+        self.reflection_frames() * (rate / super::SAMPLE_RATE) as usize
+    }
+    pub fn reflection_pose_frames_at(self, rate: u32) -> usize {
+        self.reflection_pose_frames() * (rate / super::SAMPLE_RATE) as usize
+    }
+    pub fn reflection_history_frames_at(self, rate: u32) -> usize {
+        self.reflection_history_frames() * (rate / super::SAMPLE_RATE) as usize
+    }
+    fn periodic_due(sample: u64, id: u64, period: usize, rate: u32) -> bool {
         let period = period as u64;
         if period == 0 {
             return true;
@@ -91,7 +100,8 @@ impl Quality {
         hash = (hash ^ (hash >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         hash = (hash ^ (hash >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         hash ^= hash >> 31;
-        let phase = hash % (period / super::BLOCK as u64) * super::BLOCK as u64;
+        let quantum = super::BLOCK as u64 * u64::from(rate / super::SAMPLE_RATE);
+        let phase = hash % (period / quantum) * quantum;
         sample % period == phase
     }
 }

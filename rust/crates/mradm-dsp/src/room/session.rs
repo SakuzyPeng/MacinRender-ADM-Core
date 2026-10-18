@@ -1,7 +1,7 @@
 //! Stateful source session with one canonical-block FIFO. The FIFO declares
 //! 256 frames of processing latency; it makes fragmented input bit-identical.
 use super::{
-    BLOCK, FILTER_FADE,
+    BLOCK,
     control::{self, Control, RoomCommand, RoomDescription, RoomOverride, State},
     geometry::{self, Position, WeightedPosition},
     partition::{Dynamic, Long, LongFilters},
@@ -40,13 +40,14 @@ impl PreparedSet {
         })
     }
     pub fn tail_frames(&self) -> usize {
-        (self.room.history_frames() + crate::diffuse::DELAY_LENGTH - 1).max(self.lfe.taps - 1)
+        (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
+            .max(self.lfe.taps - 1)
             + BLOCK
     }
     pub fn preroll_frames(&self) -> usize {
         self.room
             .preroll_frames()
-            .saturating_add(crate::diffuse::DELAY_LENGTH - 1)
+            .saturating_add(super::diffuse_tail(self.room.profile.sample_rate))
             .max(self.lfe.history_frames() + BLOCK)
     }
 }
@@ -64,7 +65,7 @@ impl HeadSignal {
     fn new(room: &PreparedRoom) -> Result<Self> {
         let taps = room.short_taps;
         Ok(Self {
-            convolution: Dynamic::with_policy(2, taps, room.quality.fft())?,
+            convolution: Dynamic::with_rate(2, taps, room.quality.fft(), room.profile.sample_rate)?,
             filter: vec![0.; 2 * taps],
             query: vec![0.; 2 * room.hrir.data.output_taps],
             shape: None,
@@ -110,7 +111,7 @@ impl HeadSignal {
                 &mut self.query,
             )?;
             let arrival =
-                source.position.distance / room.profile.speed * f64::from(super::SAMPLE_RATE);
+                source.position.distance / room.profile.speed * f64::from(room.profile.sample_rate);
             let integer = libm::floor(arrival) as usize;
             let mut kernel = [0.; super::hrir::FRACTIONAL_TAPS];
             room.propagation_kernel(
@@ -164,7 +165,7 @@ struct Slot {
     born: u64,
     retired_at: Option<u64>,
     lock_initialized: bool,
-    lock_history: [u8; FILTER_FADE],
+    lock_history: Vec<u8>,
     lock_position: usize,
     lock_sum: usize,
 }
@@ -192,7 +193,7 @@ impl Slot {
             live: Control::new(control::neutral_override()),
             live_target: control::neutral_override(),
             query_cache,
-            diffuse: DiffuseDelay::default(),
+            diffuse: DiffuseDelay::with_sample_rate(room.profile.sample_rate)?,
             states: vec![state; BLOCK],
             directions: vec![[1., 0., 0.]; BLOCK],
             last_direction: [1., 0., 0.],
@@ -209,7 +210,7 @@ impl Slot {
             born,
             retired_at: None,
             lock_initialized: false,
-            lock_history: [0; FILTER_FADE],
+            lock_history: vec![0; super::filter_fade(room.profile.sample_rate)],
             lock_position: 0,
             lock_sum: 0,
         })
@@ -400,15 +401,15 @@ impl Slot {
         if !self.lock_initialized {
             self.lock_initialized = true;
             self.lock_history.fill(target as u8);
-            self.lock_sum = target as usize * FILTER_FADE;
+            self.lock_sum = target as usize * self.lock_history.len();
         }
-        let weight = self.lock_sum as f32 / FILTER_FADE as f32;
+        let weight = self.lock_sum as f32 / self.lock_history.len() as f32;
         self.world[offset] = value * (1. - weight);
         self.head[offset] = value * weight;
         self.lock_sum -= usize::from(self.lock_history[self.lock_position]);
         self.lock_history[self.lock_position] = target as u8;
         self.lock_sum += target as usize;
-        self.lock_position = (self.lock_position + 1) % FILTER_FADE;
+        self.lock_position = (self.lock_position + 1) % self.lock_history.len();
         Ok(())
     }
 }
@@ -501,14 +502,18 @@ impl Voice {
                 let defer = room.quality == Quality::Realtime
                     && slot.moving[begin]
                     && !slot.hard[begin]
-                    && !room
-                        .quality
-                        .reflection_due(start + begin as u64, slot.description.id);
+                    && !room.quality.reflection_due(
+                        start + begin as u64,
+                        slot.description.id,
+                        room.profile.sample_rate,
+                    );
                 let defer_pose = room.quality == Quality::Realtime
                     && !slot.hard[begin]
-                    && !room
-                        .quality
-                        .reflection_pose_due(start + begin as u64, slot.description.id);
+                    && !room.quality.reflection_pose_due(
+                        start + begin as u64,
+                        slot.description.id,
+                        room.profile.sample_rate,
+                    );
                 self.emitter.update_sources_with_pose_budget(
                     position,
                     &self.samples[..n],
@@ -1026,7 +1031,7 @@ impl Session {
                 slot.live.apply(
                     &RoomCommand {
                         changed: 2 | 16,
-                        duration: super::FILTER_FADE as u32,
+                        duration: slot.lock_history.len() as u32,
                         state: target,
                         ..RoomCommand::default()
                     },
@@ -1330,7 +1335,9 @@ impl Session {
     fn tail_frames(&self) -> usize {
         // Head-locked sources retain the initial dry propagation filters across
         // room switches, even when the new world's acoustic support is shorter.
-        let head = self.head_room.short_taps - 1 + crate::diffuse::DELAY_LENGTH - 1 + BLOCK;
+        let head = self.head_room.short_taps - 1
+            + super::diffuse_tail(self.head_room.profile.sample_rate)
+            + BLOCK;
         self.incoming
             .as_ref()
             .map_or(self.current.prepared.tail_frames(), |v| {
@@ -1426,6 +1433,9 @@ impl Session {
     /// The caller prepares `next` off the render worker. A displaced, inaudible
     /// candidate is returned to the caller for background destruction.
     pub fn validate_room(&self, next: &Instance, request: u64) -> Result<()> {
+        if next.prepared.room.profile.sample_rate != self.head_room.profile.sample_rate {
+            return Err(Error::InvalidArgument("活动房间会话不能改变采样率"));
+        }
         if next.prepared.room.quality != self.head_room.quality {
             return Err(Error::InvalidArgument(
                 "Room quality is fixed for the session",
@@ -1536,7 +1546,11 @@ impl Session {
         // even short rooms discard that target before the crossfade starts.
         self.warm_remaining = (incoming.prepared.room.eq.taps + incoming.prepared.room.short_taps
             - 2
-            + incoming.prepared.room.quality.reflection_history_frames())
+            + incoming
+                .prepared
+                .room
+                .quality
+                .reflection_history_frames_at(self.head_room.profile.sample_rate))
         .div_ceil(BLOCK)
             * BLOCK;
         self.fade_done = 0;
@@ -1710,7 +1724,9 @@ impl Session {
         let mut new_gain = [0.; BLOCK];
         if self.phase == 2 {
             for i in 0..BLOCK {
-                let alpha = ((self.fade_done + i) as f32 / super::ROOM_FADE as f32).min(1.);
+                let alpha = ((self.fade_done + i) as f32
+                    / super::room_fade(self.head_room.profile.sample_rate) as f32)
+                    .min(1.);
                 old_gain[i] = 1. - alpha;
                 new_gain[i] = alpha;
             }
@@ -1746,9 +1762,12 @@ impl Session {
                 // complete transition window before their first audible sample.
                 self.phase != 1
                     || self.warm_remaining
-                        <= FILTER_FADE
+                        <= super::filter_fade(self.head_room.profile.sample_rate)
                             + 2 * BLOCK
-                            + self.head_room.quality.reflection_history_frames(),
+                            + self
+                                .head_room
+                                .quality
+                                .reflection_history_frames_at(self.head_room.profile.sample_rate),
             )?;
         }
         {
@@ -1831,7 +1850,7 @@ impl Session {
             }
             2 => {
                 self.fade_done += BLOCK;
-                if self.fade_done >= super::ROOM_FADE {
+                if self.fade_done >= super::room_fade(self.head_room.profile.sample_rate) {
                     self.phase = 3;
                     self.drain_remaining = self.current.prepared.tail_frames() - BLOCK;
                 }
