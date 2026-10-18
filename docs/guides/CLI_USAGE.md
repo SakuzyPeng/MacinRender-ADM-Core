@@ -84,6 +84,10 @@ CLI、C ABI 和 GUI 批量渲染可选；C API 和 GUI 系统空间音频监听�
 
 `saf-binaural` 默认使用 SAF 内置 Genelec KEMAR HRTF，也可通过 `--sofa <path>` 加载用户 FIR SOFA HRIR 文件。当前 SOFA 规格为 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz 原生采样率。`apple` 使用 Apple 系统 HRTF；可运行 `mradm backends` 查看每个双耳后端的 `HRTF sources`。
 
+`room-binaural` 另支持原生 48/96 kHz 房间处理。96 kHz 素材使用同采样率房间包，
+`--room-hrir` 可直接选择 SkinRLC 九距离集合目录或索引；不会自动切换到 48 kHz 兼容文件。
+完整命令和预设见[原生 96 kHz 房间](../architecture/ROOM_NATIVE_96K.md)。
+
 推荐的通用外部 HRTF 是 [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html) 的 D1 KU100 SOFA，例如 `D1_48K_24bit_256tap_FIR_SOFA.sofa`（也可从 [SOFA database SADIE 索引](https://sofacoustics.org/data/database/sadie/) 下载）。它是 48 kHz、256-tap、SimpleFreeFieldHRIR，方向采样密度高，并带 low-frequency extension / diffuse-field EQ，适合作为均衡的 `--sofa` 默认推荐。SADIE II 数据集由 University of York 以 Apache License 2.0 发布；若分发素材或学术使用，请按其页面说明引用论文 [DOI:10.3390/app8112029](https://doi.org/10.3390/app8112029)。
 
 `apple` 使用 AudioToolbox AUSpatialMixer，提供 Apple 平台渲染语义，支持 binaural、5.1、7.1、5.1.2、5.1.4、7.1.4、9.1.6 和 22.2，以及扬声器输出的 channelLock 与 extent 点云近似。扬声器输出默认清除 SpatialMixer 的 InterAuralDelay / DistanceAttenuation flags，以匹配 ADM / SAF / Logic 式增益语义；`--apple-speaker-rendering-flags` 可恢复 Apple 原生 flags（旧行为）。`--apple-spatial-preset headphone-default|headphone-movie` 为 Apple binaural 应用 AUSpatialMixer headphone factory preset。Apple 动态参数平滑由 SpatialMixer 内部处理。`--start` / `--end` 使用按需窗口渲染和一个 render block 的 pre-roll 更新 SpatialMixer 内部状态。

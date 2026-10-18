@@ -39,7 +39,7 @@ pub fn manifest(bytes: &[u8], schema: &str, kind: &str) -> Result<Value> {
     if value["schema"] != schema
         || value["version"] != 1
         || value["kind"] != kind
-        || value["sample_rate"] != super::SAMPLE_RATE
+        || !matches!(value["sample_rate"].as_u64(), Some(48000 | 96000))
     {
         return Err(Error::Unsupported(
             "Unsupported room resource schema, kind or rate",
@@ -181,6 +181,7 @@ impl Array {
 
 #[derive(Clone)]
 pub struct RoomProfile {
+    pub sample_rate: u32,
     pub identity: String,
     pub id: String,
     pub name: String,
@@ -278,7 +279,10 @@ impl RoomProfile {
         let band_taps = shape[1];
         let band_offset = integer(&value["band_filter_offset"], band_taps - 1)?;
         let (shape, late) = Array::f32(&assets["late"], &mut read)?;
-        if shape.len() != 2 || shape[0] > 64 || shape[1] > super::SAMPLE_RATE as usize * 10 {
+        if shape.len() != 2
+            || shape[0] > 64
+            || shape[1] > value["sample_rate"].as_u64().unwrap() as usize * 10
+        {
             return Err(invalid());
         }
         let count = shape[0];
@@ -303,6 +307,7 @@ impl RoomProfile {
             return Err(invalid());
         }
         Ok(Self {
+            sample_rate: value["sample_rate"].as_u64().unwrap() as u32,
             identity: sha256(&serde_json::to_vec(&value).map_err(|_| invalid())?),
             id: value["id"]
                 .as_str()
@@ -336,6 +341,8 @@ impl RoomProfile {
 }
 
 pub struct HrirData {
+    pub sample_rate: u32,
+    pub source_sample_rate: Option<u32>,
     pub collection: Option<super::collection::Collection>,
     pub source_geometry: Option<super::collection::SourceGeometry>,
     pub identity: String,
@@ -404,6 +411,11 @@ impl HrirData {
             ));
         }
         Ok(Self {
+            sample_rate: value["sample_rate"].as_u64().unwrap() as u32,
+            source_sample_rate: value["preparation"]["source_sample_rate"]
+                .as_u64()
+                .filter(|v| (1..=384000).contains(v))
+                .map(|v| v as u32),
             identity: sha256(&serde_json::to_vec(&value).map_err(|_| invalid())?),
             collection: None,
             source_geometry: None,

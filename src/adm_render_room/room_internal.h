@@ -57,6 +57,7 @@ class Runtime final : public IRoomControl {
     [[nodiscard]] RoomSourcePosition source_position(std::uint64_t id) const override;
     [[nodiscard]] std::uint64_t preroll_frames() const;
     [[nodiscard]] std::uint64_t tail_frames() const;
+    [[nodiscard]] std::uint32_t sample_rate() const { return prepared_->info.sample_rate; }
 
   private:
     Runtime(std::shared_ptr<const Prepared> prepared, RoomConfig config, void* handle);

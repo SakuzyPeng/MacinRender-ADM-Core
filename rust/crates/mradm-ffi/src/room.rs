@@ -110,7 +110,7 @@ pub struct RoomPreparedInfo {
     preroll_frames: u64,
     material_guard_frames: u64,
     sample_rate: u32,
-    reserved: u32,
+    reflection_update_frames: u32,
 }
 
 // Polar metadata conversion is part of the room consistency boundary.
@@ -176,12 +176,15 @@ fn description(prepared: &PreparedSet) -> Result<CString> {
     let mut value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
         "quality":room.quality.name(),"processing_policy":room.quality.policy(),
-        "reflection_update_frames":room.quality.reflection_frames(),
+        "reflection_update_frames":room.quality.reflection_frames_at(room.profile.sample_rate),
         "reflection_pose_limit_degrees":room.quality.reflection_pose_degrees(),
-        "reflection_pose_update_frames":room.quality.reflection_pose_frames(),
+        "reflection_pose_update_frames":room.quality.reflection_pose_frames_at(room.profile.sample_rate),
         "fft_policy":if room.quality == Quality::Exact { "scalar" } else { "native-auto" },
         "hrir_hash":room.hrir.data.identity,"source_sofa_sha256":room.hrir.data.source_sofa_sha256,
-        "sample_rate":48000,"latency_frames":mradm_dsp::room::BLOCK,
+        "sample_rate":room.profile.sample_rate,
+        "source_sample_rate":room.hrir.data.source_sample_rate,
+        "hrir_resampled":room.hrir.data.source_sample_rate.map(|rate|rate != room.hrir.data.sample_rate),
+        "hrir_taps":room.hrir.data.taps,"latency_frames":mradm_dsp::room::BLOCK,
         "material_filter_guard_frames":room.profile.band_offset,
         "hrir_interpolation_guard_frames":room.hrir.data.guard,
         "hrir_preprocessing_guard_frames":room.hrir.data.preprocessing_guard,
@@ -240,10 +243,10 @@ pub unsafe extern "C" fn mradm_room_profile_json(handle: *const RoomProfileHandl
 
 // Preparation-only cache: live sessions own the data. No disk cache or Python
 // process is needed, and an inactive SOFA bank can be reclaimed immediately.
-fn native_hrir(bytes: &[u8]) -> Result<Arc<HrirData>> {
+fn native_hrir(bytes: &[u8], rate: u32) -> Result<Arc<HrirData>> {
     type Cache = std::collections::BTreeMap<String, std::sync::Weak<HrirData>>;
     static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
-    let key = sha256(bytes);
+    let key = format!("{rate}:{}", sha256(bytes));
     let cache = CACHE.get_or_init(Default::default);
     {
         let mut entries = cache
@@ -256,7 +259,7 @@ fn native_hrir(bytes: &[u8]) -> Result<Arc<HrirData>> {
     }
     // Parsing may unwind on malformed HDF5 in debug builds. The FFI boundary
     // catches it; do not poison the cache needed by subsequent sessions.
-    let data = Arc::new(mradm_dsp::room::sofa::prepare(bytes)?);
+    let data = Arc::new(mradm_dsp::room::sofa::prepare_at_rate(bytes, rate)?);
     let mut entries = cache
         .lock()
         .map_err(|_| Error::RenderFailed("SOFA preparation cache failed"))?;
@@ -267,16 +270,34 @@ fn native_hrir(bytes: &[u8]) -> Result<Arc<HrirData>> {
     entries.insert(key, Arc::downgrade(&data));
     Ok(data)
 }
-fn load_hrir(file: &Path) -> Result<Arc<HrirData>> {
+fn load_hrir(file: &Path, rate: u32) -> Result<Arc<HrirData>> {
+    let resolved = if file.is_dir() {
+        file.join("distance_index.json")
+    } else {
+        file.to_owned()
+    };
+    let file = resolved.as_path();
     let bytes = bounded_read(file, None, 256 * 1024 * 1024)?;
     if bytes.starts_with(b"\x89HDF\r\n\x1a\n") {
-        return native_hrir(&bytes);
+        return native_hrir(&bytes, rate);
     }
     let root = file.parent().unwrap_or(Path::new("."));
     let manifest: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-    if manifest["schema"] == "mradm.hrtf-collection" {
-        let mut data = collection::prepare(&bytes, |n, s| array(root, n, s))?;
-        let review = root.join(collection::REVIEW_PATH);
+    if matches!(
+        manifest["schema"].as_str(),
+        Some("mradm.hrtf-collection" | "mradm.sofa-bank")
+    ) {
+        let mut data = collection::prepare_at_rate(&bytes, rate, |n, s| array(root, n, s))?;
+        let review = root.join(if manifest["schema"] == "mradm.sofa-bank" {
+            "quality_report.json"
+        } else {
+            collection::REVIEW_PATH
+        });
+        if manifest["schema"] == "mradm.sofa-bank" {
+            data.collection.as_mut().unwrap().name = root
+                .file_name()
+                .map_or_else(|| "SOFA bank".into(), |n| n.to_string_lossy().into_owned());
+        }
         if review
             .try_exists()
             .map_err(|_| Error::Io("无法检查 HRTF 来源报告"))?
@@ -349,14 +370,14 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
             (&*reuse).prepared.room.hrir.data.clone()
         } else if hrir_length == 0 && sofa_length != 0 {
             let bytes = bounded_read(&path(sofa_name, sofa_length)?, None, 256 * 1024 * 1024)?;
-            native_hrir(&bytes)?
+            native_hrir(&bytes, profile.profile.sample_rate)?
         } else {
             let hrir_path = if hrir_length == 0 {
                 profile.root.join(&profile.profile.default_hrir)
             } else {
                 path(hrir_name, hrir_length)?
             };
-            load_hrir(&hrir_path)?
+            load_hrir(&hrir_path, profile.profile.sample_rate)?
         };
         if sofa_length != 0 {
             let sofa_path = path(sofa_name, sofa_length)?;
@@ -441,8 +462,12 @@ pub unsafe extern "C" fn mradm_room_prepared_info(
             tail_frames: p.tail_frames() as u64,
             preroll_frames: p.preroll_frames() as u64,
             material_guard_frames: p.room.profile.band_offset as u64,
-            sample_rate: 48000,
-            reserved: 0,
+            sample_rate: p.room.profile.sample_rate,
+            reflection_update_frames: p
+                .room
+                .quality
+                .reflection_frames_at(p.room.profile.sample_rate)
+                as u32,
         };
         Ok(())
     })

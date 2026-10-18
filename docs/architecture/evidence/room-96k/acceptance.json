@@ -1,0 +1,54 @@
+{
+  "schema": "mradm.room-native96-acceptance",
+  "version": 1,
+  "validated_on": "2026-10-17",
+  "functional_passed": true,
+  "validation_platforms": [
+    "macos-arm64",
+    "windows-x64"
+  ],
+  "platform_policy": "Maintainer validation is macOS and Windows; Linux host permanently retired.",
+  "base_git_commit": "f42749fce175da5fcc7ffccbfd3047e195361b3a",
+  "cpp_surface_lines": 44208,
+  "private_ffi": {
+    "functions": 285,
+    "structures": 103,
+    "matched": true
+  },
+  "public_c_abi_exports": {
+    "count": 157,
+    "macos_matched": true,
+    "windows_matched": true
+  },
+  "rust_room_integration_tests_per_platform": 30,
+  "rust_sofa_unit_tests_per_platform": 5,
+  "macos_python_acoustic_tool_tests": 7,
+  "macos_python_hrir_prepare_tests": 9,
+  "c_api_96k": {
+    "macos_passed": true,
+    "windows_passed": true,
+    "room_struct_bytes": 32,
+    "renderer_struct_bytes": 48,
+    "scene_config_bytes": 88,
+    "fragmented_identical": true,
+    "epoch_reset_identical": true,
+    "file_seek_identical": true,
+    "scene_output_resampling_96_to_48": true
+  },
+  "acoustic_positions": 28,
+  "acoustic_passed": true,
+  "native_hrir_taps": 1920,
+  "source_and_processing_rate_hz": 96000,
+  "collection_layers": 9,
+  "directions_per_layer": 1850,
+  "quality_gate": {
+    "passed": true,
+    "notes": "clang-tidy emitted an existing CLI11 std::function analyzer warning; changed-file gate exited 0."
+  },
+  "prepared_hrir_bank_bytes": 825275648,
+  "prepared_hrir_budget_bytes": 1073741824,
+  "realtime_scope": "Software benchmark at 96 kHz / 512 frames (5.333 ms). Dynamic 16/32-source Windows cases exceed the deadline; this is not universal realtime-capacity acceptance.",
+  "windows_original_checkout_restored": true,
+  "windows_temporary_hrtf_removed": true,
+  "room_manifest_sha256": "8daa0e3a76d4dfe524d38e53f11db6551c0e490995c1d9a65eb83a5cbbde1da7"
+}

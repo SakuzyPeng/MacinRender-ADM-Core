@@ -157,7 +157,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| root.join(&profile.default_hrir));
-    let data = Arc::new(assets::hrir(&selected)?);
+    let data = Arc::new(assets::hrir_at_rate(&selected, profile.sample_rate)?);
     let (length, _, _) = PreparedRoom::required_fft(&profile, &data)?;
     let bank = Arc::new(HrirBank::with_policy(data, length, quality.fft())?);
     let prepared = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
@@ -346,7 +346,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
             let total: f64 = elapsed.iter().sum();
             elapsed.sort_by(f64::total_cmp);
-            let deadline = frames as f64 / 48000.;
+            let deadline = frames as f64 / f64::from(prepared.room.profile.sample_rate);
             let counters = process_counters(ticks);
             rss_peak = rss_peak.max(counters.1.unwrap_or(0));
             let cpu = cpu_start.zip(counters.0).map(|(start, end)| end - start);
@@ -366,16 +366,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!(
                 "{}",
                 serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
-                "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames(),
+                "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames_at(prepared.room.profile.sample_rate),
                 "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
                 "voice_segments":segments,
                 "voice_segments_per_source_block":segments.map(|v|v as f64/(sources*blocks*frames/BLOCK) as f64),
                 "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
                 "profiling":cfg!(feature = "room-profile"), "stages":stages, "trace":trace_report,
-                "blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
+                "sample_rate":prepared.room.profile.sample_rate,"blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
                 "worker_wall_budget_percent":100.*total/(blocks as f64*deadline),
                 "cpu_seconds":cpu,"cpu_audio_budget_percent":cpu.map(|v|100.*v/(blocks as f64*deadline)),
-                "rss_peak_bytes":(rss_peak!=0).then_some(rss_peak),"pose_update_hz":if moving{48000./frames as f64}else{0.},
+                "rss_peak_bytes":(rss_peak!=0).then_some(rss_peak),"pose_update_hz":if moving{f64::from(prepared.room.profile.sample_rate)/frames as f64}else{0.},
                 "mean_ms":total*1000./blocks as f64,"p95_ms":elapsed[(blocks*95/100).min(blocks-1)]*1000.,
                 "hrir_hash":prepared.room.hrir.data.identity,"hrir_bank_bytes":prepared.room.hrir.storage_bytes(),
                 "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},

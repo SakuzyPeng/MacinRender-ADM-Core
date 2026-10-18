@@ -126,6 +126,7 @@ def early_metrics(metadata, room, root):
 
 
 def main():
+    global RATE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--probe', type=Path, required=True, help='Release room_omni')
     parser.add_argument('--room', type=Path, required=True)
@@ -133,6 +134,9 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     room = json.loads(args.room.read_text(encoding='utf-8'))
+    RATE = int(room["sample_rate"])
+    if RATE not in (48000, 96000):
+        raise ValueError("Unsupported room sample rate")
     definition = json.loads(args.positions.read_text(encoding='utf-8'))
     if definition.get('schema') != 'mradm.room-measurements' or definition.get('version') != 1:
         raise ValueError('Unsupported measurement set')

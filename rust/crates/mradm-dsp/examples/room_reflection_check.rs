@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("usage: room_reflection_check ROOM_JSON COLLECTION_JSON".into());
     }
     let profile = assets::profile(Path::new(&args[1]))?;
-    let data = assets::hrir(Path::new(&args[2]))?;
+    let data = assets::hrir_at_rate(Path::new(&args[2]), profile.sample_rate)?;
     let collection = data
         .collection
         .as_ref()

@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 196,
-      "lines": 44209
+      "lines": 44208
     },
     "islands": {
       "files": 5,
@@ -18,8 +18,8 @@
       "lines": 12042
     },
     "rust": {
-      "files": 198,
-      "lines": 63155
+      "files": 199,
+      "lines": 63629
     },
     "rust-vendor": {
       "files": 175,
@@ -27,11 +27,11 @@
     }
   },
   "modules": {
-    "include/adm": 4583,
+    "include/adm": 4582,
     "rust/crates/mradm-adm": 2676,
-    "rust/crates/mradm-dsp": 34439,
+    "rust/crates/mradm-dsp": 34888,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 14171,
+    "rust/crates/mradm-ffi": 14196,
     "rust/crates/mradm-json": 1260,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,

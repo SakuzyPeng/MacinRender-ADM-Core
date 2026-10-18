@@ -1,7 +1,7 @@
 # 房间预设
 
 房间数值组件通过 Git LFS 分发，JSON 清单、制作定义和校验文件由普通 Git 管理。
-macOS、Windows 和 Linux 使用同一份资源。个人 SOFA 由用户独立选择，运行时原生加载；
+各平台使用同一份资源，当前维护者在 macOS 和 Windows 上验证。个人 SOFA 由用户独立选择，运行时原生加载；
 这些预设不包含个人 HRIR，也不需要用户运行 Python 或转换 SOFA。
 
 ## 获取和使用
@@ -32,6 +32,11 @@ build/release/mradm render -i input.wav -o output.wav --renderer room-binaural \
 | 预设 | 房间尺寸 | 固定监听点 | 资源大小 |
 |---|---|---|---|
 | [校正参考监听室 v1](reference-7x6x3.2-corrected-v1/room.json) | 7 × 6 × 3.2 m | (3.4, 3.0, 1.2) m | 6,647,188 字节，约 6.65 MB |
+| [全带宽 96 kHz 参考监听室 v1](reference-7x6x3.2-fullband-96k-v1/room.json) | 7 × 6 × 3.2 m | (3.4, 3.0, 1.2) m | 约 13.1 MB |
+
+96 kHz 预设用于同采样率素材，支持直接选择 SkinRLC 原始集合目录。材料、EQ 和晚场均在
+96 kHz 运行，高频晚场为明确标注的合成扩展；制作规则、独立验收和命令见
+[原生 96 kHz 房间](../../docs/architecture/ROOM_NATIVE_96K.md)。以下原始清单身份说明仅指 48 kHz 校正包。
 
 资源大小包含清单、制作定义和五个数值组件，不含校验文件。各文件 SHA-256 见包内
 [`SHA256SUMS`](reference-7x6x3.2-corrected-v1/SHA256SUMS)，组件形状、类型和哈希也记录在 `room.json`。

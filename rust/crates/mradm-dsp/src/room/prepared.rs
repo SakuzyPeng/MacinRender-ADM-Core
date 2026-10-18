@@ -35,19 +35,23 @@ impl PreparedRoom {
             "short_taps":self.short_taps,"path_bucket_stride":self.path_bucket_stride,"send_taps":self.send_taps})
     }
     pub fn required_fft(profile: &RoomProfile, hrir: &HrirData) -> Result<(usize, usize, usize)> {
+        super::validate_sample_rate(profile.sample_rate)?;
+        if hrir.sample_rate != profile.sample_rate {
+            return Err(Error::InvalidArgument("房间与 HRIR 处理采样率不一致"));
+        }
         let farthest = std::array::from_fn::<_, 3, _>(|i| {
             (profile.listener[i] - profile.clearance)
                 .max(profile.dimensions[i] - profile.clearance - profile.listener[i])
         });
         let distance = crate::geometry::norm(farthest);
         let arrival =
-            (distance / profile.speed + profile.early_fade[1]) * f64::from(super::SAMPLE_RATE);
+            (distance / profile.speed + profile.early_fade[1]) * f64::from(profile.sample_rate);
         let short_taps =
             libm::ceil(arrival) as usize + hrir.output_taps + FRACTIONAL_TAPS + profile.band_taps
                 - 2
                 + profile.alignment_guard;
         let send_taps = libm::ceil(
-            (distance / profile.speed + profile.late_predelay) * f64::from(super::SAMPLE_RATE),
+            (distance / profile.speed + profile.late_predelay) * f64::from(profile.sample_rate),
         ) as usize
             + FRACTIONAL_TAPS
             + profile.alignment_guard
@@ -152,8 +156,10 @@ impl PreparedRoom {
         let short = self.short_taps.div_ceil(super::BLOCK) * super::BLOCK;
         let send = self.send_taps.div_ceil(super::BLOCK) * super::BLOCK;
         let hrir = self.hrir.data.output_taps.div_ceil(super::BLOCK) * super::BLOCK;
-        super::FILTER_FADE
-            + self.quality.reflection_history_frames()
+        super::filter_fade(self.profile.sample_rate)
+            + self
+                .quality
+                .reflection_history_frames_at(self.profile.sample_rate)
             + self.eq.history_frames()
             + short.max(send + self.late[0].history_frames() + hrir)
             + super::BLOCK
@@ -201,7 +207,7 @@ impl PreparedRoom {
         for source in sources {
             let position = source.position;
             let time = (position.distance / self.profile.speed + self.profile.late_predelay)
-                * f64::from(super::SAMPLE_RATE);
+                * f64::from(self.profile.sample_rate);
             let integer = libm::floor(time) as usize;
             let mut kernel = [0.; FRACTIONAL_TAPS];
             self.propagation_kernel(f64::from((time - integer as f64) as f32), true, &mut kernel);

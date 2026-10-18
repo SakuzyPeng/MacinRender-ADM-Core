@@ -133,8 +133,10 @@ def load_sofa(path, ear_order="auto"):
         if "Data.Delay" in file:
             delay = finite(file["Data.Delay"][...], "Data.Delay")
             unit = text(file["Data.Delay"].attrs.get("Units", "samples")).lower()
-            if unit not in ("sample", "samples"):
-                raise ValueError("Data.Delay must use samples at Data.SamplingRate")
+            if unit in ("second", "seconds", "s"):
+                delay = delay * rates[0]
+            elif unit not in ("sample", "samples"):
+                raise ValueError("Data.Delay must use samples or seconds")
             if delay.shape == (2,):
                 delay = delay[None, :]
             if delay.shape not in ((1, 2), (len(ir), 2)):
@@ -328,6 +330,7 @@ def prepare(source, output, *, ear_order="auto", faces=None, index_base=0, check
 
 
 def main():
+    global RATE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sofa", type=Path)
     parser.add_argument("--output", type=Path, required=True)
@@ -336,7 +339,9 @@ def main():
     parser.add_argument("--faces", type=Path, help="Original N x 3 mesh (.npy, JSON or text)")
     parser.add_argument("--faces-index-base", type=int, choices=(0, 1), default=0)
     parser.add_argument("--check-executable", type=Path, help="Release room_hrir_check executable")
+    parser.add_argument("--sample-rate", type=int, choices=(48000, 96000), default=48000)
     args = parser.parse_args()
+    RATE = args.sample_rate
     try:
         result = prepare(args.sofa, args.output, ear_order=args.ear_order, faces=args.faces,
                          index_base=args.faces_index_base, checker=args.check_executable)

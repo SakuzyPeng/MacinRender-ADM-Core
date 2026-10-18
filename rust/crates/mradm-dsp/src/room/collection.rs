@@ -12,6 +12,7 @@ pub struct SourceGeometry {
     pub sample_rate: u32,
     pub receivers: [Vec3; 2],
     pub order: [usize; 2],
+    pub origins: Value,
 }
 
 pub struct Layer {
@@ -103,20 +104,29 @@ pub fn relative_path(name: &str) -> Result<&str> {
     Ok(name)
 }
 
-pub fn prepare(
+pub fn prepare(bytes: &[u8], read: impl FnMut(&str, usize) -> Result<Vec<u8>>) -> Result<HrirData> {
+    prepare_at_rate(bytes, super::SAMPLE_RATE, read)
+}
+
+pub fn prepare_at_rate(
     bytes: &[u8],
+    sample_rate: u32,
     mut read: impl FnMut(&str, usize) -> Result<Vec<u8>>,
 ) -> Result<HrirData> {
+    super::validate_sample_rate(sample_rate)?;
     if bytes.len() > 1024 * 1024 {
         return Err(invalid());
     }
     let value: Value = serde_json::from_slice(bytes).map_err(|_| invalid())?;
-    if value["schema"] != "mradm.hrtf-collection"
+    let bank = value["schema"] == "mradm.sofa-bank";
+    if (value["schema"] != "mradm.hrtf-collection" && !bank)
         || value["version"] != 1
         || value["primary_variant"] != "HRIR_DFEQ100"
-        || value["sampling_rate_hz"] != 48000
+        || !matches!(value["sampling_rate_hz"].as_u64(), Some(48000 | 96000))
     {
-        return Err(Error::Unsupported("仅支持 48 kHz HRIR_DFEQ100 距离集合 v1"));
+        return Err(Error::Unsupported(
+            "仅支持 48/96 kHz HRIR_DFEQ100 距离集合或 SOFA bank v1",
+        ));
     }
     let layers = value["layers"]
         .as_array()
@@ -126,10 +136,14 @@ pub fn prepare(
         .as_array()
         .filter(|a| a.len() == layers.len())
         .ok_or_else(invalid)?;
-    let count = value["directions_per_distance"]
-        .as_u64()
-        .filter(|count| (4..=65536).contains(count))
-        .ok_or_else(invalid)? as usize;
+    let count = (if bank {
+        &layers[0]["directions"]
+    } else {
+        &value["directions_per_distance"]
+    })
+    .as_u64()
+    .filter(|count| (4..=65536).contains(count))
+    .ok_or_else(invalid)? as usize;
     let mut reference = None;
     let mut loaded: Vec<Layer> = Vec::with_capacity(layers.len());
     let mut total = 0usize;
@@ -145,8 +159,11 @@ pub fn prepare(
         {
             return Err(invalid());
         }
-        if layer["reference_layer"].as_bool().ok_or_else(invalid)?
-            && reference.replace(index).is_some()
+        if (if bank {
+            (radius - 1.5).abs() < 1e-9
+        } else {
+            layer["reference_layer"].as_bool().ok_or_else(invalid)?
+        }) && reference.replace(index).is_some()
         {
             return Err(invalid());
         }
@@ -170,7 +187,7 @@ pub fn prepare(
                 "距离 HRTF 文件长度或 SHA-256 不匹配",
             ));
         }
-        let data = super::sofa::prepare(&bytes)?;
+        let data = super::sofa::prepare_at_rate(&bytes, sample_rate)?;
         decoded_bytes = decoded_bytes
             .checked_add(
                 data.impulses.len() * 4
@@ -181,7 +198,7 @@ pub fn prepare(
             .filter(|total| *total <= MAX_BYTES)
             .ok_or(Error::Unsupported("距离 HRTF 解码资源超过 1 GiB 预算"))?;
         let geometry = data.source_geometry.as_ref().ok_or_else(invalid)?;
-        if geometry.sample_rate != 48000
+        if Some(u64::from(geometry.sample_rate)) != value["sampling_rate_hz"].as_u64()
             || (geometry.radius - radius).abs() > 1e-6 + 1e-5 * radius
             || data.directions.len() != count
         {
@@ -207,17 +224,31 @@ pub fn prepare(
                 return Err(invalid());
             }
         }
+        let quality = if bank {
+            geometry.origins.clone()
+        } else {
+            layer["provenance"].clone()
+        };
         loaded.push(Layer {
             radius,
             data: Some(data),
-            quality: layer["provenance"].clone(),
+            quality,
         });
     }
     let reference = reference.ok_or_else(invalid)?;
     let mut data = loaded[reference].data.take().ok_or_else(invalid)?;
-    data.identity = sha256(format!("mradm-distance-hrir-v1:{}", sha256(bytes)).as_bytes());
+    data.identity = if sample_rate == super::SAMPLE_RATE {
+        sha256(format!("mradm-distance-hrir-v1:{}", sha256(bytes)).as_bytes())
+    } else {
+        sha256(format!("mradm-distance-hrir-v2:{sample_rate}:{}", sha256(bytes)).as_bytes())
+    };
     data.collection = Some(Collection {
-        name: value["collection"].as_str().ok_or_else(invalid)?.to_owned(),
+        name: if bank {
+            value["collection"].as_str().unwrap_or("SOFA bank")
+        } else {
+            value["collection"].as_str().ok_or_else(invalid)?
+        }
+        .to_owned(),
         reference,
         layers: loaded,
         reviews: Value::Null,

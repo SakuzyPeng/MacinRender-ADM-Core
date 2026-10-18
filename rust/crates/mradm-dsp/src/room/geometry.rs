@@ -161,7 +161,7 @@ pub fn path(room: &RoomProfile, source: Position, image: Image) -> Path {
     Path {
         direction,
         distance,
-        samples: distance * f64::from(super::SAMPLE_RATE) / room.speed,
+        samples: distance * f64::from(room.sample_rate) / room.speed,
         gain: beam * beam * fade * room.reference_distance / distance,
     }
 }

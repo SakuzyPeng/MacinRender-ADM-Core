@@ -40,13 +40,16 @@ static ALLOCATOR: CheckedAllocator = CheckedAllocator;
 #[test]
 fn regular_room_dsp_does_not_allocate_on_any_worker() {
     for quality in [Quality::Realtime, Quality::Exact] {
-        verify_quality(quality, false);
-        verify_quality(quality, true);
+        verify_quality(quality, false, 48000);
+        verify_quality(quality, true, 48000);
+        verify_quality(quality, true, 96000);
     }
 }
-fn verify_quality(quality: Quality, collection: bool) {
+fn verify_quality(quality: Quality, collection: bool, rate: u32) {
     ALLOCATIONS.store(0, Ordering::SeqCst);
-    let base = if collection {
+    let base = if rate == 96000 {
+        common::fixture_at_rate(quality, rate)
+    } else if collection {
         common::fixture_with_collection(quality)
     } else if quality == Quality::Exact {
         common::fixture()

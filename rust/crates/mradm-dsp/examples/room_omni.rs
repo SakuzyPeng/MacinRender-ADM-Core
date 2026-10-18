@@ -19,8 +19,10 @@ fn asset(root: &Path, name: &str, size: usize) -> Result<Vec<u8>> {
     }
     Ok(value)
 }
-fn omni() -> HrirData {
+fn omni(rate: u32) -> HrirData {
     HrirData {
+        sample_rate: rate,
+        source_sample_rate: None,
         identity: "ideal-omni-unit-impulse-v1".into(),
         source_sofa_sha256: None,
         collection: None,
@@ -51,11 +53,11 @@ fn omni() -> HrirData {
         output_taps: 81,
     }
 }
-fn magnitude(impulse: &[f32], hz: f64) -> f64 {
+fn magnitude(impulse: &[f32], hz: f64, rate: u32) -> f64 {
     let mut re = 0.;
     let mut im = 0.;
     for (n, h) in impulse.iter().enumerate() {
-        let (s, c) = libm::sincos(std::f64::consts::TAU * hz * n as f64 / 48000.);
+        let (s, c) = libm::sincos(std::f64::consts::TAU * hz * n as f64 / f64::from(rate));
         re += f64::from(*h) * c;
         im -= f64::from(*h) * s;
     }
@@ -73,7 +75,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let root = file.parent().ok_or("Missing room directory")?;
     let manifest = fs::read(file)?;
     let profile = Arc::new(RoomProfile::parse(&manifest, |n, s| asset(root, n, s))?);
-    let receiver = Arc::new(omni());
+    let receiver = Arc::new(omni(profile.sample_rate));
     let (fft, _, _) = PreparedRoom::required_fft(&profile, &receiver)?;
     let bank = Arc::new(HrirBank::new(receiver, fft)?);
     let room = Arc::new(PreparedRoom::new(profile.clone(), bank)?);
@@ -155,14 +157,17 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             false,
             &mut propagation,
         );
-        let response = [1000., 2000., 4000., 8000.]
-            .map(|hz| magnitude(&material, hz) * magnitude(&propagation, hz) * path.gain);
+        let response = [1000., 2000., 4000., 8000.].map(|hz| {
+            magnitude(&material, hz, profile.sample_rate)
+                * magnitude(&propagation, hz, profile.sample_rate)
+                * path.gain
+        });
         if image.order == 0 {
             direct_magnitude = response;
             direct_analysis = serde_json::json!({"gain":path.gain as f32,"fraction":(path.samples-integer) as f32,"band_gains":gains});
-        } else if path.samples / 48000. - direct_time <= 0.015 {
+        } else if path.samples / f64::from(profile.sample_rate) - direct_time <= 0.015 {
             reflections.push(serde_json::json!({"order":image.order,"walls":image.walls,
-                "delay_after_direct_ms":(path.samples/48000.-direct_time)*1000.,
+                "delay_after_direct_ms":(path.samples/f64::from(profile.sample_rate)-direct_time)*1000.,
                 "gain":path.gain as f32,"fraction":(path.samples-integer) as f32,"band_gains":gains,
                 "level_db_1_2_4_8khz":std::array::from_fn::<_,4,_>(|i|20.*libm::log10((response[i]/direct_magnitude[i]).max(1e-30)))}));
         }
@@ -177,7 +182,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!(
         "{}",
         serde_json::json!({"schema":"mradm.room-omni-response","version":1,
-        "sample_rate":48000,"frames":frames,"channels":["direct","early","late"],
+        "sample_rate":profile.sample_rate,"frames":frames,"channels":["direct","early","late"],
         "room_id":profile.id,"room_hash":profile.identity,"manifest_sha256":sha256(&manifest),
         "position":position.point,"distance_m":position.distance,"constrained":position.constrained,
         "receiver":"ideal omni unit impulse; normalized interpolation kernel with 40-sample causal guard",

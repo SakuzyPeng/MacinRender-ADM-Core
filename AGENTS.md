@@ -43,6 +43,9 @@ Follow `.clang-format`: LLVM base style, 4-space indentation, no tabs, C++20, 12
 
 ## Testing Guidelines
 
+维护者今后的主机验证矩阵为 **macOS arm64 + Windows x64**。Linux 测试机已永久下线，
+不再安排 Linux 主机验证，也不把缺少 Linux 结果列为验收阻塞项。已有 Linux 支持和历史证据继续保留。
+
 Tests are standalone C++ executables registered with CTest from `CMakeLists.txt`; there is no separate test framework requirement. Add new tests under `tests/unit/` with names such as `module_smoke_test.cpp` or `module_fixture_test.cpp`, then register them with `add_test`. Prefer smoke tests for API/error-path coverage and fixture tests for real ADM/audio behavior.
 
 Run the narrowest relevant test set by default instead of reflexively running the full suite. For example, use `ctest --preset debug -R "(c_api|cli|binaural)" --parallel "$(sysctl -n hw.ncpu)" --output-on-failure` for focused C ABI / CLI / backend work. When a full suite is warranted by broad engine, layout, ABI, or shared-rendering changes, run it with `--parallel "$(sysctl -n hw.ncpu)" --output-on-failure` so CTest uses the available cores.

@@ -369,7 +369,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->needs("--room");
     render_cmd->add_option("--room-hrir",
                            opts.room_hrir_path,
-                           "Personal SOFA, prepared HRIR or distance collection manifest (room-binaural)");
+                           "Personal SOFA, HRIR or distance collection directory/index (room-binaural)");
     render_cmd->add_option(
         "--screen-config", opts.screen_config_path, "Reference/reproduction screen JSON (room-binaural)");
     mradm::cli::add_decimal_option(*render_cmd,

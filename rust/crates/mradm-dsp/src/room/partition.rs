@@ -371,6 +371,7 @@ struct Target {
 /// Up to 16 distinct targets per 10 ms are prepared; excess rate is an explicit
 /// resource error, never a machine-dependent quality reduction.
 pub struct Dynamic {
+    fade_frames: usize,
     core: Uniform,
     targets: Vec<Target>,
     order: [usize; MAX_TARGETS],
@@ -386,15 +387,33 @@ impl Dynamic {
         Self::with_policy(channels, taps, FftPolicy::Exact)
     }
     pub fn with_policy(channels: usize, taps: usize, policy: FftPolicy) -> Result<Self> {
-        Self::workspace(channels, taps, true, policy)
+        Self::with_rate(channels, taps, policy, super::SAMPLE_RATE)
+    }
+    pub fn with_rate(channels: usize, taps: usize, policy: FftPolicy, rate: u32) -> Result<Self> {
+        Self::workspace(channels, taps, true, policy, rate)
     }
     pub fn reader(channels: usize, taps: usize) -> Result<Self> {
         Self::reader_with_policy(channels, taps, FftPolicy::Exact)
     }
     pub fn reader_with_policy(channels: usize, taps: usize, policy: FftPolicy) -> Result<Self> {
-        Self::workspace(channels, taps, false, policy)
+        Self::reader_at_rate(channels, taps, policy, super::SAMPLE_RATE)
     }
-    fn workspace(channels: usize, taps: usize, history: bool, policy: FftPolicy) -> Result<Self> {
+    pub fn reader_at_rate(
+        channels: usize,
+        taps: usize,
+        policy: FftPolicy,
+        rate: u32,
+    ) -> Result<Self> {
+        Self::workspace(channels, taps, false, policy, rate)
+    }
+    fn workspace(
+        channels: usize,
+        taps: usize,
+        history: bool,
+        policy: FftPolicy,
+        rate: u32,
+    ) -> Result<Self> {
+        super::validate_sample_rate(rate)?;
         let filter = Filters::empty_with_policy(super::BLOCK, channels, taps, policy)?;
         let core = Uniform::workspace(&filter, history)?;
         let mut targets: Vec<Target> = (0..MAX_TARGETS)
@@ -410,6 +429,7 @@ impl Dynamic {
             super::touch_pages(&mut target.filter.spectrum);
         }
         Ok(Self {
+            fade_frames: super::filter_fade(rate),
             core,
             targets,
             order: [0; MAX_TARGETS],
@@ -431,10 +451,10 @@ impl Dynamic {
         }
     }
     fn prune(&mut self, sample: u64) {
-        if sample < super::FILTER_FADE as u64 {
+        if sample < self.fade_frames as u64 {
             return;
         }
-        let left = sample - super::FILTER_FADE as u64;
+        let left = sample - self.fade_frames as u64;
         while self.count > 1 && self.targets[self.order[1]].start <= left {
             self.order.copy_within(1..self.count, 0);
             self.count -= 1;
@@ -582,18 +602,18 @@ impl Dynamic {
                 let sample = self.block_start + i as u64;
                 let right = sample.min(end);
                 let duration = if j == 0 {
-                    (super::FILTER_FADE as u64).saturating_sub(sample - right)
+                    (self.fade_frames as u64).saturating_sub(sample - right)
                 } else {
                     right.saturating_sub(
                         sample
-                            .saturating_sub(super::FILTER_FADE as u64)
+                            .saturating_sub(self.fade_frames as u64)
                             .max(target.start),
                     )
                 };
                 if duration == 0 {
                     continue;
                 }
-                let weight = duration as f32 / super::FILTER_FADE as f32;
+                let weight = duration as f32 / self.fade_frames as f32;
                 for channel in 0..channels {
                     let at = channel * super::BLOCK + i;
                     output[at] += target.cache[at] * weight;

@@ -97,7 +97,7 @@ class RoomStream final : public IRenderStream {
   public:
     static Result<std::unique_ptr<IRenderStream>> create(std::shared_ptr<const FileData> data, const RenderPlan& plan) {
         if (plan.scene.info.num_frames != data->frames || plan.scene.info.num_channels != data->input_channels ||
-            plan.scene.info.sample_rate != 48000) {
+            plan.scene.info.sample_rate != data->room->info.sample_rate) {
             return make_error(ErrorCode::invalid_argument, "room-binaural prepared 输入格式不匹配");
         }
         auto reader = audio::RenderInputReader::open(plan.input_path);
@@ -282,7 +282,7 @@ class RoomStream final : public IRenderStream {
     [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const override { return runtime_; }
     [[nodiscard]] std::uint64_t appended_tail_frames() const override { return runtime_->tail_frames(); }
     [[nodiscard]] std::uint32_t out_channels() const override { return 2; }
-    [[nodiscard]] std::uint32_t sample_rate() const override { return 48000; }
+    [[nodiscard]] std::uint32_t sample_rate() const override { return data_->room->info.sample_rate; }
     [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
 
   private:
@@ -338,11 +338,11 @@ class RoomRenderer final : public IRenderer {
         if (!seek) {
             return tl::unexpected{seek.error()};
         }
-        auto writer = audio::WriterHandle::open(plan.output_path, 2, 48000, "binaural");
+        auto writer = audio::WriterHandle::open(plan.output_path, 2, (*stream)->sample_rate(), "binaural");
         if (!writer) {
             return tl::unexpected{writer.error()};
         }
-        auto meter = dsp::Meter::create(2, 48000, dsp::MeterMode::integrated_true_peak);
+        auto meter = dsp::Meter::create(2, (*stream)->sample_rate(), dsp::MeterMode::integrated_true_peak);
         if (!meter) {
             return tl::unexpected{meter.error()};
         }
@@ -398,17 +398,18 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
     if (!screen_valid) {
         return tl::unexpected{screen_valid.error()};
     }
-    if (plan.scene.info.sample_rate != 48000 || plan.output_layout != "binaural" || !plan.scene.hoa_tracks.empty()) {
-        return make_error(ErrorCode::unsupported, "room-binaural v1 需要 48 kHz Objects/DirectSpeakers，输出为双耳");
+    auto room = room_internal::prepare(plan.room, plan.sofa_path.value_or(std::filesystem::path{}));
+    if (!room) {
+        return tl::unexpected{room.error()};
+    }
+    if (plan.scene.info.sample_rate != (*room)->info.sample_rate || plan.output_layout != "binaural" ||
+        !plan.scene.hoa_tracks.empty()) {
+        return make_error(ErrorCode::unsupported, "room-binaural 需要同采样率双耳 Objects/DirectSpeakers");
     }
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader || plan.direct_speakers_matrix ||
         (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic &&
          plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::position)) {
         return make_error(ErrorCode::unsupported, "room-binaural 使用连续位置渲染，不支持此 spreader/扬声器路由模式");
-    }
-    auto room = room_internal::prepare(plan.room, plan.sofa_path.value_or(std::filesystem::path{}));
-    if (!room) {
-        return tl::unexpected{room.error()};
     }
     auto data = std::make_shared<FileData>();
     data->room = *room;
@@ -553,9 +554,9 @@ CapabilityReport room_capabilities() {
     result.supports_render_window = true;
     result.hrtf_sources = {"user-sofa", "prepared-hrir", "hrtf-collection"};
     result.supported_layouts = {{"binaural", "Room binaural", 2, true, 0, true, true}};
-    result.modes = {{"hybrid-shoebox-v1", "Finite hybrid room", {"binaural"}, {48000}, true}};
-    result.qualities = {{"exact", "精确", {"binaural"}, {48000}, true},
-                        {"realtime", "实时", {"binaural"}, {48000}, true}};
+    result.modes = {{"hybrid-shoebox-v1", "Finite hybrid room", {"binaural"}, {48000, 96000}, true}};
+    result.qualities = {{"exact", "精确", {"binaural"}, {48000, 96000}, true},
+                        {"realtime", "实时", {"binaural"}, {48000, 96000}, true}};
     return result;
 }
 std::unique_ptr<IRenderer> create_room_renderer() {

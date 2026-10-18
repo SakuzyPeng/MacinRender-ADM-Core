@@ -37,7 +37,7 @@ v1 动态切换保留相同的晚场世界方向基与算法保护延迟；生�
 
 ## 直接使用个人 SOFA
 
-`room-binaural` 会在创建会话时原生读取 SOFA、准备 48 kHz FIR、处理 `Data.Delay` 并构建
+`room-binaural` 会在创建会话时原生读取 SOFA、按房间处理采样率准备 48/96 kHz FIR、处理 `Data.Delay` 并构建
 插值网格。用户不需要运行 Python，也不需要生成 `hrir.json`。准备过程在播放前执行，
 活动数据完全保存在内存中；同一 SOFA 的活动会话共享准备数据，结束后可回收，不建立磁盘缓存。
 
@@ -58,10 +58,26 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
 保留幅度和完整响应，支持不同采样率及以样本或秒声明的 `Data.Delay`；保护延迟单独报告。
 不完整几何、无法识别的左右耳、异常数据或不支持的 HDF5 编码会报错，不静默回退到默认 HRIR。
 
+### 原生 96 kHz
+
+96 kHz 素材选择 `reference-7x6x3.2-fullband-96k-v1`；房间包与素材采样率须一致。
+`--room-hrir` / `room-check --hrir` 也可直接传集合目录，读取其 `distance_index.json`。
+SkinRLC 的 `mradm.sofa-bank` v1 原始索引直接受支持，默认参考层为 1.5 m；96 kHz 下不经过
+48 kHz 中间处理。既有 48 kHz 兼容索引继续可用。公共接口、时序与验证见
+[原生 96 kHz 房间](../../docs/architecture/ROOM_NATIVE_96K.md)。
+
+```sh
+python3 scripts/room/generate-96k.py \
+  --template-package resources/rooms/reference-7x6x3.2-corrected-v1/room.json \
+  --output /path/to/new-fullband-96k-room
+```
+
+生成目录必须不存在；完整 FIR、生成参数和高频合成依据均记录在新包中。源包不修改。
+
 ### 多距离 HRTF：房间直达声与早期反射
 
 `--room-hrir`、`room-check --hrir` 和 `adm_room_config_t.hrir_manifest` 也接受
-`mradm.hrtf-collection` v1 的 `distance_index.json`。当前支持 48 kHz、双耳
+`mradm.hrtf-collection` v1 的 `distance_index.json`。当前支持 48/96 kHz、双耳
 `HRIR_DFEQ100`，各层必须具有相同的方向顺序、监听耳序和一个明确的参考层。
 加载时验证相对路径、文件长度、SHA-256、实际 SOFA 半径和层间几何；任何一层失败都会拒绝准备。
 
@@ -120,7 +136,7 @@ build/release/mr_adm_room_reflection_check /path/new-comparison/room.json /path/
 `prepare-hrir.py` 独立读取 SimpleFreeFieldHRIR / 适用的 GeneralFIR，无需个人研究脚本。
 使用现有的 NumPy、SciPy、h5py 环境；只支持双耳、固定监听点、单半径且包围监听点的方向网格。
 多半径、变化的监听者、重复方向、网格孔洞、非有限值及超过 v1 完整 FIR 预算的输入会明确拒绝。
-不进行逐耳/逐方向归一化，也不按能量截短响应。非 48 kHz 数据离线重采样，FIR 系数按采样间隔
+不进行逐耳/逐方向归一化，也不按能量截短响应。数据按 `--sample-rate 48000|96000` 离线准备，默认 48 kHz；采样率不同时重采样，FIR 系数按采样间隔
 补偿以保留传递增益；`Data.Delay` 的整数、分数及负值都保留。
 
 ```sh

@@ -1092,6 +1092,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
         set_tests_properties(mr_adm_room_tests PROPERTIES TIMEOUT 120)
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(_room_96k_capi mr_adm_c_api)
+            if(TARGET mradm_capi_bundle)
+                set(_room_96k_capi mradm_capi_bundle)
+            endif()
+            get_target_property(_room_96k_library_type ${_room_96k_capi} TYPE)
+            if(_room_96k_library_type STREQUAL "SHARED_LIBRARY")
+                add_test(NAME mr_adm_room_96k_tests COMMAND "${Python3_EXECUTABLE}" -B
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_96k_test.py"
+                    "$<TARGET_FILE:mradm_exe>" "$<TARGET_FILE:${_room_96k_capi}>")
+                set_tests_properties(mr_adm_room_96k_tests PROPERTIES TIMEOUT 120)
+            endif()
+        endif()
         set(MR_ADM_ROOM_PREP_PYTHON "${Python3_EXECUTABLE}" CACHE FILEPATH
             "Existing Python environment with numpy, scipy and h5py for room preparation tests")
         execute_process(COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -c "import numpy, scipy, h5py"

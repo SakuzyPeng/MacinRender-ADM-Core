@@ -51,9 +51,24 @@ impl Emitter {
                 room.short_taps.max(room.send_taps),
                 room.quality.fft(),
             )?,
-            direct: Dynamic::reader_with_policy(2, room.short_taps, room.quality.fft())?,
-            early: Dynamic::reader_with_policy(2, room.short_taps, room.quality.fft())?,
-            send: Dynamic::reader_with_policy(1, room.send_taps, room.quality.fft())?,
+            direct: Dynamic::reader_at_rate(
+                2,
+                room.short_taps,
+                room.quality.fft(),
+                room.profile.sample_rate,
+            )?,
+            early: Dynamic::reader_at_rate(
+                2,
+                room.short_taps,
+                room.quality.fft(),
+                room.profile.sample_rate,
+            )?,
+            send: Dynamic::reader_at_rate(
+                1,
+                room.send_taps,
+                room.quality.fft(),
+                room.profile.sample_rate,
+            )?,
             send_impulse: vec![0.; room.send_taps],
             direct_input: [0.; BLOCK],
             wet_input: [0.; BLOCK],
@@ -567,10 +582,11 @@ impl WorldTail {
             .map(|index| {
                 Ok(Decoder {
                     convolution: if kind != TailKind::Field {
-                        Some(Dynamic::with_policy(
+                        Some(Dynamic::with_rate(
                             2,
                             room.hrir.data.output_taps,
                             room.quality.fft(),
+                            room.profile.sample_rate,
                         )?)
                     } else {
                         None
