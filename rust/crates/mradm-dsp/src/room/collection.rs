@@ -108,6 +108,63 @@ pub fn prepare(bytes: &[u8], read: impl FnMut(&str, usize) -> Result<Vec<u8>>) -
     prepare_at_rate(bytes, super::SAMPLE_RATE, read)
 }
 
+fn read_authenticated(
+    layer: &Value,
+    total: &mut usize,
+    read: &mut impl FnMut(&str, usize) -> Result<Vec<u8>>,
+) -> Result<(Vec<u8>, String)> {
+    let file = &layer["files"]["HRIR_DFEQ100"];
+    let name = relative_path(file["path"].as_str().ok_or_else(invalid)?)?;
+    if layer["primary"].as_str() != Some(name) {
+        return Err(invalid());
+    }
+    let size = file["bytes"]
+        .as_u64()
+        .and_then(|s| usize::try_from(s).ok())
+        .filter(|s| *s > 0 && *s <= 256 * 1024 * 1024)
+        .ok_or_else(invalid)?;
+    *total = total
+        .checked_add(size)
+        .filter(|s| *s <= MAX_BYTES)
+        .ok_or_else(invalid)?;
+    let bytes = read(name, size)?;
+    if bytes.len() != size {
+        return Err(Error::InvalidArgument(
+            "距离 HRTF 文件长度或 SHA-256 不匹配",
+        ));
+    }
+    let hash = sha256(&bytes);
+    if file["sha256"].as_str() != Some(hash.as_str()) {
+        return Err(Error::InvalidArgument(
+            "距离 HRTF 文件长度或 SHA-256 不匹配",
+        ));
+    }
+    Ok((bytes, hash))
+}
+
+/// Reauthenticate the payloads of an already prepared, content-addressed index.
+/// This does not replace schema/geometry validation in `prepare_at_rate`.
+/// Each payload is released before reading the next; cache hits never retain
+/// a second raw SOFA bank or trust file timestamps in place of hashes.
+pub fn authenticate_files(
+    bytes: &[u8],
+    mut read: impl FnMut(&str, usize) -> Result<Vec<u8>>,
+) -> Result<()> {
+    if bytes.len() > 1024 * 1024 {
+        return Err(invalid());
+    }
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    let layers = value["layers"]
+        .as_array()
+        .filter(|v| (2..=64).contains(&v.len()))
+        .ok_or_else(invalid)?;
+    let mut total = 0;
+    for layer in layers {
+        let _ = read_authenticated(layer, &mut total, &mut read)?;
+    }
+    Ok(())
+}
+
 pub fn prepare_at_rate(
     bytes: &[u8],
     sample_rate: u32,
@@ -167,27 +224,8 @@ pub fn prepare_at_rate(
         {
             return Err(invalid());
         }
-        let file = &layer["files"]["HRIR_DFEQ100"];
-        let name = relative_path(file["path"].as_str().ok_or_else(invalid)?)?;
-        if layer["primary"].as_str() != Some(name) {
-            return Err(invalid());
-        }
-        let size = file["bytes"]
-            .as_u64()
-            .and_then(|s| usize::try_from(s).ok())
-            .filter(|s| *s > 0 && *s <= 256 * 1024 * 1024)
-            .ok_or_else(invalid)?;
-        total = total
-            .checked_add(size)
-            .filter(|s| *s <= MAX_BYTES)
-            .ok_or_else(invalid)?;
-        let bytes = read(name, size)?;
-        if bytes.len() != size || file["sha256"].as_str() != Some(sha256(&bytes).as_str()) {
-            return Err(Error::InvalidArgument(
-                "距离 HRTF 文件长度或 SHA-256 不匹配",
-            ));
-        }
-        let data = super::sofa::prepare_at_rate(&bytes, sample_rate)?;
+        let (bytes, hash) = read_authenticated(layer, &mut total, &mut read)?;
+        let data = super::sofa::prepare_authenticated(&bytes, sample_rate, hash)?;
         decoded_bytes = decoded_bytes
             .checked_add(
                 data.impulses.len() * 4

@@ -46,6 +46,13 @@ Follow `.clang-format`: LLVM base style, 4-space indentation, no tabs, C++20, 12
 维护者今后的主机验证矩阵为 **macOS arm64 + Windows x64**。Linux 测试机已永久下线，
 不再安排 Linux 主机验证，也不把缺少 Linux 结果列为验收阻塞项。已有 Linux 支持和历史证据继续保留。
 
+性能优化优先在 **Windows x64** 验证：先完成必要的原生正确性检查，再做无插桩 Release 短测。
+Windows 短测未达到该候选的验收门槛，就停止该候选，不继续 macOS 性能矩阵或长测；修改形成新候选后，
+仍从 Windows 短测开始。ROOM 零超时验收的短测固定 8 workers、96 kHz、512 帧、32 源，
+位置运动和距离运动各 1024 次调用；任一超时即不进入六轮长测。短测通过只是进入后续验收的条件，
+不等于长测通过。隔离链路的收益不能代替完整会话结果；加载优化按加载收益和正确性独立判断，
+不能用来抵消运行时失败。Windows 通过后仍须完成适用的 macOS 验证。
+
 Tests are standalone C++ executables registered with CTest from `CMakeLists.txt`; there is no separate test framework requirement. Add new tests under `tests/unit/` with names such as `module_smoke_test.cpp` or `module_fixture_test.cpp`, then register them with `add_test`. Prefer smoke tests for API/error-path coverage and fixture tests for real ADM/audio behavior.
 
 Run the narrowest relevant test set by default instead of reflexively running the full suite. For example, use `ctest --preset debug -R "(c_api|cli|binaural)" --parallel "$(sysctl -n hw.ncpu)" --output-on-failure` for focused C ABI / CLI / backend work. When a full suite is warranted by broad engine, layout, ABI, or shared-rendering changes, run it with `--parallel "$(sysctl -n hw.ncpu)" --output-on-failure` so CTest uses the available cores.

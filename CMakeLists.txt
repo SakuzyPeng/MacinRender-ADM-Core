@@ -1092,6 +1092,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
         set_tests_properties(mr_adm_room_tests PROPERTIES TIMEOUT 120)
+        add_test(NAME mr_adm_room_realtime_tools_tests COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_realtime_tools_test.py")
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             set(_room_96k_capi mr_adm_c_api)
             if(TARGET mradm_capi_bundle)

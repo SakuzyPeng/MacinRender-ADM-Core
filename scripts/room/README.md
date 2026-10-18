@@ -5,7 +5,7 @@
 
 房间运行时不需要 Python。个人 SOFA 由原生代码自动准备；房间预设制作脚本使用 NumPy、SciPy，冻结参考包转换另外
 需要 h5py、pyroomacoustics 及已有的连续 HRIR 代码。生成环境版本写入清单，跨平台验证
-必须分发同一份资源字节，而不是在三个平台分别随机生成资源。
+必须分发同一份资源字节，而不是在各平台分别随机生成资源。
 
 - `pack-reference.py` 将已有冻结组件转为 `room.json` / `hrir.json`；不生成全方向 BRIR 库。
 - `generate-room.py` 用 `room-template.json` 生成同类新房间。模板包提供频带 FIR、传播核、
@@ -16,8 +16,15 @@
 - `validate-reference.py` 调用 **Release** `room_impulse`，在验证端显式恢复参考测量的距离
   校准，检查 22.2 的 22 个全频参考位和 6 个补点；临时响应用完即删。
 - `compare-replays.py` 比较 Release `room_replay` 的准备系数、HRIR / 分支、PCM 及帧数。
-  输入为 `macos-arm64=.../manifest.json windows-x64=.../manifest.json linux-x64=.../manifest.json`，
+  当前主机输入为 `macos-arm64=.../manifest.json windows-x64=.../manifest.json`，历史 Linux 记录保留。
   使用 `--output report.json` 保存报告。`--allow-partial` 可记录已完成的平台，但报告不会把缺少平台当作通过。
+- `compare-realtime.py REFERENCE/manifest.json CANDIDATE/manifest.json --output report.json`
+  对同机新旧 realtime 计算完整 HRIR／分支／PCM（含尾声）的舍入误差；认证载荷 SHA-256，
+  拒绝帧数、延迟、尾长或输入配置变化、非有限数和静音泄漏。门槛为相对 L2 `2e-5`、
+  最大误差／参考峰值 `2e-4`，不允许对齐搜索、增益拟合或裁剪；不能用于放宽 exact。
+- `benchmark-prepare.py --library RELEASE_CAPI --room ROOM --hrir COLLECTION --output report.json`
+  通过公开 C ABI 分别测无活动句柄的冷准备与保留活动句柄的缓存命中。保留 OS 文件缓存，
+  每轮销毁所有句柄；命中仍读取并认证全部层。该计时不代替运行时验收。
 
 新增预设示例：
 
@@ -168,7 +175,7 @@ CMake 可用 `MR_ADM_ROOM_PREP_PYTHON` 指定已有环境，避免另外创建�
 输出包括均值、p95/p99、截止时间超限次数、HRIR 准备字节数。macOS 的 RSS 为进程累计峰值，Linux 为周期采样；
 若需要分别归属每个场景的 RSS，应将各场景放到独立进程。计时排除资源准备，正式性能证据不启用内层 profiling。
 
-## Linux 性能复测
+## 阶段剖析与历史 Linux 复测工具
 
 复用现有 Cargo / CMake 构建缓存，使用 Release `room_bench`。可选的 `room-profile` Cargo
 feature 启用固定大小的跨线程阶段计数器；普通构建不读计时器、不更新计数器。阶段耗时是
@@ -179,8 +186,9 @@ feature 启用固定大小的跨线程阶段计数器；普通构建不读计时
 定位偶发慢调用时，使用 `room-trace` feature 构建 Release `room_bench` 并追加 `--trace`。
 它包含 `room-profile`，但关闭 HRIR / 响应 / 滤波器等内层算术计时，保留声源任务组、单个
 声源任务、晚场和线程交接阶段。计数按工作线程分开存放，以减少计数器自身的跨核争用。
-Linux 64 位和 macOS 同时记录执行线程 CPU 时间；其它平台的原生 CPU 时钟当前不可用，
-以 `thread_cpu_available=false` 明确标注。原生时钟封装只在诊断示例中，DSP crate 仍禁止 unsafe。
+Linux 64 位、macOS 和 Windows 同时记录执行线程 CPU 时间；Windows 使用 `GetThreadTimes`
+的用户态＋内核态计数，单位为 100 ns，但实际更新粒度可能较粗，不能据短阶段的零值认定没有计算。
+其它平台以 `thread_cpu_available=false` 标注。原生时钟只在诊断示例中，DSP crate 仍禁止 unsafe。
 
 沿用已有的 `--target-dir`、`--target` 和 Rust 构建参数，只增加 `--features room-trace`，然后运行：
 
@@ -320,3 +328,37 @@ build/release/mr_adm_room_file_device_probe programme.wav \
 该探针固定为实时档，直接以 100 Hz 调用头姿 API，每 5 秒请求换房，并播放至文件及房间
 尾声排空。它报告实际帧数、欠载、控制请求、峰值电平、RSS 和诊断，不计算传感器延迟。
 文件监控的 `ended` 表示生产端 EOS；验收还需等待输出环形缓冲排空并核对完整帧数。
+
+## Windows 96 kHz 零超时门槛
+
+性能候选先在 Windows 完成必要的原生正确性检查，再做完整会话短测。
+使用独立、无 `room-profile`／`room-trace` 的 Release `room_bench`，完成全部构建后运行：
+
+```powershell
+python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
+  --baseline-binary BASELINE.exe --room ROOM96.json --hrir COLLECTION `
+  --output NEW_SHORT_EVIDENCE_DIR --calls 1024 --frames 512 --sources 32 `
+  --workers 8 --quality realtime --scenarios ramps distance-ramps --repetitions 1
+```
+
+核对候选的两份结果均为原生 96 kHz、完整 1024 次调用，且 `deadline_misses=0`。
+常规短测模式只记录结果，其退出码不代表零超时通过。任一短测失败即停止该候选，
+不继续 macOS 性能矩阵或长测；修改形成新候选后仍从 Windows 短测开始。
+隔离链路的测试不能替代完整会话短测。只有通过上述门槛，才可运行正式长测：
+
+```powershell
+python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
+  --baseline-binary BASELINE.exe --baseline-calls 1024 `
+  --room ROOM96.json --hrir COLLECTION --output NEW_EVIDENCE_DIR `
+  --acceptance --idle-note "Maintainer confirmed idle; no concurrent build or benchmark"
+```
+
+候选固定 8 workers、32 源、512 帧、96 kHz、realtime；位置和距离运动各 3 轮，每轮
+22,500 次计时调用（另有 32 次预热），总计 135,000 次。任何一次超过 `512 / 96000` 秒即失败。
+短基线按轮交替执行并单独记录，不与长轮合并计算 p99。省略 `--baseline-calls` 可令基线同样长测。
+脚本记录每轮后台 CPU 与供电状态；连续三个一秒观察窗均不超过 5% 才通过其空闲筛查。
+此筛查只是显式记录的测试条件，不能证明不存在调度干扰。失败报告仍完整保存，退出码为 1。
+
+常规矩阵可用 `--sources 1 16 32 --scenarios static pose switch ramps distance-ramps`
+和 `--repetitions 3`；均值、p99、最大值、超时和峰值工作集按独立进程保存。
+原始个人 SOFA、集合及主机路径留在私有证据目录，不提交到仓库。

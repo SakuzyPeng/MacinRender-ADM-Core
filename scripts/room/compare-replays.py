@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare room-only Release checkpoints produced from identical resources/events.
 
-Inputs are LABEL=manifest.json, with labels macos-arm64/windows-x64/linux-x64.
+Inputs are LABEL=manifest.json, with labels macos-arm64/windows-x64.
 An incomplete platform set never produces a complete_pass result.
 """
 import argparse
@@ -42,7 +42,7 @@ def main():
         inputs[label] = value
     reference = next(iter(inputs.values()))
     comparison = {label: differences(reference, value) for label, value in inputs.items()}
-    missing = sorted({"macos-arm64", "windows-x64", "linux-x64"} - set(inputs))
+    missing = sorted({"macos-arm64", "windows-x64"} - set(inputs))
     identical = all(not value for value in comparison.values())
     report = dict(schema="mradm.room-comparison", version=1, platforms=list(inputs), missing_platforms=missing,
                   identical_for_compared=identical, complete_pass=identical and not missing,

@@ -1,0 +1,336 @@
+{
+  "schema": "mradm.room-preparation-adoption",
+  "version": 1,
+  "date": "2026-10-18",
+  "base_commit": "718a80495b812dcd442b8f5109dfd595afb1d1d5",
+  "runtime_policy": "room-realtime-v2",
+  "accepted_scope": [
+    "bounded HRIR delay preparation",
+    "single authentication per cold layer",
+    "authenticated weak collection cache",
+    "metadata-aware prepared cache",
+    "profiling and numerical/benchmark tools"
+  ],
+  "runtime_v3_adopted": false,
+  "research_in_commit": false,
+  "resources": {
+    "collection_index_sha256": "65772997e2715444bf5fff74c11bab15e2808afddaa1e1a0a57af48394a24dc0",
+    "room_sha256": {
+      "48000": "40495a7c441c77d4b430e7b97278a42ee53786707ecb585a91fafe6ce596bdec",
+      "96000": "8daa0e3a76d4dfe524d38e53f11db6551c0e490995c1d9a65eb83a5cbbde1da7"
+    }
+  },
+  "windows": {
+    "tests": [
+      {
+        "name": "loading-dsp-unit",
+        "returncode": 0,
+        "passed_test_counts": [
+          20
+        ]
+      },
+      {
+        "name": "loading-cache",
+        "returncode": 0,
+        "passed_test_counts": [
+          5
+        ]
+      },
+      {
+        "name": "room-integration",
+        "returncode": 0,
+        "passed_test_counts": [
+          22,
+          4,
+          1,
+          9,
+          3
+        ]
+      },
+      {
+        "name": "room-profile",
+        "returncode": 0,
+        "passed_test_counts": [
+          1
+        ]
+      },
+      {
+        "name": "tool-gates",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "release-probes",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "release-preparation-probe",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "canonical-build",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "canonical-room-tests",
+        "returncode": 0,
+        "passed_test_counts": []
+      }
+    ],
+    "loading_short_screen_passed": true,
+    "preparation": [
+      {
+        "sample_rate": 48000,
+        "hrir_hash": "2f4891bf9446cff24c050190f341decf71cdf3ca7505667e9bee4831d3cd86a2",
+        "results": [
+          {
+            "variant": "baseline",
+            "processing_policy": "room-realtime-v2",
+            "binary_sha256": "9e16e3597a16c2521c30443e31382da73188d126e6f0bf041cbca252b19e90d4",
+            "results": [
+              {
+                "active_hit_seconds": 14.6429797,
+                "cold_seconds": 14.3073544,
+                "repetition": 1
+              }
+            ]
+          },
+          {
+            "variant": "candidate",
+            "processing_policy": "room-realtime-v2",
+            "binary_sha256": "1a5409cab665b5a7941a16b675a75f66f709ba26e055e937ddb86c34d63cd4b3",
+            "results": [
+              {
+                "active_hit_seconds": 0.4090415,
+                "cold_seconds": 10.3266605,
+                "repetition": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sample_rate": 96000,
+        "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+        "results": [
+          {
+            "variant": "baseline",
+            "processing_policy": "room-realtime-v2",
+            "binary_sha256": "9e16e3597a16c2521c30443e31382da73188d126e6f0bf041cbca252b19e90d4",
+            "results": [
+              {
+                "active_hit_seconds": 17.8447289,
+                "cold_seconds": 18.4774976,
+                "repetition": 1
+              }
+            ]
+          },
+          {
+            "variant": "candidate",
+            "processing_policy": "room-realtime-v2",
+            "binary_sha256": "1a5409cab665b5a7941a16b675a75f66f709ba26e055e937ddb86c34d63cd4b3",
+            "results": [
+              {
+                "active_hit_seconds": 0.3836294,
+                "cold_seconds": 9.9322229,
+                "repetition": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "timing_scope": "One baseline/candidate pair per rate, Release private C boundary. No live handle before cold; baseline/candidate hits pin the first handle. OS file cache retained. All task builds completed before timing. Not a formal idle-host or runtime-deadline certification.",
+    "replay": [
+      {
+        "sample_rate": 48000,
+        "quality": "exact",
+        "manifest_identical": true,
+        "verified_payloads": 17,
+        "frames": 163846,
+        "latency_frames": 256,
+        "tail_frames": 67800,
+        "binary_sha256": "481d7f3dc642b4f1c774946bef0f0af9333e8331deef7b0ec2fe865f051501c6"
+      },
+      {
+        "sample_rate": 48000,
+        "quality": "realtime",
+        "manifest_identical": true,
+        "verified_payloads": 17,
+        "frames": 163846,
+        "latency_frames": 256,
+        "tail_frames": 67800,
+        "binary_sha256": "481d7f3dc642b4f1c774946bef0f0af9333e8331deef7b0ec2fe865f051501c6"
+      },
+      {
+        "sample_rate": 96000,
+        "quality": "exact",
+        "manifest_identical": true,
+        "verified_payloads": 17,
+        "frames": 231581,
+        "latency_frames": 256,
+        "tail_frames": 135502,
+        "binary_sha256": "481d7f3dc642b4f1c774946bef0f0af9333e8331deef7b0ec2fe865f051501c6"
+      },
+      {
+        "sample_rate": 96000,
+        "quality": "realtime",
+        "manifest_identical": true,
+        "verified_payloads": 17,
+        "frames": 231581,
+        "latency_frames": 256,
+        "tail_frames": 135502,
+        "binary_sha256": "481d7f3dc642b4f1c774946bef0f0af9333e8331deef7b0ec2fe865f051501c6"
+      }
+    ],
+    "restoration": {
+      "restored_files": 646,
+      "removed_task_files": 546,
+      "verified_overlay_entries": 1192,
+      "head_restored": true,
+      "git_status_restored": true,
+      "conflicts": [],
+      "private_assets_removed": true
+    }
+  },
+  "macos": {
+    "status": "passed",
+    "tests": [
+      {
+        "name": "mac-loading-dsp",
+        "returncode": 0,
+        "passed_test_counts": [
+          20
+        ]
+      },
+      {
+        "name": "mac-loading-cache",
+        "returncode": 0,
+        "passed_test_counts": [
+          5
+        ]
+      },
+      {
+        "name": "mac-room-integration",
+        "returncode": 0,
+        "passed_test_counts": [
+          22,
+          4,
+          1,
+          9,
+          3
+        ]
+      },
+      {
+        "name": "mac-profile",
+        "returncode": 0,
+        "passed_test_counts": [
+          1
+        ]
+      },
+      {
+        "name": "mac-clippy",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "mac-tool-gates",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "mac-release-replay",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "mac-release-build",
+        "returncode": 0,
+        "passed_test_counts": []
+      },
+      {
+        "name": "mac-capi-tests",
+        "returncode": 0,
+        "passed_test_counts": []
+      }
+    ],
+    "replay": [
+      {
+        "sample_rate": 48000,
+        "quality": "exact",
+        "manifest_identical": true,
+        "payloads_identical": 17,
+        "frames": 163846,
+        "latency_frames": 256,
+        "tail_frames": 67800
+      },
+      {
+        "sample_rate": 48000,
+        "quality": "realtime",
+        "manifest_identical": true,
+        "payloads_identical": 17,
+        "frames": 163846,
+        "latency_frames": 256,
+        "tail_frames": 67800
+      },
+      {
+        "sample_rate": 96000,
+        "quality": "exact",
+        "manifest_identical": true,
+        "payloads_identical": 17,
+        "frames": 231581,
+        "latency_frames": 256,
+        "tail_frames": 135502
+      },
+      {
+        "sample_rate": 96000,
+        "quality": "realtime",
+        "manifest_identical": true,
+        "payloads_identical": 17,
+        "frames": 231581,
+        "latency_frames": 256,
+        "tail_frames": 135502
+      }
+    ],
+    "scope": "macOS arm64 verification after Windows loading screen passed; preserved research features disabled, no new performance matrix."
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "df7f9163f1ae08adc64da0dfd1057e25220ed1c9cfdac9a8258e8729483e6f2f",
+    "rust/crates/mradm-dsp/examples/room_bench/trace.rs": "8700721b9880755dc9f60fda5ba27c7da6e460fc46a0d0f9cd843e17aea72b53",
+    "rust/crates/mradm-dsp/examples/room_replay.rs": "86624c97c162a293afc6e16804e14a52d87c436489abbd6b0868dc4e8d4c7cd1",
+    "rust/crates/mradm-dsp/src/room/collection.rs": "327e844c06b499b604b254dda247c53678f6a86eb99c10f1017b9f86b0e997f7",
+    "rust/crates/mradm-dsp/src/room/prepared.rs": "b270bda2a532eccc9fbb5d02a382bd88dcf7eabe28e4a2c86573334b187fc879",
+    "rust/crates/mradm-dsp/src/room/profile.rs": "d080945c45c7860c7b8d7417e3cccfc11e4c8f0e85d42faa79ea1f09f42beecd",
+    "rust/crates/mradm-dsp/src/room/sofa.rs": "24ab3390304b9c351ae114964c54c0864d972cd28be3859e81742490b10490df",
+    "rust/crates/mradm-ffi/examples/room_prepare_bench.rs": "f13dfb4fcddaf793315245f707fcce2f1bd7bfc9b80f2d07484945fad1e7f5a5",
+    "rust/crates/mradm-ffi/src/room.rs": "83481896f251705fc4d6aa77e98c389b5396a3a74f04eb69f6cc512b9818d786",
+    "scripts/room/benchmark-prepare.py": "354544379cadb8e1dfdabdd71549978ac6c89310f5d14bb35d7ae234cc661849",
+    "scripts/room/benchmark-windows.py": "be2742e5ee32ffe13dbae6a0d13ccb7786bbbf1a96f0b893ab8705ffd9dd22c0",
+    "scripts/room/compare-realtime.py": "047132db4a9407b6174b5495c0aace8a3dbcd7ab2d8214abfa43c72831be60d9",
+    "scripts/room/compare-replays.py": "a5f2f511c4bd953a1269239c648ca2fb0377479253c4cb23c33ebe785b78c9f7",
+    "tests/unit/room_realtime_tools_test.py": "3aecb99f53b8d70da19044a22f7f6823ee8c5943246217497941afe8115501e4"
+  },
+  "original_tracked_research_preserved": true,
+  "future_runtime_screen": {
+    "first_host": "windows-x64",
+    "workers": 8,
+    "sample_rate": 96000,
+    "call_frames": 512,
+    "sources": 32,
+    "scenarios": [
+      "ramps",
+      "distance-ramps"
+    ],
+    "calls_per_scenario": 1024,
+    "maximum_deadline_misses": 0,
+    "on_failure": "Stop candidate; do not run macOS performance matrix or long-run acceptance."
+  },
+  "format": {
+    "staged_rust_files_checked": 8,
+    "passed": true
+  },
+  "status": "Adopt loading and validation tools only. Both hosts pass targeted checks and 48/96 kHz exact/realtime bitwise replay. Windows loading screen passes; runtime zero-deadline target remains unresolved."
+}

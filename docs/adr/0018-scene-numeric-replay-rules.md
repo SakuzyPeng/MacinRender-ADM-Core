@@ -31,6 +31,12 @@ C++ 还在做策略改写、VBAP 系数组装、Triple Balance 床系数和输�
 
 ### 2. 基本算术
 
+2026-10-18 的房间 realtime 优化契约：仅房间 realtime 内核的候选实现允许 FMA、
+固定归约重排及原生 SIMD／FFT；仍保持原精度层次与事件时序。此例外仅作用于房间
+realtime 内核，不扩展到 exact、其它后端或应用侧 DSP。数值门槛见
+[ADR 0020](0020-room-quality-tiers.md#数值与验收契约)。当前生产策略仍为 `room-realtime-v2`；
+本轮 v3 算术候选未通过 Windows 性能门槛，未采用。下述非融合基线继续适用于其余路径。
+
 - `scene-separate-v1` 扩展到整条 Scene 链路：从策略改写到应用侧输出，乘法和加法分别舍入，不使用融合乘加。
 - Rust 实现不调用 `mul_add`，诊断用的历史对照除外。
 - C++ 中尚未迁走的运算不再新增 `a*b+c` 形式的表达式。

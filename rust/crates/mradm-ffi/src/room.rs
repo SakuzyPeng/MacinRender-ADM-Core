@@ -287,26 +287,76 @@ fn load_hrir(file: &Path, rate: u32) -> Result<Arc<HrirData>> {
         manifest["schema"].as_str(),
         Some("mradm.hrtf-collection" | "mradm.sofa-bank")
     ) {
-        let mut data = collection::prepare_at_rate(&bytes, rate, |n, s| array(root, n, s))?;
-        let review = root.join(if manifest["schema"] == "mradm.sofa-bank" {
+        let bank = manifest["schema"] == "mradm.sofa-bank";
+        let review = root.join(if bank {
             "quality_report.json"
         } else {
             collection::REVIEW_PATH
         });
-        if manifest["schema"] == "mradm.sofa-bank" {
-            data.collection.as_mut().unwrap().name = root
-                .file_name()
-                .map_or_else(|| "SOFA bank".into(), |n| n.to_string_lossy().into_owned());
-        }
-        if review
+        let review = if review
             .try_exists()
             .map_err(|_| Error::Io("无法检查 HRTF 来源报告"))?
         {
-            collection::attach_reviews(&mut data, &bounded_read(&review, None, 1024 * 1024)?)?;
+            Some(bounded_read(&review, None, 1024 * 1024)?)
+        } else {
+            None
+        };
+        let name = bank.then(|| {
+            root.file_name()
+                .map_or_else(|| "SOFA bank".into(), |n| n.to_string_lossy().into_owned())
+        });
+        type Key = (String, u32, Option<String>, Option<String>);
+        type Cache = std::collections::BTreeMap<Key, std::sync::Weak<HrirData>>;
+        static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
+        let key = (
+            sha256(&bytes),
+            rate,
+            name.clone(),
+            review.as_deref().map(sha256),
+        );
+        let cache = CACHE.get_or_init(Default::default);
+        let existing = {
+            let mut entries = cache
+                .lock()
+                .map_err(|_| Error::RenderFailed("Collection preparation cache failed"))?;
+            entries.retain(|_, value| value.strong_count() != 0);
+            entries.get(&key).and_then(std::sync::Weak::upgrade)
+        };
+        if let Some(data) = existing {
+            // File bytes, not timestamps or an index-only key, authenticate a
+            // hit. The original successful preparation validated its geometry.
+            collection::authenticate_files(&bytes, |n, s| array(root, n, s))?;
+            return Ok(data);
         }
-        return Ok(Arc::new(data));
+        let mut data = collection::prepare_at_rate(&bytes, rate, |n, s| array(root, n, s))?;
+        if let Some(name) = name {
+            data.collection.as_mut().unwrap().name = name;
+        }
+        if let Some(review) = review {
+            collection::attach_reviews(&mut data, &review)?;
+        }
+        let data = Arc::new(data);
+        let mut entries = cache
+            .lock()
+            .map_err(|_| Error::RenderFailed("Collection preparation cache failed"))?;
+        if let Some(existing) = entries.get(&key).and_then(std::sync::Weak::upgrade) {
+            return Ok(existing);
+        }
+        entries.insert(key, Arc::downgrade(&data));
+        return Ok(data);
     }
     Ok(Arc::new(HrirData::parse(&bytes, |n, s| array(root, n, s))?))
+}
+
+fn hrir_binding_identity(data: &HrirData) -> Result<Option<String>> {
+    data.collection
+        .as_ref()
+        .map(|collection| {
+            serde_json::to_vec(&collection.summary())
+                .map(|bytes| sha256(&bytes))
+                .map_err(|_| invalid())
+        })
+        .transpose()
 }
 
 /// `reuse` pins the existing listener HRIR across a room change. Optional sofa
@@ -390,24 +440,28 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
         }
         let (length, _, _) = PreparedRoom::required_fft(&profile.profile, &data)?;
         type Cache = std::collections::BTreeMap<
-            (String, String, usize, Quality),
+            (String, String, Option<String>, usize, Quality),
             std::sync::Weak<PreparedSet>,
         >;
         static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
         // Preparation-only weak cache. It shares immutable data between Scene
         // and file sessions without keeping inactive rooms alive or touching DSP locks.
-        let mut cache = CACHE
-            .get_or_init(Default::default)
-            .lock()
-            .map_err(|_| Error::RenderFailed("Room preparation cache failed"))?;
-        cache.retain(|_, entry| entry.strong_count() != 0);
         let key = (
             profile.profile.identity.clone(),
             data.identity.clone(),
+            hrir_binding_identity(&data)?,
             length,
             quality,
         );
-        let prepared = if let Some(prepared) = cache.get(&key).and_then(std::sync::Weak::upgrade) {
+        let cache = CACHE.get_or_init(Default::default);
+        let existing = {
+            let mut entries = cache
+                .lock()
+                .map_err(|_| Error::RenderFailed("Room preparation cache failed"))?;
+            entries.retain(|_, entry| entry.strong_count() != 0);
+            entries.get(&key).and_then(std::sync::Weak::upgrade)
+        };
+        let prepared = if let Some(prepared) = existing {
             prepared
         } else {
             let bank = if !reuse.is_null()
@@ -424,10 +478,16 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
                 quality,
             )?);
             let prepared = Arc::new(PreparedSet::new(room)?);
-            cache.insert(key, Arc::downgrade(&prepared));
-            prepared
+            let mut entries = cache
+                .lock()
+                .map_err(|_| Error::RenderFailed("Room preparation cache failed"))?;
+            if let Some(existing) = entries.get(&key).and_then(std::sync::Weak::upgrade) {
+                existing
+            } else {
+                entries.insert(key, Arc::downgrade(&prepared));
+                prepared
+            }
         };
-        drop(cache);
         let json = description(&prepared)?;
         *out = Box::into_raw(Box::new(RoomPreparedHandle { prepared, json }));
         Ok(())
@@ -769,27 +829,129 @@ pub unsafe extern "C" fn mradm_room_session_retired(
 
 #[cfg(test)]
 mod native_sofa_tests {
+    struct CollectionFixture(std::path::PathBuf);
+    impl CollectionFixture {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!(
+                "mradm-collection-{}-{stamp}-{id}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&root).unwrap();
+            let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../tests/fixtures/sofa/distance-96");
+            for name in ["distance_index.json", "near.sofa", "far.sofa"] {
+                std::fs::copy(source.join(name), root.join(name)).unwrap();
+            }
+            Self(root)
+        }
+    }
+    impl Drop for CollectionFixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    #[test]
+    fn collection_hits_reauthenticate_files_and_keep_source_reports_current() {
+        let fixture = CollectionFixture::new();
+        let first = super::load_hrir(&fixture.0, 96000).unwrap();
+        let hit = super::load_hrir(&fixture.0.join("distance_index.json"), 96000).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&first, &hit));
+        let file = fixture.0.join("near.sofa");
+        let bytes = std::fs::read(&file).unwrap();
+        let mut broken = bytes.clone();
+        broken[100] ^= 1;
+        std::fs::write(&file, &broken).unwrap();
+        assert!(super::load_hrir(&fixture.0, 96000).is_err());
+        std::fs::remove_file(&file).unwrap();
+        assert!(super::load_hrir(&fixture.0, 96000).is_err());
+        std::fs::write(&file, &bytes).unwrap();
+        let recovered = super::load_hrir(&fixture.0, 96000).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&first, &recovered));
+        let review = fixture.0.join("quality_report.json");
+        std::fs::write(&review, b"{\"revision\":1}").unwrap();
+        let updated = super::load_hrir(&fixture.0, 96000).unwrap();
+        assert_eq!(updated.identity, first.identity);
+        assert_eq!(updated.collection.as_ref().unwrap().reviews["revision"], 1);
+        assert_ne!(
+            super::hrir_binding_identity(&updated).unwrap(),
+            super::hrir_binding_identity(&first).unwrap()
+        );
+        std::fs::write(&review, b"not json").unwrap();
+        assert!(super::load_hrir(&fixture.0, 96000).is_err());
+    }
+    #[test]
+    fn collection_cache_separates_rates_and_names_and_reclaims_inactive_data() {
+        let fixture = CollectionFixture::new();
+        let other = CollectionFixture::new();
+        let first = super::load_hrir(&fixture.0, 96000).unwrap();
+        let converted = super::load_hrir(&fixture.0, 48000).unwrap();
+        let renamed = super::load_hrir(&other.0, 96000).unwrap();
+        assert_ne!(first.identity, converted.identity);
+        assert_eq!((first.sample_rate, converted.sample_rate), (96000, 48000));
+        assert_eq!(first.identity, renamed.identity);
+        assert_ne!(
+            first.collection.as_ref().unwrap().name,
+            renamed.collection.as_ref().unwrap().name
+        );
+        assert_ne!(
+            super::hrir_binding_identity(&first).unwrap(),
+            super::hrir_binding_identity(&renamed).unwrap()
+        );
+        let weak = std::sync::Arc::downgrade(&first);
+        drop(first);
+        assert!(weak.upgrade().is_none());
+    }
+    #[test]
+    fn concurrent_collection_requests_publish_one_live_bank() {
+        let fixture = CollectionFixture::new();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(4));
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                let path = fixture.0.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    super::load_hrir(&path, 96000).unwrap()
+                })
+            })
+            .collect();
+        let banks: Vec<_> = workers.into_iter().map(|w| w.join().unwrap()).collect();
+        assert!(
+            banks
+                .iter()
+                .all(|bank| std::sync::Arc::ptr_eq(bank, &banks[0]))
+        );
+        let weak = std::sync::Arc::downgrade(&banks[0]);
+        drop(banks);
+        assert!(weak.upgrade().is_none());
+    }
     #[test]
     fn live_banks_are_shared_and_inactive_banks_are_reclaimed() {
         let bytes = include_bytes!("../../../../tests/fixtures/sofa/simple.sofa");
-        let first = super::native_hrir(bytes).unwrap();
-        let second = super::native_hrir(bytes).unwrap();
+        let first = super::native_hrir(bytes, 48000).unwrap();
+        let second = super::native_hrir(bytes, 48000).unwrap();
         assert!(std::sync::Arc::ptr_eq(&first, &second));
         // Exercise the same panic boundary used by room_prepare. Some HDF5
         // errors unwind in debug builds; none may disable later SOFA imports.
         let mut message = [0; 128];
         let status = super::boundary(message.as_mut_ptr(), message.len(), || {
-            super::native_hrir(&bytes[..bytes.len() - 1]).map(|_| ())
+            super::native_hrir(&bytes[..bytes.len() - 1], 48000).map(|_| ())
         });
         assert_ne!(status, 0);
-        let after_error = super::native_hrir(bytes).unwrap();
+        let after_error = super::native_hrir(bytes, 48000).unwrap();
         assert!(std::sync::Arc::ptr_eq(&first, &after_error));
         drop(after_error);
         let weak = std::sync::Arc::downgrade(&first);
         drop(first);
         drop(second);
         assert!(weak.upgrade().is_none());
-        assert!(super::native_hrir(b"not a SOFA").is_err());
+        assert!(super::native_hrir(b"not a SOFA", 48000).is_err());
     }
     #[test]
     fn concurrent_preparations_share_the_published_bank() {
@@ -799,9 +961,10 @@ mod native_sofa_tests {
                 let barrier = barrier.clone();
                 std::thread::spawn(move || {
                     barrier.wait();
-                    super::native_hrir(include_bytes!(
-                        "../../../../tests/fixtures/sofa/room-delayed.sofa"
-                    ))
+                    super::native_hrir(
+                        include_bytes!("../../../../tests/fixtures/sofa/room-delayed.sofa"),
+                        48000,
+                    )
                     .unwrap()
                 })
             })
