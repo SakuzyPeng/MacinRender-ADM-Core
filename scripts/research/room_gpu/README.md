@@ -229,3 +229,8 @@ python scripts/research/room_gpu/resident_transport_test.py --library $ResidentD
 `$MatchingKernelSource` 必须与 DLL 配套：融合 DLL 需要报告中的融合补丁版本，未融合的内存绑定 DLL
 可以使用当前 `session_kernels.cu`。CUDA 运行库与 DLL 放在同一目录；融合配置还需保留 DLL 编译时指定的
 MathDx 头文件路径以供 NVRTC 使用。完整准备、构建和冻结步骤见报告，不应重跑未修改的失败候选长测。
+
+[延后等待实验](../../../docs/architecture/ROOM_CUDA_DEFERRED_WAIT.md) 在 Windows 距离运动短测出现
+1/1024 次超时、最大 5.6600 ms，运行时已归档。原生工具保留 `--cross-thread` 选项，验证在另一主机线程
+完成输出，并在最后一次提交后直接销毁实例、检查全部资源计数归零。该选项需要支持跨线程完成的
+内存绑定 DLL，完整构建步骤见报告；正确性通过不代表延后等待候选通过性能验收。

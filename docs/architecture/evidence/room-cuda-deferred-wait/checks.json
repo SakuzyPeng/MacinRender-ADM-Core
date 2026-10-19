@@ -1,0 +1,26 @@
+{
+  "local-tests.log": {
+    "sha256": "8cebc52aa4fe26caefec9f0ed0d2ea99e25d03ff97cb60bd77697451fc1281a2"
+  },
+  "local-clippy.log": {
+    "sha256": "49f2cc63aec875f010b14e5b3285486c71055c980c53f0c1b7922ec065fb7134"
+  },
+  "local-quality.log": {
+    "sha256": "7448fe1a2638d594d13976680363830c9ceb0bc15c7a59614cc77d7e21ed60f8"
+  },
+  "windows-build.log": {
+    "sha256": "e45c06acf8c856c1250d363ea7b7f3b6c52b98a0bd0314d82e256121347b622a"
+  },
+  "windows-smoke.log": {
+    "sha256": "7e820f0de08d2fffc8cd4f4b6d46211d4b35956edceae5965da674abc611fb7c"
+  },
+  "windows-short.log": {
+    "sha256": "f33c99ef40f986e058e9f4dbadfe135934d783608775f9bc55073c7d1c7f981c"
+  },
+  "build.log": {
+    "sha256": "ac538a2913164b08a6acc8c84a66fcf898a24b48d4eb4459777c10d89a1b1fba"
+  },
+  "examples.log": {
+    "sha256": "2a26aa7b9d4a965d365989ba44d4427a17253342847878b27c74e544eeec4abf"
+  }
+}
