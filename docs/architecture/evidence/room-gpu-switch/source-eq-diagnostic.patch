@@ -1,0 +1,48 @@
+--- a/rust/crates/mradm-dsp/src/room/profile.rs
++++ b/rust/crates/mradm-dsp/src/room/profile.rs
+@@ -24,8 +24,9 @@
+     ResponseTransform,
+     GpuSubmit,
+     GpuWait,
+-}
+-pub const STAGE_COUNT: usize = 19;
++    SourceEq,
++}
++pub const STAGE_COUNT: usize = 20;
+ pub const NAMES: [&str; STAGE_COUNT] = [
+     "session_process",
+     "canonical_block",
+@@ -46,6 +47,7 @@
+     "response_transform",
+     "gpu_submit",
+     "gpu_wait",
++    "source_eq",
+ ];
+ #[cfg(feature = "room-profile")]
+ mod enabled {
+--- a/rust/crates/mradm-dsp/src/room/signal.rs
++++ b/rust/crates/mradm-dsp/src/room/signal.rs
+@@ -360,7 +360,10 @@
+         }
+         self.render_direct = direct;
+         if direct {
+-            self.direct_eq.process(input, &mut self.direct_input)?;
++            {
++                let _eq = super::profile::Guard::new(super::profile::Stage::SourceEq);
++                self.direct_eq.process(input, &mut self.direct_input)?;
++            }
+             self.direct
+                 .begin_with_history(&mut self.direct_history, &self.direct_input)?;
+         }
+@@ -368,7 +371,10 @@
+             for i in 0..BLOCK {
+                 self.scaled[i] = input[i] * wet_gain[i];
+             }
+-            self.wet_eq.process(&self.scaled, &mut self.wet_input)?;
++            {
++                let _eq = super::profile::Guard::new(super::profile::Stage::SourceEq);
++                self.wet_eq.process(&self.scaled, &mut self.wet_input)?;
++            }
+             self.early
+                 .begin_with_history(&mut self.wet_history, &self.wet_input)?;
+         } else {

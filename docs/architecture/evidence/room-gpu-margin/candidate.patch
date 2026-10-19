@@ -1,0 +1,690 @@
+--- a/rust/crates/mradm-dsp/src/room/partition.rs
++++ b/rust/crates/mradm-dsp/src/room/partition.rs
+@@ -709,6 +709,8 @@
+ }
+ 
+ pub struct Long {
++    #[cfg(feature = "room-gpu-experiment")]
++    initial_phase: usize,
+     filters: Arc<LongFilters>,
+     head: Uniform,
+     tail: Option<Uniform>,
+@@ -855,6 +857,8 @@
+ impl Long {
+     pub fn new(filters: Arc<LongFilters>) -> Result<Self> {
+         Ok(Self {
++            #[cfg(feature = "room-gpu-experiment")]
++            initial_phase: 0,
+             head: Uniform::new(&filters.head)?,
+             tail: filters.tail.as_ref().map(Uniform::new).transpose()?,
+             collected: vec![0.; if filters.tail.is_some() { 2048 } else { 0 }],
+@@ -870,6 +874,22 @@
+             position: 0,
+         })
+     }
++    /// Preparation-only zero prehistory offsets the long FFT boundaries, not
++    /// the FIR's sample origin. The head and the 2048-frame tail offset stay put.
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn initialize_phase(&mut self, phase: usize) -> Result<()> {
++        if self.filters.head.policy != FftPolicy::Native
++            || phase >= 2048
++            || !phase.is_multiple_of(super::BLOCK)
++        {
++            return Err(Error::InvalidArgument(
++                "Invalid realtime EQ partition phase",
++            ));
++        }
++        self.initial_phase = if self.tail.is_some() { phase } else { 0 };
++        self.reset();
++        Ok(())
++    }
+     pub fn reset(&mut self) {
+         self.head.reset();
+         if let Some(tail) = &mut self.tail {
+@@ -878,10 +898,20 @@
+         self.collected.fill(0.);
+         self.ready.fill(0.);
+         self.position = 0;
++        #[cfg(feature = "room-gpu-experiment")]
++        {
++            self.position = self.initial_phase;
++        }
+     }
+     /// Fork an identical EQ before changing its input send. The prepared filter
+     /// must be the same allocation: `ready` contains already filtered samples.
+     pub fn copy_history_from(&mut self, source: &Self) -> Result<()> {
++        #[cfg(feature = "room-gpu-experiment")]
++        if self.initial_phase != source.initial_phase {
++            return Err(Error::InvalidArgument(
++                "Cannot copy mismatched EQ partition phases",
++            ));
++        }
+         if !Arc::ptr_eq(&self.filters, &source.filters) {
+             return Err(Error::InvalidArgument(
+                 "Cannot copy history across different room filters",
+@@ -928,6 +958,90 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    #[cfg(feature = "room-gpu-experiment")]
++    #[test]
++    fn staggered_long_fir_preserves_sample_origin_support_reset_and_fork() {
++        let taps = 32781;
++        let coefficients = [
++            (0, 0.7),
++            (2048, -0.2),
++            (2049, 0.3),
++            (4097, 0.1),
++            (taps - 1, 0.05),
++        ];
++        let mut filter = vec![0.; taps];
++        for (at, value) in coefficients {
++            filter[at] = value;
++        }
++        let filters = LongFilters::with_policy(1, &filter, FftPolicy::Native).unwrap();
++        let input: Vec<f32> = (0..5173)
++            .map(|i| (i % 179) as f32 * 0.001 - 0.089)
++            .collect();
++        let length = (input.len() + taps - 1).div_ceil(super::super::BLOCK) * super::super::BLOCK;
++        let mut expected = vec![0.; length];
++        for (i, &value) in input.iter().enumerate() {
++            for (offset, coefficient) in coefficients {
++                expected[i + offset] += value * coefficient;
++            }
++        }
++        for phase in (0..2048).step_by(super::super::BLOCK) {
++            let mut machine = Long::new(filters.clone()).unwrap();
++            let mut fork = Long::new(filters.clone()).unwrap();
++            machine.initialize_phase(phase).unwrap();
++            fork.initialize_phase(phase).unwrap();
++            let mut saved = Vec::new();
++            for epoch in 0..2 {
++                machine.reset();
++                fork.reset();
++                let mut actual = vec![0.; length];
++                for start in (0..length).step_by(super::super::BLOCK) {
++                    let mut block = [0.; super::super::BLOCK];
++                    if start < input.len() {
++                        let n = block.len().min(input.len() - start);
++                        block[..n].copy_from_slice(&input[start..start + n]);
++                    }
++                    if start == 4096 {
++                        fork.copy_history_from(&machine).unwrap();
++                    }
++                    machine
++                        .process(&block, &mut actual[start..start + block.len()])
++                        .unwrap();
++                    if start >= 4096 {
++                        let mut out = block;
++                        fork.process(&block, &mut out).unwrap();
++                        assert_eq!(
++                            out.map(f32::to_bits).as_slice(),
++                            actual[start..start + block.len()]
++                                .iter()
++                                .map(|v| v.to_bits())
++                                .collect::<Vec<_>>()
++                        );
++                    }
++                }
++                let energy: f64 = expected.iter().map(|&v| f64::from(v).powi(2)).sum();
++                let error: f64 = actual
++                    .iter()
++                    .zip(&expected)
++                    .map(|(&a, &b)| f64::from(a - b).powi(2))
++                    .sum();
++                let peak = expected.iter().fold(0f32, |p, v| p.max(v.abs()));
++                let maximum = actual
++                    .iter()
++                    .zip(&expected)
++                    .fold(0f32, |p, (&a, &b)| p.max((a - b).abs()));
++                assert!((error / energy).sqrt() <= 2e-5, "phase={phase}");
++                assert!(maximum / peak <= 2e-4, "phase={phase}");
++                let bits: Vec<_> = actual.iter().map(|v| v.to_bits()).collect();
++                if epoch == 0 {
++                    saved = bits;
++                } else {
++                    assert_eq!(saved, bits);
++                }
++            }
++        }
++        let mut exact = Long::new(LongFilters::prepare(1, &filter).unwrap()).unwrap();
++        assert!(exact.initialize_phase(256).is_err());
++    }
+     fn signal(count: usize, seed: usize) -> Vec<f32> {
+         (0..count)
+             .map(|i| (((i * 71 + seed) % 257) as f32 - 128.) / 512.)
+--- a/rust/crates/mradm-dsp/src/room/signal.rs
++++ b/rust/crates/mradm-dsp/src/room/signal.rs
+@@ -102,6 +102,11 @@
+             Dynamic::reader_at_rate(2, 1, self.room.quality.fft(), self.room.profile.sample_rate)?;
+         Ok(())
+     }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn stagger_eq(&mut self, phase: usize) -> Result<()> {
++        self.direct_eq.initialize_phase(phase)?;
++        self.wet_eq.initialize_phase(phase)
++    }
+     fn prepare_short(
+         &mut self,
+         sources: &[WeightedPosition],
+@@ -323,7 +328,6 @@
+         Ok(())
+     }
+ 
+-
+     /// Overwrite direct / early stereo planes and mono late send. The wet send
+     /// scales excitation before EQ, so a room switch retains the old EQ tail.
+     pub fn process(
+@@ -633,10 +637,16 @@
+ }
+ impl WorldTail {
+     #[cfg(feature = "room-gpu-experiment")]
+-    pub(crate) fn enable_gpu_late(&mut self, factory: &dyn super::gpu_experiment::Factory) -> Result<()> {
++    pub(crate) fn enable_gpu_late(
++        &mut self,
++        factory: &dyn super::gpu_experiment::Factory,
++    ) -> Result<()> {
+         let mut group = self.group.lock().unwrap();
+-        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime {
+-            return Err(Error::Unsupported("GPU late field requires realtime field kind"));
++        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime
++        {
++            return Err(Error::Unsupported(
++                "GPU late field requires realtime field kind",
++            ));
+         }
+         if let Some(backend) = factory.create_late(group.room.clone())? {
+             group.gpu_late = Some(GpuLate {
+@@ -823,13 +833,20 @@
+         }
+         #[cfg(feature = "room-gpu-experiment")]
+         {
+-            let Decoders { gpu_late, decoders, history, .. } = &mut *group;
++            let Decoders {
++                gpu_late,
++                decoders,
++                history,
++                ..
++            } = &mut *group;
+             if let Some(gpu) = gpu_late {
+                 if gpu.pending {
+                     gpu.backend.finish(&mut gpu.ready)?;
+                     gpu.pending = false;
+                     if !gpu.reset {
+-                        for (decoder, ready) in decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0) {
++                        for (decoder, ready) in
++                            decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0)
++                        {
+                             decoder.field.as_mut().unwrap().install_gpu_tail(ready)?;
+                         }
+                     }
+--- a/rust/crates/mradm-dsp/src/room/session.rs
++++ b/rust/crates/mradm-dsp/src/room/session.rs
+@@ -19,6 +19,10 @@
+ pub struct PreparedSet {
+     #[cfg(feature = "room-gpu-experiment")]
+     gpu_factory: Option<Arc<dyn super::gpu_experiment::Factory>>,
++    #[cfg(feature = "room-gpu-experiment")]
++    eq_stagger: bool,
++    #[cfg(feature = "room-gpu-experiment")]
++    voice_chunk: usize,
+     pub room: Arc<PreparedRoom>,
+     pub lfe: Arc<LongFilters>,
+     workers: Arc<super::workers::Workers>,
+@@ -38,6 +42,10 @@
+         Ok(Self {
+             #[cfg(feature = "room-gpu-experiment")]
+             gpu_factory: None,
++            #[cfg(feature = "room-gpu-experiment")]
++            eq_stagger: false,
++            #[cfg(feature = "room-gpu-experiment")]
++            voice_chunk: 0,
+             room,
+             lfe,
+             workers: super::workers::shared()?,
+@@ -55,10 +63,23 @@
+         }
+         Ok(Self {
+             gpu_factory: Some(factory),
++            eq_stagger: false,
++            voice_chunk: 0,
+             room: self.room.clone(),
+             lfe: self.lfe.clone(),
+             workers: self.workers.clone(),
+         })
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub fn with_gpu_tuning(mut self, eq_stagger: bool, voice_chunk: usize) -> Result<Self> {
++        if self.gpu_factory.is_none() || !matches!(voice_chunk, 0 | 4) {
++            return Err(Error::InvalidArgument(
++                "GPU tuning requires an experiment backend",
++            ));
++        }
++        self.eq_stagger = eq_stagger;
++        self.voice_chunk = voice_chunk;
++        Ok(self)
+     }
+     pub fn tail_frames(&self) -> usize {
+         (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
+@@ -652,6 +673,8 @@
+ }
+ struct Voices {
+     #[cfg(feature = "room-gpu-experiment")]
++    voice_chunk: usize,
++    #[cfg(feature = "room-gpu-experiment")]
+     gpu: Option<Box<dyn super::gpu_experiment::Backend>>,
+     #[cfg(feature = "room-gpu-experiment")]
+     gpu_output: Vec<f32>,
+@@ -689,6 +712,16 @@
+         let room = &self.room;
+         let render =
+             |(voice, slot): (&mut Voice, &VoiceInput)| render_voice(voice, room, slot, &block);
++        #[cfg(feature = "room-gpu-experiment")]
++        if self.voice_chunk != 0 && block.sources >= 4 {
++            self.voices[..block.sources]
++                .par_chunks_mut(self.voice_chunk)
++                .zip(self.inputs[..block.sources].par_chunks(self.voice_chunk))
++                .try_for_each(|(voices, inputs)| {
++                    voices.iter_mut().zip(inputs).try_for_each(render)
++                })?;
++            return self.submit_gpu();
++        }
+         let result = if block.sources >= 4 {
+             self.voices[..block.sources]
+                 .par_iter_mut()
+@@ -1068,6 +1101,8 @@
+         let mut result = Self {
+             group: Arc::new(Mutex::new(Voices {
+                 #[cfg(feature = "room-gpu-experiment")]
++                voice_chunk: prepared.voice_chunk,
++                #[cfg(feature = "room-gpu-experiment")]
+                 gpu: prepared
+                     .gpu_factory
+                     .as_ref()
+@@ -1097,7 +1132,12 @@
+         };
+         #[cfg(feature = "room-gpu-experiment")]
+         if let Some(factory) = &result.prepared.gpu_factory {
+-            result.output.lock().unwrap().field.enable_gpu_late(&**factory)?;
++            result
++                .output
++                .lock()
++                .unwrap()
++                .field
++                .enable_gpu_late(&**factory)?;
+         }
+         result.reserve(capacity)?;
+         drop(result.output.lock().unwrap());
+@@ -1134,6 +1174,10 @@
+             #[cfg(feature = "room-gpu-experiment")]
+             if group.gpu.is_some() {
+                 group.voices.last_mut().unwrap().emitter.enable_gpu()?;
++                if self.prepared.eq_stagger {
++                    let phase = ((group.voices.len() - 1) % 8) * BLOCK;
++                    group.voices.last_mut().unwrap().emitter.stagger_eq(phase)?;
++                }
+             }
+         }
+         Ok(())
+--- a/rust/crates/mradm-dsp/examples/room_bench.rs
++++ b/rust/crates/mradm-dsp/examples/room_bench.rs
+@@ -14,6 +14,8 @@
+ use std::{path::Path, sync::Arc, time::Instant};
+ #[path = "room_support/assets.rs"]
+ mod assets;
++#[path = "room_support/audio_workers.rs"]
++mod audio_workers;
+ #[cfg(feature = "room-gpu-experiment")]
+ #[path = "room_support/gpu.rs"]
+ mod gpu;
+@@ -76,6 +78,11 @@
+         return Err("Use Release for performance evidence".into());
+     }
+     let mut arguments: Vec<_> = std::env::args().collect();
++    let audio_workers = arguments.iter().any(|v| v == "--audio-workers");
++    arguments.retain(|v| v != "--audio-workers");
++    if audio_workers {
++        audio_workers::enable()?;
++    }
+     #[cfg(feature = "room-gpu-experiment")]
+     let gpu = gpu::Options::parse(&mut arguments)?;
+     let hrir_path = if let Some(index) = arguments.iter().position(|v| v == "--hrir") {
+@@ -180,6 +187,11 @@
+     )?))?);
+     #[cfg(feature = "room-gpu-experiment")]
+     let (prepared, other) = (gpu.prepare(prepared)?, gpu.prepare(other)?);
++    let scheduling = if audio_workers {
++        audio_workers::report()?
++    } else {
++        serde_json::Value::Null
++    };
+     let experiment = serde_json::Value::Null;
+     #[cfg(feature = "room-gpu-experiment")]
+     let experiment = if gpu.report().is_null() {
+@@ -384,9 +396,7 @@
+                 profile[index].0
+             });
+             let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
+-            println!(
+-                "{}",
+-                serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
++            let mut report = serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
+                 "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames_at(prepared.room.profile.sample_rate),
+                 "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
+                 "voice_segments":segments,
+@@ -402,8 +412,9 @@
+                 "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},
+                 "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
+                 "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),"slowest_calls":slowest_calls,
+-                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak})
+-            );
++                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak});
++            report["thread_scheduling"] = scheduling.clone();
++            println!("{report}");
+         }
+     }
+     Ok(())
+--- a/rust/crates/mradm-dsp/examples/room_support/gpu.rs
++++ b/rust/crates/mradm-dsp/examples/room_support/gpu.rs
+@@ -11,6 +11,8 @@
+ mod native;
+ pub struct Options {
+     reference: bool,
++    eq_stagger: bool,
++    voice_chunk: usize,
+     library: Option<PathBuf>,
+     fixture: Option<PathBuf>,
+     kernels: Option<PathBuf>,
+@@ -19,6 +21,9 @@
+     pub fn parse(args: &mut Vec<String>) -> std::result::Result<Self, Box<dyn std::error::Error>> {
+         let reference = args.iter().any(|a| a == "--gpu-reference");
+         args.retain(|a| a != "--gpu-reference");
++        let eq_stagger = args.iter().any(|a| a == "--gpu-eq-stagger");
++        let chunked = args.iter().any(|a| a == "--gpu-voice-chunks");
++        args.retain(|a| a != "--gpu-eq-stagger" && a != "--gpu-voice-chunks");
+         let mut take =
+             |name: &str| -> std::result::Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+                 if let Some(i) = args.iter().position(|a| a == name) {
+@@ -31,6 +36,8 @@
+             };
+         let result = Self {
+             reference,
++            eq_stagger,
++            voice_chunk: if chunked { 4 } else { 0 },
+             library: take("--gpu-dll")?,
+             fixture: take("--gpu-fixture")?,
+             kernels: take("--gpu-kernels")?,
+@@ -41,6 +48,9 @@
+             return Err(
+                 "GPU DLL needs fixture/kernels and cannot combine with CPU reference".into(),
+             );
++        }
++        if (eq_stagger || chunked) && !reference && result.library.is_none() {
++            return Err("GPU tuning requires --gpu-reference or --gpu-dll".into());
+         }
+         Ok(result)
+     }
+@@ -68,14 +78,25 @@
+             None
+         };
+         if let Some(factory) = factory {
+-            Ok(Arc::new(prepared.with_gpu_experiment(factory)?))
++            Ok(Arc::new(
++                prepared
++                    .with_gpu_experiment(factory)?
++                    .with_gpu_tuning(self.eq_stagger, self.voice_chunk)?,
++            ))
+         } else {
+             Ok(prepared)
+         }
+     }
+     pub fn report(&self) -> serde_json::Value {
+         if self.reference || self.library.is_some() {
+-            serde_json::json!({"kind":"room-gpu-session","cpu_reference":self.reference,"control":"production Session","finite_fade":true})
++            let mut report = serde_json::json!({"kind":"room-gpu-session","cpu_reference":self.reference,"control":"production Session","finite_fade":true});
++            if self.eq_stagger {
++                report["eq_stagger_frames"] = serde_json::json!(256);
++            }
++            if self.voice_chunk != 0 {
++                report["voice_chunk"] = serde_json::json!(self.voice_chunk);
++            }
++            report
+         } else {
+             serde_json::Value::Null
+         }
+--- a/rust/crates/mradm-dsp/tests/room_gpu.rs
++++ b/rust/crates/mradm-dsp/tests/room_gpu.rs
+@@ -336,3 +336,148 @@
+         assert!(canonical[..512 * 2].iter().all(|v| *v == 0.));
+     }
+ }
++
++fn tuned(base: &Arc<PreparedSet>) -> Arc<PreparedSet> {
++    Arc::new(
++        base.with_gpu_experiment(Arc::new(ReferenceFactory))
++            .unwrap()
++            .with_gpu_tuning(true, 4)
++            .unwrap(),
++    )
++}
++#[test]
++fn staggered_long_eq_preserves_forks_reset_restart_and_complete_switch_tail() {
++    let _lock = TEST_LOCK.lock().unwrap();
++    for rate in [48000, 96000] {
++        let original = common::fixture_at_rate(Quality::Realtime, rate);
++        let mut profile = (*original.room.profile).clone();
++        profile.eq = (0..32768)
++            .map(|i| {
++                if i == 0 {
++                    0.7
++                } else {
++                    libm::cos(i as f64 * 0.037) as f32 * 0.0002 / (1. + i as f32 * 0.0005)
++                }
++            })
++            .collect();
++        let prepare = |profile| {
++            Arc::new(
++                PreparedSet::new(Arc::new(
++                    PreparedRoom::with_quality(
++                        Arc::new(profile),
++                        original.room.hrir.clone(),
++                        Quality::Realtime,
++                    )
++                    .unwrap(),
++                ))
++                .unwrap(),
++            )
++        };
++        let base = prepare(profile.clone());
++        profile.identity.push_str("-different-eq");
++        profile.eq[2173] += 0.03;
++        profile.eq.extend_from_slice(&[0.01; 13]);
++        profile.absorption = [[0.8; 8]; 6];
++        let next = prepare(profile);
++        let mut a = Session::new(base.clone(), 1.5, true, false).unwrap();
++        let mut b = Session::new(tuned(&base), 1.5, true, false).unwrap();
++        let descriptions: Vec<_> = (0..8)
++            .map(|i| RoomDescription {
++                id: i + 1,
++                position: [i as f32 * 0.1, 0.5, 0.],
++                ..Default::default()
++            })
++            .collect();
++        a.configure(&descriptions).unwrap();
++        b.configure(&descriptions).unwrap();
++        let mut switch_a = Some(Box::new(Instance::new(next.clone(), 8).unwrap()));
++        let mut switch_b = Some(Box::new(Instance::new(tuned(&next), 8).unwrap()));
++        let mut input = [[0.; 512]; 8];
++        let mut out_a = [0.; 1024];
++        let mut out_b = [0.; 1024];
++        let (mut energy, mut error, mut peak, mut maximum) = (0f64, 0f64, 0f64, 0f64);
++        let mut phases = [false; 4];
++        for block in 0..200 {
++            if block == 16 {
++                // Reset at a boundary shared by the phase-zero long partition.
++                a.reset(4096).unwrap();
++                b.reset(4096).unwrap();
++            }
++            if block == 40 {
++                a.queue_room(switch_a.take().unwrap(), 1).unwrap();
++                b.queue_room(switch_b.take().unwrap(), 1).unwrap();
++            }
++            let n = [512, 137, 375, 512][block % 4];
++            for (source, row) in input.iter_mut().enumerate() {
++                for (i, value) in row[..n].iter_mut().enumerate() {
++                    *value = if block < source * 3 || (source == 3 && (20..150).contains(&block)) {
++                        0.
++                    } else {
++                        ((block * 512 + i + source * 29) % 179) as f32 * 0.00001 - 0.00089
++                    };
++                }
++            }
++            a.set_pose([block as f32 * 0.3, 2., 0.]).unwrap();
++            b.set_pose([block as f32 * 0.3, 2., 0.]).unwrap();
++            a.process(
++                n,
++                input.iter().map(|row| Some(&row[..n])),
++                &[],
++                &[],
++                &mut out_a[..n * 2],
++            )
++            .unwrap();
++            ALLOCS.store(0, Ordering::SeqCst);
++            CHECK.store(true, Ordering::SeqCst);
++            let value = b.process(
++                n,
++                input.iter().map(|row| Some(&row[..n])),
++                &[],
++                &[],
++                &mut out_b[..n * 2],
++            );
++            CHECK.store(false, Ordering::SeqCst);
++            value.unwrap();
++            assert_eq!(ALLOCS.load(Ordering::SeqCst), 0);
++            phases[b.info().phase as usize] = true;
++            assert_eq!(a.info().phase, b.info().phase);
++            for (&x, &y) in out_a[..n * 2].iter().zip(&out_b[..n * 2]) {
++                assert!(x.is_finite() && y.is_finite());
++                energy += f64::from(x).powi(2);
++                error += (f64::from(x) - f64::from(y)).powi(2);
++                peak = peak.max(f64::from(x).abs());
++                maximum = maximum.max((f64::from(x) - f64::from(y)).abs());
++            }
++            let _ = a.take_retired();
++            let _ = b.take_retired();
++        }
++        assert!(
++            phases.into_iter().all(|v| v),
++            "did not cover all room phases"
++        );
++        a.end_input();
++        b.end_input();
++        assert_eq!(a.info().tail_frames, b.info().tail_frames);
++        for _ in 0..(a.info().tail_frames as usize).div_ceil(512) + 2 {
++            a.process(512, (0..8).map(|_| None), &[], &[], &mut out_a)
++                .unwrap();
++            b.process(512, (0..8).map(|_| None), &[], &[], &mut out_b)
++                .unwrap();
++            for (&x, &y) in out_a.iter().zip(&out_b) {
++                assert!(x.is_finite() && y.is_finite());
++                energy += f64::from(x).powi(2);
++                error += (f64::from(x) - f64::from(y)).powi(2);
++                peak = peak.max(f64::from(x).abs());
++                maximum = maximum.max((f64::from(x) - f64::from(y)).abs());
++            }
++        }
++        assert!(
++            (error / energy).sqrt() <= 2e-5,
++            "{rate}: {}",
++            (error / energy).sqrt()
++        );
++        assert!(maximum / peak <= 2e-4);
++        assert_eq!(a.info().latency_frames, b.info().latency_frames);
++        assert_eq!(a.info().input_frames, b.info().input_frames);
++    }
++}
+--- /dev/null
++++ b/rust/crates/mradm-dsp/examples/room_support/audio_workers.rs
+@@ -0,0 +1,82 @@
++//! Optional benchmark alignment with the production FFI's Windows Audio class.
++#[cfg(windows)]
++mod native {
++    use std::sync::atomic::{AtomicUsize, Ordering};
++    static REGISTERED: AtomicUsize = AtomicUsize::new(0);
++    static FAILED: AtomicUsize = AtomicUsize::new(0);
++    #[link(name = "avrt")]
++    unsafe extern "system" {
++        fn AvSetMmThreadCharacteristicsW(
++            name: *const u16,
++            index: *mut u32,
++        ) -> *mut core::ffi::c_void;
++        fn AvRevertMmThreadCharacteristics(handle: *mut core::ffi::c_void) -> i32;
++    }
++    struct Task(*mut core::ffi::c_void);
++    impl Task {
++        fn new() -> Self {
++            let mut index = 0;
++            let name = [65, 117, 100, 105, 111, 0];
++            let handle = unsafe { AvSetMmThreadCharacteristicsW(name.as_ptr(), &mut index) };
++            if handle.is_null() {
++                FAILED.fetch_add(1, Ordering::Relaxed);
++            } else {
++                REGISTERED.fetch_add(1, Ordering::Relaxed);
++            }
++            Self(handle)
++        }
++    }
++    impl Drop for Task {
++        fn drop(&mut self) {
++            if !self.0.is_null() {
++                unsafe {
++                    AvRevertMmThreadCharacteristics(self.0);
++                }
++                REGISTERED.fetch_sub(1, Ordering::Relaxed);
++            }
++        }
++    }
++    pub fn start() {
++        thread_local! { static TASK: Task = Task::new(); }
++        TASK.with(|_| {});
++    }
++    pub fn report() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
++        let workers = REGISTERED.load(Ordering::Relaxed);
++        let expected = std::env::var("MR_ADM_ROOM_WORKERS")
++            .ok()
++            .map(|v| v.parse::<usize>())
++            .transpose()?
++            .unwrap_or_else(|| {
++                std::thread::available_parallelism()
++                    .map_or(1, usize::from)
++                    .min(8)
++            });
++        if FAILED.load(Ordering::Relaxed) != 0 || workers != expected {
++            return Err("Windows Audio worker registration incomplete".into());
++        }
++        Ok(
++            serde_json::json!({"class":"Audio","registered_workers":workers,"caller_registered":false}),
++        )
++    }
++}
++pub fn enable() -> Result<(), Box<dyn std::error::Error>> {
++    #[cfg(windows)]
++    {
++        mradm_dsp::room::set_worker_start_hook(native::start);
++        Ok(())
++    }
++    #[cfg(not(windows))]
++    {
++        Err("--audio-workers requires Windows".into())
++    }
++}
++pub fn report() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
++    #[cfg(windows)]
++    {
++        native::report()
++    }
++    #[cfg(not(windows))]
++    {
++        Err("--audio-workers requires Windows".into())
++    }
++}

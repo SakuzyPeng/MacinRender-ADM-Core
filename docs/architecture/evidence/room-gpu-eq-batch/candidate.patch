@@ -1,0 +1,1119 @@
+--- a/rust/crates/mradm-dsp/src/room/partition.rs
++++ b/rust/crates/mradm-dsp/src/room/partition.rs
+@@ -708,7 +708,11 @@
+     }
+ }
+ 
++#[cfg(feature = "room-gpu-experiment")]
++mod gpu_eq;
+ pub struct Long {
++    #[cfg(feature = "room-gpu-experiment")]
++    gpu_eq: Option<gpu_eq::EqTail>,
+     filters: Arc<LongFilters>,
+     head: Uniform,
+     tail: Option<Uniform>,
+@@ -855,6 +859,8 @@
+ impl Long {
+     pub fn new(filters: Arc<LongFilters>) -> Result<Self> {
+         Ok(Self {
++            #[cfg(feature = "room-gpu-experiment")]
++            gpu_eq: None,
+             head: Uniform::new(&filters.head)?,
+             tail: filters.tail.as_ref().map(Uniform::new).transpose()?,
+             collected: vec![0.; if filters.tail.is_some() { 2048 } else { 0 }],
+@@ -878,6 +884,10 @@
+         self.collected.fill(0.);
+         self.ready.fill(0.);
+         self.position = 0;
++        #[cfg(feature = "room-gpu-experiment")]
++        if let Some(eq) = &mut self.gpu_eq {
++            eq.reset();
++        }
+     }
+     /// Fork an identical EQ before changing its input send. The prepared filter
+     /// must be the same allocation: `ready` contains already filtered samples.
+@@ -891,14 +901,42 @@
+         if let (Some(destination), Some(source)) = (&mut self.tail, &source.tail) {
+             destination.copy_history_from(source)?;
+         }
++        #[cfg(feature = "room-gpu-experiment")]
++        match (&mut self.gpu_eq, &source.gpu_eq) {
++            (Some(destination), Some(source)) => destination.fork(source)?,
++            (None, None) => {}
++            _ => return Err(Error::InvalidArgument("Incompatible GPU EQ history")),
++        }
+         self.collected.copy_from_slice(&source.collected);
+         self.ready.copy_from_slice(&source.ready);
+         self.position = source.position;
+         Ok(())
+     }
+     pub fn process(&mut self, input: &[f32], output: &mut [f32]) -> Result<()> {
++        #[cfg(feature = "room-gpu-experiment")]
++        if self.gpu_eq.as_ref().is_some_and(|eq| {
++            eq.awaiting || eq.command().flags & super::gpu_experiment::EQ_DUE != 0
++        }) {
++            return Err(Error::InvalidArgument("GPU EQ result was not consumed"));
++        }
+         self.head.push(input)?;
+         self.head.render(&self.filters.head, output)?;
++        #[cfg(feature = "room-gpu-experiment")]
++        if let Some(eq) = &mut self.gpu_eq {
++            for (out, value) in output
++                .iter_mut()
++                .zip(&self.ready[self.position..self.position + super::BLOCK])
++            {
++                *out += *value;
++            }
++            self.collected[self.position..self.position + super::BLOCK].copy_from_slice(input);
++            self.position += super::BLOCK;
++            if self.position == 2048 {
++                eq.push(&self.collected)?;
++                self.position = 0;
++            }
++            return Ok(());
++        }
+         if let (Some(tail), Some(filters)) = (&mut self.tail, &self.filters.tail) {
+             for (channel, out) in output
+                 .as_chunks_mut::<{ super::BLOCK }>()
+@@ -921,6 +959,46 @@
+                 self.position = 0;
+             }
+         }
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn enable_gpu_eq(&mut self) -> Result<()> {
++        if self.filters.channels != 1 || self.gpu_eq.is_some() {
++            return Err(Error::Unsupported(
++                "GPU EQ requires an unstarted mono filter",
++            ));
++        }
++        let tail = self
++            .filters
++            .tail
++            .as_ref()
++            .ok_or(Error::Unsupported("GPU EQ needs long partitions"))?;
++        self.gpu_eq = Some(gpu_eq::EqTail::new(tail)?);
++        // Keep only the forward overlap/window; the backend owns the
++        // full partition history. Do not retain a second large CPU ring.
++        self.tail = None;
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn gpu_eq_request(&self) -> (super::gpu_experiment::EqCommand, &[f32], u64) {
++        let eq = self.gpu_eq.as_ref().expect("prepared GPU EQ");
++        (eq.command(), &eq.window, eq.generation)
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn gpu_eq_submitted(&mut self) {
++        self.gpu_eq.as_mut().expect("prepared GPU EQ").submitted();
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn install_gpu_eq(&mut self, generation: u64, output: &[f32]) -> Result<()> {
++        let eq = self.gpu_eq.as_mut().expect("prepared GPU EQ");
++        if generation != eq.generation || !eq.awaiting {
++            return Ok(());
++        }
++        if output.len() != self.ready.len() {
++            return Err(Error::InvalidArgument("Invalid GPU EQ output shape"));
++        }
++        self.ready.copy_from_slice(output);
++        eq.awaiting = false;
+         Ok(())
+     }
+ }
+--- a/rust/crates/mradm-dsp/src/room/signal.rs
++++ b/rust/crates/mradm-dsp/src/room/signal.rs
+@@ -39,6 +39,27 @@
+ }
+ 
+ impl Emitter {
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn enable_gpu_eq(&mut self) -> Result<()> {
++        self.direct_eq.enable_gpu_eq()?;
++        self.wet_eq.enable_gpu_eq()
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn gpu_eq(&self, branch: usize) -> &Long {
++        if branch == 0 {
++            &self.direct_eq
++        } else {
++            &self.wet_eq
++        }
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn gpu_eq_mut(&mut self, branch: usize) -> &mut Long {
++        if branch == 0 {
++            &mut self.direct_eq
++        } else {
++            &mut self.wet_eq
++        }
++    }
+     pub fn new(room: Arc<PreparedRoom>, position: Position) -> Result<Self> {
+         let pose_budget_cosine = libm::cos(room.quality.reflection_pose_degrees().to_radians());
+         let early_taps = room.short_taps;
+@@ -323,7 +344,6 @@
+         Ok(())
+     }
+ 
+-
+     /// Overwrite direct / early stereo planes and mono late send. The wet send
+     /// scales excitation before EQ, so a room switch retains the old EQ tail.
+     pub fn process(
+@@ -633,10 +653,16 @@
+ }
+ impl WorldTail {
+     #[cfg(feature = "room-gpu-experiment")]
+-    pub(crate) fn enable_gpu_late(&mut self, factory: &dyn super::gpu_experiment::Factory) -> Result<()> {
++    pub(crate) fn enable_gpu_late(
++        &mut self,
++        factory: &dyn super::gpu_experiment::Factory,
++    ) -> Result<()> {
+         let mut group = self.group.lock().unwrap();
+-        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime {
+-            return Err(Error::Unsupported("GPU late field requires realtime field kind"));
++        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime
++        {
++            return Err(Error::Unsupported(
++                "GPU late field requires realtime field kind",
++            ));
+         }
+         if let Some(backend) = factory.create_late(group.room.clone())? {
+             group.gpu_late = Some(GpuLate {
+@@ -823,13 +849,20 @@
+         }
+         #[cfg(feature = "room-gpu-experiment")]
+         {
+-            let Decoders { gpu_late, decoders, history, .. } = &mut *group;
++            let Decoders {
++                gpu_late,
++                decoders,
++                history,
++                ..
++            } = &mut *group;
+             if let Some(gpu) = gpu_late {
+                 if gpu.pending {
+                     gpu.backend.finish(&mut gpu.ready)?;
+                     gpu.pending = false;
+                     if !gpu.reset {
+-                        for (decoder, ready) in decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0) {
++                        for (decoder, ready) in
++                            decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0)
++                        {
+                             decoder.field.as_mut().unwrap().install_gpu_tail(ready)?;
+                         }
+                     }
+--- a/rust/crates/mradm-dsp/src/room/session.rs
++++ b/rust/crates/mradm-dsp/src/room/session.rs
+@@ -650,7 +650,84 @@
+     prepare_filters: bool,
+     sources: usize,
+ }
++#[cfg(feature = "room-gpu-experiment")]
++struct GpuEqBatch {
++    backend: Box<dyn super::gpu_experiment::EqBackend>,
++    commands: [super::gpu_experiment::EqCommand; 64],
++    generations: [u64; 64],
++    input: Vec<f32>,
++    output: Vec<f32>,
++    pending_channels: usize,
++}
++#[cfg(feature = "room-gpu-experiment")]
++impl GpuEqBatch {
++    fn new(backend: Box<dyn super::gpu_experiment::EqBackend>) -> Self {
++        Self {
++            backend,
++            commands: [Default::default(); 64],
++            generations: [0; 64],
++            input: vec![0.; 64 * 4096],
++            output: vec![0.; 64 * 2048],
++            pending_channels: 0,
++        }
++    }
++    fn finish(&mut self, voices: &mut [Voice]) -> Result<()> {
++        if self.pending_channels == 0 {
++            return Ok(());
++        }
++        self.backend
++            .finish(&mut self.output[..self.pending_channels * 2048])?;
++        for channel in 0..self.pending_channels {
++            if self.commands[channel].flags & super::gpu_experiment::EQ_DUE != 0 {
++                voices[channel / 2]
++                    .emitter
++                    .gpu_eq_mut(channel % 2)
++                    .install_gpu_eq(
++                        self.generations[channel],
++                        &self.output[channel * 2048..(channel + 1) * 2048],
++                    )?;
++            }
++        }
++        self.pending_channels = 0;
++        Ok(())
++    }
++    fn submit(&mut self, voices: &mut [Voice]) -> Result<()> {
++        if self.pending_channels != 0 || voices.len() > super::gpu_experiment::MAX_VOICES {
++            return Err(Error::InvalidArgument("Unfinished GPU EQ batch"));
++        }
++        let channels = voices.len() * 2;
++        for (i, voice) in voices.iter().enumerate() {
++            for branch in 0..2 {
++                let channel = i * 2 + branch;
++                let (command, row, generation) = voice.emitter.gpu_eq(branch).gpu_eq_request();
++                self.commands[channel] = command;
++                self.generations[channel] = generation;
++                if command.flags & super::gpu_experiment::EQ_DUE != 0 {
++                    self.input[channel * 4096..(channel + 1) * 4096].copy_from_slice(row);
++                }
++            }
++        }
++        if !self.commands[..channels]
++            .iter()
++            .any(|c| c.flags & super::gpu_experiment::EQ_DUE != 0)
++        {
++            // Resets/forks remain on the owning Long until the next due row.
++            return Ok(());
++        }
++        self.backend
++            .submit(&self.commands[..channels], &self.input[..channels * 4096])?;
++        for voice in voices {
++            for branch in 0..2 {
++                voice.emitter.gpu_eq_mut(branch).gpu_eq_submitted();
++            }
++        }
++        self.pending_channels = channels;
++        Ok(())
++    }
++}
+ struct Voices {
++    #[cfg(feature = "room-gpu-experiment")]
++    gpu_eq: Option<GpuEqBatch>,
+     #[cfg(feature = "room-gpu-experiment")]
+     gpu: Option<Box<dyn super::gpu_experiment::Backend>>,
+     #[cfg(feature = "room-gpu-experiment")]
+@@ -682,7 +759,23 @@
+     )
+ }
+ impl Voices {
++    #[cfg(feature = "room-gpu-experiment")]
++    fn complete_eq(&mut self) -> Result<()> {
++        if let Some(eq) = &mut self.gpu_eq {
++            eq.finish(&mut self.voices)?;
++        }
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn submit_eq(&mut self) -> Result<()> {
++        if let Some(eq) = &mut self.gpu_eq {
++            eq.submit(&mut self.voices[..self.block.unwrap().sources])?;
++        }
++        Ok(())
++    }
+     fn render(&mut self) -> Result<()> {
++        #[cfg(feature = "room-gpu-experiment")]
++        self.complete_eq()?;
+         let block = self
+             .block
+             .ok_or(Error::InvalidArgument("Missing room block"))?;
+@@ -703,6 +796,8 @@
+         result?;
+         #[cfg(feature = "room-gpu-experiment")]
+         self.submit_gpu()?;
++        #[cfg(feature = "room-gpu-experiment")]
++        self.submit_eq()?;
+         Ok(())
+     }
+     #[cfg(feature = "room-gpu-experiment")]
+@@ -828,6 +923,11 @@
+             return current.render();
+         };
+         let mut incoming = incoming.lock().unwrap();
++        #[cfg(feature = "room-gpu-experiment")]
++        {
++            current.complete_eq()?;
++            incoming.complete_eq()?;
++        }
+         let a = current
+             .block
+             .ok_or(Error::InvalidArgument("Missing paired room block"))?;
+@@ -880,6 +980,8 @@
+         {
+             current.submit_gpu()?;
+             incoming.submit_gpu()?;
++            current.submit_eq()?;
++            incoming.submit_eq()?;
+         }
+         Ok(())
+     }
+@@ -1068,6 +1170,14 @@
+         let mut result = Self {
+             group: Arc::new(Mutex::new(Voices {
+                 #[cfg(feature = "room-gpu-experiment")]
++                gpu_eq: prepared
++                    .gpu_factory
++                    .as_ref()
++                    .map(|f| f.create_eq(prepared.room.clone()))
++                    .transpose()?
++                    .flatten()
++                    .map(GpuEqBatch::new),
++                #[cfg(feature = "room-gpu-experiment")]
+                 gpu: prepared
+                     .gpu_factory
+                     .as_ref()
+@@ -1097,7 +1207,12 @@
+         };
+         #[cfg(feature = "room-gpu-experiment")]
+         if let Some(factory) = &result.prepared.gpu_factory {
+-            result.output.lock().unwrap().field.enable_gpu_late(&**factory)?;
++            result
++                .output
++                .lock()
++                .unwrap()
++                .field
++                .enable_gpu_late(&**factory)?;
+         }
+         result.reserve(capacity)?;
+         drop(result.output.lock().unwrap());
+@@ -1134,6 +1249,10 @@
+             #[cfg(feature = "room-gpu-experiment")]
+             if group.gpu.is_some() {
+                 group.voices.last_mut().unwrap().emitter.enable_gpu()?;
++            }
++            #[cfg(feature = "room-gpu-experiment")]
++            if group.gpu_eq.is_some() {
++                group.voices.last_mut().unwrap().emitter.enable_gpu_eq()?;
+             }
+         }
+         Ok(())
+--- a/rust/crates/mradm-dsp/src/room/gpu_experiment.rs
++++ b/rust/crates/mradm-dsp/src/room/gpu_experiment.rs
+@@ -1,6 +1,7 @@
+ //! Research-only batch boundary. The Session still owns control, EQ, sends,
+ //! late field, LFE, head-locked processing, FIFO, switching and tail accounting.
+ //! No unsafe code or native GPU dependency belongs to this module.
++mod eq;
+ mod reference;
+ use super::{
+     BLOCK,
+@@ -10,6 +11,7 @@
+     prepared::PreparedRoom,
+ };
+ use crate::{Error, Result};
++pub use eq::{EQ_DUE, EQ_FORK, EQ_RESET, EqBackend, EqCommand};
+ pub use reference::ReferenceFactory;
+ use std::sync::Arc;
+ 
+@@ -23,6 +25,9 @@
+ pub trait Factory: Send + Sync {
+     fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>>;
+     fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>>;
++    fn create_eq(&self, _room: Arc<PreparedRoom>) -> Result<Option<Box<dyn EqBackend>>> {
++        Ok(None)
++    }
+ }
+ /// The 2048-frame late partition is computed after its input closes, then
+ /// consumed starting at the next canonical block, just like LongReader.
+--- a/rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs
++++ b/rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs
+@@ -4,6 +4,18 @@
+ use crate::{Complex32 as C, fft::RealFft};
+ pub struct ReferenceFactory;
+ impl Factory for ReferenceFactory {
++    fn create_eq(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn EqBackend>>> {
++        let Some(filters) = room.eq.gpu_tail() else {
++            return Ok(None);
++        };
++        if room.eq.channels != 1 {
++            return Err(Error::Unsupported("GPU EQ requires mono"));
++        }
++        Ok(Some(Box::new(super::eq::ReferenceEq::new(
++            filters,
++            room.quality.fft(),
++        )?)))
++    }
+     fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>> {
+         Ok(Box::new(Reference::new(room)?))
+     }
+--- a/rust/crates/mradm-dsp/examples/room_support/gpu_native.rs
++++ b/rust/crates/mradm-dsp/examples/room_support/gpu_native.rs
+@@ -3,7 +3,9 @@
+ use mradm_dsp::{
+     Complex32, Error, Result,
+     room::{
+-        gpu_experiment::{Backend, Factory, Frame, Job, LateBackend, Range, Task, Update},
++        gpu_experiment::{
++            Backend, EqBackend, EqCommand, Factory, Frame, Job, LateBackend, Range, Task, Update,
++        },
+         prepared::PreparedRoom,
+     },
+ };
+@@ -58,7 +60,17 @@
+ type LateCreate =
+     unsafe extern "C" fn(*const u8, *const u8, u32, u32, *const f32, usize) -> *mut c_void;
+ type LateSubmit = unsafe extern "C" fn(*mut c_void, *const f32, usize, u32) -> i32;
++type EqCreate = unsafe extern "C" fn(*const u8, *const u8, u32, *const f32, usize) -> *mut c_void;
++type EqSubmit =
++    unsafe extern "C" fn(*mut c_void, *const EqCommand, usize, *const f32, usize) -> i32;
++struct EqApi {
++    create: EqCreate,
++    destroy: Destroy,
++    submit: EqSubmit,
++    finish: Finish,
++}
+ struct Library {
++    eq: Option<EqApi>,
+     handle: *mut c_void,
+     create: Create,
+     destroy: Destroy,
+@@ -98,7 +110,32 @@
+                 Ok(p)
+             }
+         };
++        // Old frozen DLLs remain usable as a CPU-EQ comparison. A partial new
++        // interface is an error, not a reason to silently disable EQ offload.
++        let eq_symbols = [
++            b"room_gpu_eq_create\0".as_slice(),
++            b"room_gpu_eq_destroy\0",
++            b"room_gpu_eq_submit\0",
++            b"room_gpu_eq_finish\0",
++        ]
++        .map(|name| unsafe { GetProcAddress(handle, name.as_ptr()) });
++        let eq = if eq_symbols.iter().all(|p| p.is_null()) {
++            None
++        } else if eq_symbols.iter().any(|p| p.is_null()) {
++            unsafe {
++                FreeLibrary(handle);
++            }
++            return Err("Incomplete GPU EQ interface".into());
++        } else {
++            Some(EqApi {
++                create: unsafe { std::mem::transmute::<*mut c_void, EqCreate>(eq_symbols[0]) },
++                destroy: unsafe { std::mem::transmute::<*mut c_void, Destroy>(eq_symbols[1]) },
++                submit: unsafe { std::mem::transmute::<*mut c_void, EqSubmit>(eq_symbols[2]) },
++                finish: unsafe { std::mem::transmute::<*mut c_void, Finish>(eq_symbols[3]) },
++            })
++        };
+         Ok(Self {
++            eq,
+             handle,
+             create: unsafe {
+                 std::mem::transmute::<*mut c_void, Create>(symbol(b"room_gpu_session_create\0")?)
+@@ -177,6 +214,40 @@
+     }
+ }
+ impl Factory for NativeFactory {
++    fn create_eq(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn EqBackend>>> {
++        let Some(api) = &self.library.eq else {
++            return Ok(None);
++        };
++        let Some(tail) = room.eq.gpu_tail() else {
++            return Ok(None);
++        };
++        if room.eq.channels != 1 {
++            return Err(Error::Unsupported("GPU EQ requires mono"));
++        }
++        let filters: Vec<_> = tail.iter().flat_map(|v| [v.re, v.im]).collect();
++        let path = |p: &Path| {
++            CString::new(p.to_string_lossy().as_bytes())
++                .map_err(|_| Error::InvalidArgument("Invalid GPU path"))
++        };
++        let fixture = path(&self.fixture)?;
++        let kernels = path(&self.kernels)?;
++        let context = unsafe {
++            (api.create)(
++                fixture.as_ptr().cast(),
++                kernels.as_ptr().cast(),
++                (tail.len() / 2049) as u32,
++                filters.as_ptr(),
++                filters.len(),
++            )
++        };
++        if context.is_null() {
++            self.library.check(1)?;
++        }
++        Ok(Some(Box::new(NativeEq {
++            library: self.library.clone(),
++            context,
++        })))
++    }
+     fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>> {
+         let Some(first) = room.late[0].gpu_tail() else {
+             return Ok(None);
+@@ -259,6 +330,41 @@
+         }))
+     }
+ }
++struct NativeEq {
++    library: Arc<Library>,
++    context: *mut c_void,
++}
++// The owning Voices group serializes the batch and keeps buffers alive while pending.
++unsafe impl Send for NativeEq {}
++impl Drop for NativeEq {
++    fn drop(&mut self) {
++        unsafe {
++            (self.library.eq.as_ref().unwrap().destroy)(self.context);
++        }
++    }
++}
++impl EqBackend for NativeEq {
++    fn submit(&mut self, commands: &[EqCommand], input: &[f32]) -> Result<()> {
++        self.library.check(unsafe {
++            (self.library.eq.as_ref().unwrap().submit)(
++                self.context,
++                commands.as_ptr(),
++                commands.len(),
++                input.as_ptr(),
++                input.len(),
++            )
++        })
++    }
++    fn finish(&mut self, output: &mut [f32]) -> Result<()> {
++        self.library.check(unsafe {
++            (self.library.eq.as_ref().unwrap().finish)(
++                self.context,
++                output.as_mut_ptr(),
++                output.len(),
++            )
++        })
++    }
++}
+ struct NativeLate {
+     library: Arc<Library>,
+     context: *mut c_void,
+--- a/rust/crates/mradm-dsp/tests/room_gpu.rs
++++ b/rust/crates/mradm-dsp/tests/room_gpu.rs
+@@ -46,6 +46,143 @@
+             .with_gpu_experiment(Arc::new(ReferenceFactory))
+             .unwrap(),
+     )
++}
++
++#[test]
++fn batched_long_eq_preserves_forks_pending_reset_source_restart_and_complete_switch_tail() {
++    let _lock = TEST_LOCK.lock().unwrap();
++    for rate in [48000, 96000] {
++        let original = common::fixture_at_rate(Quality::Realtime, rate);
++        let mut profile = (*original.room.profile).clone();
++        profile.eq = (0..32768)
++            .map(|i| {
++                if i == 0 {
++                    0.7
++                } else {
++                    libm::cos(i as f64 * 0.037) as f32 * 0.0002 / (1. + i as f32 * 0.0005)
++                }
++            })
++            .collect();
++        let prepare = |profile| {
++            Arc::new(
++                PreparedSet::new(Arc::new(
++                    PreparedRoom::with_quality(
++                        Arc::new(profile),
++                        original.room.hrir.clone(),
++                        Quality::Realtime,
++                    )
++                    .unwrap(),
++                ))
++                .unwrap(),
++            )
++        };
++        let base = prepare(profile.clone());
++        profile.identity.push_str("-different-eq");
++        profile.eq[2173] += 0.03;
++        profile.eq.extend_from_slice(&[0.01; 13]);
++        profile.absorption = [[0.8; 8]; 6];
++        let next = prepare(profile);
++        let mut a = Session::new(base.clone(), 1.5, true, false).unwrap();
++        let mut b = Session::new(adapted(&base), 1.5, true, false).unwrap();
++        let descriptions: Vec<_> = (0..4)
++            .map(|i| RoomDescription {
++                id: i + 1,
++                position: [i as f32 * 0.1, 0.5, 0.],
++                ..Default::default()
++            })
++            .collect();
++        a.configure(&descriptions).unwrap();
++        b.configure(&descriptions).unwrap();
++        let mut switch_a = Some(Box::new(Instance::new(next.clone(), 4).unwrap()));
++        let mut switch_b = Some(Box::new(Instance::new(adapted(&next), 4).unwrap()));
++        let mut input = [[0.; 512]; 4];
++        let mut out_a = [0.; 1024];
++        let mut out_b = [0.; 1024];
++        let (mut energy, mut error, mut peak, mut maximum) = (0f64, 0f64, 0f64, 0f64);
++        let mut phases = [false; 4];
++        for block in 0..200 {
++            if block == 16 {
++                // The preceding 2048-frame tail is in flight when reset arrives.
++                a.reset(4096).unwrap();
++                b.reset(4096).unwrap();
++            }
++            if block == 40 {
++                a.queue_room(switch_a.take().unwrap(), 1).unwrap();
++                b.queue_room(switch_b.take().unwrap(), 1).unwrap();
++            }
++            let n = [512, 137, 375, 512][block % 4];
++            for (source, row) in input.iter_mut().enumerate() {
++                for (i, value) in row[..n].iter_mut().enumerate() {
++                    *value = if block < source * 3 || (source == 3 && (20..150).contains(&block)) {
++                        0.
++                    } else {
++                        ((block * 512 + i + source * 29) % 179) as f32 * 0.00001 - 0.00089
++                    };
++                }
++            }
++            a.set_pose([block as f32 * 0.3, 2., 0.]).unwrap();
++            b.set_pose([block as f32 * 0.3, 2., 0.]).unwrap();
++            a.process(
++                n,
++                input.iter().map(|row| Some(&row[..n])),
++                &[],
++                &[],
++                &mut out_a[..n * 2],
++            )
++            .unwrap();
++            ALLOCS.store(0, Ordering::SeqCst);
++            CHECK.store(true, Ordering::SeqCst);
++            let value = b.process(
++                n,
++                input.iter().map(|row| Some(&row[..n])),
++                &[],
++                &[],
++                &mut out_b[..n * 2],
++            );
++            CHECK.store(false, Ordering::SeqCst);
++            value.unwrap();
++            assert_eq!(ALLOCS.load(Ordering::SeqCst), 0);
++            phases[b.info().phase as usize] = true;
++            assert_eq!(a.info().phase, b.info().phase);
++            for (&x, &y) in out_a[..n * 2].iter().zip(&out_b[..n * 2]) {
++                assert!(x.is_finite() && y.is_finite());
++                energy += f64::from(x).powi(2);
++                error += (f64::from(x) - f64::from(y)).powi(2);
++                peak = peak.max(f64::from(x).abs());
++                maximum = maximum.max((f64::from(x) - f64::from(y)).abs());
++            }
++            let _ = a.take_retired();
++            let _ = b.take_retired();
++        }
++        assert!(
++            phases.into_iter().all(|v| v),
++            "did not cover all room phases"
++        );
++        a.end_input();
++        b.end_input();
++        assert_eq!(a.info().tail_frames, b.info().tail_frames);
++        for _ in 0..(a.info().tail_frames as usize).div_ceil(512) + 2 {
++            a.process(512, (0..4).map(|_| None), &[], &[], &mut out_a)
++                .unwrap();
++            b.process(512, (0..4).map(|_| None), &[], &[], &mut out_b)
++                .unwrap();
++            for (&x, &y) in out_a.iter().zip(&out_b) {
++                assert!(x.is_finite() && y.is_finite());
++                energy += f64::from(x).powi(2);
++                error += (f64::from(x) - f64::from(y)).powi(2);
++                peak = peak.max(f64::from(x).abs());
++                maximum = maximum.max((f64::from(x) - f64::from(y)).abs());
++            }
++        }
++        assert!(
++            (error / energy).sqrt() <= 2e-5,
++            "{rate}: {}",
++            (error / energy).sqrt()
++        );
++        assert!(maximum / peak <= 2e-4);
++        assert_eq!(a.info().latency_frames, b.info().latency_frames);
++        assert_eq!(a.info().input_frames, b.info().input_frames);
++    }
+ }
+ #[test]
+ fn recorded_full_session_preserves_fades_branches_reset_switch_and_tail_without_allocations() {
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -304,6 +304,7 @@
+             std::memcpy(destination, host_output.data, samples * sizeof(float));
+     }
+ };
++#include "session_eq.h"
+ #include "session_late.h"
+ thread_local std::array<char, 1024> last_error{};
+ void remember(const char* message) noexcept {
+@@ -402,4 +403,36 @@
+     }
+     GPU_CATCH(1)
+ }
++
++extern "C" __declspec(dllexport) void* room_gpu_eq_create(
++    const char* fixture, const char* kernels, unsigned parts, const float* filters, size_t floats) noexcept {
++    try {
++        runtime(cudaSetDevice(0));
++        if (!parts || parts > 512 || floats != size_t(parts) * 2049 * 2)
++            throw std::runtime_error("Unsupported GPU EQ shape");
++        return new EqEngine(fs::u8path(fixture), fs::u8path(kernels), parts, filters);
++    }
++    GPU_CATCH(nullptr)
++}
++extern "C" __declspec(dllexport) void room_gpu_eq_destroy(void* p) noexcept {
++    try {
++        delete static_cast<EqEngine*>(p);
++    }
++    GPU_CATCH()
++}
++extern "C" __declspec(dllexport) int room_gpu_eq_submit(
++    void* p, const RoomGpuEqCommand* commands, size_t channels, const float* windows, size_t samples) noexcept {
++    try {
++        static_cast<EqEngine*>(p)->submit(commands, channels, windows, samples);
++        return 0;
++    }
++    GPU_CATCH(1)
++}
++extern "C" __declspec(dllexport) int room_gpu_eq_finish(void* p, float* output, size_t samples) noexcept {
++    try {
++        static_cast<EqEngine*>(p)->finish(output, samples);
++        return 0;
++    }
++    GPU_CATCH(1)
++}
+ #undef GPU_CATCH
+--- a/scripts/research/room_gpu/session_backend.h
++++ b/scripts/research/room_gpu/session_backend.h
+@@ -2,6 +2,9 @@
+ #include <stddef.h>
+ #include <stdint.h>
+ // Private research ABI, not part of adm/c_api.h.
++struct RoomGpuEqCommand {
++    uint32_t head, flags;
++};
+ struct RoomGpuParams {
+     uint32_t rate, fft, taps, bucket_stride, buckets, rows, images, history_parts;
+     const float* materials;
+--- a/scripts/research/room_gpu/session_kernels.cu
++++ b/scripts/research/room_gpu/session_kernels.cu
+@@ -198,3 +198,50 @@
+     unsigned i = blockIdx.x * blockDim.x + threadIdx.x, direction = blockIdx.y;
+     out[direction * 2048 + i] = time[direction * 4096 + 2048 + i] * (1.f / 4096);
+ }
++
++struct EqCommand {
++    unsigned head, flags;
++};
++struct EqHeader {
++    unsigned channels;
++    EqCommand commands[64];
++};
++extern "C" __global__ void eq_input(const EqHeader* h, const Complex* input, Complex* history, unsigned parts) {
++    unsigned bin = blockIdx.x * blockDim.x + threadIdx.x, direct = blockIdx.y * 2, wet = direct + 1;
++    if (bin >= 2049 || wet >= h->channels)
++        return;
++    EqCommand a = h->commands[direct], b = h->commands[wet];
++    if ((a.flags & 1) || (b.flags & 3)) {
++        for (unsigned p = 0; p < parts; ++p) {
++            unsigned d = (direct * parts + p) * 2049 + bin;
++            unsigned w = (wet * parts + p) * 2049 + bin;
++            Complex value = (a.flags & 1) ? Complex{0, 0} : history[d];
++            if (a.flags & 1)
++                history[d] = value;
++            if (b.flags & 2)
++                history[w] = value;
++            else if (b.flags & 1)
++                history[w] = {0, 0};
++        }
++    }
++    // Every bin's paired fork completes before either new row is installed.
++    if (a.flags & 4)
++        history[(direct * parts + a.head) * 2049 + bin] = input[direct * 2049 + bin];
++    if (b.flags & 4)
++        history[(wet * parts + b.head) * 2049 + bin] = input[wet * 2049 + bin];
++}
++extern "C" __global__ void
++eq_convolve(const EqHeader* h, const Complex* history, const Complex* filters, Complex* out, unsigned parts) {
++    unsigned bin = blockIdx.x * blockDim.x + threadIdx.x, channel = blockIdx.y;
++    if (bin >= 2049)
++        return;
++    Complex sum = {0, 0};
++    if (channel < h->channels && (h->commands[channel].flags & 4)) {
++        unsigned head = h->commands[channel].head;
++        for (unsigned p = 0; p < parts; ++p) {
++            unsigned row = head >= p ? head - p : head + parts - p;
++            sum = plus(sum, product(history[(channel * parts + row) * 2049 + bin], filters[p * 2049 + bin]));
++        }
++    }
++    out[channel * 2049 + bin] = sum;
++}
+--- a/scripts/research/room_gpu/session_late.h
++++ b/scripts/research/room_gpu/session_late.h
+@@ -1,3 +1,4 @@
++#pragma once
+ // Included inside the private Session backend namespace.
+ // The long partition result is consumed by the next canonical block, preserving
+ // the original 2048-frame tail offset. A separate stream overlaps current audio.
+--- /dev/null
++++ b/rust/crates/mradm-dsp/src/room/gpu_experiment/eq.rs
+@@ -0,0 +1,111 @@
++//! Independent mono EQ histories; each adjacent pair is direct/wet for one source.
++use crate::{
++    Complex32 as C, Error, Result,
++    fft::{FftPolicy, RealFft},
++};
++pub const EQ_RESET: u32 = 1;
++pub const EQ_FORK: u32 = 2;
++pub const EQ_DUE: u32 = 4;
++#[derive(Clone, Copy, Default)]
++#[repr(C)]
++pub struct EqCommand {
++    pub head: u32,
++    pub flags: u32,
++}
++pub trait EqBackend: Send {
++    /// Apply resets, then direct-to-wet forks, then new rows. Only EQ_DUE rows
++    /// produce a result. Inputs are copied before returning from submit.
++    fn submit(&mut self, commands: &[EqCommand], input: &[f32]) -> Result<()>;
++    fn finish(&mut self, output: &mut [f32]) -> Result<()>;
++}
++
++pub(super) struct ReferenceEq {
++    parts: usize,
++    filters: Vec<C>,
++    history: Vec<C>,
++    output: Vec<f32>,
++    sum: Vec<C>,
++    time: Vec<f32>,
++    fft: RealFft,
++    pending: usize,
++}
++impl ReferenceEq {
++    pub fn new(filters: &[C], policy: FftPolicy) -> Result<Self> {
++        Ok(Self {
++            parts: filters.len() / 2049,
++            filters: filters.to_vec(),
++            history: vec![C::default(); super::MAX_VOICES * 2 * filters.len()],
++            output: vec![0.; super::MAX_VOICES * 2 * 2048],
++            sum: vec![C::default(); 2049],
++            time: vec![0.; 4096],
++            fft: RealFft::with_policy(4096, policy)?,
++            pending: 0,
++        })
++    }
++}
++impl EqBackend for ReferenceEq {
++    fn submit(&mut self, commands: &[EqCommand], input: &[f32]) -> Result<()> {
++        if self.pending != 0
++            || commands.is_empty()
++            || !commands.len().is_multiple_of(2)
++            || commands.len() > super::MAX_VOICES * 2
++            || input.len() != commands.len() * 4096
++            || commands.iter().enumerate().any(|(i, c)| {
++                c.head as usize >= self.parts
++                    || c.flags & !7 != 0
++                    || (i % 2 == 0 && c.flags & EQ_FORK != 0)
++            })
++        {
++            return Err(Error::InvalidArgument("Invalid GPU EQ batch"));
++        }
++        let stride = self.filters.len();
++        for (channel, command) in commands.iter().enumerate() {
++            let offset = channel * stride;
++            if command.flags & EQ_RESET != 0 {
++                self.history[offset..offset + stride].fill(C::default());
++            }
++        }
++        for channel in (1..commands.len()).step_by(2) {
++            if commands[channel].flags & EQ_FORK != 0 {
++                let offset = channel * stride;
++                self.history.copy_within(offset - stride..offset, offset);
++            }
++        }
++        for (channel, command) in commands.iter().enumerate() {
++            if command.flags & EQ_DUE == 0 {
++                continue;
++            }
++            let head = command.head as usize;
++            let offset = (channel * self.parts + head) * 2049;
++            self.fft.forward(
++                &input[channel * 4096..(channel + 1) * 4096],
++                &mut self.history[offset..offset + 2049],
++            )?;
++        }
++        for (channel, command) in commands.iter().enumerate() {
++            if command.flags & EQ_DUE == 0 {
++                continue;
++            }
++            self.sum.fill(C::default());
++            for part in 0..self.parts {
++                let at = (command.head as usize + self.parts - part) % self.parts;
++                let offset = (channel * self.parts + at) * 2049;
++                for bin in 0..2049 {
++                    self.sum[bin] += self.history[offset + bin] * self.filters[part * 2049 + bin];
++                }
++            }
++            self.fft.inverse(&self.sum, &mut self.time)?;
++            self.output[channel * 2048..(channel + 1) * 2048].copy_from_slice(&self.time[2048..]);
++        }
++        self.pending = commands.len();
++        Ok(())
++    }
++    fn finish(&mut self, output: &mut [f32]) -> Result<()> {
++        if self.pending == 0 || output.len() != self.pending * 2048 {
++            return Err(Error::InvalidArgument("Invalid GPU EQ completion"));
++        }
++        output.copy_from_slice(&self.output[..output.len()]);
++        self.pending = 0;
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/rust/crates/mradm-dsp/src/room/partition/gpu_eq.rs
+@@ -0,0 +1,62 @@
++//! One forward window, not a second retained partition history. History lives
++//! in the batch backend; head EQ, overlap windows and ready samples remain here.
++use super::super::gpu_experiment::{EQ_DUE, EQ_FORK, EQ_RESET, EqCommand};
++use super::*;
++pub(super) struct EqTail {
++    previous: Vec<f32>,
++    pub window: Vec<f32>,
++    parts: usize,
++    head: usize,
++    flags: u32,
++    pub generation: u64,
++    pub awaiting: bool,
++}
++impl EqTail {
++    pub fn new(filters: &Filters) -> Result<Self> {
++        Ok(Self {
++            previous: vec![0.; 2048],
++            window: vec![0.; 4096],
++            parts: filters.partitions,
++            head: filters.partitions - 1,
++            flags: EQ_RESET,
++            generation: 0,
++            awaiting: false,
++        })
++    }
++    pub fn reset(&mut self) {
++        self.previous.fill(0.);
++        self.head = self.parts - 1;
++        self.flags = EQ_RESET;
++        self.generation = self.generation.wrapping_add(1);
++        self.awaiting = false;
++    }
++    pub fn fork(&mut self, source: &Self) -> Result<()> {
++        if self.parts != source.parts || source.awaiting || source.flags & EQ_DUE != 0 {
++            return Err(Error::InvalidArgument("Unfinished GPU EQ fork"));
++        }
++        self.previous.copy_from_slice(&source.previous);
++        self.head = source.head;
++        self.flags = EQ_FORK;
++        self.generation = self.generation.wrapping_add(1);
++        self.awaiting = false;
++        Ok(())
++    }
++    pub fn push(&mut self, input: &[f32]) -> Result<()> {
++        self.window[..2048].copy_from_slice(&self.previous);
++        self.window[2048..].copy_from_slice(input);
++        self.previous.copy_from_slice(input);
++        self.head = (self.head + 1) % self.parts;
++        self.flags |= EQ_DUE;
++        Ok(())
++    }
++    pub fn command(&self) -> EqCommand {
++        EqCommand {
++            head: self.head as u32,
++            flags: self.flags,
++        }
++    }
++    pub fn submitted(&mut self) {
++        self.awaiting = self.flags & EQ_DUE != 0;
++        self.flags = 0;
++    }
++}
+--- /dev/null
++++ b/scripts/research/room_gpu/session_eq.h
+@@ -0,0 +1,90 @@
++#pragma once
++#include "session_late.h"
++// Included inside the private backend namespace.
++// Each adjacent channel pair belongs to one source: direct, then wet.
++struct EqHeader {
++    unsigned channels;
++    RoomGpuEqCommand commands[64];
++};
++static_assert(sizeof(RoomGpuEqCommand) == 8 && sizeof(EqHeader) == 516);
++struct EqEngine {
++    unsigned parts, pending_channels = 0;
++    LateStream stream;
++    Device filters, history, input, parameters, fresh, spectrum, time, output;
++    Pinned host_input, host_parameters, host_output;
++    cudaDeviceProp properties = late_device_properties();
++    Module module;
++    Plan forward, inverse;
++    LateGraph graph;
++    CUfunction input_fn, convolve_fn, extract_fn;
++    EqEngine(const fs::path& fixture, const fs::path& source, unsigned p, const float* f)
++        : parts(p), filters(size_t(p) * 2049 * 8), history(size_t(64) * p * 2049 * 8), input(64 * 4096 * 4),
++          parameters(sizeof(EqHeader)), fresh(64 * 2049 * 8), spectrum(64 * 2049 * 8), time(64 * 4096 * 4),
++          output(64 * 2048 * 4), host_input(input.bytes), host_parameters(parameters.bytes), host_output(output.bytes),
++          module(source, Config(fixture / "config.txt"), 32, properties.major, properties.minor),
++          forward(4096, CUFFT_R2C, 64, stream.value), inverse(4096, CUFFT_C2R, 64, stream.value) {
++        runtime(cudaMemcpy(filters.data, f, filters.bytes, cudaMemcpyHostToDevice));
++        runtime(cudaMemset(history.data, 0, history.bytes));
++        std::memset(host_input.data, 0, host_input.bytes);
++        std::memset(host_parameters.data, 0, host_parameters.bytes);
++        input_fn = module.function("eq_input");
++        convolve_fn = module.function("eq_convolve");
++        extract_fn = module.function("late_extract");
++        execute();
++        runtime(cudaStreamSynchronize(stream.value));
++        runtime(cudaStreamBeginCapture(stream.value, cudaStreamCaptureModeThreadLocal));
++        execute();
++        runtime(cudaStreamEndCapture(stream.value, &graph.graph));
++        runtime(cudaGraphInstantiate(&graph.execution, graph.graph, 0));
++    }
++    ~EqEngine() {
++        cudaSetDevice(0);
++        if (pending_channels)
++            cudaStreamSynchronize(stream.value);
++    }
++    void execute() {
++        runtime(cudaMemcpyAsync(input.data, host_input.data, input.bytes, cudaMemcpyHostToDevice, stream.value));
++        runtime(cudaMemcpyAsync(
++            parameters.data, host_parameters.data, parameters.bytes, cudaMemcpyHostToDevice, stream.value));
++        fft_check(cufftExecR2C(forward.value, static_cast<float*>(input.data), static_cast<cufftComplex*>(fresh.data)));
++        auto launch = [&](CUfunction fn, unsigned x, unsigned y, std::initializer_list<void*> values) {
++            std::array<void*, 8> args{};
++            std::copy(values.begin(), values.end(), args.begin());
++            driver(cuLaunchKernel(
++                fn, x, y, 1, 128, 1, 1, 0, reinterpret_cast<CUstream>(stream.value), args.data(), nullptr));
++        };
++        launch(input_fn, 17, 32, {&parameters.data, &fresh.data, &history.data, &parts});
++        launch(convolve_fn, 17, 64, {&parameters.data, &history.data, &filters.data, &spectrum.data, &parts});
++        fft_check(
++            cufftExecC2R(inverse.value, static_cast<cufftComplex*>(spectrum.data), static_cast<float*>(time.data)));
++        launch(extract_fn, 16, 64, {&time.data, &output.data});
++        runtime(cudaMemcpyAsync(host_output.data, output.data, output.bytes, cudaMemcpyDeviceToHost, stream.value));
++    }
++    void submit(const RoomGpuEqCommand* commands, size_t channels, const float* windows, size_t samples) {
++        if (pending_channels || !channels || channels > 64 || channels % 2 || samples != channels * 4096)
++            throw std::runtime_error("Invalid GPU EQ submission");
++        for (size_t i = 0; i < channels; ++i) {
++            if (commands[i].head >= parts || (commands[i].flags & ~7u) || (i % 2 == 0 && commands[i].flags & 2))
++                throw std::runtime_error("Invalid GPU EQ command");
++        }
++        runtime(cudaSetDevice(0));
++        auto* header = static_cast<EqHeader*>(host_parameters.data);
++        header->channels = static_cast<unsigned>(channels);
++        std::memcpy(header->commands, commands, channels * sizeof(RoomGpuEqCommand));
++        auto* input_rows = static_cast<float*>(host_input.data);
++        for (size_t i = 0; i < channels; ++i) {
++            if (commands[i].flags & 4)
++                std::memcpy(input_rows + i * 4096, windows + i * 4096, 4096 * sizeof(float));
++        }
++        runtime(cudaGraphLaunch(graph.execution, stream.value));
++        pending_channels = static_cast<unsigned>(channels);
++    }
++    void finish(float* destination, size_t samples) {
++        if (!pending_channels || samples != size_t(pending_channels) * 2048)
++            throw std::runtime_error("Invalid GPU EQ completion");
++        runtime(cudaSetDevice(0));
++        runtime(cudaStreamSynchronize(stream.value));
++        pending_channels = 0;
++        std::memcpy(destination, host_output.data, samples * sizeof(float));
++    }
++};

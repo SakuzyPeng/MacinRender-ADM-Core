@@ -336,3 +336,148 @@ fn pipelined_position_ramps_preserve_fragmentation_screens_origin_and_zero_alloc
         assert!(canonical[..512 * 2].iter().all(|v| *v == 0.));
     }
 }
+
+fn tuned(base: &Arc<PreparedSet>) -> Arc<PreparedSet> {
+    Arc::new(
+        base.with_gpu_experiment(Arc::new(ReferenceFactory))
+            .unwrap()
+            .with_gpu_tuning(true, 4)
+            .unwrap(),
+    )
+}
+#[test]
+fn staggered_long_eq_preserves_forks_reset_restart_and_complete_switch_tail() {
+    let _lock = TEST_LOCK.lock().unwrap();
+    for rate in [48000, 96000] {
+        let original = common::fixture_at_rate(Quality::Realtime, rate);
+        let mut profile = (*original.room.profile).clone();
+        profile.eq = (0..32768)
+            .map(|i| {
+                if i == 0 {
+                    0.7
+                } else {
+                    libm::cos(i as f64 * 0.037) as f32 * 0.0002 / (1. + i as f32 * 0.0005)
+                }
+            })
+            .collect();
+        let prepare = |profile| {
+            Arc::new(
+                PreparedSet::new(Arc::new(
+                    PreparedRoom::with_quality(
+                        Arc::new(profile),
+                        original.room.hrir.clone(),
+                        Quality::Realtime,
+                    )
+                    .unwrap(),
+                ))
+                .unwrap(),
+            )
+        };
+        let base = prepare(profile.clone());
+        profile.identity.push_str("-different-eq");
+        profile.eq[2173] += 0.03;
+        profile.eq.extend_from_slice(&[0.01; 13]);
+        profile.absorption = [[0.8; 8]; 6];
+        let next = prepare(profile);
+        let mut a = Session::new(base.clone(), 1.5, true, false).unwrap();
+        let mut b = Session::new(tuned(&base), 1.5, true, false).unwrap();
+        let descriptions: Vec<_> = (0..8)
+            .map(|i| RoomDescription {
+                id: i + 1,
+                position: [i as f32 * 0.1, 0.5, 0.],
+                ..Default::default()
+            })
+            .collect();
+        a.configure(&descriptions).unwrap();
+        b.configure(&descriptions).unwrap();
+        let mut switch_a = Some(Box::new(Instance::new(next.clone(), 8).unwrap()));
+        let mut switch_b = Some(Box::new(Instance::new(tuned(&next), 8).unwrap()));
+        let mut input = [[0.; 512]; 8];
+        let mut out_a = [0.; 1024];
+        let mut out_b = [0.; 1024];
+        let (mut energy, mut error, mut peak, mut maximum) = (0f64, 0f64, 0f64, 0f64);
+        let mut phases = [false; 4];
+        for block in 0..200 {
+            if block == 16 {
+                // Reset at a boundary shared by the phase-zero long partition.
+                a.reset(4096).unwrap();
+                b.reset(4096).unwrap();
+            }
+            if block == 40 {
+                a.queue_room(switch_a.take().unwrap(), 1).unwrap();
+                b.queue_room(switch_b.take().unwrap(), 1).unwrap();
+            }
+            let n = [512, 137, 375, 512][block % 4];
+            for (source, row) in input.iter_mut().enumerate() {
+                for (i, value) in row[..n].iter_mut().enumerate() {
+                    *value = if block < source * 3 || (source == 3 && (20..150).contains(&block)) {
+                        0.
+                    } else {
+                        ((block * 512 + i + source * 29) % 179) as f32 * 0.00001 - 0.00089
+                    };
+                }
+            }
+            a.set_pose([block as f32 * 0.3, 2., 0.]).unwrap();
+            b.set_pose([block as f32 * 0.3, 2., 0.]).unwrap();
+            a.process(
+                n,
+                input.iter().map(|row| Some(&row[..n])),
+                &[],
+                &[],
+                &mut out_a[..n * 2],
+            )
+            .unwrap();
+            ALLOCS.store(0, Ordering::SeqCst);
+            CHECK.store(true, Ordering::SeqCst);
+            let value = b.process(
+                n,
+                input.iter().map(|row| Some(&row[..n])),
+                &[],
+                &[],
+                &mut out_b[..n * 2],
+            );
+            CHECK.store(false, Ordering::SeqCst);
+            value.unwrap();
+            assert_eq!(ALLOCS.load(Ordering::SeqCst), 0);
+            phases[b.info().phase as usize] = true;
+            assert_eq!(a.info().phase, b.info().phase);
+            for (&x, &y) in out_a[..n * 2].iter().zip(&out_b[..n * 2]) {
+                assert!(x.is_finite() && y.is_finite());
+                energy += f64::from(x).powi(2);
+                error += (f64::from(x) - f64::from(y)).powi(2);
+                peak = peak.max(f64::from(x).abs());
+                maximum = maximum.max((f64::from(x) - f64::from(y)).abs());
+            }
+            let _ = a.take_retired();
+            let _ = b.take_retired();
+        }
+        assert!(
+            phases.into_iter().all(|v| v),
+            "did not cover all room phases"
+        );
+        a.end_input();
+        b.end_input();
+        assert_eq!(a.info().tail_frames, b.info().tail_frames);
+        for _ in 0..(a.info().tail_frames as usize).div_ceil(512) + 2 {
+            a.process(512, (0..8).map(|_| None), &[], &[], &mut out_a)
+                .unwrap();
+            b.process(512, (0..8).map(|_| None), &[], &[], &mut out_b)
+                .unwrap();
+            for (&x, &y) in out_a.iter().zip(&out_b) {
+                assert!(x.is_finite() && y.is_finite());
+                energy += f64::from(x).powi(2);
+                error += (f64::from(x) - f64::from(y)).powi(2);
+                peak = peak.max(f64::from(x).abs());
+                maximum = maximum.max((f64::from(x) - f64::from(y)).abs());
+            }
+        }
+        assert!(
+            (error / energy).sqrt() <= 2e-5,
+            "{rate}: {}",
+            (error / energy).sqrt()
+        );
+        assert!(maximum / peak <= 2e-4);
+        assert_eq!(a.info().latency_frames, b.info().latency_frames);
+        assert_eq!(a.info().input_frames, b.info().input_frames);
+    }
+}

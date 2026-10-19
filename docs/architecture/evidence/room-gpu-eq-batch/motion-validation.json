@@ -1,0 +1,2887 @@
+{
+  "schema": "mradm.room-gpu-eq-motion-validation",
+  "version": 1,
+  "date_local": "2026-10-18",
+  "base_commit": "e7ace2a",
+  "outcome": {
+    "short_passed": true,
+    "motion_long_passed": false,
+    "completed_candidate_long_rounds": 2,
+    "candidate_long_calls": 45000,
+    "candidate_long_deadline_misses": 1,
+    "remaining_long_rounds_not_run": 4,
+    "runtime_reverted": true,
+    "device_validation_not_started": true
+  },
+  "policy": "Frequent room switching is observational only. This failure is in fixed-room distance motion and still blocks acceptance.",
+  "provenance": {
+    "frozen_artifacts_reused": true,
+    "recompiled_this_round": false,
+    "binary_and_kernel_sha256": {
+      "candidate/room_bench.exe": "7807722e92cdea39ee024b5409be7f96d3264d1322228f3a372e8ab8a7e2136f",
+      "candidate/room_replay.exe": "0eac8c7205d3ad062d3420a8014a75e1d3f5e6a1c59f6c63d3202aaa287fd464",
+      "candidate/room_gpu_session.dll": "30ea002bd7499da236b34c7fccf2850b0171cba5290d3ff90dfe1eae421334de",
+      "candidate/session_kernels.cu": "994e0fdaf605c16570ea1476a800826c4d3c18a53e032cf5647f070f729a9792",
+      "baseline/room_bench.exe": "2b5dd763cc52e5bc0abbca85063979600e9823302876df6af59e57475e2b8099",
+      "baseline/room_replay.exe": "d8400bc74aab858890be9b7c79c03d21299ba14adc2a42c348f5f0323a896579",
+      "baseline/room_gpu_session.dll": "7a0ae855b1b30ba160b160e0ec8e9a1115ee42fba7e40d7ae5759bdf1de8b821",
+      "baseline/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851"
+    },
+    "all_candidate_changed_source_hashes_match_prior_evidence": true,
+    "all_archived_source_files_compared": 309,
+    "archived_source_mismatches": [],
+    "fixture_manifest_identical": true,
+    "fixture_manifest_sha256": "1100364110dce7de22f50326feda33d65af39cb27bc69a91e6c1768679e68ecd",
+    "fixture_payloads": 12,
+    "fixture_payload_bytes": 644253669,
+    "uploaded_files_verified": {
+      "verified_files": 43,
+      "bytes": 1086311224
+    },
+    "baseline_archive_source_differences_from_committed_snapshot": [
+      "rust/crates/mradm-dsp/src/room/session.rs"
+    ],
+    "baseline_snapshot_note": "The combined experiment binaries were frozen before commit e7ace2a excluded inactive HOA research. Historical timing remains tied to these archived binaries; see room-gpu-combined/commit-checks.json.",
+    "runtime_rollback_equals_head": true,
+    "rollback_verified_paths": 14
+  },
+  "numerical": {
+    "reused_previous_unchanged_artifact_evidence": "validation.json",
+    "rerun_this_round": false,
+    "results": {
+      "default": {
+        "passed": true,
+        "frames": 231581,
+        "maximum_relative_l2": 4.947644584753168e-07,
+        "maximum_over_reference_peak": 6.516114024176086e-07
+      },
+      "world_only": {
+        "passed": true,
+        "frames": 231581,
+        "maximum_relative_l2": 5.232097034403449e-07,
+        "maximum_over_reference_peak": 7.056050916463413e-07
+      }
+    }
+  },
+  "smoke": {
+    "schema": "mradm.room-gpu-eq-motion",
+    "version": 1,
+    "mode": "smoke",
+    "workers": 8,
+    "scope": "Fresh process per run; uninstrumented Release Session; 32 warmup calls excluded; no device callback.",
+    "host_policy": "Normal desktop applications retained; no concurrent task build or benchmark. All candidate motion misses count.",
+    "binary_sha256": {
+      "candidate/room_bench.exe": "7807722e92cdea39ee024b5409be7f96d3264d1322228f3a372e8ab8a7e2136f",
+      "candidate/room_replay.exe": "0eac8c7205d3ad062d3420a8014a75e1d3f5e6a1c59f6c63d3202aaa287fd464",
+      "candidate/room_gpu_session.dll": "30ea002bd7499da236b34c7fccf2850b0171cba5290d3ff90dfe1eae421334de",
+      "candidate/session_kernels.cu": "994e0fdaf605c16570ea1476a800826c4d3c18a53e032cf5647f070f729a9792",
+      "baseline/room_bench.exe": "2b5dd763cc52e5bc0abbca85063979600e9823302876df6af59e57475e2b8099",
+      "baseline/room_replay.exe": "d8400bc74aab858890be9b7c79c03d21299ba14adc2a42c348f5f0323a896579",
+      "baseline/room_gpu_session.dll": "7a0ae855b1b30ba160b160e0ec8e9a1115ee42fba7e40d7ae5759bdf1de8b821",
+      "baseline/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851"
+    },
+    "cases": [
+      {
+        "variant": "baseline",
+        "scenario": "ramps",
+        "repetition": 1,
+        "calls": 1,
+        "command": [
+          "<task>\\baseline\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "ramps",
+          "--gpu-dll",
+          "<task>\\baseline\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\baseline\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:24:10Z",
+          "background_cpu_percent": [
+            2.44140625,
+            8.49609375,
+            14.519230769230774
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.53 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 0.005333333333333333,
+          "blocks": 1,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 0.0031595,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.1595,
+          "mean_ms": 3.1595,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.1595,
+          "p99_ms": 3.1595,
+          "peak": 0.029012436047196388,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 32,
+              "measured_call": 0,
+              "ms": 3.1595
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 59.240625
+        },
+        "peak_working_set_bytes": 1707569152,
+        "memory_observations": 197,
+        "process_seconds": 12.35999999998603,
+        "host_after": {
+          "utc": "2026-10-19T06:24:26Z",
+          "background_cpu_percent": [
+            8.546168958742628,
+            2.5242718446601975,
+            4.710500490677139
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.39 W, 1056 MiB\n"
+      },
+      {
+        "variant": "candidate",
+        "scenario": "ramps",
+        "repetition": 1,
+        "calls": 1,
+        "command": [
+          "<task>\\candidate\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "ramps",
+          "--gpu-dll",
+          "<task>\\candidate\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\candidate\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:24:29Z",
+          "background_cpu_percent": [
+            4.956268221574344,
+            3.2692307692307687,
+            4.00390625
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.28 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 0.005333333333333333,
+          "blocks": 1,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 0.0028677,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 2.8677,
+          "mean_ms": 2.8677,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 2.8677,
+          "p99_ms": 2.8677,
+          "peak": 0.02901243418455124,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 32,
+              "measured_call": 0,
+              "ms": 2.8677
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 53.769375
+        },
+        "peak_working_set_bytes": 1739210752,
+        "memory_observations": 199,
+        "process_seconds": 12.5,
+        "host_after": {
+          "utc": "2026-10-19T06:24:45Z",
+          "background_cpu_percent": [
+            4.692082111436946,
+            2.4390243902439046,
+            2.3076923076923106
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.03 W, 1056 MiB\n"
+      }
+    ],
+    "passed": true
+  },
+  "short": {
+    "schema": "mradm.room-gpu-eq-motion",
+    "version": 1,
+    "mode": "short",
+    "workers": 8,
+    "scope": "Fresh process per run; uninstrumented Release Session; 32 warmup calls excluded; no device callback.",
+    "host_policy": "Normal desktop applications retained; no concurrent task build or benchmark. All candidate motion misses count.",
+    "binary_sha256": {
+      "candidate/room_bench.exe": "7807722e92cdea39ee024b5409be7f96d3264d1322228f3a372e8ab8a7e2136f",
+      "candidate/room_replay.exe": "0eac8c7205d3ad062d3420a8014a75e1d3f5e6a1c59f6c63d3202aaa287fd464",
+      "candidate/room_gpu_session.dll": "30ea002bd7499da236b34c7fccf2850b0171cba5290d3ff90dfe1eae421334de",
+      "candidate/session_kernels.cu": "994e0fdaf605c16570ea1476a800826c4d3c18a53e032cf5647f070f729a9792",
+      "baseline/room_bench.exe": "2b5dd763cc52e5bc0abbca85063979600e9823302876df6af59e57475e2b8099",
+      "baseline/room_replay.exe": "d8400bc74aab858890be9b7c79c03d21299ba14adc2a42c348f5f0323a896579",
+      "baseline/room_gpu_session.dll": "7a0ae855b1b30ba160b160e0ec8e9a1115ee42fba7e40d7ae5759bdf1de8b821",
+      "baseline/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851"
+    },
+    "cases": [
+      {
+        "variant": "baseline",
+        "scenario": "ramps",
+        "repetition": 1,
+        "calls": 1024,
+        "command": [
+          "<task>\\baseline\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1024",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "ramps",
+          "--gpu-dll",
+          "<task>\\baseline\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\baseline\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:25:10Z",
+          "background_cpu_percent": [
+            6.8359375,
+            8.269230769230774,
+            7.115384615384612
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 30.73 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 2.9065343999999964,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.8344,
+          "mean_ms": 2.8384124999999965,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.3223,
+          "p99_ms": 3.5228,
+          "peak": 0.031607646495103836,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 575,
+              "measured_call": 543,
+              "ms": 3.8344
+            },
+            {
+              "benchmark_call": 583,
+              "measured_call": 551,
+              "ms": 3.762
+            },
+            {
+              "benchmark_call": 103,
+              "measured_call": 71,
+              "ms": 3.7122
+            },
+            {
+              "benchmark_call": 515,
+              "measured_call": 483,
+              "ms": 3.7046
+            },
+            {
+              "benchmark_call": 611,
+              "measured_call": 579,
+              "ms": 3.7001
+            },
+            {
+              "benchmark_call": 499,
+              "measured_call": 467,
+              "ms": 3.6557999999999997
+            },
+            {
+              "benchmark_call": 567,
+              "measured_call": 535,
+              "ms": 3.5739
+            },
+            {
+              "benchmark_call": 467,
+              "measured_call": 435,
+              "ms": 3.5589
+            },
+            {
+              "benchmark_call": 463,
+              "measured_call": 431,
+              "ms": 3.5486
+            },
+            {
+              "benchmark_call": 459,
+              "measured_call": 427,
+              "ms": 3.542
+            },
+            {
+              "benchmark_call": 123,
+              "measured_call": 91,
+              "ms": 3.5228
+            },
+            {
+              "benchmark_call": 187,
+              "measured_call": 155,
+              "ms": 3.5134
+            },
+            {
+              "benchmark_call": 523,
+              "measured_call": 491,
+              "ms": 3.5134
+            },
+            {
+              "benchmark_call": 719,
+              "measured_call": 687,
+              "ms": 3.5006999999999997
+            },
+            {
+              "benchmark_call": 79,
+              "measured_call": 47,
+              "ms": 3.4956
+            },
+            {
+              "benchmark_call": 667,
+              "measured_call": 635,
+              "ms": 3.4865
+            },
+            {
+              "benchmark_call": 35,
+              "measured_call": 3,
+              "ms": 3.4846999999999997
+            },
+            {
+              "benchmark_call": 819,
+              "measured_call": 787,
+              "ms": 3.4707000000000003
+            },
+            {
+              "benchmark_call": 563,
+              "measured_call": 531,
+              "ms": 3.47
+            },
+            {
+              "benchmark_call": 599,
+              "measured_call": 567,
+              "ms": 3.4677000000000002
+            },
+            {
+              "benchmark_call": 183,
+              "measured_call": 151,
+              "ms": 3.4549
+            },
+            {
+              "benchmark_call": 631,
+              "measured_call": 599,
+              "ms": 3.4449
+            },
+            {
+              "benchmark_call": 83,
+              "measured_call": 51,
+              "ms": 3.4437
+            },
+            {
+              "benchmark_call": 435,
+              "measured_call": 403,
+              "ms": 3.4391000000000003
+            },
+            {
+              "benchmark_call": 911,
+              "measured_call": 879,
+              "ms": 3.4349
+            },
+            {
+              "benchmark_call": 555,
+              "measured_call": 523,
+              "ms": 3.4323
+            },
+            {
+              "benchmark_call": 543,
+              "measured_call": 511,
+              "ms": 3.4274
+            },
+            {
+              "benchmark_call": 355,
+              "measured_call": 323,
+              "ms": 3.4209
+            },
+            {
+              "benchmark_call": 535,
+              "measured_call": 503,
+              "ms": 3.4194999999999998
+            },
+            {
+              "benchmark_call": 871,
+              "measured_call": 839,
+              "ms": 3.4187000000000003
+            },
+            {
+              "benchmark_call": 495,
+              "measured_call": 463,
+              "ms": 3.4117
+            },
+            {
+              "benchmark_call": 507,
+              "measured_call": 475,
+              "ms": 3.4093999999999998
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 53.22023437499994
+        },
+        "peak_working_set_bytes": 1707134976,
+        "memory_observations": 246,
+        "process_seconds": 15.438000000081956,
+        "host_after": {
+          "utc": "2026-10-19T06:25:28Z",
+          "background_cpu_percent": [
+            2.734375,
+            3.5363457760314354,
+            3.0592734225621365
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.30 W, 1056 MiB\n"
+      },
+      {
+        "variant": "candidate",
+        "scenario": "ramps",
+        "repetition": 1,
+        "calls": 1024,
+        "command": [
+          "<task>\\candidate\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1024",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "ramps",
+          "--gpu-dll",
+          "<task>\\candidate\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\candidate\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:25:31Z",
+          "background_cpu_percent": [
+            8.846153846153848,
+            4.58984375,
+            3.749999999999998
+          ],
+          "ac": 1,
+          "battery_percent": 100,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.21 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 2.846927600000002,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 4.360799999999999,
+          "mean_ms": 2.780202734375002,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.1299,
+          "p99_ms": 3.4196,
+          "peak": 0.031607646495103836,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 871,
+              "measured_call": 839,
+              "ms": 4.360799999999999
+            },
+            {
+              "benchmark_call": 866,
+              "measured_call": 834,
+              "ms": 4.0454
+            },
+            {
+              "benchmark_call": 870,
+              "measured_call": 838,
+              "ms": 3.8604
+            },
+            {
+              "benchmark_call": 867,
+              "measured_call": 835,
+              "ms": 3.8436
+            },
+            {
+              "benchmark_call": 117,
+              "measured_call": 85,
+              "ms": 3.7053
+            },
+            {
+              "benchmark_call": 865,
+              "measured_call": 833,
+              "ms": 3.532
+            },
+            {
+              "benchmark_call": 831,
+              "measured_call": 799,
+              "ms": 3.4783
+            },
+            {
+              "benchmark_call": 869,
+              "measured_call": 837,
+              "ms": 3.4587
+            },
+            {
+              "benchmark_call": 868,
+              "measured_call": 836,
+              "ms": 3.4413
+            },
+            {
+              "benchmark_call": 883,
+              "measured_call": 851,
+              "ms": 3.4291
+            },
+            {
+              "benchmark_call": 743,
+              "measured_call": 711,
+              "ms": 3.4196
+            },
+            {
+              "benchmark_call": 179,
+              "measured_call": 147,
+              "ms": 3.4101
+            },
+            {
+              "benchmark_call": 355,
+              "measured_call": 323,
+              "ms": 3.3956
+            },
+            {
+              "benchmark_call": 287,
+              "measured_call": 255,
+              "ms": 3.3337000000000003
+            },
+            {
+              "benchmark_call": 259,
+              "measured_call": 227,
+              "ms": 3.3240000000000003
+            },
+            {
+              "benchmark_call": 864,
+              "measured_call": 832,
+              "ms": 3.315
+            },
+            {
+              "benchmark_call": 875,
+              "measured_call": 843,
+              "ms": 3.3141999999999996
+            },
+            {
+              "benchmark_call": 879,
+              "measured_call": 847,
+              "ms": 3.2981
+            },
+            {
+              "benchmark_call": 878,
+              "measured_call": 846,
+              "ms": 3.2961
+            },
+            {
+              "benchmark_call": 303,
+              "measured_call": 271,
+              "ms": 3.2816
+            },
+            {
+              "benchmark_call": 655,
+              "measured_call": 623,
+              "ms": 3.2799
+            },
+            {
+              "benchmark_call": 707,
+              "measured_call": 675,
+              "ms": 3.2726
+            },
+            {
+              "benchmark_call": 699,
+              "measured_call": 667,
+              "ms": 3.2676
+            },
+            {
+              "benchmark_call": 1043,
+              "measured_call": 1011,
+              "ms": 3.2629
+            },
+            {
+              "benchmark_call": 906,
+              "measured_call": 874,
+              "ms": 3.2602
+            },
+            {
+              "benchmark_call": 416,
+              "measured_call": 384,
+              "ms": 3.2580999999999998
+            },
+            {
+              "benchmark_call": 787,
+              "measured_call": 755,
+              "ms": 3.2472
+            },
+            {
+              "benchmark_call": 791,
+              "measured_call": 759,
+              "ms": 3.2469
+            },
+            {
+              "benchmark_call": 711,
+              "measured_call": 679,
+              "ms": 3.2382
+            },
+            {
+              "benchmark_call": 734,
+              "measured_call": 702,
+              "ms": 3.2342
+            },
+            {
+              "benchmark_call": 848,
+              "measured_call": 816,
+              "ms": 3.2243
+            },
+            {
+              "benchmark_call": 271,
+              "measured_call": 239,
+              "ms": 3.2165000000000004
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 52.12880126953129
+        },
+        "peak_working_set_bytes": 1739431936,
+        "memory_observations": 264,
+        "process_seconds": 16.56200000003446,
+        "host_after": {
+          "utc": "2026-10-19T06:25:51Z",
+          "background_cpu_percent": [
+            2.8846153846153855,
+            4.1346153846153815,
+            5.381604696673192
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.47 W, 1056 MiB\n"
+      },
+      {
+        "variant": "candidate",
+        "scenario": "distance-ramps",
+        "repetition": 1,
+        "calls": 1024,
+        "command": [
+          "<task>\\candidate\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1024",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "distance-ramps",
+          "--gpu-dll",
+          "<task>\\candidate\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\candidate\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:25:54Z",
+          "background_cpu_percent": [
+            6.454720616570331,
+            2.046783625730997,
+            7.91015625
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.23 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 2.7250479000000003,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.8004,
+          "mean_ms": 2.6611795898437505,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 2.9789,
+          "p99_ms": 3.2397,
+          "peak": 0.051233842968940735,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 351,
+              "measured_call": 319,
+              "ms": 3.8004
+            },
+            {
+              "benchmark_call": 315,
+              "measured_call": 283,
+              "ms": 3.6172
+            },
+            {
+              "benchmark_call": 1035,
+              "measured_call": 1003,
+              "ms": 3.5991999999999997
+            },
+            {
+              "benchmark_call": 1034,
+              "measured_call": 1002,
+              "ms": 3.552
+            },
+            {
+              "benchmark_call": 319,
+              "measured_call": 287,
+              "ms": 3.4218
+            },
+            {
+              "benchmark_call": 498,
+              "measured_call": 466,
+              "ms": 3.3822
+            },
+            {
+              "benchmark_call": 327,
+              "measured_call": 295,
+              "ms": 3.377
+            },
+            {
+              "benchmark_call": 507,
+              "measured_call": 475,
+              "ms": 3.3346
+            },
+            {
+              "benchmark_call": 323,
+              "measured_call": 291,
+              "ms": 3.2551
+            },
+            {
+              "benchmark_call": 943,
+              "measured_call": 911,
+              "ms": 3.2417000000000002
+            },
+            {
+              "benchmark_call": 399,
+              "measured_call": 367,
+              "ms": 3.2397
+            },
+            {
+              "benchmark_call": 967,
+              "measured_call": 935,
+              "ms": 3.2252
+            },
+            {
+              "benchmark_call": 387,
+              "measured_call": 355,
+              "ms": 3.1924
+            },
+            {
+              "benchmark_call": 539,
+              "measured_call": 507,
+              "ms": 3.1715
+            },
+            {
+              "benchmark_call": 316,
+              "measured_call": 284,
+              "ms": 3.1608
+            },
+            {
+              "benchmark_call": 371,
+              "measured_call": 339,
+              "ms": 3.1405
+            },
+            {
+              "benchmark_call": 354,
+              "measured_call": 322,
+              "ms": 3.1384999999999996
+            },
+            {
+              "benchmark_call": 331,
+              "measured_call": 299,
+              "ms": 3.1337
+            },
+            {
+              "benchmark_call": 883,
+              "measured_call": 851,
+              "ms": 3.1309
+            },
+            {
+              "benchmark_call": 322,
+              "measured_call": 290,
+              "ms": 3.1237
+            },
+            {
+              "benchmark_call": 355,
+              "measured_call": 323,
+              "ms": 3.1185
+            },
+            {
+              "benchmark_call": 307,
+              "measured_call": 275,
+              "ms": 3.1039000000000003
+            },
+            {
+              "benchmark_call": 401,
+              "measured_call": 369,
+              "ms": 3.1007000000000002
+            },
+            {
+              "benchmark_call": 311,
+              "measured_call": 279,
+              "ms": 3.0969
+            },
+            {
+              "benchmark_call": 103,
+              "measured_call": 71,
+              "ms": 3.0822
+            },
+            {
+              "benchmark_call": 56,
+              "measured_call": 24,
+              "ms": 3.0723000000000003
+            },
+            {
+              "benchmark_call": 139,
+              "measured_call": 107,
+              "ms": 3.0685000000000002
+            },
+            {
+              "benchmark_call": 391,
+              "measured_call": 359,
+              "ms": 3.0682
+            },
+            {
+              "benchmark_call": 117,
+              "measured_call": 85,
+              "ms": 3.0614000000000003
+            },
+            {
+              "benchmark_call": 840,
+              "measured_call": 808,
+              "ms": 3.0533
+            },
+            {
+              "benchmark_call": 1036,
+              "measured_call": 1004,
+              "ms": 3.0521
+            },
+            {
+              "benchmark_call": 67,
+              "measured_call": 35,
+              "ms": 3.0385
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 49.89711730957032
+        },
+        "peak_working_set_bytes": 1739268096,
+        "memory_observations": 243,
+        "process_seconds": 15.23499999998603,
+        "host_after": {
+          "utc": "2026-10-19T06:26:13Z",
+          "background_cpu_percent": [
+            10.592808551992228,
+            9.615384615384615,
+            3.8461538461538436
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.37 W, 1056 MiB\n"
+      },
+      {
+        "variant": "baseline",
+        "scenario": "distance-ramps",
+        "repetition": 1,
+        "calls": 1024,
+        "command": [
+          "<task>\\baseline\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1024",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "distance-ramps",
+          "--gpu-dll",
+          "<task>\\baseline\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\baseline\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:26:16Z",
+          "background_cpu_percent": [
+            4.780487804878053,
+            3.8461538461538436,
+            2.019230769230773
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.19 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 2.799182200000002,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.8129,
+          "mean_ms": 2.733576367187502,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.1908000000000003,
+          "p99_ms": 3.4434,
+          "peak": 0.05123386159539223,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 95,
+              "measured_call": 63,
+              "ms": 3.8129
+            },
+            {
+              "benchmark_call": 179,
+              "measured_call": 147,
+              "ms": 3.5749000000000004
+            },
+            {
+              "benchmark_call": 343,
+              "measured_call": 311,
+              "ms": 3.573
+            },
+            {
+              "benchmark_call": 911,
+              "measured_call": 879,
+              "ms": 3.5443
+            },
+            {
+              "benchmark_call": 247,
+              "measured_call": 215,
+              "ms": 3.5415
+            },
+            {
+              "benchmark_call": 171,
+              "measured_call": 139,
+              "ms": 3.4996
+            },
+            {
+              "benchmark_call": 759,
+              "measured_call": 727,
+              "ms": 3.4825
+            },
+            {
+              "benchmark_call": 683,
+              "measured_call": 651,
+              "ms": 3.4673
+            },
+            {
+              "benchmark_call": 743,
+              "measured_call": 711,
+              "ms": 3.4581
+            },
+            {
+              "benchmark_call": 203,
+              "measured_call": 171,
+              "ms": 3.4489
+            },
+            {
+              "benchmark_call": 731,
+              "measured_call": 699,
+              "ms": 3.4434
+            },
+            {
+              "benchmark_call": 163,
+              "measured_call": 131,
+              "ms": 3.4351
+            },
+            {
+              "benchmark_call": 899,
+              "measured_call": 867,
+              "ms": 3.4084
+            },
+            {
+              "benchmark_call": 187,
+              "measured_call": 155,
+              "ms": 3.4053
+            },
+            {
+              "benchmark_call": 271,
+              "measured_call": 239,
+              "ms": 3.4004
+            },
+            {
+              "benchmark_call": 802,
+              "measured_call": 770,
+              "ms": 3.3907999999999996
+            },
+            {
+              "benchmark_call": 59,
+              "measured_call": 27,
+              "ms": 3.3705
+            },
+            {
+              "benchmark_call": 155,
+              "measured_call": 123,
+              "ms": 3.3598999999999997
+            },
+            {
+              "benchmark_call": 323,
+              "measured_call": 291,
+              "ms": 3.3589
+            },
+            {
+              "benchmark_call": 195,
+              "measured_call": 163,
+              "ms": 3.3571999999999997
+            },
+            {
+              "benchmark_call": 299,
+              "measured_call": 267,
+              "ms": 3.3529
+            },
+            {
+              "benchmark_call": 243,
+              "measured_call": 211,
+              "ms": 3.351
+            },
+            {
+              "benchmark_call": 191,
+              "measured_call": 159,
+              "ms": 3.3463999999999996
+            },
+            {
+              "benchmark_call": 823,
+              "measured_call": 791,
+              "ms": 3.3425
+            },
+            {
+              "benchmark_call": 251,
+              "measured_call": 219,
+              "ms": 3.3335
+            },
+            {
+              "benchmark_call": 207,
+              "measured_call": 175,
+              "ms": 3.3272000000000004
+            },
+            {
+              "benchmark_call": 755,
+              "measured_call": 723,
+              "ms": 3.3127999999999997
+            },
+            {
+              "benchmark_call": 775,
+              "measured_call": 743,
+              "ms": 3.3064999999999998
+            },
+            {
+              "benchmark_call": 283,
+              "measured_call": 251,
+              "ms": 3.3059000000000003
+            },
+            {
+              "benchmark_call": 99,
+              "measured_call": 67,
+              "ms": 3.3054
+            },
+            {
+              "benchmark_call": 843,
+              "measured_call": 811,
+              "ms": 3.3043
+            },
+            {
+              "benchmark_call": 227,
+              "measured_call": 195,
+              "ms": 3.2904
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 51.25455688476566
+        },
+        "peak_working_set_bytes": 1706983424,
+        "memory_observations": 248,
+        "process_seconds": 15.562999999965541,
+        "host_after": {
+          "utc": "2026-10-19T06:26:34Z",
+          "background_cpu_percent": [
+            2.4154589371980673,
+            5.539358600583089,
+            3.3235581622678367
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.43 W, 1056 MiB\n"
+      }
+    ],
+    "passed": true
+  },
+  "long": {
+    "schema": "mradm.room-gpu-eq-motion",
+    "version": 1,
+    "mode": "long",
+    "workers": 8,
+    "scope": "Fresh process per run; uninstrumented Release Session; 32 warmup calls excluded; no device callback.",
+    "host_policy": "Normal desktop applications retained; no concurrent task build or benchmark. All candidate motion misses count.",
+    "binary_sha256": {
+      "candidate/room_bench.exe": "7807722e92cdea39ee024b5409be7f96d3264d1322228f3a372e8ab8a7e2136f",
+      "candidate/room_replay.exe": "0eac8c7205d3ad062d3420a8014a75e1d3f5e6a1c59f6c63d3202aaa287fd464",
+      "candidate/room_gpu_session.dll": "30ea002bd7499da236b34c7fccf2850b0171cba5290d3ff90dfe1eae421334de",
+      "candidate/session_kernels.cu": "994e0fdaf605c16570ea1476a800826c4d3c18a53e032cf5647f070f729a9792",
+      "baseline/room_bench.exe": "2b5dd763cc52e5bc0abbca85063979600e9823302876df6af59e57475e2b8099",
+      "baseline/room_replay.exe": "d8400bc74aab858890be9b7c79c03d21299ba14adc2a42c348f5f0323a896579",
+      "baseline/room_gpu_session.dll": "7a0ae855b1b30ba160b160e0ec8e9a1115ee42fba7e40d7ae5759bdf1de8b821",
+      "baseline/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851"
+    },
+    "cases": [
+      {
+        "variant": "baseline",
+        "scenario": "ramps",
+        "repetition": 1,
+        "calls": 1024,
+        "command": [
+          "<task>\\baseline\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "1024",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "ramps",
+          "--gpu-dll",
+          "<task>\\baseline\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\baseline\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:26:54Z",
+          "background_cpu_percent": [
+            3.746397694524495,
+            1.8269230769230815,
+            4.716073147256983
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.21 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 2.8904334,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 3.8815999999999997,
+          "mean_ms": 2.8226888671875,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.2881,
+          "p99_ms": 3.4737,
+          "peak": 0.031607646495103836,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 943,
+              "measured_call": 911,
+              "ms": 3.8815999999999997
+            },
+            {
+              "benchmark_call": 455,
+              "measured_call": 423,
+              "ms": 3.6927000000000003
+            },
+            {
+              "benchmark_call": 243,
+              "measured_call": 211,
+              "ms": 3.6376999999999997
+            },
+            {
+              "benchmark_call": 311,
+              "measured_call": 279,
+              "ms": 3.6175
+            },
+            {
+              "benchmark_call": 483,
+              "measured_call": 451,
+              "ms": 3.5606
+            },
+            {
+              "benchmark_call": 263,
+              "measured_call": 231,
+              "ms": 3.5373
+            },
+            {
+              "benchmark_call": 251,
+              "measured_call": 219,
+              "ms": 3.5263
+            },
+            {
+              "benchmark_call": 295,
+              "measured_call": 263,
+              "ms": 3.5006999999999997
+            },
+            {
+              "benchmark_call": 1035,
+              "measured_call": 1003,
+              "ms": 3.4862
+            },
+            {
+              "benchmark_call": 747,
+              "measured_call": 715,
+              "ms": 3.4774
+            },
+            {
+              "benchmark_call": 731,
+              "measured_call": 699,
+              "ms": 3.4737
+            },
+            {
+              "benchmark_call": 239,
+              "measured_call": 207,
+              "ms": 3.4684999999999997
+            },
+            {
+              "benchmark_call": 291,
+              "measured_call": 259,
+              "ms": 3.4602
+            },
+            {
+              "benchmark_call": 575,
+              "measured_call": 543,
+              "ms": 3.4578
+            },
+            {
+              "benchmark_call": 279,
+              "measured_call": 247,
+              "ms": 3.4561
+            },
+            {
+              "benchmark_call": 231,
+              "measured_call": 199,
+              "ms": 3.4476
+            },
+            {
+              "benchmark_call": 335,
+              "measured_call": 303,
+              "ms": 3.4451
+            },
+            {
+              "benchmark_call": 771,
+              "measured_call": 739,
+              "ms": 3.44
+            },
+            {
+              "benchmark_call": 515,
+              "measured_call": 483,
+              "ms": 3.4253
+            },
+            {
+              "benchmark_call": 99,
+              "measured_call": 67,
+              "ms": 3.4186
+            },
+            {
+              "benchmark_call": 527,
+              "measured_call": 495,
+              "ms": 3.4183
+            },
+            {
+              "benchmark_call": 855,
+              "measured_call": 823,
+              "ms": 3.4155
+            },
+            {
+              "benchmark_call": 519,
+              "measured_call": 487,
+              "ms": 3.4153000000000002
+            },
+            {
+              "benchmark_call": 807,
+              "measured_call": 775,
+              "ms": 3.4103
+            },
+            {
+              "benchmark_call": 755,
+              "measured_call": 723,
+              "ms": 3.4086
+            },
+            {
+              "benchmark_call": 339,
+              "measured_call": 307,
+              "ms": 3.4034
+            },
+            {
+              "benchmark_call": 843,
+              "measured_call": 811,
+              "ms": 3.3991
+            },
+            {
+              "benchmark_call": 767,
+              "measured_call": 735,
+              "ms": 3.3966
+            },
+            {
+              "benchmark_call": 587,
+              "measured_call": 555,
+              "ms": 3.3888
+            },
+            {
+              "benchmark_call": 479,
+              "measured_call": 447,
+              "ms": 3.3643
+            },
+            {
+              "benchmark_call": 735,
+              "measured_call": 703,
+              "ms": 3.3605
+            },
+            {
+              "benchmark_call": 323,
+              "measured_call": 291,
+              "ms": 3.3566
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 52.925416259765626
+        },
+        "peak_working_set_bytes": 1706856448,
+        "memory_observations": 242,
+        "process_seconds": 15.202999999979511,
+        "host_after": {
+          "utc": "2026-10-19T06:27:12Z",
+          "background_cpu_percent": [
+            8.469682386910494,
+            9.17073170731707,
+            11.057692307692314
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.53 W, 1056 MiB\n"
+      },
+      {
+        "variant": "candidate",
+        "scenario": "ramps",
+        "repetition": 1,
+        "calls": 22500,
+        "command": [
+          "<task>\\candidate\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "22500",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "ramps",
+          "--gpu-dll",
+          "<task>\\candidate\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\candidate\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:27:15Z",
+          "background_cpu_percent": [
+            1.538461538461533,
+            2.7884615384615397,
+            7.32421875
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.41 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 120.0,
+          "blocks": 22500,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 62.44646259999996,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 4.154299999999999,
+          "mean_ms": 2.775398337777776,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.0918,
+          "p99_ms": 3.3002000000000002,
+          "peak": 0.03799697756767273,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 8583,
+              "measured_call": 8551,
+              "ms": 4.154299999999999
+            },
+            {
+              "benchmark_call": 20972,
+              "measured_call": 20940,
+              "ms": 3.932
+            },
+            {
+              "benchmark_call": 17139,
+              "measured_call": 17107,
+              "ms": 3.8995
+            },
+            {
+              "benchmark_call": 15337,
+              "measured_call": 15305,
+              "ms": 3.8887
+            },
+            {
+              "benchmark_call": 5637,
+              "measured_call": 5605,
+              "ms": 3.8559
+            },
+            {
+              "benchmark_call": 5255,
+              "measured_call": 5223,
+              "ms": 3.7620999999999998
+            },
+            {
+              "benchmark_call": 4863,
+              "measured_call": 4831,
+              "ms": 3.7563
+            },
+            {
+              "benchmark_call": 4143,
+              "measured_call": 4111,
+              "ms": 3.7561999999999998
+            },
+            {
+              "benchmark_call": 691,
+              "measured_call": 659,
+              "ms": 3.7479
+            },
+            {
+              "benchmark_call": 14015,
+              "measured_call": 13983,
+              "ms": 3.7218
+            },
+            {
+              "benchmark_call": 1836,
+              "measured_call": 1804,
+              "ms": 3.7117
+            },
+            {
+              "benchmark_call": 19291,
+              "measured_call": 19259,
+              "ms": 3.7035
+            },
+            {
+              "benchmark_call": 475,
+              "measured_call": 443,
+              "ms": 3.6941
+            },
+            {
+              "benchmark_call": 7975,
+              "measured_call": 7943,
+              "ms": 3.6919
+            },
+            {
+              "benchmark_call": 127,
+              "measured_call": 95,
+              "ms": 3.6830000000000003
+            },
+            {
+              "benchmark_call": 592,
+              "measured_call": 560,
+              "ms": 3.6587
+            },
+            {
+              "benchmark_call": 3084,
+              "measured_call": 3052,
+              "ms": 3.6492
+            },
+            {
+              "benchmark_call": 14979,
+              "measured_call": 14947,
+              "ms": 3.6491000000000002
+            },
+            {
+              "benchmark_call": 2696,
+              "measured_call": 2664,
+              "ms": 3.6408
+            },
+            {
+              "benchmark_call": 17563,
+              "measured_call": 17531,
+              "ms": 3.64
+            },
+            {
+              "benchmark_call": 19251,
+              "measured_call": 19219,
+              "ms": 3.6327
+            },
+            {
+              "benchmark_call": 11399,
+              "measured_call": 11367,
+              "ms": 3.6271
+            },
+            {
+              "benchmark_call": 16050,
+              "measured_call": 16018,
+              "ms": 3.6261
+            },
+            {
+              "benchmark_call": 17135,
+              "measured_call": 17103,
+              "ms": 3.6235
+            },
+            {
+              "benchmark_call": 15026,
+              "measured_call": 14994,
+              "ms": 3.6094
+            },
+            {
+              "benchmark_call": 4379,
+              "measured_call": 4347,
+              "ms": 3.6085000000000003
+            },
+            {
+              "benchmark_call": 5591,
+              "measured_call": 5559,
+              "ms": 3.6061
+            },
+            {
+              "benchmark_call": 22044,
+              "measured_call": 22012,
+              "ms": 3.6031
+            },
+            {
+              "benchmark_call": 18987,
+              "measured_call": 18955,
+              "ms": 3.5943
+            },
+            {
+              "benchmark_call": 21007,
+              "measured_call": 20975,
+              "ms": 3.594
+            },
+            {
+              "benchmark_call": 21983,
+              "measured_call": 21951,
+              "ms": 3.594
+            },
+            {
+              "benchmark_call": 12363,
+              "measured_call": 12331,
+              "ms": 3.5894999999999997
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 52.0387188333333
+        },
+        "peak_working_set_bytes": 1738784768,
+        "memory_observations": 1206,
+        "process_seconds": 75.51500000001397,
+        "host_after": {
+          "utc": "2026-10-19T06:28:34Z",
+          "background_cpu_percent": [
+            3.173076923076923,
+            8.173076923076927,
+            11.143695014662757
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 34.96 W, 1056 MiB\n"
+      },
+      {
+        "variant": "candidate",
+        "scenario": "distance-ramps",
+        "repetition": 1,
+        "calls": 22500,
+        "command": [
+          "<task>\\candidate\\room_bench.exe",
+          "<task>\\assets\\room\\room.json",
+          "22500",
+          "512",
+          "32",
+          "--hrir",
+          "<task>\\assets\\collection",
+          "--quality",
+          "realtime",
+          "--scenario",
+          "distance-ramps",
+          "--gpu-dll",
+          "<task>\\candidate\\room_gpu_session.dll",
+          "--gpu-fixture",
+          "<task>\\fixture",
+          "--gpu-kernels",
+          "<task>\\candidate\\session_kernels.cu"
+        ],
+        "host_before": {
+          "utc": "2026-10-19T06:28:37Z",
+          "background_cpu_percent": [
+            8.758421559191532,
+            10.384615384615381,
+            9.08203125
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 34.13 W, 1056 MiB\n",
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 120.0,
+          "blocks": 22500,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 1,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 60.58510649999985,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 5.6484,
+          "mean_ms": 2.6926713999999934,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.0208,
+          "p99_ms": 3.2269,
+          "peak": 0.057050980627536774,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "slowest_calls": [
+            {
+              "benchmark_call": 3981,
+              "measured_call": 3949,
+              "ms": 5.6484
+            },
+            {
+              "benchmark_call": 19971,
+              "measured_call": 19939,
+              "ms": 3.875
+            },
+            {
+              "benchmark_call": 21475,
+              "measured_call": 21443,
+              "ms": 3.8449999999999998
+            },
+            {
+              "benchmark_call": 22482,
+              "measured_call": 22450,
+              "ms": 3.8265000000000002
+            },
+            {
+              "benchmark_call": 1448,
+              "measured_call": 1416,
+              "ms": 3.8043
+            },
+            {
+              "benchmark_call": 3703,
+              "measured_call": 3671,
+              "ms": 3.7756
+            },
+            {
+              "benchmark_call": 15411,
+              "measured_call": 15379,
+              "ms": 3.7664999999999997
+            },
+            {
+              "benchmark_call": 18459,
+              "measured_call": 18427,
+              "ms": 3.6989
+            },
+            {
+              "benchmark_call": 21479,
+              "measured_call": 21447,
+              "ms": 3.6584
+            },
+            {
+              "benchmark_call": 16014,
+              "measured_call": 15982,
+              "ms": 3.6343
+            },
+            {
+              "benchmark_call": 20015,
+              "measured_call": 19983,
+              "ms": 3.6163
+            },
+            {
+              "benchmark_call": 3063,
+              "measured_call": 3031,
+              "ms": 3.6087
+            },
+            {
+              "benchmark_call": 20446,
+              "measured_call": 20414,
+              "ms": 3.6003
+            },
+            {
+              "benchmark_call": 10835,
+              "measured_call": 10803,
+              "ms": 3.5756
+            },
+            {
+              "benchmark_call": 9715,
+              "measured_call": 9683,
+              "ms": 3.5731
+            },
+            {
+              "benchmark_call": 15407,
+              "measured_call": 15375,
+              "ms": 3.5604999999999998
+            },
+            {
+              "benchmark_call": 21928,
+              "measured_call": 21896,
+              "ms": 3.557
+            },
+            {
+              "benchmark_call": 10831,
+              "measured_call": 10799,
+              "ms": 3.5562
+            },
+            {
+              "benchmark_call": 22499,
+              "measured_call": 22467,
+              "ms": 3.5425
+            },
+            {
+              "benchmark_call": 19511,
+              "measured_call": 19479,
+              "ms": 3.5334
+            },
+            {
+              "benchmark_call": 18995,
+              "measured_call": 18963,
+              "ms": 3.5328
+            },
+            {
+              "benchmark_call": 3046,
+              "measured_call": 3014,
+              "ms": 3.5321
+            },
+            {
+              "benchmark_call": 11883,
+              "measured_call": 11851,
+              "ms": 3.5266
+            },
+            {
+              "benchmark_call": 14857,
+              "measured_call": 14825,
+              "ms": 3.5116
+            },
+            {
+              "benchmark_call": 15642,
+              "measured_call": 15610,
+              "ms": 3.5062
+            },
+            {
+              "benchmark_call": 16869,
+              "measured_call": 16837,
+              "ms": 3.5058
+            },
+            {
+              "benchmark_call": 15375,
+              "measured_call": 15343,
+              "ms": 3.4984
+            },
+            {
+              "benchmark_call": 19205,
+              "measured_call": 19173,
+              "ms": 3.4917
+            },
+            {
+              "benchmark_call": 21055,
+              "measured_call": 21023,
+              "ms": 3.4914
+            },
+            {
+              "benchmark_call": 21432,
+              "measured_call": 21400,
+              "ms": 3.4886
+            },
+            {
+              "benchmark_call": 17475,
+              "measured_call": 17443,
+              "ms": 3.4874
+            },
+            {
+              "benchmark_call": 13752,
+              "measured_call": 13720,
+              "ms": 3.4838999999999998
+            }
+          ],
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 50.48758874999988
+        },
+        "peak_working_set_bytes": 1738833920,
+        "memory_observations": 1179,
+        "process_seconds": 73.84399999992456,
+        "host_after": {
+          "utc": "2026-10-19T06:29:54Z",
+          "background_cpu_percent": [
+            1.2499999999999956,
+            3.4615384615384603,
+            5.37109375
+          ],
+          "ac": 1,
+          "battery_percent": 99,
+          "saver": 0
+        },
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 35.53 W, 1056 MiB\n"
+      }
+    ],
+    "passed": false,
+    "stop_reason": "Candidate motion deadline miss; no later screen or long run."
+  },
+  "cleanup": {
+    "windows": {
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "checkout_source_files_overlaid": 0,
+      "task_directory_removed": true
+    },
+    "local": {
+      "runtime_reverted": true,
+      "verified_runtime_files": 14,
+      "private_fixture_bytes_removed": 644253669,
+      "private_fixture_removed": true,
+      "existing_caches_preserved": true
+    }
+  },
+  "notes": [
+    "Fresh process per run, normal desktop load, AC power, no concurrent task builds or benchmarks. No background application was stopped.",
+    "This is an additional workload gate after the frequent-switch policy change, not a rerun of the failed repeated-switch workload.",
+    "Both variants use their own frozen uninstrumented Release executable, DLL and kernel source; both use identical resources and events.",
+    "Paired short cases alternate execution order. Long-stage baseline samples use 1024 calls and must not be pooled with 22500-call candidate rounds.",
+    "The candidate failed in distance-ramps at zero-based measured call 3949 (benchmark call 3981 including 32 warmup calls). Maximum 5.6484 ms exceeds 512/96000 seconds.",
+    "No stage profiler ran, so the single fixed-room spike is not attributed to EQ GPU waiting or desktop contention.",
+    "No remaining motion rounds, macOS performance matrix, or audio-device playback integration were run after the gate failure.",
+    "Prior frequent-switch measurements and prior validation outcomes remain unchanged."
+  ]
+}

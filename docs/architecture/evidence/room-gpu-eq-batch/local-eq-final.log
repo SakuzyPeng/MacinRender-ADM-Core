@@ -1,0 +1,8 @@
+   Compiling mradm-dsp v0.1.0 (<checkout>/rust/crates/mradm-dsp)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.89s
+     Running tests/room_gpu.rs (build/rust/cargo/rust_0e004/aarch64-apple-darwin/debug/deps/room_gpu-1a5dc3ac63b13884)
+
+running 1 test
+test batched_long_eq_preserves_forks_pending_reset_source_restart_and_complete_switch_tail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.91s

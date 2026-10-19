@@ -14,6 +14,8 @@ use mradm_dsp::{
 use std::{path::Path, sync::Arc, time::Instant};
 #[path = "room_support/assets.rs"]
 mod assets;
+#[path = "room_support/audio_workers.rs"]
+mod audio_workers;
 #[cfg(feature = "room-gpu-experiment")]
 #[path = "room_support/gpu.rs"]
 mod gpu;
@@ -76,6 +78,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for performance evidence".into());
     }
     let mut arguments: Vec<_> = std::env::args().collect();
+    let audio_workers = arguments.iter().any(|v| v == "--audio-workers");
+    arguments.retain(|v| v != "--audio-workers");
+    if audio_workers {
+        audio_workers::enable()?;
+    }
     #[cfg(feature = "room-gpu-experiment")]
     let gpu = gpu::Options::parse(&mut arguments)?;
     let hrir_path = if let Some(index) = arguments.iter().position(|v| v == "--hrir") {
@@ -180,6 +187,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     )?))?);
     #[cfg(feature = "room-gpu-experiment")]
     let (prepared, other) = (gpu.prepare(prepared)?, gpu.prepare(other)?);
+    let scheduling = if audio_workers {
+        audio_workers::report()?
+    } else {
+        serde_json::Value::Null
+    };
     let experiment = serde_json::Value::Null;
     #[cfg(feature = "room-gpu-experiment")]
     let experiment = if gpu.report().is_null() {
@@ -384,9 +396,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 profile[index].0
             });
             let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
-            println!(
-                "{}",
-                serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
+            let mut report = serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
                 "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames_at(prepared.room.profile.sample_rate),
                 "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
                 "voice_segments":segments,
@@ -402,8 +412,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},
                 "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
                 "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),"slowest_calls":slowest_calls,
-                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak})
-            );
+                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak});
+            report["thread_scheduling"] = scheduling.clone();
+            println!("{report}");
         }
     }
     Ok(())
