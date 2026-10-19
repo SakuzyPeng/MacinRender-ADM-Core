@@ -48,7 +48,7 @@ struct RoomConfig {
     std::shared_ptr<const RoomProfile> profile;
     std::filesystem::path
         hrir_manifest; // SOFA, prepared HRIR or distance collection; empty selects SOFA/package default
-    double metres_per_unit{1.5};
+    double metres_per_unit{0.0};
     RoomQuality quality{RoomQuality::exact};
 };
 

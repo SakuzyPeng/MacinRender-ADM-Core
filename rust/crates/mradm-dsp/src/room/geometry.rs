@@ -89,10 +89,7 @@ pub fn position(
     metres: f64,
     previous: Vec3,
 ) -> Result<Position> {
-    if !metres.is_finite()
-        || !(0.01..=100.).contains(&metres)
-        || scene.iter().any(|v| !v.is_finite())
-    {
+    if !valid_scale(metres) || scene.iter().any(|v| !v.is_finite()) {
         return Err(Error::InvalidArgument(
             "Invalid room coordinates or distance scale",
         ));
@@ -102,6 +99,10 @@ pub fn position(
         -f64::from(scene[0]),
         f64::from(scene[2]),
     ];
+    if metres == 0. {
+        let previous = unit_or_front(room_offset(room, previous));
+        return physical_position(room, room_offset(room, relative), previous);
+    }
     let length = norm(relative);
     let direction = if length > 1e-15 {
         scale(relative, 1. / length)
@@ -109,6 +110,51 @@ pub fn position(
         previous
     };
     let requested = length * metres;
+    constrain(room, direction, requested)
+}
+
+/// Zero selects listener-centred room coordinates; positive values retain the
+/// explicit uniform scale. Keep the existing positive-scale arithmetic intact.
+pub fn valid_scale(metres: f64) -> bool {
+    metres == 0. || (metres.is_finite() && (0.01..=100.).contains(&metres))
+}
+
+pub(crate) fn unit_or_front(value: Vec3) -> Vec3 {
+    let length = norm(value);
+    if length > 1e-15 {
+        scale(value, 1. / length)
+    } else {
+        [1., 0., 0.]
+    }
+}
+
+/// World-axis normalized offsets, with each signed unit at its usable wall.
+pub(crate) fn room_offset(room: &RoomProfile, offset: Vec3) -> Vec3 {
+    std::array::from_fn(|axis| {
+        offset[axis]
+            * if offset[axis] >= 0. {
+                room.dimensions[axis] - room.clearance - room.listener[axis]
+            } else {
+                room.listener[axis] - room.clearance
+            }
+    })
+}
+
+pub(crate) fn physical_position(
+    room: &RoomProfile,
+    offset: Vec3,
+    previous: Vec3,
+) -> Result<Position> {
+    let requested = norm(offset);
+    let direction = if requested > 1e-15 {
+        scale(offset, 1. / requested)
+    } else {
+        previous
+    };
+    constrain(room, direction, requested)
+}
+
+fn constrain(room: &RoomProfile, direction: Vec3, requested: f64) -> Result<Position> {
     let mut maximum = f64::INFINITY;
     for (axis, component) in direction.into_iter().enumerate() {
         if component > 1e-15 {

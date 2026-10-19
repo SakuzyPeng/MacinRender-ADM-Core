@@ -84,6 +84,8 @@ CLI、C ABI 和 GUI 批量渲染可选；C API 和 GUI 系统空间音频监听�
 
 `saf-binaural` 默认使用 SAF 内置 Genelec KEMAR HRTF，也可通过 `--sofa <path>` 加载用户 FIR SOFA HRIR 文件。当前 SOFA 规格为 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz 原生采样率。`apple` 使用 Apple 系统 HRTF；可运行 `mradm backends` 查看每个双耳后端的 `HRTF sources`。
 
+ROOM 默认按房间几何自动映射归一化位置，以听者为原点；`--room-metres-per-unit 1.5` 显式恢复固定比例。
+
 `room-binaural` 另支持原生 48/96 kHz 房间处理。96 kHz 素材使用同采样率房间包，
 `--room-hrir` 可直接选择 SkinRLC 九距离集合目录或索引；不会自动切换到 48 kHz 兼容文件。
 完整命令和预设见[原生 96 kHz 房间](../architecture/ROOM_NATIVE_96K.md)。

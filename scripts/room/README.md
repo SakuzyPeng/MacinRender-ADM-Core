@@ -367,3 +367,10 @@ python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
 频繁换房作为观察项，另行记录换房频率和调用数，不承诺零超时，也不因该项超时停止
 固定位置／距离运动验收。已有换房超时记录保留，数值与时序等正确性要求不变。
 原始个人 SOFA、集合及主机路径留在私有证据目录，不提交到仓库。
+
+### 房间坐标自动映射
+
+省略 `--room-metres-per-unit` 时，归一化位置按房间各轴可用长度映射，原点位于听者，
+正负 1 位于保留边界留距后的墙面。显式正数保留固定米数比例。C ABI 的
+`adm_room_config_t.metres_per_unit=0` 选择自动模式。
+见 [映射语义与验证](../../docs/architecture/ROOM_COORDINATE_MAPPING.md)。

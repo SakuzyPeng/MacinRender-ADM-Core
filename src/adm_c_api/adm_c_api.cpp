@@ -373,8 +373,8 @@ bool valid_room_quality(adm_room_quality_t quality) {
 
 mradm::Result<mradm::RoomConfig> to_room_config(const adm_room_config_t* config) {
     if (config == nullptr || config->struct_size < sizeof(*config) || config->reserved != 0 ||
-        config->room == nullptr || !std::isfinite(config->metres_per_unit) || config->metres_per_unit < 0.01 ||
-        config->metres_per_unit > 100) {
+        config->room == nullptr || !std::isfinite(config->metres_per_unit) ||
+        (config->metres_per_unit != 0 && config->metres_per_unit < 0.01) || config->metres_per_unit > 100) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument, "无效的房间配置");
     }
     mradm::RoomConfig result;

@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cmath>
 #include <utility>
 
 #include "room_internal.h"
@@ -63,9 +62,8 @@ MradmRoomScreens screens(const ScreenConfig& config, const ScreenGeometry& refer
 }
 Result<std::shared_ptr<const Prepared>>
 prepare(const RoomConfig& config, const std::filesystem::path& sofa, const Prepared* reuse) {
-    if (!config.profile || !std::isfinite(config.metres_per_unit) || config.metres_per_unit < 0.01 ||
-        config.metres_per_unit > 100) {
-        return make_error(ErrorCode::invalid_argument, "room-binaural 需要房间包和有效的距离比例");
+    if (!config.profile) {
+        return make_error(ErrorCode::invalid_argument, "room-binaural 需要房间包");
     }
     const auto hrir = utf8_path(config.hrir_manifest);
     const auto sofa_path = utf8_path(sofa);
@@ -78,6 +76,7 @@ prepare(const RoomConfig& config, const std::filesystem::path& sofa, const Prepa
                                                      sofa_path.size(),
                                                      reuse != nullptr ? reuse->handle.get() : nullptr,
                                                      static_cast<std::uint32_t>(config.quality),
+                                                     config.metres_per_unit,
                                                      &raw,
                                                      message.data(),
                                                      message.size()),

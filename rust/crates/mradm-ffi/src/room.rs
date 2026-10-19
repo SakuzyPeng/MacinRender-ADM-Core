@@ -171,7 +171,7 @@ unsafe fn path(bytes: *const u8, length: usize) -> Result<PathBuf> {
         Error::InvalidArgument("Room paths must be UTF-8")
     })?))
 }
-fn description(prepared: &PreparedSet) -> Result<CString> {
+fn description(prepared: &PreparedSet, metres: f64) -> Result<CString> {
     let room = &prepared.room;
     let mut value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
@@ -181,6 +181,11 @@ fn description(prepared: &PreparedSet) -> Result<CString> {
         "reflection_pose_update_frames":room.quality.reflection_pose_frames_at(room.profile.sample_rate),
         "fft_policy":if room.quality == Quality::Exact { "scalar" } else { "native-auto" },
         "hrir_hash":room.hrir.data.identity,"source_sofa_sha256":room.hrir.data.source_sofa_sha256,
+        "coordinate_mapping": {"mode": if metres == 0. { "room" } else { "uniform" },
+            "metres_per_unit": if metres == 0. { None } else { Some(metres) },
+            "origin": "listener", "dimensions_metres": room.profile.dimensions,
+            "listener_metres": room.profile.listener, "boundary_clearance_metres": room.profile.clearance,
+            "minimum_distance_metres": room.profile.minimum_distance},
         "sample_rate":room.profile.sample_rate,
         "source_sample_rate":room.hrir.data.source_sample_rate,
         "hrir_resampled":room.hrir.data.source_sample_rate.map(|rate|rate != room.hrir.data.sample_rate),
@@ -383,6 +388,7 @@ pub unsafe extern "C" fn mradm_room_prepare(
             sofa_length,
             reuse,
             0,
+            0.,
             out,
             message,
             capacity,
@@ -399,6 +405,7 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
     sofa_length: usize,
     reuse: *const RoomPreparedHandle,
     quality: u32,
+    metres: f64,
     out: *mut *mut RoomPreparedHandle,
     message: *mut u8,
     capacity: usize,
@@ -409,6 +416,9 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
         separate(sofa_name, sofa_length, out, 1)?;
         *out = ptr::null_mut();
         let quality = Quality::try_from(quality)?;
+        if !mradm_dsp::room::geometry::valid_scale(metres) {
+            return Err(Error::InvalidArgument("Invalid room distance scale"));
+        }
         let profile = &*profile;
         let data = if !reuse.is_null() {
             separate(reuse, 1, out, 1)?;
@@ -488,7 +498,7 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
                 prepared
             }
         };
-        let json = description(&prepared)?;
+        let json = description(&prepared, metres)?;
         *out = Box::into_raw(Box::new(RoomPreparedHandle { prepared, json }));
         Ok(())
     })

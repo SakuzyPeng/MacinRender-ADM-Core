@@ -105,6 +105,7 @@ int mradm_room_prepare_quality(const void* profile,
                                size_t sofa_length,
                                const void* reuse,
                                uint32_t quality,
+                               double metres,
                                void** out,
                                char* message,
                                size_t capacity);

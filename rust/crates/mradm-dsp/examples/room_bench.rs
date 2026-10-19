@@ -78,6 +78,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for performance evidence".into());
     }
     let mut arguments: Vec<_> = std::env::args().collect();
+    let automatic = arguments.iter().any(|v| v == "--automatic-mapping");
+    arguments.retain(|v| v != "--automatic-mapping");
     let audio_workers = arguments.iter().any(|v| v == "--audio-workers");
     arguments.retain(|v| v != "--audio-workers");
     if audio_workers {
@@ -224,12 +226,40 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             if scenario != "all" && scenario != name {
                 continue;
             }
-            let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
+            let mut session = Session::new(
+                prepared.clone(),
+                if automatic { 0. } else { 1.5 },
+                true,
+                false,
+            )?;
+            let authored = |position: [f64; 3]| -> [f32; 3] {
+                if !automatic {
+                    return position.map(|v| (v / 1.5) as f32);
+                }
+                let world = [position[1], -position[0], position[2]];
+                let room = &prepared.room.profile;
+                let normalized: [f64; 3] = std::array::from_fn(|axis| {
+                    world[axis]
+                        / if world[axis] >= 0. {
+                            room.dimensions[axis] - room.clearance - room.listener[axis]
+                        } else {
+                            room.listener[axis] - room.clearance
+                        }
+                });
+                [
+                    -normalized[1] as f32,
+                    normalized[0] as f32,
+                    normalized[2] as f32,
+                ]
+            };
             let around = |i: usize, turn: f32| {
                 let v = geometry::portable_direction(
                     i as f32 * 360. / sources as f32 + turn,
                     (i % 3) as f32 * 15. - 15.,
                 );
+                if automatic {
+                    return authored([-v[1] * 2.1, v[0] * 2.1, v[2] * 2.1]);
+                }
                 [
                     (-v[1] * 1.4) as f32,
                     (v[0] * 1.4) as f32,
@@ -243,6 +273,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 );
                 let phase = ((block + i * 11) % 128) as f64 / 64.;
                 let metres = 0.2 + 1.4 * (1. - (phase - 1.).abs());
+                if automatic {
+                    return authored([-v[1] * metres, v[0] * metres, 0.]);
+                }
                 [
                     (-v[1] * metres / 1.5) as f32,
                     (v[0] * metres / 1.5) as f32,
@@ -413,6 +446,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
                 "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),"slowest_calls":slowest_calls,
                 "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak});
+            report["coordinate_mapping"] =
+                serde_json::json!(if automatic { "room" } else { "uniform" });
             report["thread_scheduling"] = scheduling.clone();
             println!("{report}");
         }

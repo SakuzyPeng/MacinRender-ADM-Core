@@ -31,7 +31,7 @@ struct RenderCliOptions {
     std::string room_path;
     std::string room_hrir_path;
     std::string screen_config_path;
-    double room_metres_per_unit{1.5};
+    double room_metres_per_unit{0.0};
     std::string room_quality{"exact"};
     std::string semantic_policy_path;
     std::string semantic_report_path;

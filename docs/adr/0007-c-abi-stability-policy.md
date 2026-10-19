@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.48）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-13 的 v1.48）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.49）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-19 的 v1.49）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 > 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 保留本 ADR 的全部兼容规则；实现语言不属于承诺，`adm_c_api.cpp`、`noexcept` 与 CMake `SOVERSION` 等实现条款在 C ABI 迁移期改写。
 
@@ -92,6 +92,15 @@ C ABI 走 **两阶段稳定** 模型：
 - 修改 callback `adm_progress_cb` 形参或调用约定。
 - 修改宏 `ADM_API_VERSION_*` 的含义。
 - 删除导出函数（必须走 deprecation 流程，见下）。
+
+### v1.49（additive，房间自动坐标映射）
+
+- `adm_room_config_t.metres_per_unit=0` 新增为以听者为原点、按房间各轴可用长度自动映射。
+  正数 `[0.01, 100]` 保留固定比例及原数值路径；负数、非有限数和其余值仍拒绝。
+- 公开结构大小、字段布局、函数签名及符号不变。既有显式传入 1.5 的调用保持原行为。
+- 三种渲染流程共用 Rust 几何层；换房保留映射模式，head-locked 内容使用会话初始房间尺度。
+- CLI 省略比例时默认自动映射；诊断 JSON 的 `coordinate_mapping` 描述生效模式与物理几何。
+  具体语义和验证见 [ROOM 自动映射](../architecture/ROOM_COORDINATE_MAPPING.md)。
 
 ### v1.48（additive，房间精确／实时档位）
 

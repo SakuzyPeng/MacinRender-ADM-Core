@@ -375,7 +375,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     mradm::cli::add_decimal_option(*render_cmd,
                                    "--room-metres-per-unit",
                                    opts.room_metres_per_unit,
-                                   "Room coordinate scale; default 1.5 m/unit",
+                                   "Explicit fixed room scale in m/unit; omitted uses automatic room mapping",
                                    0.01,
                                    100.0);
     render_cmd->add_option("--semantic-policy", opts.semantic_policy_path, "ADM semantic render policy JSON");

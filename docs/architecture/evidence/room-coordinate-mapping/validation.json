@@ -1,0 +1,680 @@
+{
+  "schema": "mradm.room-coordinate-mapping-validation.v1",
+  "date": "2026-10-19",
+  "base_commit": "e0a9f2870297c12ffe67f3fff23fead506f81dde",
+  "functional_passed": true,
+  "realtime_zero_deadline_passed": false,
+  "macos": {
+    "ctest_debug": {
+      "passed": 85,
+      "failed": 0
+    },
+    "release_cli_file_scene": true,
+    "fixed_scale_pcm": {
+      "fixed_scale_pcm_identical": true,
+      "frames": 17036,
+      "sha256": "4116ffd80f54c9a7d50a8d0f0bc20cb322772175bd23a29d562e87e505369b59"
+    },
+    "integrated_room_tests": true,
+    "integrated_clippy": true,
+    "ffi_headers": {
+      "functions": 285,
+      "structs": 103
+    },
+    "cpp_quality_exit_code": 0,
+    "cpp_quality_note": "Clang-tidy emitted diagnostics in CLI11/libc++ headers; script exited successfully.",
+    "current_workspace_release_build": true,
+    "current_workspace_release_cli_file_scene": true,
+    "native_collection_check": {
+      "coordinate_mapping": {
+        "boundary_clearance_metres": 0.15,
+        "dimensions_metres": [
+          7.0,
+          6.0,
+          3.2
+        ],
+        "listener_metres": [
+          3.4,
+          3.0,
+          1.2
+        ],
+        "metres_per_unit": null,
+        "minimum_distance_metres": 0.25,
+        "mode": "room",
+        "origin": "listener"
+      },
+      "sample_rate": 96000,
+      "source_sample_rate": 96000,
+      "hrir_resampled": false,
+      "hrir_taps": 1920,
+      "radii_m": [
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.75,
+        1.0,
+        1.3,
+        1.5,
+        1.6
+      ]
+    }
+  },
+  "windows": {
+    "native_build": true,
+    "rust_room_tests": true,
+    "release_cli_file_scene": true,
+    "restore": {
+      "restored_files": 842,
+      "status_identical": true,
+      "index_identical": true
+    },
+    "temporary_directory_removed": true,
+    "short_test": {
+      "workers": 8,
+      "sample_rate": 96000,
+      "call_frames": 512,
+      "sources": 32,
+      "calls": 1024,
+      "profiling": false,
+      "host_before": {
+        "cpu": {
+          "Name": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz",
+          "NumberOfLogicalProcessors": 16,
+          "LoadPercentage": 1
+        },
+        "ac_line_status": 1
+      },
+      "binary_sha256": "654fafd990e2e7c18379e7aea84b7ed88fd6f665a460f0031eba37dcef632581",
+      "cases": [
+        {
+          "name": "ramps-uniform",
+          "result": {
+            "algorithm_fifo_frames": 256,
+            "audio_seconds": 5.461333333333333,
+            "blocks": 1024,
+            "call_frames": 512,
+            "continuous_pose": true,
+            "coordinate_mapping": "uniform",
+            "cpu_audio_budget_percent": null,
+            "cpu_seconds": null,
+            "deadline_misses": 1024,
+            "distinct_event_offsets": 32,
+            "dsp_seconds": 12.413138299999984,
+            "experiment": null,
+            "final_phase": 0,
+            "hrir_bank_bytes": 825275648,
+            "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+            "maximum_ms": 15.698500000000001,
+            "mean_ms": 12.122205371093735,
+            "memory_measurement": "sampled-process-rss",
+            "p95_ms": 13.5381,
+            "p99_ms": 14.2381,
+            "peak": 0.03160765394568443,
+            "pose_update_hz": 187.5,
+            "preparation_outside_dsp_seconds": 0.0,
+            "processing_policy": "room-realtime-v2",
+            "profiling": false,
+            "quality": "realtime",
+            "reflection_update_frames": 2048,
+            "reported_latency_frames": 256,
+            "room_switches": 0,
+            "room_transition": false,
+            "rss_peak_bytes": null,
+            "sample_rate": 96000,
+            "scenario": "ramps",
+            "slowest_calls": [
+              {
+                "benchmark_call": 771,
+                "measured_call": 739,
+                "ms": 15.698500000000001
+              },
+              {
+                "benchmark_call": 915,
+                "measured_call": 883,
+                "ms": 14.7799
+              },
+              {
+                "benchmark_call": 187,
+                "measured_call": 155,
+                "ms": 14.550199999999998
+              },
+              {
+                "benchmark_call": 699,
+                "measured_call": 667,
+                "ms": 14.5365
+              },
+              {
+                "benchmark_call": 707,
+                "measured_call": 675,
+                "ms": 14.347199999999999
+              },
+              {
+                "benchmark_call": 195,
+                "measured_call": 163,
+                "ms": 14.324399999999999
+              },
+              {
+                "benchmark_call": 319,
+                "measured_call": 287,
+                "ms": 14.2872
+              },
+              {
+                "benchmark_call": 59,
+                "measured_call": 27,
+                "ms": 14.2544
+              },
+              {
+                "benchmark_call": 823,
+                "measured_call": 791,
+                "ms": 14.2538
+              },
+              {
+                "benchmark_call": 975,
+                "measured_call": 943,
+                "ms": 14.246
+              },
+              {
+                "benchmark_call": 835,
+                "measured_call": 803,
+                "ms": 14.2381
+              },
+              {
+                "benchmark_call": 827,
+                "measured_call": 795,
+                "ms": 14.2267
+              },
+              {
+                "benchmark_call": 859,
+                "measured_call": 827,
+                "ms": 14.2138
+              },
+              {
+                "benchmark_call": 847,
+                "measured_call": 815,
+                "ms": 14.1852
+              },
+              {
+                "benchmark_call": 723,
+                "measured_call": 691,
+                "ms": 14.142800000000001
+              },
+              {
+                "benchmark_call": 575,
+                "measured_call": 543,
+                "ms": 14.130099999999999
+              },
+              {
+                "benchmark_call": 599,
+                "measured_call": 567,
+                "ms": 14.1138
+              },
+              {
+                "benchmark_call": 447,
+                "measured_call": 415,
+                "ms": 14.111
+              },
+              {
+                "benchmark_call": 603,
+                "measured_call": 571,
+                "ms": 14.0462
+              },
+              {
+                "benchmark_call": 403,
+                "measured_call": 371,
+                "ms": 14.0044
+              },
+              {
+                "benchmark_call": 183,
+                "measured_call": 151,
+                "ms": 13.9978
+              },
+              {
+                "benchmark_call": 715,
+                "measured_call": 683,
+                "ms": 13.981800000000002
+              },
+              {
+                "benchmark_call": 843,
+                "measured_call": 811,
+                "ms": 13.8407
+              },
+              {
+                "benchmark_call": 443,
+                "measured_call": 411,
+                "ms": 13.8394
+              },
+              {
+                "benchmark_call": 983,
+                "measured_call": 951,
+                "ms": 13.829899999999999
+              },
+              {
+                "benchmark_call": 199,
+                "measured_call": 167,
+                "ms": 13.8087
+              },
+              {
+                "benchmark_call": 943,
+                "measured_call": 911,
+                "ms": 13.799199999999999
+              },
+              {
+                "benchmark_call": 851,
+                "measured_call": 819,
+                "ms": 13.7843
+              },
+              {
+                "benchmark_call": 171,
+                "measured_call": 139,
+                "ms": 13.7748
+              },
+              {
+                "benchmark_call": 419,
+                "measured_call": 387,
+                "ms": 13.774
+              },
+              {
+                "benchmark_call": 703,
+                "measured_call": 671,
+                "ms": 13.7729
+              },
+              {
+                "benchmark_call": 79,
+                "measured_call": 47,
+                "ms": 13.7567
+              }
+            ],
+            "source_ramps": true,
+            "sources": 32,
+            "stages": {
+              "canonical_block": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "emitter_begin": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "emitter_convolution": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "gpu_submit": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "gpu_wait": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "hrir_query": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "late_decoder": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "late_field": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "path_transfers": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "response_transform": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "session_process": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "source_reduction": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "source_response": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "target_filters": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_batch": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_render": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_segment": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "worker_execution": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "worker_roundtrip": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              }
+            },
+            "switch_period_calls": 0,
+            "thread_scheduling": null,
+            "trace": null,
+            "voice_segments": null,
+            "voice_segments_per_source_block": null,
+            "worker_wall_budget_percent": 227.29135070800754
+          },
+          "peak_working_set_bytes": 1368145920
+        },
+        {
+          "name": "ramps-auto",
+          "result": {
+            "algorithm_fifo_frames": 256,
+            "audio_seconds": 5.461333333333333,
+            "blocks": 1024,
+            "call_frames": 512,
+            "continuous_pose": true,
+            "coordinate_mapping": "room",
+            "cpu_audio_budget_percent": null,
+            "cpu_seconds": null,
+            "deadline_misses": 1024,
+            "distinct_event_offsets": 32,
+            "dsp_seconds": 12.66547710000001,
+            "experiment": null,
+            "final_phase": 0,
+            "hrir_bank_bytes": 825275648,
+            "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+            "maximum_ms": 15.659099999999999,
+            "mean_ms": 12.368629980468759,
+            "memory_measurement": "sampled-process-rss",
+            "p95_ms": 13.9308,
+            "p99_ms": 14.5618,
+            "peak": 0.03160764276981354,
+            "pose_update_hz": 187.5,
+            "preparation_outside_dsp_seconds": 0.0,
+            "processing_policy": "room-realtime-v2",
+            "profiling": false,
+            "quality": "realtime",
+            "reflection_update_frames": 2048,
+            "reported_latency_frames": 256,
+            "room_switches": 0,
+            "room_transition": false,
+            "rss_peak_bytes": null,
+            "sample_rate": 96000,
+            "scenario": "ramps",
+            "slowest_calls": [
+              {
+                "benchmark_call": 343,
+                "measured_call": 311,
+                "ms": 15.659099999999999
+              },
+              {
+                "benchmark_call": 335,
+                "measured_call": 303,
+                "ms": 15.0514
+              },
+              {
+                "benchmark_call": 715,
+                "measured_call": 683,
+                "ms": 15.0368
+              },
+              {
+                "benchmark_call": 971,
+                "measured_call": 939,
+                "ms": 14.994800000000001
+              },
+              {
+                "benchmark_call": 759,
+                "measured_call": 727,
+                "ms": 14.971699999999998
+              },
+              {
+                "benchmark_call": 571,
+                "measured_call": 539,
+                "ms": 14.950899999999999
+              },
+              {
+                "benchmark_call": 951,
+                "measured_call": 919,
+                "ms": 14.7525
+              },
+              {
+                "benchmark_call": 743,
+                "measured_call": 711,
+                "ms": 14.734
+              },
+              {
+                "benchmark_call": 959,
+                "measured_call": 927,
+                "ms": 14.716
+              },
+              {
+                "benchmark_call": 719,
+                "measured_call": 687,
+                "ms": 14.636
+              },
+              {
+                "benchmark_call": 711,
+                "measured_call": 679,
+                "ms": 14.5618
+              },
+              {
+                "benchmark_call": 563,
+                "measured_call": 531,
+                "ms": 14.5526
+              },
+              {
+                "benchmark_call": 967,
+                "measured_call": 935,
+                "ms": 14.514199999999999
+              },
+              {
+                "benchmark_call": 947,
+                "measured_call": 915,
+                "ms": 14.5111
+              },
+              {
+                "benchmark_call": 939,
+                "measured_call": 907,
+                "ms": 14.4924
+              },
+              {
+                "benchmark_call": 979,
+                "measured_call": 947,
+                "ms": 14.4637
+              },
+              {
+                "benchmark_call": 587,
+                "measured_call": 555,
+                "ms": 14.4451
+              },
+              {
+                "benchmark_call": 551,
+                "measured_call": 519,
+                "ms": 14.4275
+              },
+              {
+                "benchmark_call": 827,
+                "measured_call": 795,
+                "ms": 14.421
+              },
+              {
+                "benchmark_call": 467,
+                "measured_call": 435,
+                "ms": 14.398299999999999
+              },
+              {
+                "benchmark_call": 315,
+                "measured_call": 283,
+                "ms": 14.374400000000001
+              },
+              {
+                "benchmark_call": 963,
+                "measured_call": 931,
+                "ms": 14.3729
+              },
+              {
+                "benchmark_call": 687,
+                "measured_call": 655,
+                "ms": 14.3557
+              },
+              {
+                "benchmark_call": 727,
+                "measured_call": 695,
+                "ms": 14.340399999999999
+              },
+              {
+                "benchmark_call": 975,
+                "measured_call": 943,
+                "ms": 14.3225
+              },
+              {
+                "benchmark_call": 555,
+                "measured_call": 523,
+                "ms": 14.258
+              },
+              {
+                "benchmark_call": 547,
+                "measured_call": 515,
+                "ms": 14.255500000000001
+              },
+              {
+                "benchmark_call": 747,
+                "measured_call": 715,
+                "ms": 14.2502
+              },
+              {
+                "benchmark_call": 763,
+                "measured_call": 731,
+                "ms": 14.2369
+              },
+              {
+                "benchmark_call": 1035,
+                "measured_call": 1003,
+                "ms": 14.2111
+              },
+              {
+                "benchmark_call": 599,
+                "measured_call": 567,
+                "ms": 14.206800000000001
+              },
+              {
+                "benchmark_call": 323,
+                "measured_call": 291,
+                "ms": 14.176599999999999
+              }
+            ],
+            "source_ramps": true,
+            "sources": 32,
+            "stages": {
+              "canonical_block": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "emitter_begin": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "emitter_convolution": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "gpu_submit": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "gpu_wait": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "hrir_query": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "late_decoder": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "late_field": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "path_transfers": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "response_transform": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "session_process": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "source_reduction": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "source_response": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "target_filters": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_batch": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_render": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_segment": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "worker_execution": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "worker_roundtrip": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              }
+            },
+            "switch_period_calls": 0,
+            "thread_scheduling": null,
+            "trace": null,
+            "voice_segments": null,
+            "voice_segments_per_source_block": null,
+            "worker_wall_budget_percent": 231.91181213378925
+          },
+          "peak_working_set_bytes": 1368117248
+        }
+      ],
+      "scope": "Full CPU Session, normal desktop; no task-owned parallel builds; no device underrun claim.",
+      "host_after": {
+        "cpu": {
+          "Name": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz",
+          "NumberOfLogicalProcessors": 16,
+          "LoadPercentage": 24
+        },
+        "ac_line_status": 1
+      },
+      "passed": false
+    }
+  },
+  "performance_scope": "Uniform and automatic modes of the same uninstrumented CPU Session binary; not a pre-change/post-change performance baseline. No concurrent task-owned build on benchmark host.",
+  "performance_followup": "Stopped after automatic position-motion short test missed deadlines; distance-motion, macOS performance and six-round long tests not run.",
+  "integration_scope": "Concurrent CUDA integration preserved. Merged macOS build, focused tests and clippy passed. This change does not certify CUDA performance."
+}
