@@ -142,14 +142,15 @@ class Api:
     def ok(self, code):
         assert code == 0, (code, self.lib.adm_context_last_error_message(self.context))
 
-    def scene(self, room_file, hrir, samples, chunks, output_rate=96000, quality=0, epoch_twice=False):
+    def scene(self, room_file, hrir, samples, chunks, output_rate=96000, quality=0, epoch_twice=False, metres=1.5):
         room_handle, stream = PTR(), PTR()
         self.ok(self.lib.adm_room_load(self.context, str(room_file).encode(), C.byref(room_handle)))
-        room = Room(handle=room_handle, hrir=str(hrir).encode(), metres=1.5)
+        room = Room(handle=room_handle, hrir=str(hrir).encode(), metres=metres)
         report = PTR()
         self.ok(self.lib.adm_room_inspect_with_quality(self.context, C.byref(room), quality, C.byref(report)))
         info = json.loads(C.string_at(report).decode()); self.lib.adm_free_string(report)
         assert info['sample_rate'] == 96000
+        assert info['coordinate_mapping']['mode'] == ('room' if metres == 0 else 'uniform')
         assert info['reflection_update_frames'] == (2048 if quality else 0)
         config = Config(rendering=Renderer(renderer=8, layout=b'binaural'), input_rate=96000,
                         output_rate=output_rate, ring=32768, watermark=1)
@@ -217,6 +218,8 @@ def main():
         wav_write(source, samples, 96000)
         command = [str(cli), 'render', '-i', str(source), '--input-channels', 'C', '--renderer', 'room-binaural',
                    '--room', str(room), '--room-hrir', str(bank), '--no-peak-limit']
+        automatic_command = command.copy()
+        command += ['--room-metres-per-unit', '1.5']
         subprocess.run(command + ['-o', str(full)], check=True, capture_output=True)
         rate, channels, pcm = wav_read(full); assert (rate, channels) == (96000, 2)
         subprocess.run(command + ['-o', str(trim), '--start', '.02', '--end', '.06'], check=True, capture_output=True)
@@ -239,6 +242,17 @@ def main():
                                           scene_peak=max(abs(v) for v in a), file_peak=max(abs(v) for v in b),
                                           first_diff=next(i for i,(x,y) in enumerate(zip(a,b)) if abs(x-y)>1e-7),
                                           last_diff=max(i for i,(x,y) in enumerate(zip(a,b)) if abs(x-y)>1e-7)))
+            for quality in [0, 1]:
+                automatic_file = root / ('automatic-' + str(quality) + '.wav')
+                auto_cmd = automatic_command + ['--room-quality', 'realtime' if quality else 'exact']
+                subprocess.run(auto_cmd + ['-o', str(automatic_file)], check=True, capture_output=True)
+                _, _, automatic_pcm = wav_read(automatic_file)
+                auto_scene = api.scene(room, bank, samples, [256], quality=quality, metres=0.)
+                assert auto_scene == automatic_pcm, 'automatic file / Scene PCM mismatch'
+                assert auto_scene == api.scene(room, bank, samples, [1, 173, 733, 19, 257], quality=quality, metres=0.)
+                subprocess.run(auto_cmd + ['-o', str(trim), '--start', '.02', '--end', '.06'], check=True, capture_output=True)
+                assert wav_read(trim)[2] == automatic_pcm[1920 * 8:5760 * 8], 'automatic seek changed PCM'
+                assert auto_scene != pcm, 'automatic default silently kept 1.5 m/unit'
             realtime = api.scene(room, bank, samples, [256], quality=1)
             assert realtime == api.scene(room, bank, samples, [113, 7, 1024], quality=1)
             resampled = api.scene(room, bank, samples, [256], output_rate=48000)

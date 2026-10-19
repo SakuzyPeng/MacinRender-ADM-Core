@@ -14,7 +14,8 @@ Windows 实时档的 [设备长测](ROOM_WINDOWS_DEVICE_V2.md)已覆盖文件播
 共享该内核，直接接收 Objects / DirectSpeakers；不经过固定扬声器中间总线。
 支持 48/96 kHz、固定监听位置、3DoF、worker 头追、CLI / C API，不包含生产 HOA 或 GUI。
 
-输入距离一单位默认对应 1.5 m；Scene `(x,y,z)` 转为房间 `(y,-x,z)`。
+输入默认按房间几何自动映射；显式 `metres_per_unit>0` 使用固定米数比例。Scene `(x,y,z)` 转为房间 `(y,-x,z)`。
+自动模式以听者为原点，各轴正负 1 对应保留留距后的墙面；详见 [坐标映射](ROOM_COORDINATE_MAPPING.md)。
 沿射线把源限制到距边界 0.15 m 的室内，最近距离 0.25 m，并报告实际位置。
 传播按实际距离计算，以 2.1 m 为单位增益参考。位置 / 头姿滤波过渡持续 10 ms；
 没有变速读延时线或多普勒模型。单半径 HRIR 的距离使用属于近似。

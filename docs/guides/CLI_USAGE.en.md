@@ -82,6 +82,8 @@ Current entry points are the CLI, the C++ API, and the C ABI.
 
 The `saf-binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA specifications are SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, and a native 48 kHz sample rate. The `apple` backend uses Apple's system HRTF; `mradm backends` reports each binaural backend's `HRTF sources`.
 
+ROOM defaults to listener-centred automatic mapping using each room axis. Pass `--room-metres-per-unit 1.5` for the explicit uniform scale.
+
 `room-binaural` supports native 48/96 kHz processing with a room package matching the input rate.
 `--room-hrir` accepts the SkinRLC nine-distance collection directory or index, including its original
 96 kHz SOFA bank. See [native 96 kHz room rendering](../architecture/ROOM_NATIVE_96K.md).

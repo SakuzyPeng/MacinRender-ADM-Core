@@ -205,7 +205,7 @@
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 48
+#define ADM_API_VERSION_MINOR 49
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1878,7 +1878,7 @@ typedef struct adm_room_config_t {
     uint32_t reserved;
     const adm_room_t* room;
     const char* hrir_manifest; /* UTF-8 SOFA, HRIR or collection directory/index; NULL uses SOFA/package default */
-    double metres_per_unit;    /* [0.01, 100]; recommended/default scale = 1.5 */
+    double metres_per_unit;    /* 0: automatic room mapping (default); [0.01, 100]: fixed metres/unit */
 } adm_room_config_t;
 
 adm_error_code_t adm_room_load(adm_context_t* context, const char* manifest, adm_room_t** out) ADM_API_NOEXCEPT;

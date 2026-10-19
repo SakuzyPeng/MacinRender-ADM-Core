@@ -21,12 +21,14 @@ pub struct Shape {
     pub ranges: [f32; 2],
     pub channel_lock: bool,
     pub maximum_lock: Option<f32>,
+    mapped: Option<(Vec3, Vec3)>,
 }
 
 impl Shape {
     pub fn from_state(state: State, fallback: [f32; 3], role: u32, spread: bool) -> Self {
         let object = role == 0;
         Self {
+            mapped: None,
             position: if state.valid & 4 != 0 {
                 state.position
             } else {
@@ -55,6 +57,50 @@ impl Shape {
             },
         }
     }
+    /// Resolve automatic coordinates independently for each active room. Screen
+    /// warping operates on physical directions and leaves the radius unchanged.
+    pub(crate) fn map_room(
+        mut self,
+        profile: &RoomProfile,
+        previous: Vec3,
+        screen: &super::screen::Mapping,
+        screen_active: bool,
+        previous_screen: bool,
+    ) -> Self {
+        let offset = geometry::room_offset(
+            profile,
+            [
+                f64::from(self.position[1]),
+                -f64::from(self.position[0]),
+                f64::from(self.position[2]),
+            ],
+        );
+        let previous = geometry::room_offset(profile, previous);
+        let warp = |v: Vec3| {
+            let v = screen.physical_position([-v[1], v[0], v[2]]);
+            [v[1], -v[0], v[2]]
+        };
+        self.mapped = Some((
+            if screen_active { warp(offset) } else { offset },
+            geometry::unit_or_front(if previous_screen {
+                warp(previous)
+            } else {
+                previous
+            }),
+        ));
+        self
+    }
+    pub(crate) fn primary(
+        &self,
+        profile: &RoomProfile,
+        metres: f64,
+        previous: Vec3,
+    ) -> Result<geometry::Position> {
+        match self.mapped {
+            Some((offset, previous)) => geometry::physical_position(profile, offset, previous),
+            None => geometry::position(profile, self.position, metres, previous),
+        }
+    }
     /// `scene_flavor` retains Scene's eight-direction expansion. File rendering
     /// uses the existing 17-point angular cloud (up to three divergence lobes).
     pub fn samples(
@@ -65,7 +111,7 @@ impl Shape {
         scene_flavor: bool,
         output: &mut [WeightedPosition; MAX_SAMPLES],
     ) -> Result<usize> {
-        let primary = geometry::position(profile, self.position, metres, previous)?;
+        let primary = self.primary(profile, metres, previous)?;
         if self.extent == [0.; 3] && self.divergence <= 1e-4 && !self.channel_lock {
             output[0] = WeightedPosition {
                 position: primary,
@@ -121,6 +167,29 @@ impl Shape {
             count = 3;
         }
         let to_position = |direction: Vec3| {
+            if metres == 0. {
+                let offset = self.mapped.map_or_else(
+                    || {
+                        geometry::room_offset(
+                            profile,
+                            [
+                                f64::from(self.position[1]),
+                                -f64::from(self.position[0]),
+                                f64::from(self.position[2]),
+                            ],
+                        )
+                    },
+                    |v| v.0,
+                );
+                let radius = norm(offset)
+                    .min(norm(profile.dimensions))
+                    .max(profile.minimum_distance);
+                return geometry::physical_position(
+                    profile,
+                    direction.map(|v| v * radius),
+                    primary.direction,
+                );
+            }
             // Bound the physical radius before narrowing back to the Scene ABI.
             // Extent samples preserve the parent's requested radius until each
             // ray is independently constrained by the room boundary.

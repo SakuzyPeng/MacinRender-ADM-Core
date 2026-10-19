@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
         auto report = mradm::inspect_room(
             {*profile,
              room_hrir,
-             1.5,
+             0.0,
              room_quality == "realtime" ? mradm::RoomQuality::realtime : mradm::RoomQuality::exact});
         if (!report) {
             spdlog::error(report.error().message);

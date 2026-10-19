@@ -134,8 +134,7 @@ impl HeadSignal {
         samples: &mut [WeightedPosition; MAX_SAMPLES],
         work: &mut ResponseWork,
     ) -> Result<()> {
-        let effective_direction =
-            geometry::position(&room.profile, shape.position, metres, previous)?.direction;
+        let effective_direction = shape.primary(&room.profile, metres, previous)?.direction;
         if self.shape == Some(shape) && self.previous == effective_direction {
             return Ok(());
         }
@@ -182,6 +181,9 @@ impl HeadSignal {
 struct Slot {
     description: RoomDescription,
     screen: super::screen::Mapping,
+    automatic: bool,
+    previous_screens: Vec<bool>,
+    last_screen: bool,
     screen_input: Option<[f32; 3]>,
     screen_position: [f32; 3],
     control: Control,
@@ -192,7 +194,7 @@ struct Slot {
     states: Vec<State>,
     directions: Vec<[f64; 3]>,
     last_direction: [f64; 3],
-    last_position: Option<[f32; 3]>,
+    last_position: Option<([f32; 3], bool)>,
     world: [f32; BLOCK],
     head: [f32; BLOCK],
     head_signal: HeadSignal,
@@ -212,7 +214,12 @@ struct Slot {
     lock_sum: usize,
 }
 impl Slot {
-    fn new(description: RoomDescription, room: &PreparedRoom, born: u64) -> Result<Self> {
+    fn new(
+        description: RoomDescription,
+        room: &PreparedRoom,
+        born: u64,
+        automatic: bool,
+    ) -> Result<Self> {
         let state = State {
             position: description.position,
             ..State::default()
@@ -229,6 +236,9 @@ impl Slot {
         Ok(Self {
             description,
             screen: super::screen::Mapping::new(description.screens)?,
+            automatic,
+            previous_screens: vec![false; BLOCK],
+            last_screen: false,
             screen_input: None,
             screen_position: [0.; 3],
             control: Control::new(state),
@@ -278,6 +288,8 @@ impl Slot {
         self.born = 0;
         self.last_direction = [1., 0., 0.];
         self.last_position = None;
+        self.last_screen = false;
+        self.previous_screens.fill(false);
         self.screen_input = None;
         self.directions.fill([1., 0., 0.]);
     }
@@ -287,10 +299,11 @@ impl Slot {
         } else {
             self.description.position
         };
-        if self.last_position == Some(position) {
+        let screen = self.automatic && state.valid & 128 != 0 && state.screen_reference != 0;
+        if self.last_position == Some((position, screen)) {
             return;
         }
-        self.last_position = Some(position);
+        self.last_position = Some((position, screen));
         let vector = [
             f64::from(position[1]),
             -f64::from(position[0]),
@@ -299,9 +312,13 @@ impl Slot {
         let length = crate::geometry::norm(vector);
         if length > 1e-15 {
             self.last_direction = crate::geometry::scale(vector, 1. / length);
+            self.last_screen = screen;
         }
     }
     fn spatial_state(&self, mut state: State) -> State {
+        if self.automatic {
+            return state;
+        }
         if state.valid & 128 != 0
             && state.screen_reference != 0
             && self.description.screens.enabled != 0
@@ -337,7 +354,8 @@ impl Slot {
         } else {
             self.description.position
         };
-        let mapped = state.valid & 128 != 0
+        let mapped = !self.automatic
+            && state.valid & 128 != 0
             && state.screen_reference != 0
             && self.description.screens.enabled != 0;
         state = self.spatial_state(state);
@@ -413,7 +431,8 @@ impl Slot {
                 } else {
                     self.description.position
                 };
-                let mapped = state.valid & 128 != 0
+                let mapped = !self.automatic
+                    && state.valid & 128 != 0
                     && state.screen_reference != 0
                     && self.description.screens.enabled != 0;
                 state = self.spatial_state(state);
@@ -467,6 +486,7 @@ impl Slot {
             }
             self.states[offset] = *state;
             self.directions[offset] = self.last_direction;
+            self.previous_screens[offset] = self.last_screen;
         }
         let gain = if state.active != 0 { state.gain } else { 0. };
         let value = if self.description.role == 2 {
@@ -579,13 +599,20 @@ impl Voice {
                 slot.description.role,
                 spread,
             );
+            let shape = if metres == 0. {
+                let state = slot.states[begin];
+                shape.map_room(
+                    &room.profile,
+                    slot.directions[begin],
+                    &slot.screen,
+                    state.valid & 128 != 0 && state.screen_reference != 0,
+                    slot.previous_screens[begin],
+                )
+            } else {
+                shape
+            };
             let moved = self.shape != Some(shape);
-            let position = geometry::position(
-                &room.profile,
-                shape.position,
-                metres,
-                slot.directions[begin],
-            )?;
+            let position = shape.primary(&room.profile, metres, slot.directions[begin])?;
             let n = shape.samples(
                 &room.profile,
                 metres,
@@ -635,6 +662,8 @@ impl Voice {
 }
 
 struct VoiceInput {
+    screen: super::screen::Mapping,
+    previous_screens: [bool; BLOCK],
     description: RoomDescription,
     born: u64,
     marks: [bool; BLOCK],
@@ -647,6 +676,8 @@ struct VoiceInput {
 impl Default for VoiceInput {
     fn default() -> Self {
         Self {
+            screen: super::screen::Mapping::default(),
+            previous_screens: [false; BLOCK],
             description: RoomDescription::default(),
             born: 0,
             marks: [false; BLOCK],
@@ -1222,6 +1253,10 @@ impl Instance {
             let mut group = self.group.lock().unwrap();
             for (input, slot) in group.inputs.iter_mut().zip(slots) {
                 input.description = slot.description;
+                input.screen = slot.screen;
+                input
+                    .previous_screens
+                    .copy_from_slice(&slot.previous_screens);
                 input.born = slot.born;
                 input.marks = slot.marks;
                 if self.prepared.room.quality == Quality::Realtime {
@@ -1353,7 +1388,7 @@ impl Session {
         Ok(())
     }
     pub fn new(prepared: Arc<PreparedSet>, metres: f64, scene: bool, spread: bool) -> Result<Self> {
-        if !metres.is_finite() || !(0.01..=100.).contains(&metres) {
+        if !geometry::valid_scale(metres) {
             return Err(Error::InvalidArgument("Invalid room distance scale"));
         }
         let current = Box::new(Instance::new(prepared.clone(), 0)?);
@@ -1503,7 +1538,8 @@ impl Session {
             });
             let index = if let Some(index) = available {
                 if reusable.get(index).copied().unwrap_or(false) {
-                    self.slots[index] = Slot::new(*description, &self.head_room, self.clock)?;
+                    self.slots[index] =
+                        Slot::new(*description, &self.head_room, self.clock, self.metres == 0.)?;
                     self.current.reset_voice(index);
                     if let Some(v) = &mut self.incoming {
                         v.reset_voice(index);
@@ -1514,8 +1550,12 @@ impl Session {
                 }
                 index
             } else {
-                self.slots
-                    .push(Slot::new(*description, &self.head_room, self.clock)?);
+                self.slots.push(Slot::new(
+                    *description,
+                    &self.head_room,
+                    self.clock,
+                    self.metres == 0.,
+                )?);
                 self.slots.len() - 1
             };
             self.slots[index].active = true;
@@ -1730,7 +1770,20 @@ impl Session {
             slot.description.role,
             self.spread,
         );
-        geometry::position(profile, shape.position, self.metres, slot.last_direction).ok()
+        let shape = if self.metres == 0. {
+            shape.map_room(
+                profile,
+                slot.last_direction,
+                &slot.screen,
+                state.valid & 128 != 0 && state.screen_reference != 0,
+                slot.last_screen,
+            )
+        } else {
+            shape
+        };
+        shape
+            .primary(profile, self.metres, slot.last_direction)
+            .ok()
     }
     /// The caller prepares `next` off the render worker. A displaced, inaudible
     /// candidate is returned to the caller for background destruction.
@@ -2290,6 +2343,18 @@ impl Session {
                         slot.description.role,
                         self.spread,
                     );
+                    let shape = if self.metres == 0. {
+                        let state = slot.states[begin];
+                        shape.map_room(
+                            &self.head_room.profile,
+                            slot.directions[begin],
+                            &slot.screen,
+                            state.valid & 128 != 0 && state.screen_reference != 0,
+                            slot.previous_screens[begin],
+                        )
+                    } else {
+                        shape
+                    };
                     slot.head_signal.update(
                         &self.head_room,
                         shape,

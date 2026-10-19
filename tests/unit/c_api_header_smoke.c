@@ -6,7 +6,7 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 48
+#if ADM_API_VERSION_MINOR != 49
 #error "unexpected C ABI minor version"
 #endif
 

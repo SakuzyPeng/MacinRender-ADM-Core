@@ -157,10 +157,21 @@ impl Mapping {
         if !self.enabled {
             return position;
         }
-        let vector = position.map(f64::from);
+        self.map_vector(position.map(f64::from), f64::from(f32::MAX))
+            .map(|v| v as f32)
+    }
+    /// Automatic room coordinates are mapped before screen warping. Keep the
+    /// physical radius in f64, including positions outside the room boundary.
+    pub(crate) fn physical_position(&self, position: [f64; 3]) -> [f64; 3] {
+        self.map_vector(position, f64::MAX)
+    }
+    fn map_vector(&self, vector: [f64; 3], maximum: f64) -> [f64; 3] {
+        if !self.enabled {
+            return vector;
+        }
         let radius = norm(vector);
         if radius <= 1e-15 {
-            return position;
+            return vector;
         }
         let [az, el] = angles(vector);
         let az = warp(
@@ -177,12 +188,8 @@ impl Mapping {
         let (se, ce) = libm::sincos(el.to_radians());
         // Huge finite Scene positions already lie beyond every valid room wall.
         // Keep their direction representable until the subsequent room constraint.
-        let radius = radius.min(f64::from(f32::MAX));
-        [
-            (-sa * ce * radius) as f32,
-            (ca * ce * radius) as f32,
-            (se * radius) as f32,
-        ]
+        let radius = radius.min(maximum);
+        [-sa * ce * radius, ca * ce * radius, se * radius]
     }
 }
 
