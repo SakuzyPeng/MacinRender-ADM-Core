@@ -1,0 +1,586 @@
+{
+  "schema": "mradm.room-gpu-feasibility-summary",
+  "version": 1,
+  "date": "2026-10-18",
+  "git_base": "6bd4937a780879e7779aba6a92c65444e0ce1fed",
+  "hardware": {
+    "cpu": "Intel Core i7-11800H, 8 physical cores / 16 logical processors",
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "vram_mib": 6144,
+    "driver": "610.88",
+    "toolkit": "CUDA 12.0",
+    "host_compiler": "canonical MSVC 14.51"
+  },
+  "status": "Promising GPU arithmetic capacity; full ROOM acceptance not established.",
+  "full_room_acceptance": false,
+  "component_short_gate_passed": true,
+  "production_path_changed": false,
+  "cpu_reference_platform": "macOS arm64 Release, production Rust ResponseWork using room-realtime-v2",
+  "fixture": {
+    "bucket_stride": 768,
+    "buckets": 10,
+    "cases": [
+      {
+        "paths": 646,
+        "scenario": "ramps",
+        "tick": 0
+      },
+      {
+        "paths": 651,
+        "scenario": "ramps",
+        "tick": 7
+      },
+      {
+        "paths": 644,
+        "scenario": "ramps",
+        "tick": 19
+      },
+      {
+        "paths": 647,
+        "scenario": "ramps",
+        "tick": 31
+      },
+      {
+        "paths": 647,
+        "scenario": "ramps",
+        "tick": 47
+      },
+      {
+        "paths": 654,
+        "scenario": "ramps",
+        "tick": 63
+      },
+      {
+        "paths": 639,
+        "scenario": "ramps",
+        "tick": 89
+      },
+      {
+        "paths": 652,
+        "scenario": "ramps",
+        "tick": 127
+      },
+      {
+        "paths": 505,
+        "scenario": "distance-ramps",
+        "tick": 0
+      },
+      {
+        "paths": 508,
+        "scenario": "distance-ramps",
+        "tick": 7
+      },
+      {
+        "paths": 510,
+        "scenario": "distance-ramps",
+        "tick": 19
+      },
+      {
+        "paths": 510,
+        "scenario": "distance-ramps",
+        "tick": 31
+      },
+      {
+        "paths": 507,
+        "scenario": "distance-ramps",
+        "tick": 47
+      },
+      {
+        "paths": 496,
+        "scenario": "distance-ramps",
+        "tick": 63
+      },
+      {
+        "paths": 476,
+        "scenario": "distance-ramps",
+        "tick": 89
+      },
+      {
+        "paths": 505,
+        "scenario": "distance-ramps",
+        "tick": 127
+      }
+    ],
+    "directions": 1850,
+    "distance_layers": 9,
+    "fft_length": 4096,
+    "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+    "images": 129,
+    "maximum_active_paths": 654,
+    "room_hash": "89262945f99bb1297c6ab0c7660262450058f24e53f7cf891c2b4f10e4c78963",
+    "sample_rate": 96000,
+    "schema": "mradm.room-gpu-fixture",
+    "scope": "Frozen geometry snapshots, all active direct/early image paths and all distance layers. CPU reference is production ResponseWork. Input-history and convolution checks use deterministic synthetic audio; not the Session event schedule, fade implementation, late field or complete tail acceptance.",
+    "short_taps": 7071,
+    "sources": 32,
+    "version": 1,
+    "files": {
+      "ranges.bin": {
+        "bytes": 81920,
+        "sha256": "04c8e259f31a73921f5647cb2da8cc9cd18f24dc29c1ad97dca033d1059aad00"
+      },
+      "reference.bin": {
+        "bytes": 57925632,
+        "sha256": "39434fbbc8cd3ba0839c81d429f413cc9c8333c51f6f6d10883f5ff8655d8561"
+      },
+      "config.txt": {
+        "bytes": 45,
+        "sha256": "2b72c8bc174b4321925cc60abd84b816203cf636a0e661af5720240ef0d5406b"
+      },
+      "bank.bin": {
+        "bytes": 545853600,
+        "sha256": "10ce3052d68b61be63d46c651a45917a676e3ca6066328c707ec5cc68404fa25"
+      },
+      "materials.bin": {
+        "bytes": 2114568,
+        "sha256": "3a337f90e0a1c10c21c5e839573f92c529488c7b4f4a769d6e5495af4580e4bc"
+      },
+      "phase.bin": {
+        "bytes": 32768,
+        "sha256": "7e0ea19de5e54c1da96657ae75f03b3a4e4e82814264d1334f6f706481c2f326"
+      },
+      "previous.bin": {
+        "bytes": 32768,
+        "sha256": "b8ea2d7720c2032e321e7f2743fb963bed46f1458182ba19c541aa89d56865ce"
+      },
+      "audio-reference.bin": {
+        "bytes": 4096,
+        "sha256": "1c0eb12577ca390d2a36b2a465e7b51dd1698360c0875d10933dd798fa1a21ab"
+      },
+      "fraction.bin": {
+        "bytes": 16801800,
+        "sha256": "8b3b917280b974e5e502fd41364e07ecef908d17ac926f3eade9a4f0dcfde683"
+      },
+      "history.bin": {
+        "bytes": 1842176,
+        "sha256": "4b734cec12a13771b7811bd5d3fed3feb14b8165fb11f0fb2bede76b90d2cd44"
+      },
+      "propagation.bin": {
+        "bytes": 16801800,
+        "sha256": "9ea485659f34d4fe2a34d078c7f0625c9efc7b515e2b09f12b31eae7626c75a3"
+      },
+      "jobs.bin": {
+        "bytes": 2762496,
+        "sha256": "a8de09772f5f13716ed6f83b6ee232ed5b6623bbd86ec33e18625e5f07f59b00"
+      }
+    }
+  },
+  "final_runs": [
+    {
+      "schema": "mradm.room-gpu-probe-run",
+      "version": 1,
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 1024,
+        "scenario": "ramps",
+        "paced": true,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 16,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 2.10091232097e-06,
+        "audio_maximum_over_peak": 4.00658544489e-06,
+        "audio_checked": true,
+        "mean_ms": 3.71783222656,
+        "p99_ms": 4.3356,
+        "maximum_ms": 4.6602,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1895301120,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": 0.0105077834355
+      },
+      "binary_sha256": "ee686c49e534878f26e484e86770a57b94cb699863349ac1d7347fbde0cf84b2",
+      "fixture_manifest_sha256": "cd74d29514cd65dcdf2e4490bf90783cf129ca3299c8fcc58a51904bbd48d54a",
+      "source_sha256": {
+        "probe.cpp": "271393cea2440a964e1ee085d42002386cd49f87d90c6f91367f27d6a1e74ce2",
+        "kernels.cu": "5d35bb5444b40c6254aba9808d4914a874d7a42d8e006cff34a9e1ddfde2cd20"
+      },
+      "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.67 W, 1691 MiB\n",
+      "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 15 %, 1702 MHz, 45.02 W, 1691 MiB\n",
+      "full_room_acceptance": false,
+      "scope": "Partial arithmetic pipeline with precomputed geometry. Host packing, transfers, submission, synchronization and output copy are timed. No production Session scheduling or finite fade validation."
+    },
+    {
+      "schema": "mradm.room-gpu-probe-run",
+      "version": 1,
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 1024,
+        "scenario": "distance-ramps",
+        "paced": true,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 16,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 2.10091232097e-06,
+        "audio_maximum_over_peak": 4.00658544489e-06,
+        "audio_checked": true,
+        "mean_ms": 3.38870361328,
+        "p99_ms": 4.0099,
+        "maximum_ms": 4.2348,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1895301120,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": -0.428520683554
+      },
+      "binary_sha256": "ee686c49e534878f26e484e86770a57b94cb699863349ac1d7347fbde0cf84b2",
+      "fixture_manifest_sha256": "cd74d29514cd65dcdf2e4490bf90783cf129ca3299c8fcc58a51904bbd48d54a",
+      "source_sha256": {
+        "probe.cpp": "271393cea2440a964e1ee085d42002386cd49f87d90c6f91367f27d6a1e74ce2",
+        "kernels.cu": "5d35bb5444b40c6254aba9808d4914a874d7a42d8e006cff34a9e1ddfde2cd20"
+      },
+      "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 39.00 W, 1691 MiB\n",
+      "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 16 %, 1702 MHz, 44.01 W, 1691 MiB\n",
+      "full_room_acceptance": false,
+      "scope": "Partial arithmetic pipeline with precomputed geometry. Host packing, transfers, submission, synchronization and output copy are timed. No production Session scheduling or finite fade validation."
+    }
+  ],
+  "preliminary_runs": [
+    {
+      "name": "resident4-screen",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 64,
+        "scenario": "both",
+        "paced": false,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 4,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 8.5383980878e-07,
+        "audio_maximum_over_peak": 1.3125021285e-06,
+        "audio_checked": true,
+        "mean_ms": 2.6984078125,
+        "p99_ms": 3.2367,
+        "maximum_ms": 3.2367,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1794637824,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": -0.291111653568
+      }
+    },
+    {
+      "name": "transfer-screen",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "transfer",
+        "submission": "graph",
+        "calls": 64,
+        "scenario": "both",
+        "paced": false,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 4,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 0,
+        "audio_maximum_over_peak": 0,
+        "audio_checked": false,
+        "mean_ms": 0.258509375,
+        "p99_ms": 0.3301,
+        "maximum_ms": 0.3301,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1794637824,
+        "metadata_h2d_bytes_per_call": 0,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": -0.0144999996119
+      }
+    },
+    {
+      "name": "response-screen",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "response",
+        "submission": "graph",
+        "calls": 64,
+        "scenario": "both",
+        "paced": false,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 4,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 0,
+        "audio_maximum_over_peak": 0,
+        "audio_checked": false,
+        "mean_ms": 2.823390625,
+        "p99_ms": 3.5223,
+        "maximum_ms": 3.5223,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1794637824,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 0,
+        "d2h_bytes_per_call": 7240704,
+        "output_checksum": 416.364633146
+      }
+    },
+    {
+      "name": "resident8-screen",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 64,
+        "scenario": "both",
+        "paced": false,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 8,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 1.16481810578e-06,
+        "audio_maximum_over_peak": 2.14145084123e-06,
+        "audio_checked": true,
+        "mean_ms": 2.8883921875,
+        "p99_ms": 3.1434,
+        "maximum_ms": 3.1434,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1830289408,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": -0.239342113624
+      }
+    },
+    {
+      "name": "resident16-screen",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 64,
+        "scenario": "both",
+        "paced": false,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 16,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 2.10091232097e-06,
+        "audio_maximum_over_peak": 4.00658544489e-06,
+        "audio_checked": true,
+        "mean_ms": 3.3112765625,
+        "p99_ms": 3.6151,
+        "maximum_ms": 3.6151,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1895301120,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": -0.226092372104
+      }
+    },
+    {
+      "name": "resident16-paced-ramps",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 1024,
+        "scenario": "ramps",
+        "paced": true,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 16,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 2.10091232097e-06,
+        "audio_maximum_over_peak": 4.00658544489e-06,
+        "audio_checked": true,
+        "mean_ms": 3.76952529297,
+        "p99_ms": 4.3538,
+        "maximum_ms": 4.9053,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1895301120,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": 0.0105077834355
+      }
+    },
+    {
+      "name": "resident16-paced-distance-ramps",
+      "probe": {
+        "schema": "mradm.room-gpu-feasibility",
+        "version": 1,
+        "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "route": "resident",
+        "submission": "graph",
+        "calls": 1024,
+        "scenario": "distance-ramps",
+        "paced": true,
+        "sources": 32,
+        "sample_rate": 96000,
+        "call_frames": 512,
+        "active_targets": 16,
+        "response_updates_per_call": 64,
+        "host_preparation_precomputed": true,
+        "full_session": false,
+        "response_relative_l2": 4.24479886808e-07,
+        "response_maximum_over_peak": 2.68678579636e-07,
+        "audio_relative_l2": 2.10091232097e-06,
+        "audio_maximum_over_peak": 4.00658544489e-06,
+        "audio_checked": true,
+        "mean_ms": 3.47558720703,
+        "p99_ms": 4.1153,
+        "maximum_ms": 4.7647,
+        "deadline_misses": 0,
+        "gpu_total_bytes": 6441926656,
+        "gpu_used_bytes_observed": 1895301120,
+        "metadata_h2d_bytes_per_call": 355552,
+        "audio_h2d_bytes_per_call": 65536,
+        "d2h_bytes_per_call": 4096,
+        "output_checksum": -0.428520683554
+      }
+    }
+  ],
+  "preliminary_binary_sha256": "911a93f740d8d4beeb193c1f96393d13159ce6d9235ba1ab16ea5e98cd8bb801",
+  "final_source_change": "Host numerical reference reader now copies file bytes into correctly typed float storage; timed processing and CUDA kernels unchanged. Final binary repeated both 1024-call paced checks.",
+  "worst_paced_component_ms": 4.9053,
+  "constraints": {
+    "sample_rate": 96000,
+    "call_frames": 512,
+    "sources": 32,
+    "cpu_submit_threads": 1,
+    "audio_workers_included": false,
+    "phase_geometry_precomputed": true,
+    "f64_geometry_preserved_in_fixture": true,
+    "complete_fir_taps": 7071,
+    "distance_layers": 9,
+    "maximum_active_paths_per_snapshot": 654,
+    "response_fft_length": 4096,
+    "convolution_fft_length": 512,
+    "convolution_partitions": 28,
+    "response_updates_per_call": 64,
+    "active_targets_final": 16,
+    "target_weights": "Uniform weights model occupancy; production finite moving-average fade not implemented",
+    "paced_wait_outside_timer": true,
+    "wake_schedule_lateness_measured": false,
+    "timed_host_operations": [
+      "descriptor packing",
+      "audio input generation",
+      "H2D",
+      "CUDA graph launch",
+      "all GPU kernels and FFTs",
+      "D2H",
+      "stream synchronization",
+      "CPU output copy"
+    ],
+    "excluded": [
+      "geometry and HRTF triangle/weight lookup",
+      "Scene metadata and actual event subdivision",
+      "EQ",
+      "late field",
+      "LFE",
+      "headLocked and extent semantics",
+      "room switching",
+      "device callback",
+      "production FIFO/seek/reset/full PCM tail acceptance"
+    ]
+  },
+  "checks": {
+    "response_planes": 2048,
+    "response_samples_per_plane": 7071,
+    "audio_frames_checked": 512,
+    "response_relative_l2_max": 4.24479886808e-07,
+    "response_maximum_over_peak": 2.68678579636e-07,
+    "audio_relative_l2_max": 2.10091232097e-06,
+    "audio_maximum_over_peak": 4.00658544489e-06,
+    "relative_l2_limit": 2e-05,
+    "maximum_over_peak_limit": 0.0002,
+    "clippy_fixture_example": "passed (-D warnings)",
+    "cppcheck_probe": "passed",
+    "clang_format": "passed",
+    "python_cli_smoke": "passed",
+    "original_tracked_changes_preserved": true
+  },
+  "source_sha256": {
+    "rust/crates/mradm-dsp/examples/room_gpu_fixture.rs": "26bed9163d133ab904987b0ce2c3a30fb210c00662b104f745d24170799afe40",
+    "scripts/research/room_gpu/probe.cpp": "271393cea2440a964e1ee085d42002386cd49f87d90c6f91367f27d6a1e74ce2",
+    "scripts/research/room_gpu/kernels.cu": "5d35bb5444b40c6254aba9808d4914a874d7a42d8e006cff34a9e1ddfde2cd20",
+    "scripts/research/room_gpu/run.py": "7b1e0fff8cd29861163bffed4a0e26326e99c39780757f85fd839e1dca7857c0",
+    "scripts/research/room_gpu/seal_fixture.py": "c6314cf8543a7260b0f1aee12e19572b02258e3c34e36f1b2e91854b71d07c99"
+  },
+  "cleanup": {
+    "head_unchanged": true,
+    "git_status_unchanged": true,
+    "production_files_overlaid": false,
+    "driver_settings_modified": false,
+    "dependency_caches_created": false,
+    "private_fixture_removed": true,
+    "local_private_fixture_removed": true,
+    "local_bytes_removed": 644257376
+  }
+}

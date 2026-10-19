@@ -1,0 +1,5557 @@
+{
+  "algorithm_fifo_frames": 256,
+  "audio_seconds": 2.7306666666666666,
+  "blocks": 512,
+  "call_frames": 512,
+  "continuous_pose": true,
+  "cpu_audio_budget_percent": null,
+  "cpu_seconds": null,
+  "deadline_misses": 7,
+  "distinct_event_offsets": 0,
+  "dsp_seconds": 1.5654479,
+  "experiment": {
+    "control": "production Session",
+    "cpu_reference": false,
+    "finite_fade": true,
+    "kind": "room-gpu-session"
+  },
+  "final_phase": 0,
+  "hrir_bank_bytes": 825275648,
+  "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+  "maximum_ms": 6.2874,
+  "mean_ms": 3.0575154296875,
+  "memory_measurement": "sampled-process-rss",
+  "p95_ms": 4.7738,
+  "p99_ms": 5.3958,
+  "peak": 0.031163156032562256,
+  "pose_update_hz": 187.5,
+  "preparation_outside_dsp_seconds": 4.9e-06,
+  "processing_policy": "room-realtime-v2",
+  "profiling": true,
+  "quality": "realtime",
+  "reflection_update_frames": 2048,
+  "reported_latency_frames": 256,
+  "room_switches": 1,
+  "room_transition": true,
+  "rss_peak_bytes": null,
+  "sample_rate": 96000,
+  "scenario": "switch",
+  "slowest_calls": [
+    {
+      "benchmark_call": 175,
+      "measured_call": 143,
+      "ms": 6.2874
+    },
+    {
+      "benchmark_call": 155,
+      "measured_call": 123,
+      "ms": 5.946899999999999
+    },
+    {
+      "benchmark_call": 163,
+      "measured_call": 131,
+      "ms": 5.7372
+    },
+    {
+      "benchmark_call": 159,
+      "measured_call": 127,
+      "ms": 5.7358
+    },
+    {
+      "benchmark_call": 227,
+      "measured_call": 195,
+      "ms": 5.7357
+    },
+    {
+      "benchmark_call": 147,
+      "measured_call": 115,
+      "ms": 5.3958
+    },
+    {
+      "benchmark_call": 179,
+      "measured_call": 147,
+      "ms": 5.3495
+    },
+    {
+      "benchmark_call": 139,
+      "measured_call": 107,
+      "ms": 5.3084
+    },
+    {
+      "benchmark_call": 151,
+      "measured_call": 119,
+      "ms": 5.2743
+    },
+    {
+      "benchmark_call": 207,
+      "measured_call": 175,
+      "ms": 5.2729
+    },
+    {
+      "benchmark_call": 235,
+      "measured_call": 203,
+      "ms": 5.2477
+    },
+    {
+      "benchmark_call": 231,
+      "measured_call": 199,
+      "ms": 5.0848
+    },
+    {
+      "benchmark_call": 171,
+      "measured_call": 139,
+      "ms": 5.0119
+    },
+    {
+      "benchmark_call": 191,
+      "measured_call": 159,
+      "ms": 4.96
+    },
+    {
+      "benchmark_call": 143,
+      "measured_call": 111,
+      "ms": 4.9418
+    },
+    {
+      "benchmark_call": 219,
+      "measured_call": 187,
+      "ms": 4.8848
+    },
+    {
+      "benchmark_call": 195,
+      "measured_call": 163,
+      "ms": 4.8843000000000005
+    },
+    {
+      "benchmark_call": 223,
+      "measured_call": 191,
+      "ms": 4.8828
+    },
+    {
+      "benchmark_call": 123,
+      "measured_call": 91,
+      "ms": 4.881500000000001
+    },
+    {
+      "benchmark_call": 239,
+      "measured_call": 207,
+      "ms": 4.8802
+    },
+    {
+      "benchmark_call": 183,
+      "measured_call": 151,
+      "ms": 4.8769
+    },
+    {
+      "benchmark_call": 135,
+      "measured_call": 103,
+      "ms": 4.8568
+    },
+    {
+      "benchmark_call": 167,
+      "measured_call": 135,
+      "ms": 4.8487
+    },
+    {
+      "benchmark_call": 215,
+      "measured_call": 183,
+      "ms": 4.8215
+    },
+    {
+      "benchmark_call": 91,
+      "measured_call": 59,
+      "ms": 4.8139
+    },
+    {
+      "benchmark_call": 279,
+      "measured_call": 247,
+      "ms": 4.7738
+    },
+    {
+      "benchmark_call": 199,
+      "measured_call": 167,
+      "ms": 4.7421
+    },
+    {
+      "benchmark_call": 187,
+      "measured_call": 155,
+      "ms": 4.7228
+    },
+    {
+      "benchmark_call": 203,
+      "measured_call": 171,
+      "ms": 4.7074
+    },
+    {
+      "benchmark_call": 283,
+      "measured_call": 251,
+      "ms": 4.693700000000001
+    },
+    {
+      "benchmark_call": 111,
+      "measured_call": 79,
+      "ms": 4.6593
+    },
+    {
+      "benchmark_call": 211,
+      "measured_call": 179,
+      "ms": 4.655
+    }
+  ],
+  "source_ramps": false,
+  "sources": 32,
+  "stages": {
+    "canonical_block": {
+      "calls": 732,
+      "worker_summed_ms": 1112.1681
+    },
+    "emitter_begin": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "emitter_convolution": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "gpu_submit": {
+      "calls": 1755,
+      "worker_summed_ms": 315.7508
+    },
+    "gpu_wait": {
+      "calls": 1755,
+      "worker_summed_ms": 84.3077
+    },
+    "hrir_query": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "late_decoder": {
+      "calls": 1024,
+      "worker_summed_ms": 446.7841
+    },
+    "late_field": {
+      "calls": 32768,
+      "worker_summed_ms": 299.9385
+    },
+    "path_transfers": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "response_transform": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "session_process": {
+      "calls": 512,
+      "worker_summed_ms": 1565.1008
+    },
+    "source_reduction": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "source_response": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "target_filters": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "voice_batch": {
+      "calls": 1024,
+      "worker_summed_ms": 682.048
+    },
+    "voice_render": {
+      "calls": 56160,
+      "worker_summed_ms": 2242.1838
+    },
+    "voice_segment": {
+      "calls": 0,
+      "worker_summed_ms": 0.0
+    },
+    "worker_execution": {
+      "calls": 1024,
+      "worker_summed_ms": 1293.01
+    },
+    "worker_roundtrip": {
+      "calls": 1024,
+      "worker_summed_ms": 1312.4127
+    }
+  },
+  "switch_period_calls": 0,
+  "trace": {
+    "captured_calls": 512,
+    "clock_read_mean_ns": 89.7,
+    "deadline_misses": 7,
+    "inner_stage_walls": false,
+    "retained_slowest_calls": [
+      {
+        "measured_block": 143,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 6.2874,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 5.8616
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 1.4037
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0939
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9443
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7952
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 6.2867
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 3.7388
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 16.473
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 5.524
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 5.5601
+          }
+        }
+      },
+      {
+        "measured_block": 123,
+        "phase_after": 2,
+        "phase_before": 2,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 15.625
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 15.625
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 15.625
+          }
+        },
+        "wall_ms": 5.946899999999999,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 5.6377
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.861
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.4463
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8953
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.9379
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.9464
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 3.4903
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 18.6627
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 5.3668
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 5.4016
+          }
+        }
+      },
+      {
+        "measured_block": 131,
+        "phase_after": 2,
+        "phase_before": 2,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.7372,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 5.4266
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7916
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.3054
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.0539
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.9211
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.7364
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 3.314
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 17.794
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 5.1361
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 5.1724
+          }
+        }
+      },
+      {
+        "measured_block": 127,
+        "phase_after": 2,
+        "phase_before": 2,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 15.625
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 15.625
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.7358,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 5.3959
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7222
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.4047
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9317
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8306
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.7352
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 3.2192
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 17.7375
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 5.027
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 5.0585
+          }
+        }
+      },
+      {
+        "measured_block": 195,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.7357,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 5.4261
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 1.1159
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.3643
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.053
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7417
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.735
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.9776
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.8926
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 5.1609
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 5.1936
+          }
+        }
+      },
+      {
+        "measured_block": 115,
+        "phase_after": 2,
+        "phase_before": 2,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.3958,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 5.0875
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.6322
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.3596
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9542
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8438
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.3952
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 3.0569
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 17.1598
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.8271
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.8653
+          }
+        }
+      },
+      {
+        "measured_block": 147,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.3495,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.802
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.9153
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.202
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8932
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7824
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.3488
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.8853
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.8724
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.5067
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.549
+          }
+        }
+      },
+      {
+        "measured_block": 107,
+        "phase_after": 1,
+        "phase_before": 1,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.3084,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.9932
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.974
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.3504
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.0262
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7082
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.3075
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.9409
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 14.0346
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.7224
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.755
+          }
+        }
+      },
+      {
+        "measured_block": 119,
+        "phase_after": 2,
+        "phase_before": 2,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 15.625
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 78.125
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 15.625
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.2743,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.963
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.5894
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.4295
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9247
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7419
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.2737
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.9066
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 16.4957
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.6975
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.7335
+          }
+        }
+      },
+      {
+        "measured_block": 175,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.2729,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.7616
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.8419
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2463
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.0055
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.775
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.2723
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.6493
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.35
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.4955
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.5325
+          }
+        }
+      },
+      {
+        "measured_block": 203,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.2477,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.744
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7621
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.1454
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.1547
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 1.0477
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.247
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.6762
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 13.1866
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.3959
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.4448
+          }
+        }
+      },
+      {
+        "measured_block": 199,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.0848,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.6814
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7972
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0992
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.1777
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8383
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.0842
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.6579
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 13.162
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.3608
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.4102
+          }
+        }
+      },
+      {
+        "measured_block": 139,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 5.0119,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.7021
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.8662
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2846
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8898
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7555
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 5.0112
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.7781
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 13.2641
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.3836
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.4208
+          }
+        }
+      },
+      {
+        "measured_block": 159,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.96,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5339
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.6523
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2358
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.0456
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8151
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.9593
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.5729
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 13.136
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2587
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.2961
+          }
+        }
+      },
+      {
+        "measured_block": 111,
+        "phase_after": 1,
+        "phase_before": 1,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.9418,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.6346
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.8641
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2779
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9866
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8076
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.9413
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.6614
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.4518
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.3858
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.417
+          }
+        }
+      },
+      {
+        "measured_block": 187,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8848,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5739
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.8495
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.1548
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9543
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7647
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8838
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.674
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.819
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.3078
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.3455
+          }
+        }
+      },
+      {
+        "measured_block": 163,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8843000000000005,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5665
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.8184
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.198
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9753
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7455
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8837
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.7172
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.9375
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2965
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.3282
+          }
+        }
+      },
+      {
+        "measured_block": 191,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8828,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5603
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7772
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2455
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.0488
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8176
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8821
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.5783
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.7556
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2931
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.3293
+          }
+        }
+      },
+      {
+        "measured_block": 91,
+        "phase_after": 1,
+        "phase_before": 1,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.881500000000001,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.4951
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.6568
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0935
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9991
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7629
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8807
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.7123
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 13.7561
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2438
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.2785
+          }
+        }
+      },
+      {
+        "measured_block": 207,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8802,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5698
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7932
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.17
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9878
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 1.1427
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8795
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.7351
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.7358
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2932
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.3309
+          }
+        }
+      },
+      {
+        "measured_block": 151,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8769,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5664
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.8893
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2134
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8843
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.818
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8761
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.6931
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.5762
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.3169
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.3516
+          }
+        }
+      },
+      {
+        "measured_block": 103,
+        "phase_after": 1,
+        "phase_before": 1,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8568,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.5427
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 1.0218
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0879
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8901
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.8071
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.856
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.7031
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 11.9336
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2904
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.3239
+          }
+        }
+      },
+      {
+        "measured_block": 135,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8487,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.4939
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.6904
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2586
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9091
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7291
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.848
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.6174
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 14.0196
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.234
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.2704
+          }
+        }
+      },
+      {
+        "measured_block": 183,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8215,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.3556
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.6265
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.3186
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.867
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.668
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8208
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.4725
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 13.308
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.0585
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.1075
+          }
+        }
+      },
+      {
+        "measured_block": 59,
+        "phase_after": 1,
+        "phase_before": 1,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.8139,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.4959
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.9331
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0968
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.021
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.6579
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.8134
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.56
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 11.5363
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.2582
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.2918
+          }
+        }
+      },
+      {
+        "measured_block": 247,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.7738,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.4588
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 1.1969
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0831
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.884
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.6939
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.7732
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.4198
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 8.1371
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.1995
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.2341
+          }
+        }
+      },
+      {
+        "measured_block": 167,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.7421,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.4319
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7418
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.3272
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8243
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.6808
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.7415
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.5559
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.8982
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.1493
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.1826
+          }
+        }
+      },
+      {
+        "measured_block": 155,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.7228,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.3077
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7541
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.1866
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.8882
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7184
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.7219
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.5639
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.8624
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.0245
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.0722
+          }
+        }
+      },
+      {
+        "measured_block": 171,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.7074,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.3984
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7628
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.2272
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9461
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7391
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.7067
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.5719
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.4483
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.1412
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.1741
+          }
+        }
+      },
+      {
+        "measured_block": 251,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.693700000000001,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.377
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 1.2257
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.0847
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.7915
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.6913
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.6929
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.4624
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 8.3497
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.1143
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.153
+          }
+        }
+      },
+      {
+        "measured_block": 79,
+        "phase_after": 1,
+        "phase_before": 1,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.6593,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.2849
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.6186
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.1318
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 1.091
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.6751
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.6585
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.3096
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 11.3797
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.037
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.0728
+          }
+        }
+      },
+      {
+        "measured_block": 179,
+        "phase_after": 3,
+        "phase_before": 3,
+        "thread_cpu_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 0.0
+          }
+        },
+        "wall_ms": 4.655,
+        "wall_stages": {
+          "canonical_block": {
+            "calls": 2,
+            "summed_ms": 4.3436
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 4,
+            "summed_ms": 0.7382
+          },
+          "gpu_wait": {
+            "calls": 4,
+            "summed_ms": 0.1614
+          },
+          "hrir_query": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 2,
+            "summed_ms": 0.9838
+          },
+          "late_field": {
+            "calls": 64,
+            "summed_ms": 0.7263
+          },
+          "path_transfers": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 1,
+            "summed_ms": 4.6543
+          },
+          "source_reduction": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 2,
+            "summed_ms": 2.4942
+          },
+          "voice_render": {
+            "calls": 128,
+            "summed_ms": 12.5664
+          },
+          "voice_segment": {
+            "calls": 0,
+            "summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 2,
+            "summed_ms": 4.0809
+          },
+          "worker_roundtrip": {
+            "calls": 2,
+            "summed_ms": 4.1223
+          }
+        }
+      }
+    ],
+    "scope": "Instrumented diagnostic only. Stage wall/CPU totals sum across threads and overlap when nested. CPU excludes blocking/descheduling but not clock overhead. CPU clocks cover session/block/worker/voice and late stages. room-trace disables inner arithmetic-stage clocks entirely; room-profile alone retains inner stage wall times. Waiting for other workers is not evidence of OS preemption. Capacity requires a separate unprofiled run.",
+    "stage_cpu_totals": {
+      "canonical_block": {
+        "calls": 732,
+        "summed_ms": 296.875
+      },
+      "emitter_begin": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "emitter_convolution": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "gpu_submit": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "gpu_wait": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "hrir_query": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "late_decoder": {
+        "calls": 1024,
+        "summed_ms": 562.5
+      },
+      "late_field": {
+        "calls": 32768,
+        "summed_ms": 15.625
+      },
+      "path_transfers": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "response_transform": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "session_process": {
+        "calls": 512,
+        "summed_ms": 390.625
+      },
+      "source_reduction": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "source_response": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "target_filters": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "voice_batch": {
+        "calls": 1024,
+        "summed_ms": 281.25
+      },
+      "voice_render": {
+        "calls": 56160,
+        "summed_ms": 140.625
+      },
+      "voice_segment": {
+        "calls": 0,
+        "summed_ms": 0.0
+      },
+      "worker_execution": {
+        "calls": 1024,
+        "summed_ms": 875.0
+      },
+      "worker_roundtrip": {
+        "calls": 1024,
+        "summed_ms": 390.625
+      }
+    },
+    "thread_cpu_available": true
+  },
+  "voice_segments": 0,
+  "voice_segments_per_source_block": 0.0,
+  "worker_wall_budget_percent": 57.32841430664062
+}

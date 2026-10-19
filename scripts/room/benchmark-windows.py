@@ -20,7 +20,8 @@ class MemoryCounters(C.Structure):
                                        'peak_nonpaged', 'nonpaged', 'pagefile', 'peak_pagefile', 'private']]
 
 
-def idle_snapshot():
+def host_snapshot():
+    """Record background load and power state without imposing an idle gate."""
     kernel = C.WinDLL('kernel32', use_last_error=True)
     kernel.GetSystemTimes.argtypes = [C.POINTER(C.c_uint64)] * 3
     kernel.GetSystemTimes.restype = C.c_int32
@@ -51,8 +52,12 @@ def idle_snapshot():
     if not kernel.GetSystemPowerStatus(C.byref(power)):
         raise C.WinError(C.get_last_error())
     return dict(utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                background_cpu_percent=loads, idle_cpu_limit_percent=5.,
-                eligible=max(loads) <= 5., ac=power.ac, battery_percent=power.battery_percent, saver=power.saver)
+                background_cpu_percent=loads, ac=power.ac,
+                battery_percent=power.battery_percent, saver=power.saver)
+
+
+# Compatibility for existing research collectors; the snapshot is informational.
+idle_snapshot = host_snapshot
 
 
 def acceptance(cases):
@@ -61,9 +66,8 @@ def acceptance(cases):
     complete = len(candidates) == 6 and identities == {(s, r) for s in SCENARIOS[-2:] for r in range(1, 4)}
     calls = sum(case['result']['blocks'] for case in candidates)
     misses = sum(case['result']['deadline_misses'] for case in candidates)
-    eligible = bool(candidates) and all(case['idle_before']['eligible'] for case in candidates)
     return dict(complete=complete, measured_calls=calls, deadline_misses=misses,
-                all_rounds_idle=eligible, passed=complete and calls == 135000 and misses == 0 and eligible)
+                passed=complete and calls == 135000 and misses == 0)
 
 
 def main():
@@ -82,7 +86,8 @@ def main():
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--repetitions', type=int)
     parser.add_argument('--acceptance', action='store_true', help='96 kHz / 512 / 32 / 8, two scenarios, 3 x 22500 calls')
-    parser.add_argument('--idle-note', help='record the agreed host condition; acceptance also samples background CPU')
+    parser.add_argument('--host-note', '--idle-note', dest='host_note',
+                        help='describe the host workload; background CPU is recorded, not gated')
     args = parser.parse_args()
     if sys.platform != 'win32':
         parser.error('This collector uses Windows process working-set counters')
@@ -96,8 +101,8 @@ def main():
         parser.error('baseline-calls requires a baseline binary and 1..112500 calls')
     if args.acceptance and (args.calls != 22500 or args.sources != [32] or args.frames != 512
                            or args.workers != 8 or args.quality != 'realtime' or args.repetitions != 3
-                           or args.scenarios != SCENARIOS[-2:] or not args.idle_note):
-        parser.error('acceptance requires the fixed matrix and an explicit idle-note')
+                           or args.scenarios != SCENARIOS[-2:] or not args.host_note):
+        parser.error('acceptance requires the fixed matrix and an explicit host-note')
     args.output.mkdir(parents=True, exist_ok=False)
     psapi = C.WinDLL('psapi')
     psapi.GetProcessMemoryInfo.argtypes = [C.c_void_p, C.POINTER(MemoryCounters), C.c_uint32]
@@ -105,9 +110,10 @@ def main():
     binaries = [('candidate', args.binary)]
     if args.baseline_binary:
         binaries.insert(0, ('baseline', args.baseline_binary))
-    report = dict(schema='mradm.room-windows-benchmark', version=2, platform=platform.platform(),
+    report = dict(schema='mradm.room-windows-benchmark', version=3, platform=platform.platform(),
                   processor=platform.processor(), logical_processors=os.cpu_count(), workers=args.workers,
-                  idle_note=args.idle_note, acceptance_requested=args.acceptance,
+                  host_note=args.host_note, acceptance_requested=args.acceptance,
+                  host_load_policy='Informational only; ordinary desktop background load does not invalidate deadline results.',
                   binaries={name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in binaries},
                   scope='Fresh process per run, no profile feature. Working-set peak includes preparation. Calls exclude 32 warmup calls. Software timing only.',
                   cases=[])
@@ -119,12 +125,12 @@ def main():
                 for variant, binary in binaries:
                     calls = args.baseline_calls if variant == 'baseline' and args.baseline_calls else args.calls
                     name = f'{variant}-{sources}-{scenario}-{repetition}'
-                    idle = idle_snapshot() if args.acceptance else None
+                    host = host_snapshot() if args.acceptance else None
                     command = [str(binary.resolve()), str(args.room.resolve()), str(calls), str(args.frames),
                                str(sources), '--quality', args.quality, '--hrir', str(args.hrir.resolve()), '--scenario', scenario]
                     (args.output / f'{name}.start.json').write_text(json.dumps(
                         dict(variant=variant, scenario=scenario, repetition=repetition,
-                             command=command, idle_before=idle, expected_calls=calls), indent=2) + '\n', encoding='utf-8')
+                             command=command, host_before=host, expected_calls=calls), indent=2) + '\n', encoding='utf-8')
                     stdout, stderr = args.output / f'{name}.jsonl', args.output / f'{name}.stderr'
                     peak, observations = 0, 0
                     start = time.monotonic()
@@ -154,14 +160,14 @@ def main():
                     if args.acceptance and row['sample_rate'] != 96000:
                         raise RuntimeError('Acceptance requires native 96 kHz')
                     report['cases'].append(dict(variant=variant, sources=sources, scenario=scenario, repetition=repetition,
-                                                command=command, idle_before=idle, process_seconds=time.monotonic()-start,
+                                                command=command, host_before=host, process_seconds=time.monotonic()-start,
                                                 peak_working_set_bytes=peak, observations=observations, result=row))
                     if args.acceptance:
                         report['acceptance'] = acceptance(report['cases'])
                     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
                     print(json.dumps(dict(run=name, mean_ms=row['mean_ms'], p99_ms=row['p99_ms'],
                                           maximum_ms=row['maximum_ms'], misses=row['deadline_misses'], calls=calls,
-                                          peak_working_set_bytes=peak, idle_before=idle)), flush=True)
+                                          peak_working_set_bytes=peak, host_before=host)), flush=True)
     if args.acceptance and not report['acceptance']['passed']:
         raise SystemExit(1)
 

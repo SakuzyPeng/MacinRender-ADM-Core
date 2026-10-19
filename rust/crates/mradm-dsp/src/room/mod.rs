@@ -3,6 +3,8 @@
 pub mod collection;
 pub mod control;
 pub mod geometry;
+#[cfg(feature = "room-gpu-experiment")]
+pub mod gpu_experiment;
 pub mod hrir;
 pub mod partition;
 pub mod prepared;

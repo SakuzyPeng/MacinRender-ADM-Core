@@ -11,6 +11,8 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
 pub struct Emitter {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) gpu: Option<super::gpu_experiment::Voice>,
     room: Arc<PreparedRoom>,
     direct_eq: Long,
     wet_eq: Long,
@@ -39,7 +41,10 @@ pub struct Emitter {
 impl Emitter {
     pub fn new(room: Arc<PreparedRoom>, position: Position) -> Result<Self> {
         let pose_budget_cosine = libm::cos(room.quality.reflection_pose_degrees().to_radians());
+        let early_taps = room.short_taps;
         Ok(Self {
+            #[cfg(feature = "room-gpu-experiment")]
+            gpu: None,
             direct_eq: Long::new(room.eq.clone())?,
             wet_eq: Long::new(room.eq.clone())?,
             eq_shared: true,
@@ -58,8 +63,8 @@ impl Emitter {
                 room.profile.sample_rate,
             )?,
             early: Dynamic::reader_at_rate(
-                2,
-                room.short_taps,
+                room.early_channels(),
+                early_taps,
                 room.quality.fft(),
                 room.profile.sample_rate,
             )?,
@@ -86,7 +91,53 @@ impl Emitter {
         })
     }
 
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn enable_gpu(&mut self) -> Result<()> {
+        self.gpu = Some(super::gpu_experiment::Voice::new(self.room.clone())?);
+        // These readers retain only the original clocks and the FFT scratch used
+        // by shared input history. Actual short-path targets reside in the backend.
+        self.direct =
+            Dynamic::reader_at_rate(2, 1, self.room.quality.fft(), self.room.profile.sample_rate)?;
+        self.early =
+            Dynamic::reader_at_rate(2, 1, self.room.quality.fft(), self.room.profile.sample_rate)?;
+        Ok(())
+    }
+    fn prepare_short(
+        &mut self,
+        sources: &[WeightedPosition],
+        rotation: &Rotation,
+        direct: bool,
+        early: bool,
+        work: &mut ResponseWork,
+    ) -> Result<()> {
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(gpu) = &mut self.gpu {
+            if direct {
+                gpu.target(0, self.direct.gpu_clock().0, sources, *rotation)?;
+            }
+            if early {
+                gpu.target(1, self.early.gpu_clock().0, sources, *rotation)?;
+            }
+            return Ok(());
+        }
+        work.build_branches(&self.room, sources, rotation, direct, early)?;
+        let taps = self.room.short_taps;
+        if direct {
+            self.direct
+                .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
+        }
+        if early {
+            self.early
+                .set_target_support(&work.impulse[2 * taps..], work.early_support)?;
+        }
+        Ok(())
+    }
+
     pub fn reset(&mut self) {
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(gpu) = &mut self.gpu {
+            gpu.reset();
+        }
         self.direct_eq.reset();
         self.wet_eq.reset();
         self.direct_history.reset();
@@ -131,7 +182,6 @@ impl Emitter {
         defer_early: bool,
         work: &mut ResponseWork,
     ) -> Result<()> {
-        let taps = self.room.short_taps;
         // ADR 0020: an update that only moves the source may refresh
         // the direct path alone. Reflections and the late send follow at the
         // next full update; a pose change always updates every branch.
@@ -144,17 +194,13 @@ impl Emitter {
             if !force && position.point == self.position.point {
                 return Ok(());
             }
-            work.build_branches(
-                &self.room,
+            self.prepare_short(
                 sources,
                 &Rotation::new(orientation)?,
                 self.render_direct,
                 false,
+                work,
             )?;
-            if self.render_direct {
-                self.direct
-                    .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
-            }
             self.position = position;
             self.early_stale = true;
             return Ok(());
@@ -178,17 +224,11 @@ impl Emitter {
         let moved =
             force || !self.initialized || position.point != self.position.point || early_stale;
         let rotation = Rotation::new(orientation)?;
-        work.build_branches(&self.room, sources, &rotation, direct, early)?;
+        self.prepare_short(sources, &rotation, direct, early, work)?;
         if early {
             self.early_stale = false;
         }
-        if direct {
-            self.direct
-                .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
-        }
         if early {
-            self.early
-                .set_target_support(&work.impulse[2 * taps..], work.early_support)?;
             self.early_initialized = true;
             self.early_orientation = orientation;
             self.early_rotation = rotation;
@@ -258,11 +298,7 @@ impl Emitter {
                 return Ok(());
             }
             if self.render_direct {
-                work.build_branches(&self.room, sources, &rotation, true, false)?;
-                self.direct.set_target_support(
-                    &work.impulse[..2 * self.room.short_taps],
-                    work.direct_support,
-                )?;
+                self.prepare_short(sources, &rotation, true, false, work)?;
             }
             self.early_stale |= geometry_changed;
             self.position = position;
@@ -270,15 +306,8 @@ impl Emitter {
             return Ok(());
         }
         let direct = self.render_direct && (!self.initialized || direct_changed);
-        work.build_branches(&self.room, sources, &rotation, direct, early)?;
-        let taps = self.room.short_taps;
-        if direct {
-            self.direct
-                .set_target_support(&work.impulse[..2 * taps], work.direct_support)?;
-        }
+        self.prepare_short(sources, &rotation, direct, early, work)?;
         if early {
-            self.early
-                .set_target_support(&work.impulse[2 * taps..], work.early_support)?;
             self.early_initialized = true;
             self.early_stale = false;
             self.early_orientation = orientation;
@@ -293,6 +322,7 @@ impl Emitter {
         self.initialized = true;
         Ok(())
     }
+
 
     /// Overwrite direct / early stereo planes and mono late send. The wet send
     /// scales excitation before EQ, so a room switch retains the old EQ tail.
@@ -345,6 +375,17 @@ impl Emitter {
             self.early.begin_shared();
         }
         self.send.begin_shared();
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(gpu) = &mut self.gpu {
+            gpu.inputs(
+                &self.direct_history,
+                if self.eq_shared {
+                    &self.direct_history
+                } else {
+                    &self.wet_history
+                },
+            );
+        }
         Ok(())
     }
     pub fn render_range(
@@ -356,6 +397,21 @@ impl Emitter {
         send: &mut [f32],
     ) -> Result<()> {
         let _profile = super::profile::Guard::new(super::profile::Stage::EmitterConvolution);
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(gpu) = &mut self.gpu {
+            if self.render_direct {
+                gpu.render(0, self.direct.gpu_clock().1, offset, frames)?;
+                self.direct.gpu_advance(offset, frames)?;
+            }
+            gpu.render(1, self.early.gpu_clock().1, offset, frames)?;
+            self.early.gpu_advance(offset, frames)?;
+            let history = if self.eq_shared {
+                &self.direct_history
+            } else {
+                &self.wet_history
+            };
+            return self.send.render_shared_range(history, offset, frames, send);
+        }
         if self.render_direct {
             self.direct
                 .render_shared_range(&self.direct_history, offset, frames, direct)?;
@@ -401,6 +457,8 @@ struct Segment {
     rotation: Rotation,
 }
 struct Decoders {
+    #[cfg(feature = "room-gpu-experiment")]
+    gpu_late: Option<GpuLate>,
     room: Arc<PreparedRoom>,
     decoders: Vec<Decoder>,
     orientation: [f32; 3],
@@ -566,7 +624,33 @@ pub struct WorldTail {
     group: Arc<Mutex<Decoders>>,
     workers: Arc<super::workers::Workers>,
 }
+#[cfg(feature = "room-gpu-experiment")]
+struct GpuLate {
+    backend: Box<dyn super::gpu_experiment::LateBackend>,
+    ready: Vec<f32>,
+    pending: bool,
+    reset: bool,
+}
 impl WorldTail {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn enable_gpu_late(&mut self, factory: &dyn super::gpu_experiment::Factory) -> Result<()> {
+        let mut group = self.group.lock().unwrap();
+        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime {
+            return Err(Error::Unsupported("GPU late field requires realtime field kind"));
+        }
+        if let Some(backend) = factory.create_late(group.room.clone())? {
+            group.gpu_late = Some(GpuLate {
+                backend,
+                ready: vec![0.; group.decoders.len() * 2048],
+                pending: false,
+                reset: true,
+            });
+            for decoder in &mut group.decoders {
+                decoder.field.as_mut().unwrap().enable_gpu_tail();
+            }
+        }
+        Ok(())
+    }
     pub fn new(room: Arc<PreparedRoom>) -> Result<Self> {
         Self::new_kind(room, TailKind::Combined)
     }
@@ -577,11 +661,12 @@ impl WorldTail {
         Self::new_kind(room, TailKind::Decoder)
     }
     fn new_kind(room: Arc<PreparedRoom>, kind: TailKind) -> Result<Self> {
-        let count = room.profile.late_directions.len();
+        let count = room.field_channels();
+        let point_decoder = kind != TailKind::Field && room.early_channels() == 2;
         let decoders = (0..count)
             .map(|index| {
                 Ok(Decoder {
-                    convolution: if kind != TailKind::Field {
+                    convolution: if point_decoder {
                         Some(Dynamic::with_rate(
                             2,
                             room.hrir.data.output_taps,
@@ -596,7 +681,7 @@ impl WorldTail {
                     } else {
                         None
                     },
-                    query: if kind != TailKind::Field {
+                    query: if point_decoder {
                         Some(super::hrir::TimeQuery::new(room.decoder_hrir.clone())?)
                     } else {
                         None
@@ -604,7 +689,7 @@ impl WorldTail {
                     face: usize::MAX,
                     filter: vec![
                         0.;
-                        if kind != TailKind::Field {
+                        if point_decoder {
                             room.hrir.data.output_taps * 2
                         } else {
                             0
@@ -617,6 +702,8 @@ impl WorldTail {
             .collect::<Result<Vec<_>>>()?;
         let mut result = Self {
             group: Arc::new(Mutex::new(Decoders {
+                #[cfg(feature = "room-gpu-experiment")]
+                gpu_late: None,
                 history: if kind != TailKind::Decoder {
                     Some(SharedLongHistory::new(&room.late[0])?)
                 } else {
@@ -643,6 +730,12 @@ impl WorldTail {
     }
     pub fn reset(&mut self) {
         let mut group = self.group.lock().unwrap();
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(gpu) = &mut group.gpu_late {
+            // Complete any in-flight old epoch before reusing its buffers, but
+            // discard its result at the next begin_field rather than installing it.
+            gpu.reset = true;
+        }
         for decoder in &mut group.decoders {
             if let Some(convolution) = &mut decoder.convolution {
                 convolution.reset();
@@ -727,6 +820,29 @@ impl WorldTail {
         let mut group = self.group.lock().unwrap();
         if group.kind != TailKind::Field || input.len() != BLOCK {
             return Err(Error::InvalidArgument("Invalid room field buffers"));
+        }
+        #[cfg(feature = "room-gpu-experiment")]
+        {
+            let Decoders { gpu_late, decoders, history, .. } = &mut *group;
+            if let Some(gpu) = gpu_late {
+                if gpu.pending {
+                    gpu.backend.finish(&mut gpu.ready)?;
+                    gpu.pending = false;
+                    if !gpu.reset {
+                        for (decoder, ready) in decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0) {
+                            decoder.field.as_mut().unwrap().install_gpu_tail(ready)?;
+                        }
+                    }
+                }
+                let history = history.as_mut().unwrap();
+                history.begin(input)?;
+                if let Some(row) = history.gpu_tail_row() {
+                    gpu.backend.submit(row, gpu.reset)?;
+                    gpu.reset = false;
+                    gpu.pending = true;
+                }
+                return Ok(());
+            }
         }
         group.history.as_mut().unwrap().begin(input)
     }

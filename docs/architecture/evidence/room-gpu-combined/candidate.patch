@@ -1,0 +1,796 @@
+--- a/rust/crates/mradm-dsp/src/room/control.rs
++++ b/rust/crates/mradm-dsp/src/room/control.rs
+@@ -212,6 +212,29 @@
+     #[inline]
+     pub(super) fn is_settled(&self, sample: u64) -> bool {
+         sample >= self.settled
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(super) fn only_position_ramping(&self, sample: u64) -> bool {
++        sample < self.end[2]
++            && self
++                .end
++                .iter()
++                .enumerate()
++                .all(|(field, end)| field == 2 || sample >= *end)
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(super) fn position_at(&self, sample: u64) -> ([f32; 3], u64) {
++        if sample >= self.end[2] {
++            return (self.target.position, self.target.valid & 4);
++        }
++        let alpha =
++            sample.saturating_sub(self.start[2]) as f64 / (self.end[2] - self.start[2]) as f64;
++        let position = std::array::from_fn(|i| {
++            (f64::from(self.origin.position[i])
++                + (f64::from(self.target.position[i]) - f64::from(self.origin.position[i])) * alpha)
++                as f32
++        });
++        (position, self.origin.valid & 4)
+     }
+     /// Geometry interpolation at this absolute sample; reference-frame changes
+     /// are instantaneous and are never held by the realtime reflection grid.
+@@ -371,3 +394,45 @@
+         assert_eq!(control.at(10100).position, [-1., 0., 0.]);
+     }
+ }
++
++#[cfg(all(test, feature = "room-gpu-experiment"))]
++mod gpu_tests {
++    use super::*;
++    #[test]
++    fn position_projection_preserves_original_f64_ramps_validity_and_deadlines() {
++        let mut c = Control::new(State::default());
++        for (step, at) in [0, 17, 73, 127, 255].into_iter().enumerate() {
++            c.apply(
++                &RoomCommand {
++                    changed: 4 | if step == 2 { 2 } else { 0 },
++                    cleared: if step == 3 { 4 } else { 0 },
++                    duration: [128, 1, 257, 96, 0][step],
++                    state: State {
++                        position: [step as f32 * 0.2 - 0.4, 0.7, -0.3],
++                        gain: 0.5,
++                        ..State::default()
++                    },
++                    ..RoomCommand::default()
++                },
++                at,
++            )
++            .unwrap();
++            for sample in 0..640 {
++                let expected = c.at(sample);
++                let (position, valid) = c.position_at(sample);
++                assert_eq!(
++                    position.map(f32::to_bits),
++                    expected.position.map(f32::to_bits)
++                );
++                assert_eq!(valid, expected.valid & 4);
++                if c.only_position_ramping(sample) {
++                    for later in sample..sample + 17 {
++                        let value = c.at(later);
++                        assert_eq!(value.gain.to_bits(), expected.gain.to_bits());
++                        assert_eq!(value.valid & !4, expected.valid & !4);
++                    }
++                }
++            }
++        }
++    }
++}
+--- a/rust/crates/mradm-dsp/src/room/workers.rs
++++ b/rust/crates/mradm-dsp/src/room/workers.rs
+@@ -33,6 +33,32 @@
+ struct Shared {
+     state: Mutex<Mailbox>,
+     changed: Condvar,
++}
++#[cfg(feature = "room-gpu-experiment")]
++struct Pending<'a> {
++    shared: &'a Shared,
++    finished: bool,
++}
++#[cfg(feature = "room-gpu-experiment")]
++impl Pending<'_> {
++    fn finish(&mut self) -> Result<()> {
++        let mut state = self.shared.state.lock().unwrap();
++        while state.result.is_none() {
++            state = self.shared.changed.wait(state).unwrap();
++        }
++        self.finished = true;
++        state.result.take().unwrap()
++    }
++}
++#[cfg(feature = "room-gpu-experiment")]
++impl Drop for Pending<'_> {
++    fn drop(&mut self) {
++        if !self.finished {
++            // Drain even when preparation unwinds, before releasing the serial
++            // mailbox guard. A later session must not consume this job's result.
++            let _ = self.finish();
++        }
++    }
+ }
+ pub struct Workers {
+     shared: Arc<Shared>,
+@@ -152,6 +178,42 @@
+         }
+         state.result.take().unwrap()
+     }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn run_overlapping<T>(
++        &self,
++        job: Arc<dyn Work>,
++        prepare: impl FnOnce() -> Result<T>,
++    ) -> Result<T> {
++        if self.in_pool() {
++            job.run()?;
++            return prepare();
++        }
++        let _profile = super::profile::Guard::new(super::profile::Stage::WorkerRoundtrip);
++        let _serial = self.serial.lock().unwrap();
++        {
++            let mut state = self.shared.state.lock().unwrap();
++            state.result = None;
++            state.job = Some(job);
++            self.shared.changed.notify_all();
++        }
++        let mut pending = Pending {
++            shared: &self.shared,
++            finished: false,
++        };
++        let prepared = catch_unwind(AssertUnwindSafe(prepare));
++        // Preserve execution-error precedence and never leave work in flight
++        // when the caller receives either success or a preparation error.
++        let executed = pending.finish();
++        drop(pending);
++        // Release the mailbox normally before propagating a preparation panic;
++        // another session must not inherit a poisoned serial mutex.
++        drop(_serial);
++        executed?;
++        match prepared {
++            Ok(value) => value,
++            Err(panic) => std::panic::resume_unwind(panic),
++        }
++    }
+ }
+ impl Drop for Workers {
+     fn drop(&mut self) {
+@@ -160,3 +222,36 @@
+         self.shared.changed.notify_all();
+     }
+ }
++
++#[cfg(all(test, feature = "room-gpu-experiment"))]
++mod gpu_tests {
++    use super::*;
++    use std::sync::Barrier;
++    struct Rendezvous(Arc<Barrier>);
++    impl Work for Rendezvous {
++        fn run(&self) -> Result<()> {
++            self.0.wait();
++            Ok(())
++        }
++    }
++    #[test]
++    fn overlapping_preparation_runs_while_work_is_pending_and_drains_on_error() {
++        let workers = Workers::new().unwrap();
++        let barrier = Arc::new(Barrier::new(2));
++        let result: Result<()> =
++            workers.run_overlapping(Arc::new(Rendezvous(barrier.clone())), || {
++                barrier.wait();
++                Err(Error::InvalidArgument("preparation rejected"))
++            });
++        assert!(matches!(
++            result,
++            Err(Error::InvalidArgument("preparation rejected"))
++        ));
++        workers.run(Arc::new(Noop)).unwrap();
++        let panic = catch_unwind(AssertUnwindSafe(|| {
++            let _: Result<()> = workers.run_overlapping(Arc::new(Noop), || panic!("prepare panic"));
++        }));
++        assert!(panic.is_err());
++        workers.run(Arc::new(Noop)).unwrap();
++    }
++}
+--- a/rust/crates/mradm-dsp/src/room/session.rs
++++ b/rust/crates/mradm-dsp/src/room/session.rs
+@@ -392,6 +392,55 @@
+         }
+         Ok(())
+     }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn input_span_gpu(
++        &mut self,
++        input: Option<&[f32]>,
++        sample: u64,
++        offset: usize,
++        scene: bool,
++        snapshots: &[bool],
++    ) -> Result<()> {
++        if !self.control.only_position_ramping(sample) || !self.live.is_settled(sample) {
++            return self.input_span(input, sample, offset, scene, snapshots);
++        }
++        // All non-position fields remain constant until the next command;
++        // each position still uses the original absolute-sample f64 expression.
++        let base = self.input_state(sample);
++        for (i, snapshot) in snapshots.iter().copied().enumerate() {
++            let mut state = base;
++            if i != 0 {
++                let (position, valid) = self.control.position_at(sample + i as u64);
++                state.position = position;
++                state.valid = (state.valid & !4) | valid;
++                let authored = if valid != 0 {
++                    position
++                } else {
++                    self.description.position
++                };
++                let mapped = state.valid & 128 != 0
++                    && state.screen_reference != 0
++                    && self.description.screens.enabled != 0;
++                state = self.spatial_state(state);
++                if mapped {
++                    self.screen_input = Some(authored);
++                    self.screen_position = state.position;
++                }
++                // Keep every-sample tracking, including the previous direction
++                // retained through the origin and screen-mapping boundaries.
++                self.track_direction(state);
++            }
++            self.input_with_state(
++                input.map_or(0., |v| v[i]),
++                &state,
++                sample + i as u64,
++                offset + i,
++                scene,
++                snapshot || self.marks[offset + i],
++            )?;
++        }
++        Ok(())
++    }
+     #[inline]
+     fn input_with_state(
+         &mut self,
+@@ -1930,6 +1979,11 @@
+             slot.marks[self.fill] = true;
+             slot.hard[self.fill] = true;
+         }
++        #[cfg(feature = "room-gpu-experiment")]
++        if self.can_pipeline_gpu(initial, events) {
++            self.process_gpu_pipeline(frames, planes, events, output)?;
++            return Ok(self.info());
++        }
+         let mut event = 0;
+         let mut frame = 0;
+         while frame < frames {
+@@ -2008,6 +2062,175 @@
+             self.finish_switch();
+         }
+         Ok(self.info())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn can_pipeline_gpu(&self, initial: &[RoomCommand], events: &[RoomCommand]) -> bool {
++        self.current.prepared.gpu_factory.is_some()
++            && self.ended.is_none()
++            && self.phase == 0
++            && self.incoming.is_none()
++            && self.pending.is_none()
++            && initial
++                .iter()
++                .chain(events)
++                .all(|c| (c.changed | c.cleared) & 256 == 0)
++            && self.slots.iter().all(|slot| {
++                slot.lock_sum == 0
++                    && slot.head_signal.until <= self.clock - self.fill as u64
++                    && slot.head.iter().all(|v| *v == 0.)
++                    && slot.control.at(self.clock).head_locked == 0
++                    && slot.live.at(self.clock).head_locked == 0
++            })
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn clear_gpu_input(&mut self) {
++        self.fill = 0;
++        self.marks.fill(false);
++        self.geometry_marks.fill(false);
++        for slot in &mut self.slots {
++            slot.marks.fill(false);
++            slot.hard.fill(false);
++        }
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn ingest_gpu_block<'a, I>(
++        &mut self,
++        frames: usize,
++        planes: I,
++        events: &[RoomCommand],
++        mut frame: usize,
++        mut event: usize,
++    ) -> Result<(usize, usize)>
++    where
++        I: Iterator<Item = Option<&'a [f32]>> + Clone + ExactSizeIterator,
++    {
++        while frame < frames && self.fill < BLOCK {
++            while event < events.len() && events[event].offset as usize == frame {
++                let command = &events[event];
++                let slot = &mut self.slots[self.active[command.element as usize]];
++                slot.control.apply(command, self.clock)?;
++                if (command.changed | command.cleared) & control::GEOMETRY_FIELDS != 0 {
++                    slot.marks[self.fill] = true;
++                    // Jumps, clears and reference-frame changes cannot wait for
++                    // the reflection grid, even while another field is ramping.
++                    slot.hard[self.fill] |= command.duration == 0
++                        || command.cleared & control::GEOMETRY_FIELDS != 0
++                        || command.changed & (64 | 128 | 256) != 0;
++                }
++                event += 1;
++            }
++            if self.fill == 0 {
++                self.geometry_marks[self.fill] = true;
++            }
++            if self.fill == 0 || self.pose_changed {
++                self.marks[self.fill] = true;
++                self.pose_changed = false;
++            }
++            // No control event or DSP block boundary lies inside this span.
++            // Finish each source's contiguous input while its control/delay
++            // state is hot, preserving that source's exact sample order.
++            let next_event = events.get(event).map_or(frames, |c| c.offset as usize);
++            let count = (BLOCK - self.fill)
++                .min(frames - frame)
++                .min(next_event - frame);
++            // The pose only changes between calls. Each source samples it at
++            // its own update points, not only at the session's.
++            self.poses[self.fill..self.fill + count].fill(self.pose);
++            for slot in &mut self.slots {
++                if !slot.active {
++                    slot.input_span_gpu(
++                        None,
++                        self.clock,
++                        self.fill,
++                        self.scene,
++                        &self.marks[self.fill..self.fill + count],
++                    )?;
++                }
++            }
++            for (index, plane) in self.active.iter().zip(planes.clone()) {
++                self.slots[*index].input_span_gpu(
++                    plane.map(|v| &v[frame..frame + count]),
++                    self.clock,
++                    self.fill,
++                    self.scene,
++                    &self.marks[self.fill..self.fill + count],
++                )?;
++            }
++            self.fill += count;
++            self.clock += count as u64;
++            frame += count;
++        }
++        Ok((frame, event))
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn process_gpu_pipeline<'a, I>(
++        &mut self,
++        frames: usize,
++        planes: I,
++        events: &[RoomCommand],
++        output: &mut [f32],
++    ) -> Result<()>
++    where
++        I: Iterator<Item = Option<&'a [f32]>> + Clone + ExactSizeIterator,
++    {
++        let (mut frame, mut event) = (0, 0);
++        while frame < frames || self.fill == BLOCK {
++            if self.fill < BLOCK {
++                let begin = frame;
++                let offset = self.fill;
++                (frame, event) =
++                    self.ingest_gpu_block(frames, planes.clone(), events, frame, event)?;
++                output[begin * 2..frame * 2].copy_from_slice(&self.fifo[offset * 2..self.fill * 2]);
++                if self.fill < BLOCK {
++                    break;
++                }
++            }
++            // Stable room, no head-locked signal or tail. The worker owns copies
++            // of all input/metadata before the caller fills the following block.
++            let start = self.clock - BLOCK as u64;
++            self.current.prepare_render(
++                &self.slots,
++                &self.marks,
++                &self.poses,
++                &[1.; BLOCK],
++                start,
++                self.metres,
++                self.scene,
++                self.spread,
++                true,
++                true,
++            )?;
++            {
++                let mut job = self.paired.lock().unwrap();
++                job.order[..self.order.len()].copy_from_slice(&self.order);
++                job.sources = self.order.len();
++                job.draining = false;
++                job.drain_remaining = 0;
++                job.old_gain.fill(1.);
++                job.new_gain.fill(0.);
++                job.marks = self.marks;
++                job.poses = self.poses;
++            }
++            let workers = self.current.prepared.workers.clone();
++            let job = self.paired.clone();
++            let begin = frame;
++            workers.run_overlapping(job, || {
++                self.clear_gpu_input();
++                if frame < frames {
++                    (frame, event) =
++                        self.ingest_gpu_block(frames, planes.clone(), events, frame, event)?;
++                }
++                Ok(())
++            })?;
++            self.fifo = self.paired.lock().unwrap().output;
++            if self.fifo.iter().any(|v| !v.is_finite()) {
++                return Err(Error::RenderFailed("Room DSP produced nonfinite PCM"));
++            }
++            // Finish the original FIFO reads. No worker work survives process(),
++            // even when its output is only consumed by the next call.
++            output[begin * 2..frame * 2].copy_from_slice(&self.fifo[..self.fill * 2]);
++        }
++        Ok(())
+     }
+     fn render_block(&mut self) -> Result<()> {
+         let _profile = super::profile::Guard::new(super::profile::Stage::CanonicalBlock);
+--- a/rust/crates/mradm-dsp/tests/room_gpu.rs
++++ b/rust/crates/mradm-dsp/tests/room_gpu.rs
+@@ -16,6 +16,7 @@
+ #[path = "common/room_fixture.rs"]
+ #[allow(dead_code)]
+ mod common;
++static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+ struct Allocator;
+ static CHECK: AtomicBool = AtomicBool::new(false);
+ static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+@@ -48,6 +49,7 @@
+ }
+ #[test]
+ fn recorded_full_session_preserves_fades_branches_reset_switch_and_tail_without_allocations() {
++    let _lock = TEST_LOCK.lock().unwrap();
+     for rate in [48000, 96000] {
+         let baseline = common::fixture_at_rate(Quality::Realtime, rate);
+         assert!(baseline.room.late[0].gpu_tail().is_some());
+@@ -192,3 +194,145 @@
+         assert_eq!(a.info().input_frames, b.info().input_frames);
+     }
+ }
++
++#[test]
++fn pipelined_position_ramps_preserve_fragmentation_screens_origin_and_zero_allocations() {
++    let _lock = TEST_LOCK.lock().unwrap();
++    use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
++    for rate in [48000, 96000] {
++        let cpu = common::fixture_at_rate(Quality::Realtime, rate);
++        let gpu = adapted(&cpu);
++        let descriptions: Vec<_> = (0..4)
++            .map(|i| RoomDescription {
++                id: i + 1,
++                role: if i == 3 { 2 } else { 0 },
++                position: [0.1, 0.8, 0.],
++                screens: RoomScreens {
++                    enabled: u32::from(i == 1),
++                    reproduction: RoomScreenGeometry {
++                        width: 42.,
++                        ..Default::default()
++                    },
++                    ..Default::default()
++                },
++                ..Default::default()
++            })
++            .collect();
++        let initial: Vec<_> = (0..4)
++            .map(|i| RoomCommand {
++                element: i,
++                state: State {
++                    position: [0.1, 0.8, 0.],
++                    screen_reference: 1,
++                    diffuse: 0.2,
++                    extent: [0.08, 0.02, 0.],
++                    ..State::default()
++                },
++                ..Default::default()
++            })
++            .collect();
++        let mut events = Vec::new();
++        for (j, at) in [0, 1, 127, 255, 256, 257, 511, 777, 1023, 1536, 2047, 3073]
++            .into_iter()
++            .enumerate()
++        {
++            for source in 0..3 {
++                events.push((
++                    at,
++                    RoomCommand {
++                        element: source,
++                        changed: 4,
++                        cleared: if j == 8 { 4 } else { 0 },
++                        duration: [0, 1, 128, 512][j % 4],
++                        state: State {
++                            position: if j == 5 {
++                                [0.; 3]
++                            } else {
++                                [
++                                    0.7 * (j as f32 * 0.3).sin(),
++                                    0.4 * (j as f32 * 0.2).cos(),
++                                    0.1,
++                                ]
++                            },
++                            ..State::default()
++                        },
++                        ..RoomCommand::default()
++                    },
++                ));
++            }
++        }
++        let input: Vec<_> = (0..4096)
++            .map(|i| {
++                if i < 512 {
++                    0.
++                } else {
++                    (i % 179) as f32 * 0.00001 - 0.00089
++                }
++            })
++            .collect();
++        let render = |prepared: Arc<PreparedSet>, packets: &[usize], checked: bool| {
++            let mut session = Session::new(prepared, 1.5, true, true).unwrap();
++            session.configure(&descriptions).unwrap();
++            session.set_pose([17., 3., 0.]).unwrap();
++            let mut output = vec![0.; input.len() * 2];
++            let mut commands = Vec::with_capacity(events.len());
++            let (mut at, mut packet) = (0, 0);
++            while at < input.len() {
++                let n = packets[packet % packets.len()].min(input.len() - at);
++                commands.clear();
++                for (time, command) in &events {
++                    if *time >= at && *time < at + n {
++                        let mut c = *command;
++                        c.offset = (*time - at) as u32;
++                        commands.push(c);
++                    }
++                }
++                ALLOCS.store(0, Ordering::SeqCst);
++                CHECK.store(checked, Ordering::SeqCst);
++                let result = session.process(
++                    n,
++                    (0..4).map(|_| Some(&input[at..at + n])),
++                    if at == 0 { &initial } else { &[] },
++                    &commands,
++                    &mut output[at * 2..(at + n) * 2],
++                );
++                CHECK.store(false, Ordering::SeqCst);
++                result.unwrap();
++                if checked {
++                    assert_eq!(ALLOCS.load(Ordering::SeqCst), 0);
++                }
++                at += n;
++                packet += 1;
++            }
++            session.end_input();
++            let tail = session.info().tail_frames as usize;
++            let mut block = [0.; 1024];
++            for _ in 0..tail.div_ceil(512) + 1 {
++                session
++                    .process(512, (0..4).map(|_| None), &[], &[], &mut block)
++                    .unwrap();
++                output.extend_from_slice(&block);
++            }
++            output
++        };
++        let baseline = render(cpu, &[512], false);
++        let canonical = render(gpu.clone(), &[512], true);
++        let fragmented = render(gpu, &[1, 137, 375, 511, 257, 19], true);
++        assert_eq!(canonical.len(), baseline.len());
++        assert!(
++            canonical
++                .iter()
++                .map(|v| v.to_bits())
++                .eq(fragmented.iter().map(|v| v.to_bits()))
++        );
++        let energy: f64 = baseline.iter().map(|v| f64::from(*v).powi(2)).sum();
++        let error: f64 = baseline
++            .iter()
++            .zip(&canonical)
++            .map(|(a, b)| (f64::from(*a) - f64::from(*b)).powi(2))
++            .sum();
++        assert!((error / energy).sqrt() <= 2e-5);
++        assert!(canonical.iter().all(|v| v.is_finite()));
++        assert!(canonical[..512 * 2].iter().all(|v| *v == 0.));
++    }
++}
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -11,16 +11,16 @@
+ namespace {
+ constexpr unsigned max_voices = 32, max_updates = 256, max_ranges = 1024, max_tasks = 2048, max_jobs = 32 * 8192;
+ struct NativeUpdate {
+-    unsigned group, slot, parts, support;
++    unsigned group, slot, parts, support, first_row;
+     unsigned rows[64];
+ };
+ struct Info {
+     unsigned active, reset, heads[2];
+ };
+ struct Header {
+-    unsigned voices, ranges, updates, tasks;
+-};
+-static_assert(sizeof(RoomGpuJob) == 264 && sizeof(RoomGpuTask) == 48 && sizeof(NativeUpdate) == 272);
++    unsigned voices, ranges, updates, tasks, fft_rows;
++};
++static_assert(sizeof(RoomGpuJob) == 264 && sizeof(RoomGpuTask) == 48 && sizeof(NativeUpdate) == 276);
+ Config configuration(const fs::path& path, const RoomGpuParams& p) {
+     Config c(path / "config.txt");
+     if (p.rate != 96000 || p.fft != static_cast<unsigned>(c.n) || p.rows != static_cast<unsigned>(c.rows) ||
+@@ -33,15 +33,37 @@
+     c.materials = p.images;
+     return c;
+ }
++// Graphs in one Engine execute serially on one stream and share identical
++// input/output addresses. Reuse plans/workspaces across capacity variants.
++struct Plans {
++    struct Entry {
++        int length = 0;
++        cufftType type = CUFFT_R2C;
++        unsigned rows = 0;
++        std::shared_ptr<Plan> value;
++    };
++    cudaStream_t stream;
++    std::vector<Entry> entries;
++    explicit Plans(cudaStream_t s) : stream(s) {}
++    std::shared_ptr<Plan> get(int length, cufftType type, unsigned rows) {
++        const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& entry) {
++            return entry.length == length && entry.type == type && entry.rows == rows;
++        });
++        if (found != entries.end())
++            return found->value;
++        auto value = std::make_shared<Plan>(length, type, rows, stream);
++        entries.push_back({length, type, rows, value});
++        return value;
++    }
++};
+ struct Variant {
+-    unsigned responses, updates, tasks;
+-    std::unique_ptr<Plan> inverse, target, output;
++    unsigned responses, updates, tasks, fft_rows;
++    std::shared_ptr<Plan> inverse, target, output;
+     cudaGraph_t graph = nullptr;
+     cudaGraphExec_t execution = nullptr;
+-    Variant(unsigned r, unsigned u, unsigned t, const Config& c, cudaStream_t stream)
+-        : responses(r), updates(u), tasks(t), inverse(std::make_unique<Plan>(c.n, CUFFT_C2R, r, stream)),
+-          target(std::make_unique<Plan>(512, CUFFT_R2C, u * 2 * ((c.taps + 255) / 256), stream)),
+-          output(std::make_unique<Plan>(512, CUFFT_C2R, t * 2, stream)) {}
++    Variant(unsigned r, unsigned u, unsigned t, unsigned f, const Config& c, Plans& plans)
++        : responses(r), updates(u), tasks(t), fft_rows(f), inverse(plans.get(c.n, CUFFT_C2R, r)),
++          target(plans.get(512, CUFFT_R2C, f)), output(plans.get(512, CUFFT_C2R, t * 2)) {}
+     ~Variant() {
+         if (execution)
+             cudaGraphExecDestroy(execution);
+@@ -86,6 +108,9 @@
+         runtime(cudaMemcpy(propagation.data, p.propagation, propagation.bytes, cudaMemcpyHostToDevice));
+         runtime(cudaMemset(history.data, 0, history.bytes));
+         runtime(cudaMemset(filters.data, 0, filters.bytes));
++        // Active packed rows are fully overwritten. Inactive padded FFT rows
++        // may retain earlier inputs; their outputs are never installed.
++        runtime(cudaMemset(packed.data, 0, packed.bytes));
+         runtime(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+         cudaDeviceProp props{};
+         runtime(cudaGetDeviceProperties(&props, 0));
+@@ -96,11 +121,14 @@
+         input_fn = module->function("session_input");
+         convolve_fn = module->function("session_convolve");
+         mix_fn = module->function("session_mix");
+-        variants.emplace_back(std::make_unique<Variant>(128, 32, 256, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(128, 64, 384, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(320, 96, 384, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(512, 128, 512, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(2048, 256, 2048, c, stream));
++        Plans plans(stream);
++        for (const auto& shape : std::array<std::array<unsigned, 3>, 5>{
++                 {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, 256, 2048}}}) {
++            const unsigned maximum = shape[1] * 2 * static_cast<unsigned>(parts);
++            for (unsigned rows = 128; rows < maximum; rows *= 2)
++                variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], rows, c, plans));
++            variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], maximum, c, plans));
++        }
+         runtime(cudaMemset(device_header.data, 0, sizeof(Header)));
+         for (auto& v : variants) {
+             execute(*v);
+@@ -180,7 +208,7 @@
+         if (pending || voices > max_voices)
+             throw std::runtime_error("Invalid GPU batch lifecycle/capacity");
+         runtime(cudaSetDevice(0));
+-        header = {voices, 0, 0, 0};
++        header = {voices, 0, 0, 0, 0};
+         job_count = 0;
+         std::memset(host_info.data, 0, host_info.bytes);
+         std::memset(host_groups.data, 0, host_groups.bytes);
+@@ -198,14 +226,16 @@
+         for (size_t i = 0; i < f.update_count; ++i) {
+             auto u = f.updates[i];
+             if (u.slot >= 32 || u.branch >= 2 || u.range_count != static_cast<unsigned>(c.buckets) ||
+-                u.range_first + u.range_count > f.range_count || u.parts > parts ||
+-                u.support > static_cast<unsigned>(c.taps))
++                u.range_first + u.range_count > f.range_count || u.parts > parts || !u.support ||
++                u.support > static_cast<unsigned>(c.taps) || u.parts != (u.support + 255) / 256)
+                 throw std::runtime_error("Invalid GPU target");
+             NativeUpdate update{};
+             update.group = voice * 2 + u.branch;
+             update.slot = u.slot;
+             update.parts = u.parts;
+             update.support = u.support;
++            update.first_row = header.fft_rows;
++            header.fft_rows += u.parts * 2;
+             std::fill(std::begin(update.rows), std::end(update.rows), 0xffffffffu);
+             for (unsigned b = 0; b < u.range_count; ++b) {
+                 auto range = f.ranges[u.range_first + b];
+@@ -237,7 +267,8 @@
+     }
+     void submit() {
+         const auto found = std::find_if(variants.begin(), variants.end(), [&](const auto& v) {
+-            return header.ranges * 2 <= v->responses && header.updates <= v->updates && header.tasks <= v->tasks;
++            return header.ranges * 2 <= v->responses && header.updates <= v->updates && header.tasks <= v->tasks &&
++                   header.fft_rows <= v->fft_rows;
+         });
+         if (found == variants.end())
+             throw std::runtime_error("GPU graph shape capacity exceeded");
+--- a/scripts/research/room_gpu/session_kernels.cu
++++ b/scripts/research/room_gpu/session_kernels.cu
+@@ -16,7 +16,7 @@
+     unsigned first, count;
+ };
+ struct Update {
+-    unsigned group, slot, parts, support;
++    unsigned group, slot, parts, support, first_row;
+     unsigned rows[64];
+ };
+ struct Task {
+@@ -27,7 +27,7 @@
+     unsigned active, reset, heads[2];
+ };
+ struct Header {
+-    unsigned voices, ranges, updates, tasks;
++    unsigned voices, ranges, updates, tasks, fft_rows;
+ };
+ __device__ Complex plus(Complex a, Complex b) {
+     return {a.r + b.r, a.i + b.i};
+@@ -83,16 +83,21 @@
+     if (i >= PARTS * 512)
+         return;
+     unsigned target = row / 2, ear = row % 2, part = i / 512, t = part * 256 + i % 512;
++    if (target >= h->updates)
++        return;
++    const Update& update = updates[target];
++    if (part >= update.parts)
++        return;
+     float sum = 0;
+-    if (target < h->updates && i % 512 < 256 && t < updates[target].support) {
++    if (i % 512 < 256 && t < update.support) {
+         for (unsigned b = 0; b < BUCKETS; ++b) {
+-            unsigned r = updates[target].rows[b];
++            unsigned r = update.rows[b];
+             int at = int(t) - int(b * BUCKET_STRIDE);
+             if (r != 0xffffffffu && at >= 0 && at < FFT_N)
+                 sum += buckets[(r * 2 + ear) * FFT_N + at] * (1.f / FFT_N);
+         }
+     }
+-    windows[row * PARTS * 512 + i] = sum;
++    windows[(update.first_row + ear * update.parts + part) * 512 + i % 512] = sum;
+ }
+ extern "C" __global__ void
+ session_install(const Header* h, const Update* updates, const Complex* fresh, Complex* filters) {
+@@ -100,7 +105,11 @@
+     if (target >= h->updates || i >= 2 * PARTS * 257)
+         return;
+     Update u = updates[target];
+-    filters[((u.group * TARGETS + u.slot) * 2 * PARTS * 257) + i] = fresh[target * 2 * PARTS * 257 + i];
++    unsigned ear = i / (PARTS * 257), part = (i / 257) % PARTS, bin = i % 257;
++    if (part >= u.parts)
++        return;
++    filters[((u.group * TARGETS + u.slot) * 2 * PARTS * 257) + i] =
++        fresh[(u.first_row + ear * u.parts + part) * 257 + bin];
+ }
+ extern "C" __global__ void session_input(const Header* h, const Info* info, const Complex* input, Complex* history) {
+     unsigned bin = blockIdx.x * blockDim.x + threadIdx.x, group = blockIdx.y;

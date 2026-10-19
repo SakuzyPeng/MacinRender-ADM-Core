@@ -14,6 +14,9 @@ use mradm_dsp::{
 use std::{path::Path, sync::Arc, time::Instant};
 #[path = "room_support/assets.rs"]
 mod assets;
+#[cfg(feature = "room-gpu-experiment")]
+#[path = "room_support/gpu.rs"]
+mod gpu;
 
 #[cfg(feature = "room-profile")]
 #[path = "room_bench/trace.rs"]
@@ -73,6 +76,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for performance evidence".into());
     }
     let mut arguments: Vec<_> = std::env::args().collect();
+    #[cfg(feature = "room-gpu-experiment")]
+    let gpu = gpu::Options::parse(&mut arguments)?;
     let hrir_path = if let Some(index) = arguments.iter().position(|v| v == "--hrir") {
         let path = arguments
             .get(index + 1)
@@ -173,6 +178,15 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         bank,
         quality,
     )?))?);
+    #[cfg(feature = "room-gpu-experiment")]
+    let (prepared, other) = (gpu.prepare(prepared)?, gpu.prepare(other)?);
+    let experiment = serde_json::Value::Null;
+    #[cfg(feature = "room-gpu-experiment")]
+    let experiment = if gpu.report().is_null() {
+        experiment
+    } else {
+        gpu.report()
+    };
     let only_sources = arguments.get(4).map(|v| v.parse::<usize>()).transpose()?;
     if only_sources.is_some_and(|n| ![1, 16, 32].contains(&n)) {
         return Err("SOURCES must be 1, 16 or 32".into());
@@ -344,12 +358,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 peak = output.iter().fold(peak, |a, b| a.max(b.abs()));
                 let _retired = session.take_retired();
             }
-            let total: f64 = elapsed.iter().sum();
-            elapsed.sort_by(f64::total_cmp);
-            let deadline = frames as f64 / f64::from(prepared.room.profile.sample_rate);
             let counters = process_counters(ticks);
             rss_peak = rss_peak.max(counters.1.unwrap_or(0));
             let cpu = cpu_start.zip(counters.0).map(|(start, end)| end - start);
+            // Preserve the worst call identities from already-recorded times.
+            // Sorting/JSON construction happen after processing and CPU sampling.
+            let mut indexed: Vec<_> = elapsed.iter().copied().enumerate().collect();
+            indexed.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+            let slowest_calls: Vec<_> = indexed.iter().take(32).map(|(index, seconds)| {
+                serde_json::json!({"measured_call":index,"benchmark_call":index+32,"ms":seconds*1000.})
+            }).collect();
+            let total: f64 = elapsed.iter().sum();
+            elapsed.sort_by(f64::total_cmp);
+            let deadline = frames as f64 / f64::from(prepared.room.profile.sample_rate);
             let profile = mradm_dsp::room::profile::snapshot();
             #[cfg(feature = "room-profile")]
             let trace_report = trace.map(|trace| trace.report(deadline));
@@ -380,8 +401,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "hrir_hash":prepared.room.hrir.data.identity,"hrir_bank_bytes":prepared.room.hrir.storage_bytes(),
                 "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},
                 "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
-                "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),
-                "algorithm_fifo_frames":BLOCK,"final_phase":session.info().phase,"peak":peak})
+                "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),"slowest_calls":slowest_calls,
+                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak})
             );
         }
     }

@@ -17,6 +17,8 @@ use std::sync::{Arc, Mutex};
 pub const MAX_SOURCES: usize = 512;
 
 pub struct PreparedSet {
+    #[cfg(feature = "room-gpu-experiment")]
+    gpu_factory: Option<Arc<dyn super::gpu_experiment::Factory>>,
     pub room: Arc<PreparedRoom>,
     pub lfe: Arc<LongFilters>,
     workers: Arc<super::workers::Workers>,
@@ -34,9 +36,28 @@ impl PreparedSet {
             .collect();
         let lfe = LongFilters::with_policy(1, &mean, room.quality.fft())?;
         Ok(Self {
+            #[cfg(feature = "room-gpu-experiment")]
+            gpu_factory: None,
             room,
             lfe,
             workers: super::workers::shared()?,
+        })
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn with_gpu_experiment(
+        &self,
+        factory: Arc<dyn super::gpu_experiment::Factory>,
+    ) -> Result<Self> {
+        if self.room.quality != Quality::Realtime || self.room.early_channels() != 2 {
+            return Err(Error::Unsupported(
+                "GPU experiment requires realtime binaural paths",
+            ));
+        }
+        Ok(Self {
+            gpu_factory: Some(factory),
+            room: self.room.clone(),
+            lfe: self.lfe.clone(),
+            workers: self.workers.clone(),
         })
     }
     pub fn tail_frames(&self) -> usize {
@@ -345,6 +366,55 @@ impl Slot {
         }
         Ok(())
     }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn input_span_gpu(
+        &mut self,
+        input: Option<&[f32]>,
+        sample: u64,
+        offset: usize,
+        scene: bool,
+        snapshots: &[bool],
+    ) -> Result<()> {
+        if !self.control.only_position_ramping(sample) || !self.live.is_settled(sample) {
+            return self.input_span(input, sample, offset, scene, snapshots);
+        }
+        // All non-position fields remain constant until the next command;
+        // each position still uses the original absolute-sample f64 expression.
+        let base = self.input_state(sample);
+        for (i, snapshot) in snapshots.iter().copied().enumerate() {
+            let mut state = base;
+            if i != 0 {
+                let (position, valid) = self.control.position_at(sample + i as u64);
+                state.position = position;
+                state.valid = (state.valid & !4) | valid;
+                let authored = if valid != 0 {
+                    position
+                } else {
+                    self.description.position
+                };
+                let mapped = state.valid & 128 != 0
+                    && state.screen_reference != 0
+                    && self.description.screens.enabled != 0;
+                state = self.spatial_state(state);
+                if mapped {
+                    self.screen_input = Some(authored);
+                    self.screen_position = state.position;
+                }
+                // Keep every-sample tracking, including the previous direction
+                // retained through the origin and screen-mapping boundaries.
+                self.track_direction(state);
+            }
+            self.input_with_state(
+                input.map_or(0., |v| v[i]),
+                &state,
+                sample + i as u64,
+                offset + i,
+                scene,
+                snapshot || self.marks[offset + i],
+            )?;
+        }
+        Ok(())
+    }
     #[inline]
     fn input_with_state(
         &mut self,
@@ -446,6 +516,10 @@ impl Voice {
         self.direct.fill(0.);
         self.early.fill(0.);
         self.send.fill(0.);
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(gpu) = &mut self.emitter.gpu {
+            gpu.begin();
+        }
         if slot.description.role == 2 {
             return Ok(());
         }
@@ -577,6 +651,10 @@ struct VoiceBlock {
     sources: usize,
 }
 struct Voices {
+    #[cfg(feature = "room-gpu-experiment")]
+    gpu: Option<Box<dyn super::gpu_experiment::Backend>>,
+    #[cfg(feature = "room-gpu-experiment")]
+    gpu_output: Vec<f32>,
     room: Arc<PreparedRoom>,
     voices: Vec<Voice>,
     inputs: Vec<VoiceInput>,
@@ -611,7 +689,7 @@ impl Voices {
         let room = &self.room;
         let render =
             |(voice, slot): (&mut Voice, &VoiceInput)| render_voice(voice, room, slot, &block);
-        if block.sources >= 4 {
+        let result = if block.sources >= 4 {
             self.voices[..block.sources]
                 .par_iter_mut()
                 .zip(self.inputs[..block.sources].par_iter())
@@ -621,7 +699,42 @@ impl Voices {
                 .iter_mut()
                 .zip(&self.inputs[..block.sources])
                 .try_for_each(render)
+        };
+        result?;
+        #[cfg(feature = "room-gpu-experiment")]
+        self.submit_gpu()?;
+        Ok(())
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn submit_gpu(&mut self) -> Result<()> {
+        let Some(backend) = &mut self.gpu else {
+            return Ok(());
+        };
+        let _profile = super::profile::Guard::new(super::profile::Stage::GpuSubmit);
+        let count = self.block.unwrap().sources;
+        backend.begin(count)?;
+        for (index, voice) in self.voices[..count].iter().enumerate() {
+            backend.voice(index, &voice.emitter.gpu.as_ref().unwrap().frame)?;
         }
+        backend.submit()
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn complete_gpu(&mut self) -> Result<()> {
+        let Some(backend) = &mut self.gpu else {
+            return Ok(());
+        };
+        let _profile = super::profile::Guard::new(super::profile::Stage::GpuWait);
+        let count = self.block.unwrap().sources;
+        backend.finish(&mut self.gpu_output[..count * 4 * BLOCK])?;
+        for (index, voice) in self.voices[..count].iter_mut().enumerate() {
+            voice
+                .direct
+                .copy_from_slice(&self.gpu_output[index * 4 * BLOCK..(index * 4 + 2) * BLOCK]);
+            voice.early.copy_from_slice(
+                &self.gpu_output[(index * 4 + 2) * BLOCK..(index + 1) * 4 * BLOCK],
+            );
+        }
+        Ok(())
     }
 }
 impl super::workers::Work for Mutex<Voices> {
@@ -652,6 +765,17 @@ struct BlockJob {
 }
 impl BlockJob {
     fn render(&mut self) -> Result<()> {
+        #[cfg(feature = "room-gpu-experiment")]
+        {
+            let enabled = self.current.lock().unwrap().gpu.is_some()
+                || self
+                    .incoming
+                    .as_ref()
+                    .is_some_and(|v| v.lock().unwrap().gpu.is_some());
+            if enabled {
+                return self.render_gpu_block();
+            }
+        }
         self.render_voices()?;
         let mut current = self.current_output.lock().unwrap();
         current.finish(&self.current.lock().unwrap(), &self.order[..self.sources])?;
@@ -736,7 +860,7 @@ impl BlockJob {
             render_voice(voice_a, room_a, input_a, &a)?;
             render_voice(voice_b, room_b, input_b, &b)
         };
-        if a.sources >= 4 {
+        let result = if a.sources >= 4 {
             voices_a[..a.sources]
                 .par_iter_mut()
                 .zip(voices_b[..a.sources].par_iter_mut())
@@ -750,7 +874,66 @@ impl BlockJob {
                 .zip(&inputs_a[..a.sources])
                 .zip(&inputs_b[..a.sources])
                 .try_for_each(render)
+        };
+        result?;
+        #[cfg(feature = "room-gpu-experiment")]
+        {
+            current.submit_gpu()?;
+            incoming.submit_gpu()?;
         }
+        Ok(())
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn render_gpu_block(&mut self) -> Result<()> {
+        self.render_voices()?;
+        let mut current = self.current_output.lock().unwrap();
+        current.gpu_field(&self.current.lock().unwrap(), &self.order[..self.sources])?;
+        let mut incoming = self.incoming_output.as_ref().map(|v| v.lock().unwrap());
+        if let (Some(output), Some(voices)) = (&mut incoming, &self.incoming) {
+            output.gpu_field(&voices.lock().unwrap(), &self.order[..self.sources])?;
+        }
+        let current_frames = if self.draining {
+            self.drain_remaining.min(BLOCK)
+        } else {
+            BLOCK
+        };
+        // Independent field/decoder work overlaps the submitted GPU batch. The
+        // final per-sample addition order is identical to the ordinary path.
+        self.late_decoder.render_world(
+            &current.field,
+            current_frames,
+            incoming.as_deref().map(|v| &v.field),
+            &self.marks,
+            &self.poses,
+            &mut self.late_output,
+        )?;
+        self.current.lock().unwrap().complete_gpu()?;
+        current.gpu_short(&self.current.lock().unwrap(), &self.order[..self.sources]);
+        if let (Some(output), Some(voices)) = (&mut incoming, &self.incoming) {
+            voices.lock().unwrap().complete_gpu()?;
+            output.gpu_short(&voices.lock().unwrap(), &self.order[..self.sources]);
+        }
+        for i in 0..BLOCK {
+            for ear in 0..2 {
+                let at = ear * BLOCK + i;
+                let tail_gain = if self.draining && i >= self.drain_remaining {
+                    0.
+                } else {
+                    1.
+                };
+                let mut value = current.direct[at] * self.old_gain[i] + current.wet[at] * tail_gain;
+                if let Some(next) = &incoming {
+                    value += next.direct[at] * self.new_gain[i] + next.wet[at];
+                }
+                self.output[2 * i + ear] = value;
+            }
+        }
+        for i in 0..BLOCK {
+            for ear in 0..2 {
+                self.output[2 * i + ear] += self.late_output[ear * BLOCK + i];
+            }
+        }
+        Ok(())
     }
 }
 impl super::workers::Work for Mutex<BlockJob> {
@@ -769,6 +952,53 @@ struct InstanceOutput {
     wet: [f32; 2 * BLOCK],
 }
 impl InstanceOutput {
+    #[cfg(feature = "room-gpu-experiment")]
+    fn gpu_field(&mut self, group: &Voices, order: &[usize]) -> Result<()> {
+        let block = group
+            .block
+            .ok_or(Error::InvalidArgument("Missing GPU room block"))?;
+        self.send.fill(0.);
+        self.lfe_input.fill(0.);
+        for index in order {
+            let slot = &group.inputs[*index];
+            if slot.description.role == 2 {
+                if block.excitation {
+                    for i in 0..BLOCK {
+                        self.lfe_input[i] += slot.world[i] * block.wet_gain[i];
+                    }
+                }
+            } else {
+                for i in 0..BLOCK {
+                    self.send[i] += group.voices[*index].send[i];
+                }
+            }
+        }
+        self.field.begin_field(&self.send)?;
+        self.lfe.process(&self.lfe_input, &mut self.lfe_output)
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn gpu_short(&mut self, group: &Voices, order: &[usize]) {
+        self.direct.fill(0.);
+        self.wet.fill(0.);
+        for index in order {
+            if group.inputs[*index].description.role == 2 {
+                continue;
+            }
+            let voice = &group.voices[*index];
+            for i in 0..BLOCK {
+                for ear in 0..2 {
+                    let at = ear * BLOCK + i;
+                    self.direct[at] += voice.direct[at];
+                    self.wet[at] += voice.early[at];
+                }
+            }
+        }
+        for i in 0..BLOCK {
+            for ear in 0..2 {
+                self.wet[ear * BLOCK + i] += self.lfe_output[i];
+            }
+        }
+    }
     fn finish(&mut self, group: &Voices, order: &[usize]) -> Result<()> {
         let block = group
             .block
@@ -779,6 +1009,7 @@ impl InstanceOutput {
         self.wet.fill(0.);
         self.send.fill(0.);
         self.lfe_input.fill(0.);
+        let binaural_early = group.room.early_channels() == 2;
         let profile = super::profile::Guard::new(super::profile::Stage::SourceReduction);
         // Parallel work never reduces audio. Preserve the fixed source-ID order.
         for index in order {
@@ -796,7 +1027,9 @@ impl InstanceOutput {
                     for ear in 0..2 {
                         let at = ear * BLOCK + i;
                         self.direct[at] += voice.direct[at];
-                        self.wet[at] += voice.early[at];
+                        if binaural_early {
+                            self.wet[at] += voice.early[at];
+                        }
                     }
                 }
             }
@@ -834,6 +1067,18 @@ impl Instance {
         }
         let mut result = Self {
             group: Arc::new(Mutex::new(Voices {
+                #[cfg(feature = "room-gpu-experiment")]
+                gpu: prepared
+                    .gpu_factory
+                    .as_ref()
+                    .map(|f| f.create(prepared.room.clone()))
+                    .transpose()?,
+                #[cfg(feature = "room-gpu-experiment")]
+                gpu_output: if prepared.gpu_factory.is_some() {
+                    vec![0.; super::gpu_experiment::MAX_VOICES * 4 * BLOCK]
+                } else {
+                    Vec::new()
+                },
                 room: prepared.room.clone(),
                 voices: Vec::with_capacity(capacity),
                 inputs: Vec::with_capacity(capacity),
@@ -850,6 +1095,10 @@ impl Instance {
             })),
             prepared,
         };
+        #[cfg(feature = "room-gpu-experiment")]
+        if let Some(factory) = &result.prepared.gpu_factory {
+            result.output.lock().unwrap().field.enable_gpu_late(&**factory)?;
+        }
         result.reserve(capacity)?;
         drop(result.output.lock().unwrap());
         Ok(result)
@@ -863,6 +1112,10 @@ impl Instance {
             return Err(Error::InvalidArgument("Room source capacity exceeded"));
         }
         let mut group = self.group.lock().unwrap();
+        #[cfg(feature = "room-gpu-experiment")]
+        if group.gpu.is_some() && count > super::gpu_experiment::MAX_VOICES {
+            return Err(Error::Unsupported("GPU source capacity exceeded"));
+        }
         while group.voices.len() < count {
             group.inputs.push(VoiceInput::default());
             let position =
@@ -878,6 +1131,10 @@ impl Instance {
                 early: [0.; BLOCK * 2],
                 send: [0.; BLOCK],
             });
+            #[cfg(feature = "room-gpu-experiment")]
+            if group.gpu.is_some() {
+                group.voices.last_mut().unwrap().emitter.enable_gpu()?;
+            }
         }
         Ok(())
     }
@@ -1336,6 +1593,7 @@ impl Session {
         // Head-locked sources retain the initial dry propagation filters across
         // room switches, even when the new world's acoustic support is shorter.
         let head = self.head_room.short_taps - 1
+            + self.head_room.experimental_delay()
             + super::diffuse_tail(self.head_room.profile.sample_rate)
             + BLOCK;
         self.incoming
@@ -1357,7 +1615,7 @@ impl Session {
     pub fn info(&self) -> RoomInfo {
         RoomInfo {
             input_frames: self.ended.unwrap_or(self.clock),
-            latency_frames: BLOCK as u64,
+            latency_frames: (BLOCK + self.head_room.experimental_delay()) as u64,
             tail_frames: if self.ended.is_some() {
                 self.end_tail as u64
             } else {
@@ -1629,6 +1887,11 @@ impl Session {
             slot.marks[self.fill] = true;
             slot.hard[self.fill] = true;
         }
+        #[cfg(feature = "room-gpu-experiment")]
+        if self.can_pipeline_gpu(initial, events) {
+            self.process_gpu_pipeline(frames, planes, events, output)?;
+            return Ok(self.info());
+        }
         let mut event = 0;
         let mut frame = 0;
         while frame < frames {
@@ -1707,6 +1970,175 @@ impl Session {
             self.finish_switch();
         }
         Ok(self.info())
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn can_pipeline_gpu(&self, initial: &[RoomCommand], events: &[RoomCommand]) -> bool {
+        self.current.prepared.gpu_factory.is_some()
+            && self.ended.is_none()
+            && self.phase == 0
+            && self.incoming.is_none()
+            && self.pending.is_none()
+            && initial
+                .iter()
+                .chain(events)
+                .all(|c| (c.changed | c.cleared) & 256 == 0)
+            && self.slots.iter().all(|slot| {
+                slot.lock_sum == 0
+                    && slot.head_signal.until <= self.clock - self.fill as u64
+                    && slot.head.iter().all(|v| *v == 0.)
+                    && slot.control.at(self.clock).head_locked == 0
+                    && slot.live.at(self.clock).head_locked == 0
+            })
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn clear_gpu_input(&mut self) {
+        self.fill = 0;
+        self.marks.fill(false);
+        self.geometry_marks.fill(false);
+        for slot in &mut self.slots {
+            slot.marks.fill(false);
+            slot.hard.fill(false);
+        }
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn ingest_gpu_block<'a, I>(
+        &mut self,
+        frames: usize,
+        planes: I,
+        events: &[RoomCommand],
+        mut frame: usize,
+        mut event: usize,
+    ) -> Result<(usize, usize)>
+    where
+        I: Iterator<Item = Option<&'a [f32]>> + Clone + ExactSizeIterator,
+    {
+        while frame < frames && self.fill < BLOCK {
+            while event < events.len() && events[event].offset as usize == frame {
+                let command = &events[event];
+                let slot = &mut self.slots[self.active[command.element as usize]];
+                slot.control.apply(command, self.clock)?;
+                if (command.changed | command.cleared) & control::GEOMETRY_FIELDS != 0 {
+                    slot.marks[self.fill] = true;
+                    // Jumps, clears and reference-frame changes cannot wait for
+                    // the reflection grid, even while another field is ramping.
+                    slot.hard[self.fill] |= command.duration == 0
+                        || command.cleared & control::GEOMETRY_FIELDS != 0
+                        || command.changed & (64 | 128 | 256) != 0;
+                }
+                event += 1;
+            }
+            if self.fill == 0 {
+                self.geometry_marks[self.fill] = true;
+            }
+            if self.fill == 0 || self.pose_changed {
+                self.marks[self.fill] = true;
+                self.pose_changed = false;
+            }
+            // No control event or DSP block boundary lies inside this span.
+            // Finish each source's contiguous input while its control/delay
+            // state is hot, preserving that source's exact sample order.
+            let next_event = events.get(event).map_or(frames, |c| c.offset as usize);
+            let count = (BLOCK - self.fill)
+                .min(frames - frame)
+                .min(next_event - frame);
+            // The pose only changes between calls. Each source samples it at
+            // its own update points, not only at the session's.
+            self.poses[self.fill..self.fill + count].fill(self.pose);
+            for slot in &mut self.slots {
+                if !slot.active {
+                    slot.input_span_gpu(
+                        None,
+                        self.clock,
+                        self.fill,
+                        self.scene,
+                        &self.marks[self.fill..self.fill + count],
+                    )?;
+                }
+            }
+            for (index, plane) in self.active.iter().zip(planes.clone()) {
+                self.slots[*index].input_span_gpu(
+                    plane.map(|v| &v[frame..frame + count]),
+                    self.clock,
+                    self.fill,
+                    self.scene,
+                    &self.marks[self.fill..self.fill + count],
+                )?;
+            }
+            self.fill += count;
+            self.clock += count as u64;
+            frame += count;
+        }
+        Ok((frame, event))
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn process_gpu_pipeline<'a, I>(
+        &mut self,
+        frames: usize,
+        planes: I,
+        events: &[RoomCommand],
+        output: &mut [f32],
+    ) -> Result<()>
+    where
+        I: Iterator<Item = Option<&'a [f32]>> + Clone + ExactSizeIterator,
+    {
+        let (mut frame, mut event) = (0, 0);
+        while frame < frames || self.fill == BLOCK {
+            if self.fill < BLOCK {
+                let begin = frame;
+                let offset = self.fill;
+                (frame, event) =
+                    self.ingest_gpu_block(frames, planes.clone(), events, frame, event)?;
+                output[begin * 2..frame * 2].copy_from_slice(&self.fifo[offset * 2..self.fill * 2]);
+                if self.fill < BLOCK {
+                    break;
+                }
+            }
+            // Stable room, no head-locked signal or tail. The worker owns copies
+            // of all input/metadata before the caller fills the following block.
+            let start = self.clock - BLOCK as u64;
+            self.current.prepare_render(
+                &self.slots,
+                &self.marks,
+                &self.poses,
+                &[1.; BLOCK],
+                start,
+                self.metres,
+                self.scene,
+                self.spread,
+                true,
+                true,
+            )?;
+            {
+                let mut job = self.paired.lock().unwrap();
+                job.order[..self.order.len()].copy_from_slice(&self.order);
+                job.sources = self.order.len();
+                job.draining = false;
+                job.drain_remaining = 0;
+                job.old_gain.fill(1.);
+                job.new_gain.fill(0.);
+                job.marks = self.marks;
+                job.poses = self.poses;
+            }
+            let workers = self.current.prepared.workers.clone();
+            let job = self.paired.clone();
+            let begin = frame;
+            workers.run_overlapping(job, || {
+                self.clear_gpu_input();
+                if frame < frames {
+                    (frame, event) =
+                        self.ingest_gpu_block(frames, planes.clone(), events, frame, event)?;
+                }
+                Ok(())
+            })?;
+            self.fifo = self.paired.lock().unwrap().output;
+            if self.fifo.iter().any(|v| !v.is_finite()) {
+                return Err(Error::RenderFailed("Room DSP produced nonfinite PCM"));
+            }
+            // Finish the original FIFO reads. No worker work survives process(),
+            // even when its output is only consumed by the next call.
+            output[begin * 2..frame * 2].copy_from_slice(&self.fifo[..self.fill * 2]);
+        }
+        Ok(())
     }
     fn render_block(&mut self) -> Result<()> {
         let _profile = super::profile::Guard::new(super::profile::Stage::CanonicalBlock);

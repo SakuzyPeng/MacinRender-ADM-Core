@@ -16,6 +16,9 @@ use mradm_dsp::{
 use std::{fs, io::Write, path::Path, sync::Arc};
 #[path = "room_support/assets.rs"]
 mod assets;
+#[cfg(feature = "room-gpu-experiment")]
+#[path = "room_support/gpu.rs"]
+mod gpu;
 
 fn save(root: &Path, name: &str, samples: &[f32]) -> std::io::Result<serde_json::Value> {
     let bytes: Vec<_> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
@@ -33,6 +36,7 @@ fn render(
     screens: bool,
     dense: bool,
     head_motion: &str,
+    world_only: bool,
 ) -> Result<Vec<f32>> {
     const MATERIAL: usize = 96013;
     let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
@@ -67,7 +71,7 @@ fn render(
             element: i as u32,
             state: State {
                 position: d.position,
-                head_locked: u32::from(i == 0),
+                head_locked: u32::from(i == 0 && !world_only),
                 screen_reference: u32::from(screens && i < 30),
                 diffuse: if i == 4 { 0.7 } else { 0. },
                 ..State::default()
@@ -112,6 +116,9 @@ fn render(
             },
         ),
     ];
+    if world_only {
+        events.retain(|(_, command)| command.changed & 256 == 0);
+    }
     if dense {
         // Dense replay: 30 non-LFE sources each ramp at a distinct sample offset.
         // Keep the original head-lock, gain, pose, room-switch, removal and EOS schedule.
@@ -234,6 +241,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for numerical acceptance".into());
     }
     let mut args: Vec<_> = std::env::args().collect();
+    #[cfg(feature = "room-gpu-experiment")]
+    let gpu = gpu::Options::parse(&mut args)?;
     let hrir_path = if let Some(index) = args.iter().position(|v| v == "--hrir") {
         let path = args
             .get(index + 1)
@@ -269,9 +278,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
     let screens = args.iter().any(|v| v == "--screens");
     let dense = args.iter().any(|v| v == "--dense");
-    args.retain(|v| v != "--screens" && v != "--dense");
+    let world_only = args.iter().any(|v| v == "--world-only");
+    args.retain(|v| v != "--screens" && v != "--dense" && v != "--world-only");
     if args.len() != 3 {
-        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--hrir SOFA_OR_COLLECTION] [--screens] [--dense] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
+        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--hrir SOFA_OR_COLLECTION] [--screens] [--dense] [--world-only] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
     }
     let file = Path::new(&args[1]);
     let root = file.parent().ok_or("missing parent")?;
@@ -301,6 +311,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         bank,
         quality,
     )?))?);
+    #[cfg(feature = "room-gpu-experiment")]
+    let (prepared, next) = (gpu.prepare(prepared)?, gpu.prepare(next)?);
     let mut work = ResponseWork::new(&room)?;
     let mut query = vec![0.; room.hrir.data.output_taps * 2];
     let mut manifest = serde_json::json!({"schema":"mradm.room-replay","version":1,
@@ -309,6 +321,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "lfe":prepared.lfe.fingerprint(),"latency_frames":256,"tail_frames":prepared.tail_frames(),"files":{}});
     if quality != Quality::Exact {
         manifest["processing_policy"] = quality.policy().into();
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    if !gpu.report().is_null() {
+        manifest["experiment"] = gpu.report();
     }
     for (index, [az, el, r]) in [
         [0., 0., 0.75],
@@ -351,13 +367,20 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if head_motion != "standard" {
         manifest["head_motion"] = head_motion.clone().into();
     }
+    if world_only {
+        // Separate workload identity; never compare this to a head-locked replay.
+        let scenario = manifest["scenario"].as_str().unwrap().to_owned();
+        manifest["scenario"] = format!("{scenario}-world-only").into();
+        manifest["world_only"] = true.into();
+    }
     let canonical = render(
         prepared.clone(),
         next.clone(),
-        &[256],
+        if world_only { &[512] } else { &[256] },
         screens,
         dense,
         &head_motion,
+        world_only,
     )?;
     let fragmented = render(
         prepared,
@@ -366,6 +389,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         screens,
         dense,
         &head_motion,
+        world_only,
     )?;
     if canonical
         .iter()

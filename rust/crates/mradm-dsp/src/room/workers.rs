@@ -34,6 +34,32 @@ struct Shared {
     state: Mutex<Mailbox>,
     changed: Condvar,
 }
+#[cfg(feature = "room-gpu-experiment")]
+struct Pending<'a> {
+    shared: &'a Shared,
+    finished: bool,
+}
+#[cfg(feature = "room-gpu-experiment")]
+impl Pending<'_> {
+    fn finish(&mut self) -> Result<()> {
+        let mut state = self.shared.state.lock().unwrap();
+        while state.result.is_none() {
+            state = self.shared.changed.wait(state).unwrap();
+        }
+        self.finished = true;
+        state.result.take().unwrap()
+    }
+}
+#[cfg(feature = "room-gpu-experiment")]
+impl Drop for Pending<'_> {
+    fn drop(&mut self) {
+        if !self.finished {
+            // Drain even when preparation unwinds, before releasing the serial
+            // mailbox guard. A later session must not consume this job's result.
+            let _ = self.finish();
+        }
+    }
+}
 pub struct Workers {
     shared: Arc<Shared>,
     serial: Mutex<()>,
@@ -152,11 +178,80 @@ impl Workers {
         }
         state.result.take().unwrap()
     }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn run_overlapping<T>(
+        &self,
+        job: Arc<dyn Work>,
+        prepare: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        if self.in_pool() {
+            job.run()?;
+            return prepare();
+        }
+        let _profile = super::profile::Guard::new(super::profile::Stage::WorkerRoundtrip);
+        let _serial = self.serial.lock().unwrap();
+        {
+            let mut state = self.shared.state.lock().unwrap();
+            state.result = None;
+            state.job = Some(job);
+            self.shared.changed.notify_all();
+        }
+        let mut pending = Pending {
+            shared: &self.shared,
+            finished: false,
+        };
+        let prepared = catch_unwind(AssertUnwindSafe(prepare));
+        // Preserve execution-error precedence and never leave work in flight
+        // when the caller receives either success or a preparation error.
+        let executed = pending.finish();
+        drop(pending);
+        // Release the mailbox normally before propagating a preparation panic;
+        // another session must not inherit a poisoned serial mutex.
+        drop(_serial);
+        executed?;
+        match prepared {
+            Ok(value) => value,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
 }
 impl Drop for Workers {
     fn drop(&mut self) {
         let mut state = self.shared.state.lock().unwrap();
         state.stop = true;
         self.shared.changed.notify_all();
+    }
+}
+
+#[cfg(all(test, feature = "room-gpu-experiment"))]
+mod gpu_tests {
+    use super::*;
+    use std::sync::Barrier;
+    struct Rendezvous(Arc<Barrier>);
+    impl Work for Rendezvous {
+        fn run(&self) -> Result<()> {
+            self.0.wait();
+            Ok(())
+        }
+    }
+    #[test]
+    fn overlapping_preparation_runs_while_work_is_pending_and_drains_on_error() {
+        let workers = Workers::new().unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let result: Result<()> =
+            workers.run_overlapping(Arc::new(Rendezvous(barrier.clone())), || {
+                barrier.wait();
+                Err(Error::InvalidArgument("preparation rejected"))
+            });
+        assert!(matches!(
+            result,
+            Err(Error::InvalidArgument("preparation rejected"))
+        ));
+        workers.run(Arc::new(Noop)).unwrap();
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _: Result<()> = workers.run_overlapping(Arc::new(Noop), || panic!("prepare panic"));
+        }));
+        assert!(panic.is_err());
+        workers.run(Arc::new(Noop)).unwrap();
     }
 }
