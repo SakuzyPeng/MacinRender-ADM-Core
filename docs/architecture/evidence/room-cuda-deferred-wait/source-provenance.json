@@ -1,0 +1,14 @@
+{
+  "base": "e14fe43c58b5fcedf11c79527528153ea117cdee",
+  "prerequisite": "../room-cuda-integration/candidate.patch",
+  "patch_sha256": "9b55dec681ec52b777c16e1dbd44c2b30588128ffdf8dfaea6305e0f7de44ea7",
+  "candidate_source_sha256": {
+    "rust/crates/mradm-dsp/src/room/session.rs": "a8b230e99565b44f908323c762ef272a7e3251a8b789a317cedfb866db844d47",
+    "rust/crates/mradm-dsp/tests/room_gpu.rs": "15f198cb80452c1e50eeaee73673b0f62338a16325b0995c997eec65f84e5713",
+    "rust/crates/mradm-room-cuda/examples/support/options.rs": "8627dcb06ffea6282321589023ae1f95b7027ebd9f7b7a0ea307327845e88c73",
+    "rust/crates/mradm-room-cuda/src/native.rs": "9ef13eb6e59c0bd885c40ed439e2a21d32f8f05986d3bc82cd5bac3ffb6c0808",
+    "scripts/research/room_gpu/session_backend.cpp": "5e54fc93bb2fd2c05c1661c818edd6100f8668d15f9a0932a46d8b1a56289df3"
+  },
+  "native_regression_sha256": "651ade0d5bc296e08a7b011e73d26e26788e23c862e6baf14e821f8ed6063d89",
+  "activation": "Not adopted: distance-motion Windows short gate failed."
+}

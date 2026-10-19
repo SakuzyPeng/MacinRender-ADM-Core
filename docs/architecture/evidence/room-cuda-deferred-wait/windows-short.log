@@ -1,0 +1,7 @@
+start short-1-baseline-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "ramps", "mean_ms": 2.748289160156252, "p99_ms": 3.166, "maximum_ms": 3.4375, "deadline_misses": 0, "process_seconds": 16.969000000040978}
+start short-1-candidate-ramps
+{"variant": "candidate", "repetition": 1, "scenario": "ramps", "mean_ms": 2.6089417968750017, "p99_ms": 3.1616999999999997, "maximum_ms": 3.3463, "deadline_misses": 0, "process_seconds": 18.04700000002049}
+start short-1-candidate-distance-ramps
+{"variant": "candidate", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.7127870117187505, "p99_ms": 3.4987, "maximum_ms": 5.66, "deadline_misses": 1, "process_seconds": 17.09299999999348}
+Candidate failed; stop without replacement runs.

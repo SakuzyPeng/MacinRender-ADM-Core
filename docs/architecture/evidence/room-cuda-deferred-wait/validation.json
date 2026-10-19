@@ -1,0 +1,89 @@
+{
+  "schema": "mradm.room-cuda-deferred-wait-validation",
+  "version": 1,
+  "base": "e14fe43c58b5fcedf11c79527528153ea117cdee",
+  "outcome": "not-adopted-short-gate-failed",
+  "configuration": {
+    "workers": 8,
+    "worker_scheduling": "Audio MMCSS",
+    "caller_scheduling": "ordinary",
+    "sample_rate": 96000,
+    "call_frames": 512,
+    "sources": 32,
+    "quality": "realtime",
+    "deadline_ms": 5.333333333333333,
+    "warmup_calls": 32,
+    "normal_desktop": true,
+    "power": "AC",
+    "no_concurrent_test_host_build_or_benchmark": true
+  },
+  "implementation": {
+    "scope": "Stable room pipeline without headLocked audio/history, room transition or EOS; existing 256-frame FIFO",
+    "waiting": "GPU submit and independent CPU field work finish before process returns; final GPU output is joined at its first FIFO read",
+    "ownership": "Only backend-owned GPU buffers survive process; no borrowed CPU worker job survives; configure/reset/queue drain before mutating saved state",
+    "arithmetic": "No FFT, FIR, precision, fade, metadata, latency or tail changes. No batch/upload/fusion experiments enabled.",
+    "native": "Completion binds device zero on its host thread; original context-loss checks retained."
+  },
+  "short": {
+    "passed": false,
+    "candidate_calls": 2048,
+    "candidate_deadline_misses": 1,
+    "maximum_ms": 5.66,
+    "failed_scenario": "distance-ramps",
+    "failed_call": {
+      "benchmark_call": 43,
+      "measured_call": 11,
+      "ms": 5.66
+    },
+    "completed_runs": 3,
+    "planned_runs": 8,
+    "remaining_runs_stopped": 5,
+    "candidate_peak_working_set_bytes": 1477881856,
+    "position_single_pair_mean_reduction_fraction": 0.05070331219198487,
+    "comparison_limit": "Only one position pair completed; no distance baseline or second repetition. No stable overall speedup claim."
+  },
+  "correctness": {
+    "local": "15 tests: 4 GPU/reference/lifecycle tests, 1 prepared resource, 1 no-allocation, 9 quality; clippy warnings denied and applicable C++ quality passed.",
+    "native": "1/32 voices, three epochs, analytical delayed FIR, cross-thread finish, silent/empty work, pending destruction and zero plugin resource counters passed.",
+    "full_windows_replay": "not run; short gate failed before full replay expansion",
+    "exact": "No arithmetic changes to CPU/default/exact; existing quality/no-allocation tests passed, no new full bitwise baseline certification claimed."
+  },
+  "long": {
+    "started": false,
+    "calls": 0,
+    "reason": "Candidate failed distance short gate"
+  },
+  "restoration": {
+    "local": {
+      "base_preserved": "e14fe43c58b5fcedf11c79527528153ea117cdee",
+      "restored_tracked_files": 20,
+      "removed_archived_new_files": 14,
+      "kept_validated_tools": [
+        "scripts/research/room_gpu/resident_transport_test.py"
+      ],
+      "original_cmake_preserved": true
+    },
+    "windows": {
+      "verified_overlay_entries": 1355,
+      "restored_files": 622,
+      "removed_task_files": 733,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "restore-configure": 0,
+      "restore-build": 0,
+      "git_status_unchanged_after_build": true,
+      "final_status_unchanged": true,
+      "shared_caches_preserved": true,
+      "frozen_binaries_verified_before_cleanup": true,
+      "new_sdk_installed": false,
+      "task_directory_removed": true
+    }
+  },
+  "notes": [
+    "No retry or replacement run after failure.",
+    "Normal desktop variation was counted; no application was closed and no power/driver configuration changed.",
+    "No phase attribution for the 5.6600 ms spike.",
+    "No full Windows numerical replay, macOS performance matrix, device playback or GUI packaging after short failure.",
+    "Existing native regression tool retains cross-thread/pending-destruction checks; runtime and Rust regression changes archived."
+  ]
+}

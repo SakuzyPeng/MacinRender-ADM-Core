@@ -1,0 +1,510 @@
+diff --git a/rust/crates/mradm-dsp/src/room/session.rs b/rust/crates/mradm-dsp/src/room/session.rs
+index eab3605c..38b2f74c 100644
+--- a/rust/crates/mradm-dsp/src/room/session.rs
++++ b/rust/crates/mradm-dsp/src/room/session.rs
+@@ -23,6 +23,8 @@ pub struct PreparedSet {
+     eq_stagger: bool,
+     #[cfg(feature = "room-gpu-experiment")]
+     voice_chunk: usize,
++    #[cfg(feature = "room-gpu-experiment")]
++    defer_gpu_output: bool,
+     pub room: Arc<PreparedRoom>,
+     pub lfe: Arc<LongFilters>,
+     workers: Arc<super::workers::Workers>,
+@@ -46,6 +48,8 @@ impl PreparedSet {
+             eq_stagger: false,
+             #[cfg(feature = "room-gpu-experiment")]
+             voice_chunk: 0,
++            #[cfg(feature = "room-gpu-experiment")]
++            defer_gpu_output: false,
+             room,
+             lfe,
+             workers: super::workers::shared()?,
+@@ -65,6 +69,7 @@ impl PreparedSet {
+             gpu_factory: Some(factory),
+             eq_stagger: false,
+             voice_chunk: 0,
++            defer_gpu_output: false,
+             room: self.room.clone(),
+             lfe: self.lfe.clone(),
+             workers: self.workers.clone(),
+@@ -81,6 +86,24 @@ impl PreparedSet {
+         self.voice_chunk = voice_chunk;
+         Ok(self)
+     }
++    /// Research opt-in: complete a stable-room GPU batch at its FIFO read.
++    #[cfg(feature = "room-gpu-experiment")]
++    pub fn with_gpu_deferred_wait(&self) -> Result<Self> {
++        if self.gpu_factory.is_none() {
++            return Err(Error::InvalidArgument(
++                "Deferred GPU wait requires a GPU backend",
++            ));
++        }
++        Ok(Self {
++            gpu_factory: self.gpu_factory.clone(),
++            eq_stagger: self.eq_stagger,
++            voice_chunk: self.voice_chunk,
++            defer_gpu_output: true,
++            room: self.room.clone(),
++            lfe: self.lfe.clone(),
++            workers: self.workers.clone(),
++        })
++    }
+     pub fn tail_frames(&self) -> usize {
+         (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
+             .max(self.lfe.taps - 1)
+@@ -811,6 +834,10 @@ impl super::workers::Work for Mutex<Voices> {
+ // worker before moving to another source. Its exact HRIR query cache stays hot;
+ // audio reduction still happens later in the fixed source-ID order.
+ struct BlockJob {
++    #[cfg(feature = "room-gpu-experiment")]
++    defer_gpu_output: bool,
++    #[cfg(feature = "room-gpu-experiment")]
++    gpu_pending: bool,
+     current: Arc<Mutex<Voices>>,
+     incoming: Option<Arc<Mutex<Voices>>>,
+     current_output: Arc<Mutex<InstanceOutput>>,
+@@ -949,7 +976,22 @@ impl BlockJob {
+     }
+     #[cfg(feature = "room-gpu-experiment")]
+     fn render_gpu_block(&mut self) -> Result<()> {
++        if self.gpu_pending {
++            return Err(Error::RenderFailed("Previous GPU output was not consumed"));
++        }
+         self.render_voices()?;
++        self.gpu_pending = true;
++        let prepared = self.prepare_gpu_field();
++        if prepared.is_err() || !self.defer_gpu_output {
++            // Drain submitted work even if independent CPU preparation failed.
++            let completed = self.complete_gpu_block();
++            prepared?;
++            completed?;
++        }
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn prepare_gpu_field(&mut self) -> Result<()> {
+         let mut current = self.current_output.lock().unwrap();
+         current.gpu_field(&self.current.lock().unwrap(), &self.order[..self.sources])?;
+         let mut incoming = self.incoming_output.as_ref().map(|v| v.lock().unwrap());
+@@ -971,6 +1013,12 @@ impl BlockJob {
+             &self.poses,
+             &mut self.late_output,
+         )?;
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    fn complete_gpu_block(&mut self) -> Result<()> {
++        let mut current = self.current_output.lock().unwrap();
++        let mut incoming = self.incoming_output.as_ref().map(|v| v.lock().unwrap());
+         self.current.lock().unwrap().complete_gpu()?;
+         current.gpu_short(&self.current.lock().unwrap(), &self.order[..self.sources]);
+         if let (Some(output), Some(voices)) = (&mut incoming, &self.incoming) {
+@@ -997,6 +1045,7 @@ impl BlockJob {
+                 self.output[2 * i + ear] += self.late_output[ear * BLOCK + i];
+             }
+         }
++        self.gpu_pending = false;
+         Ok(())
+     }
+ }
+@@ -1393,6 +1442,10 @@ impl Session {
+         }
+         let current = Box::new(Instance::new(prepared.clone(), 0)?);
+         let paired = Arc::new(Mutex::new(BlockJob {
++            #[cfg(feature = "room-gpu-experiment")]
++            defer_gpu_output: false,
++            #[cfg(feature = "room-gpu-experiment")]
++            gpu_pending: false,
+             current: current.group.clone(),
+             incoming: None,
+             current_output: current.output.clone(),
+@@ -1502,6 +1555,8 @@ impl Session {
+                 "Room source/history capacity exceeded",
+             ));
+         }
++        #[cfg(feature = "room-gpu-experiment")]
++        self.complete_deferred_gpu()?;
+         self.current.reserve(self.slots.len() + extra)?;
+         if let Some(incoming) = &mut self.incoming {
+             incoming.reserve(self.slots.len() + extra)?;
+@@ -1592,6 +1647,8 @@ impl Session {
+         }
+         // Reset is a preparation/control operation. A committed incoming room
+         // becomes the sole configuration; an inaudible warmup is cancelled.
++        #[cfg(feature = "room-gpu-experiment")]
++        self.complete_deferred_gpu()?;
+         if self.phase >= 2
+             && let Some(incoming) = self.incoming.take()
+         {
+@@ -1847,6 +1904,8 @@ impl Session {
+         request: u64,
+     ) -> Result<[Option<Box<Instance>>; 2]> {
+         self.validate_room(&next, request)?;
++        #[cfg(feature = "room-gpu-experiment")]
++        self.complete_deferred_gpu()?;
+         self.note_room_request(request)?;
+         if self.phase == 0
+             && next.prepared.room.profile.identity == self.current.prepared.room.profile.identity
+@@ -1989,6 +2048,8 @@ impl Session {
+             self.process_gpu_pipeline(frames, planes, events, output)?;
+             return Ok(self.info());
+         }
++        #[cfg(feature = "room-gpu-experiment")]
++        self.complete_deferred_gpu()?;
+         let mut event = 0;
+         let mut frame = 0;
+         while frame < frames {
+@@ -2168,6 +2229,21 @@ impl Session {
+         Ok((frame, event))
+     }
+     #[cfg(feature = "room-gpu-experiment")]
++    fn complete_deferred_gpu(&mut self) -> Result<()> {
++        if !self.current.prepared.defer_gpu_output {
++            return Ok(());
++        }
++        let mut job = self.paired.lock().unwrap();
++        if job.gpu_pending {
++            job.complete_gpu_block()?;
++            self.fifo = job.output;
++            if self.fifo.iter().any(|v| !v.is_finite()) {
++                return Err(Error::RenderFailed("Room DSP produced nonfinite PCM"));
++            }
++        }
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
+     fn process_gpu_pipeline<'a, I>(
+         &mut self,
+         frames: usize,
+@@ -2185,6 +2261,7 @@ impl Session {
+                 let offset = self.fill;
+                 (frame, event) =
+                     self.ingest_gpu_block(frames, planes.clone(), events, frame, event)?;
++                self.complete_deferred_gpu()?;
+                 output[begin * 2..frame * 2].copy_from_slice(&self.fifo[offset * 2..self.fill * 2]);
+                 if self.fill < BLOCK {
+                     break;
+@@ -2207,6 +2284,7 @@ impl Session {
+             )?;
+             {
+                 let mut job = self.paired.lock().unwrap();
++                job.defer_gpu_output = self.current.prepared.defer_gpu_output;
+                 job.order[..self.order.len()].copy_from_slice(&self.order);
+                 job.sources = self.order.len();
+                 job.draining = false;
+@@ -2219,21 +2297,28 @@ impl Session {
+             let workers = self.current.prepared.workers.clone();
+             let job = self.paired.clone();
+             let begin = frame;
+-            workers.run_overlapping(job, || {
++            let rendered = workers.run_overlapping(job, || {
+                 self.clear_gpu_input();
+                 if frame < frames {
+                     (frame, event) =
+                         self.ingest_gpu_block(frames, planes.clone(), events, frame, event)?;
+                 }
+                 Ok(())
+-            })?;
+-            self.fifo = self.paired.lock().unwrap().output;
+-            if self.fifo.iter().any(|v| !v.is_finite()) {
+-                return Err(Error::RenderFailed("Room DSP produced nonfinite PCM"));
++            });
++            if rendered.is_err() {
++                let _ = self.complete_deferred_gpu();
+             }
+-            // Finish the original FIFO reads. No worker work survives process(),
+-            // even when its output is only consumed by the next call.
+-            output[begin * 2..frame * 2].copy_from_slice(&self.fifo[..self.fill * 2]);
++            rendered?;
++            if !self.current.prepared.defer_gpu_output || self.fill != 0 {
++                self.complete_deferred_gpu()?;
++                self.fifo = self.paired.lock().unwrap().output;
++                if self.fifo.iter().any(|v| !v.is_finite()) {
++                    return Err(Error::RenderFailed("Room DSP produced nonfinite PCM"));
++                }
++                output[begin * 2..frame * 2].copy_from_slice(&self.fifo[..self.fill * 2]);
++            }
++            // CPU jobs are joined. An owned GPU batch may survive process()
++            // only when none of its output is needed by this call's FIFO reads.
+         }
+         Ok(())
+     }
+@@ -2301,6 +2386,10 @@ impl Session {
+         }
+         {
+             let mut job = self.paired.lock().unwrap();
++            #[cfg(feature = "room-gpu-experiment")]
++            {
++                job.defer_gpu_output = false;
++            }
+             job.order[..self.order.len()].copy_from_slice(&self.order);
+             job.sources = self.order.len();
+             job.draining = self.phase == 3;
+diff --git a/rust/crates/mradm-dsp/tests/room_gpu.rs b/rust/crates/mradm-dsp/tests/room_gpu.rs
+index 1602b820..b2c3227f 100644
+--- a/rust/crates/mradm-dsp/tests/room_gpu.rs
++++ b/rust/crates/mradm-dsp/tests/room_gpu.rs
+@@ -44,6 +44,8 @@ fn adapted(base: &Arc<PreparedSet>) -> Arc<PreparedSet> {
+         PreparedSet::new(base.room.clone())
+             .unwrap()
+             .with_gpu_experiment(Arc::new(ReferenceFactory))
++            .unwrap()
++            .with_gpu_deferred_wait()
+             .unwrap(),
+     )
+ }
+@@ -342,9 +344,175 @@ fn tuned(base: &Arc<PreparedSet>) -> Arc<PreparedSet> {
+         base.with_gpu_experiment(Arc::new(ReferenceFactory))
+             .unwrap()
+             .with_gpu_tuning(true, 4)
++            .unwrap()
++            .with_gpu_deferred_wait()
+             .unwrap(),
+     )
+ }
++
++#[derive(Default)]
++struct PendingAudit {
++    pending: AtomicUsize,
++    completions: AtomicUsize,
++    dropped_pending: AtomicUsize,
++    fail_finish: AtomicBool,
++}
++struct AuditedFactory(Arc<PendingAudit>);
++struct AuditedBackend {
++    inner: Box<dyn mradm_dsp::room::gpu_experiment::Backend>,
++    audit: Arc<PendingAudit>,
++    pending: bool,
++}
++impl mradm_dsp::room::gpu_experiment::Factory for AuditedFactory {
++    fn create(
++        &self,
++        room: Arc<PreparedRoom>,
++    ) -> mradm_dsp::Result<Box<dyn mradm_dsp::room::gpu_experiment::Backend>> {
++        Ok(Box::new(AuditedBackend {
++            inner: ReferenceFactory.create(room)?,
++            audit: self.0.clone(),
++            pending: false,
++        }))
++    }
++    fn create_late(
++        &self,
++        room: Arc<PreparedRoom>,
++    ) -> mradm_dsp::Result<Option<Box<dyn mradm_dsp::room::gpu_experiment::LateBackend>>> {
++        ReferenceFactory.create_late(room)
++    }
++}
++impl mradm_dsp::room::gpu_experiment::Backend for AuditedBackend {
++    fn begin(&mut self, voices: usize) -> mradm_dsp::Result<()> {
++        assert!(
++            !self.pending,
++            "Submitted storage reused before its FIFO read"
++        );
++        self.inner.begin(voices)
++    }
++    fn voice(
++        &mut self,
++        index: usize,
++        frame: &mradm_dsp::room::gpu_experiment::Frame,
++    ) -> mradm_dsp::Result<()> {
++        assert!(!self.pending);
++        self.inner.voice(index, frame)
++    }
++    fn submit(&mut self) -> mradm_dsp::Result<()> {
++        assert!(!self.pending);
++        self.inner.submit()?;
++        self.pending = true;
++        self.audit.pending.fetch_add(1, Ordering::SeqCst);
++        Ok(())
++    }
++    fn finish(&mut self, output: &mut [f32]) -> mradm_dsp::Result<()> {
++        assert!(self.pending);
++        if self.audit.fail_finish.swap(false, Ordering::SeqCst) {
++            return Err(mradm_dsp::Error::RenderFailed(
++                "Injected deferred completion failure",
++            ));
++        }
++        self.inner.finish(output)?;
++        self.pending = false;
++        self.audit.pending.fetch_sub(1, Ordering::SeqCst);
++        self.audit.completions.fetch_add(1, Ordering::SeqCst);
++        Ok(())
++    }
++}
++impl Drop for AuditedBackend {
++    fn drop(&mut self) {
++        if self.pending {
++            self.audit.pending.fetch_sub(1, Ordering::SeqCst);
++            self.audit.dropped_pending.fetch_add(1, Ordering::SeqCst);
++        }
++    }
++}
++#[test]
++fn deferred_gpu_wait_owns_pending_work_until_consume_reset_configure_or_drop() {
++    let _lock = TEST_LOCK.lock().unwrap();
++    let base = common::fixture_at_rate(Quality::Realtime, 96000);
++    let audit = Arc::new(PendingAudit::default());
++    let deferred = Arc::new(
++        base.with_gpu_experiment(Arc::new(AuditedFactory(audit.clone())))
++            .unwrap()
++            .with_gpu_deferred_wait()
++            .unwrap(),
++    );
++    let mut session = Session::new(deferred, 1.5, true, true).unwrap();
++    let descriptions = [RoomDescription {
++        id: 1,
++        position: [0., 0.8, 0.],
++        ..Default::default()
++    }];
++    session.configure(&descriptions).unwrap();
++    let input = [0.01; 512];
++    let mut output = [0.; 1024];
++    session
++        .process(512, [Some(&input[..])].into_iter(), &[], &[], &mut output)
++        .unwrap();
++    assert_eq!(session.info().latency_frames, 256);
++    assert_eq!(audit.completions.load(Ordering::SeqCst), 1);
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    session
++        .process(0, [None].into_iter(), &[], &[], &mut [])
++        .unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    assert!(
++        session
++            .process(1, [None].into_iter(), &[], &[], &mut [])
++            .is_err()
++    );
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    session
++        .process(1, [None].into_iter(), &[], &[], &mut output[..2])
++        .unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 0);
++    session
++        .process(255, [None].into_iter(), &[], &[], &mut output[..510])
++        .unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    // A generation/slot mutation must consume the saved source ordering first.
++    session.clear_generation();
++    session.configure(&descriptions).unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 0);
++    session.reset(2048).unwrap();
++    session
++        .process(512, [Some(&input[..])].into_iter(), &[], &[], &mut output)
++        .unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    audit.fail_finish.store(true, Ordering::SeqCst);
++    output.fill(f32::NAN);
++    assert!(matches!(
++        session.process(1, [None].into_iter(), &[], &[], &mut output[..2]),
++        Err(mradm_dsp::Error::RenderFailed(
++            "Injected deferred completion failure"
++        ))
++    ));
++    assert!(
++        output[..2].iter().all(|v| v.is_nan()),
++        "Failed output was published"
++    );
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    session.reset(4096).unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 0);
++    session
++        .process(512, [None].into_iter(), &[], &[], &mut output)
++        .unwrap();
++    assert!(output.iter().all(|v| *v == 0.));
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    session.end_input();
++    session
++        .process(1, [None].into_iter(), &[], &[], &mut output[..2])
++        .unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 0);
++    session.reset(4096).unwrap();
++    session
++        .process(256, [None].into_iter(), &[], &[], &mut output[..512])
++        .unwrap();
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 1);
++    drop(session);
++    assert_eq!(audit.pending.load(Ordering::SeqCst), 0);
++    assert_eq!(audit.dropped_pending.load(Ordering::SeqCst), 1);
++}
+ #[test]
+ fn staggered_long_eq_preserves_forks_reset_restart_and_complete_switch_tail() {
+     let _lock = TEST_LOCK.lock().unwrap();
+diff --git a/rust/crates/mradm-room-cuda/examples/support/options.rs b/rust/crates/mradm-room-cuda/examples/support/options.rs
+index 9f90fe8d..25b0bbb4 100644
+--- a/rust/crates/mradm-room-cuda/examples/support/options.rs
++++ b/rust/crates/mradm-room-cuda/examples/support/options.rs
+@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
+ pub struct Options {
+     enabled: bool,
+     library: Option<PathBuf>,
++    deferred_wait: bool,
+ }
+ impl Options {
+     pub fn parse(args: &mut Vec<String>) -> std::result::Result<Self, Box<dyn std::error::Error>> {
+@@ -19,21 +20,35 @@ impl Options {
+         } else {
+             None
+         };
+-        Ok(Self { enabled, library })
++        let deferred_wait = args.iter().any(|v| v == "--cuda-deferred-wait");
++        args.retain(|v| v != "--cuda-deferred-wait");
++        if deferred_wait && !enabled {
++            return Err("--cuda-deferred-wait requires --cuda or --cuda-library".into());
++        }
++        Ok(Self {
++            enabled,
++            library,
++            deferred_wait,
++        })
+     }
+     pub fn prepare(
+         &self,
+         prepared: Arc<PreparedSet>,
+     ) -> std::result::Result<Arc<PreparedSet>, Box<dyn std::error::Error>> {
+         if self.enabled {
+-            Ok(mradm_room_cuda::bind(prepared, self.library.as_deref())?.0)
++            let bound = mradm_room_cuda::bind(prepared, self.library.as_deref())?.0;
++            if self.deferred_wait {
++                Ok(Arc::new(bound.with_gpu_deferred_wait()?))
++            } else {
++                Ok(bound)
++            }
+         } else {
+             Ok(prepared)
+         }
+     }
+     pub fn report(&self) -> serde_json::Value {
+         if self.enabled {
+-            serde_json::json!({"kind":"room-cuda-session","control":"production Session","finite_fade":true,"cpu_reference":false,"binding":"prepared-memory","eq_stagger_frames":256})
++            serde_json::json!({"kind":"room-cuda-session","control":"production Session","finite_fade":true,"cpu_reference":false,"binding":"prepared-memory","eq_stagger_frames":256,"deferred_wait":self.deferred_wait})
+         } else {
+             serde_json::Value::Null
+         }
+diff --git a/rust/crates/mradm-room-cuda/src/native.rs b/rust/crates/mradm-room-cuda/src/native.rs
+index 0409737a..a59635a4 100644
+--- a/rust/crates/mradm-room-cuda/src/native.rs
++++ b/rust/crates/mradm-room-cuda/src/native.rs
+@@ -522,7 +522,8 @@ struct Native {
+     context: *mut c_void,
+ }
+ // The Session owns this engine and serializes begin/submit/finish. The DLL
+-// binds the CUDA primary context when used on the persistent worker thread.
++// binds device zero on both submission and completion; FIFO consumption may
++// complete on the caller after the persistent worker has returned.
+ unsafe impl Send for Native {}
+ impl Drop for Native {
+     fn drop(&mut self) {
+diff --git a/scripts/research/room_gpu/session_backend.cpp b/scripts/research/room_gpu/session_backend.cpp
+index 5693bce3..da5dfe77 100644
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -386,6 +386,8 @@ struct Engine {
+ #endif
+         if (!pending || samples != header.voices * 4 * 256)
+             throw std::runtime_error("Invalid GPU completion");
++        // FIFO consumption can run on a different host thread from submit().
++        runtime(cudaSetDevice(0));
+         trace.wait();
+         runtime(cudaStreamSynchronize(stream));
+         trace.finish();

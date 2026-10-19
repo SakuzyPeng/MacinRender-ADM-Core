@@ -1,0 +1,5 @@
+start smoke-0-baseline-ramps
+{"variant": "baseline", "repetition": 0, "scenario": "ramps", "mean_ms": 3.1062, "p99_ms": 3.1062, "maximum_ms": 3.1062, "deadline_misses": 0, "process_seconds": 14.266000000061467}
+start smoke-0-candidate-ramps
+{"variant": "candidate", "repetition": 0, "scenario": "ramps", "mean_ms": 2.4553000000000003, "p99_ms": 2.4553000000000003, "maximum_ms": 2.4553000000000003, "deadline_misses": 0, "process_seconds": 14.312999999965541}
+smoke passed

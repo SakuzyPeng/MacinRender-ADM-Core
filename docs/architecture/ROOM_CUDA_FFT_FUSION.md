@@ -198,3 +198,6 @@ subprocess.run([sys.executable, 'scripts/room/compare-realtime.py',
 清除本轮 CUDA CMake 选项并重建 canonical CPU CLI／C API。临时私有资源、输出和 MathDx SDK 已删除，
 既有共享构建缓存保留；恢复记录见 validation.json 的 `restoration`。
 融合补丁可供后续研究，但本轮不纳入正式运行路径。
+
+后续独立测试了 [延后 GPU 等待至 FIFO 消费](ROOM_CUDA_DEFERRED_WAIT.md)，保持 256 帧延迟，
+没有叠加本页 FFT 融合。该候选距离运动短测 1/1024 次超时、最大 5.6600 ms，未进入长测。

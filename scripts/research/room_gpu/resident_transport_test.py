@@ -7,6 +7,7 @@ FFT-fusion source, while an unfused resident DLL can use session_kernels.cu.
 import argparse
 import array
 import ctypes as C
+from concurrent.futures import ThreadPoolExecutor
 import json
 import math
 import os
@@ -23,7 +24,7 @@ class Stats(C.Structure):
     _fields_ = [(name, C.c_uint64) for name in ['banks', 'engines', 'late_engines', 'device_bytes', 'pinned_bytes']]
 
 
-def check_library(path, kernels):
+def check_library(path, kernels, cross_thread=False):
     directory = os.add_dll_directory(str(path.parent.resolve()))
     dll = C.CDLL(str(path.resolve()))
     def bind(name, result, *arguments):
@@ -41,7 +42,7 @@ def check_library(path, kernels):
     begin = bind('session_begin', C.c_int, pointer, u32)
     voice = bind('session_voice', C.c_int, pointer, u32, C.POINTER(Frame))
     submit = bind('session_submit', C.c_int, pointer)
-    finish = bind('session_finish', C.c_int, pointer, floats, size)
+    native_finish = bind('session_finish', C.c_int, pointer, floats, size)
     stats = bind('stats', C.c_int, C.POINTER(Stats))
     def ok(value):
         assert value == 0, error().decode()
@@ -57,6 +58,14 @@ def check_library(path, kernels):
     source = kernels.read_bytes()
     bank = bank_create(C.byref(BankDesc(1, C.sizeof(BankDesc), 96000, 4096, 2)), source, len(source))
     assert bank, error().decode()
+    worker = ThreadPoolExecutor(max_workers=1) if cross_thread else None
+    def finish(*args):
+        def run():
+            value = native_finish(*args)
+            # The DLL error message belongs to the completion thread.
+            assert value == 0, error().decode()
+            return value
+        return worker.submit(run).result() if worker else run()
     results = []
     try:
         for table, values in enumerate([bank_values, ones, phases]):
@@ -120,14 +129,19 @@ def check_library(path, kernels):
                 results.append({'voices': voices, 'epochs': 3, 'blocks_per_epoch': 32,
                                 'relative_l2': l2, 'maximum_over_reference_peak': relative_peak,
                                 'repeated_epoch_bit_identical': True, 'silence_and_empty_work': True})
+                # Destruction owns the final submitted batch, even without a finish call.
+                ok(begin(engine, 0)); ok(submit(engine))
             finally:
                 destroy(engine)
     finally:
         bank_destroy(bank)
+        if worker:
+            worker.shutdown(wait=True)
     remaining = Stats(); ok(stats(C.byref(remaining)))
     assert not any(getattr(remaining, name) for name, _ in Stats._fields_)
     directory.close()
-    return {'library': path.name, 'passed': True, 'cases': results, 'released_resources': True}
+    return {'library': path.name, 'passed': True, 'cases': results, 'released_resources': True,
+            'cross_thread_completion': cross_thread, 'destroy_with_pending_batch': True}
 
 
 def main():
@@ -135,9 +149,10 @@ def main():
     parser.add_argument('--library', type=Path, action='append', required=True)
     parser.add_argument('--kernels', type=Path, default=Path(__file__).with_name('session_kernels.cu'),
                         help='kernel source matching the tested DLL configuration')
+    parser.add_argument('--cross-thread', action='store_true', help='finish on a separate host thread')
     args = parser.parse_args()
     for library in args.library:
-        print(json.dumps(check_library(library, args.kernels)), flush=True)
+        print(json.dumps(check_library(library, args.kernels, args.cross_thread)), flush=True)
 
 
 if __name__ == '__main__':
