@@ -1,0 +1,78 @@
+{
+  "cases": [
+    {
+      "case": "cpu",
+      "frames": 138835,
+      "gpu_loaded": false,
+      "passed": true
+    },
+    {
+      "case": "exact",
+      "frames": 138835,
+      "gpu_loaded": false,
+      "passed": true
+    },
+    {
+      "case": "cuda",
+      "cycles": 3,
+      "epochs_per_cycle": 2,
+      "frames": 138835,
+      "active_resources": [
+        {
+          "banks": 1,
+          "engines": 1,
+          "late_engines": 1,
+          "device_bytes": 1060255828,
+          "pinned_bytes": 69925412
+        }
+      ],
+      "after_release": {
+        "banks": 0,
+        "engines": 0,
+        "late_engines": 0,
+        "device_bytes": 0,
+        "pinned_bytes": 0
+      },
+      "passed": true
+    },
+    {
+      "case": "concurrent",
+      "active_resources": [
+        {
+          "banks": 1,
+          "engines": 2,
+          "late_engines": 2,
+          "device_bytes": 1557823488,
+          "pinned_bytes": 139850824
+        },
+        {
+          "banks": 1,
+          "engines": 2,
+          "late_engines": 2,
+          "device_bytes": 1557823488,
+          "pinned_bytes": 139850824
+        }
+      ],
+      "after_release": {
+        "banks": 0,
+        "engines": 0,
+        "late_engines": 0,
+        "device_bytes": 0,
+        "pinned_bytes": 0
+      },
+      "passed": true
+    },
+    {
+      "case": "bad-request",
+      "error_code": 1,
+      "message": "MR_ADM_ROOM_CUDA must be 0 or 1: room-binaural",
+      "passed": true
+    }
+  ],
+  "numerical": {
+    "frames": 138835,
+    "relative_l2": 4.241682741617573e-07,
+    "maximum_over_reference_peak": 3.864917425652709e-07
+  },
+  "passed": true
+}

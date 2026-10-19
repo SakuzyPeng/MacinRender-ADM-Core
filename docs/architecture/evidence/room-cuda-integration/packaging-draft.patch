@@ -1,0 +1,244 @@
+diff --git a/scripts/release/package-windows-gui-release.ps1 b/scripts/release/package-windows-gui-release.ps1
+index f869e60..4537d8a 100644
+--- a/scripts/release/package-windows-gui-release.ps1
++++ b/scripts/release/package-windows-gui-release.ps1
+@@ -3,7 +3,9 @@ param(
+     [string]$OpenBlasRoot = "",
+     [string]$VcpkgRoot = "",
+     [string]$CmakeOptions = "",
+-    [switch]$SkipNative
++    [switch]$SkipNative,
++    [string]$NativeBuildDir = "",
++    [switch]$RoomCuda
+ )
+ 
+ $ErrorActionPreference = "Stop"
+@@ -19,6 +21,9 @@ if (![System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.R
+ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+ $project = Join-Path $repoRoot "gui\MacinRender.Gui\MacinRender.Gui.csproj"
+ $resolvedVcpkgRoot = if ($VcpkgRoot) { $VcpkgRoot } else { $env:VCPKG_INSTALLATION_ROOT }
++$nativeBuildDir = if ($NativeBuildDir) { [System.IO.Path]::GetFullPath($NativeBuildDir) } else { Join-Path $repoRoot "build\win-canon" }
++$runtimeNativeDir = Join-Path $repoRoot "gui\MacinRender.Gui\runtimes\$Rid\native"
++$cudaEnabled = if ($RoomCuda) { "ON" } else { "OFF" }
+ 
+ function Test-ExistingPath {
+     param([AllowNull()][object]$Path)
+@@ -127,7 +132,7 @@ function Test-SystemDll {
+         "gdi32full.dll", "gdiplus.dll", "hid.dll", "imm32.dll",
+         "iphlpapi.dll", "kernel32.dll", "kernelbase.dll", "mf.dll", "mfplat.dll",
+         "mfreadwrite.dll", "mpr.dll", "msvcp_win.dll", "msvcrt.dll", "ncrypt.dll",
+-        "netapi32.dll", "ntdll.dll", "ole32.dll", "oleacc.dll", "oleaut32.dll",
++        "netapi32.dll", "ntdll.dll", "nvcuda.dll", "ole32.dll", "oleacc.dll", "oleaut32.dll",
+         "opengl32.dll", "powrprof.dll", "propsys.dll", "psapi.dll", "rpcrt4.dll",
+         "sechost.dll", "setupapi.dll", "shcore.dll", "shell32.dll", "shlwapi.dll",
+         "textinputframework.dll", "ucrtbase.dll", "user32.dll", "userenv.dll",
+@@ -186,9 +191,6 @@ function Find-Dll {
+ }
+ 
+ if (!$SkipNative) {
+-    $nativeBuildDir = Join-Path $repoRoot "build\gui-native-package\$Rid"
+-    $runtimeNativeDir = Join-Path $repoRoot "gui\MacinRender.Gui\runtimes\$Rid\native"
+-
+     $cmakeArgs = @(
+         "-S", $repoRoot,
+         "-B", $nativeBuildDir,
+@@ -197,11 +199,11 @@ if (!$SkipNative) {
+         "-DCMAKE_C_COMPILER=cl",
+         "-DCMAKE_CXX_COMPILER=cl",
+         "-DMR_ADM_BUILD_CAPI_BUNDLE=ON",
+-        "-DMR_ADM_CORE_BUILD_CLI=OFF",
+-        "-DMR_ADM_CORE_BUILD_TESTS=OFF",
+         "-DMR_ADM_FLAC_PROVIDER=VENDORED",
+         "-DMR_ADM_OPUS_PROVIDER=VENDORED",
+         "-DMR_ADM_ENABLE_IAMF=OFF",
++        "-DMR_ADM_ENABLE_SOFA=OFF",
++        "-DMR_ADM_ENABLE_ROOM_CUDA=$cudaEnabled",
+         "-DMR_ADM_BUILD_SAF_REFERENCE_TESTS=OFF"
+     )
+ 
+@@ -224,6 +226,13 @@ if (!$SkipNative) {
+     $build = "cmake --build " + (Quote-CmdArg $nativeBuildDir) + " --target mradm_capi_bundle --config Release"
+     Invoke-VcvarsCommand -CommandLines @($configure, $build)
+ 
++}
++
++# CUDA packages always take both artifacts from the same configured build.
++if (!$SkipNative -or $RoomCuda) {
++    if ($RoomCuda -and (Get-Content (Join-Path $nativeBuildDir "CMakeCache.txt") -Raw) -notmatch "(?m)^MR_ADM_ENABLE_ROOM_CUDA:BOOL=ON") {
++        throw "ROOM CUDA packaging requires MR_ADM_ENABLE_ROOM_CUDA=ON in the native build"
++    }
+     $nativeDll = @(
+         (Join-Path $nativeBuildDir "mradm_capi.dll"),
+         (Join-Path $nativeBuildDir "Release\mradm_capi.dll")
+@@ -263,7 +272,7 @@ $version = Get-VersionMetadata "package-version"
+ 
+ $distDir = Join-Path $repoRoot "dist"
+ $publishDir = Join-Path $repoRoot "build\gui-publish\$Rid"
+-$packageName = "MacinRender-Gui-$version-windows-x64"
++$packageName = "MacinRender-Gui-$version-windows-x64" + $(if ($RoomCuda) { "-cuda" } else { "" })
+ $packageRoot = Join-Path $distDir $packageName
+ $appDir = Join-Path $packageRoot "app"
+ $archive = Join-Path $distDir "$packageName.zip"
+@@ -286,6 +295,47 @@ Copy-Item (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Joi
+ Copy-Item (Join-Path $repoRoot "third_party\licenses") -Destination (Join-Path $packageRoot "licenses") -Recurse -Force
+ Copy-Item (Join-Path $repoRoot "third_party\sbom.cyclonedx.json") -Destination (Join-Path $packageRoot "sbom.cyclonedx.json") -Force
+ 
++# The optional plugin is loaded dynamically, so dumpbin cannot discover it
++# from the C API import table. Seed the dependency scan with its runtime DLLs,
++# including NVRTC builtins loaded by NVRTC itself. Never package nvcuda.dll.
++if ($RoomCuda) {
++    $cache = Get-Content (Join-Path $nativeBuildDir "CMakeCache.txt") -Raw
++    if ($cache -notmatch "(?m)^MR_ADM_ROOM_CUDA_RUNTIME_FILES:INTERNAL=(.+)$") {
++        throw "ROOM CUDA runtime manifest is missing; configure the native build again"
++    }
++    $runtimeFiles = $Matches[1].Trim() -split ";"
++    $plugin = Join-Path (Split-Path -Parent $nativeDll) "mradm_room_cuda.dll"
++    foreach ($file in @($plugin) + $runtimeFiles) {
++        if (!(Test-ExistingPath $file)) { throw "ROOM CUDA dependency is missing: $file" }
++        Copy-Item $file -Destination $appDir -Force
++    }
++    $cudaRoot = Split-Path -Parent (Split-Path -Parent $runtimeFiles[0])
++    $licenseDir = Join-Path $packageRoot "licenses\cuda"
++    New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
++    foreach ($name in @("EULA.txt", "LICENSE")) {
++        $license = Join-Path $cudaRoot $name
++        if (!(Test-ExistingPath $license)) { throw "CUDA license is missing: $license" }
++        Copy-Item $license -Destination $licenseDir -Force
++    }
++    @(
++        "@echo off",
++        'set "MR_ADM_ROOM_CUDA=1"',
++        'start "" "%~dp0app\MacinRender.Gui.exe" %*'
++    ) | Set-Content -Path (Join-Path $packageRoot "MacinRender ADM CUDA.cmd") -Encoding ASCII
++    @(
++        "Optional ROOM CUDA runtime: NVIDIA CUDA Toolkit redistributable components.",
++        "See licenses/cuda/EULA.txt and licenses/cuda/LICENSE.",
++        "Requires an installed NVIDIA driver. Select ROOM realtime at 96 kHz; exact remains on CPU.",
++        "Use MacinRender ADM CUDA.cmd or set MR_ADM_ROOM_CUDA=1 explicitly."
++    ) | Add-Content -Path (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Encoding utf8
++} else {
++    # Prevent a previous optional build in an incremental publish directory
++    # from accidentally turning the normal package into a CUDA distribution.
++    foreach ($pattern in @("mradm_room_cuda.dll", "cudart64*.dll", "cufft64*.dll", "nvrtc64*.dll", "nvrtc-builtins64*.dll")) {
++        Get-ChildItem -Path $appDir -Filter $pattern -File | Remove-Item -Force
++    }
++}
++
+ $exe = Join-Path $appDir "MacinRender.Gui.exe"
+ if (!(Test-ExistingPath $exe)) {
+     throw "published GUI executable is missing: $exe"
+@@ -385,9 +435,10 @@ $buildInfo = @(
+     "c_api_version: $cApiVersion",
+     "commit: $commitSha",
+     "rid: $Rid",
++    "room_cuda: $cudaEnabled",
+     "built_at_utc: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))",
+     "cmake_options: $(if ($CmakeOptions) { $CmakeOptions } else { 'not recorded' })",
+-    "dependency_policy: Windows GUI packages may depend on Windows system DLLs only; every non-system DLL discovered by dumpbin /dependents must be copied into the package app directory."
++    "dependency_policy: Windows GUI packages may depend on Windows system DLLs and, when CUDA is enabled, the installed NVIDIA driver; every non-system DLL discovered by dumpbin /dependents must be copied into the package app directory."
+ )
+ $buildInfo | Set-Content -Path (Join-Path $packageRoot "BUILD_INFO.txt") -Encoding utf8
+ 
+diff --git a/scripts/release/smoke-windows-gui-release.ps1 b/scripts/release/smoke-windows-gui-release.ps1
+index 04cbf0b..8526ebb 100644
+--- a/scripts/release/smoke-windows-gui-release.ps1
++++ b/scripts/release/smoke-windows-gui-release.ps1
+@@ -51,6 +51,19 @@ try {
+             throw "GUI package build info is missing $field"
+         }
+     }
++    if ($buildInfo -match "(?m)^room_cuda: ON") {
++        foreach ($required in @("app\mradm_room_cuda.dll", "MacinRender ADM CUDA.cmd", "licenses\cuda\EULA.txt", "licenses\cuda\LICENSE")) {
++            if (!(Test-Path (Join-Path $packageRoot $required))) { throw "CUDA package is missing $required" }
++        }
++        foreach ($pattern in @("cudart64*.dll", "cufft64*.dll", "nvrtc64*.dll", "nvrtc-builtins64*.dll")) {
++            if (!(Get-ChildItem -Path (Join-Path $packageRoot "app") -Filter $pattern -File)) {
++                throw "CUDA package is missing runtime component $pattern"
++            }
++        }
++        if (Test-Path (Join-Path $packageRoot "app\nvcuda.dll")) {
++            throw "The NVIDIA driver must not be redistributed with the application"
++        }
++    }
+ 
+     $deps = Join-Path $packageRoot "DEPENDENCIES.txt"
+     if (Select-String -Path $deps -Pattern "\[missing\]" -Quiet) {
+diff --git a/tests/manual/room_cuda_file.py b/tests/manual/room_cuda_file.py
+new file mode 100644
+index 0000000..2ba09a0
+--- /dev/null
++++ b/tests/manual/room_cuda_file.py
+@@ -0,0 +1,73 @@
++#!/usr/bin/env python3
++"""Check opt-in CUDA offline rendering and file streaming seek with normal ROOM resources."""
++import argparse
++import array
++import hashlib
++import importlib.util
++import json
++import math
++import os
++from pathlib import Path
++import subprocess
++
++ROOT = Path(__file__).resolve().parents[2]
++spec = importlib.util.spec_from_file_location('room96', ROOT / 'tests/unit/room_96k_test.py')
++room96 = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(room96)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    for name in ['cli', 'room', 'hrir', 'output']:
++        parser.add_argument('--' + name, type=Path, required=True)
++    args = parser.parse_args()
++    args.output.mkdir(parents=True, exist_ok=False)
++    samples = [0.] * 1024 + [.02 * math.sin(2 * math.pi * 30000 * i / 96000)
++                            + .01 * math.sin(2 * math.pi * 40000 * i / 96000) for i in range(8193)]
++    source = args.output / 'input.wav'
++    room96.wav_write(source, samples, 96000)
++    outputs, report = {}, {'commands': [], 'cases': {}}
++    for name, quality, selection in [('cpu', 'realtime', '0'), ('cuda', 'realtime', '1'),
++                                      ('exact', 'exact', '0'), ('exact-opt-in', 'exact', 'invalid'),
++                                      ('seek', 'realtime', '1'), ('silence', 'realtime', '1')]:
++        if name == 'silence':
++            source = args.output / 'silence-input.wav'
++            room96.wav_write(source, [0.] * len(samples), 96000)
++        target = args.output / (name + '.wav')
++        command = [str(args.cli.resolve()), 'render', '-i', str(source.resolve()), '-o', str(target.resolve()),
++                   '--input-channels', 'C', '--renderer', 'room-binaural', '--room', str(args.room.resolve()),
++                   '--room-hrir', str(args.hrir.resolve()), '--room-metres-per-unit', '1.5',
++                   '--room-quality', quality, '--no-peak-limit']
++        if name == 'seek':
++            command += ['--start', '.02', '--end', '.06']
++        print('file', name, flush=True)
++        result = subprocess.run(command, env=dict(os.environ, MR_ADM_ROOM_CUDA=selection,
++                                                 MR_ADM_ROOM_WORKERS='8'), capture_output=True, timeout=240)
++        (args.output / (name + '.stdout')).write_bytes(result.stdout)
++        (args.output / (name + '.stderr')).write_bytes(result.stderr)
++        assert result.returncode == 0, result.stderr.decode(errors='replace')
++        rate, channels, pcm = room96.wav_read(target)
++        assert (rate, channels) == (96000, 2)
++        assert all(math.isfinite(v) for v in array.array('f', pcm))
++        outputs[name] = pcm
++        report['commands'].append({'selection': selection, 'arguments': command})
++        report['cases'][name] = {'frames': len(pcm) // 8, 'sha256': hashlib.sha256(pcm).hexdigest()}
++        (args.output / 'report.json').write_text(json.dumps(report, indent=2))
++    assert outputs['exact'] == outputs['exact-opt-in'], 'exact observed the CUDA opt-in'
++    assert outputs['seek'] == outputs['cuda'][1920 * 8:5760 * 8], 'file streaming seek changed PCM'
++    assert all(v == 0 for v in array.array('f', outputs['silence']))
++    assert len(outputs['cpu']) == len(outputs['cuda']) == len(outputs['silence'])
++    reference, actual = (array.array('f', outputs[name]) for name in ['cpu', 'cuda'])
++    error = sum((float(a) - float(b)) ** 2 for a, b in zip(reference, actual))
++    energy = sum(float(v) ** 2 for v in reference)
++    peak_error = max(abs(float(a) - float(b)) for a, b in zip(reference, actual)) / max(abs(v) for v in reference)
++    report['relative_l2'] = (error / energy) ** .5
++    report['maximum_over_reference_peak'] = peak_error
++    assert report['relative_l2'] <= 2e-5 and peak_error <= 2e-4
++    report['passed'] = True
++    (args.output / 'report.json').write_text(json.dumps(report, indent=2))
++    print(json.dumps(report), flush=True)
++
++
++if __name__ == '__main__':
++    main()

@@ -1,0 +1,35 @@
+{
+  "local-capi-exports.log": {
+    "sha256": "c23615f92c20109d6c946f386f2124e5ca7a10381994ec3a3df9e314281ccd7a"
+  },
+  "examples-final.log": {
+    "sha256": "7dde4143f0702801e595a6897d4a774a2eccd0b7479736f9b6b4afa41cd8581c"
+  },
+  "local-ctest.log": {
+    "sha256": "1eef38cb88e3a2cc0c057f45d172302e546d08a4b74c84e61e487f9508dab80d"
+  },
+  "local-final-clippy.log": {
+    "sha256": "375ec4a0f6f993048ee5736da191d0a2bf66390c465e7d50a2d57f47baff861b"
+  },
+  "local-quality.log": {
+    "sha256": "7448fe1a2638d594d13976680363830c9ceb0bc15c7a59614cc77d7e21ed60f8"
+  },
+  "release-final.log": {
+    "sha256": "7c0e9407629d71f175ab8968d59eeac75e6a3c52cee6400c450461debb0f6591"
+  },
+  "local-final-rust.log": {
+    "sha256": "57536b8efc5969fabd01db4f7afaae52ed47da2d899b37ab958050e89bbe2278"
+  },
+  "context-build.log": {
+    "sha256": "ac538a2913164b08a6acc8c84a66fcf898a24b48d4eb4459777c10d89a1b1fba"
+  },
+  "capi-exports.log": {
+    "sha256": "fe1efae4e52ce5f94552179c0a3b7e858a6df4c3124520eb9916785d1100295a"
+  },
+  "windows-clippy-final.log": {
+    "sha256": "e04b9c37af51680da578b08c8eba015ae015a01e54e6ee6295ac45d57b936f3e"
+  },
+  "windows-errors.log": {
+    "sha256": "09d7a4967f48d5fcb6100a4948223ba4a464e19c248d2ddd1c399faa92d5c332"
+  }
+}

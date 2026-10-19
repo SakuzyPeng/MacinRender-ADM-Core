@@ -1,0 +1,65 @@
+{
+  "schema": "mradm.room-cuda-integration-validation",
+  "version": 1,
+  "outcome": "rejected-runtime-gate",
+  "previously_accepted_commit": "e0a9f2870297c12ffe67f3fff23fead506f81dde",
+  "preserved_current_base": "1a214bd359cee129f640401c9a981ec402123ad6",
+  "runtime": {
+    "calls": 135000,
+    "deadline_misses": 1,
+    "maximum_ms": 5.674799999999999,
+    "deadline_ms": 5.333333333333333,
+    "peak_working_set_bytes": 1478983680,
+    "short_gate_passed": true,
+    "long_gate_passed": false,
+    "conditions": "normal desktop load, AC power; no concurrent build/benchmark launched by this task; ordinary background load was not excluded",
+    "rerun_to_replace_failure": false
+  },
+  "correctness_scope": {
+    "full_replay": "numerical-before-context-guard.json; not relabelled as the final protected binary",
+    "public_api": "lifecycle.json; normal create/release, concurrent bank sharing, fragmentation and epoch reset",
+    "context_loss": "errors.json; final guards return a failed Scene, teardown and recreate identical PCM",
+    "c_abi_exports": 157,
+    "local_debug": "3 CTest tests and 14 GPU/reference/quality/no-allocation/resource tests passed"
+  },
+  "not_executed_after_failure": [
+    "real audio device playback/underrun acceptance",
+    "new CUDA offline/file-streaming seek and silence manual test",
+    "optional GUI package build and smoke",
+    "further performance expansion"
+  ],
+  "archive": {
+    "candidate": "candidate.patch",
+    "unverified_draft": "packaging-draft.patch",
+    "frozen_binaries": "retained privately under local/room-cuda-integration-20261019/windows-evidence/frozen",
+    "restoration": {
+      "windows": {
+        "verified_overlay_entries": 1275,
+        "restored_files": 622,
+        "removed_task_files": 653,
+        "head_unchanged": true,
+        "git_status_unchanged": true,
+        "restore-configure": 0,
+        "restore-build": 0,
+        "git_status_unchanged_after_build": true,
+        "restore-probes": {
+          "initial_request_exit": 1,
+          "unavailable_in_original_checkout": [
+            "mr_adm_room_file_device_probe"
+          ],
+          "scene_rebuild_exit": 0
+        },
+        "final_status_unchanged": true,
+        "shared_build_caches_preserved": true,
+        "generated_optional_runtime_outputs_retained": true,
+        "task_directory_removed": true
+      },
+      "local": {
+        "head_preserved": "1a214bd359cee129f640401c9a981ec402123ad6",
+        "restored_tracked": 20,
+        "removed_archived_new_sources": 15,
+        "user_cmake_preserved": true
+      }
+    }
+  }
+}

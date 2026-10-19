@@ -1,0 +1,9 @@
+{
+  "mradm.exe": "51f5cc88696dcde9517f51a2118646cb9395e9a4c60ce1afb02e8a49cbbf2d72",
+  "mradm_capi.dll": "955a33829d76595be8331510c4591bb9605b88f9c35f18328308855fbac48f01",
+  "mradm_room_cuda.dll": "7ea8e92e019a2b0721fb8cb98dbe623e1895eff471cf638cf0d41d1f89da1f47",
+  "mr_adm_room_file_device_probe.exe": "8a0546fc2970ee8330510b2f06dc6023e3fe65f4ed43e75485218585792039da",
+  "mr_adm_room_scene_benchmark.exe": "13430156731c9a82ca67e10c09d483c2d57607c0298837f9c2d263bc1a087325",
+  "room_cuda_bench.exe": "aa99d2f89ccbf8ede0d276b8ff83667b38ca13f9f54114c9ee6cede30d976948",
+  "room_cuda_replay.exe": "a3dd67cdaf305d5f99f412898a5cec67f652196cd4eb4b3d6dacfb031c01ead3"
+}
