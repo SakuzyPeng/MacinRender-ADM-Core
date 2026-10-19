@@ -1,0 +1,16 @@
+{
+  "base": "5926c7b0976a902a1524363b1370cb4b107569af",
+  "prerequisite": "../room-cuda-integration/candidate.patch",
+  "optimizations_patch_sha256": "c297369d89d3740ad7de88b62e7c9767230c3843b2a7fc15c2c9a686e38b3363",
+  "unexecuted_regression_sha256": "a4176e7173c379d752605337c01428a74ff6d9d9f9d7e15763e007ec12eb0a31",
+  "compiled_source_sha256": {
+    "scripts/research/room_gpu/session_backend.cpp": "41f6c45a4925ca36241f907cdb1dd2a2588f0380a461e18fa1e125a7b583da53",
+    "scripts/research/room_gpu/session_layout.h": "38c71b37f41489318b2bf4fddc37dd791d3b00f51ff194a80ed9b9d4484d5455",
+    "scripts/research/room_gpu/session_late.h": "9c528d0027a5c534be0d50d4bfbc28067b28528598fc31734376282a0878960f",
+    "scripts/research/room_gpu/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851",
+    "src/adm_render_room/cuda/backend.cpp": "420b81fb751fccd118a48b9b58763f219dd2186a6c17afa3d2c9498ef7d3ca08",
+    "src/adm_render_room/cuda/resident_support.h": "35f7d5c48c4f063dd905d3436e34f193cec4922fc34af31b1d5d16008ec2368f",
+    "cmake/MRRoomCuda.cmake": "d525754cac75a7acb7c8ed268417f66b5eeeaa820ce634750af4e2f7ba33f073"
+  },
+  "default_activation": "none; the candidate is archived after failing the runtime gate"
+}

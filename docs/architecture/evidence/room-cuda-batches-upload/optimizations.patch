@@ -1,0 +1,291 @@
+diff --git a/cmake/MRRoomCuda.cmake b/cmake/MRRoomCuda.cmake
+--- a/cmake/MRRoomCuda.cmake
++++ b/cmake/MRRoomCuda.cmake
+@@ -4,9 +4,17 @@
+ if(NOT WIN32)
+     message(FATAL_ERROR "MR_ADM_ENABLE_ROOM_CUDA currently supports Windows only")
+ endif()
++option(MR_ADM_ROOM_CUDA_TIGHT_BATCHES "Research: tighten CUDA FFT batch capacities" OFF)
++option(MR_ADM_ROOM_CUDA_COMPACT_UPLOAD "Research: compact CUDA metadata uploads" OFF)
+ find_package(CUDAToolkit 12 REQUIRED)
+ add_library(mr_adm_room_cuda SHARED src/adm_render_room/cuda/backend.cpp)
+ target_compile_features(mr_adm_room_cuda PRIVATE cxx_std_20)
++if(MR_ADM_ROOM_CUDA_TIGHT_BATCHES)
++    target_compile_definitions(mr_adm_room_cuda PRIVATE ROOM_GPU_TIGHT_BATCHES)
++endif()
++if(MR_ADM_ROOM_CUDA_COMPACT_UPLOAD)
++    target_compile_definitions(mr_adm_room_cuda PRIVATE ROOM_GPU_COMPACT_UPLOAD)
++endif()
+ target_include_directories(mr_adm_room_cuda PRIVATE src/adm_render_room/cuda)
+ target_link_libraries(mr_adm_room_cuda PRIVATE CUDA::cuda_driver CUDA::cudart CUDA::nvrtc CUDA::cufft)
+ set_target_properties(mr_adm_room_cuda PROPERTIES OUTPUT_NAME mradm_room_cuda)
+diff --git a/src/adm_render_room/cuda/backend.cpp b/src/adm_render_room/cuda/backend.cpp
+--- a/src/adm_render_room/cuda/backend.cpp
++++ b/src/adm_render_room/cuda/backend.cpp
+@@ -13,6 +13,17 @@
+     }
+ 
+ 
++// Private research capability bits let the runner verify each frozen variant.
++extern "C" __declspec(dllexport) unsigned mradm_room_cuda_optimizations() noexcept {
++    unsigned value = 0;
++#ifdef ROOM_GPU_TIGHT_BATCHES
++    value |= 1;
++#endif
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++    value |= 2;
++#endif
++    return value;
++}
+ extern "C" __declspec(dllexport) unsigned mradm_room_cuda_abi() noexcept {
+     return 1;
+ }
+diff --git a/scripts/research/room_gpu/session_backend.cpp b/scripts/research/room_gpu/session_backend.cpp
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -10,6 +10,7 @@
+ #include <memory>
+ 
+ #include "session_backend.h"
++#include "session_layout.h"
+ #include "session_trace.h"
+ 
+ #ifdef ROOM_GPU_RESIDENT
+@@ -77,17 +78,36 @@
+         return value;
+     }
+ };
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++room_gpu_layout::Upload upload_layout(unsigned responses, unsigned updates, unsigned tasks) {
++    return room_gpu_layout::Upload({sizeof(Header),
++                                    (responses / 2) * sizeof(RoomGpuRange),
++                                    updates * sizeof(NativeUpdate),
++                                    tasks * sizeof(RoomGpuTask),
++                                    max_voices * 2 * sizeof(RoomGpuRange),
++                                    max_voices * sizeof(Info),
++                                    max_voices * 4 * 257 * sizeof(float)});
++}
++#endif
+ struct Variant {
+ #ifdef ROOM_GPU_RESIDENT
+     Context context;
+ #endif
+     unsigned responses, updates, tasks, fft_rows;
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++    room_gpu_layout::Upload upload;
++#endif
+     std::shared_ptr<Plan> inverse, target, output;
+     cudaGraph_t graph = nullptr;
+     cudaGraphExec_t execution = nullptr;
+     Variant(unsigned r, unsigned u, unsigned t, unsigned f, const Config& c, Plans& plans)
+-        : responses(r), updates(u), tasks(t), fft_rows(f), inverse(plans.get(c.n, CUFFT_C2R, r)),
+-          target(plans.get(512, CUFFT_R2C, f)), output(plans.get(512, CUFFT_C2R, t * 2)) {}
++        : responses(r), updates(u), tasks(t), fft_rows(f),
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++          upload(upload_layout(r, u, t)),
++#endif
++          inverse(plans.get(c.n, CUFFT_C2R, r)), target(plans.get(512, CUFFT_R2C, f)),
++          output(plans.get(512, CUFFT_C2R, t * 2)) {
++    }
+     ~Variant() {
+ #ifdef ROOM_GPU_RESIDENT
+         if (!context.valid())
+@@ -121,6 +141,10 @@
+     Device spectrum, bucket_time, packed, fresh, filters, history, convolved, convolved_time, output;
+     Pinned host_jobs, host_ranges, host_updates, host_tasks, host_groups, host_info, host_input, host_header,
+         host_output;
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++    Device packet{upload_layout(2048, max_updates, max_tasks).bytes};
++    Pinned host_packet{packet.bytes};
++#endif
+     std::vector<std::unique_ptr<Variant>> variants;
+     CUfunction response_fn, pack_fn, install_fn, input_fn, convolve_fn, mix_fn;
+ #ifdef ROOM_GPU_RESIDENT
+@@ -194,13 +218,27 @@
+         convolve_fn = module->function("session_convolve");
+         mix_fn = module->function("session_mix");
+         Plans plans(stream);
+-        for (const auto& shape : std::array<std::array<unsigned, 3>, 5>{
+-                 {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, 256, 2048}}}) {
++        auto add_shape = [&](const std::array<unsigned, 3>& shape) {
+             const unsigned maximum = shape[1] * 2 * static_cast<unsigned>(parts);
+             for (unsigned rows = 128; rows < maximum; rows *= 2)
+                 variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], rows, c, plans));
+             variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], maximum, c, plans));
+-        }
++        };
++        for (const auto& shape : std::array<std::array<unsigned, 3>, 5>{
++                 {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, 256, 2048}}})
++            add_shape(shape);
++#ifdef ROOM_GPU_TIGHT_BATCHES
++        for (const auto& shape : room_gpu_layout::compact_shapes)
++            add_shape(shape);
++        std::stable_sort(variants.begin(), variants.end(), [&](const auto& left, const auto& right) {
++            return room_gpu_layout::fft_work(left->responses, left->fft_rows, left->tasks, c.n) <
++                   room_gpu_layout::fft_work(right->responses, right->fft_rows, right->tasks, c.n);
++        });
++#endif
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++        runtime(cudaMemset(packet.data, 0, packet.bytes));
++        std::memset(host_packet.data, 0, host_packet.bytes);
++#endif
+         runtime(cudaMemset(device_header.data, 0, sizeof(Header)));
+         for (auto& v : variants) {
+             execute(*v);
+@@ -239,12 +277,28 @@
+     }
+     static unsigned blocks(size_t n) { return static_cast<unsigned>((n + 127) / 128); }
+     void execute(const Variant& v) {
++        auto address = [&](room_gpu_layout::Field field, void* separate) -> void* {
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++            (void) separate;
++            return static_cast<char*>(packet.data) + v.upload.offsets[field];
++#else
++            (void) field;
++            return separate;
++#endif
++        };
++        void* device_header_address = address(room_gpu_layout::header, device_header.data);
++        void* ranges_address = address(room_gpu_layout::ranges, ranges.data);
++        void* updates_address = address(room_gpu_layout::updates, updates.data);
++        void* tasks_address = address(room_gpu_layout::tasks, tasks.data);
++        void* groups_address = address(room_gpu_layout::groups, groups.data);
++        void* info_address = address(room_gpu_layout::info, info.data);
++        void* input_address = address(room_gpu_layout::input, input.data);
+         trace.mark(1, stream);
+         launch(response_fn,
+                blocks(bins),
+                v.responses,
+-               {&device_header.data,
+-                &ranges.data,
++               {&device_header_address,
++                &ranges_address,
+                 &jobs.data,
+                 &bank.data,
+                 &fractional.data,
+@@ -259,7 +313,7 @@
+         launch(pack_fn,
+                blocks(parts * 512),
+                v.updates * 2,
+-               {&device_header.data, &updates.data, &bucket_time.data, &packed.data});
++               {&device_header_address, &updates_address, &bucket_time.data, &packed.data});
+         trace.mark(4, stream);
+         fft_check(
+             cufftExecR2C(v.target->value, static_cast<float*>(packed.data), static_cast<cufftComplex*>(fresh.data)));
+@@ -267,13 +321,16 @@
+         launch(install_fn,
+                blocks(2 * parts * 257),
+                v.updates,
+-               {&device_header.data, &updates.data, &fresh.data, &filters.data});
+-        launch(input_fn, blocks(257), max_voices * 2, {&device_header.data, &info.data, &input.data, &history.data});
++               {&device_header_address, &updates_address, &fresh.data, &filters.data});
++        launch(input_fn,
++               blocks(257),
++               max_voices * 2,
++               {&device_header_address, &info_address, &input_address, &history.data});
+         trace.mark(6, stream);
+         launch(convolve_fn,
+                blocks(257),
+                v.tasks * 2,
+-               {&device_header.data, &info.data, &tasks.data, &history.data, &filters.data, &convolved.data});
++               {&device_header_address, &info_address, &tasks_address, &history.data, &filters.data, &convolved.data});
+         trace.mark(7, stream);
+         fft_check(cufftExecC2R(
+             v.output->value, static_cast<cufftComplex*>(convolved.data), static_cast<float*>(convolved_time.data)));
+@@ -282,7 +339,7 @@
+         launch(mix_fn,
+                blocks(512),
+                max_voices * 2,
+-               {&device_header.data, &groups.data, &tasks.data, &convolved_time.data, &output.data, &fade});
++               {&device_header_address, &groups_address, &tasks_address, &convolved_time.data, &output.data, &fade});
+         trace.mark(9, stream);
+         runtime(cudaMemcpyAsync(host_output.data, output.data, output.bytes, cudaMemcpyDeviceToHost, stream));
+         trace.mark(10, stream);
+@@ -363,6 +420,27 @@
+         trace.submit(
+             header.ranges * 2, header.updates, header.tasks, selected->responses, selected->updates, selected->tasks);
+         trace.mark(0, stream);
++#ifdef ROOM_GPU_COMPACT_UPLOAD
++        auto pack = [&](room_gpu_layout::Field field, const void* from, size_t bytes) {
++            if (bytes > selected->upload.capacities[field])
++                throw std::runtime_error("GPU compact upload capacity exceeded");
++            if (bytes)
++                std::memcpy(static_cast<char*>(host_packet.data) + selected->upload.offsets[field], from, bytes);
++        };
++        pack(room_gpu_layout::header, &header, sizeof(header));
++        pack(room_gpu_layout::ranges, host_ranges.data, header.ranges * sizeof(RoomGpuRange));
++        pack(room_gpu_layout::updates, host_updates.data, header.updates * sizeof(NativeUpdate));
++        pack(room_gpu_layout::tasks, host_tasks.data, header.tasks * sizeof(RoomGpuTask));
++        pack(room_gpu_layout::groups, host_groups.data, header.voices * 2 * sizeof(RoomGpuRange));
++        pack(room_gpu_layout::info, host_info.data, header.voices * sizeof(Info));
++        pack(room_gpu_layout::input, host_input.data, header.voices * 4 * 257 * sizeof(float));
++        // Keep the potentially large job array in its original pinned storage.
++        // Only the seven small arrays are repacked; capacity follows this graph.
++        if (job_count)
++            runtime(cudaMemcpyAsync(
++                jobs.data, host_jobs.data, job_count * sizeof(RoomGpuJob), cudaMemcpyHostToDevice, stream));
++        runtime(cudaMemcpyAsync(packet.data, host_packet.data, selected->upload.bytes, cudaMemcpyHostToDevice, stream));
++#else
+         std::memcpy(host_header.data, &header, sizeof(header));
+         auto copy = [&](Device& to, Pinned& from, size_t size) {
+             if (size)
+@@ -376,6 +454,7 @@
+         copy(info, host_info, header.voices * sizeof(Info));
+         copy(input, host_input, header.voices * 4 * 257 * sizeof(float));
+         copy(device_header, host_header, sizeof(Header));
++#endif
+         runtime(cudaGraphLaunch(selected->execution, stream));
+         trace.launched();
+         pending = true;
+diff --git a/scripts/research/room_gpu/session_layout.h b/scripts/research/room_gpu/session_layout.h
+new file mode 100644
+--- /dev/null
++++ b/scripts/research/room_gpu/session_layout.h
+@@ -0,0 +1,47 @@
++#pragma once
++#include <array>
++#include <cstddef>
++#include <cstdint>
++
++namespace room_gpu_layout {
++// Keep the original capacities as a fallback. These intermediate capacities
++// avoid coupling a response-row increase to an unnecessarily large output FFT.
++inline constexpr std::array<std::array<unsigned, 3>, 16> compact_shapes{{
++    {32, 32, 64},
++    {64, 32, 128},
++    {96, 64, 256},
++    {96, 64, 352},
++    {96, 64, 384},
++    {128, 64, 352},
++    {192, 64, 352},
++    {256, 96, 352},
++    {320, 96, 352},
++    {384, 96, 352},
++    {384, 96, 384},
++    {384, 96, 448},
++    {384, 96, 512},
++    {448, 128, 448},
++    {448, 128, 512},
++    {512, 128, 448},
++}};
++
++constexpr std::uint64_t fft_work(unsigned responses, unsigned fft_rows, unsigned tasks, unsigned length) {
++    unsigned levels = 0;
++    for (unsigned n = length; n > 1; n /= 2)
++        ++levels;
++    return std::uint64_t(responses) * length * levels + std::uint64_t(fft_rows) * 512 * 9 +
++           std::uint64_t(tasks) * 2 * 512 * 9;
++}
++
++enum Field : unsigned { header, ranges, updates, tasks, groups, info, input, fields };
++struct Upload {
++    std::array<std::size_t, fields> offsets{}, capacities{};
++    std::size_t bytes = 0;
++    explicit Upload(const std::array<std::size_t, fields>& lengths) : capacities(lengths) {
++        for (unsigned i = 0; i < fields; ++i) {
++            offsets[i] = bytes;
++            bytes += (lengths[i] + 63) & ~std::size_t(63);
++        }
++    }
++};
++} // namespace room_gpu_layout

@@ -1,0 +1,12 @@
+    Checking mradm-math v0.1.0 (<checkout>/rust/crates/mradm-math)
+    Checking mradm-json v0.1.0 (<checkout>/rust/crates/mradm-json)
+    Checking mradm-wav v0.1.0 (<checkout>/rust/crates/mradm-wav)
+    Checking mradm-ear v0.1.0 (<checkout>/rust/crates/mradm-ear)
+    Checking mradm-adm v0.1.0 (<checkout>/rust/crates/mradm-adm)
+    Checking rubato v5.0.1 (<checkout>/rust/vendor/rubato)
+    Checking mradm-dsp v0.1.0 (<checkout>/rust/crates/mradm-dsp)
+    Checking mradm-room-cuda v0.1.0 (<checkout>/rust/crates/mradm-room-cuda)
+    Checking mradm-scene v0.1.0 (<checkout>/rust/crates/mradm-scene)
+    Checking mradm-osc v0.1.0 (<checkout>/rust/crates/mradm-osc)
+    Checking mradm-ffi v0.1.0 (<checkout>/rust/crates/mradm-ffi)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2.48s

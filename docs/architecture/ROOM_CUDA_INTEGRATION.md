@@ -145,3 +145,8 @@ Windows x64，RTX 3060 Laptop GPU（6 GiB）、驱动 610.88、CUDA Toolkit 12.0
 
 Windows 覆盖恢复和临时私有资源清理记录见 validation.json 中的 restoration 字段。
 此前已验收组合的证据继续保留在 [ROOM_GPU_COMBINED.md](ROOM_GPU_COMBINED.md)。
+
+
+后续按“收紧 FFT 批次／合并上传”分别测试并组合对照，结果见
+[批次与上传实验](ROOM_CUDA_BATCH_UPLOAD.md)。仅上传有小幅平均耗时收益，但第三轮长测出现
+1/22,500 次超时、最大 6.7507 ms，仍未采用；该候选的结果与本页数据独立保存。

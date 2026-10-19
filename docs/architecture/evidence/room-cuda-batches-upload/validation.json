@@ -1,0 +1,78 @@
+{
+  "schema": "mradm.room-cuda-batches-upload-validation",
+  "version": 1,
+  "base": "5926c7b0976a902a1524363b1370cb4b107569af",
+  "outcome": "no-candidate-adopted",
+  "implementation": {
+    "tight_batches": "16 additional bounded graph capacities; original fallback capacities retained; preparation sorts by estimated FFT work",
+    "compact_upload": "Large job array stays in its pinned storage; the seven small arrays are packed using the selected graph capacities; at most two H2D calls per internal 256-frame block",
+    "audio_contract": "No kernel arithmetic, FIR truncation, extra FIFO or latency change; previous context guards retained"
+  },
+  "short": {
+    "rounds": 2,
+    "calls_per_case": 1024,
+    "scenarios": [
+      "ramps",
+      "distance-ramps"
+    ],
+    "all_variants_zero_misses": true,
+    "selected": "upload",
+    "mean_reduction_fraction": {
+      "ramps": 0.02238385059946202,
+      "distance-ramps": 0.027009619471826563
+    },
+    "selection_recorded_before_long": true,
+    "note": "Each single-run p99 is retained; no pooled p99 is inferred from their average."
+  },
+  "long": {
+    "calls": 67500,
+    "completed_rounds": 3,
+    "deadline_misses": 1,
+    "maximum_ms": 6.7507,
+    "deadline_ms": 5.333333333333333,
+    "passed": false,
+    "remaining_rounds_stopped": 3,
+    "peak_working_set_bytes": 1478877184,
+    "failed_call": {
+      "benchmark_call": 15115,
+      "measured_call": 15083,
+      "ms": 6.7507
+    },
+    "baseline_short_runs_do_not_count_toward_gate": true
+  },
+  "correctness": {
+    "upload_full_replay": "numerical.json; 2 x 231581 frames with full tails and fixed/fragmented input",
+    "local_tests": "14 GPU/reference/resource/quality/no-allocation tests passed",
+    "quality": "local clippy, applicable C++ quality checks, C++ format and all four Windows native builds passed",
+    "unexecuted_regression": "unexecuted-regression.patch contains a synthetic delayed-FIR transport test draft; not run after the long failure"
+  },
+  "conditions": "Windows 8 Audio workers, 96 kHz, 512 frames, 32 sources, realtime; normal desktop load on AC; no concurrent builds/benchmarks by this task during timing",
+  "notes": [
+    "No replacement run after failure; ordinary background load was not excluded.",
+    "A small mean improvement is not a zero-timeout pass.",
+    "Neither the single-batch experiment nor the combination entered long tests after the upload-only configuration was chosen.",
+    "No actual device or GUI packaging expansion after failure."
+  ],
+  "restoration": {
+    "windows": {
+      "verified_overlay_entries": 1301,
+      "restored_files": 622,
+      "removed_task_files": 679,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "restore-configure": 0,
+      "restore-build": 0,
+      "git_status_unchanged_after_build": true,
+      "final_status_unchanged": true,
+      "shared_caches_preserved": true,
+      "optional_generated_plugin_outputs_retained": true,
+      "task_directory_removed": true
+    },
+    "local": {
+      "base_preserved": "5926c7b0976a902a1524363b1370cb4b107569af",
+      "restored_tracked_files": 18,
+      "removed_archived_new_files": 16,
+      "original_cmake_preserved": true
+    }
+  }
+}

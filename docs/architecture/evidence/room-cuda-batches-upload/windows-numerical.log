@@ -1,0 +1,6 @@
+numerical default cpu
+numerical default upload
+{"mode": "default", "variant": "upload", "passed": true, "frames": 231581, "maximum_l2": 4.870885748869781e-07, "maximum_peak": 6.516114024176086e-07}
+numerical world cpu
+numerical world upload
+{"mode": "world", "variant": "upload", "passed": true, "frames": 231581, "maximum_l2": 5.146129544874351e-07, "maximum_peak": 7.056050916463413e-07}

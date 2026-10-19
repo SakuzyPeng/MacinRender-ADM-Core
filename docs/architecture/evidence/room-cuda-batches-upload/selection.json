@@ -1,0 +1,9 @@
+{
+  "selected": "upload",
+  "optimization_flags": 2,
+  "selection_before_long_test": true,
+  "reason": "Upload-only improves the mean in both scenarios in both alternating rounds. Tight batches have no consistent position benefit and adding them does not improve the combined result.",
+  "runtime_gate": "2 x 3 x 22500; any miss stops this selected candidate; no replacement reruns",
+  "numerical": "full CPU reference/default and world replays before the long gate",
+  "scope": "No extra buffering or FFT arithmetic changes."
+}
