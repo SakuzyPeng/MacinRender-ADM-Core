@@ -1,0 +1,21 @@
+start long-1-baseline-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "ramps", "mean_ms": 2.8153459960937495, "p99_ms": 3.1981, "maximum_ms": 3.8344, "deadline_misses": 0}
+start long-1-target-ramps
+{"variant": "target", "repetition": 1, "scenario": "ramps", "mean_ms": 2.621729075555537, "p99_ms": 3.0797, "maximum_ms": 4.1163, "deadline_misses": 0}
+start long-1-target-distance-ramps
+{"variant": "target", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.501796315555545, "p99_ms": 2.9177, "maximum_ms": 3.7786999999999997, "deadline_misses": 0}
+start long-1-baseline-distance-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.6522894531250025, "p99_ms": 3.0739, "maximum_ms": 3.3605, "deadline_misses": 0}
+start long-2-target-ramps
+{"variant": "target", "repetition": 2, "scenario": "ramps", "mean_ms": 2.615686435555557, "p99_ms": 3.0707, "maximum_ms": 3.9430000000000005, "deadline_misses": 0}
+start long-2-baseline-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "ramps", "mean_ms": 2.739662890624999, "p99_ms": 3.1015, "maximum_ms": 3.8979000000000004, "deadline_misses": 0}
+start long-2-baseline-distance-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.6217301757812495, "p99_ms": 3.0547999999999997, "maximum_ms": 3.4448, "deadline_misses": 0}
+start long-2-target-distance-ramps
+{"variant": "target", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.507377337777779, "p99_ms": 2.9307, "maximum_ms": 4.983300000000001, "deadline_misses": 0}
+start long-3-baseline-ramps
+{"variant": "baseline", "repetition": 3, "scenario": "ramps", "mean_ms": 2.733233593750002, "p99_ms": 3.1513, "maximum_ms": 3.5722, "deadline_misses": 0}
+start long-3-target-ramps
+{"variant": "target", "repetition": 3, "scenario": "ramps", "mean_ms": 2.6664639599999886, "p99_ms": 3.1386000000000003, "maximum_ms": 7.1111, "deadline_misses": 1}
+Candidate failed; stop without replacement runs.

@@ -1,0 +1,9 @@
+{
+  "base_preserved": "a08245a654fde05cfd3a459b2820a68f2f4b91c0",
+  "restored_tracked_files": 19,
+  "removed_archived_new_files": 14,
+  "kept_validated_tools": [
+    "scripts/research/room_gpu/resident_transport_test.py"
+  ],
+  "original_cmake_preserved": true
+}

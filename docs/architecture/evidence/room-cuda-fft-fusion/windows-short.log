@@ -1,0 +1,33 @@
+start short-1-baseline-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "ramps", "mean_ms": 2.7353225585937486, "p99_ms": 3.0854, "maximum_ms": 3.6024, "deadline_misses": 0, "process_seconds": 16.953000000095926}
+start short-1-target-ramps
+{"variant": "target", "repetition": 1, "scenario": "ramps", "mean_ms": 2.593310937499996, "p99_ms": 3.0463, "maximum_ms": 3.6349, "deadline_misses": 0, "process_seconds": 23.484000000054948}
+start short-1-convolution-ramps
+{"variant": "convolution", "repetition": 1, "scenario": "ramps", "mean_ms": 2.75222431640625, "p99_ms": 3.1403, "maximum_ms": 3.4447, "deadline_misses": 0, "process_seconds": 23.39000000001397}
+start short-1-combined-ramps
+{"variant": "combined", "repetition": 1, "scenario": "ramps", "mean_ms": 2.7405300781249995, "p99_ms": 3.1031, "maximum_ms": 3.5450999999999997, "deadline_misses": 0, "process_seconds": 23.56200000003446}
+start short-1-combined-distance-ramps
+{"variant": "combined", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.4834350585937495, "p99_ms": 2.9115, "maximum_ms": 3.2236000000000002, "deadline_misses": 0, "process_seconds": 22.531000000075437}
+start short-1-convolution-distance-ramps
+{"variant": "convolution", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.6100461914062487, "p99_ms": 3.0355, "maximum_ms": 3.5063, "deadline_misses": 0, "process_seconds": 22.656000000075437}
+start short-1-target-distance-ramps
+{"variant": "target", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.4816372070312505, "p99_ms": 2.8855, "maximum_ms": 3.5393999999999997, "deadline_misses": 0, "process_seconds": 23.203000000095926}
+start short-1-baseline-distance-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.6377624999999996, "p99_ms": 3.0526, "maximum_ms": 3.2455000000000003, "deadline_misses": 0, "process_seconds": 16.780999999959022}
+start short-2-combined-ramps
+{"variant": "combined", "repetition": 2, "scenario": "ramps", "mean_ms": 2.6427560546875, "p99_ms": 3.0989, "maximum_ms": 3.415, "deadline_misses": 0, "process_seconds": 23.04599999997299}
+start short-2-convolution-ramps
+{"variant": "convolution", "repetition": 2, "scenario": "ramps", "mean_ms": 2.7596639648437504, "p99_ms": 3.1504, "maximum_ms": 3.5691, "deadline_misses": 0, "process_seconds": 22.75}
+start short-2-target-ramps
+{"variant": "target", "repetition": 2, "scenario": "ramps", "mean_ms": 2.7049717773437494, "p99_ms": 3.1434, "maximum_ms": 4.1043, "deadline_misses": 0, "process_seconds": 23.17099999997299}
+start short-2-baseline-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "ramps", "mean_ms": 2.903932812500001, "p99_ms": 3.3162000000000003, "maximum_ms": 3.5578, "deadline_misses": 0, "process_seconds": 17.484000000054948}
+start short-2-baseline-distance-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.6485671875000016, "p99_ms": 3.0225999999999997, "maximum_ms": 3.6458, "deadline_misses": 0, "process_seconds": 16.984000000054948}
+start short-2-target-distance-ramps
+{"variant": "target", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.487794921874997, "p99_ms": 2.8216, "maximum_ms": 2.9918, "deadline_misses": 0, "process_seconds": 22.25}
+start short-2-convolution-distance-ramps
+{"variant": "convolution", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.6785328124999976, "p99_ms": 3.1197999999999997, "maximum_ms": 3.9156, "deadline_misses": 0, "process_seconds": 23.906000000075437}
+start short-2-combined-distance-ramps
+{"variant": "combined", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.481534960937496, "p99_ms": 2.8552, "maximum_ms": 3.2925, "deadline_misses": 0, "process_seconds": 22.5}
+short completed

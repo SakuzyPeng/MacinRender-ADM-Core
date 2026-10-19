@@ -1,0 +1,6 @@
+numerical default cpu
+numerical default target
+{"mode": "default", "variant": "target", "passed": true, "frames": 231581, "maximum_l2": 4.011806445656977e-07, "maximum_peak": 5.430095020146739e-07}
+numerical world cpu
+numerical world target
+{"mode": "world", "variant": "target", "passed": true, "frames": 231581, "maximum_l2": 4.259707092056806e-07, "maximum_peak": 5.29203818734756e-07}
