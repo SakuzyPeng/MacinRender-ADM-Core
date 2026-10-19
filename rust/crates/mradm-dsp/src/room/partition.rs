@@ -709,6 +709,8 @@ impl LongFilters {
 }
 
 pub struct Long {
+    #[cfg(feature = "room-gpu-experiment")]
+    initial_phase: usize,
     filters: Arc<LongFilters>,
     head: Uniform,
     tail: Option<Uniform>,
@@ -855,6 +857,8 @@ impl LongReader {
 impl Long {
     pub fn new(filters: Arc<LongFilters>) -> Result<Self> {
         Ok(Self {
+            #[cfg(feature = "room-gpu-experiment")]
+            initial_phase: 0,
             head: Uniform::new(&filters.head)?,
             tail: filters.tail.as_ref().map(Uniform::new).transpose()?,
             collected: vec![0.; if filters.tail.is_some() { 2048 } else { 0 }],
@@ -870,6 +874,22 @@ impl Long {
             position: 0,
         })
     }
+    /// Preparation-only zero prehistory offsets the long FFT boundaries, not
+    /// the FIR's sample origin. The head and the 2048-frame tail offset stay put.
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn initialize_phase(&mut self, phase: usize) -> Result<()> {
+        if self.filters.head.policy != FftPolicy::Native
+            || phase >= 2048
+            || !phase.is_multiple_of(super::BLOCK)
+        {
+            return Err(Error::InvalidArgument(
+                "Invalid realtime EQ partition phase",
+            ));
+        }
+        self.initial_phase = if self.tail.is_some() { phase } else { 0 };
+        self.reset();
+        Ok(())
+    }
     pub fn reset(&mut self) {
         self.head.reset();
         if let Some(tail) = &mut self.tail {
@@ -878,10 +898,20 @@ impl Long {
         self.collected.fill(0.);
         self.ready.fill(0.);
         self.position = 0;
+        #[cfg(feature = "room-gpu-experiment")]
+        {
+            self.position = self.initial_phase;
+        }
     }
     /// Fork an identical EQ before changing its input send. The prepared filter
     /// must be the same allocation: `ready` contains already filtered samples.
     pub fn copy_history_from(&mut self, source: &Self) -> Result<()> {
+        #[cfg(feature = "room-gpu-experiment")]
+        if self.initial_phase != source.initial_phase {
+            return Err(Error::InvalidArgument(
+                "Cannot copy mismatched EQ partition phases",
+            ));
+        }
         if !Arc::ptr_eq(&self.filters, &source.filters) {
             return Err(Error::InvalidArgument(
                 "Cannot copy history across different room filters",
@@ -928,6 +958,90 @@ impl Long {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "room-gpu-experiment")]
+    #[test]
+    fn staggered_long_fir_preserves_sample_origin_support_reset_and_fork() {
+        let taps = 32781;
+        let coefficients = [
+            (0, 0.7),
+            (2048, -0.2),
+            (2049, 0.3),
+            (4097, 0.1),
+            (taps - 1, 0.05),
+        ];
+        let mut filter = vec![0.; taps];
+        for (at, value) in coefficients {
+            filter[at] = value;
+        }
+        let filters = LongFilters::with_policy(1, &filter, FftPolicy::Native).unwrap();
+        let input: Vec<f32> = (0..5173)
+            .map(|i| (i % 179) as f32 * 0.001 - 0.089)
+            .collect();
+        let length = (input.len() + taps - 1).div_ceil(super::super::BLOCK) * super::super::BLOCK;
+        let mut expected = vec![0.; length];
+        for (i, &value) in input.iter().enumerate() {
+            for (offset, coefficient) in coefficients {
+                expected[i + offset] += value * coefficient;
+            }
+        }
+        for phase in (0..2048).step_by(super::super::BLOCK) {
+            let mut machine = Long::new(filters.clone()).unwrap();
+            let mut fork = Long::new(filters.clone()).unwrap();
+            machine.initialize_phase(phase).unwrap();
+            fork.initialize_phase(phase).unwrap();
+            let mut saved = Vec::new();
+            for epoch in 0..2 {
+                machine.reset();
+                fork.reset();
+                let mut actual = vec![0.; length];
+                for start in (0..length).step_by(super::super::BLOCK) {
+                    let mut block = [0.; super::super::BLOCK];
+                    if start < input.len() {
+                        let n = block.len().min(input.len() - start);
+                        block[..n].copy_from_slice(&input[start..start + n]);
+                    }
+                    if start == 4096 {
+                        fork.copy_history_from(&machine).unwrap();
+                    }
+                    machine
+                        .process(&block, &mut actual[start..start + block.len()])
+                        .unwrap();
+                    if start >= 4096 {
+                        let mut out = block;
+                        fork.process(&block, &mut out).unwrap();
+                        assert_eq!(
+                            out.map(f32::to_bits).as_slice(),
+                            actual[start..start + block.len()]
+                                .iter()
+                                .map(|v| v.to_bits())
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                }
+                let energy: f64 = expected.iter().map(|&v| f64::from(v).powi(2)).sum();
+                let error: f64 = actual
+                    .iter()
+                    .zip(&expected)
+                    .map(|(&a, &b)| f64::from(a - b).powi(2))
+                    .sum();
+                let peak = expected.iter().fold(0f32, |p, v| p.max(v.abs()));
+                let maximum = actual
+                    .iter()
+                    .zip(&expected)
+                    .fold(0f32, |p, (&a, &b)| p.max((a - b).abs()));
+                assert!((error / energy).sqrt() <= 2e-5, "phase={phase}");
+                assert!(maximum / peak <= 2e-4, "phase={phase}");
+                let bits: Vec<_> = actual.iter().map(|v| v.to_bits()).collect();
+                if epoch == 0 {
+                    saved = bits;
+                } else {
+                    assert_eq!(saved, bits);
+                }
+            }
+        }
+        let mut exact = Long::new(LongFilters::prepare(1, &filter).unwrap()).unwrap();
+        assert!(exact.initialize_phase(256).is_err());
+    }
     fn signal(count: usize, seed: usize) -> Vec<f32> {
         (0..count)
             .map(|i| (((i * 71 + seed) % 257) as f32 - 128.) / 512.)

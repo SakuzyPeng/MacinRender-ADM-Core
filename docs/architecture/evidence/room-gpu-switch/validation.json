@@ -1,0 +1,534 @@
+{
+  "schema": "mradm.room-gpu-switch-investigation",
+  "version": 1,
+  "date_local": "2026-10-18",
+  "committed_baseline": "e7ace2ae2b2fe90ee5b265b17b285af495b44014",
+  "scope": "Commit the previously retained GPU combination, then investigate 32-source room switching.",
+  "empty_graph_candidate": {
+    "changes": "Five prepared history/convolution-only Graph variants; skip response/target FFTs without updates, preserve input/reset work, return silence without D2H when no tasks.",
+    "runtime_reverted": true,
+    "native_lifecycle": {
+      "passed": true,
+      "compared_blocks": 23,
+      "bit_identical": true,
+      "empty_voice_batch": true,
+      "scope": "Native lifecycle correctness; no timing evidence"
+    },
+    "native_source_sha256": {
+      "scripts/research/room_gpu/session_backend.cpp": "b0b7f51eeea9a089bcc605cdf296a80aa646651680d77edd3eff8c2dbe175eac",
+      "scripts/research/room_gpu/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851",
+      "scripts/research/room_gpu/empty_graph_test.py": "cc32aa35a785b7109a5070f04191b288cd0cd8563798e16edd18cad9521432fa"
+    },
+    "benchmark_rust_executable_reused_from_frozen_combination": true,
+    "short": {
+      "workers": 8,
+      "profile": false,
+      "scope": "Existing room_bench Session and event sequence; GPU direct/early and asynchronous late partitions; CPU control, EQ, late head and decoder; no device callback.",
+      "cases": [
+        {
+          "result": {
+            "algorithm_fifo_frames": 256,
+            "audio_seconds": 5.461333333333333,
+            "blocks": 1024,
+            "call_frames": 512,
+            "continuous_pose": true,
+            "cpu_audio_budget_percent": null,
+            "cpu_seconds": null,
+            "deadline_misses": 5,
+            "distinct_event_offsets": 0,
+            "dsp_seconds": 2.4574971999999997,
+            "experiment": {
+              "control": "production Session",
+              "cpu_reference": false,
+              "finite_fade": true,
+              "kind": "room-gpu-session"
+            },
+            "final_phase": 0,
+            "hrir_bank_bytes": 825275648,
+            "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+            "maximum_ms": 5.9325,
+            "mean_ms": 2.399899609375,
+            "memory_measurement": "sampled-process-rss",
+            "p95_ms": 3.8308,
+            "p99_ms": 4.8905,
+            "peak": 0.03148484230041504,
+            "pose_update_hz": 187.5,
+            "preparation_outside_dsp_seconds": 4.7e-06,
+            "processing_policy": "room-realtime-v2",
+            "profiling": false,
+            "quality": "realtime",
+            "reflection_update_frames": 2048,
+            "reported_latency_frames": 256,
+            "room_switches": 1,
+            "room_transition": true,
+            "rss_peak_bytes": null,
+            "sample_rate": 96000,
+            "scenario": "switch",
+            "slowest_calls": [
+              {
+                "benchmark_call": 147,
+                "measured_call": 115,
+                "ms": 5.9325
+              },
+              {
+                "benchmark_call": 151,
+                "measured_call": 119,
+                "ms": 5.8104000000000005
+              },
+              {
+                "benchmark_call": 163,
+                "measured_call": 131,
+                "ms": 5.7435
+              },
+              {
+                "benchmark_call": 159,
+                "measured_call": 127,
+                "ms": 5.692
+              },
+              {
+                "benchmark_call": 155,
+                "measured_call": 123,
+                "ms": 5.6056
+              },
+              {
+                "benchmark_call": 167,
+                "measured_call": 135,
+                "ms": 5.2875
+              },
+              {
+                "benchmark_call": 139,
+                "measured_call": 107,
+                "ms": 5.260199999999999
+              },
+              {
+                "benchmark_call": 179,
+                "measured_call": 147,
+                "ms": 5.0969999999999995
+              },
+              {
+                "benchmark_call": 107,
+                "measured_call": 75,
+                "ms": 5.092099999999999
+              },
+              {
+                "benchmark_call": 231,
+                "measured_call": 199,
+                "ms": 5.0556
+              },
+              {
+                "benchmark_call": 175,
+                "measured_call": 143,
+                "ms": 4.8905
+              },
+              {
+                "benchmark_call": 67,
+                "measured_call": 35,
+                "ms": 4.863700000000001
+              },
+              {
+                "benchmark_call": 203,
+                "measured_call": 171,
+                "ms": 4.8233
+              },
+              {
+                "benchmark_call": 187,
+                "measured_call": 155,
+                "ms": 4.8195
+              },
+              {
+                "benchmark_call": 111,
+                "measured_call": 79,
+                "ms": 4.8084
+              },
+              {
+                "benchmark_call": 215,
+                "measured_call": 183,
+                "ms": 4.7735
+              },
+              {
+                "benchmark_call": 127,
+                "measured_call": 95,
+                "ms": 4.7671
+              },
+              {
+                "benchmark_call": 135,
+                "measured_call": 103,
+                "ms": 4.7602
+              },
+              {
+                "benchmark_call": 143,
+                "measured_call": 111,
+                "ms": 4.7495
+              },
+              {
+                "benchmark_call": 131,
+                "measured_call": 99,
+                "ms": 4.6927
+              },
+              {
+                "benchmark_call": 235,
+                "measured_call": 203,
+                "ms": 4.6829
+              },
+              {
+                "benchmark_call": 103,
+                "measured_call": 71,
+                "ms": 4.6417
+              },
+              {
+                "benchmark_call": 183,
+                "measured_call": 151,
+                "ms": 4.6110999999999995
+              },
+              {
+                "benchmark_call": 171,
+                "measured_call": 139,
+                "ms": 4.5854
+              },
+              {
+                "benchmark_call": 223,
+                "measured_call": 191,
+                "ms": 4.5746
+              },
+              {
+                "benchmark_call": 146,
+                "measured_call": 114,
+                "ms": 4.5463
+              },
+              {
+                "benchmark_call": 239,
+                "measured_call": 207,
+                "ms": 4.5103
+              },
+              {
+                "benchmark_call": 227,
+                "measured_call": 195,
+                "ms": 4.5101
+              },
+              {
+                "benchmark_call": 79,
+                "measured_call": 47,
+                "ms": 4.5019
+              },
+              {
+                "benchmark_call": 219,
+                "measured_call": 187,
+                "ms": 4.4506
+              },
+              {
+                "benchmark_call": 123,
+                "measured_call": 91,
+                "ms": 4.449599999999999
+              },
+              {
+                "benchmark_call": 195,
+                "measured_call": 163,
+                "ms": 4.4388
+              }
+            ],
+            "source_ramps": false,
+            "sources": 32,
+            "stages": {
+              "canonical_block": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "emitter_begin": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "emitter_convolution": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "gpu_submit": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "gpu_wait": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "hrir_query": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "late_decoder": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "late_field": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "path_transfers": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "response_transform": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "session_process": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "source_reduction": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "source_response": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "target_filters": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_batch": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_render": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "voice_segment": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "worker_execution": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              },
+              "worker_roundtrip": {
+                "calls": 0,
+                "worker_summed_ms": 0.0
+              }
+            },
+            "switch_period_calls": 0,
+            "trace": null,
+            "voice_segments": null,
+            "voice_segments_per_source_block": null,
+            "worker_wall_budget_percent": 44.998117675781245
+          },
+          "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.29 W, 1054 MiB\n",
+          "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 1 %, 1702 MHz, 51.71 W, 1054 MiB\n",
+          "peak_working_set_bytes": 2111516672,
+          "memory_observations": 262,
+          "process_seconds": 16.530999999959022
+        }
+      ],
+      "host_before": {
+        "utc": "2026-10-19T04:12:08Z",
+        "background_cpu_percent": [
+          4.174757281553399,
+          3.550863723608444,
+          1.3671875
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "host_policy": "Normal desktop; background load is informational, any deadline miss counts.",
+      "host_after": {
+        "utc": "2026-10-19T04:12:28Z",
+        "background_cpu_percent": [
+          3.9690222652468576,
+          2.3076923076923106,
+          3.3653846153846145
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "passed": false,
+      "binary_sha256": {
+        "room_gpu_session.dll": "127412a278515c37b8de792e6c524096654505bc10f93ece6acbed90865bea7f",
+        "room_bench.exe": "2b5dd763cc52e5bc0abbca85063979600e9823302876df6af59e57475e2b8099"
+      }
+    },
+    "not_run": [
+      "remaining position/distance screens",
+      "full Session numerical extension",
+      "long tests",
+      "macOS performance"
+    ]
+  },
+  "findings": {
+    "scope": "Counts and instrumented timings from the archived combined switch diagnostic; not new acceptance results.",
+    "groups": [
+      {
+        "engine": 0,
+        "records": 859,
+        "zero_update_and_task_records": 373,
+        "no_update_records": 616,
+        "zero_work_mean_device_ms": 0.23081171045576407,
+        "zero_work_mean_host_submit_ms": 0.15897640750670242
+      },
+      {
+        "engine": 1,
+        "records": 960,
+        "zero_update_and_task_records": 151,
+        "no_update_records": 555,
+        "zero_work_mean_device_ms": 0.19802659602649006,
+        "zero_work_mean_host_submit_ms": 0.09619006622516556
+      }
+    ],
+    "new_candidate_misses": [
+      {
+        "benchmark_call": 147,
+        "measured_call": 115,
+        "ms": 5.9325
+      },
+      {
+        "benchmark_call": 151,
+        "measured_call": 119,
+        "ms": 5.8104000000000005
+      },
+      {
+        "benchmark_call": 163,
+        "measured_call": 131,
+        "ms": 5.7435
+      },
+      {
+        "benchmark_call": 159,
+        "measured_call": 127,
+        "ms": 5.692
+      },
+      {
+        "benchmark_call": 155,
+        "measured_call": 123,
+        "ms": 5.6056
+      }
+    ],
+    "periodicity": {
+      "all_call_mod4": true,
+      "eq_taps": 32768,
+      "long_partition_frames": 2048,
+      "caveat": "Reflection scheduling and world-field partitions also have a 2048-frame period; this is a hypothesis pending stage profiling."
+    }
+  },
+  "source_eq_diagnostic": {
+    "scope": "One independent instrumented Release run of the committed baseline, with an extra wall-time scope around direct/wet Long::process. Not performance acceptance; worker-summed durations overlap and cannot be added to callback wall time.",
+    "provenance": {
+      "binary_sha256": {
+        "room_bench.exe": "0d85129dbcfe036569aaa13566a86d657a1555159b87b9ba81df818caadb39ae",
+        "room_gpu_session.dll": "24e6adeae5536638d49edda362005319c79fa5c57926c9f434a3288e3f206981"
+      },
+      "source_sha256": {
+        "rust/crates/mradm-dsp/src/room/profile.rs": "97585f863bb4195e128b8dfbdfbca2df693f807d4d15b703e30d86488da77a23",
+        "rust/crates/mradm-dsp/src/room/signal.rs": "19d5d5277ee2d4af89fdb0320b7e7a8748c7faa2e36809635035db059aec7cd9"
+      },
+      "scope": "One diagnostic run; source_eq times direct/wet Long::process only; no audio operations changed."
+    },
+    "matching_slow_calls": [
+      {
+        "benchmark_call": 147,
+        "phase": 2,
+        "wall_ms": 5.9018,
+        "eq_calls": 256,
+        "eq_worker_summed_ms": 14.4572,
+        "voice_worker_summed_ms": 17.9097,
+        "eq_fraction_of_voice_summed_wall": 0.8072273684092978,
+        "gpu_wait_ms": 0.4496
+      },
+      {
+        "benchmark_call": 151,
+        "phase": 2,
+        "wall_ms": 6.0824,
+        "eq_calls": 256,
+        "eq_worker_summed_ms": 16.5206,
+        "voice_worker_summed_ms": 20.4394,
+        "eq_fraction_of_voice_summed_wall": 0.8082722584811688,
+        "gpu_wait_ms": 0.218
+      },
+      {
+        "benchmark_call": 155,
+        "phase": 2,
+        "wall_ms": 5.9802,
+        "eq_calls": 256,
+        "eq_worker_summed_ms": 14.2756,
+        "voice_worker_summed_ms": 17.6357,
+        "eq_fraction_of_voice_summed_wall": 0.8094716966153882,
+        "gpu_wait_ms": 0.3704
+      },
+      {
+        "benchmark_call": 159,
+        "phase": 2,
+        "wall_ms": 5.9196,
+        "eq_calls": 256,
+        "eq_worker_summed_ms": 16.2088,
+        "voice_worker_summed_ms": 19.5439,
+        "eq_fraction_of_voice_summed_wall": 0.8293534043870465,
+        "gpu_wait_ms": 0.488
+      },
+      {
+        "benchmark_call": 163,
+        "phase": 2,
+        "wall_ms": 6.128299999999999,
+        "eq_calls": 256,
+        "eq_worker_summed_ms": 14.8853,
+        "voice_worker_summed_ms": 18.5375,
+        "eq_fraction_of_voice_summed_wall": 0.8029831422791639,
+        "gpu_wait_ms": 0.1964
+      }
+    ],
+    "raw_result": "source-eq.json",
+    "diagnostic_patch": "source-eq-diagnostic.patch",
+    "timeline": {
+      "benchmark_switch_call": 64,
+      "eq_taps": 32768,
+      "short_taps": 7071,
+      "reflection_history_frames": 2048,
+      "warmup_frames": 41984,
+      "warmup_calls": 82,
+      "fade_first_call": 146,
+      "fade_last_call": 164,
+      "eq_chains_during_fade": 128,
+      "eq_process_calls_per_512_frame_call": 256,
+      "long_partition_frames": 2048,
+      "observed_misses_all_at_long_partition_boundary": true
+    },
+    "inference": "Source EQ is the main worker hot spot during these fade calls (about 80-83% of summed voice-render wall time). Synchronized 2048-frame refreshes match all five missed calls. Prioritize batched GPU source-EQ tails and reuse only when filter/history equivalence is proven."
+  },
+  "cleanup": {
+    "native_test_windows": {
+      "verified_overlay_entries": 41,
+      "restored_files": 0,
+      "removed_task_files": 41,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "private_assets_removed": true
+    },
+    "diagnostic_windows": {
+      "verified_overlay_entries": 345,
+      "restored_files": 87,
+      "removed_task_files": 258,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "private_assets_removed": true
+    },
+    "canonical_output": {
+      "unprofiled": true,
+      "sha256": "516e896d19d0da5e072f8acd346f70fc092c83635d43ee917fcfaff8bcc7a9a7",
+      "used_for_reported_benchmarks": false
+    },
+    "local": {
+      "private_fixture_removed": true,
+      "verified_removed_payload_bytes": 644253669,
+      "temporary_commit_snapshot_removed": true,
+      "native_candidate_reverted_to_commit": "e7ace2a",
+      "native_lifecycle_test_retained": true,
+      "production_code_unchanged_by_investigation": true
+    }
+  },
+  "status": {
+    "first_requested_commit_completed": true,
+    "baseline_combination_preserved": true,
+    "room_switch_zero_timeout_passed": false,
+    "new_empty_graph_runtime_retained": false,
+    "new_native_test_retained": true,
+    "diagnostic_counter_left_in_runtime": false
+  }
+}

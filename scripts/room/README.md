@@ -343,7 +343,7 @@ python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
 ```
 
 核对候选的两份结果均为原生 96 kHz、完整 1024 次调用，且 `deadline_misses=0`。
-常规短测模式只记录结果，其退出码不代表零超时通过。任一短测失败即停止该候选，
+常规短测模式只记录结果，其退出码不代表零超时通过。上述任一运动短测失败即停止该候选，
 不继续 macOS 性能矩阵或长测；修改形成新候选后仍从 Windows 短测开始。
 隔离链路的测试不能替代完整会话短测。只有通过上述门槛，才可运行正式长测：
 
@@ -364,4 +364,6 @@ python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
 
 常规矩阵可用 `--sources 1 16 32 --scenarios static pose switch ramps distance-ramps`
 和 `--repetitions 3`；均值、p99、最大值、超时和峰值工作集按独立进程保存。
+频繁换房作为观察项，另行记录换房频率和调用数，不承诺零超时，也不因该项超时停止
+固定位置／距离运动验收。已有换房超时记录保留，数值与时序等正确性要求不变。
 原始个人 SOFA、集合及主机路径留在私有证据目录，不提交到仓库。

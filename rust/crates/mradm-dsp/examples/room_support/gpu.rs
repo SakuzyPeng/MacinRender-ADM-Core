@@ -11,6 +11,8 @@ use std::{path::PathBuf, sync::Arc};
 mod native;
 pub struct Options {
     reference: bool,
+    eq_stagger: bool,
+    voice_chunk: usize,
     library: Option<PathBuf>,
     fixture: Option<PathBuf>,
     kernels: Option<PathBuf>,
@@ -19,6 +21,9 @@ impl Options {
     pub fn parse(args: &mut Vec<String>) -> std::result::Result<Self, Box<dyn std::error::Error>> {
         let reference = args.iter().any(|a| a == "--gpu-reference");
         args.retain(|a| a != "--gpu-reference");
+        let eq_stagger = args.iter().any(|a| a == "--gpu-eq-stagger");
+        let chunked = args.iter().any(|a| a == "--gpu-voice-chunks");
+        args.retain(|a| a != "--gpu-eq-stagger" && a != "--gpu-voice-chunks");
         let mut take =
             |name: &str| -> std::result::Result<Option<PathBuf>, Box<dyn std::error::Error>> {
                 if let Some(i) = args.iter().position(|a| a == name) {
@@ -31,6 +36,8 @@ impl Options {
             };
         let result = Self {
             reference,
+            eq_stagger,
+            voice_chunk: if chunked { 4 } else { 0 },
             library: take("--gpu-dll")?,
             fixture: take("--gpu-fixture")?,
             kernels: take("--gpu-kernels")?,
@@ -41,6 +48,9 @@ impl Options {
             return Err(
                 "GPU DLL needs fixture/kernels and cannot combine with CPU reference".into(),
             );
+        }
+        if (eq_stagger || chunked) && !reference && result.library.is_none() {
+            return Err("GPU tuning requires --gpu-reference or --gpu-dll".into());
         }
         Ok(result)
     }
@@ -68,14 +78,25 @@ impl Options {
             None
         };
         if let Some(factory) = factory {
-            Ok(Arc::new(prepared.with_gpu_experiment(factory)?))
+            Ok(Arc::new(
+                prepared
+                    .with_gpu_experiment(factory)?
+                    .with_gpu_tuning(self.eq_stagger, self.voice_chunk)?,
+            ))
         } else {
             Ok(prepared)
         }
     }
     pub fn report(&self) -> serde_json::Value {
         if self.reference || self.library.is_some() {
-            serde_json::json!({"kind":"room-gpu-session","cpu_reference":self.reference,"control":"production Session","finite_fade":true})
+            let mut report = serde_json::json!({"kind":"room-gpu-session","cpu_reference":self.reference,"control":"production Session","finite_fade":true});
+            if self.eq_stagger {
+                report["eq_stagger_frames"] = serde_json::json!(256);
+            }
+            if self.voice_chunk != 0 {
+                report["voice_chunk"] = serde_json::json!(self.voice_chunk);
+            }
+            report
         } else {
             serde_json::Value::Null
         }

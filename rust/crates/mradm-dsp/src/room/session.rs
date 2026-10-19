@@ -19,6 +19,10 @@ pub const MAX_SOURCES: usize = 512;
 pub struct PreparedSet {
     #[cfg(feature = "room-gpu-experiment")]
     gpu_factory: Option<Arc<dyn super::gpu_experiment::Factory>>,
+    #[cfg(feature = "room-gpu-experiment")]
+    eq_stagger: bool,
+    #[cfg(feature = "room-gpu-experiment")]
+    voice_chunk: usize,
     pub room: Arc<PreparedRoom>,
     pub lfe: Arc<LongFilters>,
     workers: Arc<super::workers::Workers>,
@@ -38,6 +42,10 @@ impl PreparedSet {
         Ok(Self {
             #[cfg(feature = "room-gpu-experiment")]
             gpu_factory: None,
+            #[cfg(feature = "room-gpu-experiment")]
+            eq_stagger: false,
+            #[cfg(feature = "room-gpu-experiment")]
+            voice_chunk: 0,
             room,
             lfe,
             workers: super::workers::shared()?,
@@ -55,10 +63,23 @@ impl PreparedSet {
         }
         Ok(Self {
             gpu_factory: Some(factory),
+            eq_stagger: false,
+            voice_chunk: 0,
             room: self.room.clone(),
             lfe: self.lfe.clone(),
             workers: self.workers.clone(),
         })
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn with_gpu_tuning(mut self, eq_stagger: bool, voice_chunk: usize) -> Result<Self> {
+        if self.gpu_factory.is_none() || !matches!(voice_chunk, 0 | 4) {
+            return Err(Error::InvalidArgument(
+                "GPU tuning requires an experiment backend",
+            ));
+        }
+        self.eq_stagger = eq_stagger;
+        self.voice_chunk = voice_chunk;
+        Ok(self)
     }
     pub fn tail_frames(&self) -> usize {
         (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
@@ -652,6 +673,8 @@ struct VoiceBlock {
 }
 struct Voices {
     #[cfg(feature = "room-gpu-experiment")]
+    voice_chunk: usize,
+    #[cfg(feature = "room-gpu-experiment")]
     gpu: Option<Box<dyn super::gpu_experiment::Backend>>,
     #[cfg(feature = "room-gpu-experiment")]
     gpu_output: Vec<f32>,
@@ -689,6 +712,16 @@ impl Voices {
         let room = &self.room;
         let render =
             |(voice, slot): (&mut Voice, &VoiceInput)| render_voice(voice, room, slot, &block);
+        #[cfg(feature = "room-gpu-experiment")]
+        if self.voice_chunk != 0 && block.sources >= 4 {
+            self.voices[..block.sources]
+                .par_chunks_mut(self.voice_chunk)
+                .zip(self.inputs[..block.sources].par_chunks(self.voice_chunk))
+                .try_for_each(|(voices, inputs)| {
+                    voices.iter_mut().zip(inputs).try_for_each(render)
+                })?;
+            return self.submit_gpu();
+        }
         let result = if block.sources >= 4 {
             self.voices[..block.sources]
                 .par_iter_mut()
@@ -1068,6 +1101,8 @@ impl Instance {
         let mut result = Self {
             group: Arc::new(Mutex::new(Voices {
                 #[cfg(feature = "room-gpu-experiment")]
+                voice_chunk: prepared.voice_chunk,
+                #[cfg(feature = "room-gpu-experiment")]
                 gpu: prepared
                     .gpu_factory
                     .as_ref()
@@ -1097,7 +1132,12 @@ impl Instance {
         };
         #[cfg(feature = "room-gpu-experiment")]
         if let Some(factory) = &result.prepared.gpu_factory {
-            result.output.lock().unwrap().field.enable_gpu_late(&**factory)?;
+            result
+                .output
+                .lock()
+                .unwrap()
+                .field
+                .enable_gpu_late(&**factory)?;
         }
         result.reserve(capacity)?;
         drop(result.output.lock().unwrap());
@@ -1134,6 +1174,10 @@ impl Instance {
             #[cfg(feature = "room-gpu-experiment")]
             if group.gpu.is_some() {
                 group.voices.last_mut().unwrap().emitter.enable_gpu()?;
+                if self.prepared.eq_stagger {
+                    let phase = ((group.voices.len() - 1) % 8) * BLOCK;
+                    group.voices.last_mut().unwrap().emitter.stagger_eq(phase)?;
+                }
             }
         }
         Ok(())

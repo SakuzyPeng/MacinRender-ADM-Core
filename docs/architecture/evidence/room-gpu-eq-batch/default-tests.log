@@ -1,0 +1,23 @@
+   Compiling mradm-dsp v0.1.0 (<checkout>/rust/crates/mradm-dsp)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.43s
+     Running tests/room_no_alloc.rs (build/rust/cargo/rust_0e004/aarch64-apple-darwin/debug/deps/room_no_alloc-74b2e1ca09263449)
+
+running 1 test
+test regular_room_dsp_does_not_allocate_on_any_worker ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.74s
+
+     Running tests/room_quality.rs (build/rust/cargo/rust_0e004/aarch64-apple-darwin/debug/deps/room_quality-54a1248bf2532d19)
+
+running 9 tests
+test reflection_pose_budget_preserves_direct_sound_and_bypasses_on_jumps_and_deadlines ... ok
+test small_pose_steps_keep_the_reference_geometry_catch_up ... ok
+test quality_is_fixed_and_incompatible_prepared_banks_are_rejected ... ok
+test branch_updates_clear_previous_buckets_and_match_full_responses ... ok
+test hard_geometry_events_bypass_the_grid_while_another_field_is_ramping ... ok
+test small_head_motion_is_independent_of_packetization_and_finite_preroll ... ok
+test realtime_ramps_switches_and_tail_are_independent_of_packetization ... ok
+test realtime_preroll_reproduces_continuous_ramps_on_each_source_phase ... ok
+test short_room_switch_preserves_ramps_on_each_reflection_phase ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s

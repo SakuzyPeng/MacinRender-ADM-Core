@@ -102,6 +102,11 @@ impl Emitter {
             Dynamic::reader_at_rate(2, 1, self.room.quality.fft(), self.room.profile.sample_rate)?;
         Ok(())
     }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn stagger_eq(&mut self, phase: usize) -> Result<()> {
+        self.direct_eq.initialize_phase(phase)?;
+        self.wet_eq.initialize_phase(phase)
+    }
     fn prepare_short(
         &mut self,
         sources: &[WeightedPosition],
@@ -322,7 +327,6 @@ impl Emitter {
         self.initialized = true;
         Ok(())
     }
-
 
     /// Overwrite direct / early stereo planes and mono late send. The wet send
     /// scales excitation before EQ, so a room switch retains the old EQ tail.
@@ -633,10 +637,16 @@ struct GpuLate {
 }
 impl WorldTail {
     #[cfg(feature = "room-gpu-experiment")]
-    pub(crate) fn enable_gpu_late(&mut self, factory: &dyn super::gpu_experiment::Factory) -> Result<()> {
+    pub(crate) fn enable_gpu_late(
+        &mut self,
+        factory: &dyn super::gpu_experiment::Factory,
+    ) -> Result<()> {
         let mut group = self.group.lock().unwrap();
-        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime {
-            return Err(Error::Unsupported("GPU late field requires realtime field kind"));
+        if group.kind != TailKind::Field || group.room.quality != super::quality::Quality::Realtime
+        {
+            return Err(Error::Unsupported(
+                "GPU late field requires realtime field kind",
+            ));
         }
         if let Some(backend) = factory.create_late(group.room.clone())? {
             group.gpu_late = Some(GpuLate {
@@ -823,13 +833,20 @@ impl WorldTail {
         }
         #[cfg(feature = "room-gpu-experiment")]
         {
-            let Decoders { gpu_late, decoders, history, .. } = &mut *group;
+            let Decoders {
+                gpu_late,
+                decoders,
+                history,
+                ..
+            } = &mut *group;
             if let Some(gpu) = gpu_late {
                 if gpu.pending {
                     gpu.backend.finish(&mut gpu.ready)?;
                     gpu.pending = false;
                     if !gpu.reset {
-                        for (decoder, ready) in decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0) {
+                        for (decoder, ready) in
+                            decoders.iter_mut().zip(gpu.ready.as_chunks::<2048>().0)
+                        {
                             decoder.field.as_mut().unwrap().install_gpu_tail(ready)?;
                         }
                     }
