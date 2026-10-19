@@ -1,0 +1,33 @@
+start short-1-baseline-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "ramps", "mean_ms": 2.728743066406249, "p99_ms": 3.0927, "maximum_ms": 3.5016000000000003, "deadline_misses": 0, "process_seconds": 16.81299999996554}
+start short-1-batches-ramps
+{"variant": "batches", "repetition": 1, "scenario": "ramps", "mean_ms": 2.7876613281249973, "p99_ms": 3.1268, "maximum_ms": 3.8984, "deadline_misses": 0, "process_seconds": 18.31200000003446}
+start short-1-upload-ramps
+{"variant": "upload", "repetition": 1, "scenario": "ramps", "mean_ms": 2.7109222656250003, "p99_ms": 3.2056, "maximum_ms": 3.4413, "deadline_misses": 0, "process_seconds": 16.95400000002701}
+start short-1-combined-ramps
+{"variant": "combined", "repetition": 1, "scenario": "ramps", "mean_ms": 2.7886900390624945, "p99_ms": 3.2916999999999996, "maximum_ms": 3.6885, "deadline_misses": 0, "process_seconds": 17.20299999997951}
+start short-1-combined-distance-ramps
+{"variant": "combined", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.5588955078124984, "p99_ms": 2.9967, "maximum_ms": 3.3764, "deadline_misses": 0, "process_seconds": 17.20299999997951}
+start short-1-upload-distance-ramps
+{"variant": "upload", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.616904003906247, "p99_ms": 3.0316, "maximum_ms": 3.4125, "deadline_misses": 0, "process_seconds": 16.79700000002049}
+start short-1-batches-distance-ramps
+{"variant": "batches", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.5959997070312504, "p99_ms": 3.0147, "maximum_ms": 3.5866000000000002, "deadline_misses": 0, "process_seconds": 17.125}
+start short-1-baseline-distance-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.7484460937500015, "p99_ms": 3.1854, "maximum_ms": 3.4033, "deadline_misses": 0, "process_seconds": 17.20299999997951}
+start short-2-combined-ramps
+{"variant": "combined", "repetition": 2, "scenario": "ramps", "mean_ms": 2.7116455078124986, "p99_ms": 3.1058000000000003, "maximum_ms": 3.6075, "deadline_misses": 0, "process_seconds": 17.10999999998603}
+start short-2-upload-ramps
+{"variant": "upload", "repetition": 2, "scenario": "ramps", "mean_ms": 2.7020903320312524, "p99_ms": 3.1576, "maximum_ms": 3.6365999999999996, "deadline_misses": 0, "process_seconds": 17.42200000002049}
+start short-2-batches-ramps
+{"variant": "batches", "repetition": 2, "scenario": "ramps", "mean_ms": 2.8030266601562475, "p99_ms": 3.2234, "maximum_ms": 3.9673, "deadline_misses": 0, "process_seconds": 17.093999999924563}
+start short-2-baseline-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "ramps", "mean_ms": 2.808207812500001, "p99_ms": 3.2926, "maximum_ms": 3.6670000000000003, "deadline_misses": 0, "process_seconds": 17.094000000040978}
+start short-2-baseline-distance-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.621074609374998, "p99_ms": 3.0639, "maximum_ms": 3.8601, "deadline_misses": 0, "process_seconds": 17.155999999959022}
+start short-2-batches-distance-ramps
+{"variant": "batches", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.6159803710937477, "p99_ms": 2.9793, "maximum_ms": 3.5528999999999997, "deadline_misses": 0, "process_seconds": 16.671999999904074}
+start short-2-upload-distance-ramps
+{"variant": "upload", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.607587988281252, "p99_ms": 2.989, "maximum_ms": 3.5178000000000003, "deadline_misses": 0, "process_seconds": 17.17200000002049}
+start short-2-combined-distance-ramps
+{"variant": "combined", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.6555561523437494, "p99_ms": 3.1479, "maximum_ms": 3.7710999999999997, "deadline_misses": 0, "process_seconds": 17.188000000081956}
+short completed

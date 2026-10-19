@@ -1,0 +1,66 @@
+{
+  "baseline": {
+    "optimization_flags": 0,
+    "dll_sha256": "4a0f35070523885053f3e28ec30466a53c3ccbaf48d5aaf727fc878d275b87a3",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_TIGHT_BATCHES=OFF",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=OFF"
+    ]
+  },
+  "batches": {
+    "optimization_flags": 1,
+    "dll_sha256": "961a4fed1166770d6223b221a9bc7ad82f0fe386a6a4d2e6b0ace49b727f0852",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_TIGHT_BATCHES=ON",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=OFF"
+    ]
+  },
+  "upload": {
+    "optimization_flags": 2,
+    "dll_sha256": "3ba95cb5859be6daaa404a6a791d00123c50910121e99aeab997afe1062e7b69",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_TIGHT_BATCHES=OFF",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=ON"
+    ]
+  },
+  "combined": {
+    "optimization_flags": 3,
+    "dll_sha256": "3948417f83a816da01054232643a5eb28825115898bef2065cf78886b2d3e482",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_TIGHT_BATCHES=ON",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=ON"
+    ]
+  }
+}

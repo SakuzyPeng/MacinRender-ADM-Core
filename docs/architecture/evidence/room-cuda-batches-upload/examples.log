@@ -1,0 +1,9 @@
+   Compiling rayon-core v1.13.0 (<checkout>\rust\vendor\rayon-core)
+   Compiling ebur128 v0.1.10 (<checkout>\rust\vendor\ebur128)
+   Compiling rustfft v6.4.1 (<checkout>\rust\vendor\rustfft)
+   Compiling sofar v0.3.0 (<checkout>\rust\vendor\sofar)
+   Compiling rayon v1.11.0
+   Compiling realfft v3.5.0 (<checkout>\rust\vendor\realfft)
+   Compiling mradm-dsp v0.1.0 (<checkout>\rust\crates\mradm-dsp)
+   Compiling mradm-room-cuda v0.1.0 (<checkout>\rust\crates\mradm-room-cuda)
+    Finished `release` profile [optimized] target(s) in 21.31s
