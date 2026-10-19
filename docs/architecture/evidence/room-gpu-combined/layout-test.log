@@ -1,0 +1,5 @@
+updates=0 active_fft_rows=0 passed
+updates=1 active_fft_rows=2 passed
+updates=3 active_fft_rows=8 passed
+updates=17 active_fft_rows=248 passed
+updates=256 active_fft_rows=4336 passed

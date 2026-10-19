@@ -1,0 +1,193 @@
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -11,16 +11,16 @@
+ namespace {
+ constexpr unsigned max_voices = 32, max_updates = 256, max_ranges = 1024, max_tasks = 2048, max_jobs = 32 * 8192;
+ struct NativeUpdate {
+-    unsigned group, slot, parts, support;
++    unsigned group, slot, parts, support, first_row;
+     unsigned rows[64];
+ };
+ struct Info {
+     unsigned active, reset, heads[2];
+ };
+ struct Header {
+-    unsigned voices, ranges, updates, tasks;
+-};
+-static_assert(sizeof(RoomGpuJob) == 264 && sizeof(RoomGpuTask) == 48 && sizeof(NativeUpdate) == 272);
++    unsigned voices, ranges, updates, tasks, fft_rows;
++};
++static_assert(sizeof(RoomGpuJob) == 264 && sizeof(RoomGpuTask) == 48 && sizeof(NativeUpdate) == 276);
+ Config configuration(const fs::path& path, const RoomGpuParams& p) {
+     Config c(path / "config.txt");
+     if (p.rate != 96000 || p.fft != static_cast<unsigned>(c.n) || p.rows != static_cast<unsigned>(c.rows) ||
+@@ -33,15 +33,37 @@
+     c.materials = p.images;
+     return c;
+ }
++// Graphs in one Engine execute serially on one stream and share identical
++// input/output addresses. Reuse plans/workspaces across capacity variants.
++struct Plans {
++    struct Entry {
++        int length = 0;
++        cufftType type = CUFFT_R2C;
++        unsigned rows = 0;
++        std::shared_ptr<Plan> value;
++    };
++    cudaStream_t stream;
++    std::vector<Entry> entries;
++    explicit Plans(cudaStream_t s) : stream(s) {}
++    std::shared_ptr<Plan> get(int length, cufftType type, unsigned rows) {
++        const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& entry) {
++            return entry.length == length && entry.type == type && entry.rows == rows;
++        });
++        if (found != entries.end())
++            return found->value;
++        auto value = std::make_shared<Plan>(length, type, rows, stream);
++        entries.push_back({length, type, rows, value});
++        return value;
++    }
++};
+ struct Variant {
+-    unsigned responses, updates, tasks;
+-    std::unique_ptr<Plan> inverse, target, output;
++    unsigned responses, updates, tasks, fft_rows;
++    std::shared_ptr<Plan> inverse, target, output;
+     cudaGraph_t graph = nullptr;
+     cudaGraphExec_t execution = nullptr;
+-    Variant(unsigned r, unsigned u, unsigned t, const Config& c, cudaStream_t stream)
+-        : responses(r), updates(u), tasks(t), inverse(std::make_unique<Plan>(c.n, CUFFT_C2R, r, stream)),
+-          target(std::make_unique<Plan>(512, CUFFT_R2C, u * 2 * ((c.taps + 255) / 256), stream)),
+-          output(std::make_unique<Plan>(512, CUFFT_C2R, t * 2, stream)) {}
++    Variant(unsigned r, unsigned u, unsigned t, unsigned f, const Config& c, Plans& plans)
++        : responses(r), updates(u), tasks(t), fft_rows(f), inverse(plans.get(c.n, CUFFT_C2R, r)),
++          target(plans.get(512, CUFFT_R2C, f)), output(plans.get(512, CUFFT_C2R, t * 2)) {}
+     ~Variant() {
+         if (execution)
+             cudaGraphExecDestroy(execution);
+@@ -86,6 +108,9 @@
+         runtime(cudaMemcpy(propagation.data, p.propagation, propagation.bytes, cudaMemcpyHostToDevice));
+         runtime(cudaMemset(history.data, 0, history.bytes));
+         runtime(cudaMemset(filters.data, 0, filters.bytes));
++        // Active packed rows are fully overwritten. Inactive padded FFT rows
++        // may retain earlier inputs; their outputs are never installed.
++        runtime(cudaMemset(packed.data, 0, packed.bytes));
+         runtime(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+         cudaDeviceProp props{};
+         runtime(cudaGetDeviceProperties(&props, 0));
+@@ -96,11 +121,14 @@
+         input_fn = module->function("session_input");
+         convolve_fn = module->function("session_convolve");
+         mix_fn = module->function("session_mix");
+-        variants.emplace_back(std::make_unique<Variant>(128, 32, 256, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(128, 64, 384, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(320, 96, 384, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(512, 128, 512, c, stream));
+-        variants.emplace_back(std::make_unique<Variant>(2048, 256, 2048, c, stream));
++        Plans plans(stream);
++        for (const auto& shape : std::array<std::array<unsigned, 3>, 5>{
++                 {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, 256, 2048}}}) {
++            const unsigned maximum = shape[1] * 2 * static_cast<unsigned>(parts);
++            for (unsigned rows = 128; rows < maximum; rows *= 2)
++                variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], rows, c, plans));
++            variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], maximum, c, plans));
++        }
+         runtime(cudaMemset(device_header.data, 0, sizeof(Header)));
+         for (auto& v : variants) {
+             execute(*v);
+@@ -180,7 +208,7 @@
+         if (pending || voices > max_voices)
+             throw std::runtime_error("Invalid GPU batch lifecycle/capacity");
+         runtime(cudaSetDevice(0));
+-        header = {voices, 0, 0, 0};
++        header = {voices, 0, 0, 0, 0};
+         job_count = 0;
+         std::memset(host_info.data, 0, host_info.bytes);
+         std::memset(host_groups.data, 0, host_groups.bytes);
+@@ -198,14 +226,16 @@
+         for (size_t i = 0; i < f.update_count; ++i) {
+             auto u = f.updates[i];
+             if (u.slot >= 32 || u.branch >= 2 || u.range_count != static_cast<unsigned>(c.buckets) ||
+-                u.range_first + u.range_count > f.range_count || u.parts > parts ||
+-                u.support > static_cast<unsigned>(c.taps))
++                u.range_first + u.range_count > f.range_count || u.parts > parts || !u.support ||
++                u.support > static_cast<unsigned>(c.taps) || u.parts != (u.support + 255) / 256)
+                 throw std::runtime_error("Invalid GPU target");
+             NativeUpdate update{};
+             update.group = voice * 2 + u.branch;
+             update.slot = u.slot;
+             update.parts = u.parts;
+             update.support = u.support;
++            update.first_row = header.fft_rows;
++            header.fft_rows += u.parts * 2;
+             std::fill(std::begin(update.rows), std::end(update.rows), 0xffffffffu);
+             for (unsigned b = 0; b < u.range_count; ++b) {
+                 auto range = f.ranges[u.range_first + b];
+@@ -237,7 +267,8 @@
+     }
+     void submit() {
+         const auto found = std::find_if(variants.begin(), variants.end(), [&](const auto& v) {
+-            return header.ranges * 2 <= v->responses && header.updates <= v->updates && header.tasks <= v->tasks;
++            return header.ranges * 2 <= v->responses && header.updates <= v->updates && header.tasks <= v->tasks &&
++                   header.fft_rows <= v->fft_rows;
+         });
+         if (found == variants.end())
+             throw std::runtime_error("GPU graph shape capacity exceeded");
+--- a/scripts/research/room_gpu/session_kernels.cu
++++ b/scripts/research/room_gpu/session_kernels.cu
+@@ -16,7 +16,7 @@
+     unsigned first, count;
+ };
+ struct Update {
+-    unsigned group, slot, parts, support;
++    unsigned group, slot, parts, support, first_row;
+     unsigned rows[64];
+ };
+ struct Task {
+@@ -27,7 +27,7 @@
+     unsigned active, reset, heads[2];
+ };
+ struct Header {
+-    unsigned voices, ranges, updates, tasks;
++    unsigned voices, ranges, updates, tasks, fft_rows;
+ };
+ __device__ Complex plus(Complex a, Complex b) {
+     return {a.r + b.r, a.i + b.i};
+@@ -83,16 +83,21 @@
+     if (i >= PARTS * 512)
+         return;
+     unsigned target = row / 2, ear = row % 2, part = i / 512, t = part * 256 + i % 512;
++    if (target >= h->updates)
++        return;
++    const Update& update = updates[target];
++    if (part >= update.parts)
++        return;
+     float sum = 0;
+-    if (target < h->updates && i % 512 < 256 && t < updates[target].support) {
++    if (i % 512 < 256 && t < update.support) {
+         for (unsigned b = 0; b < BUCKETS; ++b) {
+-            unsigned r = updates[target].rows[b];
++            unsigned r = update.rows[b];
+             int at = int(t) - int(b * BUCKET_STRIDE);
+             if (r != 0xffffffffu && at >= 0 && at < FFT_N)
+                 sum += buckets[(r * 2 + ear) * FFT_N + at] * (1.f / FFT_N);
+         }
+     }
+-    windows[row * PARTS * 512 + i] = sum;
++    windows[(update.first_row + ear * update.parts + part) * 512 + i % 512] = sum;
+ }
+ extern "C" __global__ void
+ session_install(const Header* h, const Update* updates, const Complex* fresh, Complex* filters) {
+@@ -100,7 +105,11 @@
+     if (target >= h->updates || i >= 2 * PARTS * 257)
+         return;
+     Update u = updates[target];
+-    filters[((u.group * TARGETS + u.slot) * 2 * PARTS * 257) + i] = fresh[target * 2 * PARTS * 257 + i];
++    unsigned ear = i / (PARTS * 257), part = (i / 257) % PARTS, bin = i % 257;
++    if (part >= u.parts)
++        return;
++    filters[((u.group * TARGETS + u.slot) * 2 * PARTS * 257) + i] =
++        fresh[(u.first_row + ear * u.parts + part) * 257 + bin];
+ }
+ extern "C" __global__ void session_input(const Header* h, const Info* info, const Complex* input, Complex* history) {
+     unsigned bin = blockIdx.x * blockDim.x + threadIdx.x, group = blockIdx.y;

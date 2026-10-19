@@ -67,18 +67,26 @@ class Gates(unittest.TestCase):
         with self.assertRaises(ValueError):
             compare.compare(reference, candidate)
 
-    def test_deadline_gate_requires_all_six_idle_rounds_and_zero_misses(self):
+    def test_deadline_gate_requires_all_six_rounds_and_zero_misses(self):
         cases = [dict(variant='candidate', scenario=scenario, repetition=repetition,
-                      idle_before=dict(eligible=True), result=dict(blocks=22500, deadline_misses=0))
+                      host_before=dict(background_cpu_percent=[8.4, 4.0, 6.5]),
+                      result=dict(blocks=22500, deadline_misses=0))
                  for scenario in ['ramps', 'distance-ramps'] for repetition in [1, 2, 3]]
         self.assertTrue(benchmark.acceptance(cases)['passed'])
+        self.assertFalse(benchmark.acceptance([])['passed'])
         self.assertFalse(benchmark.acceptance(cases[:-1])['passed'])
         duplicate = copy.deepcopy(cases); duplicate[-1] = duplicate[0]
         self.assertFalse(benchmark.acceptance(duplicate)['passed'])
         changed = copy.deepcopy(cases); changed[-1]['result']['deadline_misses'] = 1
         self.assertFalse(benchmark.acceptance(changed)['passed'])
-        changed = copy.deepcopy(cases); changed[0]['idle_before']['eligible'] = False
-        self.assertFalse(benchmark.acceptance(changed)['passed'])
+        # Legacy idle flags and background CPU samples cannot overrule measured deadlines.
+        legacy = copy.deepcopy(cases)
+        for case in legacy:
+            case['idle_before'] = dict(eligible=False)
+            del case['host_before']
+        self.assertTrue(benchmark.acceptance(legacy)['passed'])
+        legacy[-1]['result']['deadline_misses'] = 1
+        self.assertFalse(benchmark.acceptance(legacy)['passed'])
 
 
 if __name__ == '__main__':

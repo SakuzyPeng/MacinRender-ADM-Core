@@ -190,6 +190,16 @@ impl PreparedRoom {
         }
     }
 
+    pub(crate) fn early_channels(&self) -> usize {
+        2
+    }
+    pub(crate) fn field_channels(&self) -> usize {
+        self.profile.late_directions.len()
+    }
+    pub(crate) fn experimental_delay(&self) -> usize {
+        0
+    }
+
     pub fn late_send(&self, position: Position, output: &mut [f32]) -> Result<()> {
         self.late_send_many(
             &[WeightedPosition {

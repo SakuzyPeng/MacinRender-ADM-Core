@@ -44,7 +44,7 @@ Windows 拆分后的加载短测，每个采样率各一对基线／候选，单
 | 96 kHz | 18.477 → 9.932 | 17.845 → 0.384 |
 
 两项加载短测均有收益；单轮数据不承诺稳定的加速幅度。计时期间没有本任务的并行构建或其他基准，
-不把它视为正式空闲主机或运行时零超时认证。Windows 的 48／96 kHz × exact／realtime 四组
+加载计时不代替运行时零超时验收。Windows 的 48／96 kHz × exact／realtime 四组
 完整回放 manifest 与各 17 份载荷哈希均与同机基线相同，包括完整尾声、帧数和延迟。
 Windows 原生定向测试、工具回归和 canonical 构建后的 4 项 CTest 通过。
 随后 macOS arm64 的同类定向测试、clippy、Release 构建与 4 项 CTest 通过；
@@ -87,7 +87,8 @@ ctest --test-dir build/win-canon -R "^(mr_adm_room_tests|mr_adm_room_96k_tests|m
 
 ## 后续候选的停止条件
 
-先在 Windows 做必要正确性检查，再做无插桩 Release 完整会话短测。ROOM 运行时门槛固定
+开发、代码修改与常规正确性检查默认在本地完成；Windows 优先仅指性能筛选与验收顺序。
+进入性能筛选时，先补齐必要的 Windows 原生构建与烟测，再做无插桩 Release 完整会话短测。ROOM 运行时门槛固定
 8 workers、96 kHz、512 帧、32 源，位置和距离运动各 1024 次调用，要求零次超时。
 短测失败就停止该候选，不继续 macOS 性能矩阵或六轮长测；新候选重新从 Windows 短测开始。
 短测通过后才进入适用的跨平台与长测验收。隔离链的加速、加载收益都不能代替完整会话达标。

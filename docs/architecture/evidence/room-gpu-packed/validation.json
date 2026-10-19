@@ -1,0 +1,2900 @@
+{
+  "schema": "mradm.room-gpu-packed-target-evaluation",
+  "version": 1,
+  "date": "2026-10-18",
+  "base_commit": "6bd4937",
+  "status": "reverted_after_long_failure",
+  "passed": false,
+  "default_policy": "room-realtime-v2",
+  "scope": "Complete ROOM Session kernel; candidate compacts target FFT partitions only. Same input/event schedule, all distance layers/full FIR, unchanged fades/FIFO/latency/tail. No audio device callback.",
+  "windows": {
+    "cpu": "Intel Core i7-11800H",
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "driver": "610.88",
+    "cuda": "12.0",
+    "workers": 8,
+    "rate": 96000,
+    "frames": 512,
+    "sources": 32,
+    "quality": "realtime",
+    "deadline_ms": 5.333333333333333,
+    "profile": false,
+    "condition_note": "Normal desktop acceptance; no overlapping task build or other task benchmark. User subsequently mentioned FFmpeg encoding; its host and overlap were not established. Failure remains valid; user requested no further GPU-occupancy investigation."
+  },
+  "short": {
+    "workers": 8,
+    "profile": false,
+    "scope": "Existing room_bench Session and event sequence; GPU direct/early and asynchronous late partitions; CPU control, EQ, late head and decoder; no device callback.",
+    "cases": [
+      {
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 3.5294985999999966,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 4.8267,
+          "mean_ms": 3.446775976562497,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 4.026400000000001,
+          "p99_ms": 4.4057,
+          "peak": 0.031607646495103836,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 64.62704956054681
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.32 W, 1054 MiB\n",
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 40 %, 1875 MHz, 61.05 W, 1054 MiB\n",
+        "peak_working_set_bytes": 1707212800,
+        "memory_observations": 257,
+        "process_seconds": 16.18799999996554
+      },
+      {
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 0,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 3.3931319000000033,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 4.7742,
+          "mean_ms": 3.3136053710937534,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 3.8563,
+          "p99_ms": 4.1462,
+          "peak": 0.05123386159539223,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "distance-ramps",
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 62.13010070800787
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 36.51 W, 1054 MiB\n",
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 40 %, 1717 MHz, 57.52 W, 1054 MiB\n",
+        "peak_working_set_bytes": 1706979328,
+        "memory_observations": 254,
+        "process_seconds": 15.984000000054948
+      }
+    ],
+    "host_before": {
+      "utc": "2026-10-19T01:22:24Z",
+      "background_cpu_percent": [
+        6.5891472868217065,
+        5.000000000000004,
+        11.494252873563216
+      ],
+      "ac": 1,
+      "battery_percent": 100,
+      "saver": 0
+    },
+    "host_policy": "Normal desktop; background load is informational, any deadline miss counts.",
+    "host_after": {
+      "utc": "2026-10-19T01:23:02Z",
+      "background_cpu_percent": [
+        4.748062015503873,
+        3.90625,
+        4.4921875
+      ],
+      "ac": 1,
+      "battery_percent": 100,
+      "saver": 0
+    },
+    "passed": true,
+    "binary_sha256": {
+      "room_gpu_session.dll": "60ca159db2723643fe8adb0b0a04e5cfa9b4a4c3044d78d7c3effad3b384857c",
+      "room_bench.exe": "8b8d0ee2b11f6908ba53ad9147ed4d2c704f46c824f3f5513f2131c4bc09e1a7"
+    }
+  },
+  "long": {
+    "workers": 8,
+    "profile": false,
+    "scope": "Existing room_bench Session and event sequence; GPU direct/early and asynchronous late partitions; CPU control, EQ, late head and decoder; no device callback.",
+    "cases": [
+      {
+        "repetition": 1,
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 120.0,
+          "blocks": 22500,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 362,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 82.07827609999987,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 93.1708,
+          "mean_ms": 3.6479233822222166,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 4.196400000000001,
+          "p99_ms": 16.5439,
+          "peak": 0.03799697756767273,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_submit": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "gpu_wait": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 68.39856341666656
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 0 %, 1702 MHz, 31.15 W, 1054 MiB\n",
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 40 %, 2040 MHz, 92.03 W, 1054 MiB\n",
+        "peak_working_set_bytes": 1707323392,
+        "memory_observations": 1513,
+        "process_seconds": 94.82799999997951
+      }
+    ],
+    "host_before": {
+      "utc": "2026-10-19T01:25:05Z",
+      "background_cpu_percent": [
+        6.0546875,
+        8.942307692307693,
+        3.557692307692306
+      ],
+      "ac": 1,
+      "battery_percent": 100,
+      "saver": 0
+    },
+    "host_policy": "Normal desktop; background load is informational, any deadline miss counts.",
+    "host_after": {
+      "utc": "2026-10-19T01:26:43Z",
+      "background_cpu_percent": [
+        8.541266794625724,
+        6.730769230769229,
+        4.496578690127073
+      ],
+      "ac": 1,
+      "battery_percent": 99,
+      "saver": 0
+    },
+    "passed": false,
+    "binary_sha256": {
+      "room_gpu_session.dll": "60ca159db2723643fe8adb0b0a04e5cfa9b4a4c3044d78d7c3effad3b384857c",
+      "room_bench.exe": "8b8d0ee2b11f6908ba53ad9147ed4d2c704f46c824f3f5513f2131c4bc09e1a7"
+    }
+  },
+  "long_gate": {
+    "completed_rounds": 1,
+    "measured_calls": 22500,
+    "deadline_misses": 362,
+    "remaining_rounds_run": false,
+    "passed": false
+  },
+  "numerical": {
+    "schema": "mradm.room-realtime-rounding",
+    "version": 1,
+    "reference_policy": "room-realtime-v2",
+    "candidate_policy": "room-realtime-v2",
+    "thresholds": {
+      "relative_l2": 2e-05,
+      "maximum_over_reference_peak": 0.0002
+    },
+    "frames": 231581,
+    "latency_frames": 256,
+    "tail_frames": 135502,
+    "preparation_hashes_identical": {
+      "prepared": true,
+      "lfe": true
+    },
+    "checkpoints": {
+      "branches-0.f32": {
+        "samples": 28284,
+        "reference_peak": 1.7790477275848389,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-1.f32": {
+        "samples": 28284,
+        "reference_peak": 0.8834397792816162,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-2.f32": {
+        "samples": 28284,
+        "reference_peak": 0.5392327308654785,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-3.f32": {
+        "samples": 28284,
+        "reference_peak": 0.7344926595687866,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-4.f32": {
+        "samples": 28284,
+        "reference_peak": 0.7349848747253418,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-5.f32": {
+        "samples": 28284,
+        "reference_peak": 0.3805251121520996,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-6.f32": {
+        "samples": 28284,
+        "reference_peak": 0.7198781967163086,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-7.f32": {
+        "samples": 28284,
+        "reference_peak": 0.9746142625808716,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-0.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5085525512695312,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-1.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5085525512695312,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-2.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5085525512695312,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-3.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5131561756134033,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-4.f32": {
+        "samples": 4352,
+        "reference_peak": 0.512883186340332,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-5.f32": {
+        "samples": 4352,
+        "reference_peak": 0.2615821361541748,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-6.f32": {
+        "samples": 4352,
+        "reference_peak": 0.12488539516925812,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-7.f32": {
+        "samples": 4352,
+        "reference_peak": 1.0160523653030396,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "session.f32": {
+        "samples": 463162,
+        "reference_peak": 0.034302257001399994,
+        "maximum_error": 2.2351741790771484e-08,
+        "relative_l2": 4.898492078127715e-07,
+        "maximum_over_reference_peak": 6.516114024176086e-07,
+        "silent": false,
+        "passed": true
+      }
+    },
+    "passed": true,
+    "scope": "Complete HRIR, branch and stereo PCM outputs including tails; same host, inputs and event schedule required",
+    "experiment": {
+      "control": "production Session",
+      "cpu_reference": false,
+      "finite_fade": true,
+      "kind": "room-gpu-session"
+    },
+    "binary_sha256": {
+      "room_gpu_session.dll": "60ca159db2723643fe8adb0b0a04e5cfa9b4a4c3044d78d7c3effad3b384857c",
+      "room_bench.exe": "8b8d0ee2b11f6908ba53ad9147ed4d2c704f46c824f3f5513f2131c4bc09e1a7",
+      "room_replay.exe": "e26cdbe42fcb6e16aecdae89c613b3c7c11791b83a3c7ef700fd04cb0f61a544"
+    }
+  },
+  "all_replay_checkpoint_hashes_match_retained_gpu": true,
+  "binary_sha256": {
+    "room_bench.exe": "8b8d0ee2b11f6908ba53ad9147ed4d2c704f46c824f3f5513f2131c4bc09e1a7",
+    "room_replay.exe": "e26cdbe42fcb6e16aecdae89c613b3c7c11791b83a3c7ef700fd04cb0f61a544",
+    "room_gpu_session.dll": "60ca159db2723643fe8adb0b0a04e5cfa9b4a4c3044d78d7c3effad3b384857c"
+  },
+  "candidate_source_sha256": {
+    "session_backend.cpp": "9b439132b0dcee7fc8b058be07ecab0fce40040409b0559a6215420b6f59a3a0",
+    "session_backend.h": "6f21a4ae9a743e83b638c11ebc94a29f1b618c566fb92a1f14f3c6df603d1fb5",
+    "session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851",
+    "session_late.h": "87e2fef22f61784861a3ef0595206d84764264d270f9a6c5afe26e545b9b796e",
+    "session_trace.h": "f57ca5a91e61e1c7b150c97fe244cfe3c2fe7fd9cf0db555836554c01fb96e00",
+    "probe.cpp": "666b8aefb639d220f3ac2d36aeff49842069a8e0c4d2c939fba7045e844f2a2c"
+  },
+  "rust_sources_unchanged_this_candidate": true,
+  "checks": {
+    "plain_layout_passed": true,
+    "undefined_and_bounds_sanitizer_passed": true,
+    "address_sanitizer": "Not completed: the first runtime was sampled stalled in dyld/ASan initialization before main; a second installed runtime also timed out. Both were stopped.",
+    "cases": [
+      {
+        "updates": 0,
+        "active_fft_rows": 0
+      },
+      {
+        "updates": 1,
+        "active_fft_rows": 2
+      },
+      {
+        "updates": 3,
+        "active_fft_rows": 8
+      },
+      {
+        "updates": 17,
+        "active_fft_rows": 248
+      },
+      {
+        "updates": 256,
+        "active_fft_rows": 4336
+      }
+    ],
+    "oracle": "Assemble complete time-domain FIR before partitioning; compare all active FFT-window samples bitwise. Check compact scatter and NaN guard regions."
+  },
+  "diagnostic": {
+    "acceptance_evidence": false,
+    "calls": 1024,
+    "profiling": true,
+    "timings_confounded_by_nsight_orphan": true,
+    "long_spike_reproduced": false,
+    "observed_max_ms": 4.8122,
+    "native": {
+      "calls": 2048,
+      "means": {
+        "rows": 192.0,
+        "updates": 64.0,
+        "tasks": 332.0,
+        "padded_rows": 224.0,
+        "padded_updates": 80.0,
+        "padded_tasks": 384.0,
+        "collect_ms": 0.03586015625,
+        "submit_ms": 0.163751171875,
+        "cpu_overlap_ms": 0.43065751953125,
+        "wait_ms": 0.2308986328125,
+        "gpu_upload_ms": 0.06738353125,
+        "gpu_response_ms": 0.3982431884765625,
+        "gpu_response_ifft_ms": 0.02515575,
+        "gpu_pack_ms": 0.041852,
+        "gpu_target_fft_ms": 0.045766015625,
+        "gpu_install_input_ms": 0.039859203125,
+        "gpu_convolve_ms": 0.10100740625,
+        "gpu_output_ifft_ms": 0.012887375,
+        "gpu_mix_ms": 0.010378609375,
+        "gpu_readback_ms": 0.03831525
+      },
+      "shapes": [
+        {
+          "shape": [
+            288,
+            80,
+            332,
+            320,
+            96,
+            384
+          ],
+          "count": 1024
+        },
+        {
+          "shape": [
+            96,
+            48,
+            332,
+            128,
+            64,
+            384
+          ],
+          "count": 1024
+        }
+      ],
+      "slow_calls": [
+        {
+          "block": 579,
+          "wall_ms": 4.8122,
+          "stages": {
+            "canonical_block": 3.4223,
+            "gpu_submit": 0.5997,
+            "gpu_wait": 0.2915,
+            "late_decoder": 1.0431,
+            "late_field": 0.4395,
+            "session_process": 4.8116,
+            "voice_batch": 1.6019,
+            "voice_render": 6.7692,
+            "worker_execution": 3.2035,
+            "worker_roundtrip": 3.2435
+          },
+          "gpu": [
+            {
+              "index": 1222.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0533,
+              "submit_ms": 0.2917,
+              "cpu_overlap_ms": 0.7786,
+              "wait_ms": 0.2417,
+              "gpu_upload_ms": 0.147648,
+              "gpu_response_ms": 0.748864,
+              "gpu_response_ifft_ms": 0.035776,
+              "gpu_pack_ms": 0.052032,
+              "gpu_target_fft_ms": 0.057856,
+              "gpu_install_input_ms": 0.049056,
+              "gpu_convolve_ms": 0.099456,
+              "gpu_output_ifft_ms": 0.01248,
+              "gpu_mix_ms": 0.009888,
+              "gpu_readback_ms": 0.040928
+            },
+            {
+              "index": 1223.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0362,
+              "submit_ms": 0.2163,
+              "cpu_overlap_ms": 0.5198,
+              "wait_ms": 0.0061,
+              "gpu_upload_ms": 0.076192,
+              "gpu_response_ms": 0.083232,
+              "gpu_response_ifft_ms": 0.012544,
+              "gpu_pack_ms": 0.029056,
+              "gpu_target_fft_ms": 0.030144,
+              "gpu_install_input_ms": 0.02832,
+              "gpu_convolve_ms": 0.100672,
+              "gpu_output_ifft_ms": 0.011744,
+              "gpu_mix_ms": 0.00976,
+              "gpu_readback_ms": 0.040384
+            }
+          ]
+        },
+        {
+          "block": 933,
+          "wall_ms": 4.7917000000000005,
+          "stages": {
+            "canonical_block": 3.1899,
+            "gpu_submit": 0.4127,
+            "gpu_wait": 1.1258,
+            "late_decoder": 0.8671,
+            "late_field": 0.3111,
+            "session_process": 4.791,
+            "voice_batch": 0.9316,
+            "voice_render": 3.1194,
+            "worker_execution": 2.9616,
+            "worker_roundtrip": 3.0262
+          },
+          "gpu": [
+            {
+              "index": 1930.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0477,
+              "submit_ms": 0.1857,
+              "cpu_overlap_ms": 0.6549,
+              "wait_ms": 1.0242,
+              "gpu_upload_ms": 0.067008,
+              "gpu_response_ms": 1.18346,
+              "gpu_response_ifft_ms": 0.036384,
+              "gpu_pack_ms": 0.286016,
+              "gpu_target_fft_ms": 0.05776,
+              "gpu_install_input_ms": 0.049216,
+              "gpu_convolve_ms": 0.100064,
+              "gpu_output_ifft_ms": 0.012832,
+              "gpu_mix_ms": 0.010112,
+              "gpu_readback_ms": 0.02976
+            },
+            {
+              "index": 1931.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0283,
+              "submit_ms": 0.1496,
+              "cpu_overlap_ms": 0.238,
+              "wait_ms": 0.0586,
+              "gpu_upload_ms": 0.055744,
+              "gpu_response_ms": 0.091296,
+              "gpu_response_ifft_ms": 0.013696,
+              "gpu_pack_ms": 0.029024,
+              "gpu_target_fft_ms": 0.034144,
+              "gpu_install_input_ms": 0.028832,
+              "gpu_convolve_ms": 0.10112,
+              "gpu_output_ifft_ms": 0.011712,
+              "gpu_mix_ms": 0.01008,
+              "gpu_readback_ms": 0.04448
+            }
+          ]
+        },
+        {
+          "block": 599,
+          "wall_ms": 4.6997,
+          "stages": {
+            "canonical_block": 3.1616,
+            "gpu_submit": 0.4196,
+            "gpu_wait": 0.3593,
+            "late_decoder": 0.8675,
+            "late_field": 0.4254,
+            "session_process": 4.699,
+            "voice_batch": 1.4785,
+            "voice_render": 6.8734,
+            "worker_execution": 2.9335,
+            "worker_roundtrip": 2.9747
+          },
+          "gpu": [
+            {
+              "index": 1262.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0505,
+              "submit_ms": 0.1684,
+              "cpu_overlap_ms": 0.666,
+              "wait_ms": 0.3088,
+              "gpu_upload_ms": 0.061472,
+              "gpu_response_ms": 0.694528,
+              "gpu_response_ifft_ms": 0.035552,
+              "gpu_pack_ms": 0.051968,
+              "gpu_target_fft_ms": 0.05872,
+              "gpu_install_input_ms": 0.048352,
+              "gpu_convolve_ms": 0.09936,
+              "gpu_output_ifft_ms": 0.012224,
+              "gpu_mix_ms": 0.009984,
+              "gpu_readback_ms": 0.037728
+            },
+            {
+              "index": 1263.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0345,
+              "submit_ms": 0.1647,
+              "cpu_overlap_ms": 0.4173,
+              "wait_ms": 0.0041,
+              "gpu_upload_ms": 0.057024,
+              "gpu_response_ms": 0.093376,
+              "gpu_response_ifft_ms": 0.012864,
+              "gpu_pack_ms": 0.028448,
+              "gpu_target_fft_ms": 0.031424,
+              "gpu_install_input_ms": 0.027872,
+              "gpu_convolve_ms": 0.10032,
+              "gpu_output_ifft_ms": 0.012352,
+              "gpu_mix_ms": 0.009824,
+              "gpu_readback_ms": 0.038144
+            }
+          ]
+        },
+        {
+          "block": 591,
+          "wall_ms": 4.6868,
+          "stages": {
+            "canonical_block": 3.4614,
+            "gpu_submit": 0.5417,
+            "gpu_wait": 0.3862,
+            "late_decoder": 0.9385,
+            "late_field": 0.4532,
+            "session_process": 4.686,
+            "voice_batch": 1.6032,
+            "voice_render": 6.9988,
+            "worker_execution": 3.2469,
+            "worker_roundtrip": 3.2892
+          },
+          "gpu": [
+            {
+              "index": 1246.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.048,
+              "submit_ms": 0.2186,
+              "cpu_overlap_ms": 0.6914,
+              "wait_ms": 0.3296,
+              "gpu_upload_ms": 0.088736,
+              "gpu_response_ms": 0.739104,
+              "gpu_response_ifft_ms": 0.048096,
+              "gpu_pack_ms": 0.052384,
+              "gpu_target_fft_ms": 0.059104,
+              "gpu_install_input_ms": 0.048384,
+              "gpu_convolve_ms": 0.099712,
+              "gpu_output_ifft_ms": 0.012672,
+              "gpu_mix_ms": 0.010048,
+              "gpu_readback_ms": 0.04672
+            },
+            {
+              "index": 1247.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0404,
+              "submit_ms": 0.233,
+              "cpu_overlap_ms": 0.5535,
+              "wait_ms": 0.0057,
+              "gpu_upload_ms": 0.092832,
+              "gpu_response_ms": 0.0848,
+              "gpu_response_ifft_ms": 0.017376,
+              "gpu_pack_ms": 0.02992,
+              "gpu_target_fft_ms": 0.030496,
+              "gpu_install_input_ms": 0.028192,
+              "gpu_convolve_ms": 0.10112,
+              "gpu_output_ifft_ms": 0.01232,
+              "gpu_mix_ms": 0.009952,
+              "gpu_readback_ms": 0.090336
+            }
+          ]
+        },
+        {
+          "block": 879,
+          "wall_ms": 4.6469,
+          "stages": {
+            "canonical_block": 3.1555,
+            "gpu_submit": 0.5383,
+            "gpu_wait": 0.4597,
+            "late_decoder": 0.7659,
+            "late_field": 0.3139,
+            "session_process": 4.6464,
+            "voice_batch": 1.453,
+            "voice_render": 5.9787,
+            "worker_execution": 2.9482,
+            "worker_roundtrip": 2.9894
+          },
+          "gpu": [
+            {
+              "index": 1822.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0445,
+              "submit_ms": 0.2683,
+              "cpu_overlap_ms": 0.6048,
+              "wait_ms": 0.413,
+              "gpu_upload_ms": 0.166464,
+              "gpu_response_ms": 0.741088,
+              "gpu_response_ifft_ms": 0.036256,
+              "gpu_pack_ms": 0.051808,
+              "gpu_target_fft_ms": 0.058432,
+              "gpu_install_input_ms": 0.048704,
+              "gpu_convolve_ms": 0.099104,
+              "gpu_output_ifft_ms": 0.012128,
+              "gpu_mix_ms": 0.009952,
+              "gpu_readback_ms": 0.036
+            },
+            {
+              "index": 1823.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0295,
+              "submit_ms": 0.1947,
+              "cpu_overlap_ms": 0.4195,
+              "wait_ms": 0.0044,
+              "gpu_upload_ms": 0.061344,
+              "gpu_response_ms": 0.10016,
+              "gpu_response_ifft_ms": 0.013056,
+              "gpu_pack_ms": 0.028832,
+              "gpu_target_fft_ms": 0.029856,
+              "gpu_install_input_ms": 0.027616,
+              "gpu_convolve_ms": 0.100608,
+              "gpu_output_ifft_ms": 0.01216,
+              "gpu_mix_ms": 0.009696,
+              "gpu_readback_ms": 0.05232
+            }
+          ]
+        },
+        {
+          "block": 495,
+          "wall_ms": 4.6122000000000005,
+          "stages": {
+            "canonical_block": 3.5504,
+            "gpu_submit": 0.7221,
+            "gpu_wait": 0.2948,
+            "late_decoder": 0.9825,
+            "late_field": 0.3758,
+            "session_process": 4.6115,
+            "voice_batch": 1.6755,
+            "voice_render": 6.4318,
+            "worker_execution": 3.3674,
+            "worker_roundtrip": 3.3981
+          },
+          "gpu": [
+            {
+              "index": 1054.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0462,
+              "submit_ms": 0.1331,
+              "cpu_overlap_ms": 0.8095,
+              "wait_ms": 0.242,
+              "gpu_upload_ms": 0.05904,
+              "gpu_response_ms": 0.746368,
+              "gpu_response_ifft_ms": 0.03568,
+              "gpu_pack_ms": 0.05152,
+              "gpu_target_fft_ms": 0.058816,
+              "gpu_install_input_ms": 0.04848,
+              "gpu_convolve_ms": 0.099936,
+              "gpu_output_ifft_ms": 0.012224,
+              "gpu_mix_ms": 0.009984,
+              "gpu_readback_ms": 0.024992
+            },
+            {
+              "index": 1055.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0617,
+              "submit_ms": 0.4793,
+              "cpu_overlap_ms": 0.5885,
+              "wait_ms": 0.0053,
+              "gpu_upload_ms": 0.205184,
+              "gpu_response_ms": 0.106336,
+              "gpu_response_ifft_ms": 0.01328,
+              "gpu_pack_ms": 0.029152,
+              "gpu_target_fft_ms": 0.030272,
+              "gpu_install_input_ms": 0.028096,
+              "gpu_convolve_ms": 0.101024,
+              "gpu_output_ifft_ms": 0.011968,
+              "gpu_mix_ms": 0.009536,
+              "gpu_readback_ms": 0.04112
+            }
+          ]
+        },
+        {
+          "block": 647,
+          "wall_ms": 4.5629,
+          "stages": {
+            "canonical_block": 3.2598,
+            "gpu_submit": 0.6232,
+            "gpu_wait": 0.2341,
+            "late_decoder": 1.0097,
+            "late_field": 0.4036,
+            "session_process": 4.5623,
+            "voice_batch": 1.5513,
+            "voice_render": 5.9812,
+            "worker_execution": 3.0599,
+            "worker_roundtrip": 3.1021
+          },
+          "gpu": [
+            {
+              "index": 1358.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0444,
+              "submit_ms": 0.2575,
+              "cpu_overlap_ms": 0.7665,
+              "wait_ms": 0.1688,
+              "gpu_upload_ms": 0.108832,
+              "gpu_response_ms": 0.694688,
+              "gpu_response_ifft_ms": 0.035904,
+              "gpu_pack_ms": 0.051712,
+              "gpu_target_fft_ms": 0.064672,
+              "gpu_install_input_ms": 0.048736,
+              "gpu_convolve_ms": 0.099232,
+              "gpu_output_ifft_ms": 0.012672,
+              "gpu_mix_ms": 0.010688,
+              "gpu_readback_ms": 0.032448
+            },
+            {
+              "index": 1359.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0505,
+              "submit_ms": 0.269,
+              "cpu_overlap_ms": 0.4965,
+              "wait_ms": 0.0052,
+              "gpu_upload_ms": 0.101504,
+              "gpu_response_ms": 0.08112,
+              "gpu_response_ifft_ms": 0.024384,
+              "gpu_pack_ms": 0.028576,
+              "gpu_target_fft_ms": 0.030496,
+              "gpu_install_input_ms": 0.032704,
+              "gpu_convolve_ms": 0.100928,
+              "gpu_output_ifft_ms": 0.012,
+              "gpu_mix_ms": 0.009568,
+              "gpu_readback_ms": 0.048288
+            }
+          ]
+        },
+        {
+          "block": 63,
+          "wall_ms": 4.5568,
+          "stages": {
+            "canonical_block": 3.0858,
+            "gpu_submit": 0.4567,
+            "gpu_wait": 0.3233,
+            "late_decoder": 0.9408,
+            "late_field": 0.3904,
+            "session_process": 4.556,
+            "voice_batch": 1.385,
+            "voice_render": 6.1469,
+            "worker_execution": 2.869,
+            "worker_roundtrip": 2.9054
+          },
+          "gpu": [
+            {
+              "index": 190.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0443,
+              "submit_ms": 0.1882,
+              "cpu_overlap_ms": 0.7259,
+              "wait_ms": 0.2747,
+              "gpu_upload_ms": 0.09248,
+              "gpu_response_ms": 0.698816,
+              "gpu_response_ifft_ms": 0.037056,
+              "gpu_pack_ms": 0.056192,
+              "gpu_target_fft_ms": 0.058752,
+              "gpu_install_input_ms": 0.050368,
+              "gpu_convolve_ms": 0.100416,
+              "gpu_output_ifft_ms": 0.013696,
+              "gpu_mix_ms": 0.011072,
+              "gpu_readback_ms": 0.037472
+            },
+            {
+              "index": 191.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0346,
+              "submit_ms": 0.188,
+              "cpu_overlap_ms": 0.4239,
+              "wait_ms": 0.0052,
+              "gpu_upload_ms": 0.090944,
+              "gpu_response_ms": 0.084704,
+              "gpu_response_ifft_ms": 0.014656,
+              "gpu_pack_ms": 0.032192,
+              "gpu_target_fft_ms": 0.029984,
+              "gpu_install_input_ms": 0.0296,
+              "gpu_convolve_ms": 0.101184,
+              "gpu_output_ifft_ms": 0.01344,
+              "gpu_mix_ms": 0.010784,
+              "gpu_readback_ms": 0.049184
+            }
+          ]
+        },
+        {
+          "block": 743,
+          "wall_ms": 4.5275,
+          "stages": {
+            "canonical_block": 3.3541,
+            "gpu_submit": 0.5077,
+            "gpu_wait": 0.4874,
+            "late_decoder": 0.838,
+            "late_field": 0.3828,
+            "session_process": 4.5268,
+            "voice_batch": 1.4408,
+            "voice_render": 5.5344,
+            "worker_execution": 3.1604,
+            "worker_roundtrip": 3.2068
+          },
+          "gpu": [
+            {
+              "index": 1550.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0599,
+              "submit_ms": 0.1499,
+              "cpu_overlap_ms": 0.5887,
+              "wait_ms": 0.4241,
+              "gpu_upload_ms": 0.065824,
+              "gpu_response_ms": 0.705664,
+              "gpu_response_ifft_ms": 0.035744,
+              "gpu_pack_ms": 0.06512,
+              "gpu_target_fft_ms": 0.0584,
+              "gpu_install_input_ms": 0.061024,
+              "gpu_convolve_ms": 0.099264,
+              "gpu_output_ifft_ms": 0.012288,
+              "gpu_mix_ms": 0.010048,
+              "gpu_readback_ms": 0.02512
+            },
+            {
+              "index": 1551.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0263,
+              "submit_ms": 0.2703,
+              "cpu_overlap_ms": 0.633,
+              "wait_ms": 0.0055,
+              "gpu_upload_ms": 0.171392,
+              "gpu_response_ms": 0.080736,
+              "gpu_response_ifft_ms": 0.012992,
+              "gpu_pack_ms": 0.028864,
+              "gpu_target_fft_ms": 0.030272,
+              "gpu_install_input_ms": 0.027872,
+              "gpu_convolve_ms": 0.100288,
+              "gpu_output_ifft_ms": 0.011648,
+              "gpu_mix_ms": 0.009536,
+              "gpu_readback_ms": 0.046432
+            }
+          ]
+        },
+        {
+          "block": 731,
+          "wall_ms": 4.523499999999999,
+          "stages": {
+            "canonical_block": 2.9746,
+            "gpu_submit": 0.4404,
+            "gpu_wait": 0.4464,
+            "late_decoder": 0.7613,
+            "late_field": 0.3289,
+            "session_process": 4.5224,
+            "voice_batch": 1.3854,
+            "voice_render": 5.8624,
+            "worker_execution": 2.7823,
+            "worker_roundtrip": 2.8269
+          },
+          "gpu": [
+            {
+              "index": 1526.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0425,
+              "submit_ms": 0.2244,
+              "cpu_overlap_ms": 0.5724,
+              "wait_ms": 0.3915,
+              "gpu_upload_ms": 0.122784,
+              "gpu_response_ms": 0.69264,
+              "gpu_response_ifft_ms": 0.03584,
+              "gpu_pack_ms": 0.051968,
+              "gpu_target_fft_ms": 0.05872,
+              "gpu_install_input_ms": 0.048768,
+              "gpu_convolve_ms": 0.099488,
+              "gpu_output_ifft_ms": 0.01216,
+              "gpu_mix_ms": 0.010016,
+              "gpu_readback_ms": 0.030112
+            },
+            {
+              "index": 1527.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0255,
+              "submit_ms": 0.1465,
+              "cpu_overlap_ms": 0.3666,
+              "wait_ms": 0.0043,
+              "gpu_upload_ms": 0.049088,
+              "gpu_response_ms": 0.095744,
+              "gpu_response_ifft_ms": 0.01296,
+              "gpu_pack_ms": 0.028864,
+              "gpu_target_fft_ms": 0.03008,
+              "gpu_install_input_ms": 0.027776,
+              "gpu_convolve_ms": 0.100384,
+              "gpu_output_ifft_ms": 0.011744,
+              "gpu_mix_ms": 0.00992,
+              "gpu_readback_ms": 0.03856
+            }
+          ]
+        },
+        {
+          "block": 767,
+          "wall_ms": 4.5217,
+          "stages": {
+            "canonical_block": 2.9873,
+            "gpu_submit": 0.4479,
+            "gpu_wait": 0.4278,
+            "late_decoder": 0.7923,
+            "late_field": 0.2998,
+            "session_process": 4.5213,
+            "voice_batch": 1.3165,
+            "voice_render": 5.7121,
+            "worker_execution": 2.7993,
+            "worker_roundtrip": 2.8445
+          },
+          "gpu": [
+            {
+              "index": 1598.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0478,
+              "submit_ms": 0.1702,
+              "cpu_overlap_ms": 0.5982,
+              "wait_ms": 0.3808,
+              "gpu_upload_ms": 0.05872,
+              "gpu_response_ms": 0.71184,
+              "gpu_response_ifft_ms": 0.03584,
+              "gpu_pack_ms": 0.05216,
+              "gpu_target_fft_ms": 0.058656,
+              "gpu_install_input_ms": 0.0488,
+              "gpu_convolve_ms": 0.099264,
+              "gpu_output_ifft_ms": 0.012704,
+              "gpu_mix_ms": 0.010112,
+              "gpu_readback_ms": 0.034304
+            },
+            {
+              "index": 1599.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0294,
+              "submit_ms": 0.1989,
+              "cpu_overlap_ms": 0.4439,
+              "wait_ms": 0.0045,
+              "gpu_upload_ms": 0.086912,
+              "gpu_response_ms": 0.082848,
+              "gpu_response_ifft_ms": 0.013024,
+              "gpu_pack_ms": 0.028288,
+              "gpu_target_fft_ms": 0.030432,
+              "gpu_install_input_ms": 0.027968,
+              "gpu_convolve_ms": 0.101056,
+              "gpu_output_ifft_ms": 0.012448,
+              "gpu_mix_ms": 0.009728,
+              "gpu_readback_ms": 0.033824
+            }
+          ]
+        },
+        {
+          "block": 91,
+          "wall_ms": 4.4672,
+          "stages": {
+            "canonical_block": 3.0989,
+            "gpu_submit": 0.4374,
+            "gpu_wait": 0.4783,
+            "late_decoder": 0.8044,
+            "late_field": 0.3567,
+            "session_process": 4.4664,
+            "voice_batch": 1.3922,
+            "voice_render": 6.3959,
+            "worker_execution": 2.8799,
+            "worker_roundtrip": 2.9218
+          },
+          "gpu": [
+            {
+              "index": 246.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0513,
+              "submit_ms": 0.1905,
+              "cpu_overlap_ms": 0.6191,
+              "wait_ms": 0.4315,
+              "gpu_upload_ms": 0.09312,
+              "gpu_response_ms": 0.740608,
+              "gpu_response_ifft_ms": 0.040768,
+              "gpu_pack_ms": 0.05568,
+              "gpu_target_fft_ms": 0.066528,
+              "gpu_install_input_ms": 0.050432,
+              "gpu_convolve_ms": 0.100352,
+              "gpu_output_ifft_ms": 0.013696,
+              "gpu_mix_ms": 0.011328,
+              "gpu_readback_ms": 0.037056
+            },
+            {
+              "index": 247.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0309,
+              "submit_ms": 0.1635,
+              "cpu_overlap_ms": 0.3794,
+              "wait_ms": 0.0033,
+              "gpu_upload_ms": 0.04896,
+              "gpu_response_ms": 0.090912,
+              "gpu_response_ifft_ms": 0.014336,
+              "gpu_pack_ms": 0.031712,
+              "gpu_target_fft_ms": 0.03136,
+              "gpu_install_input_ms": 0.028608,
+              "gpu_convolve_ms": 0.101312,
+              "gpu_output_ifft_ms": 0.012544,
+              "gpu_mix_ms": 0.010752,
+              "gpu_readback_ms": 0.041888
+            }
+          ]
+        },
+        {
+          "block": 115,
+          "wall_ms": 4.4508,
+          "stages": {
+            "canonical_block": 3.2587,
+            "gpu_submit": 0.4233,
+            "gpu_wait": 0.4505,
+            "late_decoder": 0.8456,
+            "late_field": 0.3724,
+            "session_process": 4.4502,
+            "voice_batch": 1.5346,
+            "voice_render": 6.4053,
+            "worker_execution": 3.0591,
+            "worker_roundtrip": 3.102
+          },
+          "gpu": [
+            {
+              "index": 294.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.067,
+              "submit_ms": 0.151,
+              "cpu_overlap_ms": 0.6547,
+              "wait_ms": 0.4044,
+              "gpu_upload_ms": 0.062912,
+              "gpu_response_ms": 0.721472,
+              "gpu_response_ifft_ms": 0.036416,
+              "gpu_pack_ms": 0.055904,
+              "gpu_target_fft_ms": 0.059168,
+              "gpu_install_input_ms": 0.05088,
+              "gpu_convolve_ms": 0.110976,
+              "gpu_output_ifft_ms": 0.01424,
+              "gpu_mix_ms": 0.011328,
+              "gpu_readback_ms": 0.057024
+            },
+            {
+              "index": 295.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0315,
+              "submit_ms": 0.1724,
+              "cpu_overlap_ms": 0.389,
+              "wait_ms": 0.0039,
+              "gpu_upload_ms": 0.07168,
+              "gpu_response_ms": 0.090656,
+              "gpu_response_ifft_ms": 0.014112,
+              "gpu_pack_ms": 0.031904,
+              "gpu_target_fft_ms": 0.02992,
+              "gpu_install_input_ms": 0.029248,
+              "gpu_convolve_ms": 0.10144,
+              "gpu_output_ifft_ms": 0.012576,
+              "gpu_mix_ms": 0.011104,
+              "gpu_readback_ms": 0.046144
+            }
+          ]
+        },
+        {
+          "block": 111,
+          "wall_ms": 4.4363,
+          "stages": {
+            "canonical_block": 3.2805,
+            "gpu_submit": 0.5548,
+            "gpu_wait": 0.3927,
+            "late_decoder": 0.9047,
+            "late_field": 0.3574,
+            "session_process": 4.4357,
+            "voice_batch": 1.5236,
+            "voice_render": 6.166,
+            "worker_execution": 3.0861,
+            "worker_roundtrip": 3.1279
+          },
+          "gpu": [
+            {
+              "index": 286.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0778,
+              "submit_ms": 0.2008,
+              "cpu_overlap_ms": 0.6648,
+              "wait_ms": 0.3326,
+              "gpu_upload_ms": 0.105472,
+              "gpu_response_ms": 0.68384,
+              "gpu_response_ifft_ms": 0.036928,
+              "gpu_pack_ms": 0.056032,
+              "gpu_target_fft_ms": 0.064864,
+              "gpu_install_input_ms": 0.049824,
+              "gpu_convolve_ms": 0.099872,
+              "gpu_output_ifft_ms": 0.013152,
+              "gpu_mix_ms": 0.011008,
+              "gpu_readback_ms": 0.049792
+            },
+            {
+              "index": 287.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0509,
+              "submit_ms": 0.2237,
+              "cpu_overlap_ms": 0.4922,
+              "wait_ms": 0.0037,
+              "gpu_upload_ms": 0.098848,
+              "gpu_response_ms": 0.076384,
+              "gpu_response_ifft_ms": 0.014368,
+              "gpu_pack_ms": 0.032128,
+              "gpu_target_fft_ms": 0.030944,
+              "gpu_install_input_ms": 0.02896,
+              "gpu_convolve_ms": 0.100992,
+              "gpu_output_ifft_ms": 0.013248,
+              "gpu_mix_ms": 0.011072,
+              "gpu_readback_ms": 0.046688
+            }
+          ]
+        },
+        {
+          "block": 727,
+          "wall_ms": 4.4341,
+          "stages": {
+            "canonical_block": 2.8992,
+            "gpu_submit": 0.399,
+            "gpu_wait": 0.4245,
+            "late_decoder": 0.7826,
+            "late_field": 0.2771,
+            "session_process": 4.4336,
+            "voice_batch": 1.2981,
+            "voice_render": 6.0561,
+            "worker_execution": 2.7002,
+            "worker_roundtrip": 2.748
+          },
+          "gpu": [
+            {
+              "index": 1518.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0429,
+              "submit_ms": 0.1675,
+              "cpu_overlap_ms": 0.578,
+              "wait_ms": 0.3819,
+              "gpu_upload_ms": 0.0576,
+              "gpu_response_ms": 0.683904,
+              "gpu_response_ifft_ms": 0.036448,
+              "gpu_pack_ms": 0.051616,
+              "gpu_target_fft_ms": 0.05808,
+              "gpu_install_input_ms": 0.049184,
+              "gpu_convolve_ms": 0.099392,
+              "gpu_output_ifft_ms": 0.012512,
+              "gpu_mix_ms": 0.009952,
+              "gpu_readback_ms": 0.0424
+            },
+            {
+              "index": 1519.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0277,
+              "submit_ms": 0.1593,
+              "cpu_overlap_ms": 0.389,
+              "wait_ms": 0.0039,
+              "gpu_upload_ms": 0.06592,
+              "gpu_response_ms": 0.102912,
+              "gpu_response_ifft_ms": 0.013088,
+              "gpu_pack_ms": 0.028768,
+              "gpu_target_fft_ms": 0.035456,
+              "gpu_install_input_ms": 0.03264,
+              "gpu_convolve_ms": 0.108032,
+              "gpu_output_ifft_ms": 0.011936,
+              "gpu_mix_ms": 0.009824,
+              "gpu_readback_ms": 0.039968
+            }
+          ]
+        },
+        {
+          "block": 55,
+          "wall_ms": 4.4308000000000005,
+          "stages": {
+            "canonical_block": 3.349,
+            "gpu_submit": 0.4576,
+            "gpu_wait": 0.4498,
+            "late_decoder": 0.8919,
+            "late_field": 0.3392,
+            "session_process": 4.4301,
+            "voice_batch": 1.4205,
+            "voice_render": 5.8668,
+            "worker_execution": 3.1787,
+            "worker_roundtrip": 3.2153
+          },
+          "gpu": [
+            {
+              "index": 174.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0409,
+              "submit_ms": 0.1567,
+              "cpu_overlap_ms": 0.6307,
+              "wait_ms": 0.4069,
+              "gpu_upload_ms": 0.05888,
+              "gpu_response_ms": 0.727264,
+              "gpu_response_ifft_ms": 0.037568,
+              "gpu_pack_ms": 0.056544,
+              "gpu_target_fft_ms": 0.059296,
+              "gpu_install_input_ms": 0.05056,
+              "gpu_convolve_ms": 0.1,
+              "gpu_output_ifft_ms": 0.013632,
+              "gpu_mix_ms": 0.01136,
+              "gpu_readback_ms": 0.037408
+            },
+            {
+              "index": 175.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0265,
+              "submit_ms": 0.2321,
+              "cpu_overlap_ms": 0.6676,
+              "wait_ms": 0.0044,
+              "gpu_upload_ms": 0.130816,
+              "gpu_response_ms": 0.084576,
+              "gpu_response_ifft_ms": 0.014464,
+              "gpu_pack_ms": 0.032672,
+              "gpu_target_fft_ms": 0.03168,
+              "gpu_install_input_ms": 0.0296,
+              "gpu_convolve_ms": 0.101152,
+              "gpu_output_ifft_ms": 0.013696,
+              "gpu_mix_ms": 0.011136,
+              "gpu_readback_ms": 0.039168
+            }
+          ]
+        },
+        {
+          "block": 660,
+          "wall_ms": 4.4145,
+          "stages": {
+            "canonical_block": 2.8046,
+            "gpu_submit": 0.5362,
+            "gpu_wait": 0.374,
+            "late_decoder": 0.9481,
+            "late_field": 0.4722,
+            "session_process": 4.4139,
+            "voice_batch": 1.1563,
+            "voice_render": 2.9741,
+            "worker_execution": 2.6051,
+            "worker_roundtrip": 2.652
+          },
+          "gpu": [
+            {
+              "index": 1384.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0427,
+              "submit_ms": 0.2455,
+              "cpu_overlap_ms": 0.6884,
+              "wait_ms": 0.335,
+              "gpu_upload_ms": 0.131968,
+              "gpu_response_ms": 0.692512,
+              "gpu_response_ifft_ms": 0.05728,
+              "gpu_pack_ms": 0.052576,
+              "gpu_target_fft_ms": 0.070752,
+              "gpu_install_input_ms": 0.059392,
+              "gpu_convolve_ms": 0.107648,
+              "gpu_output_ifft_ms": 0.013184,
+              "gpu_mix_ms": 0.010144,
+              "gpu_readback_ms": 0.033472
+            },
+            {
+              "index": 1385.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0238,
+              "submit_ms": 0.2229,
+              "cpu_overlap_ms": 0.377,
+              "wait_ms": 0.0051,
+              "gpu_upload_ms": 0.124,
+              "gpu_response_ms": 0.083872,
+              "gpu_response_ifft_ms": 0.01296,
+              "gpu_pack_ms": 0.028992,
+              "gpu_target_fft_ms": 0.030528,
+              "gpu_install_input_ms": 0.028352,
+              "gpu_convolve_ms": 0.100448,
+              "gpu_output_ifft_ms": 0.011648,
+              "gpu_mix_ms": 0.01024,
+              "gpu_readback_ms": 0.0424
+            }
+          ]
+        },
+        {
+          "block": 503,
+          "wall_ms": 4.397200000000001,
+          "stages": {
+            "canonical_block": 3.14,
+            "gpu_submit": 0.4355,
+            "gpu_wait": 0.5038,
+            "late_decoder": 0.7679,
+            "late_field": 0.3187,
+            "session_process": 4.3967,
+            "voice_batch": 1.4134,
+            "voice_render": 6.3244,
+            "worker_execution": 2.9589,
+            "worker_roundtrip": 2.9985
+          },
+          "gpu": [
+            {
+              "index": 1070.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0446,
+              "submit_ms": 0.1575,
+              "cpu_overlap_ms": 0.561,
+              "wait_ms": 0.4574,
+              "gpu_upload_ms": 0.056416,
+              "gpu_response_ms": 0.743488,
+              "gpu_response_ifft_ms": 0.035904,
+              "gpu_pack_ms": 0.051744,
+              "gpu_target_fft_ms": 0.058272,
+              "gpu_install_input_ms": 0.048704,
+              "gpu_convolve_ms": 0.09968,
+              "gpu_output_ifft_ms": 0.012544,
+              "gpu_mix_ms": 0.010112,
+              "gpu_readback_ms": 0.033952
+            },
+            {
+              "index": 1071.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0349,
+              "submit_ms": 0.1973,
+              "cpu_overlap_ms": 0.467,
+              "wait_ms": 0.0037,
+              "gpu_upload_ms": 0.08176,
+              "gpu_response_ms": 0.08512,
+              "gpu_response_ifft_ms": 0.012864,
+              "gpu_pack_ms": 0.028288,
+              "gpu_target_fft_ms": 0.030176,
+              "gpu_install_input_ms": 0.027648,
+              "gpu_convolve_ms": 0.10112,
+              "gpu_output_ifft_ms": 0.012032,
+              "gpu_mix_ms": 0.009856,
+              "gpu_readback_ms": 0.0344
+            }
+          ]
+        },
+        {
+          "block": 51,
+          "wall_ms": 4.3875,
+          "stages": {
+            "canonical_block": 3.0212,
+            "gpu_submit": 0.4322,
+            "gpu_wait": 0.3934,
+            "late_decoder": 0.8417,
+            "late_field": 0.3504,
+            "session_process": 4.387,
+            "voice_batch": 1.3485,
+            "voice_render": 6.0436,
+            "worker_execution": 2.8134,
+            "worker_roundtrip": 2.8514
+          },
+          "gpu": [
+            {
+              "index": 166.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0489,
+              "submit_ms": 0.19,
+              "cpu_overlap_ms": 0.6474,
+              "wait_ms": 0.3466,
+              "gpu_upload_ms": 0.081984,
+              "gpu_response_ms": 0.698336,
+              "gpu_response_ifft_ms": 0.036928,
+              "gpu_pack_ms": 0.056448,
+              "gpu_target_fft_ms": 0.059104,
+              "gpu_install_input_ms": 0.050624,
+              "gpu_convolve_ms": 0.100576,
+              "gpu_output_ifft_ms": 0.01376,
+              "gpu_mix_ms": 0.01136,
+              "gpu_readback_ms": 0.046784
+            },
+            {
+              "index": 167.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0282,
+              "submit_ms": 0.1637,
+              "cpu_overlap_ms": 0.4134,
+              "wait_ms": 0.0041,
+              "gpu_upload_ms": 0.052256,
+              "gpu_response_ms": 0.08624,
+              "gpu_response_ifft_ms": 0.014112,
+              "gpu_pack_ms": 0.032352,
+              "gpu_target_fft_ms": 0.030784,
+              "gpu_install_input_ms": 0.029472,
+              "gpu_convolve_ms": 0.10032,
+              "gpu_output_ifft_ms": 0.013056,
+              "gpu_mix_ms": 0.010912,
+              "gpu_readback_ms": 0.034208
+            }
+          ]
+        },
+        {
+          "block": 607,
+          "wall_ms": 4.3675,
+          "stages": {
+            "canonical_block": 3.2866,
+            "gpu_submit": 0.5617,
+            "gpu_wait": 0.3083,
+            "late_decoder": 0.9042,
+            "late_field": 0.3497,
+            "session_process": 4.3668,
+            "voice_batch": 1.6293,
+            "voice_render": 7.2173,
+            "worker_execution": 3.095,
+            "worker_roundtrip": 3.1343
+          },
+          "gpu": [
+            {
+              "index": 1278.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0516,
+              "submit_ms": 0.2538,
+              "cpu_overlap_ms": 0.7283,
+              "wait_ms": 0.2402,
+              "gpu_upload_ms": 0.135168,
+              "gpu_response_ms": 0.692352,
+              "gpu_response_ifft_ms": 0.03584,
+              "gpu_pack_ms": 0.05152,
+              "gpu_target_fft_ms": 0.058464,
+              "gpu_install_input_ms": 0.051264,
+              "gpu_convolve_ms": 0.108768,
+              "gpu_output_ifft_ms": 0.012448,
+              "gpu_mix_ms": 0.010112,
+              "gpu_readback_ms": 0.034688
+            },
+            {
+              "index": 1279.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0476,
+              "submit_ms": 0.2074,
+              "cpu_overlap_ms": 0.4171,
+              "wait_ms": 0.0033,
+              "gpu_upload_ms": 0.101952,
+              "gpu_response_ms": 0.087328,
+              "gpu_response_ifft_ms": 0.013024,
+              "gpu_pack_ms": 0.028128,
+              "gpu_target_fft_ms": 0.030656,
+              "gpu_install_input_ms": 0.028384,
+              "gpu_convolve_ms": 0.10064,
+              "gpu_output_ifft_ms": 0.01184,
+              "gpu_mix_ms": 0.009632,
+              "gpu_readback_ms": 0.034944
+            }
+          ]
+        },
+        {
+          "block": 79,
+          "wall_ms": 4.3649,
+          "stages": {
+            "canonical_block": 3.1362,
+            "gpu_submit": 0.4496,
+            "gpu_wait": 0.4173,
+            "late_decoder": 0.831,
+            "late_field": 0.358,
+            "session_process": 4.3643,
+            "voice_batch": 1.4543,
+            "voice_render": 6.4964,
+            "worker_execution": 2.928,
+            "worker_roundtrip": 2.9651
+          },
+          "gpu": [
+            {
+              "index": 222.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0462,
+              "submit_ms": 0.1499,
+              "cpu_overlap_ms": 0.6422,
+              "wait_ms": 0.3696,
+              "gpu_upload_ms": 0.059648,
+              "gpu_response_ms": 0.701408,
+              "gpu_response_ifft_ms": 0.037184,
+              "gpu_pack_ms": 0.05536,
+              "gpu_target_fft_ms": 0.059008,
+              "gpu_install_input_ms": 0.050464,
+              "gpu_convolve_ms": 0.100256,
+              "gpu_output_ifft_ms": 0.013504,
+              "gpu_mix_ms": 0.011072,
+              "gpu_readback_ms": 0.046688
+            },
+            {
+              "index": 223.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0318,
+              "submit_ms": 0.2205,
+              "cpu_overlap_ms": 0.4042,
+              "wait_ms": 0.0042,
+              "gpu_upload_ms": 0.050464,
+              "gpu_response_ms": 0.160992,
+              "gpu_response_ifft_ms": 0.013984,
+              "gpu_pack_ms": 0.031872,
+              "gpu_target_fft_ms": 0.03056,
+              "gpu_install_input_ms": 0.029024,
+              "gpu_convolve_ms": 0.101632,
+              "gpu_output_ifft_ms": 0.012768,
+              "gpu_mix_ms": 0.01072,
+              "gpu_readback_ms": 0.053216
+            }
+          ]
+        },
+        {
+          "block": 151,
+          "wall_ms": 4.3575,
+          "stages": {
+            "canonical_block": 3.1811,
+            "gpu_submit": 0.439,
+            "gpu_wait": 0.4809,
+            "late_decoder": 0.7829,
+            "late_field": 0.3021,
+            "session_process": 4.3568,
+            "voice_batch": 1.464,
+            "voice_render": 6.2126,
+            "worker_execution": 3.001,
+            "worker_roundtrip": 3.0384
+          },
+          "gpu": [
+            {
+              "index": 366.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.043,
+              "submit_ms": 0.1499,
+              "cpu_overlap_ms": 0.58,
+              "wait_ms": 0.4311,
+              "gpu_upload_ms": 0.056608,
+              "gpu_response_ms": 0.7008,
+              "gpu_response_ifft_ms": 0.037056,
+              "gpu_pack_ms": 0.056768,
+              "gpu_target_fft_ms": 0.058752,
+              "gpu_install_input_ms": 0.050272,
+              "gpu_convolve_ms": 0.100224,
+              "gpu_output_ifft_ms": 0.0136,
+              "gpu_mix_ms": 0.011328,
+              "gpu_readback_ms": 0.048416
+            },
+            {
+              "index": 367.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0289,
+              "submit_ms": 0.2157,
+              "cpu_overlap_ms": 0.464,
+              "wait_ms": 0.0045,
+              "gpu_upload_ms": 0.107424,
+              "gpu_response_ms": 0.089696,
+              "gpu_response_ifft_ms": 0.014368,
+              "gpu_pack_ms": 0.031712,
+              "gpu_target_fft_ms": 0.036928,
+              "gpu_install_input_ms": 0.02896,
+              "gpu_convolve_ms": 0.101024,
+              "gpu_output_ifft_ms": 0.012544,
+              "gpu_mix_ms": 0.010976,
+              "gpu_readback_ms": 0.034144
+            }
+          ]
+        },
+        {
+          "block": 636,
+          "wall_ms": 4.3567,
+          "stages": {
+            "canonical_block": 2.7786,
+            "gpu_submit": 0.4737,
+            "gpu_wait": 0.6182,
+            "late_decoder": 0.8569,
+            "late_field": 0.3644,
+            "session_process": 4.3562,
+            "voice_batch": 1.0215,
+            "voice_render": 3.2863,
+            "worker_execution": 2.5802,
+            "worker_roundtrip": 2.6195
+          },
+          "gpu": [
+            {
+              "index": 1336.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0476,
+              "submit_ms": 0.2088,
+              "cpu_overlap_ms": 0.7175,
+              "wait_ms": 0.5251,
+              "gpu_upload_ms": 0.067008,
+              "gpu_response_ms": 0.776416,
+              "gpu_response_ifft_ms": 0.035424,
+              "gpu_pack_ms": 0.051584,
+              "gpu_target_fft_ms": 0.058208,
+              "gpu_install_input_ms": 0.04928,
+              "gpu_convolve_ms": 0.099808,
+              "gpu_output_ifft_ms": 0.195936,
+              "gpu_mix_ms": 0.01024,
+              "gpu_readback_ms": 0.075296
+            },
+            {
+              "index": 1337.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0294,
+              "submit_ms": 0.1862,
+              "cpu_overlap_ms": 0.2095,
+              "wait_ms": 0.0473,
+              "gpu_upload_ms": 0.069568,
+              "gpu_response_ms": 0.087264,
+              "gpu_response_ifft_ms": 0.013088,
+              "gpu_pack_ms": 0.02912,
+              "gpu_target_fft_ms": 0.031104,
+              "gpu_install_input_ms": 0.02848,
+              "gpu_convolve_ms": 0.1008,
+              "gpu_output_ifft_ms": 0.012,
+              "gpu_mix_ms": 0.01008,
+              "gpu_readback_ms": 0.032928
+            }
+          ]
+        },
+        {
+          "block": 931,
+          "wall_ms": 4.3429,
+          "stages": {
+            "canonical_block": 3.1772,
+            "gpu_submit": 0.492,
+            "gpu_wait": 0.4009,
+            "late_decoder": 0.7891,
+            "late_field": 0.3135,
+            "session_process": 4.3424,
+            "voice_batch": 1.4195,
+            "voice_render": 6.2431,
+            "worker_execution": 2.9942,
+            "worker_roundtrip": 3.0345
+          },
+          "gpu": [
+            {
+              "index": 1926.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0464,
+              "submit_ms": 0.1847,
+              "cpu_overlap_ms": 0.6123,
+              "wait_ms": 0.3546,
+              "gpu_upload_ms": 0.079264,
+              "gpu_response_ms": 0.702272,
+              "gpu_response_ifft_ms": 0.036,
+              "gpu_pack_ms": 0.051776,
+              "gpu_target_fft_ms": 0.05776,
+              "gpu_install_input_ms": 0.048384,
+              "gpu_convolve_ms": 0.099424,
+              "gpu_output_ifft_ms": 0.012512,
+              "gpu_mix_ms": 0.010048,
+              "gpu_readback_ms": 0.026176
+            },
+            {
+              "index": 1927.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0287,
+              "submit_ms": 0.2307,
+              "cpu_overlap_ms": 0.5503,
+              "wait_ms": 0.0042,
+              "gpu_upload_ms": 0.127968,
+              "gpu_response_ms": 0.08096,
+              "gpu_response_ifft_ms": 0.01312,
+              "gpu_pack_ms": 0.029024,
+              "gpu_target_fft_ms": 0.030112,
+              "gpu_install_input_ms": 0.027904,
+              "gpu_convolve_ms": 0.100768,
+              "gpu_output_ifft_ms": 0.011872,
+              "gpu_mix_ms": 0.0096,
+              "gpu_readback_ms": 0.0408
+            }
+          ]
+        },
+        {
+          "block": 770,
+          "wall_ms": 4.3257,
+          "stages": {
+            "canonical_block": 2.7901,
+            "gpu_submit": 0.4219,
+            "gpu_wait": 0.6085,
+            "late_decoder": 0.7776,
+            "late_field": 0.3455,
+            "session_process": 4.3251,
+            "voice_batch": 1.1631,
+            "voice_render": 4.5812,
+            "worker_execution": 2.585,
+            "worker_roundtrip": 2.6314
+          },
+          "gpu": [
+            {
+              "index": 1604.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0479,
+              "submit_ms": 0.1532,
+              "cpu_overlap_ms": 0.6078,
+              "wait_ms": 0.5022,
+              "gpu_upload_ms": 0.062752,
+              "gpu_response_ms": 0.789344,
+              "gpu_response_ifft_ms": 0.035584,
+              "gpu_pack_ms": 0.052096,
+              "gpu_target_fft_ms": 0.059072,
+              "gpu_install_input_ms": 0.049632,
+              "gpu_convolve_ms": 0.09952,
+              "gpu_output_ifft_ms": 0.012736,
+              "gpu_mix_ms": 0.010016,
+              "gpu_readback_ms": 0.045696
+            },
+            {
+              "index": 1605.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0286,
+              "submit_ms": 0.191,
+              "cpu_overlap_ms": 0.1946,
+              "wait_ms": 0.0655,
+              "gpu_upload_ms": 0.076416,
+              "gpu_response_ms": 0.086336,
+              "gpu_response_ifft_ms": 0.013472,
+              "gpu_pack_ms": 0.029184,
+              "gpu_target_fft_ms": 0.030688,
+              "gpu_install_input_ms": 0.028384,
+              "gpu_convolve_ms": 0.10048,
+              "gpu_output_ifft_ms": 0.011776,
+              "gpu_mix_ms": 0.010144,
+              "gpu_readback_ms": 0.037344
+            }
+          ]
+        },
+        {
+          "block": 107,
+          "wall_ms": 4.3172999999999995,
+          "stages": {
+            "canonical_block": 3.2541,
+            "gpu_submit": 0.4852,
+            "gpu_wait": 0.4531,
+            "late_decoder": 0.9177,
+            "late_field": 0.3662,
+            "session_process": 4.3161,
+            "voice_batch": 1.4427,
+            "voice_render": 5.9883,
+            "worker_execution": 3.0543,
+            "worker_roundtrip": 3.0889
+          },
+          "gpu": [
+            {
+              "index": 278.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0453,
+              "submit_ms": 0.2362,
+              "cpu_overlap_ms": 0.6348,
+              "wait_ms": 0.409,
+              "gpu_upload_ms": 0.131104,
+              "gpu_response_ms": 0.746336,
+              "gpu_response_ifft_ms": 0.036576,
+              "gpu_pack_ms": 0.05648,
+              "gpu_target_fft_ms": 0.058848,
+              "gpu_install_input_ms": 0.049696,
+              "gpu_convolve_ms": 0.099936,
+              "gpu_output_ifft_ms": 0.013632,
+              "gpu_mix_ms": 0.011072,
+              "gpu_readback_ms": 0.047712
+            },
+            {
+              "index": 279.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0338,
+              "submit_ms": 0.1684,
+              "cpu_overlap_ms": 0.5138,
+              "wait_ms": 0.0049,
+              "gpu_upload_ms": 0.062848,
+              "gpu_response_ms": 0.069408,
+              "gpu_response_ifft_ms": 0.014048,
+              "gpu_pack_ms": 0.031584,
+              "gpu_target_fft_ms": 0.030944,
+              "gpu_install_input_ms": 0.02864,
+              "gpu_convolve_ms": 0.100608,
+              "gpu_output_ifft_ms": 0.012768,
+              "gpu_mix_ms": 0.010688,
+              "gpu_readback_ms": 0.038464
+            }
+          ]
+        },
+        {
+          "block": 635,
+          "wall_ms": 4.3143,
+          "stages": {
+            "canonical_block": 3.0067,
+            "gpu_submit": 0.4232,
+            "gpu_wait": 0.4651,
+            "late_decoder": 0.8231,
+            "late_field": 0.2928,
+            "session_process": 4.3137,
+            "voice_batch": 1.3367,
+            "voice_render": 6.2391,
+            "worker_execution": 2.8206,
+            "worker_roundtrip": 2.8625
+          },
+          "gpu": [
+            {
+              "index": 1334.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0425,
+              "submit_ms": 0.1663,
+              "cpu_overlap_ms": 0.6662,
+              "wait_ms": 0.2911,
+              "gpu_upload_ms": 0.059936,
+              "gpu_response_ms": 0.69424,
+              "gpu_response_ifft_ms": 0.0352,
+              "gpu_pack_ms": 0.052384,
+              "gpu_target_fft_ms": 0.05872,
+              "gpu_install_input_ms": 0.04896,
+              "gpu_convolve_ms": 0.099296,
+              "gpu_output_ifft_ms": 0.01264,
+              "gpu_mix_ms": 0.010016,
+              "gpu_readback_ms": 0.026592
+            },
+            {
+              "index": 1335.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0346,
+              "submit_ms": 0.1777,
+              "cpu_overlap_ms": 0.3418,
+              "wait_ms": 0.1382,
+              "gpu_upload_ms": 0.06336,
+              "gpu_response_ms": 0.106432,
+              "gpu_response_ifft_ms": 0.01264,
+              "gpu_pack_ms": 0.028896,
+              "gpu_target_fft_ms": 0.03456,
+              "gpu_install_input_ms": 0.032064,
+              "gpu_convolve_ms": 0.108992,
+              "gpu_output_ifft_ms": 0.012352,
+              "gpu_mix_ms": 0.010144,
+              "gpu_readback_ms": 0.209312
+            }
+          ]
+        },
+        {
+          "block": 655,
+          "wall_ms": 4.3115000000000006,
+          "stages": {
+            "canonical_block": 2.9947,
+            "gpu_submit": 0.4226,
+            "gpu_wait": 0.41,
+            "late_decoder": 0.8092,
+            "late_field": 0.3643,
+            "session_process": 4.311,
+            "voice_batch": 1.3753,
+            "voice_render": 6.2761,
+            "worker_execution": 2.7907,
+            "worker_roundtrip": 2.8513
+          },
+          "gpu": [
+            {
+              "index": 1374.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.054,
+              "submit_ms": 0.1896,
+              "cpu_overlap_ms": 0.6031,
+              "wait_ms": 0.3614,
+              "gpu_upload_ms": 0.073952,
+              "gpu_response_ms": 0.692672,
+              "gpu_response_ifft_ms": 0.035712,
+              "gpu_pack_ms": 0.051648,
+              "gpu_target_fft_ms": 0.058592,
+              "gpu_install_input_ms": 0.048928,
+              "gpu_convolve_ms": 0.099936,
+              "gpu_output_ifft_ms": 0.012512,
+              "gpu_mix_ms": 0.010176,
+              "gpu_readback_ms": 0.03776
+            },
+            {
+              "index": 1375.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0268,
+              "submit_ms": 0.1507,
+              "cpu_overlap_ms": 0.3902,
+              "wait_ms": 0.0049,
+              "gpu_upload_ms": 0.047104,
+              "gpu_response_ms": 0.103456,
+              "gpu_response_ifft_ms": 0.012768,
+              "gpu_pack_ms": 0.02864,
+              "gpu_target_fft_ms": 0.029504,
+              "gpu_install_input_ms": 0.027968,
+              "gpu_convolve_ms": 0.100416,
+              "gpu_output_ifft_ms": 0.011872,
+              "gpu_mix_ms": 0.00976,
+              "gpu_readback_ms": 0.044448
+            }
+          ]
+        },
+        {
+          "block": 143,
+          "wall_ms": 4.298500000000001,
+          "stages": {
+            "canonical_block": 3.0647,
+            "gpu_submit": 0.4062,
+            "gpu_wait": 0.4716,
+            "late_decoder": 0.7448,
+            "late_field": 0.3271,
+            "session_process": 4.298,
+            "voice_batch": 1.3475,
+            "voice_render": 5.9035,
+            "worker_execution": 2.8799,
+            "worker_roundtrip": 2.9246
+          },
+          "gpu": [
+            {
+              "index": 350.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.043,
+              "submit_ms": 0.1687,
+              "cpu_overlap_ms": 0.5551,
+              "wait_ms": 0.4231,
+              "gpu_upload_ms": 0.057856,
+              "gpu_response_ms": 0.6872,
+              "gpu_response_ifft_ms": 0.037248,
+              "gpu_pack_ms": 0.055904,
+              "gpu_target_fft_ms": 0.058976,
+              "gpu_install_input_ms": 0.050272,
+              "gpu_convolve_ms": 0.099872,
+              "gpu_output_ifft_ms": 0.013728,
+              "gpu_mix_ms": 0.011264,
+              "gpu_readback_ms": 0.048256
+            },
+            {
+              "index": 351.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0267,
+              "submit_ms": 0.1663,
+              "cpu_overlap_ms": 0.4937,
+              "wait_ms": 0.0041,
+              "gpu_upload_ms": 0.06576,
+              "gpu_response_ms": 0.103008,
+              "gpu_response_ifft_ms": 0.01504,
+              "gpu_pack_ms": 0.032064,
+              "gpu_target_fft_ms": 0.0352,
+              "gpu_install_input_ms": 0.031872,
+              "gpu_convolve_ms": 0.108576,
+              "gpu_output_ifft_ms": 0.0128,
+              "gpu_mix_ms": 0.010912,
+              "gpu_readback_ms": 0.033632
+            }
+          ]
+        },
+        {
+          "block": 547,
+          "wall_ms": 4.2757000000000005,
+          "stages": {
+            "canonical_block": 3.0736,
+            "gpu_submit": 0.4116,
+            "gpu_wait": 0.5088,
+            "late_decoder": 0.6909,
+            "late_field": 0.3119,
+            "session_process": 4.2751,
+            "voice_batch": 1.4271,
+            "voice_render": 6.5963,
+            "worker_execution": 2.9043,
+            "worker_roundtrip": 2.9428
+          },
+          "gpu": [
+            {
+              "index": 1158.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.04,
+              "submit_ms": 0.1314,
+              "cpu_overlap_ms": 0.5298,
+              "wait_ms": 0.4604,
+              "gpu_upload_ms": 0.054656,
+              "gpu_response_ms": 0.699424,
+              "gpu_response_ifft_ms": 0.036224,
+              "gpu_pack_ms": 0.051872,
+              "gpu_target_fft_ms": 0.0584,
+              "gpu_install_input_ms": 0.048768,
+              "gpu_convolve_ms": 0.09968,
+              "gpu_output_ifft_ms": 0.012448,
+              "gpu_mix_ms": 0.010016,
+              "gpu_readback_ms": 0.026016
+            },
+            {
+              "index": 1159.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0311,
+              "submit_ms": 0.2078,
+              "cpu_overlap_ms": 0.4271,
+              "wait_ms": 0.0053,
+              "gpu_upload_ms": 0.089216,
+              "gpu_response_ms": 0.084416,
+              "gpu_response_ifft_ms": 0.013216,
+              "gpu_pack_ms": 0.028416,
+              "gpu_target_fft_ms": 0.029632,
+              "gpu_install_input_ms": 0.028032,
+              "gpu_convolve_ms": 0.100768,
+              "gpu_output_ifft_ms": 0.012064,
+              "gpu_mix_ms": 0.009632,
+              "gpu_readback_ms": 0.034656
+            }
+          ]
+        },
+        {
+          "block": 623,
+          "wall_ms": 4.2733,
+          "stages": {
+            "canonical_block": 3.1356,
+            "gpu_submit": 0.4301,
+            "gpu_wait": 0.4389,
+            "late_decoder": 0.7997,
+            "late_field": 0.3041,
+            "session_process": 4.2728,
+            "voice_batch": 1.4581,
+            "voice_render": 6.0619,
+            "worker_execution": 2.9584,
+            "worker_roundtrip": 2.9971
+          },
+          "gpu": [
+            {
+              "index": 1310.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0414,
+              "submit_ms": 0.1582,
+              "cpu_overlap_ms": 0.5805,
+              "wait_ms": 0.3969,
+              "gpu_upload_ms": 0.056,
+              "gpu_response_ms": 0.709856,
+              "gpu_response_ifft_ms": 0.036512,
+              "gpu_pack_ms": 0.052288,
+              "gpu_target_fft_ms": 0.058112,
+              "gpu_install_input_ms": 0.048576,
+              "gpu_convolve_ms": 0.099488,
+              "gpu_output_ifft_ms": 0.012704,
+              "gpu_mix_ms": 0.00992,
+              "gpu_readback_ms": 0.02704
+            },
+            {
+              "index": 1311.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0259,
+              "submit_ms": 0.2032,
+              "cpu_overlap_ms": 0.4695,
+              "wait_ms": 0.0041,
+              "gpu_upload_ms": 0.090304,
+              "gpu_response_ms": 0.084416,
+              "gpu_response_ifft_ms": 0.012544,
+              "gpu_pack_ms": 0.028512,
+              "gpu_target_fft_ms": 0.030208,
+              "gpu_install_input_ms": 0.028416,
+              "gpu_convolve_ms": 0.100288,
+              "gpu_output_ifft_ms": 0.01248,
+              "gpu_mix_ms": 0.009568,
+              "gpu_readback_ms": 0.025568
+            }
+          ]
+        },
+        {
+          "block": 123,
+          "wall_ms": 4.2699,
+          "stages": {
+            "canonical_block": 3.0593,
+            "gpu_submit": 0.4232,
+            "gpu_wait": 0.3886,
+            "late_decoder": 0.8592,
+            "late_field": 0.3598,
+            "session_process": 4.2692,
+            "voice_batch": 1.374,
+            "voice_render": 6.0944,
+            "worker_execution": 2.8632,
+            "worker_roundtrip": 2.9097
+          },
+          "gpu": [
+            {
+              "index": 310.0,
+              "rows": 288.0,
+              "updates": 80.0,
+              "tasks": 332.0,
+              "padded_rows": 320.0,
+              "padded_updates": 96.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0444,
+              "submit_ms": 0.1721,
+              "cpu_overlap_ms": 0.6548,
+              "wait_ms": 0.3372,
+              "gpu_upload_ms": 0.062688,
+              "gpu_response_ms": 0.695424,
+              "gpu_response_ifft_ms": 0.036416,
+              "gpu_pack_ms": 0.056128,
+              "gpu_target_fft_ms": 0.058912,
+              "gpu_install_input_ms": 0.050848,
+              "gpu_convolve_ms": 0.099808,
+              "gpu_output_ifft_ms": 0.013632,
+              "gpu_mix_ms": 0.011232,
+              "gpu_readback_ms": 0.047904
+            },
+            {
+              "index": 311.0,
+              "rows": 96.0,
+              "updates": 48.0,
+              "tasks": 332.0,
+              "padded_rows": 128.0,
+              "padded_updates": 64.0,
+              "padded_tasks": 384.0,
+              "collect_ms": 0.0309,
+              "submit_ms": 0.1744,
+              "cpu_overlap_ms": 0.4332,
+              "wait_ms": 0.0042,
+              "gpu_upload_ms": 0.073248,
+              "gpu_response_ms": 0.086464,
+              "gpu_response_ifft_ms": 0.014144,
+              "gpu_pack_ms": 0.032096,
+              "gpu_target_fft_ms": 0.030272,
+              "gpu_install_input_ms": 0.029696,
+              "gpu_convolve_ms": 0.101088,
+              "gpu_output_ifft_ms": 0.012576,
+              "gpu_mix_ms": 0.010752,
+              "gpu_readback_ms": 0.04224
+            }
+          ]
+        }
+      ],
+      "target_rows": {
+        "active_mean": 2335.1806640625,
+        "executed_mean": 3072,
+        "previous_padded_mean": 4480,
+        "shapes": [
+          {
+            "shape": [
+              1536,
+              2048,
+              48,
+              3584
+            ],
+            "count": 1024
+          },
+          {
+            "shape": [
+              3134,
+              4096,
+              80,
+              5376
+            ],
+            "count": 839
+          },
+          {
+            "shape": [
+              3136,
+              4096,
+              80,
+              5376
+            ],
+            "count": 185
+          }
+        ]
+      }
+    },
+    "target_fft_row_reduction": 0.3142857142857143,
+    "nsight": {
+      "version": "2022.4.2.18",
+      "collector_exit_code": 3221225477,
+      "failure_phase": "Processing events",
+      "readable_trace_produced": false,
+      "task_owned_orphan_terminated": true
+    },
+    "clean_diagnostic_completed": false,
+    "further_investigation_cancelled_by_user": true
+  },
+  "not_run": [
+    "Remaining five long rounds",
+    "macOS performance matrix",
+    "GPU native 48 kHz matrix",
+    "Device callback underrun validation",
+    "New unprofiled retry to replace the failed long result"
+  ],
+  "cleanup": {
+    "local": {
+      "private_fixture_removed": true,
+      "verified_removed_payload_bytes": 644253669,
+      "candidate_changes_reverted": true,
+      "previous_research_preserved": true
+    },
+    "windows": {
+      "verified_overlay_entries": 355,
+      "restored_files": 87,
+      "removed_task_files": 268,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "task_benchmarks_running": false,
+      "nsight_orphan_terminated": true,
+      "additional_diagnostics_cancelled": true,
+      "private_assets_removed": true
+    }
+  }
+}

@@ -22,8 +22,10 @@ pub enum Stage {
     VoiceSegment,
     PathTransfers,
     ResponseTransform,
+    GpuSubmit,
+    GpuWait,
 }
-pub const STAGE_COUNT: usize = 17;
+pub const STAGE_COUNT: usize = 19;
 pub const NAMES: [&str; STAGE_COUNT] = [
     "session_process",
     "canonical_block",
@@ -42,6 +44,8 @@ pub const NAMES: [&str; STAGE_COUNT] = [
     "voice_segment",
     "path_transfers",
     "response_transform",
+    "gpu_submit",
+    "gpu_wait",
 ];
 #[cfg(feature = "room-profile")]
 mod enabled {

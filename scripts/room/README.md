@@ -331,7 +331,8 @@ build/release/mr_adm_room_file_device_probe programme.wav \
 
 ## Windows 96 kHz 零超时门槛
 
-性能候选先在 Windows 完成必要的原生正确性检查，再做完整会话短测。
+开发与常规正确性检查默认在本地进行。Windows 优先指性能筛选顺序：
+计时前补齐必要的原生构建与烟测，然后先在 Windows 做完整会话性能短测。
 使用独立、无 `room-profile`／`room-trace` 的 Release `room_bench`，完成全部构建后运行：
 
 ```powershell
@@ -350,14 +351,16 @@ python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
 python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
   --baseline-binary BASELINE.exe --baseline-calls 1024 `
   --room ROOM96.json --hrir COLLECTION --output NEW_EVIDENCE_DIR `
-  --acceptance --idle-note "Maintainer confirmed idle; no concurrent build or benchmark"
+  --acceptance --host-note "Normal desktop applications; no concurrent build or benchmark"
 ```
 
 候选固定 8 workers、32 源、512 帧、96 kHz、realtime；位置和距离运动各 3 轮，每轮
 22,500 次计时调用（另有 32 次预热），总计 135,000 次。任何一次超过 `512 / 96000` 秒即失败。
 短基线按轮交替执行并单独记录，不与长轮合并计算 p99。省略 `--baseline-calls` 可令基线同样长测。
-脚本记录每轮后台 CPU 与供电状态；连续三个一秒观察窗均不超过 5% 才通过其空闲筛查。
-此筛查只是显式记录的测试条件，不能证明不存在调度干扰。失败报告仍完整保存，退出码为 1。
+在正常桌面环境下运行，保留日常应用和后台服务。脚本记录每轮后台 CPU 与供电状态，
+不要求完全空闲，不设 CPU 百分比门槛；正常后台负载不会使超时结果失效。
+避免额外并行构建或其他基准干扰对照，人为压力负载另行标注。失败报告仍完整保存，退出码为 1。
+报告版本 3 使用 `host_note`／`host_before`，移除旧的空闲合格标志；`--idle-note` 仍作为兼容别名。
 
 常规矩阵可用 `--sources 1 16 32 --scenarios static pose switch ramps distance-ramps`
 和 `--repetitions 3`；均值、p99、最大值、超时和峰值工作集按独立进程保存。

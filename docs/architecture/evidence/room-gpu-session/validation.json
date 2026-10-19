@@ -1,0 +1,448 @@
+{
+  "schema": "mradm.room-gpu-session-evaluation",
+  "version": 1,
+  "date": "2026-10-18",
+  "base_commit": "6bd4937",
+  "default_policy": "room-realtime-v2",
+  "feature": "room-gpu-experiment",
+  "full_session": true,
+  "device_callback_measured": false,
+  "status": "Numerics passed. Windows position-motion short test failed; candidate stopped.",
+  "passed": false,
+  "windows": {
+    "workers": 8,
+    "profile": false,
+    "scope": "Existing room_bench Session and event sequence; GPU direct/early, CPU remaining paths; no device callback.",
+    "cases": [
+      {
+        "result": {
+          "algorithm_fifo_frames": 256,
+          "audio_seconds": 5.461333333333333,
+          "blocks": 1024,
+          "call_frames": 512,
+          "continuous_pose": true,
+          "cpu_audio_budget_percent": null,
+          "cpu_seconds": null,
+          "deadline_misses": 30,
+          "distinct_event_offsets": 32,
+          "dsp_seconds": 4.130605299999999,
+          "experiment": {
+            "control": "production Session",
+            "cpu_reference": false,
+            "finite_fade": true,
+            "kind": "room-gpu-session"
+          },
+          "final_phase": 0,
+          "hrir_bank_bytes": 825275648,
+          "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+          "maximum_ms": 6.481599999999999,
+          "mean_ms": 4.033794238281249,
+          "memory_measurement": "sampled-process-rss",
+          "p95_ms": 5.1996,
+          "p99_ms": 5.8376,
+          "peak": 0.031607650220394135,
+          "pose_update_hz": 187.5,
+          "preparation_outside_dsp_seconds": 0.0,
+          "processing_policy": "room-realtime-v2",
+          "profiling": false,
+          "quality": "realtime",
+          "reflection_update_frames": 2048,
+          "reported_latency_frames": 256,
+          "room_switches": 0,
+          "room_transition": false,
+          "rss_peak_bytes": null,
+          "sample_rate": 96000,
+          "scenario": "ramps",
+          "source_ramps": true,
+          "sources": 32,
+          "stages": {
+            "canonical_block": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_begin": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "emitter_convolution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "hrir_query": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_decoder": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "late_field": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "path_transfers": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "response_transform": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "session_process": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_reduction": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "source_response": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "target_filters": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_batch": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_render": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "voice_segment": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_execution": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            },
+            "worker_roundtrip": {
+              "calls": 0,
+              "worker_summed_ms": 0.0
+            }
+          },
+          "switch_period_calls": 0,
+          "trace": null,
+          "voice_segments": null,
+          "voice_segments_per_source_block": null,
+          "worker_wall_budget_percent": 75.63364196777343
+        },
+        "gpu_before": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 3 %, 1702 MHz, 33.14 W, 1687 MiB\n",
+        "gpu_after": "name, driver_version, pstate, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], memory.used [MiB]\nNVIDIA GeForce RTX 3060 Laptop GPU, 610.88, P0, 46 %, 2070 MHz, 89.02 W, 1687 MiB\n",
+        "peak_working_set_bytes": 1707454464,
+        "memory_observations": 269,
+        "process_seconds": 17.03200000000652
+      }
+    ],
+    "passed": false,
+    "binary_sha256": {
+      "room_gpu_session.dll": "f868fbfb3ca69d2cb07dbd7028cb1f2a01e2f03e4abf99e71279236418b425b9",
+      "room_bench.exe": "1bb612f9384d2bcd58ac8d0dce2197e125052bcd0c7b19a48ac9e14ec88f310c"
+    }
+  },
+  "numerical": {
+    "schema": "mradm.room-realtime-rounding",
+    "version": 1,
+    "reference_policy": "room-realtime-v2",
+    "candidate_policy": "room-realtime-v2",
+    "thresholds": {
+      "relative_l2": 2e-05,
+      "maximum_over_reference_peak": 0.0002
+    },
+    "frames": 231581,
+    "latency_frames": 256,
+    "tail_frames": 135502,
+    "preparation_hashes_identical": {
+      "prepared": true,
+      "lfe": true
+    },
+    "checkpoints": {
+      "branches-0.f32": {
+        "samples": 28284,
+        "reference_peak": 1.7790477275848389,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-1.f32": {
+        "samples": 28284,
+        "reference_peak": 0.8834397792816162,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-2.f32": {
+        "samples": 28284,
+        "reference_peak": 0.5392327308654785,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-3.f32": {
+        "samples": 28284,
+        "reference_peak": 0.7344926595687866,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-4.f32": {
+        "samples": 28284,
+        "reference_peak": 0.7349848747253418,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-5.f32": {
+        "samples": 28284,
+        "reference_peak": 0.3805251121520996,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-6.f32": {
+        "samples": 28284,
+        "reference_peak": 0.7198781967163086,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "branches-7.f32": {
+        "samples": 28284,
+        "reference_peak": 0.9746142625808716,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-0.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5085525512695312,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-1.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5085525512695312,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-2.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5085525512695312,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-3.f32": {
+        "samples": 4352,
+        "reference_peak": 0.5131561756134033,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-4.f32": {
+        "samples": 4352,
+        "reference_peak": 0.512883186340332,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-5.f32": {
+        "samples": 4352,
+        "reference_peak": 0.2615821361541748,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-6.f32": {
+        "samples": 4352,
+        "reference_peak": 0.12488539516925812,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "hrir-7.f32": {
+        "samples": 4352,
+        "reference_peak": 1.0160523653030396,
+        "maximum_error": 0.0,
+        "relative_l2": 0.0,
+        "maximum_over_reference_peak": 0.0,
+        "silent": false,
+        "passed": true
+      },
+      "session.f32": {
+        "samples": 463162,
+        "reference_peak": 0.034302257001399994,
+        "maximum_error": 2.2351741790771484e-08,
+        "relative_l2": 4.869347866224134e-07,
+        "maximum_over_reference_peak": 6.516114024176086e-07,
+        "silent": false,
+        "passed": true
+      }
+    },
+    "passed": true,
+    "scope": "Complete HRIR, branch and stereo PCM outputs including tails; same host, inputs and event schedule required",
+    "experiment": {
+      "control": "production Session",
+      "cpu_reference": false,
+      "finite_fade": true,
+      "kind": "room-gpu-session"
+    },
+    "binary_sha256": {
+      "room_gpu_session.dll": "f868fbfb3ca69d2cb07dbd7028cb1f2a01e2f03e4abf99e71279236418b425b9",
+      "room_bench.exe": "1bb612f9384d2bcd58ac8d0dce2197e125052bcd0c7b19a48ac9e14ec88f310c",
+      "room_replay.exe": "028484e2dce022110b5843b813355e9269c3e620db9e0148781507820999a8bf"
+    }
+  },
+  "scope": {
+    "processing": "Existing Session with original commands, per-source event grid, pose budget, finite 10 ms target fade, EQ, sends, late field/decoder, LFE, headLocked, FIFO, reset and room transition handling. GPU computes world direct/early response and dynamic convolution.",
+    "gpu_cpu_overlap": "GPU submitted after eight-worker source preparation; independent CPU field/decoder executes before GPU completion is joined.",
+    "gpu_response_inputs": "Live f64 geometry/triangle/weight/delay preparation inside the timed Session; not the earlier precomputed snapshots.",
+    "timing": "Uninstrumented Release existing room_bench ramps scenario; 32 warmup calls, 1024 measured calls, 512 frames, 96 kHz, 32 sources, MR_ADM_ROOM_WORKERS=8. No concurrent task build or benchmark.",
+    "reference": "Same Windows binary without the GPU option; full 231581-frame replay and tails. Only the verified research metadata marker is removed from the derived comparison manifest.",
+    "limits": [
+      "Native prototype uses an authenticated test fixture for GPU HRIR tables; production preparation is not integrated.",
+      "Native prototype restricted to the tested 96 kHz / 4096-bin-transform family, at most 32 sources; other incompatible shapes are explicit errors.",
+      "Frame limits: 256 updates, 1024 nonempty response buckets, 2048 render tasks; per-voice target/job limits are bounded.",
+      "CUDA/driver internal allocation behavior and device-loss recovery are not certified.",
+      "No current-run CPU baseline timing or new stage profiling; peak attribution is unresolved."
+    ]
+  },
+  "checks": {
+    "local_reference_session_48_96": "passed, including fragmented input, motion, headLocked, extent/diffuse, LFE, switch, reset and full tail",
+    "processing_allocation_test": "passed with CPU reference executor, all Rust audio workers; does not certify CUDA driver allocations",
+    "existing_quality_and_no_alloc_tests": "10 passed",
+    "new_gpu_session_test": "1 passed",
+    "clippy": "passed for lib, benchmark, replay and new test, warnings denied",
+    "feature_coexistence_compile": "GPU and HOA features compile together; not a mixed-acoustic-mode acceptance",
+    "cppcheck": "passed",
+    "format": "passed",
+    "windows_native_build_and_replay": "passed"
+  },
+  "not_run": [
+    "distance-ramps short test after ramps failure",
+    "macOS performance matrix",
+    "six-round Windows long test",
+    "post-failure profiling"
+  ],
+  "cleanup": {
+    "verified_overlay_entries": 353,
+    "restored_files": 87,
+    "removed_task_files": 266,
+    "head_unchanged": true,
+    "git_status_unchanged": true,
+    "private_assets_removed": true,
+    "local_private_fixture_removed": true,
+    "local_bytes_removed": 644257376
+  },
+  "source_sha256": {
+    "rust/crates/mradm-dsp/Cargo.toml": "b0329011938933981a320eabebb2216e6a5af421d21dfc15aafbf12111ab0f53",
+    "rust/crates/mradm-dsp/src/room/mod.rs": "dd70b84ac32fff574c368af84c6ce5ee4ecce8d415994606f5fb3ee5e8a0fcd5",
+    "rust/crates/mradm-dsp/src/room/partition.rs": "b13db474ceb021d7358b1bbeba0b5cbdddb3673a0604f9e53413cf1393b84563",
+    "rust/crates/mradm-dsp/src/room/signal.rs": "200e8e4cc4cd1b5f27ed0baea159443615dd2a6375569c86859574fbecf67f59",
+    "rust/crates/mradm-dsp/src/room/session.rs": "705844b2f87c4683a48e2b9f63461643b539505b08160b40ffa01a650289ab40",
+    "rust/crates/mradm-dsp/examples/room_bench.rs": "cca23e89d46ca5d01e06216e94ef40230acfe4b13cb46f43fab6bcd5024313c1",
+    "rust/crates/mradm-dsp/examples/room_replay.rs": "874370392739083a9067f18862536b54d015e630b83fc2f5a15c23998fb3a452",
+    "rust/crates/mradm-dsp/src/room/gpu_experiment.rs": "43c664de23a17cf1bc025fb7c4dcb30b77ed5ab285ff399c55be3dbe2155619f",
+    "rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs": "1c47dec90fdc17973659978cd5ba75661182917de82e146aaf6eb0722cb490fa",
+    "rust/crates/mradm-dsp/tests/room_gpu.rs": "c4c205d40100fbf4efc780dfa0e932186ec6d3e8f9cdf18411e9010e779127f8",
+    "rust/crates/mradm-dsp/examples/room_support/gpu.rs": "25d0fd45d6cdb9eaecef189fcde3b0590453f202b31ecafc7297e6c578359e46",
+    "rust/crates/mradm-dsp/examples/room_support/gpu_native.rs": "c43bc6fc63192d618f18279882b68ff5c9e6abdc579c4e4c5578d57969082a69",
+    "scripts/research/room_gpu/session_backend.cpp": "704f0050cf4f264dccecc9350c16461121dd533fde6571e9023c5032787535f3",
+    "scripts/research/room_gpu/session_backend.h": "6f21a4ae9a743e83b638c11ebc94a29f1b618c566fb92a1f14f3c6df603d1fb5",
+    "scripts/research/room_gpu/session_kernels.cu": "0e805043cf1ea95b3ce214557dcefc4def05e653d953d9ba27c7241de9cbe935"
+  },
+  "fixture_metadata": {
+    "directions": 1850,
+    "distance_layers": 9,
+    "fft_length": 4096,
+    "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+    "room_hash": "89262945f99bb1297c6ab0c7660262450058f24e53f7cf891c2b4f10e4c78963",
+    "sample_rate": 96000,
+    "files": {
+      "audio-reference.bin": {
+        "bytes": 4096,
+        "sha256": "1c0eb12577ca390d2a36b2a465e7b51dd1698360c0875d10933dd798fa1a21ab"
+      },
+      "bank.bin": {
+        "bytes": 545853600,
+        "sha256": "10ce3052d68b61be63d46c651a45917a676e3ca6066328c707ec5cc68404fa25"
+      },
+      "config.txt": {
+        "bytes": 45,
+        "sha256": "2b72c8bc174b4321925cc60abd84b816203cf636a0e661af5720240ef0d5406b"
+      },
+      "fraction.bin": {
+        "bytes": 16801800,
+        "sha256": "8b3b917280b974e5e502fd41364e07ecef908d17ac926f3eade9a4f0dcfde683"
+      },
+      "history.bin": {
+        "bytes": 1842176,
+        "sha256": "4b734cec12a13771b7811bd5d3fed3feb14b8165fb11f0fb2bede76b90d2cd44"
+      },
+      "jobs.bin": {
+        "bytes": 2762496,
+        "sha256": "a8de09772f5f13716ed6f83b6ee232ed5b6623bbd86ec33e18625e5f07f59b00"
+      },
+      "materials.bin": {
+        "bytes": 2114568,
+        "sha256": "3a337f90e0a1c10c21c5e839573f92c529488c7b4f4a769d6e5495af4580e4bc"
+      },
+      "phase.bin": {
+        "bytes": 32768,
+        "sha256": "7e0ea19de5e54c1da96657ae75f03b3a4e4e82814264d1334f6f706481c2f326"
+      },
+      "previous.bin": {
+        "bytes": 32768,
+        "sha256": "b8ea2d7720c2032e321e7f2743fb963bed46f1458182ba19c541aa89d56865ce"
+      },
+      "propagation.bin": {
+        "bytes": 16801800,
+        "sha256": "9ea485659f34d4fe2a34d078c7f0625c9efc7b515e2b09f12b31eae7626c75a3"
+      },
+      "ranges.bin": {
+        "bytes": 81920,
+        "sha256": "04c8e259f31a73921f5647cb2da8cc9cd18f24dc29c1ad97dca033d1059aad00"
+      },
+      "reference.bin": {
+        "bytes": 57925632,
+        "sha256": "39434fbbc8cd3ba0839c81d429f413cc9c8333c51f6f6d10883f5ff8655d8561"
+      }
+    }
+  }
+}

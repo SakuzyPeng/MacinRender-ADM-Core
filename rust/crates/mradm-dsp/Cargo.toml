@@ -30,5 +30,7 @@ diagnostics = []
 room-profile = []
 # Coarse wall/CPU tracing avoids clocks inside arithmetic kernels.
 room-trace = ["room-profile"]
+# Opt-in research adapter; no GPU API is linked by the DSP library.
+room-gpu-experiment = []
 default = ["sofa"]
 sofa = []

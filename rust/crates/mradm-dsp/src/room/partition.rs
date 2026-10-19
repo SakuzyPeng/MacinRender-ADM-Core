@@ -301,6 +301,14 @@ pub struct InputHistory {
     partitions: usize,
 }
 impl InputHistory {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn gpu_latest(&self) -> (usize, &[Complex32]) {
+        let bins = super::BLOCK + 1;
+        (
+            self.head,
+            &self.ring[self.head * bins..(self.head + 1) * bins],
+        )
+    }
     pub fn new(taps: usize) -> Result<Self> {
         Self::with_policy(taps, FftPolicy::Exact)
     }
@@ -383,6 +391,19 @@ pub struct Dynamic {
 }
 
 impl Dynamic {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn gpu_clock(&self) -> (u64, u64) {
+        (self.clock, self.block_start)
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn gpu_advance(&mut self, offset: usize, frames: usize) -> Result<()> {
+        if offset < self.cursor || offset > super::BLOCK || frames > super::BLOCK - offset {
+            return Err(Error::InvalidArgument("Invalid GPU convolution subrange"));
+        }
+        self.cursor = offset + frames;
+        self.clock = self.block_start + self.cursor as u64;
+        Ok(())
+    }
     pub fn new(channels: usize, taps: usize) -> Result<Self> {
         Self::with_policy(channels, taps, FftPolicy::Exact)
     }
@@ -635,6 +656,10 @@ pub struct LongFilters {
 }
 
 impl LongFilters {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn gpu_tail(&self) -> Option<&[Complex32]> {
+        self.tail.as_ref().map(|tail| tail.spectrum.as_slice())
+    }
     pub fn fingerprint(&self) -> serde_json::Value {
         serde_json::json!({"taps":self.taps,"channels":self.channels,
             "head":super::resources::hash_complex(&self.head.spectrum),
@@ -703,6 +728,13 @@ pub struct SharedLongHistory {
     tail_due: bool,
 }
 impl SharedLongHistory {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn gpu_tail_row(&self) -> Option<&[Complex32]> {
+        self.tail.as_ref().filter(|_| self.tail_due).map(|tail| {
+            let begin = tail.head * 2049;
+            &tail.ring[begin..begin + 2049]
+        })
+    }
     pub fn new(filters: &LongFilters) -> Result<Self> {
         Ok(Self {
             head: Uniform::new(&filters.head)?,
@@ -741,14 +773,30 @@ impl SharedLongHistory {
 }
 
 pub struct LongReader {
+    #[cfg(feature = "room-gpu-experiment")]
+    gpu_tail: bool,
     filters: Arc<LongFilters>,
     head: Uniform,
     tail: Option<Uniform>,
     ready: Vec<f32>,
 }
 impl LongReader {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn enable_gpu_tail(&mut self) {
+        self.gpu_tail = true;
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(crate) fn install_gpu_tail(&mut self, ready: &[f32]) -> Result<()> {
+        if !self.gpu_tail || self.ready.len() != ready.len() {
+            return Err(Error::InvalidArgument("Invalid GPU late tail output"));
+        }
+        self.ready.copy_from_slice(ready);
+        Ok(())
+    }
     pub fn new(filters: Arc<LongFilters>) -> Result<Self> {
         Ok(Self {
+            #[cfg(feature = "room-gpu-experiment")]
+            gpu_tail: false,
             head: Uniform::workspace(&filters.head, false)?,
             tail: filters
                 .tail
@@ -788,7 +836,11 @@ impl LongReader {
                     *value += *addition;
                 }
             }
-            if history.tail_due {
+            #[cfg(feature = "room-gpu-experiment")]
+            let render_tail = history.tail_due && !self.gpu_tail;
+            #[cfg(not(feature = "room-gpu-experiment"))]
+            let render_tail = history.tail_due;
+            if render_tail {
                 tail.render_shared(filters, input, &mut self.ready)?;
             }
         } else if self.tail.is_some() != history.tail.is_some() {

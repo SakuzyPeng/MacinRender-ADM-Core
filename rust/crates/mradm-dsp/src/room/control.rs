@@ -213,6 +213,29 @@ impl Control {
     pub(super) fn is_settled(&self, sample: u64) -> bool {
         sample >= self.settled
     }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(super) fn only_position_ramping(&self, sample: u64) -> bool {
+        sample < self.end[2]
+            && self
+                .end
+                .iter()
+                .enumerate()
+                .all(|(field, end)| field == 2 || sample >= *end)
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub(super) fn position_at(&self, sample: u64) -> ([f32; 3], u64) {
+        if sample >= self.end[2] {
+            return (self.target.position, self.target.valid & 4);
+        }
+        let alpha =
+            sample.saturating_sub(self.start[2]) as f64 / (self.end[2] - self.start[2]) as f64;
+        let position = std::array::from_fn(|i| {
+            (f64::from(self.origin.position[i])
+                + (f64::from(self.target.position[i]) - f64::from(self.origin.position[i])) * alpha)
+                as f32
+        });
+        (position, self.origin.valid & 4)
+    }
     /// Geometry interpolation at this absolute sample; reference-frame changes
     /// are instantaneous and are never held by the realtime reflection grid.
     #[inline]
@@ -369,5 +392,47 @@ mod tests {
             assert_eq!(control.at(frame), seek.at(frame));
         }
         assert_eq!(control.at(10100).position, [-1., 0., 0.]);
+    }
+}
+
+#[cfg(all(test, feature = "room-gpu-experiment"))]
+mod gpu_tests {
+    use super::*;
+    #[test]
+    fn position_projection_preserves_original_f64_ramps_validity_and_deadlines() {
+        let mut c = Control::new(State::default());
+        for (step, at) in [0, 17, 73, 127, 255].into_iter().enumerate() {
+            c.apply(
+                &RoomCommand {
+                    changed: 4 | if step == 2 { 2 } else { 0 },
+                    cleared: if step == 3 { 4 } else { 0 },
+                    duration: [128, 1, 257, 96, 0][step],
+                    state: State {
+                        position: [step as f32 * 0.2 - 0.4, 0.7, -0.3],
+                        gain: 0.5,
+                        ..State::default()
+                    },
+                    ..RoomCommand::default()
+                },
+                at,
+            )
+            .unwrap();
+            for sample in 0..640 {
+                let expected = c.at(sample);
+                let (position, valid) = c.position_at(sample);
+                assert_eq!(
+                    position.map(f32::to_bits),
+                    expected.position.map(f32::to_bits)
+                );
+                assert_eq!(valid, expected.valid & 4);
+                if c.only_position_ramping(sample) {
+                    for later in sample..sample + 17 {
+                        let value = c.at(later);
+                        assert_eq!(value.gain.to_bits(), expected.gain.to_bits());
+                        assert_eq!(value.valid & !4, expected.valid & !4);
+                    }
+                }
+            }
+        }
     }
 }

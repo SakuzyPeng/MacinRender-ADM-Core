@@ -1,0 +1,46 @@
+{
+  "scope": "Standalone index snapshot excluding inactive HOA research; working tree research preserved. Historical performance remains tied to its archived binaries, not a new build.",
+  "source_sha256": {
+    "rust/crates/mradm-dsp/Cargo.toml": "e70f8b25b69cec3e63a800f3b3c1946dd2c504183162bb838ed47191d0fe027a",
+    "rust/crates/mradm-dsp/examples/room_bench.rs": "378cbeba5e75b0ca310ccf989835bc339a20bae86ebe0b88cd89aa5f18401419",
+    "rust/crates/mradm-dsp/examples/room_gpu_fixture.rs": "26bed9163d133ab904987b0ce2c3a30fb210c00662b104f745d24170799afe40",
+    "rust/crates/mradm-dsp/examples/room_replay.rs": "ca37ecc666027f518c2a3c5123d163cd71962f85e701054c8e11f7924bdfab88",
+    "rust/crates/mradm-dsp/examples/room_support/gpu.rs": "25d0fd45d6cdb9eaecef189fcde3b0590453f202b31ecafc7297e6c578359e46",
+    "rust/crates/mradm-dsp/examples/room_support/gpu_native.rs": "620d936d419c9d23ab3bd97a8fb49b1503beeefea58d60329f53d0015a823ea5",
+    "rust/crates/mradm-dsp/src/room/control.rs": "5d4f193bcc6584945c2de3e7d61843974e59642890b5ef9ca8a69f87a773e259",
+    "rust/crates/mradm-dsp/src/room/gpu_experiment.rs": "569428a004d50d54baeeb9b364a166d64c699d24f7586093b70edf34218c5247",
+    "rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs": "1e4bdec144cb1d2628b1bd72cabc00f9147679492c5d6e31913d0aaf5d68cb35",
+    "rust/crates/mradm-dsp/src/room/mod.rs": "35d719f42dc55c26a7c96c5fe4031b993ae107b2f17297a6544fc0384b08e111",
+    "rust/crates/mradm-dsp/src/room/partition.rs": "91581269830b23434d0152a368b772f48f750705f11b6edb1551128dc6de8e3e",
+    "rust/crates/mradm-dsp/src/room/prepared.rs": "fd95130c8124dcda1a519069bf450b5d366042ee8b97680aa63b36fd5ab8d083",
+    "rust/crates/mradm-dsp/src/room/profile.rs": "d02fa8487bc41423bd3c65021f7202d20b4694508db04c2da88e8b80ba13f273",
+    "rust/crates/mradm-dsp/src/room/session.rs": "637c71dff323960919c04e202fa776d96ab77f556653771880d321983ed5648f",
+    "rust/crates/mradm-dsp/src/room/signal.rs": "d85d6707361a1ef351cb47afe62eab70c843d7d59898f6f33d2339a18c9143dc",
+    "rust/crates/mradm-dsp/src/room/workers.rs": "2c8a50ab29b7bc3f798b8b4ffe1a6f30ae37b17a9dd34875da73f18c7806dc55",
+    "rust/crates/mradm-dsp/tests/room_gpu.rs": "8dce0c90ed00445c4fec19e63c24cd33e120f0a2aaa394e9d476398ca224ffa2",
+    "scripts/research/room_gpu/README.md": "bae1014f690fe6cf68efd6c98576e569860c8e54c4ba4a4b4c114808f9037ea1",
+    "scripts/research/room_gpu/kernels.cu": "5d35bb5444b40c6254aba9808d4914a874d7a42d8e006cff34a9e1ddfde2cd20",
+    "scripts/research/room_gpu/probe.cpp": "666b8aefb639d220f3ac2d36aeff49842069a8e0c4d2c939fba7045e844f2a2c",
+    "scripts/research/room_gpu/run.py": "7b1e0fff8cd29861163bffed4a0e26326e99c39780757f85fd839e1dca7857c0",
+    "scripts/research/room_gpu/seal_fixture.py": "c6314cf8543a7260b0f1aee12e19572b02258e3c34e36f1b2e91854b71d07c99",
+    "scripts/research/room_gpu/session_backend.cpp": "9b439132b0dcee7fc8b058be07ecab0fce40040409b0559a6215420b6f59a3a0",
+    "scripts/research/room_gpu/session_backend.h": "6f21a4ae9a743e83b638c11ebc94a29f1b618c566fb92a1f14f3c6df603d1fb5",
+    "scripts/research/room_gpu/session_kernels.cu": "4a208d37c152ab024d923426fc7ca5f360844f00023982136f1892299a49a851",
+    "scripts/research/room_gpu/session_late.h": "87e2fef22f61784861a3ef0595206d84764264d270f9a6c5afe26e545b9b796e",
+    "scripts/research/room_gpu/session_trace.h": "f57ca5a91e61e1c7b150c97fe244cfe3c2fe7fd9cf0db555836554c01fb96e00"
+  },
+  "checks": {
+    "control_worker_unit_tests": 2,
+    "gpu_session_tests": 2,
+    "quality_tests": 9,
+    "zero_allocation_tests": 1,
+    "benchmark_tools_tests": 4,
+    "clippy_warnings_denied": true,
+    "whitespace": true
+  },
+  "toolchain": "Rust 1.98.0, aarch64-apple-darwin",
+  "cargo_features": [
+    "room-gpu-experiment"
+  ],
+  "shared_cache": true
+}

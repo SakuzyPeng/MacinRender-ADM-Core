@@ -46,12 +46,18 @@ Follow `.clang-format`: LLVM base style, 4-space indentation, no tabs, C++20, 12
 维护者今后的主机验证矩阵为 **macOS arm64 + Windows x64**。Linux 测试机已永久下线，
 不再安排 Linux 主机验证，也不把缺少 Linux 结果列为验收阻塞项。已有 Linux 支持和历史证据继续保留。
 
-性能优化优先在 **Windows x64** 验证：先完成必要的原生正确性检查，再做无插桩 Release 短测。
+开发、代码修改和常规正确性检查默认在本地工作区完成。**Windows 优先仅指性能筛选与验收顺序**，
+不要求优先在 Windows 开发或先把全部正确性检查搬过去。
+性能候选先做 **Windows x64** 无插桩 Release 短测；计时前只补齐必要的 Windows 原生构建与烟测。
 Windows 短测未达到该候选的验收门槛，就停止该候选，不继续 macOS 性能矩阵或长测；修改形成新候选后，
 仍从 Windows 短测开始。ROOM 零超时验收的短测固定 8 workers、96 kHz、512 帧、32 源，
 位置运动和距离运动各 1024 次调用；任一超时即不进入六轮长测。短测通过只是进入后续验收的条件，
 不等于长测通过。隔离链路的收益不能代替完整会话结果；加载优化按加载收益和正确性独立判断，
 不能用来抵消运行时失败。Windows 通过后仍须完成适用的 macOS 验证。
+
+性能验收使用有代表性的正常桌面环境，不要求完全空闲，也不设置后台 CPU 百分比的通过门槛。
+保留日常应用和后台服务，记录负载与供电条件；正常后台负载下的超时照常计入，不能据此作废失败结果。
+避免额外并行构建或其他基准干扰对照；人为施加的压力负载单独标注。
 
 Tests are standalone C++ executables registered with CTest from `CMakeLists.txt`; there is no separate test framework requirement. Add new tests under `tests/unit/` with names such as `module_smoke_test.cpp` or `module_fixture_test.cpp`, then register them with `add_test`. Prefer smoke tests for API/error-path coverage and fixture tests for real ADM/audio behavior.
 
