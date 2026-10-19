@@ -210,3 +210,22 @@ scenario 与 world_only 标记。CPU 和 GPU 比较必须使用相同标记，�
 回传量，但加入后的组合在固定房间距离长测出现 **1/22500 次超时、最大 5.6088 ms**，运行时
 已撤回，补丁与数据单独保留。不得合并不同组合的成功轮次，亦不重跑失败轮次挑选通过结果。
 MMCSS 记录只覆盖八个 DSP workers，基准调用者保持普通调度；实际设备播放仍需单独验证。
+
+## 内存绑定与 FFT 融合回归
+
+后续 [512 点 FFT 融合实验](../../../docs/architecture/ROOM_CUDA_FFT_FUSION.md) 基于归档的内存资源绑定
+适配层，对目标生成融合、卷积融合及组合分别验证。目标生成融合改善约 6% 的短测平均耗时，但长测
+1/112,500 次超时、最大 7.1111 ms；运行时代码已回退，源码补丁与结果保留在报告中。
+
+`resident_transport_test.py` 已在 Windows 对四种配置执行通过。它合成双耳不同延迟／增益的 FIR，
+以独立解析结果检查 1／32 源、重复 epoch、静音、空任务、历史保留及重置，并检查释放后资源计数。
+无需私人 HRIR 或音频资源；它是正确性回归，不提供性能证据。该工具需要内存绑定版 DLL 的私有 bank 接口，
+当前 `room_gpu_session.dll` 研究接口不能直接替代它。
+
+```powershell
+python scripts/research/room_gpu/resident_transport_test.py --library $ResidentDll --kernels $MatchingKernelSource
+```
+
+`$MatchingKernelSource` 必须与 DLL 配套：融合 DLL 需要报告中的融合补丁版本，未融合的内存绑定 DLL
+可以使用当前 `session_kernels.cu`。CUDA 运行库与 DLL 放在同一目录；融合配置还需保留 DLL 编译时指定的
+MathDx 头文件路径以供 NVRTC 使用。完整准备、构建和冻结步骤见报告，不应重跑未修改的失败候选长测。

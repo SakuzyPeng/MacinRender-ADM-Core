@@ -1,0 +1,373 @@
+{
+  "schema": "mradm.room-cuda-fft-fusion-numerical",
+  "cases": {
+    "default-target": {
+      "schema": "mradm.room-realtime-rounding",
+      "version": 1,
+      "reference_policy": "room-realtime-v2",
+      "candidate_policy": "room-realtime-v2",
+      "thresholds": {
+        "relative_l2": 2e-05,
+        "maximum_over_reference_peak": 0.0002
+      },
+      "frames": 231581,
+      "latency_frames": 256,
+      "tail_frames": 135502,
+      "preparation_hashes_identical": {
+        "prepared": true,
+        "lfe": true
+      },
+      "checkpoints": {
+        "branches-0.f32": {
+          "samples": 28284,
+          "reference_peak": 1.7790477275848389,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-1.f32": {
+          "samples": 28284,
+          "reference_peak": 0.8834397792816162,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-2.f32": {
+          "samples": 28284,
+          "reference_peak": 0.5392327308654785,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-3.f32": {
+          "samples": 28284,
+          "reference_peak": 0.7344926595687866,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-4.f32": {
+          "samples": 28284,
+          "reference_peak": 0.7349848747253418,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-5.f32": {
+          "samples": 28284,
+          "reference_peak": 0.3805251121520996,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-6.f32": {
+          "samples": 28284,
+          "reference_peak": 0.7198781967163086,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-7.f32": {
+          "samples": 28284,
+          "reference_peak": 0.9746142625808716,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-0.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5085525512695312,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-1.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5085525512695312,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-2.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5085525512695312,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-3.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5131561756134033,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-4.f32": {
+          "samples": 4352,
+          "reference_peak": 0.512883186340332,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-5.f32": {
+          "samples": 4352,
+          "reference_peak": 0.2615821361541748,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-6.f32": {
+          "samples": 4352,
+          "reference_peak": 0.12488539516925812,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-7.f32": {
+          "samples": 4352,
+          "reference_peak": 1.0160523653030396,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "session.f32": {
+          "samples": 463162,
+          "reference_peak": 0.034302257001399994,
+          "maximum_error": 1.862645149230957e-08,
+          "relative_l2": 4.011806445656977e-07,
+          "maximum_over_reference_peak": 5.430095020146739e-07,
+          "silent": false,
+          "passed": true
+        }
+      },
+      "passed": true,
+      "scope": "Complete HRIR, branch and stereo PCM outputs including tails; same host, inputs and event schedule required",
+      "experiment": {
+        "binding": "prepared-memory",
+        "control": "production Session",
+        "cpu_reference": false,
+        "eq_stagger_frames": 256,
+        "finite_fade": true,
+        "kind": "room-cuda-session"
+      },
+      "dll_sha256": "823d4531fe5616487c93a9a8bc6aba1959ac3c760f8cacae7e0810d8f34e867d"
+    },
+    "world-target": {
+      "schema": "mradm.room-realtime-rounding",
+      "version": 1,
+      "reference_policy": "room-realtime-v2",
+      "candidate_policy": "room-realtime-v2",
+      "thresholds": {
+        "relative_l2": 2e-05,
+        "maximum_over_reference_peak": 0.0002
+      },
+      "frames": 231581,
+      "latency_frames": 256,
+      "tail_frames": 135502,
+      "preparation_hashes_identical": {
+        "prepared": true,
+        "lfe": true
+      },
+      "checkpoints": {
+        "branches-0.f32": {
+          "samples": 28284,
+          "reference_peak": 1.7790477275848389,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-1.f32": {
+          "samples": 28284,
+          "reference_peak": 0.8834397792816162,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-2.f32": {
+          "samples": 28284,
+          "reference_peak": 0.5392327308654785,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-3.f32": {
+          "samples": 28284,
+          "reference_peak": 0.7344926595687866,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-4.f32": {
+          "samples": 28284,
+          "reference_peak": 0.7349848747253418,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-5.f32": {
+          "samples": 28284,
+          "reference_peak": 0.3805251121520996,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-6.f32": {
+          "samples": 28284,
+          "reference_peak": 0.7198781967163086,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "branches-7.f32": {
+          "samples": 28284,
+          "reference_peak": 0.9746142625808716,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-0.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5085525512695312,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-1.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5085525512695312,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-2.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5085525512695312,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-3.f32": {
+          "samples": 4352,
+          "reference_peak": 0.5131561756134033,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-4.f32": {
+          "samples": 4352,
+          "reference_peak": 0.512883186340332,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-5.f32": {
+          "samples": 4352,
+          "reference_peak": 0.2615821361541748,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-6.f32": {
+          "samples": 4352,
+          "reference_peak": 0.12488539516925812,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "hrir-7.f32": {
+          "samples": 4352,
+          "reference_peak": 1.0160523653030396,
+          "maximum_error": 0.0,
+          "relative_l2": 0.0,
+          "maximum_over_reference_peak": 0.0,
+          "silent": false,
+          "passed": true
+        },
+        "session.f32": {
+          "samples": 463162,
+          "reference_peak": 0.03167741000652313,
+          "maximum_error": 1.6763806343078613e-08,
+          "relative_l2": 4.259707092056806e-07,
+          "maximum_over_reference_peak": 5.29203818734756e-07,
+          "silent": false,
+          "passed": true
+        }
+      },
+      "passed": true,
+      "scope": "Complete HRIR, branch and stereo PCM outputs including tails; same host, inputs and event schedule required",
+      "experiment": {
+        "binding": "prepared-memory",
+        "control": "production Session",
+        "cpu_reference": false,
+        "eq_stagger_frames": 256,
+        "finite_fade": true,
+        "kind": "room-cuda-session"
+      },
+      "dll_sha256": "823d4531fe5616487c93a9a8bc6aba1959ac3c760f8cacae7e0810d8f34e867d"
+    }
+  },
+  "replay_sha256": "01de21c45cdb3dd00a18a21e6151d8d9c901df9d5c54c75c769cb62485efc30c",
+  "passed": true
+}

@@ -1,0 +1,8 @@
+{
+  "selected": "target",
+  "optimization_flags": 4,
+  "selected_before_long": true,
+  "reason": "Target preparation fusion improves both means and p99 in both alternating rounds. Convolution fusion adds no consistent total-session benefit.",
+  "scope": "Full FP32 512 R2C, full bucket support and direct filter-slot install; original context guard, FIFO and clocks retained.",
+  "tradeoff": "About 6 seconds additional non-DSP process overhead and peak working set about 1.71 GB versus 1.48 GB in the short matrix; not a pure preparation timer."
+}

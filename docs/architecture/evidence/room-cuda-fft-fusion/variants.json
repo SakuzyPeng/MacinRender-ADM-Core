@@ -1,0 +1,70 @@
+{
+  "baseline": {
+    "optimization_flags": 0,
+    "dll_sha256": "535fcf120f3c6cc517805fce84322272cfa63c5f79ae942ae18afd2a60ce04ec",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  },
+  "target": {
+    "optimization_flags": 4,
+    "dll_sha256": "823d4531fe5616487c93a9a8bc6aba1959ac3c760f8cacae7e0810d8f34e867d",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  },
+  "convolution": {
+    "optimization_flags": 8,
+    "dll_sha256": "03807bb96ba60c6a96a85f2d4e8359d56207408bd830027f6eae5fa6ef50389d",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=ON",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  },
+  "combined": {
+    "optimization_flags": 12,
+    "dll_sha256": "57af91baaf7020ec51e5a6f761dd826c88358066c48e86704cf57d615f39d257",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=ON",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "schema": "mradm.room-cuda-fft-fusion-validation",
+  "version": 1,
+  "base": "a08245a654fde05cfd3a459b2820a68f2f4b91c0",
+  "outcome": "no-fusion-candidate-adopted",
+  "implementation": {
+    "target": "FP32 bucket gather, zero padding, 512-point R2C and filter-slot install in one kernel",
+    "convolution": "Original partition MAC order, 512-point C2R and valid-half extraction in one kernel; original mix/scaling retained",
+    "sdk": "MathDx 24.08 / cuFFTDx 1.2.1, CUDA 12.0 NVRTC, CUTLASS dependency disabled",
+    "fft": "512, FP32, natural spectrum, folded real mode, EPT 8, 4 FFTs per block, no extra workspace",
+    "audio_contract": "Original clocks, full FIR, FIFO, tails, context guard and 256-frame latency"
+  },
+  "short": {
+    "rounds": 2,
+    "calls_per_case": 1024,
+    "scenarios": [
+      "ramps",
+      "distance-ramps"
+    ],
+    "all_variants_zero_misses": true,
+    "selected": "target",
+    "selection_recorded_before_long": true,
+    "mean_reduction_fraction": {
+      "ramps": 0.06046412758638231,
+      "distance-ramps": 0.05994661274023205
+    },
+    "note": "Individual p99 values retained; no pooled percentile inferred"
+  },
+  "long": {
+    "calls": 112500,
+    "completed_rounds": 5,
+    "deadline_misses": 1,
+    "maximum_ms": 7.1111,
+    "deadline_ms": 5.333333333333333,
+    "passed": false,
+    "remaining_rounds_stopped": 1,
+    "peak_working_set_bytes": 1709256704,
+    "failed_call": {
+      "benchmark_call": 847,
+      "measured_call": 815,
+      "ms": 7.1111
+    },
+    "baseline_short_runs_do_not_count_toward_gate": true
+  },
+  "correctness": {
+    "native": "native-correctness.json; all 4 variants, 1/32 voices, 3 epochs, analytical delayed FIR, silence/empty/history/reset, released resources",
+    "full_replay": "numerical.json; target-only 2 x 231581 frames with full tails and fixed/fragmented input",
+    "local": "14 GPU/reference/resource/quality/no-allocation tests, clippy, C++ format and applicable quality checks passed",
+    "native_build": "All four native Release builds passed; initial runtime compilation fixes completed before any performance run."
+  },
+  "preparation_tradeoff": "Short-matrix process wall time minus timed DSP increased about 6 seconds; peak working set including preparation about 1.71 GB versus 1.48 GB. This is not an isolated loading timer or device-memory measurement.",
+  "conditions": "Windows 8 Audio workers, ordinary caller, 96 kHz, 512 frames, 32 sources, realtime, AC and normal desktop load. No concurrent builds or another benchmark launched by this task during timing.",
+  "notes": [
+    "No replacement run after the failure; remaining round stopped.",
+    "No device-playback or GUI packaging expansion after failure.",
+    "No claim that a specific driver, background process or FFT operation caused the spike.",
+    "Validated native regression tool is retained; fusion runtime is archived."
+  ],
+  "restoration": {
+    "local": {
+      "base_preserved": "a08245a654fde05cfd3a459b2820a68f2f4b91c0",
+      "restored_tracked_files": 19,
+      "removed_archived_new_files": 14,
+      "kept_validated_tools": [
+        "scripts/research/room_gpu/resident_transport_test.py"
+      ],
+      "original_cmake_preserved": true
+    },
+    "windows": {
+      "verified_overlay_entries": 1327,
+      "restored_files": 622,
+      "removed_task_files": 705,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "restore-configure": 0,
+      "restore-build": 0,
+      "git_status_unchanged_after_build": true,
+      "final_status_unchanged": true,
+      "shared_caches_preserved": true,
+      "frozen_binaries_verified_before_cleanup": true,
+      "task_directory_removed": true,
+      "temporary_mathdx_removed": true
+    }
+  }
+}

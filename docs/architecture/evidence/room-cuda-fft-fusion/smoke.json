@@ -1,0 +1,815 @@
+{
+  "schema": "mradm.room-cuda-fft-fusion",
+  "mode": "smoke",
+  "variants": {
+    "baseline": {
+      "optimization_flags": 0,
+      "dll_sha256": "535fcf120f3c6cc517805fce84322272cfa63c5f79ae942ae18afd2a60ce04ec",
+      "configure": [
+        "cmake",
+        "-S",
+        "<checkout>",
+        "-B",
+        "<checkout>\\build\\win-canon",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+        "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+        "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=OFF",
+        "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+        "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+      ]
+    },
+    "target": {
+      "optimization_flags": 4,
+      "dll_sha256": "823d4531fe5616487c93a9a8bc6aba1959ac3c760f8cacae7e0810d8f34e867d",
+      "configure": [
+        "cmake",
+        "-S",
+        "<checkout>",
+        "-B",
+        "<checkout>\\build\\win-canon",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+        "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+        "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+        "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+        "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+      ]
+    },
+    "convolution": {
+      "optimization_flags": 8,
+      "dll_sha256": "03807bb96ba60c6a96a85f2d4e8359d56207408bd830027f6eae5fa6ef50389d",
+      "configure": [
+        "cmake",
+        "-S",
+        "<checkout>",
+        "-B",
+        "<checkout>\\build\\win-canon",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+        "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+        "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=OFF",
+        "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=ON",
+        "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+      ]
+    },
+    "combined": {
+      "optimization_flags": 12,
+      "dll_sha256": "57af91baaf7020ec51e5a6f761dd826c88358066c48e86704cf57d615f39d257",
+      "configure": [
+        "cmake",
+        "-S",
+        "<checkout>",
+        "-B",
+        "<checkout>\\build\\win-canon",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+        "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+        "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+        "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=ON",
+        "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-fft-fusion-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+      ]
+    }
+  },
+  "benchmark_sha256": "f55ee393580129ba2926e7a227d7f22b56f06455341308f735ef810d7be81392",
+  "cases": [
+    {
+      "variant": "baseline",
+      "repetition": 0,
+      "scenario": "ramps",
+      "result": {
+        "algorithm_fifo_frames": 256,
+        "audio_seconds": 0.005333333333333333,
+        "blocks": 1,
+        "call_frames": 512,
+        "continuous_pose": true,
+        "coordinate_mapping": "uniform",
+        "cpu_audio_budget_percent": null,
+        "cpu_seconds": null,
+        "deadline_misses": 0,
+        "distinct_event_offsets": 32,
+        "dsp_seconds": 0.0029634,
+        "experiment": {
+          "binding": "prepared-memory",
+          "control": "production Session",
+          "cpu_reference": false,
+          "eq_stagger_frames": 256,
+          "finite_fade": true,
+          "kind": "room-cuda-session"
+        },
+        "final_phase": 0,
+        "hrir_bank_bytes": 825275648,
+        "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+        "maximum_ms": 2.9634,
+        "mean_ms": 2.9634,
+        "memory_measurement": "sampled-process-rss",
+        "p95_ms": 2.9634,
+        "p99_ms": 2.9634,
+        "peak": 0.029012436047196388,
+        "pose_update_hz": 187.5,
+        "preparation_outside_dsp_seconds": 0.0,
+        "processing_policy": "room-realtime-v2",
+        "profiling": false,
+        "quality": "realtime",
+        "reflection_update_frames": 2048,
+        "reported_latency_frames": 256,
+        "room_switches": 0,
+        "room_transition": false,
+        "rss_peak_bytes": null,
+        "sample_rate": 96000,
+        "scenario": "ramps",
+        "slowest_calls": [
+          {
+            "benchmark_call": 32,
+            "measured_call": 0,
+            "ms": 2.9634
+          }
+        ],
+        "source_ramps": true,
+        "sources": 32,
+        "stages": {
+          "canonical_block": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          }
+        },
+        "switch_period_calls": 0,
+        "thread_scheduling": {
+          "caller_registered": false,
+          "class": "Audio",
+          "registered_workers": 8
+        },
+        "trace": null,
+        "voice_segments": null,
+        "voice_segments_per_source_block": null,
+        "worker_wall_budget_percent": 55.56375
+      },
+      "command": [
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\room_cuda_bench.exe",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\room\\room.json",
+        "1",
+        "512",
+        "32",
+        "--hrir",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\collection",
+        "--quality",
+        "realtime",
+        "--scenario",
+        "ramps",
+        "--audio-workers",
+        "--cuda-library",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\baseline\\mradm_room_cuda.dll"
+      ],
+      "host_before": {
+        "utc": "2026-10-19T13:19:47Z",
+        "background_cpu_percent": [
+          12.788461538461537,
+          10.557184750733139,
+          5.486044273339752
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "host_after": {
+        "utc": "2026-10-19T13:20:02Z",
+        "background_cpu_percent": [
+          16.746871992300292,
+          5.56640625,
+          6.641000962463906
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "peak_working_set_bytes": 1478356992,
+      "process_seconds": 14.75
+    },
+    {
+      "variant": "target",
+      "repetition": 0,
+      "scenario": "ramps",
+      "result": {
+        "algorithm_fifo_frames": 256,
+        "audio_seconds": 0.005333333333333333,
+        "blocks": 1,
+        "call_frames": 512,
+        "continuous_pose": true,
+        "coordinate_mapping": "uniform",
+        "cpu_audio_budget_percent": null,
+        "cpu_seconds": null,
+        "deadline_misses": 0,
+        "distinct_event_offsets": 32,
+        "dsp_seconds": 0.0024824,
+        "experiment": {
+          "binding": "prepared-memory",
+          "control": "production Session",
+          "cpu_reference": false,
+          "eq_stagger_frames": 256,
+          "finite_fade": true,
+          "kind": "room-cuda-session"
+        },
+        "final_phase": 0,
+        "hrir_bank_bytes": 825275648,
+        "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+        "maximum_ms": 2.4824,
+        "mean_ms": 2.4824,
+        "memory_measurement": "sampled-process-rss",
+        "p95_ms": 2.4824,
+        "p99_ms": 2.4824,
+        "peak": 0.02901243418455124,
+        "pose_update_hz": 187.5,
+        "preparation_outside_dsp_seconds": 0.0,
+        "processing_policy": "room-realtime-v2",
+        "profiling": false,
+        "quality": "realtime",
+        "reflection_update_frames": 2048,
+        "reported_latency_frames": 256,
+        "room_switches": 0,
+        "room_transition": false,
+        "rss_peak_bytes": null,
+        "sample_rate": 96000,
+        "scenario": "ramps",
+        "slowest_calls": [
+          {
+            "benchmark_call": 32,
+            "measured_call": 0,
+            "ms": 2.4824
+          }
+        ],
+        "source_ramps": true,
+        "sources": 32,
+        "stages": {
+          "canonical_block": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          }
+        },
+        "switch_period_calls": 0,
+        "thread_scheduling": {
+          "caller_registered": false,
+          "class": "Audio",
+          "registered_workers": 8
+        },
+        "trace": null,
+        "voice_segments": null,
+        "voice_segments_per_source_block": null,
+        "worker_wall_budget_percent": 46.545
+      },
+      "command": [
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\room_cuda_bench.exe",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\room\\room.json",
+        "1",
+        "512",
+        "32",
+        "--hrir",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\collection",
+        "--quality",
+        "realtime",
+        "--scenario",
+        "ramps",
+        "--audio-workers",
+        "--cuda-library",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\target\\mradm_room_cuda.dll"
+      ],
+      "host_before": {
+        "utc": "2026-10-19T13:20:05Z",
+        "background_cpu_percent": [
+          2.83203125,
+          6.93359375,
+          9.257473481195754
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "host_after": {
+        "utc": "2026-10-19T13:20:26Z",
+        "background_cpu_percent": [
+          2.500000000000002,
+          5.288461538461542,
+          3.653846153846152
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "peak_working_set_bytes": 1709072384,
+      "process_seconds": 20.859000000054948
+    },
+    {
+      "variant": "convolution",
+      "repetition": 0,
+      "scenario": "ramps",
+      "result": {
+        "algorithm_fifo_frames": 256,
+        "audio_seconds": 0.005333333333333333,
+        "blocks": 1,
+        "call_frames": 512,
+        "continuous_pose": true,
+        "coordinate_mapping": "uniform",
+        "cpu_audio_budget_percent": null,
+        "cpu_seconds": null,
+        "deadline_misses": 0,
+        "distinct_event_offsets": 32,
+        "dsp_seconds": 0.0028396,
+        "experiment": {
+          "binding": "prepared-memory",
+          "control": "production Session",
+          "cpu_reference": false,
+          "eq_stagger_frames": 256,
+          "finite_fade": true,
+          "kind": "room-cuda-session"
+        },
+        "final_phase": 0,
+        "hrir_bank_bytes": 825275648,
+        "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+        "maximum_ms": 2.8396,
+        "mean_ms": 2.8396,
+        "memory_measurement": "sampled-process-rss",
+        "p95_ms": 2.8396,
+        "p99_ms": 2.8396,
+        "peak": 0.029012436047196388,
+        "pose_update_hz": 187.5,
+        "preparation_outside_dsp_seconds": 0.0,
+        "processing_policy": "room-realtime-v2",
+        "profiling": false,
+        "quality": "realtime",
+        "reflection_update_frames": 2048,
+        "reported_latency_frames": 256,
+        "room_switches": 0,
+        "room_transition": false,
+        "rss_peak_bytes": null,
+        "sample_rate": 96000,
+        "scenario": "ramps",
+        "slowest_calls": [
+          {
+            "benchmark_call": 32,
+            "measured_call": 0,
+            "ms": 2.8396
+          }
+        ],
+        "source_ramps": true,
+        "sources": 32,
+        "stages": {
+          "canonical_block": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          }
+        },
+        "switch_period_calls": 0,
+        "thread_scheduling": {
+          "caller_registered": false,
+          "class": "Audio",
+          "registered_workers": 8
+        },
+        "trace": null,
+        "voice_segments": null,
+        "voice_segments_per_source_block": null,
+        "worker_wall_budget_percent": 53.2425
+      },
+      "command": [
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\room_cuda_bench.exe",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\room\\room.json",
+        "1",
+        "512",
+        "32",
+        "--hrir",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\collection",
+        "--quality",
+        "realtime",
+        "--scenario",
+        "ramps",
+        "--audio-workers",
+        "--cuda-library",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\convolution\\mradm_room_cuda.dll"
+      ],
+      "host_before": {
+        "utc": "2026-10-19T13:20:29Z",
+        "background_cpu_percent": [
+          6.692531522793399,
+          2.4038461538461564,
+          6.153846153846154
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "host_after": {
+        "utc": "2026-10-19T13:20:50Z",
+        "background_cpu_percent": [
+          6.776379477250726,
+          1.9102196752626588,
+          4.00390625
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "peak_working_set_bytes": 1708892160,
+      "process_seconds": 21.03200000000652
+    },
+    {
+      "variant": "combined",
+      "repetition": 0,
+      "scenario": "ramps",
+      "result": {
+        "algorithm_fifo_frames": 256,
+        "audio_seconds": 0.005333333333333333,
+        "blocks": 1,
+        "call_frames": 512,
+        "continuous_pose": true,
+        "coordinate_mapping": "uniform",
+        "cpu_audio_budget_percent": null,
+        "cpu_seconds": null,
+        "deadline_misses": 0,
+        "distinct_event_offsets": 32,
+        "dsp_seconds": 0.0031544,
+        "experiment": {
+          "binding": "prepared-memory",
+          "control": "production Session",
+          "cpu_reference": false,
+          "eq_stagger_frames": 256,
+          "finite_fade": true,
+          "kind": "room-cuda-session"
+        },
+        "final_phase": 0,
+        "hrir_bank_bytes": 825275648,
+        "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+        "maximum_ms": 3.1544,
+        "mean_ms": 3.1544,
+        "memory_measurement": "sampled-process-rss",
+        "p95_ms": 3.1544,
+        "p99_ms": 3.1544,
+        "peak": 0.02901243418455124,
+        "pose_update_hz": 187.5,
+        "preparation_outside_dsp_seconds": 0.0,
+        "processing_policy": "room-realtime-v2",
+        "profiling": false,
+        "quality": "realtime",
+        "reflection_update_frames": 2048,
+        "reported_latency_frames": 256,
+        "room_switches": 0,
+        "room_transition": false,
+        "rss_peak_bytes": null,
+        "sample_rate": 96000,
+        "scenario": "ramps",
+        "slowest_calls": [
+          {
+            "benchmark_call": 32,
+            "measured_call": 0,
+            "ms": 3.1544
+          }
+        ],
+        "source_ramps": true,
+        "sources": 32,
+        "stages": {
+          "canonical_block": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_begin": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "emitter_convolution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_submit": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "gpu_wait": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "hrir_query": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_decoder": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "late_field": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "path_transfers": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "response_transform": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "session_process": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_reduction": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "source_response": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "target_filters": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_batch": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_render": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "voice_segment": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_execution": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          },
+          "worker_roundtrip": {
+            "calls": 0,
+            "worker_summed_ms": 0.0
+          }
+        },
+        "switch_period_calls": 0,
+        "thread_scheduling": {
+          "caller_registered": false,
+          "class": "Audio",
+          "registered_workers": 8
+        },
+        "trace": null,
+        "voice_segments": null,
+        "voice_segments_per_source_block": null,
+        "worker_wall_budget_percent": 59.145
+      },
+      "command": [
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\room_cuda_bench.exe",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\room\\room.json",
+        "1",
+        "512",
+        "32",
+        "--hrir",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\assets\\collection",
+        "--quality",
+        "realtime",
+        "--scenario",
+        "ramps",
+        "--audio-workers",
+        "--cuda-library",
+        "<checkout>\\local\\room-cuda-fft-fusion-20261019\\bin\\combined\\mradm_room_cuda.dll"
+      ],
+      "host_before": {
+        "utc": "2026-10-19T13:20:53Z",
+        "background_cpu_percent": [
+          6.634615384615383,
+          7.429130009775175,
+          3.464870067372472
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "host_after": {
+        "utc": "2026-10-19T13:21:14Z",
+        "background_cpu_percent": [
+          5.486044273339752,
+          3.398058252427183,
+          9.455587392550147
+        ],
+        "ac": 1,
+        "battery_percent": 100,
+        "saver": 0
+      },
+      "peak_working_set_bytes": 1709842432,
+      "process_seconds": 20.75
+    }
+  ],
+  "stopped_variants": [],
+  "completed": true
+}

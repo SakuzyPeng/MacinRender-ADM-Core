@@ -1,0 +1,14 @@
+{
+  "base": "a08245a654fde05cfd3a459b2820a68f2f4b91c0",
+  "prerequisite": "../room-cuda-integration/candidate.patch",
+  "patch_sha256": "209a0be2ff780920f5248198eb76d163ad5d5ce93efade487f5bccbbdd207119",
+  "compiled_source_sha256": {
+    "cmake/MRRoomCuda.cmake": "c73442366650c17449bbd431c52464840c0fb0db8dadc9123c812b504f614e4b",
+    "src/adm_render_room/cuda/backend.cpp": "7c93452f84d9f6516c5baa9fea468b3d7e56dbb6312863bd86e80271bbc71cdb",
+    "src/adm_render_room/cuda/resident_support.h": "6658c41443084d36415517aea7258bc119055bc532288568421dcc30a6fe5c57",
+    "scripts/research/room_gpu/session_backend.cpp": "c85ca67907fa31a50ecd7cb8ae7469457f09737108f14ac10bd652bc3335c3ac",
+    "scripts/research/room_gpu/session_kernels.cu": "b618d4078e0b16ae569baf543f9c1718cb27ad5a9ff93099634079026f2d408f",
+    "scripts/research/room_gpu/session_late.h": "9c528d0027a5c534be0d50d4bfbc28067b28528598fc31734376282a0878960f"
+  },
+  "activation": "No fusion candidate adopted after failing the runtime gate."
+}

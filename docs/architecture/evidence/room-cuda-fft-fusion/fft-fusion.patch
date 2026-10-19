@@ -1,0 +1,408 @@
+diff --git a/cmake/MRRoomCuda.cmake b/cmake/MRRoomCuda.cmake
+--- a/cmake/MRRoomCuda.cmake
++++ b/cmake/MRRoomCuda.cmake
+@@ -4,9 +4,27 @@
+ if(NOT WIN32)
+     message(FATAL_ERROR "MR_ADM_ENABLE_ROOM_CUDA currently supports Windows only")
+ endif()
++option(MR_ADM_ROOM_CUDA_FUSE_TARGET "Research: fuse target gather, FFT and install" OFF)
++option(MR_ADM_ROOM_CUDA_FUSE_CONVOLVE "Research: fuse convolution, FFT and extraction" OFF)
++set(MR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR "" CACHE PATH "MathDx include directory containing cufftdx.hpp")
+ find_package(CUDAToolkit 12 REQUIRED)
+ add_library(mr_adm_room_cuda SHARED src/adm_render_room/cuda/backend.cpp)
+ target_compile_features(mr_adm_room_cuda PRIVATE cxx_std_20)
++if(MR_ADM_ROOM_CUDA_FUSE_TARGET OR MR_ADM_ROOM_CUDA_FUSE_CONVOLVE)
++    if(NOT EXISTS "${MR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR}/cufftdx.hpp")
++        message(FATAL_ERROR "FFT fusion requires an explicit MathDx include directory")
++    endif()
++    list(GET CUDAToolkit_INCLUDE_DIRS 0 _mr_cuda_toolkit_include)
++    target_compile_definitions(mr_adm_room_cuda PRIVATE
++        ROOM_CUDA_MATHDX_INCLUDE="${MR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR}"
++        ROOM_CUDA_TOOLKIT_INCLUDE="${_mr_cuda_toolkit_include}")
++endif()
++if(MR_ADM_ROOM_CUDA_FUSE_TARGET)
++    target_compile_definitions(mr_adm_room_cuda PRIVATE ROOM_GPU_FUSE_TARGET)
++endif()
++if(MR_ADM_ROOM_CUDA_FUSE_CONVOLVE)
++    target_compile_definitions(mr_adm_room_cuda PRIVATE ROOM_GPU_FUSE_CONVOLVE)
++endif()
+ target_include_directories(mr_adm_room_cuda PRIVATE src/adm_render_room/cuda)
+ target_link_libraries(mr_adm_room_cuda PRIVATE CUDA::cuda_driver CUDA::cudart CUDA::nvrtc CUDA::cufft)
+ set_target_properties(mr_adm_room_cuda PROPERTIES OUTPUT_NAME mradm_room_cuda)
+diff --git a/src/adm_render_room/cuda/backend.cpp b/src/adm_render_room/cuda/backend.cpp
+--- a/src/adm_render_room/cuda/backend.cpp
++++ b/src/adm_render_room/cuda/backend.cpp
+@@ -13,6 +13,16 @@
+     }
+ 
+ 
++extern "C" __declspec(dllexport) unsigned mradm_room_cuda_optimizations() noexcept {
++    unsigned flags = 0;
++#ifdef ROOM_GPU_FUSE_TARGET
++    flags |= 4;
++#endif
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++    flags |= 8;
++#endif
++    return flags;
++}
+ extern "C" __declspec(dllexport) unsigned mradm_room_cuda_abi() noexcept {
+     return 1;
+ }
+diff --git a/src/adm_render_room/cuda/resident_support.h b/src/adm_render_room/cuda/resident_support.h
+--- a/src/adm_render_room/cuda/resident_support.h
++++ b/src/adm_render_room/cuda/resident_support.h
+@@ -150,7 +150,7 @@
+ struct Module {
+     Context context;
+     CUmodule value = nullptr;
+-    Module(const std::string& source, const Config& c, int targets, int major, int minor) {
++    Module(const std::string& source, const Config& c, int targets, int major, int minor, bool fusion = false) {
+         nvrtcProgram program = nullptr;
+         auto check = [](nvrtcResult r) {
+             if (r != NVRTC_SUCCESS)
+@@ -172,6 +172,24 @@
+                                                 "-DBUCKET_STRIDE=" + std::to_string(c.bucket_stride),
+                                                 "-DPARTS=" + std::to_string((c.taps + 255) / 256),
+                                                 "-DTARGETS=" + std::to_string(targets)};
++#if defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)
++            if (fusion) {
++                options[0] = "--std=c++17";
++                options.emplace_back("--device-as-default-execution-space");
++                options.emplace_back("-DCUFFTDX_DISABLE_CUTLASS_DEPENDENCY");
++                options.emplace_back("--include-path=" ROOM_CUDA_MATHDX_INCLUDE);
++                options.emplace_back("--include-path=" ROOM_CUDA_TOOLKIT_INCLUDE);
++                options.emplace_back("-DROOM_FFT_SM=" + std::to_string(major * 100 + minor * 10));
++#ifdef ROOM_GPU_FUSE_TARGET
++                options.emplace_back("-DROOM_GPU_FUSE_TARGET");
++#endif
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++                options.emplace_back("-DROOM_GPU_FUSE_CONVOLVE");
++#endif
++            }
++#else
++            (void) fusion;
++#endif
+             std::vector<const char*> pointers;
+             for (const auto& option : options)
+                 pointers.push_back(option.c_str());
+diff --git a/scripts/research/room_gpu/session_backend.cpp b/scripts/research/room_gpu/session_backend.cpp
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -25,6 +25,53 @@
+ #endif
+ 
+ namespace {
++#if (defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)) && !defined(ROOM_GPU_RESIDENT)
++#error FFT fusion requires the resident CUDA research adapter
++#endif
++#ifdef ROOM_GPU_FUSE_TARGET
++constexpr bool fuse_target = true;
++#else
++constexpr bool fuse_target = false;
++#endif
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++constexpr bool fuse_convolve = true;
++#else
++constexpr bool fuse_convolve = false;
++#endif
++#if defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)
++struct FusedKernel {
++    CUfunction function = nullptr;
++    std::array<unsigned, 4> shape{}; // block x/y, shared bytes, FFTs per block
++    void load(const Module& module, const char* name, const char* traits) {
++        function = module.function(name);
++        CUdeviceptr address = 0;
++        size_t bytes = 0;
++        driver(cuModuleGetGlobal(&address, &bytes, module.value, traits));
++        if (bytes != sizeof(shape))
++            throw std::runtime_error("Invalid fused FFT launch traits");
++        driver(cuMemcpyDtoH(shape.data(), address, bytes));
++        if (!shape[0] || !shape[1] || shape[0] * shape[1] > 1024 || shape[1] != shape[3] || shape[2] > 98304)
++            throw std::runtime_error("Unsupported fused FFT launch shape");
++        driver(
++            cuFuncSetAttribute(function, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, static_cast<int>(shape[2])));
++    }
++    void launch(unsigned x, unsigned y, cudaStream_t stream, std::initializer_list<void*> values) const {
++        std::array<void*, 12> arguments{};
++        std::copy(values.begin(), values.end(), arguments.begin());
++        driver(cuLaunchKernel(function,
++                              x,
++                              y,
++                              1,
++                              shape[0],
++                              shape[1],
++                              1,
++                              shape[2],
++                              reinterpret_cast<CUstream>(stream),
++                              arguments.data(),
++                              nullptr));
++    }
++};
++#endif
+ constexpr unsigned max_voices = 32, max_updates = 256, max_ranges = 1024, max_tasks = 2048, max_jobs = 32 * 8192;
+ struct NativeUpdate {
+     unsigned group, slot, parts, support, first_row;
+@@ -87,7 +134,8 @@
+     cudaGraphExec_t execution = nullptr;
+     Variant(unsigned r, unsigned u, unsigned t, unsigned f, const Config& c, Plans& plans)
+         : responses(r), updates(u), tasks(t), fft_rows(f), inverse(plans.get(c.n, CUFFT_C2R, r)),
+-          target(plans.get(512, CUFFT_R2C, f)), output(plans.get(512, CUFFT_C2R, t * 2)) {}
++          target(fuse_target ? nullptr : plans.get(512, CUFFT_R2C, f)),
++          output(fuse_convolve ? nullptr : plans.get(512, CUFFT_C2R, t * 2)) {}
+     ~Variant() {
+ #ifdef ROOM_GPU_RESIDENT
+         if (!context.valid())
+@@ -123,6 +171,12 @@
+         host_output;
+     std::vector<std::unique_ptr<Variant>> variants;
+     CUfunction response_fn, pack_fn, install_fn, input_fn, convolve_fn, mix_fn;
++#ifdef ROOM_GPU_FUSE_TARGET
++    FusedKernel target_fused;
++#endif
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++    FusedKernel convolution_fused;
++#endif
+ #ifdef ROOM_GPU_RESIDENT
+     Engine(ResidentHandle resource, const RoomGpuParams& p)
+         : resident_(std::move(resource)), c(configuration(resident_, p)), bins(c.n / 2 + 1),
+@@ -133,12 +187,13 @@
+           updates(max_updates * sizeof(NativeUpdate)), tasks(max_tasks * sizeof(RoomGpuTask)),
+           groups(max_voices * 2 * sizeof(RoomGpuRange)), info(max_voices * sizeof(Info)),
+           input(max_voices * 2 * 257 * 8), device_header(sizeof(Header)), spectrum(2048 * bins * 8),
+-          bucket_time(2048 * c.n * 4), packed(max_updates * 2 * parts * 512 * 4),
+-          fresh(max_updates * 2 * parts * 257 * 8), filters(max_voices * 2 * 32 * 2 * parts * 257 * 8),
+-          history(max_voices * 2 * parts * 257 * 8), convolved(max_tasks * 2 * 257 * 8),
+-          convolved_time(max_tasks * 2 * 512 * 4), output(max_voices * 4 * 256 * 4), host_jobs(jobs.bytes),
+-          host_ranges(ranges.bytes), host_updates(updates.bytes), host_tasks(tasks.bytes), host_groups(groups.bytes),
+-          host_info(info.bytes), host_input(input.bytes), host_header(sizeof(Header)), host_output(output.bytes) {
++          bucket_time(2048 * c.n * 4), packed(fuse_target ? 1 : max_updates * 2 * parts * 512 * 4),
++          fresh(fuse_target ? 1 : max_updates * 2 * parts * 257 * 8),
++          filters(max_voices * 2 * 32 * 2 * parts * 257 * 8), history(max_voices * 2 * parts * 257 * 8),
++          convolved(fuse_convolve ? 1 : max_tasks * 2 * 257 * 8), convolved_time(max_tasks * 2 * 512 * 4),
++          output(max_voices * 4 * 256 * 4), host_jobs(jobs.bytes), host_ranges(ranges.bytes),
++          host_updates(updates.bytes), host_tasks(tasks.bytes), host_groups(groups.bytes), host_info(info.bytes),
++          host_input(input.bytes), host_header(sizeof(Header)), host_output(output.bytes) {
+         initialize(p);
+     }
+ 
+@@ -150,12 +205,13 @@
+           updates(max_updates * sizeof(NativeUpdate)), tasks(max_tasks * sizeof(RoomGpuTask)),
+           groups(max_voices * 2 * sizeof(RoomGpuRange)), info(max_voices * sizeof(Info)),
+           input(max_voices * 2 * 257 * 8), device_header(sizeof(Header)), spectrum(2048 * bins * 8),
+-          bucket_time(2048 * c.n * 4), packed(max_updates * 2 * parts * 512 * 4),
+-          fresh(max_updates * 2 * parts * 257 * 8), filters(max_voices * 2 * 32 * 2 * parts * 257 * 8),
+-          history(max_voices * 2 * parts * 257 * 8), convolved(max_tasks * 2 * 257 * 8),
+-          convolved_time(max_tasks * 2 * 512 * 4), output(max_voices * 4 * 256 * 4), host_jobs(jobs.bytes),
+-          host_ranges(ranges.bytes), host_updates(updates.bytes), host_tasks(tasks.bytes), host_groups(groups.bytes),
+-          host_info(info.bytes), host_input(input.bytes), host_header(sizeof(Header)), host_output(output.bytes) {
++          bucket_time(2048 * c.n * 4), packed(fuse_target ? 1 : max_updates * 2 * parts * 512 * 4),
++          fresh(fuse_target ? 1 : max_updates * 2 * parts * 257 * 8),
++          filters(max_voices * 2 * 32 * 2 * parts * 257 * 8), history(max_voices * 2 * parts * 257 * 8),
++          convolved(fuse_convolve ? 1 : max_tasks * 2 * 257 * 8), convolved_time(max_tasks * 2 * 512 * 4),
++          output(max_voices * 4 * 256 * 4), host_jobs(jobs.bytes), host_ranges(ranges.bytes),
++          host_updates(updates.bytes), host_tasks(tasks.bytes), host_groups(groups.bytes), host_info(info.bytes),
++          host_input(input.bytes), host_header(sizeof(Header)), host_output(output.bytes) {
+         initialize(p, fixture, source);
+     }
+ #endif
+@@ -183,7 +239,7 @@
+         cudaDeviceProp props{};
+         runtime(cudaGetDeviceProperties(&props, 0));
+ #ifdef ROOM_GPU_RESIDENT
+-        module = std::make_unique<Module>(resident_->source, c, 32, props.major, props.minor);
++        module = std::make_unique<Module>(resident_->source, c, 32, props.major, props.minor, true);
+ #else
+         module = std::make_unique<Module>(source, c, 32, props.major, props.minor);
+ #endif
+@@ -193,6 +249,12 @@
+         input_fn = module->function("session_input");
+         convolve_fn = module->function("session_convolve");
+         mix_fn = module->function("session_mix");
++#ifdef ROOM_GPU_FUSE_TARGET
++        target_fused.load(*module, "session_target_fused", "session_target_fft_traits");
++#endif
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++        convolution_fused.load(*module, "session_convolve_fused", "session_convolution_fft_traits");
++#endif
+         Plans plans(stream);
+         for (const auto& shape : std::array<std::array<unsigned, 3>, 5>{
+                  {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, 256, 2048}}}) {
+@@ -256,6 +318,14 @@
+         fft_check(cufftExecC2R(
+             v.inverse->value, static_cast<cufftComplex*>(spectrum.data), static_cast<float*>(bucket_time.data)));
+         trace.mark(3, stream);
++#ifdef ROOM_GPU_FUSE_TARGET
++        target_fused.launch((static_cast<unsigned>(parts) + target_fused.shape[3] - 1) / target_fused.shape[3],
++                            v.updates * 2,
++                            stream,
++                            {&device_header.data, &updates.data, &bucket_time.data, &filters.data});
++        trace.mark(4, stream);
++        trace.mark(5, stream);
++#else
+         launch(pack_fn,
+                blocks(parts * 512),
+                v.updates * 2,
+@@ -268,8 +338,18 @@
+                blocks(2 * parts * 257),
+                v.updates,
+                {&device_header.data, &updates.data, &fresh.data, &filters.data});
++#endif
+         launch(input_fn, blocks(257), max_voices * 2, {&device_header.data, &info.data, &input.data, &history.data});
+         trace.mark(6, stream);
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++        convolution_fused.launch(
++            (v.tasks * 2 + convolution_fused.shape[3] - 1) / convolution_fused.shape[3],
++            1,
++            stream,
++            {&device_header.data, &info.data, &tasks.data, &history.data, &filters.data, &convolved_time.data});
++        trace.mark(7, stream);
++        trace.mark(8, stream);
++#else
+         launch(convolve_fn,
+                blocks(257),
+                v.tasks * 2,
+@@ -278,6 +358,7 @@
+         fft_check(cufftExecC2R(
+             v.output->value, static_cast<cufftComplex*>(convolved.data), static_cast<float*>(convolved_time.data)));
+         trace.mark(8, stream);
++#endif
+         unsigned fade = c.rate / 100;
+         launch(mix_fn,
+                blocks(512),
+diff --git a/scripts/research/room_gpu/session_kernels.cu b/scripts/research/room_gpu/session_kernels.cu
+--- a/scripts/research/room_gpu/session_kernels.cu
++++ b/scripts/research/room_gpu/session_kernels.cu
+@@ -198,3 +198,132 @@
+     unsigned i = blockIdx.x * blockDim.x + threadIdx.x, direction = blockIdx.y;
+     out[direction * 2048 + i] = time[direction * 4096 + 2048 + i] * (1.f / 4096);
+ }
++
++
++#if defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)
++#include <cufftdx.hpp>
++namespace room_fft {
++using namespace cufftdx;
++using Common = decltype(Block() + Size<512>() + Precision<float>() + SM<ROOM_FFT_SM>() + ElementsPerThread<8>() +
++                        FFTsPerBlock<4>());
++using Forward = decltype(Common() + Type<fft_type::r2c>() + Direction<fft_direction::forward>() +
++                         RealFFTOptions<complex_layout::natural, real_mode::folded>());
++using Inverse = decltype(Common() + Type<fft_type::c2r>() + Direction<fft_direction::inverse>() +
++                         RealFFTOptions<complex_layout::natural, real_mode::folded>());
++static_assert(!Forward::requires_workspace && !Inverse::requires_workspace);
++static_assert(Forward::input_length == 256 && Forward::output_length == 257);
++static_assert(Inverse::input_length == 257 && Inverse::output_length == 256);
++static_assert(sizeof(Forward::input_type) == 8 && sizeof(Inverse::output_type) == 8);
++static_assert(Forward::implicit_type_batching == 1 && Inverse::implicit_type_batching == 1);
++} // namespace room_fft
++#endif
++
++#ifdef ROOM_GPU_FUSE_TARGET
++extern "C" __device__ __constant__ unsigned session_target_fft_traits[] = {room_fft::Forward::block_dim.x,
++                                                                           room_fft::Forward::block_dim.y,
++                                                                           room_fft::Forward::shared_memory_size,
++                                                                           room_fft::Forward::ffts_per_block};
++
++__device__ float
++target_time_sample(const Update& update, unsigned ear, unsigned part, unsigned sample, const float* buckets) {
++    const unsigned t = part * 256 + sample;
++    float sum = 0;
++    if (part < update.parts && sample < 256 && t < update.support) {
++        for (unsigned b = 0; b < BUCKETS; ++b) {
++            const unsigned r = update.rows[b];
++            const int at = int(t) - int(b * BUCKET_STRIDE);
++            if (r != 0xffffffffu && at >= 0 && at < FFT_N)
++                sum += buckets[(r * 2 + ear) * FFT_N + at] * (1.f / FFT_N);
++        }
++    }
++    return sum;
++}
++
++extern "C" __global__ void
++session_target_fused(const Header* h, const Update* updates, const float* buckets, Complex* filters) {
++    using FFT = room_fft::Forward;
++    const unsigned target = blockIdx.y / 2, ear = blockIdx.y % 2;
++    // This return is uniform across the block. Partial FFT groups still
++    // participate in all shared-memory synchronization, with zero input.
++    if (target >= h->updates)
++        return;
++    const Update& update = updates[target];
++    const unsigned part = blockIdx.x * FFT::ffts_per_block + threadIdx.y;
++    FFT::value_type data[FFT::storage_size] = {};
++    auto* input_data = reinterpret_cast<FFT::input_type*>(data);
++    for (unsigned i = 0; i < FFT::input_ept; ++i) {
++        const unsigned k = threadIdx.x + i * FFT::stride;
++        if (k < FFT::input_length) {
++            input_data[i].x = target_time_sample(update, ear, part, k * 2, buckets);
++            input_data[i].y = target_time_sample(update, ear, part, k * 2 + 1, buckets);
++        }
++    }
++    extern __shared__ __align__(16) unsigned char fft_shared[];
++    FFT().execute(data, reinterpret_cast<FFT::value_type*>(fft_shared));
++    const auto* output_data = reinterpret_cast<const FFT::output_type*>(data);
++    if (part < update.parts) {
++        for (unsigned i = 0; i < FFT::output_ept; ++i) {
++            const unsigned k = threadIdx.x + i * FFT::stride;
++            if (k < 257) {
++                const auto value = output_data[i];
++                filters[(((update.group * TARGETS + update.slot) * 2 + ear) * PARTS + part) * 257 + k] = {
++                    value.x, (k == 0 || k == 256) ? 0.f : value.y};
++            }
++        }
++    }
++}
++#endif
++
++#ifdef ROOM_GPU_FUSE_CONVOLVE
++extern "C" __device__ __constant__ unsigned session_convolution_fft_traits[] = {room_fft::Inverse::block_dim.x,
++                                                                                room_fft::Inverse::block_dim.y,
++                                                                                room_fft::Inverse::shared_memory_size,
++                                                                                room_fft::Inverse::ffts_per_block};
++
++extern "C" __global__ void session_convolve_fused(
++    const Header* h, const Info* info, const Task* tasks, const Complex* history, const Complex* filters, float* time) {
++    using FFT = room_fft::Inverse;
++    if (blockIdx.x * FFT::ffts_per_block >= h->tasks * 2)
++        return;
++    const unsigned row = blockIdx.x * FFT::ffts_per_block + threadIdx.y;
++    const bool active = row / 2 < h->tasks;
++    unsigned group = 0, head = 0, slot = 0, parts = 0;
++    if (active) {
++        const Task& task = tasks[row / 2];
++        group = task.branch;
++        head = info[group / 2].heads[group % 2];
++        slot = task.slot;
++        parts = task.parts;
++    }
++    FFT::value_type data[FFT::storage_size] = {};
++    auto* input_data = reinterpret_cast<FFT::input_type*>(data);
++    for (unsigned i = 0; i < FFT::input_ept; ++i) {
++        const unsigned k = threadIdx.x + i * FFT::stride;
++        if (k < 257) {
++            Complex sum = {0, 0};
++            for (unsigned p = 0; p < parts; ++p) {
++                const unsigned at = (head + PARTS - p) % PARTS;
++                const Complex x = history[(group * PARTS + at) * 257 + k];
++                const Complex f = filters[(((group * TARGETS + slot) * 2 + row % 2) * PARTS + p) * 257 + k];
++                sum = plus(sum, product(x, f));
++            }
++            input_data[i].x = sum.r;
++            input_data[i].y = (k == 0 || k == 256) ? 0.f : sum.i;
++        }
++    }
++    extern __shared__ __align__(16) unsigned char fft_shared[];
++    FFT().execute(data, reinterpret_cast<FFT::value_type*>(fft_shared));
++    const auto* output_data = reinterpret_cast<const FFT::output_type*>(data);
++    if (active) {
++        for (unsigned i = 0; i < FFT::output_ept; ++i) {
++            const unsigned k = (threadIdx.x + i * FFT::stride) * 2;
++            if (k >= 256 && k < 512) {
++                // Keep the original unnormalised valid half. session_mix still
++                // applies exactly the original 1/512 and finite-fade weights.
++                time[row * 512 + k] = output_data[i].x;
++                time[row * 512 + k + 1] = output_data[i].y;
++            }
++        }
++    }
++}
++#endif
