@@ -1,0 +1,8 @@
+[0/6] C:\WINDOWS\system32\cmd.exe /C "cd /D <checkout>\rust\crates\mradm-ffi && <cmake-bin>\cmake.exe -E env CARGO_TARGET_DIR=<checkout>/build/rust CARGO_INCREMENTAL=0 RUSTFLAGS=-Crelocation-model=pic "CC_x86_64-pc-windows-msvc=<msvc>/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe" "CXX_x86_64-pc-windows-msvc=<msvc>/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe" CORROSION_BUILD_DIR=<checkout>/build/win-canon CARGO_BUILD_RUSTC=<rust-toolchain>/bin/rustc.exe <rust-toolchain>/bin/cargo.exe rustc --lib --target=x86_64-pc-windows-msvc --no-default-features --features=room-cuda --package mradm-ffi --crate-type=staticlib --crate-type=rlib --manifest-path <checkout>/rust/crates/mradm-ffi/Cargo.toml --target-dir <checkout>/build/rust/cargo/rust_636e7 --profile=release --locked -- -Cdefault-linker-libraries=yes"
+   Compiling mradm-ffi v0.1.0 (<checkout>\rust\crates\mradm-ffi)
+    Finished `release` profile [optimized] target(s) in 6.20s
+[2/6] Copying byproducts `mradm_ffi.lib` to <checkout>/build/win-canon
+[3/6] Linking CXX executable mr_adm_room_scene_benchmark.exe
+[4/6] Linking CXX executable mr_adm_room_file_device_probe.exe
+[5/6] Linking CXX executable mradm.exe
+[6/6] Linking CXX shared library mradm_capi.dll

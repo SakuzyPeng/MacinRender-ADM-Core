@@ -1,0 +1,1 @@
+C ABI 导出面校验通过：libmradm_capi.1.9.1.dylib 恰好导出 157 个 adm_* 函数

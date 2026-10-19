@@ -1,0 +1,3 @@
+    Checking mradm-room-cuda v0.1.0 (<checkout>\rust\crates\mradm-room-cuda)
+    Checking mradm-ffi v0.1.0 (<checkout>\rust\crates\mradm-ffi)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2.07s

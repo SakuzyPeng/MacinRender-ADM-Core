@@ -1,0 +1,4218 @@
+diff --git a/cmake/MRRust.cmake b/cmake/MRRust.cmake
+index 56da346..a323cce 100644
+--- a/cmake/MRRust.cmake
++++ b/cmake/MRRust.cmake
+@@ -19,6 +19,9 @@ function(mr_adm_import_rust)
+     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+         list(APPEND features diagnostics)
+     endif()
++    if(MR_ADM_ENABLE_ROOM_CUDA)
++        list(APPEND features room-cuda)
++    endif()
+     corrosion_import_crate(
+         MANIFEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
+         CRATES mradm-ffi
+@@ -30,6 +33,9 @@ function(mr_adm_import_rust)
+     )
+ endfunction()
+ mr_adm_import_rust()
++if(MR_ADM_ENABLE_ROOM_CUDA)
++    add_dependencies(mradm_ffi-static mr_adm_room_cuda)
++endif()
+ include(MRRustLink)
+ mr_adm_rust_use_platform_sdk(mradm_ffi-static)
+ corrosion_set_env_vars(mradm_ffi
+@@ -60,6 +66,9 @@ endif()
+ if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+     list(APPEND _mr_phase2_features diagnostics)
+ endif()
++if(MR_ADM_ENABLE_ROOM_CUDA)
++    list(APPEND _mr_phase2_features room-cuda)
++endif()
+ set(_mr_phase2_feature_args)
+ if(_mr_phase2_features)
+     list(JOIN _mr_phase2_features "," _mr_phase2_feature_string)
+diff --git a/rust/Cargo.lock b/rust/Cargo.lock
+index fd0d808..604b377 100644
+--- a/rust/Cargo.lock
++++ b/rust/Cargo.lock
+@@ -309,6 +309,7 @@ dependencies = [
+  "mradm-ear",
+  "mradm-math",
+  "mradm-osc",
++ "mradm-room-cuda",
+  "mradm-scene",
+  "mradm-wav",
+  "serde_json",
+@@ -330,6 +331,15 @@ dependencies = [
+  "serde_json",
+ ]
+ 
++[[package]]
++name = "mradm-room-cuda"
++version = "0.1.0"
++dependencies = [
++ "libc",
++ "mradm-dsp",
++ "serde_json",
++]
++
+ [[package]]
+ name = "mradm-scene"
+ version = "0.1.0"
+diff --git a/rust/Cargo.toml b/rust/Cargo.toml
+index 7265839..b192972 100644
+--- a/rust/Cargo.toml
++++ b/rust/Cargo.toml
+@@ -1,5 +1,5 @@
+ [workspace]
+-members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-scene", "crates/mradm-json", "crates/mradm-ffi"]
++members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-scene", "crates/mradm-json", "crates/mradm-ffi", "crates/mradm-room-cuda"]
+ resolver = "2"
+ exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft", "vendor/rayon-core", "vendor/ebur128"]
+ 
+diff --git a/rust/crates/mradm-dsp/examples/room_bench.rs b/rust/crates/mradm-dsp/examples/room_bench.rs
+index fd1ec9a..3123a4b 100644
+--- a/rust/crates/mradm-dsp/examples/room_bench.rs
++++ b/rust/crates/mradm-dsp/examples/room_bench.rs
+@@ -1,17 +1,3 @@
+-//! Release-only room CPU deadline probe. No audio device is involved: missed
+-//! deadlines here are DSP misses, not claimed device underruns/latency.
+-use mradm_dsp::{
+-    geometry,
+-    room::{
+-        BLOCK,
+-        control::{RoomCommand, RoomDescription, State},
+-        hrir::HrirBank,
+-        prepared::PreparedRoom,
+-        quality::Quality,
+-        session::{Instance, PreparedSet, Session},
+-    },
+-};
+-use std::{path::Path, sync::Arc, time::Instant};
+ #[path = "room_support/assets.rs"]
+ mod assets;
+ #[path = "room_support/audio_workers.rs"]
+@@ -24,433 +10,8 @@ mod gpu;
+ #[path = "room_bench/trace.rs"]
+ mod trace;
+ 
+-// Read counters outside the measured process call. Native host/Scene benchmarks
+-// provide these counters on macOS and Windows; this lightweight probe also runs
+-// on a headless Linux validation host without building device dependencies.
+-fn process_counters(ticks: Option<f64>) -> (Option<f64>, Option<u64>) {
+-    #[cfg(target_os = "linux")]
+-    {
+-        let cpu = ticks.and_then(|ticks| {
+-            let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+-            let values: Vec<_> = stat.rsplit_once(')')?.1.split_whitespace().collect();
+-            let user: u64 = values.get(11)?.parse().ok()?;
+-            let system: u64 = values.get(12)?.parse().ok()?;
+-            Some((user + system) as f64 / ticks)
+-        });
+-        let rss = std::fs::read_to_string("/proc/self/status")
+-            .ok()
+-            .and_then(|value| {
+-                value.lines().find_map(|line| {
+-                    line.strip_prefix("VmRSS:")?
+-                        .split_whitespace()
+-                        .next()?
+-                        .parse::<u64>()
+-                        .ok()
+-                        .map(|kb| kb * 1024)
+-                })
+-            });
+-        (cpu, rss)
+-    }
+-    #[cfg(target_os = "macos")]
+-    {
+-        let _ = ticks;
+-        let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+-        // getrusage initializes the complete platform-defined structure.
+-        if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } != 0 {
+-            return (None, None);
+-        }
+-        let usage = unsafe { usage.assume_init() };
+-        let seconds = |t: libc::timeval| t.tv_sec as f64 + t.tv_usec as f64 / 1e6;
+-        (
+-            Some(seconds(usage.ru_utime) + seconds(usage.ru_stime)),
+-            u64::try_from(usage.ru_maxrss).ok(),
+-        )
+-    }
+-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+-    {
+-        let _ = ticks;
+-        (None, None)
+-    }
+-}
+-
++#[path = "room_support/room_bench.rs"]
++mod implementation;
+ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+-    if cfg!(debug_assertions) {
+-        return Err("Use Release for performance evidence".into());
+-    }
+-    let mut arguments: Vec<_> = std::env::args().collect();
+-    let automatic = arguments.iter().any(|v| v == "--automatic-mapping");
+-    arguments.retain(|v| v != "--automatic-mapping");
+-    let audio_workers = arguments.iter().any(|v| v == "--audio-workers");
+-    arguments.retain(|v| v != "--audio-workers");
+-    if audio_workers {
+-        audio_workers::enable()?;
+-    }
+-    #[cfg(feature = "room-gpu-experiment")]
+-    let gpu = gpu::Options::parse(&mut arguments)?;
+-    let hrir_path = if let Some(index) = arguments.iter().position(|v| v == "--hrir") {
+-        let path = arguments
+-            .get(index + 1)
+-            .ok_or("--hrir needs a resource path")?
+-            .clone();
+-        arguments.drain(index..index + 2);
+-        Some(path)
+-    } else {
+-        None
+-    };
+-    let quality = if let Some(index) = arguments.iter().position(|v| v == "--quality") {
+-        let value = arguments
+-            .get(index + 1)
+-            .ok_or("--quality needs exact or realtime")?
+-            .parse::<Quality>()?;
+-        arguments.drain(index..index + 2);
+-        value
+-    } else {
+-        Quality::Exact
+-    };
+-    let scenario = if let Some(index) = arguments.iter().position(|v| v == "--scenario") {
+-        let value = arguments
+-            .get(index + 1)
+-            .ok_or("--scenario needs all, static, pose, switch, ramps or distance-ramps")?
+-            .clone();
+-        if !["all", "static", "pose", "switch", "ramps", "distance-ramps"].contains(&value.as_str())
+-        {
+-            return Err(
+-                "--scenario needs all, static, pose, switch, ramps or distance-ramps".into(),
+-            );
+-        }
+-        arguments.drain(index..index + 2);
+-        value
+-    } else {
+-        "all".to_owned()
+-    };
+-    let tracing = arguments.last().is_some_and(|v| v == "--trace");
+-    if tracing {
+-        arguments.pop();
+-        if !cfg!(feature = "room-profile") {
+-            return Err("--trace requires a Release build with --features room-profile".into());
+-        }
+-    }
+-    #[cfg(feature = "room-profile")]
+-    let clock_read_ns = tracing.then(trace::enable_cpu_clock).flatten();
+-    let ticks = if cfg!(target_os = "linux") {
+-        std::process::Command::new("getconf")
+-            .arg("CLK_TCK")
+-            .output()
+-            .ok()
+-            .filter(|v| v.status.success())
+-            .and_then(|v| String::from_utf8(v.stdout).ok()?.trim().parse::<f64>().ok())
+-            .filter(|v| v.is_finite() && *v > 0.)
+-    } else {
+-        None
+-    };
+-    if arguments.len() < 2 || arguments.len() > 6 {
+-        return Err(
+-            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime] [--scenario all|static|pose|switch|ramps|distance-ramps] [--hrir SOFA_OR_MANIFEST]".into(),
+-        );
+-    }
+-    let file = Path::new(&arguments[1]);
+-    let root = file.parent().ok_or("missing parent")?;
+-    let blocks = arguments
+-        .get(2)
+-        .map(|s| s.parse())
+-        .transpose()?
+-        .unwrap_or(384usize);
+-    if blocks == 0 || blocks > 112_500 {
+-        return Err("BLOCKS must be 1..112500".into());
+-    }
+-    let frames = arguments
+-        .get(3)
+-        .map(|v| v.parse::<usize>())
+-        .transpose()?
+-        .unwrap_or(BLOCK);
+-    if frames != BLOCK && frames != 2 * BLOCK {
+-        return Err("FRAMES must be 256 or 512".into());
+-    }
+-    let profile = Arc::new(assets::profile(file)?);
+-    let selected = hrir_path
+-        .as_ref()
+-        .map(std::path::PathBuf::from)
+-        .unwrap_or_else(|| root.join(&profile.default_hrir));
+-    let data = Arc::new(assets::hrir_at_rate(&selected, profile.sample_rate)?);
+-    let (length, _, _) = PreparedRoom::required_fft(&profile, &data)?;
+-    let bank = Arc::new(HrirBank::with_policy(data, length, quality.fft())?);
+-    let prepared = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
+-        profile.clone(),
+-        bank.clone(),
+-        quality,
+-    )?))?);
+-    let mut other = (*profile).clone();
+-    other.identity.push_str("-benchmark");
+-    other.absorption = [[0.9; 8]; 6];
+-    let other = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
+-        Arc::new(other),
+-        bank,
+-        quality,
+-    )?))?);
+-    #[cfg(feature = "room-gpu-experiment")]
+-    let (prepared, other) = (gpu.prepare(prepared)?, gpu.prepare(other)?);
+-    let scheduling = if audio_workers {
+-        audio_workers::report()?
+-    } else {
+-        serde_json::Value::Null
+-    };
+-    let experiment = serde_json::Value::Null;
+-    #[cfg(feature = "room-gpu-experiment")]
+-    let experiment = if gpu.report().is_null() {
+-        experiment
+-    } else {
+-        gpu.report()
+-    };
+-    let only_sources = arguments.get(4).map(|v| v.parse::<usize>()).transpose()?;
+-    if only_sources.is_some_and(|n| ![1, 16, 32].contains(&n)) {
+-        return Err("SOURCES must be 1, 16 or 32".into());
+-    }
+-    let switch_period = arguments
+-        .get(5)
+-        .map(|v| v.parse::<usize>())
+-        .transpose()?
+-        .unwrap_or(0);
+-    for sources in [1, 16, 32] {
+-        if only_sources.is_some_and(|n| n != sources) {
+-            continue;
+-        }
+-        // The last scenario ramps every source with its own event offset, as
+-        // dense ADM automation does; per-source update grids bound its cost.
+-        for (name, moving, switching, ramps) in [
+-            ("static", false, false, false),
+-            ("pose", true, false, false),
+-            ("switch", true, true, false),
+-            ("ramps", true, false, true),
+-            ("distance-ramps", true, false, true),
+-        ] {
+-            if scenario != "all" && scenario != name {
+-                continue;
+-            }
+-            let mut session = Session::new(
+-                prepared.clone(),
+-                if automatic { 0. } else { 1.5 },
+-                true,
+-                false,
+-            )?;
+-            let authored = |position: [f64; 3]| -> [f32; 3] {
+-                if !automatic {
+-                    return position.map(|v| (v / 1.5) as f32);
+-                }
+-                let world = [position[1], -position[0], position[2]];
+-                let room = &prepared.room.profile;
+-                let normalized: [f64; 3] = std::array::from_fn(|axis| {
+-                    world[axis]
+-                        / if world[axis] >= 0. {
+-                            room.dimensions[axis] - room.clearance - room.listener[axis]
+-                        } else {
+-                            room.listener[axis] - room.clearance
+-                        }
+-                });
+-                [
+-                    -normalized[1] as f32,
+-                    normalized[0] as f32,
+-                    normalized[2] as f32,
+-                ]
+-            };
+-            let around = |i: usize, turn: f32| {
+-                let v = geometry::portable_direction(
+-                    i as f32 * 360. / sources as f32 + turn,
+-                    (i % 3) as f32 * 15. - 15.,
+-                );
+-                if automatic {
+-                    return authored([-v[1] * 2.1, v[0] * 2.1, v[2] * 2.1]);
+-                }
+-                [
+-                    (-v[1] * 1.4) as f32,
+-                    (v[0] * 1.4) as f32,
+-                    (v[2] * 1.4) as f32,
+-                ]
+-            };
+-            let radial = |i: usize, block: usize| {
+-                let v = geometry::portable_direction(
+-                    -60. + 120. * i as f32 / sources.max(1) as f32,
+-                    0.,
+-                );
+-                let phase = ((block + i * 11) % 128) as f64 / 64.;
+-                let metres = 0.2 + 1.4 * (1. - (phase - 1.).abs());
+-                if automatic {
+-                    return authored([-v[1] * metres, v[0] * metres, 0.]);
+-                }
+-                [
+-                    (-v[1] * metres / 1.5) as f32,
+-                    (v[0] * metres / 1.5) as f32,
+-                    0.,
+-                ]
+-            };
+-            let descriptions: Vec<_> = (0..sources)
+-                .map(|i| RoomDescription {
+-                    id: i as u64 + 1,
+-                    position: if name == "distance-ramps" {
+-                        radial(i, 0)
+-                    } else {
+-                        around(i, 0.)
+-                    },
+-                    ..RoomDescription::default()
+-                })
+-                .collect();
+-            let offsets: Vec<_> = (0..sources).map(|i| (i * 131 + 17) % frames).collect();
+-            let mut distinct = offsets.clone();
+-            distinct.sort_unstable();
+-            distinct.dedup();
+-            let mut commands = Vec::with_capacity(sources);
+-            session.configure(&descriptions)?;
+-            let mut candidate = if switching {
+-                Some(Box::new(Instance::new(other.clone(), sources)?))
+-            } else {
+-                None
+-            };
+-            let mut revision = 0u64;
+-            let mut preparation_seconds = 0.;
+-            let mut input = vec![0f32; frames];
+-            let mut output = vec![0f32; 2 * frames];
+-            let mut elapsed = Vec::with_capacity(blocks);
+-            #[cfg(feature = "room-profile")]
+-            let mut trace = tracing.then(|| trace::Trace::new(blocks, clock_read_ns));
+-            let mut peak = 0f32;
+-            let mut cpu_start = None;
+-            let mut rss_peak = 0u64;
+-            for block in 0..blocks + 32 {
+-                if block == 32 {
+-                    mradm_dsp::room::profile::reset();
+-                    let (cpu, rss) = process_counters(ticks);
+-                    cpu_start = cpu;
+-                    rss_peak = rss.unwrap_or(0);
+-                }
+-                for (i, v) in input.iter_mut().enumerate() {
+-                    *v = (((block * frames + i) % 179) as f32 - 89.) * 0.00001;
+-                }
+-                if moving {
+-                    session.set_pose([
+-                        block as f32 * 0.25,
+-                        block as f32 * 0.05,
+-                        block as f32 * 0.02,
+-                    ])?;
+-                }
+-                commands.clear();
+-                if ramps {
+-                    // Each call ramps every source to its next position over the call.
+-                    commands.extend((0..sources).map(|i| RoomCommand {
+-                        element: i as u32,
+-                        offset: offsets[i] as u32,
+-                        duration: frames as u32,
+-                        changed: 4,
+-                        state: State {
+-                            position: if name == "distance-ramps" {
+-                                radial(i, block + 1)
+-                            } else {
+-                                around(i, (block + 1) as f32 * 0.5)
+-                            },
+-                            ..State::default()
+-                        },
+-                        ..RoomCommand::default()
+-                    }));
+-                    commands.sort_by_key(|c| c.offset);
+-                }
+-                if switching
+-                    && (block == 64
+-                        || (switch_period != 0 && block > 64 && (block - 64) % switch_period == 0))
+-                {
+-                    if session.info().phase != 0 {
+-                        return Err("Switch period shorter than transition and tail".into());
+-                    }
+-                    revision += 1;
+-                    let prepare_start = Instant::now();
+-                    let next = candidate.take().map_or_else(
+-                        || {
+-                            Instance::new(
+-                                if revision % 2 == 1 {
+-                                    other.clone()
+-                                } else {
+-                                    prepared.clone()
+-                                },
+-                                sources,
+-                            )
+-                            .map(Box::new)
+-                        },
+-                        Ok,
+-                    )?;
+-                    session.queue_room(next, revision)?;
+-                    preparation_seconds += prepare_start.elapsed().as_secs_f64();
+-                }
+-                #[cfg(feature = "room-profile")]
+-                let trace_start = (block >= 32)
+-                    .then(|| trace.as_ref().map(|_| trace::start(session.info().phase)))
+-                    .flatten();
+-                let start = Instant::now();
+-                session.process(
+-                    frames,
+-                    (0..sources).map(|_| Some(input.as_slice())),
+-                    &[],
+-                    &commands,
+-                    &mut output,
+-                )?;
+-                let duration = start.elapsed().as_secs_f64();
+-                if block >= 32 {
+-                    elapsed.push(duration);
+-                    #[cfg(feature = "room-profile")]
+-                    if let (Some(trace), Some(before)) = (&mut trace, trace_start) {
+-                        trace.finish(block - 32, before, session.info().phase, duration);
+-                    }
+-                }
+-                if block % 64 == 0 {
+-                    rss_peak = rss_peak.max(process_counters(ticks).1.unwrap_or(0));
+-                }
+-                peak = output.iter().fold(peak, |a, b| a.max(b.abs()));
+-                let _retired = session.take_retired();
+-            }
+-            let counters = process_counters(ticks);
+-            rss_peak = rss_peak.max(counters.1.unwrap_or(0));
+-            let cpu = cpu_start.zip(counters.0).map(|(start, end)| end - start);
+-            // Preserve the worst call identities from already-recorded times.
+-            // Sorting/JSON construction happen after processing and CPU sampling.
+-            let mut indexed: Vec<_> = elapsed.iter().copied().enumerate().collect();
+-            indexed.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+-            let slowest_calls: Vec<_> = indexed.iter().take(32).map(|(index, seconds)| {
+-                serde_json::json!({"measured_call":index,"benchmark_call":index+32,"ms":seconds*1000.})
+-            }).collect();
+-            let total: f64 = elapsed.iter().sum();
+-            elapsed.sort_by(f64::total_cmp);
+-            let deadline = frames as f64 / f64::from(prepared.room.profile.sample_rate);
+-            let profile = mradm_dsp::room::profile::snapshot();
+-            #[cfg(feature = "room-profile")]
+-            let trace_report = trace.map(|trace| trace.report(deadline));
+-            #[cfg(not(feature = "room-profile"))]
+-            let trace_report: Option<serde_json::Value> = None;
+-            let segments = cfg!(feature = "room-profile").then(|| {
+-                let index = mradm_dsp::room::profile::NAMES
+-                    .iter()
+-                    .position(|name| *name == "voice_segment")
+-                    .unwrap();
+-                profile[index].0
+-            });
+-            let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
+-            let mut report = serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
+-                "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames_at(prepared.room.profile.sample_rate),
+-                "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
+-                "voice_segments":segments,
+-                "voice_segments_per_source_block":segments.map(|v|v as f64/(sources*blocks*frames/BLOCK) as f64),
+-                "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
+-                "profiling":cfg!(feature = "room-profile"), "stages":stages, "trace":trace_report,
+-                "sample_rate":prepared.room.profile.sample_rate,"blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
+-                "worker_wall_budget_percent":100.*total/(blocks as f64*deadline),
+-                "cpu_seconds":cpu,"cpu_audio_budget_percent":cpu.map(|v|100.*v/(blocks as f64*deadline)),
+-                "rss_peak_bytes":(rss_peak!=0).then_some(rss_peak),"pose_update_hz":if moving{f64::from(prepared.room.profile.sample_rate)/frames as f64}else{0.},
+-                "mean_ms":total*1000./blocks as f64,"p95_ms":elapsed[(blocks*95/100).min(blocks-1)]*1000.,
+-                "hrir_hash":prepared.room.hrir.data.identity,"hrir_bank_bytes":prepared.room.hrir.storage_bytes(),
+-                "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},
+-                "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
+-                "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),"slowest_calls":slowest_calls,
+-                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak});
+-            report["coordinate_mapping"] =
+-                serde_json::json!(if automatic { "room" } else { "uniform" });
+-            report["thread_scheduling"] = scheduling.clone();
+-            println!("{report}");
+-        }
+-    }
+-    Ok(())
++    implementation::run()
+ }
+diff --git a/rust/crates/mradm-dsp/examples/room_replay.rs b/rust/crates/mradm-dsp/examples/room_replay.rs
+index ea3ade7..78000ec 100644
+--- a/rust/crates/mradm-dsp/examples/room_replay.rs
++++ b/rust/crates/mradm-dsp/examples/room_replay.rs
+@@ -1,413 +1,11 @@
+-//! Release room-scoped numerical checkpoints. Resource bytes and event times
+-//! are fixed; wall clocks and devices are deliberately absent from the input.
+-use mradm_dsp::{
+-    Result, geometry,
+-    room::{
+-        control::{RoomCommand, RoomDescription, State},
+-        geometry::{self as room_geometry, Rotation},
+-        hrir::HrirBank,
+-        prepared::{PreparedRoom, ResponseWork},
+-        quality::Quality,
+-        resources::sha256,
+-        screen::{RoomScreenGeometry, RoomScreens},
+-        session::{Instance, PreparedSet, Session},
+-    },
+-};
+-use std::{fs, io::Write, path::Path, sync::Arc};
+ #[path = "room_support/assets.rs"]
+ mod assets;
+ #[cfg(feature = "room-gpu-experiment")]
+ #[path = "room_support/gpu.rs"]
+ mod gpu;
+ 
+-fn save(root: &Path, name: &str, samples: &[f32]) -> std::io::Result<serde_json::Value> {
+-    let bytes: Vec<_> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
+-    let mut out = fs::OpenOptions::new()
+-        .write(true)
+-        .create_new(true)
+-        .open(root.join(name))?;
+-    out.write_all(&bytes)?;
+-    Ok(serde_json::json!({"sha256":sha256(&bytes),"samples":samples.len()}))
+-}
+-fn render(
+-    prepared: Arc<PreparedSet>,
+-    next: Arc<PreparedSet>,
+-    chunks: &[usize],
+-    screens: bool,
+-    dense: bool,
+-    head_motion: &str,
+-    world_only: bool,
+-) -> Result<Vec<f32>> {
+-    const MATERIAL: usize = 96013;
+-    let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
+-    let descriptions: Vec<_> = (0..32)
+-        .map(|i| {
+-            let v = geometry::portable_direction(i as f32 * 11.25, (i % 3) as f32 * 20. - 20.);
+-            RoomDescription {
+-                id: i as u64 + 1,
+-                role: if i >= 30 { 2 } else { 0 },
+-                screens: RoomScreens {
+-                    enabled: u32::from(screens),
+-                    reproduction: RoomScreenGeometry {
+-                        width: 90.,
+-                        ..RoomScreenGeometry::default()
+-                    },
+-                    ..RoomScreens::default()
+-                },
+-                position: [
+-                    (-v[1] * 1.4) as f32,
+-                    (v[0] * 1.4) as f32,
+-                    (v[2] * 1.4) as f32,
+-                ],
+-                ..RoomDescription::default()
+-            }
+-        })
+-        .collect();
+-    session.configure(&descriptions)?;
+-    let initial: Vec<_> = descriptions
+-        .iter()
+-        .enumerate()
+-        .map(|(i, d)| RoomCommand {
+-            element: i as u32,
+-            state: State {
+-                position: d.position,
+-                head_locked: u32::from(i == 0 && !world_only),
+-                screen_reference: u32::from(screens && i < 30),
+-                diffuse: if i == 4 { 0.7 } else { 0. },
+-                ..State::default()
+-            },
+-            ..RoomCommand::default()
+-        })
+-        .collect();
+-    let mut moved = initial[1].state;
+-    moved.position = [-2., 0.4, -0.2];
+-    let mut quiet = initial[3].state;
+-    quiet.gain = 0.23;
+-    let mut relock = initial[2].state;
+-    relock.head_locked = 1;
+-    let mut events = vec![
+-        (
+-            731usize,
+-            RoomCommand {
+-                element: 1,
+-                changed: 4,
+-                duration: 1537,
+-                state: moved,
+-                ..RoomCommand::default()
+-            },
+-        ),
+-        (
+-            1789,
+-            RoomCommand {
+-                element: 3,
+-                changed: 2,
+-                duration: 913,
+-                state: quiet,
+-                ..RoomCommand::default()
+-            },
+-        ),
+-        (
+-            2901,
+-            RoomCommand {
+-                element: 2,
+-                changed: 256,
+-                state: relock,
+-                ..RoomCommand::default()
+-            },
+-        ),
+-    ];
+-    if world_only {
+-        events.retain(|(_, command)| command.changed & 256 == 0);
+-    }
+-    if dense {
+-        // Dense replay: 30 non-LFE sources each ramp at a distinct sample offset.
+-        // Keep the original head-lock, gain, pose, room-switch, removal and EOS schedule.
+-        for block in 0..MATERIAL.div_ceil(512) {
+-            for (source, command) in initial.iter().enumerate().take(30) {
+-                let sample = block * 512 + (source * 131 + 17) % 512;
+-                if sample >= MATERIAL {
+-                    continue;
+-                }
+-                let direction = geometry::portable_direction(
+-                    source as f32 * 11.25 + (block + 1) as f32 * 0.5,
+-                    (source % 3) as f32 * 20. - 20.,
+-                );
+-                events.push((
+-                    sample,
+-                    RoomCommand {
+-                        element: source as u32,
+-                        changed: 4,
+-                        duration: 512,
+-                        state: State {
+-                            position: [
+-                                (-direction[1] * 1.4) as f32,
+-                                (direction[0] * 1.4) as f32,
+-                                (direction[2] * 1.4) as f32,
+-                            ],
+-                            ..command.state
+-                        },
+-                        ..RoomCommand::default()
+-                    },
+-                ));
+-            }
+-        }
+-        events.sort_by_key(|event| event.0);
+-    }
+-    let mut candidate = Some(Box::new(Instance::new(next, 32)?));
+-    let mut input = vec![[0.; 4096]; 32];
+-    let mut block_output = vec![0.; 8192];
+-    let mut commands = Vec::with_capacity(events.len());
+-    let mut output = Vec::new();
+-    let mut position = 0usize;
+-    let mut sequence = 0;
+-    let mut end = None;
+-    let mut sources = 32;
+-    loop {
+-        if position == MATERIAL && end.is_none() {
+-            session.end_input();
+-            end = Some(MATERIAL + session.info().tail_frames as usize);
+-        }
+-        if end == Some(position) {
+-            break;
+-        }
+-        if position == 32011 {
+-            sources = 31;
+-            session.configure(&descriptions[..sources])?;
+-        }
+-        if position == 7680 {
+-            session.queue_room(candidate.take().unwrap(), 1)?;
+-        }
+-        if position.is_multiple_of(512) {
+-            let step = (position / 512) as f32;
+-            session.set_pose(match head_motion {
+-                "slow" => [step * 0.25 - 35., step * 0.05 - 10., step * 0.02],
+-                "fast" => [step * 4. - 170., step * 1., step * 0.3],
+-                "wrap" => [
+-                    ((179.85 + step * 0.1 + 180.) % 360.) - 180.,
+-                    89.8,
+-                    -30. + step * 0.04,
+-                ],
+-                _ => [step * 0.61 - 35., step * 0.12 - 10., step * 0.07],
+-            })?;
+-        }
+-        let boundary = [
+-            MATERIAL,
+-            32011,
+-            7680,
+-            end.unwrap_or(MATERIAL),
+-            (position / 512 + 1) * 512,
+-        ]
+-        .into_iter()
+-        .filter(|v| *v > position)
+-        .min()
+-        .unwrap();
+-        let count = chunks[sequence % chunks.len()]
+-            .min(4096)
+-            .min(boundary - position);
+-        sequence += 1;
+-        for (source, plane) in input.iter_mut().enumerate() {
+-            for (i, value) in plane[..count].iter_mut().enumerate() {
+-                let word = ((position + i) * 3943 + source * 7817) % 65521;
+-                *value = if position < MATERIAL {
+-                    (word as f32 - 32760.) / 16777216.
+-                } else {
+-                    0.
+-                };
+-            }
+-        }
+-        commands.clear();
+-        for (sample, command) in events.iter().copied() {
+-            if sample >= position && sample < position + count {
+-                let mut c = command;
+-                c.offset = (sample - position) as u32;
+-                commands.push(c);
+-            }
+-        }
+-        session.process(
+-            count,
+-            input[..sources].iter().map(|p| Some(&p[..count])),
+-            if position == 0 { &initial } else { &[] },
+-            &commands,
+-            &mut block_output[..count * 2],
+-        )?;
+-        output.extend_from_slice(&block_output[..count * 2]);
+-        position += count;
+-        let _retired = session.take_retired();
+-    }
+-    Ok(output)
+-}
++#[path = "room_support/room_replay.rs"]
++mod implementation;
+ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+-    if cfg!(debug_assertions) {
+-        return Err("Use Release for numerical acceptance".into());
+-    }
+-    let mut args: Vec<_> = std::env::args().collect();
+-    #[cfg(feature = "room-gpu-experiment")]
+-    let gpu = gpu::Options::parse(&mut args)?;
+-    let hrir_path = if let Some(index) = args.iter().position(|v| v == "--hrir") {
+-        let path = args
+-            .get(index + 1)
+-            .ok_or("--hrir needs a resource path")?
+-            .clone();
+-        args.drain(index..index + 2);
+-        Some(std::path::PathBuf::from(path))
+-    } else {
+-        None
+-    };
+-    let quality = if let Some(index) = args.iter().position(|v| v == "--quality") {
+-        let value = args
+-            .get(index + 1)
+-            .ok_or("--quality needs exact or realtime")?
+-            .parse::<Quality>()?;
+-        args.drain(index..index + 2);
+-        value
+-    } else {
+-        Quality::Exact
+-    };
+-    let head_motion = if let Some(index) = args.iter().position(|v| v == "--head-motion") {
+-        let value = args
+-            .get(index + 1)
+-            .ok_or("--head-motion needs standard, slow, fast or wrap")?
+-            .clone();
+-        if !["standard", "slow", "fast", "wrap"].contains(&value.as_str()) {
+-            return Err("--head-motion needs standard, slow, fast or wrap".into());
+-        }
+-        args.drain(index..index + 2);
+-        value
+-    } else {
+-        "standard".to_owned()
+-    };
+-    let screens = args.iter().any(|v| v == "--screens");
+-    let dense = args.iter().any(|v| v == "--dense");
+-    let world_only = args.iter().any(|v| v == "--world-only");
+-    args.retain(|v| v != "--screens" && v != "--dense" && v != "--world-only");
+-    if args.len() != 3 {
+-        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--hrir SOFA_OR_COLLECTION] [--screens] [--dense] [--world-only] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
+-    }
+-    let file = Path::new(&args[1]);
+-    let root = file.parent().ok_or("missing parent")?;
+-    let out = Path::new(&args[2]);
+-    fs::create_dir(out)?;
+-    let profile = Arc::new(assets::profile(file)?);
+-    let selected = hrir_path.unwrap_or_else(|| root.join(&profile.default_hrir));
+-    let hrir = Arc::new(assets::hrir_at_rate(&selected, profile.sample_rate)?);
+-    let (length, _, _) = PreparedRoom::required_fft(&profile, &hrir)?;
+-    let bank = Arc::new(HrirBank::with_policy(hrir, length, quality.fft())?);
+-    let room = Arc::new(PreparedRoom::with_quality(
+-        profile.clone(),
+-        bank.clone(),
+-        quality,
+-    )?);
+-    let prepared = Arc::new(PreparedSet::new(room.clone())?);
+-    let mut changed = (*profile).clone();
+-    changed.identity.push_str("-replay");
+-    changed.absorption = [[0.90; 8]; 6];
+-    changed.late_energy *= 0.8;
+-    changed.dimensions[0] += 0.5;
+-    changed.listener[0] += 0.25;
+-    changed.dimensions[1] += 0.2;
+-    changed.listener[1] += 0.1;
+-    let next = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
+-        Arc::new(changed),
+-        bank,
+-        quality,
+-    )?))?);
+-    #[cfg(feature = "room-gpu-experiment")]
+-    let (prepared, next) = (gpu.prepare(prepared)?, gpu.prepare(next)?);
+-    let mut work = ResponseWork::new(&room)?;
+-    let mut query = vec![0.; room.hrir.data.output_taps * 2];
+-    let mut manifest = serde_json::json!({"schema":"mradm.room-replay","version":1,
+-        "scenario":"controls-distance-geometry-switch-v1",
+-        "room_hash":profile.identity,"hrir_hash":room.hrir.data.identity,"prepared":room.fingerprint(),
+-        "lfe":prepared.lfe.fingerprint(),"latency_frames":256,"tail_frames":prepared.tail_frames(),"files":{}});
+-    if quality != Quality::Exact {
+-        manifest["processing_policy"] = quality.policy().into();
+-    }
+-    #[cfg(feature = "room-gpu-experiment")]
+-    if !gpu.report().is_null() {
+-        manifest["experiment"] = gpu.report();
+-    }
+-    for (index, [az, el, r]) in [
+-        [0., 0., 0.75],
+-        [0., 0., 1.5],
+-        [0., 0., 3.],
+-        [179.999, 0., 2.1],
+-        [-179.999, 0., 2.1],
+-        [0., 89.999, 1.85],
+-        [0., -89.999, 1.05],
+-        [91.3, -31.1, 2.1],
+-    ]
+-    .into_iter()
+-    .enumerate()
+-    {
+-        let direction = geometry::portable_direction(az as f32, el as f32);
+-        let mut face = usize::MAX;
+-        work.hrir(&room, direction, &mut face, &mut query)?;
+-        let name = format!("hrir-{index}.f32");
+-        manifest["files"][&name] = save(out, &name, &query)?;
+-        let position = room_geometry::position(
+-            &profile,
+-            [
+-                (-direction[1] * r) as f32,
+-                (direction[0] * r) as f32,
+-                (direction[2] * r) as f32,
+-            ],
+-            1.,
+-            [1., 0., 0.],
+-        )?;
+-        work.build(&room, position, &Rotation::new([13., -7., 11.])?)?;
+-        let name = format!("branches-{index}.f32");
+-        manifest["files"][&name] = save(out, &name, &work.impulse)?;
+-    }
+-    if screens {
+-        manifest["scenario"] = "controls-screen-distance-geometry-switch-v1".into();
+-    }
+-    if dense {
+-        manifest["dense_source_ramps"] = true.into();
+-    }
+-    if head_motion != "standard" {
+-        manifest["head_motion"] = head_motion.clone().into();
+-    }
+-    if world_only {
+-        // Separate workload identity; never compare this to a head-locked replay.
+-        let scenario = manifest["scenario"].as_str().unwrap().to_owned();
+-        manifest["scenario"] = format!("{scenario}-world-only").into();
+-        manifest["world_only"] = true.into();
+-    }
+-    let canonical = render(
+-        prepared.clone(),
+-        next.clone(),
+-        if world_only { &[512] } else { &[256] },
+-        screens,
+-        dense,
+-        &head_motion,
+-        world_only,
+-    )?;
+-    let fragmented = render(
+-        prepared,
+-        next,
+-        &[1, 173, 733, 4096, 19, 257],
+-        screens,
+-        dense,
+-        &head_motion,
+-        world_only,
+-    )?;
+-    if canonical
+-        .iter()
+-        .map(|v| v.to_bits())
+-        .ne(fragmented.iter().map(|v| v.to_bits()))
+-    {
+-        return Err("Fragmented replay differs from canonical PCM".into());
+-    }
+-    manifest["files"]["session.f32"] = save(out, "session.f32", &canonical)?;
+-    manifest["frames"] = (canonical.len() / 2).into();
+-    fs::write(
+-        out.join("manifest.json"),
+-        serde_json::to_vec_pretty(&manifest)?,
+-    )?;
+-    println!(
+-        "{}",
+-        serde_json::json!({"output":out,"frames":canonical.len()/2,"fragmented_identical":true,
+-        "pcm_sha256":manifest["files"]["session.f32"]["sha256"],"os":std::env::consts::OS,"arch":std::env::consts::ARCH})
+-    );
+-    Ok(())
++    implementation::run()
+ }
+diff --git a/rust/crates/mradm-dsp/src/room/hrir.rs b/rust/crates/mradm-dsp/src/room/hrir.rs
+index 2ef099e..92ed267 100644
+--- a/rust/crates/mradm-dsp/src/room/hrir.rs
++++ b/rust/crates/mradm-dsp/src/room/hrir.rs
+@@ -248,6 +248,56 @@ impl TimeQuery {
+ }
+ 
+ impl HrirBank {
++    /// Copy validated resident spectra into a bounded upload window. No FFT or
++    /// resource I/O is repeated by the optional native GPU adapter.
++    #[cfg(feature = "room-gpu-experiment")]
++    pub fn gpu_copy_rows(&self, first: usize, output: &mut [f32]) -> Result<()> {
++        let bins = self.fft_length / 2 + 1;
++        let rows_per_layer = self.data.directions.len() * 2;
++        let layers = self.data.collection.as_ref().map_or(1, |c| c.layers.len());
++        let count = output.len() / (bins * 2);
++        if count == 0
++            || !output.len().is_multiple_of(bins * 2)
++            || first
++                .checked_add(count)
++                .is_none_or(|end| end > rows_per_layer * layers)
++        {
++            return Err(Error::InvalidArgument("Invalid GPU HRIR upload window"));
++        }
++        for (offset, row) in output.chunks_exact_mut(bins * 2).enumerate() {
++            let index = first + offset;
++            let bank = self
++                .radial_spectra
++                .get(index / rows_per_layer)
++                .and_then(Option::as_ref)
++                .unwrap_or(&self.spectra);
++            let (real, imaginary) = bank.row(index % rows_per_layer);
++            for (bin, pair) in row.as_chunks_mut::<2>().0.iter_mut().enumerate() {
++                pair.copy_from_slice(&[real[bin], imaginary[bin]]);
++            }
++        }
++        Ok(())
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub fn gpu_copy_fractions(&self, first: usize, output: &mut [f32]) -> Result<()> {
++        let bins = self.fft_length / 2 + 1;
++        let count = output.len() / (bins * 2);
++        if count == 0
++            || !output.len().is_multiple_of(bins * 2)
++            || first.checked_add(count).is_none_or(|end| end > PHASES + 1)
++        {
++            return Err(Error::InvalidArgument(
++                "Invalid GPU fractional upload window",
++            ));
++        }
++        for (offset, row) in output.chunks_exact_mut(bins * 2).enumerate() {
++            let (real, imaginary) = self.fractions.row(first + offset);
++            for (bin, pair) in row.as_chunks_mut::<2>().0.iter_mut().enumerate() {
++                pair.copy_from_slice(&[real[bin], imaginary[bin]]);
++            }
++        }
++        Ok(())
++    }
+     pub fn fingerprint(&self) -> serde_json::Value {
+         use super::resources::{hash_complex, hash_f64};
+         let mut value = serde_json::json!({"fft_length":self.fft_length,"spectra":self.spectra.fingerprint(),
+diff --git a/rust/crates/mradm-dsp/src/room/prepared.rs b/rust/crates/mradm-dsp/src/room/prepared.rs
+index 16228ee..4808116 100644
+--- a/rust/crates/mradm-dsp/src/room/prepared.rs
++++ b/rust/crates/mradm-dsp/src/room/prepared.rs
+@@ -26,6 +26,18 @@ pub struct PreparedRoom {
+ }
+ 
+ impl PreparedRoom {
++    #[cfg(feature = "room-gpu-experiment")]
++    pub fn gpu_material(&self) -> &[Complex32] {
++        &self.material
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    pub fn gpu_propagation_row(&self, phase: usize) -> Result<&[Complex32]> {
++        if phase > PHASES {
++            return Err(Error::InvalidArgument("Invalid GPU propagation phase"));
++        }
++        let (a, b, _) = self.propagation.rows(phase as f64 / PHASES as f64);
++        Ok(if phase == PHASES { b } else { a })
++    }
+     /// Preparation-only stage checksums for room-scoped cross-platform replay.
+     pub fn fingerprint(&self) -> serde_json::Value {
+         serde_json::json!({"hrir":self.hrir.fingerprint(),"decoder_hrir":self.decoder_hrir.fingerprint(),
+@@ -190,7 +202,8 @@ impl PreparedRoom {
+         }
+     }
+ 
+-    pub(crate) fn early_channels(&self) -> usize {
++    /// Channel count of the prepared early-field representation.
++    pub fn early_channels(&self) -> usize {
+         2
+     }
+     pub(crate) fn field_channels(&self) -> usize {
+diff --git a/rust/crates/mradm-ffi/Cargo.toml b/rust/crates/mradm-ffi/Cargo.toml
+index e7fe96c..9181df6 100644
+--- a/rust/crates/mradm-ffi/Cargo.toml
++++ b/rust/crates/mradm-ffi/Cargo.toml
+@@ -15,6 +15,7 @@ mradm-adm = { path = "../mradm-adm" }
+ mradm-osc = { path = "../mradm-osc" }
+ mradm-scene = { path = "../mradm-scene" }
+ mradm-dsp = { path = "../mradm-dsp", default-features = false }
++mradm-room-cuda = { path = "../mradm-room-cuda", optional = true, default-features = false }
+ serde_json.workspace = true
+ libm.workspace = true
+ 
+@@ -25,3 +26,4 @@ mradm-math = { path = "../mradm-math" }
+ diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
+ default = ["sofa"]
+ sofa = ["mradm-dsp/sofa"]
++room-cuda = ["dep:mradm-room-cuda"]
+diff --git a/rust/crates/mradm-ffi/src/lib.rs b/rust/crates/mradm-ffi/src/lib.rs
+index 9d93ca0..2546641 100644
+--- a/rust/crates/mradm-ffi/src/lib.rs
++++ b/rust/crates/mradm-ffi/src/lib.rs
+@@ -28,6 +28,7 @@ mod pcm_mix;
+ mod post_gain;
+ mod resampler;
+ mod room;
++mod room_cuda_selection;
+ mod room_environment;
+ mod scene;
+ mod scene_math;
+diff --git a/rust/crates/mradm-ffi/src/room.rs b/rust/crates/mradm-ffi/src/room.rs
+index bcf5126..84e4beb 100644
+--- a/rust/crates/mradm-ffi/src/room.rs
++++ b/rust/crates/mradm-ffi/src/room.rs
+@@ -82,6 +82,7 @@ pub struct RoomProfileHandle {
+ pub struct RoomPreparedHandle {
+     prepared: Arc<PreparedSet>,
+     json: CString,
++    cuda: bool,
+ }
+ 
+ #[derive(Clone, Copy)]
+@@ -171,7 +172,11 @@ unsafe fn path(bytes: *const u8, length: usize) -> Result<PathBuf> {
+         Error::InvalidArgument("Room paths must be UTF-8")
+     })?))
+ }
+-fn description(prepared: &PreparedSet, metres: f64) -> Result<CString> {
++fn description(
++    prepared: &PreparedSet,
++    metres: f64,
++    cuda: Option<serde_json::Value>,
++) -> Result<CString> {
+     let room = &prepared.room;
+     let mut value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
+         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
+@@ -202,6 +207,10 @@ fn description(prepared: &PreparedSet, metres: f64) -> Result<CString> {
+     if let Some(collection) = &room.hrir.data.collection {
+         value["hrtf_collection"] = collection.summary();
+     }
++    if let Some(cuda) = cuda {
++        value["execution_backend"] = serde_json::json!("cuda");
++        value["cuda"] = cuda;
++    }
+     CString::new(value.to_string()).map_err(|_| invalid())
+ }
+ 
+@@ -420,6 +429,13 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
+             return Err(Error::InvalidArgument("Invalid room distance scale"));
+         }
+         let profile = &*profile;
++        if !reuse.is_null() {
++            separate(reuse, 1, out, 1)?;
++        }
++        let cuda = crate::room_cuda_selection::selected(
++            quality,
++            (!reuse.is_null()).then(|| (&*reuse).cuda),
++        )?;
+         let data = if !reuse.is_null() {
+             separate(reuse, 1, out, 1)?;
+             if hrir_length != 0 {
+@@ -498,8 +514,20 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
+                 prepared
+             }
+         };
+-        let json = description(&prepared, metres)?;
+-        *out = Box::into_raw(Box::new(RoomPreparedHandle { prepared, json }));
++        let metadata = None;
++        #[cfg(all(windows, feature = "room-cuda"))]
++        let (prepared, metadata) = if cuda {
++            let (value, metadata) = mradm_room_cuda::bind(prepared, None)?;
++            (value, Some(metadata))
++        } else {
++            (prepared, metadata)
++        };
++        let json = description(&prepared, metres, metadata)?;
++        *out = Box::into_raw(Box::new(RoomPreparedHandle {
++            prepared,
++            json,
++            cuda,
++        }));
+         Ok(())
+     })
+ }
+diff --git a/scripts/quality/check-changed.sh b/scripts/quality/check-changed.sh
+index ebbc72a..e628c7c 100755
+--- a/scripts/quality/check-changed.sh
++++ b/scripts/quality/check-changed.sh
+@@ -69,7 +69,7 @@ done < <(
+ # how the macOS-only Apple paths are skipped on non-macOS hosts.
+ is_platform_excluded() {
+     case "$1" in
+-        src/adm_windows/*) return 0 ;;
++        src/adm_windows/* | src/adm_render_room/cuda/*) return 0 ;;
+         tests/reference/libbw64/*)
+             if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+                 return 0
+diff --git a/scripts/research/room_gpu/session_backend.cpp b/scripts/research/room_gpu/session_backend.cpp
+index fc60e22..5693bce 100644
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -1,13 +1,29 @@
+ // Share only the established CUDA allocation/compiler helpers. The standalone
+ // probe entry point is renamed and never invoked by the Session backend.
++#ifdef ROOM_GPU_RESIDENT
++#include "resident_support.h"
++#else
+ #define main room_gpu_standalone_unused_main
+ #include "probe.cpp"
+ #undef main
++#endif
+ #include <memory>
+ 
+ #include "session_backend.h"
+ #include "session_trace.h"
+ 
++#ifdef ROOM_GPU_RESIDENT
++#define room_gpu_session_destroy mradm_room_cuda_session_destroy
++#define room_gpu_session_begin mradm_room_cuda_session_begin
++#define room_gpu_session_voice mradm_room_cuda_session_voice
++#define room_gpu_session_submit mradm_room_cuda_session_submit
++#define room_gpu_session_finish mradm_room_cuda_session_finish
++#define room_gpu_session_error mradm_room_cuda_session_error
++#define room_gpu_late_destroy mradm_room_cuda_late_destroy
++#define room_gpu_late_submit mradm_room_cuda_late_submit
++#define room_gpu_late_finish mradm_room_cuda_late_finish
++#endif
++
+ namespace {
+ constexpr unsigned max_voices = 32, max_updates = 256, max_ranges = 1024, max_tasks = 2048, max_jobs = 32 * 8192;
+ struct NativeUpdate {
+@@ -21,8 +37,13 @@ struct Header {
+     unsigned voices, ranges, updates, tasks, fft_rows;
+ };
+ static_assert(sizeof(RoomGpuJob) == 264 && sizeof(RoomGpuTask) == 48 && sizeof(NativeUpdate) == 276);
++#ifdef ROOM_GPU_RESIDENT
++Config configuration(const ResidentHandle& resource, const RoomGpuParams& p) {
++    Config c = resource->config;
++#else
+ Config configuration(const fs::path& path, const RoomGpuParams& p) {
+     Config c(path / "config.txt");
++#endif
+     if (p.rate != 96000 || p.fft != static_cast<unsigned>(c.n) || p.rows != static_cast<unsigned>(c.rows) ||
+         p.taps == 0 || p.taps > 32768 || p.buckets == 0 || p.buckets > 64 || p.images == 0 || p.images > 1024 ||
+         p.history_parts != (p.taps + 255) / 256)
+@@ -57,6 +78,9 @@ struct Plans {
+     }
+ };
+ struct Variant {
++#ifdef ROOM_GPU_RESIDENT
++    Context context;
++#endif
+     unsigned responses, updates, tasks, fft_rows;
+     std::shared_ptr<Plan> inverse, target, output;
+     cudaGraph_t graph = nullptr;
+@@ -65,6 +89,10 @@ struct Variant {
+         : responses(r), updates(u), tasks(t), fft_rows(f), inverse(plans.get(c.n, CUFFT_C2R, r)),
+           target(plans.get(512, CUFFT_R2C, f)), output(plans.get(512, CUFFT_C2R, t * 2)) {}
+     ~Variant() {
++#ifdef ROOM_GPU_RESIDENT
++        if (!context.valid())
++            return;
++#endif
+         if (execution)
+             cudaGraphExecDestroy(execution);
+         if (graph)
+@@ -72,9 +100,18 @@ struct Variant {
+     }
+ };
+ struct Engine {
++#ifdef ROOM_GPU_RESIDENT
++    ResidentHandle resident_;
++    room_cuda::Counted active_{room_cuda::engines};
++#endif
+     SessionTrace trace;
+     Config c;
++#ifdef ROOM_GPU_RESIDENT
++    StreamOwner stream_owner;
++    cudaStream_t& stream = stream_owner.value;
++#else
+     cudaStream_t stream = nullptr;
++#endif
+     std::unique_ptr<Module> module;
+     size_t bins, parts, job_count = 0;
+     Header header{};
+@@ -86,6 +123,26 @@ struct Engine {
+         host_output;
+     std::vector<std::unique_ptr<Variant>> variants;
+     CUfunction response_fn, pack_fn, install_fn, input_fn, convolve_fn, mix_fn;
++#ifdef ROOM_GPU_RESIDENT
++    Engine(ResidentHandle resource, const RoomGpuParams& p)
++        : resident_(std::move(resource)), c(configuration(resident_, p)), bins(c.n / 2 + 1),
++          parts((c.taps + 255) / 256), bank(resident_->bank.data, resident_->bank.bytes),
++          fractional(resident_->fractional.data, resident_->fractional.bytes), propagation(1025 * bins * 8),
++          materials(c.materials * bins * 8), phases(resident_->phases.data, resident_->phases.bytes),
++          jobs(max_jobs * sizeof(RoomGpuJob)), ranges(max_ranges * sizeof(RoomGpuRange)),
++          updates(max_updates * sizeof(NativeUpdate)), tasks(max_tasks * sizeof(RoomGpuTask)),
++          groups(max_voices * 2 * sizeof(RoomGpuRange)), info(max_voices * sizeof(Info)),
++          input(max_voices * 2 * 257 * 8), device_header(sizeof(Header)), spectrum(2048 * bins * 8),
++          bucket_time(2048 * c.n * 4), packed(max_updates * 2 * parts * 512 * 4),
++          fresh(max_updates * 2 * parts * 257 * 8), filters(max_voices * 2 * 32 * 2 * parts * 257 * 8),
++          history(max_voices * 2 * parts * 257 * 8), convolved(max_tasks * 2 * 257 * 8),
++          convolved_time(max_tasks * 2 * 512 * 4), output(max_voices * 4 * 256 * 4), host_jobs(jobs.bytes),
++          host_ranges(ranges.bytes), host_updates(updates.bytes), host_tasks(tasks.bytes), host_groups(groups.bytes),
++          host_info(info.bytes), host_input(input.bytes), host_header(sizeof(Header)), host_output(output.bytes) {
++        initialize(p);
++    }
++
++#else
+     Engine(const fs::path& fixture, const fs::path& source, const RoomGpuParams& p)
+         : c(configuration(fixture, p)), bins(c.n / 2 + 1), parts((c.taps + 255) / 256), bank(c.rows * bins * 8),
+           fractional(1025 * bins * 8), propagation(1025 * bins * 8), materials(c.materials * bins * 8), phases(c.n * 8),
+@@ -99,11 +156,22 @@ struct Engine {
+           convolved_time(max_tasks * 2 * 512 * 4), output(max_voices * 4 * 256 * 4), host_jobs(jobs.bytes),
+           host_ranges(ranges.bytes), host_updates(updates.bytes), host_tasks(tasks.bytes), host_groups(groups.bytes),
+           host_info(info.bytes), host_input(input.bytes), host_header(sizeof(Header)), host_output(output.bytes) {
+-        if (p.material_floats * 4 != materials.bytes || p.propagation_floats * 4 != propagation.bytes)
++        initialize(p, fixture, source);
++    }
++#endif
++#ifdef ROOM_GPU_RESIDENT
++    void initialize(const RoomGpuParams& p)
++#else
++    void initialize(const RoomGpuParams& p, const fs::path& fixture, const fs::path& source)
++#endif
++    {
++        if (p.material_floats != materials.bytes / 4 || p.propagation_floats != propagation.bytes / 4)
+             throw std::runtime_error("GPU table shape mismatch");
++#ifndef ROOM_GPU_RESIDENT
+         load(bank, fixture / "bank.bin");
+         load(fractional, fixture / "fraction.bin");
+         load(phases, fixture / "phase.bin");
++#endif
+         runtime(cudaMemcpy(materials.data, p.materials, materials.bytes, cudaMemcpyHostToDevice));
+         runtime(cudaMemcpy(propagation.data, p.propagation, propagation.bytes, cudaMemcpyHostToDevice));
+         runtime(cudaMemset(history.data, 0, history.bytes));
+@@ -114,7 +182,11 @@ struct Engine {
+         runtime(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+         cudaDeviceProp props{};
+         runtime(cudaGetDeviceProperties(&props, 0));
++#ifdef ROOM_GPU_RESIDENT
++        module = std::make_unique<Module>(resident_->source, c, 32, props.major, props.minor);
++#else
+         module = std::make_unique<Module>(source, c, 32, props.major, props.minor);
++#endif
+         response_fn = module->function("session_response");
+         pack_fn = module->function("session_pack");
+         install_fn = module->function("session_install");
+@@ -133,20 +205,32 @@ struct Engine {
+         for (auto& v : variants) {
+             execute(*v);
+             runtime(cudaStreamSynchronize(stream));
++#ifdef ROOM_GPU_RESIDENT
++            capture_graph(stream, [&] { execute(*v); }, v->graph, v->execution);
++#else
+             runtime(cudaStreamBeginCapture(stream, cudaStreamCaptureModeThreadLocal));
+             execute(*v);
+             runtime(cudaStreamEndCapture(stream, &v->graph));
+             runtime(cudaGraphInstantiate(&v->execution, v->graph, 0));
++#endif
+         }
+         std::memset(host_output.data, 0, host_output.bytes);
+     }
+     ~Engine() {
++#ifdef ROOM_GPU_RESIDENT
++        if (!resident_->context.valid()) {
++            stream = nullptr;
++            return;
++        }
++#endif
+         cudaSetDevice(0);
+         if (pending)
+             cudaStreamSynchronize(stream);
+         variants.clear();
+-        if (stream)
++        if (stream) {
+             cudaStreamDestroy(stream);
++            stream = nullptr;
++        }
+     }
+     void launch(CUfunction f, unsigned x, unsigned y, std::initializer_list<void*> a) {
+         std::array<void*, 12> args{};
+@@ -204,6 +288,9 @@ struct Engine {
+         trace.mark(10, stream);
+     }
+     void begin(unsigned voices) {
++#ifdef ROOM_GPU_RESIDENT
++        resident_->context.require();
++#endif
+         trace.begin();
+         if (pending || voices > max_voices)
+             throw std::runtime_error("Invalid GPU batch lifecycle/capacity");
+@@ -294,6 +381,9 @@ struct Engine {
+         pending = true;
+     }
+     void finish(float* destination, size_t samples) {
++#ifdef ROOM_GPU_RESIDENT
++        resident_->context.require();
++#endif
+         if (!pending || samples != header.voices * 4 * 256)
+             throw std::runtime_error("Invalid GPU completion");
+         trace.wait();
+@@ -303,7 +393,7 @@ struct Engine {
+         if (samples)
+             std::memcpy(destination, host_output.data, samples * sizeof(float));
+     }
+-};
++}; // namespace
+ #include "session_late.h"
+ thread_local std::array<char, 1024> last_error{};
+ void remember(const char* message) noexcept {
+@@ -321,6 +411,18 @@ void remember(const char* message) noexcept {
+         remember("Unknown CUDA failure");                                                                              \
+         return result;                                                                                                 \
+     }
++#ifdef ROOM_GPU_RESIDENT
++extern "C"
++    __declspec(dllexport) void* mradm_room_cuda_session_create(void* bank, const RoomGpuParams* params) noexcept {
++    try {
++        if (!params)
++            throw std::runtime_error("Missing ROOM CUDA parameters");
++        runtime(cudaSetDevice(0));
++        return new Engine(resident(bank), *params);
++    }
++    GPU_CATCH(nullptr)
++}
++#else
+ extern "C" __declspec(dllexport) void*
+ room_gpu_session_create(const char* fixture, const char* kernels, const RoomGpuParams* params) noexcept {
+     try {
+@@ -330,11 +432,12 @@ room_gpu_session_create(const char* fixture, const char* kernels, const RoomGpuP
+     }
+     GPU_CATCH(nullptr)
+ }
++#endif
+ extern "C" __declspec(dllexport) void room_gpu_session_destroy(void* p) noexcept {
+     try {
+         delete static_cast<Engine*>(p);
+     }
+-    GPU_CATCH()
++    GPU_CATCH(void())
+ }
+ extern "C" __declspec(dllexport) int room_gpu_session_begin(void* p, unsigned count) noexcept {
+     try {
+@@ -367,6 +470,19 @@ extern "C" __declspec(dllexport) int room_gpu_session_finish(void* p, float* out
+ extern "C" __declspec(dllexport) const char* room_gpu_session_error() noexcept {
+     return last_error.data();
+ }
++#ifdef ROOM_GPU_RESIDENT
++extern "C" __declspec(dllexport) void* mradm_room_cuda_late_create(
++    void* bank, unsigned parts, unsigned channels, const float* filters, size_t floats) noexcept {
++    try {
++        runtime(cudaSetDevice(0));
++        if (!filters || !parts || parts > 512 || !channels || channels > 64 ||
++            floats != size_t(parts) * channels * 2049 * 2)
++            throw std::runtime_error("Unsupported GPU late shape");
++        return new LateEngine(resident(bank), parts, channels, filters);
++    }
++    GPU_CATCH(nullptr)
++}
++#else
+ extern "C" __declspec(dllexport) void* room_gpu_late_create(const char* fixture,
+                                                             const char* kernels,
+                                                             unsigned parts,
+@@ -381,11 +497,12 @@ extern "C" __declspec(dllexport) void* room_gpu_late_create(const char* fixture,
+     }
+     GPU_CATCH(nullptr)
+ }
++#endif
+ extern "C" __declspec(dllexport) void room_gpu_late_destroy(void* p) noexcept {
+     try {
+         delete static_cast<LateEngine*>(p);
+     }
+-    GPU_CATCH()
++    GPU_CATCH(void())
+ }
+ extern "C" __declspec(dllexport) int
+ room_gpu_late_submit(void* p, const float* row, size_t floats, unsigned reset) noexcept {
+diff --git a/scripts/research/room_gpu/session_late.h b/scripts/research/room_gpu/session_late.h
+index 5d768d7..db785d8 100644
+--- a/scripts/research/room_gpu/session_late.h
++++ b/scripts/research/room_gpu/session_late.h
+@@ -2,14 +2,30 @@
+ // The long partition result is consumed by the next canonical block, preserving
+ // the original 2048-frame tail offset. A separate stream overlaps current audio.
+ struct LateStream {
++#ifdef ROOM_GPU_RESIDENT
++    Context context;
++#endif
+     cudaStream_t value = nullptr;
+     LateStream() { runtime(cudaStreamCreateWithFlags(&value, cudaStreamNonBlocking)); }
+-    ~LateStream() { cudaStreamDestroy(value); }
++    ~LateStream() {
++#ifdef ROOM_GPU_RESIDENT
++        if (!context.valid())
++            return;
++#endif
++        cudaStreamDestroy(value);
++    }
+ };
+ struct LateGraph {
++#ifdef ROOM_GPU_RESIDENT
++    Context context;
++#endif
+     cudaGraph_t graph = nullptr;
+     cudaGraphExec_t execution = nullptr;
+     ~LateGraph() {
++#ifdef ROOM_GPU_RESIDENT
++        if (!context.valid())
++            return;
++#endif
+         if (execution)
+             cudaGraphExecDestroy(execution);
+         if (graph)
+@@ -22,6 +38,10 @@ cudaDeviceProp late_device_properties() {
+     return properties;
+ }
+ struct LateEngine {
++#ifdef ROOM_GPU_RESIDENT
++    ResidentHandle resident_;
++    room_cuda::Counted active_{room_cuda::late_engines};
++#endif
+     unsigned parts, channels, head;
+     bool pending = false;
+     LateStream stream;
+@@ -32,12 +52,26 @@ struct LateEngine {
+     Plan inverse;
+     LateGraph graph;
+     CUfunction input_fn, convolve_fn, extract_fn;
++#ifdef ROOM_GPU_RESIDENT
++    LateEngine(ResidentHandle resource, unsigned p, unsigned c, const float* f)
++        : resident_(std::move(resource)), parts(p), channels(c), head(p - 1), filters(size_t(c) * p * 2049 * 8),
++          history(size_t(p) * 2049 * 8), input(2049 * 8), parameters(8), spectrum(c * 2049 * 8), time(c * 4096 * 4),
++          output(c * 2048 * 4), host_input(input.bytes), host_parameters(parameters.bytes), host_output(output.bytes),
++          module(resident_->source, resident_->config, 32, properties.major, properties.minor),
++          inverse(4096, CUFFT_C2R, c, stream.value) {
++        initialize(f);
++    }
++#else
+     LateEngine(const fs::path& fixture, const fs::path& source, unsigned p, unsigned c, const float* f)
+         : parts(p), channels(c), head(p - 1), filters(size_t(c) * p * 2049 * 8), history(size_t(p) * 2049 * 8),
+           input(2049 * 8), parameters(8), spectrum(c * 2049 * 8), time(c * 4096 * 4), output(c * 2048 * 4),
+           host_input(input.bytes), host_parameters(parameters.bytes), host_output(output.bytes),
+           module(source, Config(fixture / "config.txt"), 32, properties.major, properties.minor),
+           inverse(4096, CUFFT_C2R, c, stream.value) {
++        initialize(f);
++    }
++#endif
++    void initialize(const float* f) {
+         runtime(cudaMemcpy(filters.data, f, filters.bytes, cudaMemcpyHostToDevice));
+         runtime(cudaMemset(history.data, 0, history.bytes));
+         std::memset(host_input.data, 0, host_input.bytes);
+@@ -47,12 +81,20 @@ struct LateEngine {
+         extract_fn = module.function("late_extract");
+         execute();
+         runtime(cudaStreamSynchronize(stream.value));
++#ifdef ROOM_GPU_RESIDENT
++        capture_graph(stream.value, [&] { execute(); }, graph.graph, graph.execution);
++#else
+         runtime(cudaStreamBeginCapture(stream.value, cudaStreamCaptureModeThreadLocal));
+         execute();
+         runtime(cudaStreamEndCapture(stream.value, &graph.graph));
+         runtime(cudaGraphInstantiate(&graph.execution, graph.graph, 0));
++#endif
+     }
+     ~LateEngine() {
++#ifdef ROOM_GPU_RESIDENT
++        if (!resident_->context.valid())
++            return;
++#endif
+         cudaSetDevice(0);
+         if (pending)
+             cudaStreamSynchronize(stream.value);
+@@ -75,6 +117,9 @@ struct LateEngine {
+         runtime(cudaMemcpyAsync(host_output.data, output.data, output.bytes, cudaMemcpyDeviceToHost, stream.value));
+     }
+     void submit(const float* row, size_t floats, bool reset) {
++#ifdef ROOM_GPU_RESIDENT
++        resident_->context.require();
++#endif
+         if (pending || floats != 4098)
+             throw std::runtime_error("Invalid GPU late submission");
+         runtime(cudaSetDevice(0));
+@@ -87,6 +132,9 @@ struct LateEngine {
+         pending = true;
+     }
+     void finish(float* out, size_t samples) {
++#ifdef ROOM_GPU_RESIDENT
++        resident_->context.require();
++#endif
+         if (!pending || samples * sizeof(float) != output.bytes)
+             throw std::runtime_error("Invalid GPU late completion");
+         runtime(cudaSetDevice(0));
+diff --git a/scripts/room/device-probe.py b/scripts/room/device-probe.py
+index 1b4f75f..3cb3836 100644
+--- a/scripts/room/device-probe.py
++++ b/scripts/room/device-probe.py
+@@ -124,6 +124,7 @@ def main():
+     parser.add_argument('--probe', type=Path, required=True)
+     parser.add_argument('--room', type=Path, required=True)
+     parser.add_argument('--other-room', type=Path, required=True)
++    parser.add_argument('--hrir', type=Path, help='normal SOFA/HRIR/collection override')
+     parser.add_argument('--device', required=True, help='exact output name or current opaque ID; "null" for a dry run')
+     parser.add_argument('--seconds', type=int, default=1800)
+     parser.add_argument('--sources', type=int, choices=[1, 16, 32], default=32)
+@@ -143,6 +144,8 @@ def main():
+     command = [str(args.probe.resolve()), str(args.room.resolve()), str(args.other_room.resolve()),
+                str(args.seconds), mode, str(args.sources),
+                '--osc-port', '0', '--volume', str(args.volume), '--quality', args.quality]
++    if args.hrir:
++        command += ['--hrir', str(args.hrir.resolve())]
+     if args.source_ramps:
+         command += ['--source-ramps']
+     if args.device != 'null':
+diff --git a/tests/manual/room_file_device_probe.cpp b/tests/manual/room_file_device_probe.cpp
+index 22e50fc..4ad076a 100644
+--- a/tests/manual/room_file_device_probe.cpp
++++ b/tests/manual/room_file_device_probe.cpp
+@@ -51,8 +51,9 @@ int main(int argc, char** argv) {
+     return 2;
+ #endif
+     try {
+-        if (argc != 5) {
+-            throw std::runtime_error("usage: room_file_device_probe INPUT_ADM ROOM_JSON OTHER_ROOM_JSON DEVICE_ID");
++        if (argc != 5 && (argc != 7 || std::string_view(argv[5]) != "--hrir")) {
++            throw std::runtime_error(
++                "usage: room_file_device_probe INPUT_ADM ROOM_JSON OTHER_ROOM_JSON DEVICE_ID [--hrir PATH]");
+         }
+         const auto devices = MonitorSession::list_output_devices();
+         const auto device = std::ranges::find(devices, std::string(argv[4]), &AudioOutputDeviceInfo::id);
+@@ -65,8 +66,12 @@ int main(int argc, char** argv) {
+         options.output_layout = "binaural";
+         options.binaural_spread_mode = BinauralSpreadMode::none;
+         options.room = {take(RoomProfile::load(argv[2])), {}, 1.5, RoomQuality::realtime};
+-        const RoomConfig next{take(RoomProfile::load(argv[3])), {}, 1.5, RoomQuality::realtime};
++        RoomConfig next{take(RoomProfile::load(argv[3])), {}, 1.5, RoomQuality::realtime};
++        if (argc == 7) {
++            options.room.hrir_manifest = next.hrir_manifest = argv[6];
++        }
+         auto monitor = take(MonitorSession::create(argv[1], options, device->id));
++        const auto prepared_report = Json::parse(take(inspect_room(options.room)));
+         const auto control = monitor->room_control();
+         if (!control || control->status().quality != RoomQuality::realtime) {
+             throw std::runtime_error("File monitor did not select the realtime room backend");
+@@ -177,6 +182,7 @@ int main(int argc, char** argv) {
+                           {"quality", "realtime"},
+                           {"requested_seconds", requested_seconds},
+                           {"sample_rate", rate},
++                          {"room_prepared", prepared_report},
+                           {"input_channels", scene.info.num_channels},
+                           {"objects", scene.objects.size()},
+                           {"wall_seconds", wall},
+diff --git a/tests/manual/room_probe_metrics.h b/tests/manual/room_probe_metrics.h
+index 984d7d6..67fb696 100644
+--- a/tests/manual/room_probe_metrics.h
++++ b/tests/manual/room_probe_metrics.h
+@@ -77,10 +77,9 @@ struct Window {
+ };
+ class Recording {
+   public:
+-    Recording(Clock::time_point origin, unsigned seconds, bool enabled)
+-        : origin_(origin), first_second_(seconds > 20 ? 10U : 2U),
+-          windows_(enabled ? ((seconds - first_second_) / 60U) + 1U : 0U),
+-          samples_(windows_.size() * 48000U * 2U, 0.F) {
++    Recording(Clock::time_point origin, unsigned seconds, bool enabled, std::uint32_t rate = 48000)
++        : origin_(origin), rate_(rate), first_second_(seconds > 20 ? 10U : 2U),
++          windows_(enabled ? ((seconds - first_second_) / 60U) + 1U : 0U), samples_(windows_.size() * rate_ * 2U, 0.F) {
+         // Commit recording pages before measuring RSS; logging must not look
+         // like a growing renderer merely because later windows are first touched.
+         for (std::size_t i = 0; i < samples_.size(); i += 1024U) {
+@@ -101,8 +100,8 @@ class Recording {
+         if (window.frames == 0) {
+             window.first_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - origin_).count();
+         }
+-        const auto count = std::min<std::size_t>({frames, 48000U - window.frames, samples.size() / 2U});
+-        const auto start = ((index * 48000U) + window.frames) * 2U;
++        const auto count = std::min<std::size_t>({frames, rate_ - window.frames, samples.size() / 2U});
++        const auto start = ((index * rate_) + window.frames) * 2U;
+         std::copy_n(samples.begin(), count * 2U, samples_.begin() + static_cast<std::ptrdiff_t>(start));
+         window.frames += static_cast<std::uint32_t>(count);
+         window.maximum_callback_frames = std::max(window.maximum_callback_frames, static_cast<std::uint32_t>(frames));
+@@ -114,7 +113,7 @@ class Recording {
+             rows.push_back({{"first_callback_ns", w.first_ns},
+                             {"frames", w.frames},
+                             {"maximum_callback_frames", w.maximum_callback_frames},
+-                            {"offset_frames", i * 48000U}});
++                            {"offset_frames", i * rate_}});
+         }
+         if (!windows_.empty()) {
+             std::ofstream file(root / (name + ".f32"), std::ios::binary);
+@@ -125,7 +124,7 @@ class Recording {
+             }
+         }
+         return {{"file", name + ".f32"},
+-                {"sample_rate", 48000},
++                {"sample_rate", rate_},
+                 {"channels", 2},
+                 {"windows", rows},
+                 {"timestamp", "steady clock at callback entry; first sample presentation/capture time is unknown"}};
+@@ -133,12 +132,14 @@ class Recording {
+ 
+   private:
+     Clock::time_point origin_;
++    std::uint32_t rate_;
+     unsigned first_second_;
+     std::vector<Window> windows_;
+     std::vector<float> samples_;
+ };
+ struct OutputTrace {
+-    OutputTrace(Clock::time_point origin, unsigned seconds, bool record) : recording(origin, seconds, record) {}
++    OutputTrace(Clock::time_point origin, unsigned seconds, bool record, std::uint32_t rate = 48000)
++        : recording(origin, seconds, record, rate) {}
+     Histogram intervals;
+     Histogram pull_duration;
+     Recording recording;
+@@ -182,8 +183,9 @@ class CaptureTap {
+     CaptureTap(Clock::time_point origin,
+                unsigned seconds,
+                const std::string& name,
+-               const std::string& loopback_output_token)
+-        : recording_(origin, seconds, true) {
++               const std::string& loopback_output_token,
++               std::uint32_t rate = 48000)
++        : recording_(origin, seconds, true, rate) {
+         if (ma_context_init(nullptr, 0, nullptr, &context_) != MA_SUCCESS) {
+             throw std::runtime_error("Capture context initialization failed");
+         }
+@@ -213,7 +215,7 @@ class CaptureTap {
+             config.capture.pDeviceID = &id_;
+             config.capture.format = ma_format_f32;
+             config.capture.channels = 2;
+-            config.sampleRate = 48000;
++            config.sampleRate = rate;
+             config.pUserData = this;
+             config.dataCallback = [](ma_device* device, void*, const void* input, ma_uint32 frames) {
+                 if (input != nullptr) {
+diff --git a/tests/manual/room_scene_benchmark.cpp b/tests/manual/room_scene_benchmark.cpp
+index b334edf..be75fe0 100644
+--- a/tests/manual/room_scene_benchmark.cpp
++++ b/tests/manual/room_scene_benchmark.cpp
+@@ -169,9 +169,13 @@ class Fixture {
+     bool broadband_;
+     bool moving_;
+ };
++std::uint32_t room_rate(const RoomConfig& room) {
++    return nlohmann::json::parse(room.profile->manifest_json()).at("sample_rate").get<std::uint32_t>();
++}
+ RendererConfig renderer_config(const RoomConfig& room) {
+     RendererConfig config;
+     config.renderer = RendererSelection::room_binaural;
++    config.sample_rate = room_rate(room);
+     config.room = room;
+     config.output_layout = "binaural";
+     config.binaural_spread_mode = BinauralSpreadMode::none;
+@@ -179,6 +183,7 @@ RendererConfig renderer_config(const RoomConfig& room) {
+ }
+ void kernel(const RoomConfig& first, const RoomConfig& next, unsigned seconds, uint32_t quantum = 256) {
+     set_room_worker_active(quantum == 512);
++    const auto rate = room_rate(first);
+     for (const std::size_t sources : {1U, 16U, 32U}) {
+         for (unsigned mode = 0; mode < 3; ++mode) {
+             auto renderer = take(create_live_room_renderer(renderer_config(first), {}));
+@@ -189,7 +194,7 @@ void kernel(const RoomConfig& first, const RoomConfig& next, unsigned seconds, u
+                 fixture.update(block);
+                 done(renderer->render(fixture.frame(), output));
+             }
+-            const std::size_t blocks = static_cast<std::size_t>(seconds) * 48000 / quantum;
++            const std::size_t blocks = static_cast<std::size_t>(seconds) * rate / quantum;
+             std::vector<double> times(blocks);
+             uint64_t peak_rss = rss();
+             auto control = renderer->room_control();
+@@ -212,14 +217,15 @@ void kernel(const RoomConfig& first, const RoomConfig& next, unsigned seconds, u
+             }
+             const double elapsed = std::chrono::duration<double>(Clock::now() - begin).count();
+             const double cpu = cpu_seconds() - cpu_start;
+-            const double audio = static_cast<double>(blocks) * quantum / 48000.;
+-            const auto misses = std::ranges::count_if(times, [quantum](double t) { return t > quantum / 48000.; });
++            const double audio = static_cast<double>(blocks) * quantum / static_cast<double>(rate);
++            const auto misses = std::ranges::count_if(
++                times, [quantum, rate](double t) { return t > quantum / static_cast<double>(rate); });
+             std::ranges::sort(times);
+             const auto status = control->status();
+             std::cout << nlohmann::json{{"case", "kernel"},
+                                         {"sources", sources},
+                                         {"call_frames", quantum},
+-                                        {"pose_update_hz", mode > 0 ? 48000. / quantum : 0.},
++                                        {"pose_update_hz", mode > 0 ? static_cast<double>(rate) / quantum : 0.},
+                                         {"continuous_pose", mode > 0},
+                                         {"room_switch", mode == 2},
+                                         {"audio_seconds", audio},
+@@ -271,7 +277,7 @@ void control_latency(const RoomConfig& room) {
+     }
+     std::cout << nlohmann::json{{"case", "control_latency"},
+                                 {"frames_to_first_change", first},
+-                                {"milliseconds", static_cast<double>(first) / 48.},
++                                {"milliseconds", static_cast<double>(first) * 1000. / room_rate(room)},
+                                 {"scope", "Room PCM only; excludes host queue, sensor and physical device"}}
+                      .dump()
+               << '\n'
+@@ -306,7 +312,10 @@ bool streaming(const RoomConfig& first,
+                const ProbeOptions& options) {
+     SceneStreamConfig config;
+     config.renderer = renderer_config(first);
++    config.output_sample_rate = config.renderer.sample_rate;
++    const auto rate = config.renderer.sample_rate;
+     auto stream = std::shared_ptr<SceneStreamEngine>(take(SceneStreamEngine::create(config)));
++    const auto prepared_report = nlohmann::json::parse(take(inspect_room(first)));
+     const bool real_device = !options.device_name.empty();
+     const auto selected = real_device ? select_device(options.device_name) : AudioDeviceInfo{};
+     const bool capture = options.loopback || !options.capture_name.empty();
+@@ -323,11 +332,11 @@ bool streaming(const RoomConfig& first,
+         done(receiver->start());
+     }
+     const auto begin = Clock::now();
+-    auto trace = std::make_shared<room_probe::OutputTrace>(begin, seconds, capture);
++    auto trace = std::make_shared<room_probe::OutputTrace>(begin, seconds, capture, rate);
+     std::unique_ptr<room_probe::CaptureTap> tap;
+     if (capture) {
+         tap = std::make_unique<room_probe::CaptureTap>(
+-            begin, seconds, options.capture_name, options.loopback ? selected.id : "");
++            begin, seconds, options.capture_name, options.loopback ? selected.id : "", rate);
+     }
+     auto device = std::make_unique<room_probe::MeasuredDevice>(make_miniaudio_device(!real_device, selected.id), trace);
+     auto output = take(SceneOutputSession::create_with_device(stream, std::move(device), true));
+@@ -345,7 +354,8 @@ bool streaming(const RoomConfig& first,
+                                 {"device", real_device ? selected.name : "null"},
+                                 {"osc_port", receiver ? receiver->snapshot().bound_port : 0},
+                                 {"seconds", seconds},
+-                                {"sample_rate", 48000},
++                                {"sample_rate", rate},
++                                {"room_prepared", prepared_report},
+                                 {"quality", first.quality == RoomQuality::realtime ? "realtime" : "exact"},
+                                 {"source_ramps", options.moving},
+                                 {"volume", options.volume}}
+@@ -447,7 +457,7 @@ bool streaming(const RoomConfig& first,
+     std::vector<double> queued_ms;
+     prepare_samples(queued_ms, static_cast<std::size_t>(seconds + 10) * 2U);
+     auto next_observation = Clock::now();
+-    const uint64_t frames = static_cast<uint64_t>(seconds) * 48000;
++    const uint64_t frames = static_cast<uint64_t>(seconds) * rate;
+     for (uint64_t sample = 0, block = 0; sample < frames; ++block) {
+         if (tracking_failed.load()) {
+             break;
+@@ -490,7 +500,7 @@ bool streaming(const RoomConfig& first,
+             const auto resident = rss();
+             peak_rss = std::max(peak_rss, resident);
+             resident_samples.push_back({time, resident});
+-            queued_ms.push_back(static_cast<double>(current.queued_frames) / 48.);
++            queued_ms.push_back(1000. * static_cast<double>(current.queued_frames) / rate);
+             std::cout << nlohmann::json{{"case", "device_progress"},
+                                         {"seconds", time},
+                                         {"rss_bytes", resident},
+@@ -530,6 +540,8 @@ bool streaming(const RoomConfig& first,
+                           {"quality", first.quality == RoomQuality::realtime ? "realtime" : "exact"},
+                           {"source_ramps", options.moving},
+                           {"requested_seconds", seconds},
++                          {"sample_rate", rate},
++                          {"room_prepared", prepared_report},
+                           {"control_transport", receiver ? "OSC loopback UDP" : "direct API"},
+                           {"nominal_head_update_hz", 100},
+                           {"poses_applied", poses_applied},
+@@ -598,7 +610,7 @@ int main(int argc, char** argv) {
+                 "usage: room_scene_benchmark ROOM_JSON OTHER_ROOM_JSON [SECONDS=10] "
+                 "[all|stream|stream-cycles|stream-device|kernel|kernel-worker|latency] [SOURCES=32] [--device NAME|ID] "
+                 "[--osc-port PORT] [--capture NAME|--capture-loopback] [--recordings NEW_DIR] [--volume GAIN] "
+-                "[--quality exact|realtime] [--source-ramps]");
++                "[--quality exact|realtime] [--hrir PATH] [--source-ramps]");
+         }
+         const unsigned seconds = argc > 3 ? static_cast<unsigned>(std::stoul(argv[3])) : 10;
+         if (seconds < 5 || seconds > 3600) {
+@@ -635,6 +647,8 @@ int main(int argc, char** argv) {
+                 options.volume = std::stof(argv[i]);
+             } else if (flag == "--osc-port") {
+                 options.osc_port = std::stoi(argv[i]);
++            } else if (flag == "--hrir") {
++                first.hrir_manifest = next.hrir_manifest = argv[i];
+             } else if (flag == "--quality") {
+                 const std::string_view quality = argv[i];
+                 if (quality != "exact" && quality != "realtime") {
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -27,6 +27,7 @@
+ option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when available" OFF)
+ option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
+ option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
++option(MR_ADM_ENABLE_ROOM_CUDA "Build the optional Windows ROOM CUDA runtime (opt-in only)" OFF)
+ option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools prebuilt bridge" OFF)
+ option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
+ option(MR_ADM_BUILD_HEADMOTION "Build standalone AirPods motion shim (macOS)" OFF)
+@@ -128,6 +129,7 @@
+ # 拉下来的第三方目录拿不到（路线图 §5.1 第 3 项）。
+ include(MRStrictFp)
+ include(MRDependencies)
++include(MRRoomCuda)
+ include(MRRust)
+ mr_adm_core_write_dependency_record()
+ include(MRStaticAnalysis)
+diff --git a/cmake/MRRoomCuda.cmake b/cmake/MRRoomCuda.cmake
+new file mode 100644
+index 0000000..7caf360
+--- /dev/null
++++ b/cmake/MRRoomCuda.cmake
+@@ -0,0 +1,32 @@
++if(NOT MR_ADM_ENABLE_ROOM_CUDA)
++    return()
++endif()
++if(NOT WIN32)
++    message(FATAL_ERROR "MR_ADM_ENABLE_ROOM_CUDA currently supports Windows only")
++endif()
++find_package(CUDAToolkit 12 REQUIRED)
++add_library(mr_adm_room_cuda SHARED src/adm_render_room/cuda/backend.cpp)
++target_compile_features(mr_adm_room_cuda PRIVATE cxx_std_20)
++target_include_directories(mr_adm_room_cuda PRIVATE src/adm_render_room/cuda)
++target_link_libraries(mr_adm_room_cuda PRIVATE CUDA::cuda_driver CUDA::cudart CUDA::nvrtc CUDA::cufft)
++set_target_properties(mr_adm_room_cuda PROPERTIES OUTPUT_NAME mradm_room_cuda)
++if(MSVC)
++    target_compile_options(mr_adm_room_cuda PRIVATE /W4 /EHsc /utf-8)
++endif()
++
++# No dependency is linked into the public C API or loaded for CPU/exact. Keep
++# the optional plugin and its redistributable runtime DLLs side by side.
++set(_mr_cuda_runtime_files)
++foreach(_component cudart cufft nvrtc nvrtc-builtins)
++    file(GLOB _matches "${CUDAToolkit_BIN_DIR}/${_component}64*.dll")
++    if(NOT _matches)
++        message(FATAL_ERROR "Cannot locate CUDA runtime component ${_component}")
++    endif()
++    list(APPEND _mr_cuda_runtime_files ${_matches})
++endforeach()
++foreach(_runtime IN LISTS _mr_cuda_runtime_files)
++    add_custom_command(TARGET mr_adm_room_cuda POST_BUILD
++        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_runtime}" "$<TARGET_FILE_DIR:mr_adm_room_cuda>"
++        VERBATIM)
++endforeach()
++set(MR_ADM_ROOM_CUDA_RUNTIME_FILES "${_mr_cuda_runtime_files}" CACHE INTERNAL "Optional ROOM CUDA dependencies" FORCE)
+diff --git a/rust/crates/mradm-dsp/examples/room_support/room_bench.rs b/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
+new file mode 100644
+index 0000000..6a4d25d
+--- /dev/null
++++ b/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
+@@ -0,0 +1,450 @@
++//! Release-only room CPU deadline probe. No audio device is involved: missed
++//! deadlines here are DSP misses, not claimed device underruns/latency.
++use super::assets;
++use super::audio_workers;
++#[cfg(feature = "room-gpu-experiment")]
++use super::gpu;
++#[cfg(feature = "room-profile")]
++use super::trace;
++use mradm_dsp::{
++    geometry,
++    room::{
++        BLOCK,
++        control::{RoomCommand, RoomDescription, State},
++        hrir::HrirBank,
++        prepared::PreparedRoom,
++        quality::Quality,
++        session::{Instance, PreparedSet, Session},
++    },
++};
++use std::{path::Path, sync::Arc, time::Instant};
++// Read counters outside the measured process call. Native host/Scene benchmarks
++// provide these counters on macOS and Windows; this lightweight probe also runs
++// on a headless Linux validation host without building device dependencies.
++fn process_counters(ticks: Option<f64>) -> (Option<f64>, Option<u64>) {
++    #[cfg(target_os = "linux")]
++    {
++        let cpu = ticks.and_then(|ticks| {
++            let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
++            let values: Vec<_> = stat.rsplit_once(')')?.1.split_whitespace().collect();
++            let user: u64 = values.get(11)?.parse().ok()?;
++            let system: u64 = values.get(12)?.parse().ok()?;
++            Some((user + system) as f64 / ticks)
++        });
++        let rss = std::fs::read_to_string("/proc/self/status")
++            .ok()
++            .and_then(|value| {
++                value.lines().find_map(|line| {
++                    line.strip_prefix("VmRSS:")?
++                        .split_whitespace()
++                        .next()?
++                        .parse::<u64>()
++                        .ok()
++                        .map(|kb| kb * 1024)
++                })
++            });
++        (cpu, rss)
++    }
++    #[cfg(target_os = "macos")]
++    {
++        let _ = ticks;
++        let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
++        // getrusage initializes the complete platform-defined structure.
++        if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } != 0 {
++            return (None, None);
++        }
++        let usage = unsafe { usage.assume_init() };
++        let seconds = |t: libc::timeval| t.tv_sec as f64 + t.tv_usec as f64 / 1e6;
++        (
++            Some(seconds(usage.ru_utime) + seconds(usage.ru_stime)),
++            u64::try_from(usage.ru_maxrss).ok(),
++        )
++    }
++    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
++    {
++        let _ = ticks;
++        (None, None)
++    }
++}
++
++pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
++    if cfg!(debug_assertions) {
++        return Err("Use Release for performance evidence".into());
++    }
++    let mut arguments: Vec<_> = std::env::args().collect();
++    let automatic = arguments.iter().any(|v| v == "--automatic-mapping");
++    arguments.retain(|v| v != "--automatic-mapping");
++    let audio_workers = arguments.iter().any(|v| v == "--audio-workers");
++    arguments.retain(|v| v != "--audio-workers");
++    if audio_workers {
++        audio_workers::enable()?;
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    let gpu = gpu::Options::parse(&mut arguments)?;
++    let hrir_path = if let Some(index) = arguments.iter().position(|v| v == "--hrir") {
++        let path = arguments
++            .get(index + 1)
++            .ok_or("--hrir needs a resource path")?
++            .clone();
++        arguments.drain(index..index + 2);
++        Some(path)
++    } else {
++        None
++    };
++    let quality = if let Some(index) = arguments.iter().position(|v| v == "--quality") {
++        let value = arguments
++            .get(index + 1)
++            .ok_or("--quality needs exact or realtime")?
++            .parse::<Quality>()?;
++        arguments.drain(index..index + 2);
++        value
++    } else {
++        Quality::Exact
++    };
++    let scenario = if let Some(index) = arguments.iter().position(|v| v == "--scenario") {
++        let value = arguments
++            .get(index + 1)
++            .ok_or("--scenario needs all, static, pose, switch, ramps or distance-ramps")?
++            .clone();
++        if !["all", "static", "pose", "switch", "ramps", "distance-ramps"].contains(&value.as_str())
++        {
++            return Err(
++                "--scenario needs all, static, pose, switch, ramps or distance-ramps".into(),
++            );
++        }
++        arguments.drain(index..index + 2);
++        value
++    } else {
++        "all".to_owned()
++    };
++    let tracing = arguments.last().is_some_and(|v| v == "--trace");
++    if tracing {
++        arguments.pop();
++        if !cfg!(feature = "room-profile") {
++            return Err("--trace requires a Release build with --features room-profile".into());
++        }
++    }
++    #[cfg(feature = "room-profile")]
++    let clock_read_ns = tracing.then(trace::enable_cpu_clock).flatten();
++    let ticks = if cfg!(target_os = "linux") {
++        std::process::Command::new("getconf")
++            .arg("CLK_TCK")
++            .output()
++            .ok()
++            .filter(|v| v.status.success())
++            .and_then(|v| String::from_utf8(v.stdout).ok()?.trim().parse::<f64>().ok())
++            .filter(|v| v.is_finite() && *v > 0.)
++    } else {
++        None
++    };
++    if arguments.len() < 2 || arguments.len() > 6 {
++        return Err(
++            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0] [--trace] [--quality exact|realtime] [--scenario all|static|pose|switch|ramps|distance-ramps] [--hrir SOFA_OR_MANIFEST]".into(),
++        );
++    }
++    let file = Path::new(&arguments[1]);
++    let root = file.parent().ok_or("missing parent")?;
++    let blocks = arguments
++        .get(2)
++        .map(|s| s.parse())
++        .transpose()?
++        .unwrap_or(384usize);
++    if blocks == 0 || blocks > 112_500 {
++        return Err("BLOCKS must be 1..112500".into());
++    }
++    let frames = arguments
++        .get(3)
++        .map(|v| v.parse::<usize>())
++        .transpose()?
++        .unwrap_or(BLOCK);
++    if frames != BLOCK && frames != 2 * BLOCK {
++        return Err("FRAMES must be 256 or 512".into());
++    }
++    let profile = Arc::new(assets::profile(file)?);
++    let selected = hrir_path
++        .as_ref()
++        .map(std::path::PathBuf::from)
++        .unwrap_or_else(|| root.join(&profile.default_hrir));
++    let data = Arc::new(assets::hrir_at_rate(&selected, profile.sample_rate)?);
++    let (length, _, _) = PreparedRoom::required_fft(&profile, &data)?;
++    let bank = Arc::new(HrirBank::with_policy(data, length, quality.fft())?);
++    let prepared = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
++        profile.clone(),
++        bank.clone(),
++        quality,
++    )?))?);
++    let mut other = (*profile).clone();
++    other.identity.push_str("-benchmark");
++    other.absorption = [[0.9; 8]; 6];
++    let other = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
++        Arc::new(other),
++        bank,
++        quality,
++    )?))?);
++    #[cfg(feature = "room-gpu-experiment")]
++    let (prepared, other) = (gpu.prepare(prepared)?, gpu.prepare(other)?);
++    let scheduling = if audio_workers {
++        audio_workers::report()?
++    } else {
++        serde_json::Value::Null
++    };
++    let experiment = serde_json::Value::Null;
++    #[cfg(feature = "room-gpu-experiment")]
++    let experiment = if gpu.report().is_null() {
++        experiment
++    } else {
++        gpu.report()
++    };
++    let only_sources = arguments.get(4).map(|v| v.parse::<usize>()).transpose()?;
++    if only_sources.is_some_and(|n| ![1, 16, 32].contains(&n)) {
++        return Err("SOURCES must be 1, 16 or 32".into());
++    }
++    let switch_period = arguments
++        .get(5)
++        .map(|v| v.parse::<usize>())
++        .transpose()?
++        .unwrap_or(0);
++    for sources in [1, 16, 32] {
++        if only_sources.is_some_and(|n| n != sources) {
++            continue;
++        }
++        // The last scenario ramps every source with its own event offset, as
++        // dense ADM automation does; per-source update grids bound its cost.
++        for (name, moving, switching, ramps) in [
++            ("static", false, false, false),
++            ("pose", true, false, false),
++            ("switch", true, true, false),
++            ("ramps", true, false, true),
++            ("distance-ramps", true, false, true),
++        ] {
++            if scenario != "all" && scenario != name {
++                continue;
++            }
++            let mut session = Session::new(
++                prepared.clone(),
++                if automatic { 0. } else { 1.5 },
++                true,
++                false,
++            )?;
++            let authored = |position: [f64; 3]| -> [f32; 3] {
++                if !automatic {
++                    return position.map(|v| (v / 1.5) as f32);
++                }
++                let world = [position[1], -position[0], position[2]];
++                let room = &prepared.room.profile;
++                let normalized: [f64; 3] = std::array::from_fn(|axis| {
++                    world[axis]
++                        / if world[axis] >= 0. {
++                            room.dimensions[axis] - room.clearance - room.listener[axis]
++                        } else {
++                            room.listener[axis] - room.clearance
++                        }
++                });
++                [
++                    -normalized[1] as f32,
++                    normalized[0] as f32,
++                    normalized[2] as f32,
++                ]
++            };
++            let around = |i: usize, turn: f32| {
++                let v = geometry::portable_direction(
++                    i as f32 * 360. / sources as f32 + turn,
++                    (i % 3) as f32 * 15. - 15.,
++                );
++                if automatic {
++                    return authored([-v[1] * 2.1, v[0] * 2.1, v[2] * 2.1]);
++                }
++                [
++                    (-v[1] * 1.4) as f32,
++                    (v[0] * 1.4) as f32,
++                    (v[2] * 1.4) as f32,
++                ]
++            };
++            let radial = |i: usize, block: usize| {
++                let v = geometry::portable_direction(
++                    -60. + 120. * i as f32 / sources.max(1) as f32,
++                    0.,
++                );
++                let phase = ((block + i * 11) % 128) as f64 / 64.;
++                let metres = 0.2 + 1.4 * (1. - (phase - 1.).abs());
++                if automatic {
++                    return authored([-v[1] * metres, v[0] * metres, 0.]);
++                }
++                [
++                    (-v[1] * metres / 1.5) as f32,
++                    (v[0] * metres / 1.5) as f32,
++                    0.,
++                ]
++            };
++            let descriptions: Vec<_> = (0..sources)
++                .map(|i| RoomDescription {
++                    id: i as u64 + 1,
++                    position: if name == "distance-ramps" {
++                        radial(i, 0)
++                    } else {
++                        around(i, 0.)
++                    },
++                    ..RoomDescription::default()
++                })
++                .collect();
++            let offsets: Vec<_> = (0..sources).map(|i| (i * 131 + 17) % frames).collect();
++            let mut distinct = offsets.clone();
++            distinct.sort_unstable();
++            distinct.dedup();
++            let mut commands = Vec::with_capacity(sources);
++            session.configure(&descriptions)?;
++            let mut candidate = if switching {
++                Some(Box::new(Instance::new(other.clone(), sources)?))
++            } else {
++                None
++            };
++            let mut revision = 0u64;
++            let mut preparation_seconds = 0.;
++            let mut input = vec![0f32; frames];
++            let mut output = vec![0f32; 2 * frames];
++            let mut elapsed = Vec::with_capacity(blocks);
++            #[cfg(feature = "room-profile")]
++            let mut trace = tracing.then(|| trace::Trace::new(blocks, clock_read_ns));
++            let mut peak = 0f32;
++            let mut cpu_start = None;
++            let mut rss_peak = 0u64;
++            for block in 0..blocks + 32 {
++                if block == 32 {
++                    mradm_dsp::room::profile::reset();
++                    let (cpu, rss) = process_counters(ticks);
++                    cpu_start = cpu;
++                    rss_peak = rss.unwrap_or(0);
++                }
++                for (i, v) in input.iter_mut().enumerate() {
++                    *v = (((block * frames + i) % 179) as f32 - 89.) * 0.00001;
++                }
++                if moving {
++                    session.set_pose([
++                        block as f32 * 0.25,
++                        block as f32 * 0.05,
++                        block as f32 * 0.02,
++                    ])?;
++                }
++                commands.clear();
++                if ramps {
++                    // Each call ramps every source to its next position over the call.
++                    commands.extend((0..sources).map(|i| RoomCommand {
++                        element: i as u32,
++                        offset: offsets[i] as u32,
++                        duration: frames as u32,
++                        changed: 4,
++                        state: State {
++                            position: if name == "distance-ramps" {
++                                radial(i, block + 1)
++                            } else {
++                                around(i, (block + 1) as f32 * 0.5)
++                            },
++                            ..State::default()
++                        },
++                        ..RoomCommand::default()
++                    }));
++                    commands.sort_by_key(|c| c.offset);
++                }
++                if switching
++                    && (block == 64
++                        || (switch_period != 0 && block > 64 && (block - 64) % switch_period == 0))
++                {
++                    if session.info().phase != 0 {
++                        return Err("Switch period shorter than transition and tail".into());
++                    }
++                    revision += 1;
++                    let prepare_start = Instant::now();
++                    let next = candidate.take().map_or_else(
++                        || {
++                            Instance::new(
++                                if revision % 2 == 1 {
++                                    other.clone()
++                                } else {
++                                    prepared.clone()
++                                },
++                                sources,
++                            )
++                            .map(Box::new)
++                        },
++                        Ok,
++                    )?;
++                    session.queue_room(next, revision)?;
++                    preparation_seconds += prepare_start.elapsed().as_secs_f64();
++                }
++                #[cfg(feature = "room-profile")]
++                let trace_start = (block >= 32)
++                    .then(|| trace.as_ref().map(|_| trace::start(session.info().phase)))
++                    .flatten();
++                let start = Instant::now();
++                session.process(
++                    frames,
++                    (0..sources).map(|_| Some(input.as_slice())),
++                    &[],
++                    &commands,
++                    &mut output,
++                )?;
++                let duration = start.elapsed().as_secs_f64();
++                if block >= 32 {
++                    elapsed.push(duration);
++                    #[cfg(feature = "room-profile")]
++                    if let (Some(trace), Some(before)) = (&mut trace, trace_start) {
++                        trace.finish(block - 32, before, session.info().phase, duration);
++                    }
++                }
++                if block % 64 == 0 {
++                    rss_peak = rss_peak.max(process_counters(ticks).1.unwrap_or(0));
++                }
++                peak = output.iter().fold(peak, |a, b| a.max(b.abs()));
++                let _retired = session.take_retired();
++            }
++            let counters = process_counters(ticks);
++            rss_peak = rss_peak.max(counters.1.unwrap_or(0));
++            let cpu = cpu_start.zip(counters.0).map(|(start, end)| end - start);
++            // Preserve the worst call identities from already-recorded times.
++            // Sorting/JSON construction happen after processing and CPU sampling.
++            let mut indexed: Vec<_> = elapsed.iter().copied().enumerate().collect();
++            indexed.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
++            let slowest_calls: Vec<_> = indexed.iter().take(32).map(|(index, seconds)| {
++                serde_json::json!({"measured_call":index,"benchmark_call":index+32,"ms":seconds*1000.})
++            }).collect();
++            let total: f64 = elapsed.iter().sum();
++            elapsed.sort_by(f64::total_cmp);
++            let deadline = frames as f64 / f64::from(prepared.room.profile.sample_rate);
++            let profile = mradm_dsp::room::profile::snapshot();
++            #[cfg(feature = "room-profile")]
++            let trace_report = trace.map(|trace| trace.report(deadline));
++            #[cfg(not(feature = "room-profile"))]
++            let trace_report: Option<serde_json::Value> = None;
++            let segments = cfg!(feature = "room-profile").then(|| {
++                let index = mradm_dsp::room::profile::NAMES
++                    .iter()
++                    .position(|name| *name == "voice_segment")
++                    .unwrap();
++                profile[index].0
++            });
++            let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
++            let mut report = serde_json::json!({"scenario":name,"sources":sources,"continuous_pose":moving,"room_transition":switching,
++                "quality":quality.name(),"processing_policy":quality.policy(),"reflection_update_frames":quality.reflection_frames_at(prepared.room.profile.sample_rate),
++                "source_ramps":ramps,"distinct_event_offsets":if ramps{distinct.len()}else{0},
++                "voice_segments":segments,
++                "voice_segments_per_source_block":segments.map(|v|v as f64/(sources*blocks*frames/BLOCK) as f64),
++                "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
++                "profiling":cfg!(feature = "room-profile"), "stages":stages, "trace":trace_report,
++                "sample_rate":prepared.room.profile.sample_rate,"blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
++                "worker_wall_budget_percent":100.*total/(blocks as f64*deadline),
++                "cpu_seconds":cpu,"cpu_audio_budget_percent":cpu.map(|v|100.*v/(blocks as f64*deadline)),
++                "rss_peak_bytes":(rss_peak!=0).then_some(rss_peak),"pose_update_hz":if moving{f64::from(prepared.room.profile.sample_rate)/frames as f64}else{0.},
++                "mean_ms":total*1000./blocks as f64,"p95_ms":elapsed[(blocks*95/100).min(blocks-1)]*1000.,
++                "hrir_hash":prepared.room.hrir.data.identity,"hrir_bank_bytes":prepared.room.hrir.storage_bytes(),
++                "memory_measurement":if cfg!(target_os="macos") {"process-peak-rusage"} else {"sampled-process-rss"},
++                "p99_ms":elapsed[(blocks*99/100).min(blocks-1)]*1000.,
++                "maximum_ms":elapsed[blocks-1]*1000.,"deadline_misses":elapsed.iter().filter(|v|**v>deadline).count(),"slowest_calls":slowest_calls,
++                "algorithm_fifo_frames":BLOCK,"reported_latency_frames":session.info().latency_frames,"experiment":experiment,"final_phase":session.info().phase,"peak":peak});
++            report["coordinate_mapping"] =
++                serde_json::json!(if automatic { "room" } else { "uniform" });
++            report["thread_scheduling"] = scheduling.clone();
++            println!("{report}");
++        }
++    }
++    Ok(())
++}
+diff --git a/rust/crates/mradm-dsp/examples/room_support/room_replay.rs b/rust/crates/mradm-dsp/examples/room_support/room_replay.rs
+new file mode 100644
+index 0000000..f147847
+--- /dev/null
++++ b/rust/crates/mradm-dsp/examples/room_support/room_replay.rs
+@@ -0,0 +1,410 @@
++//! Release room-scoped numerical checkpoints. Resource bytes and event times
++//! are fixed; wall clocks and devices are deliberately absent from the input.
++use super::assets;
++#[cfg(feature = "room-gpu-experiment")]
++use super::gpu;
++use mradm_dsp::{
++    Result, geometry,
++    room::{
++        control::{RoomCommand, RoomDescription, State},
++        geometry::{self as room_geometry, Rotation},
++        hrir::HrirBank,
++        prepared::{PreparedRoom, ResponseWork},
++        quality::Quality,
++        resources::sha256,
++        screen::{RoomScreenGeometry, RoomScreens},
++        session::{Instance, PreparedSet, Session},
++    },
++};
++use std::{fs, io::Write, path::Path, sync::Arc};
++fn save(root: &Path, name: &str, samples: &[f32]) -> std::io::Result<serde_json::Value> {
++    let bytes: Vec<_> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
++    let mut out = fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(root.join(name))?;
++    out.write_all(&bytes)?;
++    Ok(serde_json::json!({"sha256":sha256(&bytes),"samples":samples.len()}))
++}
++fn render(
++    prepared: Arc<PreparedSet>,
++    next: Arc<PreparedSet>,
++    chunks: &[usize],
++    screens: bool,
++    dense: bool,
++    head_motion: &str,
++    world_only: bool,
++) -> Result<Vec<f32>> {
++    const MATERIAL: usize = 96013;
++    let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
++    let descriptions: Vec<_> = (0..32)
++        .map(|i| {
++            let v = geometry::portable_direction(i as f32 * 11.25, (i % 3) as f32 * 20. - 20.);
++            RoomDescription {
++                id: i as u64 + 1,
++                role: if i >= 30 { 2 } else { 0 },
++                screens: RoomScreens {
++                    enabled: u32::from(screens),
++                    reproduction: RoomScreenGeometry {
++                        width: 90.,
++                        ..RoomScreenGeometry::default()
++                    },
++                    ..RoomScreens::default()
++                },
++                position: [
++                    (-v[1] * 1.4) as f32,
++                    (v[0] * 1.4) as f32,
++                    (v[2] * 1.4) as f32,
++                ],
++                ..RoomDescription::default()
++            }
++        })
++        .collect();
++    session.configure(&descriptions)?;
++    let initial: Vec<_> = descriptions
++        .iter()
++        .enumerate()
++        .map(|(i, d)| RoomCommand {
++            element: i as u32,
++            state: State {
++                position: d.position,
++                head_locked: u32::from(i == 0 && !world_only),
++                screen_reference: u32::from(screens && i < 30),
++                diffuse: if i == 4 { 0.7 } else { 0. },
++                ..State::default()
++            },
++            ..RoomCommand::default()
++        })
++        .collect();
++    let mut moved = initial[1].state;
++    moved.position = [-2., 0.4, -0.2];
++    let mut quiet = initial[3].state;
++    quiet.gain = 0.23;
++    let mut relock = initial[2].state;
++    relock.head_locked = 1;
++    let mut events = vec![
++        (
++            731usize,
++            RoomCommand {
++                element: 1,
++                changed: 4,
++                duration: 1537,
++                state: moved,
++                ..RoomCommand::default()
++            },
++        ),
++        (
++            1789,
++            RoomCommand {
++                element: 3,
++                changed: 2,
++                duration: 913,
++                state: quiet,
++                ..RoomCommand::default()
++            },
++        ),
++        (
++            2901,
++            RoomCommand {
++                element: 2,
++                changed: 256,
++                state: relock,
++                ..RoomCommand::default()
++            },
++        ),
++    ];
++    if world_only {
++        events.retain(|(_, command)| command.changed & 256 == 0);
++    }
++    if dense {
++        // Dense replay: 30 non-LFE sources each ramp at a distinct sample offset.
++        // Keep the original head-lock, gain, pose, room-switch, removal and EOS schedule.
++        for block in 0..MATERIAL.div_ceil(512) {
++            for (source, command) in initial.iter().enumerate().take(30) {
++                let sample = block * 512 + (source * 131 + 17) % 512;
++                if sample >= MATERIAL {
++                    continue;
++                }
++                let direction = geometry::portable_direction(
++                    source as f32 * 11.25 + (block + 1) as f32 * 0.5,
++                    (source % 3) as f32 * 20. - 20.,
++                );
++                events.push((
++                    sample,
++                    RoomCommand {
++                        element: source as u32,
++                        changed: 4,
++                        duration: 512,
++                        state: State {
++                            position: [
++                                (-direction[1] * 1.4) as f32,
++                                (direction[0] * 1.4) as f32,
++                                (direction[2] * 1.4) as f32,
++                            ],
++                            ..command.state
++                        },
++                        ..RoomCommand::default()
++                    },
++                ));
++            }
++        }
++        events.sort_by_key(|event| event.0);
++    }
++    let mut candidate = Some(Box::new(Instance::new(next, 32)?));
++    let mut input = vec![[0.; 4096]; 32];
++    let mut block_output = vec![0.; 8192];
++    let mut commands = Vec::with_capacity(events.len());
++    let mut output = Vec::new();
++    let mut position = 0usize;
++    let mut sequence = 0;
++    let mut end = None;
++    let mut sources = 32;
++    loop {
++        if position == MATERIAL && end.is_none() {
++            session.end_input();
++            end = Some(MATERIAL + session.info().tail_frames as usize);
++        }
++        if end == Some(position) {
++            break;
++        }
++        if position == 32011 {
++            sources = 31;
++            session.configure(&descriptions[..sources])?;
++        }
++        if position == 7680 {
++            session.queue_room(candidate.take().unwrap(), 1)?;
++        }
++        if position.is_multiple_of(512) {
++            let step = (position / 512) as f32;
++            session.set_pose(match head_motion {
++                "slow" => [step * 0.25 - 35., step * 0.05 - 10., step * 0.02],
++                "fast" => [step * 4. - 170., step * 1., step * 0.3],
++                "wrap" => [
++                    ((179.85 + step * 0.1 + 180.) % 360.) - 180.,
++                    89.8,
++                    -30. + step * 0.04,
++                ],
++                _ => [step * 0.61 - 35., step * 0.12 - 10., step * 0.07],
++            })?;
++        }
++        let boundary = [
++            MATERIAL,
++            32011,
++            7680,
++            end.unwrap_or(MATERIAL),
++            (position / 512 + 1) * 512,
++        ]
++        .into_iter()
++        .filter(|v| *v > position)
++        .min()
++        .unwrap();
++        let count = chunks[sequence % chunks.len()]
++            .min(4096)
++            .min(boundary - position);
++        sequence += 1;
++        for (source, plane) in input.iter_mut().enumerate() {
++            for (i, value) in plane[..count].iter_mut().enumerate() {
++                let word = ((position + i) * 3943 + source * 7817) % 65521;
++                *value = if position < MATERIAL {
++                    (word as f32 - 32760.) / 16777216.
++                } else {
++                    0.
++                };
++            }
++        }
++        commands.clear();
++        for (sample, command) in events.iter().copied() {
++            if sample >= position && sample < position + count {
++                let mut c = command;
++                c.offset = (sample - position) as u32;
++                commands.push(c);
++            }
++        }
++        session.process(
++            count,
++            input[..sources].iter().map(|p| Some(&p[..count])),
++            if position == 0 { &initial } else { &[] },
++            &commands,
++            &mut block_output[..count * 2],
++        )?;
++        output.extend_from_slice(&block_output[..count * 2]);
++        position += count;
++        let _retired = session.take_retired();
++    }
++    Ok(output)
++}
++pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
++    if cfg!(debug_assertions) {
++        return Err("Use Release for numerical acceptance".into());
++    }
++    let mut args: Vec<_> = std::env::args().collect();
++    #[cfg(feature = "room-gpu-experiment")]
++    let gpu = gpu::Options::parse(&mut args)?;
++    let hrir_path = if let Some(index) = args.iter().position(|v| v == "--hrir") {
++        let path = args
++            .get(index + 1)
++            .ok_or("--hrir needs a resource path")?
++            .clone();
++        args.drain(index..index + 2);
++        Some(std::path::PathBuf::from(path))
++    } else {
++        None
++    };
++    let quality = if let Some(index) = args.iter().position(|v| v == "--quality") {
++        let value = args
++            .get(index + 1)
++            .ok_or("--quality needs exact or realtime")?
++            .parse::<Quality>()?;
++        args.drain(index..index + 2);
++        value
++    } else {
++        Quality::Exact
++    };
++    let head_motion = if let Some(index) = args.iter().position(|v| v == "--head-motion") {
++        let value = args
++            .get(index + 1)
++            .ok_or("--head-motion needs standard, slow, fast or wrap")?
++            .clone();
++        if !["standard", "slow", "fast", "wrap"].contains(&value.as_str()) {
++            return Err("--head-motion needs standard, slow, fast or wrap".into());
++        }
++        args.drain(index..index + 2);
++        value
++    } else {
++        "standard".to_owned()
++    };
++    let screens = args.iter().any(|v| v == "--screens");
++    let dense = args.iter().any(|v| v == "--dense");
++    let world_only = args.iter().any(|v| v == "--world-only");
++    args.retain(|v| v != "--screens" && v != "--dense" && v != "--world-only");
++    if args.len() != 3 {
++        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--hrir SOFA_OR_COLLECTION] [--screens] [--dense] [--world-only] [--quality exact|realtime] [--head-motion standard|slow|fast|wrap]".into());
++    }
++    let file = Path::new(&args[1]);
++    let root = file.parent().ok_or("missing parent")?;
++    let out = Path::new(&args[2]);
++    fs::create_dir(out)?;
++    let profile = Arc::new(assets::profile(file)?);
++    let selected = hrir_path.unwrap_or_else(|| root.join(&profile.default_hrir));
++    let hrir = Arc::new(assets::hrir_at_rate(&selected, profile.sample_rate)?);
++    let (length, _, _) = PreparedRoom::required_fft(&profile, &hrir)?;
++    let bank = Arc::new(HrirBank::with_policy(hrir, length, quality.fft())?);
++    let room = Arc::new(PreparedRoom::with_quality(
++        profile.clone(),
++        bank.clone(),
++        quality,
++    )?);
++    let prepared = Arc::new(PreparedSet::new(room.clone())?);
++    let mut changed = (*profile).clone();
++    changed.identity.push_str("-replay");
++    changed.absorption = [[0.90; 8]; 6];
++    changed.late_energy *= 0.8;
++    changed.dimensions[0] += 0.5;
++    changed.listener[0] += 0.25;
++    changed.dimensions[1] += 0.2;
++    changed.listener[1] += 0.1;
++    let next = Arc::new(PreparedSet::new(Arc::new(PreparedRoom::with_quality(
++        Arc::new(changed),
++        bank,
++        quality,
++    )?))?);
++    #[cfg(feature = "room-gpu-experiment")]
++    let (prepared, next) = (gpu.prepare(prepared)?, gpu.prepare(next)?);
++    let mut work = ResponseWork::new(&room)?;
++    let mut query = vec![0.; room.hrir.data.output_taps * 2];
++    let mut manifest = serde_json::json!({"schema":"mradm.room-replay","version":1,
++        "scenario":"controls-distance-geometry-switch-v1",
++        "room_hash":profile.identity,"hrir_hash":room.hrir.data.identity,"prepared":room.fingerprint(),
++        "lfe":prepared.lfe.fingerprint(),"latency_frames":256,"tail_frames":prepared.tail_frames(),"files":{}});
++    if quality != Quality::Exact {
++        manifest["processing_policy"] = quality.policy().into();
++    }
++    #[cfg(feature = "room-gpu-experiment")]
++    if !gpu.report().is_null() {
++        manifest["experiment"] = gpu.report();
++    }
++    for (index, [az, el, r]) in [
++        [0., 0., 0.75],
++        [0., 0., 1.5],
++        [0., 0., 3.],
++        [179.999, 0., 2.1],
++        [-179.999, 0., 2.1],
++        [0., 89.999, 1.85],
++        [0., -89.999, 1.05],
++        [91.3, -31.1, 2.1],
++    ]
++    .into_iter()
++    .enumerate()
++    {
++        let direction = geometry::portable_direction(az as f32, el as f32);
++        let mut face = usize::MAX;
++        work.hrir(&room, direction, &mut face, &mut query)?;
++        let name = format!("hrir-{index}.f32");
++        manifest["files"][&name] = save(out, &name, &query)?;
++        let position = room_geometry::position(
++            &profile,
++            [
++                (-direction[1] * r) as f32,
++                (direction[0] * r) as f32,
++                (direction[2] * r) as f32,
++            ],
++            1.,
++            [1., 0., 0.],
++        )?;
++        work.build(&room, position, &Rotation::new([13., -7., 11.])?)?;
++        let name = format!("branches-{index}.f32");
++        manifest["files"][&name] = save(out, &name, &work.impulse)?;
++    }
++    if screens {
++        manifest["scenario"] = "controls-screen-distance-geometry-switch-v1".into();
++    }
++    if dense {
++        manifest["dense_source_ramps"] = true.into();
++    }
++    if head_motion != "standard" {
++        manifest["head_motion"] = head_motion.clone().into();
++    }
++    if world_only {
++        // Separate workload identity; never compare this to a head-locked replay.
++        let scenario = manifest["scenario"].as_str().unwrap().to_owned();
++        manifest["scenario"] = format!("{scenario}-world-only").into();
++        manifest["world_only"] = true.into();
++    }
++    let canonical = render(
++        prepared.clone(),
++        next.clone(),
++        if world_only { &[512] } else { &[256] },
++        screens,
++        dense,
++        &head_motion,
++        world_only,
++    )?;
++    let fragmented = render(
++        prepared,
++        next,
++        &[1, 173, 733, 4096, 19, 257],
++        screens,
++        dense,
++        &head_motion,
++        world_only,
++    )?;
++    if canonical
++        .iter()
++        .map(|v| v.to_bits())
++        .ne(fragmented.iter().map(|v| v.to_bits()))
++    {
++        return Err("Fragmented replay differs from canonical PCM".into());
++    }
++    manifest["files"]["session.f32"] = save(out, "session.f32", &canonical)?;
++    manifest["frames"] = (canonical.len() / 2).into();
++    fs::write(
++        out.join("manifest.json"),
++        serde_json::to_vec_pretty(&manifest)?,
++    )?;
++    println!(
++        "{}",
++        serde_json::json!({"output":out,"frames":canonical.len()/2,"fragmented_identical":true,
++        "pcm_sha256":manifest["files"]["session.f32"]["sha256"],"os":std::env::consts::OS,"arch":std::env::consts::ARCH})
++    );
++    Ok(())
++}
+diff --git a/rust/crates/mradm-dsp/tests/room_cuda_resources.rs b/rust/crates/mradm-dsp/tests/room_cuda_resources.rs
+new file mode 100644
+index 0000000..2d63b55
+--- /dev/null
++++ b/rust/crates/mradm-dsp/tests/room_cuda_resources.rs
+@@ -0,0 +1,55 @@
++#![cfg(feature = "room-gpu-experiment")]
++use mradm_dsp::room::{hrir::PHASES, quality::Quality, resources::sha256};
++#[path = "common/room_fixture.rs"]
++#[allow(dead_code)]
++mod common;
++
++#[test]
++fn resident_upload_windows_preserve_all_prepared_spectral_bits() {
++    for rate in [48000, 96000] {
++        let prepared = common::fixture_at_rate(Quality::Realtime, rate);
++        let bank = &prepared.room.hrir;
++        let bins = bank.fft_length / 2 + 1;
++        let rows = bank.data.directions.len() * 2;
++        let fingerprint = bank.fingerprint();
++        let layers = bank.data.collection.as_ref().unwrap().layers.len();
++        for layer in 0..layers {
++            let mut values = vec![0.; rows * bins * 2];
++            for first in (0..rows).step_by(5) {
++                let count = 5.min(rows - first);
++                bank.gpu_copy_rows(
++                    layer * rows + first,
++                    &mut values[first * bins * 2..(first + count) * bins * 2],
++                )
++                .unwrap();
++            }
++            let bytes: Vec<_> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
++            assert_eq!(
++                sha256(&bytes),
++                fingerprint["distance_layers"]["spectra"][layer]
++                    .as_str()
++                    .unwrap()
++            );
++        }
++        let mut values = vec![0.; (PHASES + 1) * bins * 2];
++        for first in (0..=PHASES).step_by(7) {
++            let count = 7.min(PHASES + 1 - first);
++            bank.gpu_copy_fractions(
++                first,
++                &mut values[first * bins * 2..(first + count) * bins * 2],
++            )
++            .unwrap();
++        }
++        let bytes: Vec<_> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
++        assert_eq!(sha256(&bytes), fingerprint["fractional"].as_str().unwrap());
++        assert!(
++            bank.gpu_copy_rows(layers * rows, &mut values[..bins * 2])
++                .is_err()
++        );
++        assert!(bank.gpu_copy_rows(0, &mut values[..1]).is_err());
++        assert!(
++            bank.gpu_copy_fractions(PHASES + 1, &mut values[..bins * 2])
++                .is_err()
++        );
++    }
++}
+diff --git a/rust/crates/mradm-ffi/src/room_cuda_selection.rs b/rust/crates/mradm-ffi/src/room_cuda_selection.rs
+new file mode 100644
+index 0000000..e09be48
+--- /dev/null
++++ b/rust/crates/mradm-ffi/src/room_cuda_selection.rs
+@@ -0,0 +1,62 @@
++use mradm_dsp::{Error, Result, room::quality::Quality};
++
++fn resolve(
++    quality: Quality,
++    inherited: Option<bool>,
++    requested: Option<&str>,
++    available: bool,
++) -> Result<bool> {
++    if quality == Quality::Exact {
++        return Ok(false);
++    }
++    let enabled = if let Some(value) = inherited {
++        value
++    } else {
++        match requested {
++            None | Some("0") => false,
++            Some("1") => true,
++            _ => return Err(Error::InvalidArgument("MR_ADM_ROOM_CUDA must be 0 or 1")),
++        }
++    };
++    if enabled && !available {
++        return Err(Error::Unsupported(
++            "Optional Windows ROOM CUDA support is not enabled in this build",
++        ));
++    }
++    Ok(enabled)
++}
++pub fn selected(quality: Quality, inherited: Option<bool>) -> Result<bool> {
++    // Exact never observes the opt-in. A room switch keeps its session's backend.
++    if quality == Quality::Exact {
++        return Ok(false);
++    }
++    let value = if inherited.is_none() {
++        std::env::var("MR_ADM_ROOM_CUDA")
++            .map(Some)
++            .or_else(|error| match error {
++                std::env::VarError::NotPresent => Ok(None),
++                _ => Err(Error::InvalidArgument("Invalid ROOM CUDA selection")),
++            })?
++    } else {
++        None
++    };
++    resolve(
++        quality,
++        inherited,
++        value.as_deref(),
++        cfg!(all(windows, feature = "room-cuda")),
++    )
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn exact_default_and_inherited_backends_are_stable() {
++        assert!(!resolve(Quality::Exact, Some(true), Some("invalid"), false).unwrap());
++        assert!(!resolve(Quality::Realtime, None, None, true).unwrap());
++        assert!(!resolve(Quality::Realtime, Some(false), Some("1"), true).unwrap());
++        assert!(resolve(Quality::Realtime, Some(true), Some("0"), true).unwrap());
++        assert!(resolve(Quality::Realtime, None, Some("1"), false).is_err());
++        assert!(resolve(Quality::Realtime, None, Some("invalid"), true).is_err());
++    }
++}
+diff --git a/rust/crates/mradm-room-cuda/Cargo.toml b/rust/crates/mradm-room-cuda/Cargo.toml
+new file mode 100644
+index 0000000..32ae054
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/Cargo.toml
+@@ -0,0 +1,27 @@
++[package]
++name = "mradm-room-cuda"
++version = "0.1.0"
++edition.workspace = true
++rust-version.workspace = true
++license.workspace = true
++
++[dependencies]
++mradm-dsp = { path = "../mradm-dsp", default-features = false, features = ["room-gpu-experiment"] }
++serde_json.workspace = true
++
++[dev-dependencies]
++libc = "=0.2.190"
++
++[features]
++default = ["room-gpu-experiment"]
++room-gpu-experiment = []
++room-profile = ["mradm-dsp/room-profile"]
++room-trace = ["room-profile", "mradm-dsp/room-trace"]
++
++[[example]]
++name = "room_cuda_bench"
++required-features = ["room-gpu-experiment"]
++
++[[example]]
++name = "room_cuda_replay"
++required-features = ["room-gpu-experiment"]
+diff --git a/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs b/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
+new file mode 100644
+index 0000000..477144d
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
+@@ -0,0 +1,14 @@
++#[path = "../../mradm-dsp/examples/room_support/assets.rs"]
++mod assets;
++#[path = "../../mradm-dsp/examples/room_support/audio_workers.rs"]
++mod audio_workers;
++#[path = "support/options.rs"]
++mod gpu;
++#[path = "../../mradm-dsp/examples/room_support/room_bench.rs"]
++mod implementation;
++#[cfg(feature = "room-profile")]
++#[path = "../../mradm-dsp/examples/room_bench/trace.rs"]
++mod trace;
++fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
++    implementation::run()
++}
+diff --git a/rust/crates/mradm-room-cuda/examples/room_cuda_replay.rs b/rust/crates/mradm-room-cuda/examples/room_cuda_replay.rs
+new file mode 100644
+index 0000000..fc21787
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/examples/room_cuda_replay.rs
+@@ -0,0 +1,9 @@
++#[path = "../../mradm-dsp/examples/room_support/assets.rs"]
++mod assets;
++#[path = "support/options.rs"]
++mod gpu;
++#[path = "../../mradm-dsp/examples/room_support/room_replay.rs"]
++mod implementation;
++fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
++    implementation::run()
++}
+diff --git a/rust/crates/mradm-room-cuda/examples/support/options.rs b/rust/crates/mradm-room-cuda/examples/support/options.rs
+new file mode 100644
+index 0000000..9f90fe8
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/examples/support/options.rs
+@@ -0,0 +1,41 @@
++use mradm_dsp::room::session::PreparedSet;
++use std::{path::PathBuf, sync::Arc};
++pub struct Options {
++    enabled: bool,
++    library: Option<PathBuf>,
++}
++impl Options {
++    pub fn parse(args: &mut Vec<String>) -> std::result::Result<Self, Box<dyn std::error::Error>> {
++        let mut enabled = args.iter().any(|v| v == "--cuda");
++        args.retain(|v| v != "--cuda");
++        let library = if let Some(index) = args.iter().position(|v| v == "--cuda-library") {
++            let value = args
++                .get(index + 1)
++                .ok_or("--cuda-library needs a path")?
++                .into();
++            args.drain(index..index + 2);
++            enabled = true;
++            Some(value)
++        } else {
++            None
++        };
++        Ok(Self { enabled, library })
++    }
++    pub fn prepare(
++        &self,
++        prepared: Arc<PreparedSet>,
++    ) -> std::result::Result<Arc<PreparedSet>, Box<dyn std::error::Error>> {
++        if self.enabled {
++            Ok(mradm_room_cuda::bind(prepared, self.library.as_deref())?.0)
++        } else {
++            Ok(prepared)
++        }
++    }
++    pub fn report(&self) -> serde_json::Value {
++        if self.enabled {
++            serde_json::json!({"kind":"room-cuda-session","control":"production Session","finite_fade":true,"cpu_reference":false,"binding":"prepared-memory","eq_stagger_frames":256})
++        } else {
++            serde_json::Value::Null
++        }
++    }
++}
+diff --git a/rust/crates/mradm-room-cuda/src/lib.rs b/rust/crates/mradm-room-cuda/src/lib.rs
+new file mode 100644
+index 0000000..591a8ca
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/src/lib.rs
+@@ -0,0 +1,52 @@
++//! Optional native ROOM boundary. Resource preparation is synchronous; the DSP
++//! library owns all clocks and never links CUDA or performs file I/O.
++#[cfg(not(windows))]
++use mradm_dsp::Error;
++use mradm_dsp::{Result, room::session::PreparedSet};
++use std::{path::Path, sync::Arc};
++
++#[cfg(windows)]
++mod native;
++#[cfg(windows)]
++pub use native::NativeFactory;
++
++pub fn bind(
++    prepared: Arc<PreparedSet>,
++    library: Option<&Path>,
++) -> Result<(Arc<PreparedSet>, serde_json::Value)> {
++    #[cfg(windows)]
++    {
++        use mradm_dsp::room::{
++            gpu_experiment::{Backend, Factory, LateBackend},
++            prepared::PreparedRoom,
++        };
++        struct CachedFactory {
++            native: Arc<NativeFactory>,
++            // Keep the CPU weak-cache entry alive without duplicating its data.
++            _prepared: Arc<PreparedSet>,
++        }
++        impl Factory for CachedFactory {
++            fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>> {
++                self.native.create(room)
++            }
++            fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>> {
++                self.native.create_late(room)
++            }
++        }
++        let native = NativeFactory::new(prepared.room.clone(), library)?;
++        let metadata = native.metadata()?;
++        let factory = Arc::new(CachedFactory {
++            native,
++            _prepared: prepared.clone(),
++        });
++        let bound = prepared
++            .with_gpu_experiment(factory)?
++            .with_gpu_tuning(true, 0)?;
++        Ok((Arc::new(bound), metadata))
++    }
++    #[cfg(not(windows))]
++    {
++        let _ = (prepared, library);
++        Err(Error::Unsupported("ROOM CUDA is available only on Windows"))
++    }
++}
+diff --git a/rust/crates/mradm-room-cuda/src/native.rs b/rust/crates/mradm-room-cuda/src/native.rs
+new file mode 100644
+index 0000000..0409737
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/src/native.rs
+@@ -0,0 +1,573 @@
++//! Unsafe calls are confined to this private, versioned native plugin boundary.
++use mradm_dsp::{
++    Complex32, Error, Result,
++    room::{
++        gpu_experiment::{Backend, Factory, Frame, Job, LateBackend, Range, Task, Update},
++        hrir::{HrirBank, PHASES},
++        prepared::PreparedRoom,
++        quality::Quality,
++    },
++};
++use std::{
++    collections::BTreeMap,
++    ffi::{CStr, OsString, c_void},
++    os::windows::ffi::{OsStrExt, OsStringExt},
++    path::{Path, PathBuf},
++    sync::{Arc, Mutex, OnceLock, Weak},
++};
++
++const SOURCE: &str = include_str!(concat!(
++    env!("CARGO_MANIFEST_DIR"),
++    "/../../../scripts/research/room_gpu/session_kernels.cu"
++));
++const ABI: u32 = 1;
++#[link(name = "kernel32")]
++unsafe extern "system" {
++    fn LoadLibraryExW(path: *const u16, file: *mut c_void, flags: u32) -> *mut c_void;
++    fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
++    fn FreeLibrary(module: *mut c_void) -> i32;
++    fn GetModuleHandleExW(flags: u32, address: *const u16, module: *mut *mut c_void) -> i32;
++    fn GetModuleFileNameW(module: *mut c_void, path: *mut u16, size: u32) -> u32;
++    fn AddDllDirectory(path: *const u16) -> *mut c_void;
++    fn RemoveDllDirectory(cookie: *mut c_void) -> i32;
++}
++fn module_anchor() {}
++fn default_library() -> Result<PathBuf> {
++    let mut module = std::ptr::null_mut();
++    if unsafe {
++        GetModuleHandleExW(
++            0x4 | 0x2,
++            module_anchor as *const () as *const u16,
++            &mut module,
++        )
++    } == 0
++    {
++        return Err(Error::Io("Cannot locate the ROOM CUDA host module"));
++    }
++    let mut path = vec![0u16; 32768];
++    let used = unsafe { GetModuleFileNameW(module, path.as_mut_ptr(), path.len() as u32) } as usize;
++    if used == 0 || used >= path.len() {
++        return Err(Error::Io("Cannot locate the ROOM CUDA host directory"));
++    }
++    let path = PathBuf::from(OsString::from_wide(&path[..used]));
++    Ok(path
++        .parent()
++        .ok_or(Error::Io("Missing ROOM CUDA host directory"))?
++        .join("mradm_room_cuda.dll"))
++}
++struct ModuleHandle(*mut c_void);
++impl Drop for ModuleHandle {
++    fn drop(&mut self) {
++        unsafe {
++            FreeLibrary(self.0);
++        }
++    }
++}
++struct Directory(*mut c_void);
++impl Drop for Directory {
++    fn drop(&mut self) {
++        unsafe {
++            RemoveDllDirectory(self.0);
++        }
++    }
++}
++
++#[repr(C)]
++struct Params {
++    rate: u32,
++    fft: u32,
++    taps: u32,
++    stride: u32,
++    buckets: u32,
++    rows: u32,
++    images: u32,
++    history_parts: u32,
++    materials: *const f32,
++    material_floats: usize,
++    propagation: *const f32,
++    propagation_floats: usize,
++}
++#[repr(C)]
++struct NativeFrame {
++    active: u32,
++    reset: u32,
++    heads: [u32; 2],
++    frequency: *const f32,
++    jobs: *const Job,
++    job_count: usize,
++    ranges: *const Range,
++    range_count: usize,
++    updates: *const Update,
++    update_count: usize,
++    tasks: *const Task,
++    task_count: usize,
++}
++#[repr(C)]
++struct BankDesc {
++    abi: u32,
++    size: u32,
++    rate: u32,
++    fft: u32,
++    rows: u32,
++}
++#[derive(Default, Debug)]
++#[repr(C)]
++pub struct Stats {
++    pub banks: u64,
++    pub engines: u64,
++    pub late_engines: u64,
++    pub device_bytes: u64,
++    pub pinned_bytes: u64,
++}
++type Destroy = unsafe extern "C" fn(*mut c_void);
++type BankCreate = unsafe extern "C" fn(*const BankDesc, *const u8, usize) -> *mut c_void;
++type BankUpload = unsafe extern "C" fn(*mut c_void, u32, usize, *const f32, usize) -> i32;
++type BankSeal = unsafe extern "C" fn(*mut c_void) -> i32;
++type BankDevice = unsafe extern "C" fn(*mut c_void) -> *const std::ffi::c_char;
++type StatsFn = unsafe extern "C" fn(*mut Stats) -> i32;
++type Create = unsafe extern "C" fn(*mut c_void, *const Params) -> *mut c_void;
++type Begin = unsafe extern "C" fn(*mut c_void, u32) -> i32;
++type Voice = unsafe extern "C" fn(*mut c_void, u32, *const NativeFrame) -> i32;
++type Submit = unsafe extern "C" fn(*mut c_void) -> i32;
++type Finish = unsafe extern "C" fn(*mut c_void, *mut f32, usize) -> i32;
++type Message = unsafe extern "C" fn() -> *const std::ffi::c_char;
++type LateCreate = unsafe extern "C" fn(*mut c_void, u32, u32, *const f32, usize) -> *mut c_void;
++type LateSubmit = unsafe extern "C" fn(*mut c_void, *const f32, usize, u32) -> i32;
++struct Library {
++    _module: ModuleHandle,
++    _directory: Directory,
++    bank_create: BankCreate,
++    bank_upload: BankUpload,
++    bank_seal: BankSeal,
++    bank_destroy: Destroy,
++    bank_device: BankDevice,
++    stats: StatsFn,
++    create: Create,
++    destroy: Destroy,
++    begin: Begin,
++    voice: Voice,
++    submit: Submit,
++    finish: Finish,
++    message: Message,
++    late_create: LateCreate,
++    late_destroy: Destroy,
++    late_submit: LateSubmit,
++    late_finish: Finish,
++}
++// Module ownership and immutable function pointers may cross preparation/worker threads.
++unsafe impl Send for Library {}
++unsafe impl Sync for Library {}
++impl Library {
++    fn load(path: &Path) -> Result<Arc<Self>> {
++        let parent: Vec<_> = path
++            .parent()
++            .ok_or(Error::Io("Missing ROOM CUDA runtime directory"))?
++            .as_os_str()
++            .encode_wide()
++            .chain(Some(0))
++            .collect();
++        let directory = Directory(unsafe { AddDllDirectory(parent.as_ptr()) });
++        if directory.0.is_null() {
++            return Err(Error::Io("Cannot register ROOM CUDA runtime directory"));
++        }
++        let wide: Vec<_> = path.as_os_str().encode_wide().chain(Some(0)).collect();
++        let module = ModuleHandle(unsafe {
++            LoadLibraryExW(wide.as_ptr(), std::ptr::null_mut(), 0x100 | 0x1000)
++        });
++        if module.0.is_null() {
++            return Err(Error::Unsupported(
++                "Optional ROOM CUDA runtime or its dependencies are unavailable",
++            ));
++        }
++        let symbol = |name: &[u8]| -> Result<*mut c_void> {
++            let pointer = unsafe { GetProcAddress(module.0, name.as_ptr()) };
++            if pointer.is_null() {
++                Err(Error::Unsupported("Incompatible ROOM CUDA runtime"))
++            } else {
++                Ok(pointer)
++            }
++        };
++        macro_rules! get {
++            ($name:literal,$ty:ty) => {
++                unsafe {
++                    std::mem::transmute::<*mut c_void, $ty>(symbol(
++                        concat!($name, "\0").as_bytes(),
++                    )?)
++                }
++            };
++        }
++        let version = get!("mradm_room_cuda_abi", unsafe extern "C" fn() -> u32);
++        if unsafe { version() } != ABI {
++            return Err(Error::Unsupported("Incompatible ROOM CUDA ABI"));
++        }
++        let value = Self {
++            bank_create: get!("mradm_room_cuda_bank_create", BankCreate),
++            bank_upload: get!("mradm_room_cuda_bank_upload", BankUpload),
++            bank_seal: get!("mradm_room_cuda_bank_seal", BankSeal),
++            bank_destroy: get!("mradm_room_cuda_bank_destroy", Destroy),
++            bank_device: get!("mradm_room_cuda_bank_device", BankDevice),
++            stats: get!("mradm_room_cuda_stats", StatsFn),
++            create: get!("mradm_room_cuda_session_create", Create),
++            destroy: get!("mradm_room_cuda_session_destroy", Destroy),
++            begin: get!("mradm_room_cuda_session_begin", Begin),
++            voice: get!("mradm_room_cuda_session_voice", Voice),
++            submit: get!("mradm_room_cuda_session_submit", Submit),
++            finish: get!("mradm_room_cuda_session_finish", Finish),
++            message: get!("mradm_room_cuda_session_error", Message),
++            late_create: get!("mradm_room_cuda_late_create", LateCreate),
++            late_destroy: get!("mradm_room_cuda_late_destroy", Destroy),
++            late_submit: get!("mradm_room_cuda_late_submit", LateSubmit),
++            late_finish: get!("mradm_room_cuda_late_finish", Finish),
++            _module: module,
++            _directory: directory,
++        };
++        Ok(Arc::new(value))
++    }
++    fn check(&self, status: i32) -> Result<()> {
++        if status == 0 {
++            return Ok(());
++        }
++        let message = unsafe { (self.message)() };
++        if !message.is_null() {
++            eprintln!(
++                "ROOM CUDA: {}",
++                unsafe { CStr::from_ptr(message) }.to_string_lossy()
++            );
++        }
++        Err(Error::RenderFailed(
++            "ROOM CUDA operation failed; recreate the session after correcting the device/runtime error",
++        ))
++    }
++}
++struct Bank {
++    library: Arc<Library>,
++    handle: *mut c_void,
++    cpu: Arc<HrirBank>,
++}
++// Upload is complete before publication. Engines only read these shared tables.
++unsafe impl Send for Bank {}
++unsafe impl Sync for Bank {}
++impl Drop for Bank {
++    fn drop(&mut self) {
++        unsafe {
++            (self.library.bank_destroy)(self.handle);
++        }
++    }
++}
++impl Bank {
++    fn new(cpu: Arc<HrirBank>, path: &Path) -> Result<Self> {
++        let library = Library::load(path)?;
++        let layers = cpu.data.collection.as_ref().map_or(1, |c| c.layers.len());
++        let rows = layers
++            .checked_mul(cpu.data.directions.len())
++            .and_then(|n| n.checked_mul(2))
++            .ok_or(Error::Unsupported("ROOM CUDA bank is too large"))?;
++        if rows > 65536 {
++            return Err(Error::Unsupported("ROOM CUDA bank is too large"));
++        }
++        let desc = BankDesc {
++            abi: ABI,
++            size: size_of::<BankDesc>() as u32,
++            rate: cpu.data.sample_rate,
++            fft: cpu.fft_length as u32,
++            rows: rows as u32,
++        };
++        let handle = unsafe { (library.bank_create)(&desc, SOURCE.as_ptr(), SOURCE.len()) };
++        if handle.is_null() {
++            library.check(1)?;
++        }
++        let bank = Self {
++            library,
++            handle,
++            cpu,
++        };
++        let bins = bank.cpu.fft_length / 2 + 1;
++        let mut buffer = vec![0f32; 64 * bins * 2];
++        for (table, total) in [(0, rows), (1, PHASES + 1)] {
++            for first in (0..total).step_by(64) {
++                let count = 64.min(total - first);
++                let row = &mut buffer[..count * bins * 2];
++                if table == 0 {
++                    bank.cpu.gpu_copy_rows(first, row)?;
++                } else {
++                    bank.cpu.gpu_copy_fractions(first, row)?;
++                }
++                bank.library.check(unsafe {
++                    (bank.library.bank_upload)(
++                        handle,
++                        table,
++                        first * bins * 2,
++                        row.as_ptr(),
++                        row.len(),
++                    )
++                })?;
++            }
++        }
++        let phases = &mut buffer[..bank.cpu.fft_length * 2];
++        for (bin, out) in phases.as_chunks_mut::<2>().0.iter_mut().enumerate() {
++            let v = bank.cpu.integer_phase(1, bin);
++            out.copy_from_slice(&[v.re, v.im]);
++        }
++        bank.library.check(unsafe {
++            (bank.library.bank_upload)(handle, 2, 0, phases.as_ptr(), phases.len())
++        })?;
++        bank.library
++            .check(unsafe { (bank.library.bank_seal)(handle) })?;
++        Ok(bank)
++    }
++}
++type Entry = OnceLock<Result<Bank>>;
++fn copy_error(error: &Error) -> Error {
++    match error {
++        Error::InvalidArgument(s) => Error::InvalidArgument(s),
++        Error::Unsupported(s) => Error::Unsupported(s),
++        Error::RenderFailed(s) => Error::RenderFailed(s),
++        Error::Io(s) => Error::Io(s),
++    }
++}
++pub struct NativeFactory {
++    entry: Arc<Entry>,
++}
++impl NativeFactory {
++    pub fn new(room: Arc<PreparedRoom>, library: Option<&Path>) -> Result<Arc<Self>> {
++        if room.quality != Quality::Realtime
++            || room.profile.sample_rate != 96000
++            || room.fft_length != 4096
++            || room.early_channels() != 2
++        {
++            return Err(Error::Unsupported(
++                "This room/HRIR configuration is not supported by the optional Windows CUDA backend",
++            ));
++        }
++        let path = library
++            .map(Path::to_path_buf)
++            .map_or_else(default_library, Ok)?;
++        let path = path
++            .canonicalize()
++            .map_err(|_| Error::Unsupported("Optional ROOM CUDA runtime is unavailable"))?;
++        type Cache = BTreeMap<(PathBuf, usize), Weak<Entry>>;
++        static CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();
++        let key = (path.clone(), Arc::as_ptr(&room.hrir) as usize);
++        let entry = {
++            let mut entries = CACHE
++                .get_or_init(Default::default)
++                .lock()
++                .map_err(|_| Error::RenderFailed("ROOM CUDA cache failed"))?;
++            entries.retain(|_, v| v.strong_count() != 0);
++            if let Some(value) = entries.get(&key).and_then(Weak::upgrade) {
++                value
++            } else {
++                let value = Arc::new(OnceLock::new());
++                entries.insert(key, Arc::downgrade(&value));
++                value
++            }
++        };
++        // Per-key single-flight initialization never holds the global cache lock.
++        entry
++            .get_or_init(|| Bank::new(room.hrir.clone(), &path))
++            .as_ref()
++            .map_err(copy_error)?;
++        Ok(Arc::new(Self { entry }))
++    }
++    fn bank(&self) -> &Bank {
++        self.entry.get().unwrap().as_ref().unwrap()
++    }
++    pub fn stats(&self) -> Result<Stats> {
++        let mut value = Stats::default();
++        self.bank()
++            .library
++            .check(unsafe { (self.bank().library.stats)(&mut value) })?;
++        Ok(value)
++    }
++    pub fn metadata(&self) -> Result<serde_json::Value> {
++        let bank = self.bank();
++        let name = unsafe { (bank.library.bank_device)(bank.handle) };
++        if name.is_null() {
++            bank.library.check(1)?;
++        }
++        Ok(
++            serde_json::json!({"kind":"cuda","abi":ABI,"device":unsafe { CStr::from_ptr(name) }.to_string_lossy(),"binding":"prepared-memory","kernel_sha256":mradm_dsp::room::resources::sha256(SOURCE.as_bytes()),"eq_stagger_frames":256,"maximum_sources":32}),
++        )
++    }
++}
++
++impl Factory for NativeFactory {
++    fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>> {
++        let bank = self.bank();
++        if !Arc::ptr_eq(&room.hrir, &bank.cpu) || room.quality != Quality::Realtime {
++            return Err(Error::InvalidArgument(
++                "ROOM CUDA prepared resource binding changed",
++            ));
++        }
++        let materials: Vec<_> = room
++            .gpu_material()
++            .iter()
++            .flat_map(|v| [v.re, v.im])
++            .collect();
++        let bins = room.fft_length / 2 + 1;
++        let mut propagation = Vec::with_capacity((PHASES + 1) * bins * 2);
++        for phase in 0..=PHASES {
++            propagation.extend(
++                room.gpu_propagation_row(phase)?
++                    .iter()
++                    .flat_map(|v| [v.re, v.im]),
++            );
++        }
++        let layers = room
++            .hrir
++            .data
++            .collection
++            .as_ref()
++            .map_or(1, |c| c.layers.len());
++        let params = Params {
++            rate: room.profile.sample_rate,
++            fft: room.fft_length as u32,
++            taps: room.short_taps as u32,
++            stride: room.path_bucket_stride as u32,
++            buckets: room.short_taps.div_ceil(room.path_bucket_stride) as u32,
++            rows: (layers * room.hrir.data.directions.len() * 2) as u32,
++            images: room.images.len() as u32,
++            history_parts: room.short_taps.max(room.send_taps).div_ceil(256) as u32,
++            materials: materials.as_ptr(),
++            material_floats: materials.len(),
++            propagation: propagation.as_ptr(),
++            propagation_floats: propagation.len(),
++        };
++        let context = unsafe { (bank.library.create)(bank.handle, &params) };
++        if context.is_null() {
++            bank.library.check(1)?;
++        }
++        Ok(Box::new(Native {
++            _entry: self.entry.clone(),
++            library: bank.library.clone(),
++            context,
++        }))
++    }
++    fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>> {
++        let bank = self.bank();
++        if !Arc::ptr_eq(&room.hrir, &bank.cpu) {
++            return Err(Error::InvalidArgument(
++                "ROOM CUDA late resource binding changed",
++            ));
++        }
++        let Some(first) = room.late[0].gpu_tail() else {
++            return Ok(None);
++        };
++        let parts = first.len() / 2049;
++        let mut filters = Vec::with_capacity(first.len() * room.late.len() * 2);
++        for row in &room.late {
++            let values = row
++                .gpu_tail()
++                .ok_or(Error::Unsupported("Inconsistent ROOM CUDA late shape"))?;
++            if row.channels != 1 || values.len() != first.len() {
++                return Err(Error::Unsupported("Inconsistent ROOM CUDA late shape"));
++            }
++            filters.extend(values.iter().flat_map(|v| [v.re, v.im]));
++        }
++        let context = unsafe {
++            (bank.library.late_create)(
++                bank.handle,
++                parts as u32,
++                room.late.len() as u32,
++                filters.as_ptr(),
++                filters.len(),
++            )
++        };
++        if context.is_null() {
++            bank.library.check(1)?;
++        }
++        Ok(Some(Box::new(NativeLate {
++            _entry: self.entry.clone(),
++            library: bank.library.clone(),
++            context,
++        })))
++    }
++}
++struct NativeLate {
++    _entry: Arc<Entry>,
++    library: Arc<Library>,
++    context: *mut c_void,
++}
++// The owning WorldTail serializes submissions and consumes each result before reuse.
++unsafe impl Send for NativeLate {}
++impl Drop for NativeLate {
++    fn drop(&mut self) {
++        unsafe {
++            (self.library.late_destroy)(self.context);
++        }
++    }
++}
++impl LateBackend for NativeLate {
++    fn submit(&mut self, frequency: &[Complex32], reset: bool) -> Result<()> {
++        if frequency.len() != 2049 {
++            return Err(Error::InvalidArgument("Invalid GPU late input"));
++        }
++        let mut row = [0.; 4098];
++        for (out, value) in row.as_chunks_mut::<2>().0.iter_mut().zip(frequency) {
++            out.copy_from_slice(&[value.re, value.im]);
++        }
++        self.library.check(unsafe {
++            (self.library.late_submit)(self.context, row.as_ptr(), row.len(), u32::from(reset))
++        })
++    }
++    fn finish(&mut self, output: &mut [f32]) -> Result<()> {
++        self.library.check(unsafe {
++            (self.library.late_finish)(self.context, output.as_mut_ptr(), output.len())
++        })
++    }
++}
++struct Native {
++    _entry: Arc<Entry>,
++    library: Arc<Library>,
++    context: *mut c_void,
++}
++// The Session owns this engine and serializes begin/submit/finish. The DLL
++// binds the CUDA primary context when used on the persistent worker thread.
++unsafe impl Send for Native {}
++impl Drop for Native {
++    fn drop(&mut self) {
++        unsafe {
++            (self.library.destroy)(self.context);
++        }
++    }
++}
++impl Backend for Native {
++    fn begin(&mut self, count: usize) -> Result<()> {
++        self.library
++            .check(unsafe { (self.library.begin)(self.context, count as u32) })
++    }
++    fn voice(&mut self, index: usize, frame: &Frame) -> Result<()> {
++        let mut updates = [Update::default(); 32];
++        if frame.requests.len() > updates.len() {
++            return Err(Error::Unsupported("GPU update capacity exceeded"));
++        }
++        for (out, request) in updates.iter_mut().zip(&frame.requests) {
++            *out = request.update;
++        }
++        let f = NativeFrame {
++            active: u32::from(frame.active),
++            reset: u32::from(frame.reset),
++            heads: frame.heads,
++            frequency: frame.frequency.as_ptr(),
++            jobs: frame.jobs.as_ptr(),
++            job_count: frame.jobs.len(),
++            ranges: frame.ranges.as_ptr(),
++            range_count: frame.ranges.len(),
++            updates: updates.as_ptr(),
++            update_count: frame.requests.len(),
++            tasks: frame.tasks.as_ptr(),
++            task_count: frame.tasks.len(),
++        };
++        self.library
++            .check(unsafe { (self.library.voice)(self.context, index as u32, &f) })
++    }
++    fn submit(&mut self) -> Result<()> {
++        self.library
++            .check(unsafe { (self.library.submit)(self.context) })
++    }
++    fn finish(&mut self, output: &mut [f32]) -> Result<()> {
++        self.library.check(unsafe {
++            (self.library.finish)(self.context, output.as_mut_ptr(), output.len())
++        })
++    }
++}
+diff --git a/src/adm_render_room/cuda/backend.cpp b/src/adm_render_room/cuda/backend.cpp
+new file mode 100644
+index 0000000..9f5e9d7
+--- /dev/null
++++ b/src/adm_render_room/cuda/backend.cpp
+@@ -0,0 +1,71 @@
++// The validated processing graph is shared with the research adapter. This
++// build selects resident prepared resources and exposes no fixture/file API.
++#define ROOM_GPU_RESIDENT 1
++#include "../../../scripts/research/room_gpu/session_backend.cpp"
++#define ROOM_CUDA_CATCH(result)                                                                                        \
++    catch (const std::exception& e) {                                                                                  \
++        remember(e.what());                                                                                            \
++        return result;                                                                                                 \
++    }                                                                                                                  \
++    catch (...) {                                                                                                      \
++        remember("Unknown CUDA resource failure");                                                                     \
++        return result;                                                                                                 \
++    }
++
++
++extern "C" __declspec(dllexport) unsigned mradm_room_cuda_abi() noexcept {
++    return 1;
++}
++extern "C" __declspec(dllexport) void*
++mradm_room_cuda_bank_create(const RoomCudaBankDesc* desc, const char* source, size_t length) noexcept {
++    try {
++        if (!desc || !source || !length || length > 1024 * 1024)
++            throw std::runtime_error("Invalid ROOM CUDA source/descriptor");
++        runtime(cudaSetDevice(0));
++        runtime(cudaFree(nullptr));
++        return new ResidentHandle(std::make_shared<ResidentBank>(*desc, source, length));
++    }
++    ROOM_CUDA_CATCH(nullptr)
++}
++extern "C" __declspec(dllexport) int
++mradm_room_cuda_bank_upload(void* bank, unsigned table, size_t offset, const float* data, size_t count) noexcept {
++    try {
++        if (!bank || !*static_cast<ResidentHandle*>(bank))
++            throw std::runtime_error("Invalid ROOM CUDA upload handle");
++        (*static_cast<ResidentHandle*>(bank))->upload(table, offset, data, count);
++        return 0;
++    }
++    ROOM_CUDA_CATCH(1)
++}
++extern "C" __declspec(dllexport) int mradm_room_cuda_bank_seal(void* bank) noexcept {
++    try {
++        if (!bank || !*static_cast<ResidentHandle*>(bank))
++            throw std::runtime_error("Invalid ROOM CUDA seal handle");
++        (*static_cast<ResidentHandle*>(bank))->seal();
++        return 0;
++    }
++    ROOM_CUDA_CATCH(1)
++}
++extern "C" __declspec(dllexport) void mradm_room_cuda_bank_destroy(void* bank) noexcept {
++    try {
++        cudaSetDevice(0);
++        delete static_cast<ResidentHandle*>(bank);
++    }
++    ROOM_CUDA_CATCH(void())
++}
++extern "C" __declspec(dllexport) const char* mradm_room_cuda_bank_device(void* bank) noexcept {
++    try {
++        return resident(bank)->properties.name;
++    }
++    ROOM_CUDA_CATCH(nullptr)
++}
++extern "C" __declspec(dllexport) int mradm_room_cuda_stats(RoomCudaStats* out) noexcept {
++    if (!out)
++        return 1;
++    *out = {room_cuda::banks.load(),
++            room_cuda::engines.load(),
++            room_cuda::late_engines.load(),
++            room_cuda::device_bytes.load(),
++            room_cuda::pinned_bytes.load()};
++    return 0;
++}
+diff --git a/src/adm_render_room/cuda/resident_support.h b/src/adm_render_room/cuda/resident_support.h
+new file mode 100644
+index 0000000..f5eb182
+--- /dev/null
++++ b/src/adm_render_room/cuda/resident_support.h
+@@ -0,0 +1,266 @@
++#pragma once
++#include <algorithm>
++#include <array>
++#include <atomic>
++#include <chrono>
++#include <cstdint>
++#include <cstring>
++#include <cuda.h>
++#include <cuda_runtime_api.h>
++#include <cufft.h>
++#include <iostream>
++#include <memory>
++#include <nvrtc.h>
++#include <source_location>
++#include <stdexcept>
++#include <string>
++#include <string_view>
++#include <vector>
++
++using Clock = std::chrono::steady_clock;
++// CUDA resource handles become invalid after a context reset. Keep its unique
++// ID so a recreated primary context cannot make stale handles appear usable.
++struct Context {
++    CUcontext value = nullptr;
++    unsigned long long id = 0;
++    Context() {
++        if (cuCtxGetCurrent(&value) != CUDA_SUCCESS || !value || cuCtxGetId(value, &id) != CUDA_SUCCESS)
++            throw std::runtime_error("Cannot identify ROOM CUDA context");
++    }
++    bool valid() const noexcept {
++        unsigned long long current = 0;
++        return cuCtxGetId(value, &current) == CUDA_SUCCESS && current == id;
++    }
++    void require() const {
++        if (!valid())
++            throw std::runtime_error("ROOM CUDA context was lost; release and recreate all affected sessions");
++    }
++};
++struct StreamOwner {
++    Context context;
++    cudaStream_t value = nullptr;
++    ~StreamOwner() {
++        if (value && context.valid())
++            cudaStreamDestroy(value);
++    }
++};
++namespace room_cuda {
++inline std::atomic<std::uint64_t> banks{0}, engines{0}, late_engines{0}, device_bytes{0}, pinned_bytes{0};
++struct Counted {
++    std::atomic<std::uint64_t>& value;
++    explicit Counted(std::atomic<std::uint64_t>& v) : value(v) { ++value; }
++    ~Counted() { --value; }
++};
++} // namespace room_cuda
++
++inline void runtime(cudaError_t result, const std::source_location& where = std::source_location::current()) {
++    if (result != cudaSuccess)
++        throw std::runtime_error(std::string(cudaGetErrorString(result)) + " in " + where.function_name());
++}
++inline void driver(CUresult result) {
++    if (result != CUDA_SUCCESS) {
++        const char* message = nullptr;
++        cuGetErrorString(result, &message);
++        throw std::runtime_error(message ? message : "CUDA driver error");
++    }
++}
++inline void fft_check(cufftResult result) {
++    if (result != CUFFT_SUCCESS)
++        throw std::runtime_error("cuFFT error " + std::to_string(result));
++}
++template <class Work>
++void capture_graph(cudaStream_t stream, Work&& work, cudaGraph_t& graph, cudaGraphExec_t& execution) {
++    runtime(cudaStreamBeginCapture(stream, cudaStreamCaptureModeThreadLocal));
++    try {
++        work();
++        runtime(cudaStreamEndCapture(stream, &graph));
++        runtime(cudaGraphInstantiate(&execution, graph, 0));
++    } catch (...) {
++        cudaStreamCaptureStatus status = cudaStreamCaptureStatusNone;
++        if (cudaStreamIsCapturing(stream, &status) == cudaSuccess && status != cudaStreamCaptureStatusNone) {
++            cudaGraph_t aborted = nullptr;
++            cudaStreamEndCapture(stream, &aborted);
++            if (aborted)
++                cudaGraphDestroy(aborted);
++        }
++        throw;
++    }
++}
++struct Device {
++    Context context;
++    void* data = nullptr;
++    size_t bytes;
++    bool owned = true;
++    explicit Device(size_t count) : bytes(count) {
++        runtime(cudaMalloc(&data, bytes));
++        room_cuda::device_bytes += bytes;
++    }
++    Device(void* view, size_t count) : data(view), bytes(count), owned(false) {}
++    Device(const Device&) = delete;
++    Device& operator=(const Device&) = delete;
++    ~Device() {
++        if (owned && data) {
++            if (context.valid())
++                cudaFree(data);
++            room_cuda::device_bytes -= bytes;
++        }
++    }
++};
++struct Pinned {
++    Context context;
++    void* data = nullptr;
++    size_t bytes;
++    explicit Pinned(size_t count) : bytes(count) {
++        runtime(cudaMallocHost(&data, bytes));
++        room_cuda::pinned_bytes += bytes;
++    }
++    Pinned(const Pinned&) = delete;
++    Pinned& operator=(const Pinned&) = delete;
++    ~Pinned() {
++        if (data) {
++            if (context.valid())
++                cudaFreeHost(data);
++            room_cuda::pinned_bytes -= bytes;
++        }
++    }
++};
++struct Plan {
++    Context context;
++    cufftHandle value = 0;
++    Plan(int n, cufftType type, int count, cudaStream_t stream) {
++        try {
++            fft_check(cufftPlan1d(&value, n, type, count));
++            fft_check(cufftSetStream(value, stream));
++        } catch (...) {
++            if (value)
++                cufftDestroy(value);
++            throw;
++        }
++    }
++    ~Plan() {
++        if (value && context.valid())
++            cufftDestroy(value);
++    }
++    Plan(const Plan&) = delete;
++    Plan& operator=(const Plan&) = delete;
++};
++struct Config {
++    int rate = 96000, voices = 32, n = 4096, taps = 256, bucket_stride = 256, buckets = 1, rows = 0, materials = 1;
++};
++struct Module {
++    Context context;
++    CUmodule value = nullptr;
++    Module(const std::string& source, const Config& c, int targets, int major, int minor) {
++        nvrtcProgram program = nullptr;
++        auto check = [](nvrtcResult r) {
++            if (r != NVRTC_SUCCESS)
++                throw std::runtime_error(nvrtcGetErrorString(r));
++        };
++        try {
++            check(nvrtcCreateProgram(&program, source.c_str(), "room_cuda.cu", 0, nullptr, nullptr));
++            std::vector<std::string> options = {"--std=c++14",
++                                                "--fmad=true",
++                                                "--ftz=false",
++                                                "--prec-div=true",
++                                                "--prec-sqrt=true",
++                                                "--gpu-architecture=compute_" + std::to_string(major) +
++                                                    std::to_string(minor),
++                                                "-DFFT_N=" + std::to_string(c.n),
++                                                "-DVOICES=" + std::to_string(c.voices),
++                                                "-DTAPS=" + std::to_string(c.taps),
++                                                "-DBUCKETS=" + std::to_string(c.buckets),
++                                                "-DBUCKET_STRIDE=" + std::to_string(c.bucket_stride),
++                                                "-DPARTS=" + std::to_string((c.taps + 255) / 256),
++                                                "-DTARGETS=" + std::to_string(targets)};
++            std::vector<const char*> pointers;
++            for (const auto& option : options)
++                pointers.push_back(option.c_str());
++            const auto compiled = nvrtcCompileProgram(program, static_cast<int>(pointers.size()), pointers.data());
++            if (compiled != NVRTC_SUCCESS) {
++                size_t bytes = 0;
++                check(nvrtcGetProgramLogSize(program, &bytes));
++                std::vector<char> log(bytes + 1);
++                check(nvrtcGetProgramLog(program, log.data()));
++                throw std::runtime_error(log.data());
++            }
++            size_t bytes = 0;
++            check(nvrtcGetPTXSize(program, &bytes));
++            std::vector<char> ptx(bytes);
++            check(nvrtcGetPTX(program, ptx.data()));
++            check(nvrtcDestroyProgram(&program));
++            driver(cuModuleLoadData(&value, ptx.data()));
++        } catch (...) {
++            if (program)
++                nvrtcDestroyProgram(&program);
++            if (value)
++                cuModuleUnload(value);
++            throw;
++        }
++    }
++    ~Module() {
++        if (value && context.valid())
++            cuModuleUnload(value);
++    }
++    CUfunction function(const char* name) const {
++        CUfunction result;
++        driver(cuModuleGetFunction(&result, value, name));
++        return result;
++    }
++    Module(const Module&) = delete;
++    Module& operator=(const Module&) = delete;
++};
++
++// This descriptor is private to the optional native plugin, not adm/c_api.h.
++struct RoomCudaBankDesc {
++    std::uint32_t abi, size, rate, fft, rows;
++};
++struct RoomCudaStats {
++    std::uint64_t banks, engines, late_engines, device_bytes, pinned_bytes;
++};
++struct ResidentBank {
++    Context context;
++    room_cuda::Counted active{room_cuda::banks};
++    Config config;
++    std::string source;
++    Device bank, fractional, phases;
++    std::array<size_t, 3> written{};
++    bool sealed = false;
++    cudaDeviceProp properties{};
++    static Config validate(const RoomCudaBankDesc& desc) {
++        if (desc.abi != 1 || desc.size != sizeof(RoomCudaBankDesc) || desc.rate != 96000 || desc.fft != 4096 ||
++            !desc.rows || desc.rows > 65536)
++            throw std::runtime_error("Unsupported resident ROOM CUDA resource shape");
++        Config c;
++        c.rows = static_cast<int>(desc.rows);
++        return c;
++    }
++    ResidentBank(const RoomCudaBankDesc& desc, const char* text, size_t length)
++        : config(validate(desc)), source(text, length), bank(size_t(desc.rows) * (desc.fft / 2 + 1) * 8),
++          fractional(size_t(1025) * (desc.fft / 2 + 1) * 8), phases(size_t(desc.fft) * 8) {
++        runtime(cudaGetDeviceProperties(&properties, 0));
++    }
++    void upload(unsigned table, size_t offset, const float* data, size_t count) {
++        Device* arrays[] = {&bank, &fractional, &phases};
++        if (sealed || table >= 3 || !data || !count || offset != written[table] || offset > arrays[table]->bytes / 4 ||
++            count > arrays[table]->bytes / 4 - offset)
++            throw std::runtime_error("Invalid resident ROOM CUDA upload window");
++        runtime(cudaSetDevice(0));
++        runtime(cudaMemcpy(static_cast<float*>(arrays[table]->data) + offset, data, count * 4, cudaMemcpyHostToDevice));
++        written[table] += count;
++    }
++    void seal() {
++        if (sealed || written != std::array<size_t, 3>{bank.bytes / 4, fractional.bytes / 4, phases.bytes / 4})
++            throw std::runtime_error("Incomplete resident ROOM CUDA upload");
++        sealed = true;
++    }
++};
++using ResidentHandle = std::shared_ptr<ResidentBank>;
++inline ResidentHandle resident(void* handle) {
++    if (!handle || !*static_cast<ResidentHandle*>(handle))
++        throw std::runtime_error("Invalid ROOM CUDA bank handle");
++    auto value = *static_cast<ResidentHandle*>(handle);
++    value->context.require();
++    if (!value->sealed)
++        throw std::runtime_error("ROOM CUDA bank is not sealed");
++    return value;
++}
+diff --git a/tests/manual/room_cuda_integration.py b/tests/manual/room_cuda_integration.py
+new file mode 100644
+index 0000000..31e80cd
+--- /dev/null
++++ b/tests/manual/room_cuda_integration.py
+@@ -0,0 +1,209 @@
++#!/usr/bin/env python3
++"""Opt-in Windows ROOM CUDA public-API lifecycle/numerical checks with explicit resources."""
++import argparse
++import array
++import concurrent.futures
++import ctypes as C
++import importlib.util
++import json
++import math
++import os
++from pathlib import Path
++import subprocess
++import sys
++import threading
++
++ROOT = Path(__file__).resolve().parents[2]
++spec = importlib.util.spec_from_file_location('room96', ROOT / 'tests/unit/room_96k_test.py')
++room96 = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(room96)
++
++
++class Stats(C.Structure):
++    _fields_ = [(name, C.c_uint64) for name in ['banks', 'engines', 'late_engines', 'device_bytes', 'pinned_bytes']]
++
++
++class Diagnostic(room96.Sized):
++    _fields_ = [('struct_size', room96.U32), ('level', room96.I32), ('code', room96.I32),
++                ('reserved', room96.U32), ('epoch', room96.U64), ('generation', room96.U64),
++                ('element', room96.U64), ('fields', room96.U64), ('message', C.c_char_p)]
++
++
++def child(args):
++    api = room96.Api(args.library)
++    handle = room96.PTR()
++    api.ok(api.lib.adm_room_load(api.context, str(args.room).encode(), C.byref(handle)))
++    room = room96.Room(handle=handle, hrir=str(args.hrir).encode(), metres=1.5)
++    report = room96.PTR()
++    quality = 0 if args.case == 'exact' else 1
++    code = api.lib.adm_room_inspect_with_quality(api.context, C.byref(room), quality, C.byref(report))
++    if args.case in ('bad-request', 'missing'):
++        assert code != 0 and not report.value
++        error = api.lib.adm_context_last_error_message(api.context).decode()
++        api.lib.adm_room_destroy(handle)
++        api.lib.adm_destroy_context(api.context)
++        return {'case': args.case, 'error_code': code, 'message': error, 'passed': True}
++    api.ok(code)
++    info = json.loads(C.string_at(report).decode())
++    api.lib.adm_free_string(report)
++    api.lib.adm_room_destroy(handle)
++    expected_cuda = args.case in ('cuda', 'concurrent', 'device-reset')
++    assert (info.get('execution_backend') == 'cuda') == expected_cuda
++    samples = [(i % 179) * .00001 - .00089 for i in range(3333)]
++    if not expected_cuda:
++        result = api.scene(args.room, args.hrir, samples, [512, 137, 375], quality=quality, epoch_twice=True)
++        C.windll.kernel32.GetModuleHandleW.restype = C.c_void_p
++        assert not C.windll.kernel32.GetModuleHandleW('mradm_room_cuda.dll')
++        (args.output / (args.case + '.f32')).write_bytes(result)
++        api.lib.adm_destroy_context(api.context)
++        return {'case': args.case, 'frames': len(result) // 8, 'gpu_loaded': False, 'passed': True}
++
++    plugin = C.CDLL(str(args.plugin))
++    plugin.mradm_room_cuda_stats.argtypes = [C.POINTER(Stats)]
++    plugin.mradm_room_cuda_stats.restype = C.c_int
++
++    def snapshot():
++        value = Stats()
++        assert plugin.mradm_room_cuda_stats(C.byref(value)) == 0
++        return {name: getattr(value, name) for name, _ in Stats._fields_}
++
++    def cleared():
++        value = snapshot()
++        assert not any(value.values()), value
++        return value
++
++    observed = []
++    if args.case == 'device-reset':
++        # cudaDeviceReset affects this fresh subprocess's primary context, not
++        # other applications or the physical device/driver.
++        runtime = C.CDLL(str(next(args.plugin.parent.glob('cudart64*.dll'))))
++        runtime.cudaDeviceReset.restype = C.c_int
++        original = api.lib.adm_create_scene_stream_with_room_quality
++        original_pull = api.lib.adm_scene_stream_pull
++        api.lib.adm_scene_stream_last_error_message.argtypes = [room96.PTR]
++        api.lib.adm_scene_stream_last_error_message.restype = C.c_char_p
++        api.lib.adm_scene_stream_log_count.argtypes = [room96.PTR]
++        api.lib.adm_scene_stream_log_count.restype = room96.U32
++        api.lib.adm_scene_stream_log_entry.argtypes = [room96.PTR, room96.U32, C.POINTER(Diagnostic)]
++        api.lib.adm_scene_stream_log_entry.restype = C.c_int
++        failures = []
++        def checked_pull(stream, pcm, count, result):
++            code = original_pull(stream, pcm, count, result)
++            if C.cast(result, C.POINTER(room96.Pull)).contents.flags & 8:
++                for index in range(api.lib.adm_scene_stream_log_count(stream)):
++                    diagnostic = Diagnostic()
++                    assert api.lib.adm_scene_stream_log_entry(stream, index, C.byref(diagnostic))
++                    if diagnostic.level == 3:
++                        failures.append(diagnostic.message.decode())
++            return code
++        def reset_after_create(*values):
++            code = original(*values)
++            if code == 0:
++                observed.append(snapshot())
++                assert runtime.cudaDeviceReset() == 0
++            return code
++        api.lib.adm_create_scene_stream_with_room_quality = reset_after_create
++        api.lib.adm_scene_stream_pull = checked_pull
++        try:
++            api.scene(args.room, args.hrir, samples, [512], quality=1)
++            raise RuntimeError('GPU context reset was not reported')
++        except AssertionError as error:
++            message = failures[-1] if failures else str(error)
++            assert 'ROOM CUDA' in message, message
++        finally:
++            api.lib.adm_create_scene_stream_with_room_quality = original
++            api.lib.adm_scene_stream_pull = original_pull
++        cleared()
++        recovered = api.scene(args.room, args.hrir, samples, [512], quality=1)
++        assert recovered == (args.output / 'cuda.f32').read_bytes()
++        api.lib.adm_destroy_context(api.context)
++        return {'case': args.case, 'error': message, 'recreated': True,
++                'active_resources': observed, 'after_release': cleared(), 'passed': True}
++
++    if args.case == 'cuda':
++        original = api.ok
++        def checked(code):
++            original(code)
++            value = snapshot()
++            if value['engines'] and not observed:
++                observed.append(value)
++        api.ok = checked
++        results = []
++        for packets in [[512], [137, 375, 1, 511], [512]]:
++            results.append(api.scene(args.room, args.hrir, samples, packets, quality=1, epoch_twice=True))
++            cleared()
++        assert observed and all(v == results[0] for v in results)
++        (args.output / 'cuda.f32').write_bytes(results[0])
++        api.lib.adm_destroy_context(api.context)
++        return {'case': args.case, 'cycles': 3, 'epochs_per_cycle': 2, 'frames': len(results[0]) // 8,
++                'active_resources': observed, 'after_release': cleared(), 'passed': True}
++
++    barrier = threading.Barrier(2)
++    def concurrent_scene(_):
++        client = room96.Api(args.library)
++        original = client.lib.adm_create_scene_stream_with_room_quality
++        def created(*values):
++            code = original(*values)
++            if code == 0:
++                barrier.wait(timeout=90)
++                observed.append(snapshot())
++            return code
++        client.lib.adm_create_scene_stream_with_room_quality = created
++        try:
++            return client.scene(args.room, args.hrir, samples, [512, 137, 375], quality=1)
++        finally:
++            client.lib.adm_destroy_context(client.context)
++    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
++        results = list(executor.map(concurrent_scene, range(2)))
++    assert len(results) == 2 and results[0] == results[1] and observed
++    assert max(v['banks'] for v in observed) == 1, observed
++    api.lib.adm_destroy_context(api.context)
++    return {'case': args.case, 'active_resources': observed, 'after_release': cleared(), 'passed': True}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    for name in ['library', 'plugin', 'room', 'hrir', 'output']:
++        parser.add_argument('--' + name, type=Path, required=True)
++    parser.add_argument('--case', choices=['cpu', 'cuda', 'exact', 'bad-request', 'missing', 'concurrent', 'device-reset'])
++    args = parser.parse_args()
++    assert os.name == 'nt'
++    if args.case:
++        result = child(args)
++        print(json.dumps(result), flush=True)
++        return
++    args.output.mkdir(parents=True, exist_ok=False)
++    report = {'cases': []}
++    for name, value in [('cpu', '0'), ('exact', 'invalid'), ('cuda', '1'), ('concurrent', '1'),
++                        ('bad-request', 'invalid'), ('device-reset', '1')]:
++        command = [sys.executable, str(Path(__file__).resolve())]
++        for key in ['library', 'plugin', 'room', 'hrir', 'output']:
++            command += ['--' + key, str(getattr(args, key).resolve())]
++        command += ['--case', name]
++        env = dict(os.environ, MR_ADM_ROOM_CUDA=value, MR_ADM_ROOM_WORKERS='8')
++        print('lifecycle', name, flush=True)
++        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=240)
++        (args.output / (name + '.stdout')).write_text(result.stdout)
++        (args.output / (name + '.stderr')).write_text(result.stderr)
++        if result.returncode:
++            raise RuntimeError(result.stdout + result.stderr)
++        report['cases'].append(json.loads(result.stdout.strip().splitlines()[-1]))
++        (args.output / 'report.json').write_text(json.dumps(report, indent=2))
++    reference = array.array('f', (args.output / 'cpu.f32').read_bytes())
++    actual = array.array('f', (args.output / 'cuda.f32').read_bytes())
++    assert len(actual) == len(reference)
++    assert all(math.isfinite(v) for v in actual)
++    energy = sum(float(v) ** 2 for v in reference)
++    error = sum((float(a) - float(b)) ** 2 for a, b in zip(reference, actual))
++    peak = max(abs(v) for v in reference)
++    maximum = max(abs(float(a) - float(b)) for a, b in zip(reference, actual))
++    report['numerical'] = {'frames': len(actual) // 2, 'relative_l2': (error / energy) ** .5,
++                           'maximum_over_reference_peak': maximum / peak}
++    assert report['numerical']['relative_l2'] <= 2e-5 and maximum / peak <= 2e-4
++    report['passed'] = True
++    (args.output / 'report.json').write_text(json.dumps(report, indent=2))
++    print(json.dumps(report), flush=True)
++
++
++if __name__ == '__main__':
++    main()

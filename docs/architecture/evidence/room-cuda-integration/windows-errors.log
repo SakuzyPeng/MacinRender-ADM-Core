@@ -1,0 +1,11 @@
+{"overlaid": 1, "tracked_entries": 1275}
+device-reset
+exit 0
+{"case": "device-reset", "error": "ROOM CUDA operation failed; recreate the session after correcting the device/runtime error: room-binaural", "recreated": true, "active_resources": [{"banks": 1, "engines": 1, "late_engines": 1, "device_bytes": 1060255828, "pinned_bytes": 69925412}], "after_release": {"banks": 0, "engines": 0, "late_engines": 0, "device_bytes": 0, "pinned_bytes": 0}, "passed": true}
+
+
+ROOM CUDA: ROOM CUDA context was lost; release and recreate all affected sessions
+
+missing
+exit 0
+{"case": "missing", "error_code": 2, "message": "Optional ROOM CUDA runtime is unavailable: room-binaural", "passed": true}
