@@ -520,7 +520,10 @@ impl Slot {
         self.lock_sum -= usize::from(self.lock_history[self.lock_position]);
         self.lock_history[self.lock_position] = target as u8;
         self.lock_sum += target as usize;
-        self.lock_position = (self.lock_position + 1) % self.lock_history.len();
+        self.lock_position += 1;
+        if self.lock_position == self.lock_history.len() {
+            self.lock_position = 0;
+        }
         Ok(())
     }
 }
