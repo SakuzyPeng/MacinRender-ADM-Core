@@ -1,0 +1,10 @@
+{
+  "scope": "Instrumented position motion; 512 calls. Positive endpoint differences only, not additive speedup predictions. GPU D2H end compared to CPU late decoder end for each matching batch.",
+  "batches": 1024,
+  "per_512_call_means": {
+    "cpu_late_ms": 1.063255888671875,
+    "gpu_finish_after_cpu_late_ms": 0.320230439453125,
+    "cpu_late_after_gpu_finish_ms": 0.09054112109375
+  },
+  "batches_cpu_late_finishes_after_gpu": 375
+}

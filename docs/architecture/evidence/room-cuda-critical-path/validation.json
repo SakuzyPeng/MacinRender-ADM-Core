@@ -1,0 +1,105 @@
+{
+  "schema": "mradm.room-cuda-critical-path-validation",
+  "version": 1,
+  "base": "28f3dc0b4df3ef8166ac2fb60bba39417fe54245",
+  "objective": "At least 1 ms lower full-session mean in both motion cases, improved paired p99, original zero-miss and numerical gates",
+  "goal_achieved": false,
+  "outcome": "Retain only bit-preserving integer ring indexing and its test; archive GPU candidates",
+  "best_short": {
+    "revision": "V2 frequency-major response plus compact controls, integer indexing, target FFT fusion and compact uploads",
+    "calls": 4096,
+    "deadline_misses": 0,
+    "maximum_ms": 3.185,
+    "scenarios": {
+      "ramps": {
+        "baseline_mean_ms": 2.8813587402343774,
+        "candidate_mean_ms": 2.2273782714843775,
+        "reduction_ms": 0.6539804687499999,
+        "reduction_fraction": 0.2269694709020521
+      },
+      "distance-ramps": {
+        "baseline_mean_ms": 2.7813429687500006,
+        "candidate_mean_ms": 2.053820947265626,
+        "reduction_ms": 0.7275220214843747,
+        "reduction_fraction": 0.2615722079795646
+      }
+    },
+    "paired_p99_improved": true,
+    "peak_working_set_bytes": 1709850624,
+    "long_not_run": "Mean reductions are below 1 ms. These are short-run results only."
+  },
+  "decoder_extension": {
+    "revision": "V3 resident world binaural decoder",
+    "calls": 1024,
+    "mean_reduction_ms": 0.33581298828125083,
+    "deadline_misses": 0,
+    "maximum_ms": 3.3719,
+    "stopped_after_first_pair": true,
+    "reason": "Required 1 ms mean reduction failed; no distance or long expansion",
+    "raw_deadline_passed_field": "The collector also requires four completed short cases; false here does not denote a timeout."
+  },
+  "diagnostic": {
+    "tool": "Existing Nsight Systems 2022.4.2.18, CUDA/NVTX and CPU context switching",
+    "successful_capture": "distance-exit-result.json and timeline-analysis.json, 512 calls, process exit 0",
+    "acceptance_evidence": false,
+    "finding": "Most CPU late decoding overlaps the early GPU batch. Its approximately 1.134 ms cannot be counted as removable serial time; the mean positive CPU-end minus GPU-D2H-end difference is approximately 0.115 ms per call.",
+    "prior_attempts": "Capture-stop processing/exit failures were preserved privately; only task-owned orphan process 105744 was terminated. Final capture used normal application exit, not mid-process CUDA profiler stop. No profiler installation or driver/power changes."
+  },
+  "correctness": {
+    "candidate": "15 local GPU/reference/resource/no-allocation/quality tests; three additional diffuse/sample-rate tests; native analytical FIR regressions passed for all four DLL configurations.",
+    "retained": "19 focused local tests after rollback; three Windows Release diffuse/sample-rate tests including bitwise direct-delay reference at 48/96 kHz.",
+    "full_windows_candidate_replay": "Not run after mean-gain failure. Component and local reference correctness do not replace the full native numerical gate.",
+    "exact": "Retained changes affect integer indexing only; tap order and floating expressions unchanged. No new full 718a804 baseline certification claimed.",
+    "quality": "Clippy warnings denied and applicable C++ quality checks passed; native MSVC/Rust Release builds passed."
+  },
+  "retained": {
+    "files": [
+      "rust/crates/mradm-dsp/src/diffuse.rs",
+      "rust/crates/mradm-dsp/src/room/session.rs",
+      "rust/crates/mradm-dsp/tests/binaural_convolution.rs"
+    ],
+    "diffuse": "Replace modulo in private 32/64-entry rings with equivalent masks.",
+    "head_lock": "Replace increment/modulo in the bounded history ring with increment/boundary reset.",
+    "performance_attribution": "Individual gain was not isolated; do not assign the whole GPU combination gain to these retained edits."
+  },
+  "conditions": "Windows i7-11800H / RTX 3060 Laptop, 8 Audio workers, ordinary caller, 96 kHz / 512 frames / 32 sources / realtime, AC and normal desktop; no concurrent test-host build/profiler/benchmark during screening.",
+  "restoration": {
+    "local": {
+      "base_preserved": "28f3dc0b4df3ef8166ac2fb60bba39417fe54245",
+      "restored_tracked_files": 23,
+      "removed_archived_new_files": 15,
+      "retained": [
+        "rust/crates/mradm-dsp/src/diffuse.rs",
+        "rust/crates/mradm-dsp/src/room/session.rs",
+        "rust/crates/mradm-dsp/tests/binaural_convolution.rs"
+      ],
+      "original_cmake_preserved": true,
+      "diagnostic_source_removed": true
+    },
+    "windows": {
+      "verified_overlay_entries": 1379,
+      "restored_files": 623,
+      "removed_task_files": 755,
+      "head_unchanged": true,
+      "git_status_unchanged": true,
+      "restore-configure": 0,
+      "restore-build": 0,
+      "git_status_unchanged_after_build": true,
+      "final_status_unchanged": true,
+      "shared_caches_preserved": true,
+      "frozen_binaries_verified_before_cleanup": true,
+      "no_owned_benchmark_processes": true,
+      "no_active_nsight_sessions": true,
+      "removed_known_nsight_temp_files": [],
+      "task_directory_removed": true,
+      "temporary_mathdx_removed": true
+    }
+  },
+  "notes": [
+    "All baseline timeouts are retained, including the 5.7803 ms V2 distance baseline call.",
+    "V1 EXEs are frozen pre-ring-index references; V2/V3 EXEs contain the indexing edits. Native configuration bits and all binary hashes are recorded.",
+    "GPU V2/V3 are separate candidates; successful calls are never pooled for long acceptance.",
+    "No long test, device-playback test, GUI packaging or macOS performance matrix was run.",
+    "Private profiler reports and compressed SQLite remain local; no private HRIR/audio files enter the repository."
+  ]
+}

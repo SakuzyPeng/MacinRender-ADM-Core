@@ -1,0 +1,59 @@
+{
+  "base": "28f3dc0b4df3ef8166ac2fb60bba39417fe54245",
+  "resident_prerequisite": "../room-cuda-integration/candidate.patch",
+  "candidate_v2": [
+    "combined-v2.patch",
+    "integer-rings.patch"
+  ],
+  "candidate_v3_additional": "decoder-v3.patch",
+  "retained_only": "integer-rings.patch",
+  "patch_sha256": {
+    "combined-v2.patch": "04582ea4a43adda64f34756e10d0386a00b7204e61c28c699a47656eaf15304a",
+    "diagnostic.patch": "42c09078516d36ece7755d8cc8cd89d91adc649add1604a131f973f3fb554660",
+    "decoder-v3.patch": "5283444e6591921cc86fee1b0e9cf47a344123e56fcd81eb948f97b724ce5961",
+    "integer-rings.patch": "f5df8353e5a02ccd1d1586cd8a67d9ca8af162186080b651a62889cf66dd4fe5"
+  },
+  "v2_source_sha256": {
+    "rust/crates/mradm-dsp/src/room/session.rs": "c3cf4567546beba6e208b09b01353c16fc2cae73ab9c45d2b1a66c7e42655e90",
+    "rust/crates/mradm-dsp/tests/room_gpu.rs": "9bf562ece2bbff02480c29d731cff4a9829a15b443ee0121874a6b23bce4e17b",
+    "rust/crates/mradm-room-cuda/examples/support/options.rs": "4f15996ae7a4da7348a65c4a28cd16e3176c26e128caa63bc699c32e6771b89b",
+    "cmake/MRRoomCuda.cmake": "8b0b7c3d900163f5dde5e29596e8cf1a1f409554fcbea8b93cfe92004c8a63b1",
+    "src/adm_render_room/cuda/backend.cpp": "b7728dc02c30765585abde9969cab474939a9d865ffa7b8f1f22eadd420d637c",
+    "src/adm_render_room/cuda/resident_support.h": "5be9aa7f9a6045f25cb42f9fbed53a27bd48d7d84523e505f3c7c0136be2b767",
+    "scripts/research/room_gpu/session_backend.cpp": "3c779a14a35ca4f2608b8d42cd2b4bb539ae35578581e46027bb59bff7cf5741",
+    "scripts/research/room_gpu/session_kernels.cu": "7e12aeeaea6b235976f263431f1abdb374bf2d94ffbabb19bb31264fad86ee26",
+    "scripts/research/room_gpu/session_layout.h": "9a09819f937d2f5b09b942958f979d12acfa360d7c05003ae1d6193b216217df",
+    "rust/crates/mradm-dsp/src/diffuse.rs": "3ba610c384778d240102a80c47a942161cf76a5c25e803ac42ade637f281f3a3",
+    "rust/crates/mradm-dsp/tests/binaural_convolution.rs": "b38ce9f7f5da4f3cae7f92180dc721e4e4d1e8a4f9d370b2f0ecc06ea10a1d56"
+  },
+  "v3_source_sha256": {
+    "rust/crates/mradm-dsp/src/room/session.rs": "fb5473e7056c7692206a4a11bed2783e848f18a066695b65b12175c6680b41d1",
+    "rust/crates/mradm-dsp/tests/room_gpu.rs": "9bf562ece2bbff02480c29d731cff4a9829a15b443ee0121874a6b23bce4e17b",
+    "rust/crates/mradm-room-cuda/examples/support/options.rs": "8137c0d159144bfcdcf3a6fc3303c43857d34a8167fb506800c619385968cc9e",
+    "cmake/MRRoomCuda.cmake": "8b0b7c3d900163f5dde5e29596e8cf1a1f409554fcbea8b93cfe92004c8a63b1",
+    "src/adm_render_room/cuda/backend.cpp": "b7728dc02c30765585abde9969cab474939a9d865ffa7b8f1f22eadd420d637c",
+    "src/adm_render_room/cuda/resident_support.h": "5be9aa7f9a6045f25cb42f9fbed53a27bd48d7d84523e505f3c7c0136be2b767",
+    "scripts/research/room_gpu/session_backend.cpp": "e9cc23b693e0db89e920102e49fef499bc05ae1c49f608b3e54c4bdb38462ede",
+    "scripts/research/room_gpu/session_kernels.cu": "7e12aeeaea6b235976f263431f1abdb374bf2d94ffbabb19bb31264fad86ee26",
+    "scripts/research/room_gpu/session_layout.h": "9a09819f937d2f5b09b942958f979d12acfa360d7c05003ae1d6193b216217df",
+    "rust/crates/mradm-dsp/src/diffuse.rs": "3ba610c384778d240102a80c47a942161cf76a5c25e803ac42ade637f281f3a3",
+    "rust/crates/mradm-dsp/tests/binaural_convolution.rs": "b38ce9f7f5da4f3cae7f92180dc721e4e4d1e8a4f9d370b2f0ecc06ea10a1d56",
+    "rust/crates/mradm-dsp/src/room/gpu_experiment.rs": "e71b73cda75c09a32d3f80ef6d98b158fa302e64c976092660ff8bf0cc0e6838",
+    "rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs": "8a59eced651c6e421db6354edce0b06fa8c1737b93acd20a4f75f15f9dd928e3",
+    "rust/crates/mradm-dsp/src/room/signal.rs": "06838ae9379db606b4a331e40da0c0cfd747592550a19b17413e1295930df0be",
+    "rust/crates/mradm-room-cuda/src/lib.rs": "a345e54606bd3aa98d87bb33352760644afdd66b692ef9761a47cdf72a8aa2ec",
+    "rust/crates/mradm-room-cuda/src/native.rs": "3de73f9036092187af0c789d0ebd2275ee49796cfbd7d92c019d1fe265d9dfbb"
+  },
+  "diagnostic_source_sha256": {
+    "rust/crates/mradm-dsp/src/room/profile.rs": "6b4b3c9b66893419707a4a84d52baa29ffb2cbbda47f76fb059026d71c653592",
+    "rust/crates/mradm-dsp/src/room/signal.rs": "b2d5e3d6edea956a3dc41774be41296f9d1fe1ba66e7eabeb1271638535f461b",
+    "rust/crates/mradm-dsp/examples/room_support/room_bench.rs": "5e9943393dc8f179bde654b4b8e872bc96c974494ca363cda41ca42ac51fe168",
+    "rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs": "217e5d105a018e0e94e5a78e7504d554048163c756a2cc2e97e43b4fbed2e48b",
+    "rust/crates/mradm-room-cuda/examples/timeline.rs": "40924506edee5f23dd4951cbaa7657dd7cd41b4c6197caff64c992818f8328a5"
+  },
+  "retained_source_sha256": {
+    "rust/crates/mradm-dsp/src/diffuse.rs": "3ba610c384778d240102a80c47a942161cf76a5c25e803ac42ade637f281f3a3",
+    "rust/crates/mradm-dsp/src/room/session.rs": "23836c2d9d0569a230fdd34eb4fbc9bb467cd3a010826adc32035f6488bd2c12",
+    "rust/crates/mradm-dsp/tests/binaural_convolution.rs": "b38ce9f7f5da4f3cae7f92180dc721e4e4d1e8a4f9d370b2f0ecc06ea10a1d56"
+  }
+}

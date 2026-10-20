@@ -1,0 +1,25 @@
+start short-v2-1-baseline-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "ramps", "mean_ms": 2.782819726562505, "p99_ms": 3.2723999999999998, "maximum_ms": 3.6919, "deadline_misses": 0}
+start short-v2-1-combined-ramps
+{"variant": "combined", "repetition": 1, "scenario": "ramps", "mean_ms": 2.33524599609375, "p99_ms": 2.8161, "maximum_ms": 3.0679000000000003, "deadline_misses": 0}
+start short-v2-1-frequency-ramps
+{"variant": "frequency", "repetition": 1, "scenario": "ramps", "mean_ms": 2.2528158203125033, "p99_ms": 2.8247, "maximum_ms": 3.185, "deadline_misses": 0}
+start short-v2-1-frequency-distance-ramps
+{"variant": "frequency", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.0233711914062495, "p99_ms": 2.6189999999999998, "maximum_ms": 2.8691, "deadline_misses": 0}
+start short-v2-1-combined-distance-ramps
+{"variant": "combined", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.25032138671875, "p99_ms": 2.6374, "maximum_ms": 2.9845, "deadline_misses": 0}
+start short-v2-1-baseline-distance-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "distance-ramps", "mean_ms": 2.86819853515625, "p99_ms": 3.5077, "maximum_ms": 5.7803, "deadline_misses": 1}
+start short-v2-2-frequency-ramps
+{"variant": "frequency", "repetition": 2, "scenario": "ramps", "mean_ms": 2.2019407226562517, "p99_ms": 2.6962, "maximum_ms": 2.9436, "deadline_misses": 0}
+start short-v2-2-combined-ramps
+{"variant": "combined", "repetition": 2, "scenario": "ramps", "mean_ms": 2.580447167968752, "p99_ms": 3.1391, "maximum_ms": 3.5775, "deadline_misses": 0}
+start short-v2-2-baseline-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "ramps", "mean_ms": 2.9798977539062497, "p99_ms": 3.5212, "maximum_ms": 3.8838000000000004, "deadline_misses": 0}
+start short-v2-2-baseline-distance-ramps
+{"variant": "baseline", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.6944874023437517, "p99_ms": 3.1216999999999997, "maximum_ms": 3.7788, "deadline_misses": 0}
+start short-v2-2-combined-distance-ramps
+{"variant": "combined", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.4359448242187516, "p99_ms": 2.927, "maximum_ms": 3.2542999999999997, "deadline_misses": 0}
+start short-v2-2-frequency-distance-ramps
+{"variant": "frequency", "repetition": 2, "scenario": "distance-ramps", "mean_ms": 2.0842707031250027, "p99_ms": 2.713, "maximum_ms": 3.0726, "deadline_misses": 0}
+short complete {"combined": {"complete": true, "deadline_passed": true, "scenarios": {"ramps": {"mean_reduction_ms": 0.42351215820312627, "paired_p99_improved": true}, "distance-ramps": {"mean_reduction_ms": 0.43820986328124967, "paired_p99_improved": true}}, "eligible": false}, "frequency": {"complete": true, "deadline_passed": true, "scenarios": {"ramps": {"mean_reduction_ms": 0.6539804687499999, "paired_p99_improved": true}, "distance-ramps": {"mean_reduction_ms": 0.7275220214843747, "paired_p99_improved": true}}, "eligible": false}}

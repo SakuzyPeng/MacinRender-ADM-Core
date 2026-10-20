@@ -1,0 +1,12 @@
+{
+  "base_preserved": "28f3dc0b4df3ef8166ac2fb60bba39417fe54245",
+  "restored_tracked_files": 23,
+  "removed_archived_new_files": 15,
+  "retained": [
+    "rust/crates/mradm-dsp/src/diffuse.rs",
+    "rust/crates/mradm-dsp/src/room/session.rs",
+    "rust/crates/mradm-dsp/tests/binaural_convolution.rs"
+  ],
+  "original_cmake_preserved": true,
+  "diagnostic_source_removed": true
+}

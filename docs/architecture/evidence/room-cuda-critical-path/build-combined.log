@@ -1,0 +1,2 @@
+[1/2] Building CXX object CMakeFiles\mr_adm_room_cuda.dir\src\adm_render_room\cuda\backend.cpp.obj
+[2/2] Linking CXX shared library mradm_room_cuda.dll

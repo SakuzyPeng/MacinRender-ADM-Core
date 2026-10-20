@@ -1,0 +1,62 @@
+{
+  "baseline": {
+    "optimization_flags": 0,
+    "compact_control": false,
+    "dll_sha256": "4bac4ea9f6b17688dce4b45145a9ea9f912e851a0293d8334939f38b1e8e07b4",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=OFF",
+      "-DMR_ADM_ROOM_CUDA_FREQUENCY_MAJOR=OFF",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-resident-pipeline-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  },
+  "combined": {
+    "optimization_flags": 6,
+    "compact_control": true,
+    "dll_sha256": "03b0a37d4cbf4ecff2beb35012e068fc7e9c4c4948ac84c758a829bf956f0c81",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=ON",
+      "-DMR_ADM_ROOM_CUDA_FREQUENCY_MAJOR=OFF",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-resident-pipeline-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  },
+  "frequency": {
+    "optimization_flags": 22,
+    "compact_control": true,
+    "dll_sha256": "90e258d95901d694945b56c6eb78b632785e209a7ad861424afbe2ed8c45da48",
+    "configure": [
+      "cmake",
+      "-S",
+      "<checkout>",
+      "-B",
+      "<checkout>\\build\\win-canon",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DMR_ADM_ENABLE_ROOM_CUDA=ON",
+      "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF",
+      "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+      "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+      "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=ON",
+      "-DMR_ADM_ROOM_CUDA_FREQUENCY_MAJOR=ON",
+      "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=<checkout>\\local\\room-cuda-resident-pipeline-20261019\\mathdx\\nvidia-mathdx-24.08.0\\nvidia\\mathdx\\24.08\\include"
+    ]
+  }
+}

@@ -1,0 +1,687 @@
+diff --git a/rust/crates/mradm-dsp/src/room/gpu_experiment.rs b/rust/crates/mradm-dsp/src/room/gpu_experiment.rs
+index e485c746..3f25c818 100644
+--- a/rust/crates/mradm-dsp/src/room/gpu_experiment.rs
++++ b/rust/crates/mradm-dsp/src/room/gpu_experiment.rs
+@@ -23,6 +23,9 @@ const UPDATE_LIMIT: usize = 32;
+ pub trait Factory: Send + Sync {
+     fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>>;
+     fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>>;
++    fn create_decoder(&self, _room: Arc<PreparedRoom>) -> Result<Option<Box<dyn Backend>>> {
++        Ok(None)
++    }
+ }
+ /// The 2048-frame late partition is computed after its input closes, then
+ /// consumed starting at the next canonical block, just like LongReader.
+@@ -138,6 +141,31 @@ impl Frame {
+         self.sources.clear();
+         self.active = false;
+     }
++    fn decoder() -> Self {
++        Self {
++            jobs: Vec::with_capacity(UPDATE_LIMIT),
++            ranges: Vec::with_capacity(UPDATE_LIMIT),
++            requests: Vec::with_capacity(UPDATE_LIMIT),
++            tasks: Vec::with_capacity(2 * SLOTS),
++            sources: Vec::new(),
++            frequency: [0.; 4 * (BLOCK + 1)],
++            heads: [0; 2],
++            active: false,
++            reset: true,
++        }
++    }
++    fn inputs(&mut self, direct: &InputHistory, wet: &InputHistory) {
++        self.active = true;
++        for (branch, history) in [direct, wet].into_iter().enumerate() {
++            let (head, row) = history.gpu_latest();
++            self.heads[branch] = head as u32;
++            for (bin, value) in row.iter().enumerate() {
++                let at = (branch * (BLOCK + 1) + bin) * 2;
++                self.frequency[at] = value.re;
++                self.frequency[at + 1] = value.im;
++            }
++        }
++    }
+ }
+ #[derive(Clone, Copy)]
+ struct Target {
+@@ -159,6 +187,9 @@ struct Timeline {
+ }
+ impl Timeline {
+     fn new(buckets: usize) -> Self {
++        Self::with_job_capacity(buckets, TARGET_JOB_LIMIT)
++    }
++    fn with_job_capacity(buckets: usize, jobs: usize) -> Self {
+         Self {
+             targets: [Target {
+                 start: 0,
+@@ -170,7 +201,7 @@ impl Timeline {
+             used: [false; SLOTS],
+             tasks: [usize::MAX; SLOTS],
+             updates: [usize::MAX; SLOTS],
+-            last_jobs: Vec::with_capacity(TARGET_JOB_LIMIT),
++            last_jobs: Vec::with_capacity(jobs),
+             last_counts: vec![0; buckets],
+             last_support: 0,
+             valid: false,
+@@ -329,16 +360,7 @@ impl Voice {
+     pub fn inputs(&mut self, direct: &InputHistory, wet: &InputHistory) {
+         self.frame.reset |= self.need_reset;
+         self.need_reset = false;
+-        self.frame.active = true;
+-        for (branch, history) in [direct, wet].into_iter().enumerate() {
+-            let (head, row) = history.gpu_latest();
+-            self.frame.heads[branch] = head as u32;
+-            for (bin, value) in row.iter().enumerate() {
+-                let at = (branch * (BLOCK + 1) + bin) * 2;
+-                self.frame.frequency[at] = value.re;
+-                self.frame.frequency[at + 1] = value.im;
+-            }
+-        }
++        self.frame.inputs(direct, wet);
+     }
+     pub fn render(
+         &mut self,
+@@ -532,3 +554,144 @@ impl Voice {
+         Ok(())
+     }
+ }
++
++pub(crate) struct DecoderVoice {
++    room: Arc<PreparedRoom>,
++    direction: [f64; 3],
++    face: usize,
++    history: InputHistory,
++    reader: super::partition::Dynamic,
++    timeline: Timeline,
++    pub frame: Frame,
++    need_reset: bool,
++}
++impl DecoderVoice {
++    pub fn new(room: Arc<PreparedRoom>, direction: [f64; 3]) -> Result<Self> {
++        Ok(Self {
++            history: InputHistory::with_policy(
++                room.decoder_hrir.data.output_taps,
++                room.quality.fft(),
++            )?,
++            reader: super::partition::Dynamic::reader_at_rate(
++                2,
++                1,
++                room.quality.fft(),
++                room.profile.sample_rate,
++            )?,
++            timeline: Timeline::with_job_capacity(1, 1),
++            frame: Frame::decoder(),
++            direction,
++            face: usize::MAX,
++            need_reset: true,
++            room,
++        })
++    }
++    pub fn reset(&mut self) {
++        self.reader.reset();
++        self.history.reset();
++        self.timeline.reset();
++        self.need_reset = true;
++        self.frame.clear();
++        self.frame.reset = true;
++    }
++    pub fn begin(&mut self, input: &[f32]) -> Result<()> {
++        self.frame.clear();
++        self.timeline.begin();
++        self.frame.reset = self.need_reset;
++        self.need_reset = false;
++        self.reader.begin_with_history(&mut self.history, input)?;
++        self.frame.inputs(&self.history, &self.history);
++        Ok(())
++    }
++    pub fn target(&mut self, rotation: Rotation) -> Result<()> {
++        let bank = &self.room.decoder_hrir;
++        let data = &bank.data;
++        let (vertices, weights) = bank.weights(rotation.apply(self.direction), &mut self.face)?;
++        let layer = data.collection.as_ref().map_or(0, |c| c.reference);
++        let mut job = Job {
++            gain: 1.,
++            ..Default::default()
++        };
++        for ear in 0..2 {
++            let mut delay = 0.;
++            for v in 0..3 {
++                delay += data.delays[vertices[v]][ear] * weights[v];
++            }
++            let mut count = 0;
++            for v in 0..3 {
++                if weights[v] <= 0. {
++                    continue;
++                }
++                let shift = delay - data.delays[vertices[v]][ear];
++                let integer = libm::floor(shift);
++                let (f, alpha) = fraction(shift - integer);
++                job.terms[ear * 6 + count] = Term {
++                    row: ((layer * data.directions.len() + vertices[v]) * 2 + ear) as u32,
++                    fraction: f,
++                    alpha,
++                    weight: weights[v] as f32,
++                    shift: (data.guard as i64 + integer as i64 - 40)
++                        .rem_euclid(bank.fft_length as i64) as u32,
++                };
++                count += 1;
++            }
++            job.counts |= (count as u32) << (ear * 8);
++        }
++        if self.timeline.valid && self.timeline.last_jobs.as_slice() == [job] {
++            return Ok(());
++        }
++        if self.frame.jobs.len() == self.frame.jobs.capacity()
++            || self.frame.requests.len() == UPDATE_LIMIT
++        {
++            return Err(Error::Unsupported(
++                "GPU decoder frame update capacity exceeded",
++            ));
++        }
++        let support = data.output_taps;
++        let slot = self.timeline.target(
++            self.reader.gpu_clock().0,
++            support,
++            super::filter_fade(self.room.profile.sample_rate) as u64,
++            &mut self.frame,
++        )?;
++        let first = self.frame.ranges.len();
++        self.frame.ranges.push(Range {
++            first: self.frame.jobs.len() as u32,
++            count: 1,
++        });
++        self.frame.jobs.push(job);
++        let request = Request {
++            update: Update {
++                slot: slot as u32,
++                branch: 0,
++                range_first: first as u32,
++                range_count: 1,
++                parts: support.div_ceil(BLOCK) as u32,
++                support: support as u32,
++            },
++            sources: 0..0,
++            rotation,
++        };
++        if self.timeline.updates[slot] != usize::MAX {
++            self.frame.requests[self.timeline.updates[slot]] = request;
++        } else {
++            self.timeline.updates[slot] = self.frame.requests.len();
++            self.frame.requests.push(request);
++        }
++        self.timeline.last_jobs.clear();
++        self.timeline.last_jobs.push(job);
++        self.timeline.valid = true;
++        Ok(())
++    }
++    pub fn render(&mut self, offset: usize, frames: usize) -> Result<()> {
++        self.timeline.render(
++            0,
++            self.reader.gpu_clock().1,
++            offset,
++            frames,
++            super::filter_fade(self.room.profile.sample_rate) as u64,
++            &mut self.frame,
++        )?;
++        self.reader.gpu_advance(offset, frames)
++    }
++}
+diff --git a/rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs b/rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs
+index e2f9be76..665bad49 100644
+--- a/rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs
++++ b/rust/crates/mradm-dsp/src/room/gpu_experiment/reference.rs
+@@ -5,7 +5,13 @@ use crate::{Complex32 as C, fft::RealFft};
+ pub struct ReferenceFactory;
+ impl Factory for ReferenceFactory {
+     fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>> {
+-        Ok(Box::new(Reference::new(room)?))
++        Ok(Box::new(Reference::new(room, false)?))
++    }
++    fn create_decoder(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn Backend>>> {
++        if room.profile.late_directions.len() > MAX_VOICES {
++            return Ok(None);
++        }
++        Ok(Some(Box::new(Reference::new(room, true)?)))
+     }
+     fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>> {
+         let Some(first) = room.late[0].gpu_tail() else {
+@@ -78,6 +84,9 @@ impl LateBackend for ReferenceLate {
+     }
+ }
+ struct Reference {
++    decoder: bool,
++    decoder_query: Option<super::super::hrir::TimeQuery>,
++    decoder_faces: [usize; MAX_VOICES],
+     room: Arc<PreparedRoom>,
+     work: ResponseWork,
+     fft: RealFft,
+@@ -91,10 +100,28 @@ struct Reference {
+     voices: usize,
+ }
+ impl Reference {
+-    fn new(room: Arc<PreparedRoom>) -> Result<Self> {
+-        let parts = room.short_taps.div_ceil(BLOCK);
+-        let history_parts = room.short_taps.max(room.send_taps).div_ceil(BLOCK);
++    fn new(room: Arc<PreparedRoom>, decoder: bool) -> Result<Self> {
++        let parts = if decoder {
++            room.decoder_hrir.data.output_taps
++        } else {
++            room.short_taps
++        }
++        .div_ceil(BLOCK);
++        let history_parts = if decoder {
++            parts
++        } else {
++            room.short_taps.max(room.send_taps).div_ceil(BLOCK)
++        };
+         Ok(Self {
++            decoder,
++            decoder_query: if decoder {
++                Some(super::super::hrir::TimeQuery::new(
++                    room.decoder_hrir.clone(),
++                )?)
++            } else {
++                None
++            },
++            decoder_faces: [usize::MAX; MAX_VOICES],
+             work: ResponseWork::new(&room)?,
+             fft: RealFft::with_policy(BLOCK * 2, room.quality.fft())?,
+             parts,
+@@ -138,21 +165,36 @@ impl Backend for Reference {
+         for request in &frame.requests {
+             let u = request.update;
+             let branch = u.branch as usize;
+-            self.work.build_branches(
+-                &self.room,
+-                &frame.sources[request.sources.clone()],
+-                &request.rotation,
+-                branch == 0,
+-                branch == 1,
+-            )?;
++            let taps = if self.decoder {
++                self.room.decoder_hrir.data.output_taps
++            } else {
++                self.room.short_taps
++            };
++            if let Some(query) = &mut self.decoder_query {
++                query.query(
++                    request
++                        .rotation
++                        .apply(self.room.profile.late_directions[index]),
++                    &mut self.decoder_faces[index],
++                    &mut self.work.impulse[..2 * taps],
++                )?;
++            } else {
++                self.work.build_branches(
++                    &self.room,
++                    &frame.sources[request.sources.clone()],
++                    &request.rotation,
++                    branch == 0,
++                    branch == 1,
++                )?;
++            }
+             for ear in 0..2 {
+                 for part in 0..u.parts as usize {
+                     self.time.fill(0.);
+                     let start = part * BLOCK;
+                     let count = BLOCK.min(u.support as usize - start);
+                     self.time[..count].copy_from_slice(
+-                        &self.work.impulse[(branch * 2 + ear) * self.room.short_taps + start
+-                            ..(branch * 2 + ear) * self.room.short_taps + start + count],
++                        &self.work.impulse[(branch * 2 + ear) * taps + start
++                            ..(branch * 2 + ear) * taps + start + count],
+                     );
+                     let offset = (((index * 2 + branch) * SLOTS + u.slot as usize) * 2 + ear)
+                         * self.parts
+diff --git a/rust/crates/mradm-dsp/src/room/session.rs b/rust/crates/mradm-dsp/src/room/session.rs
+index 311f78c3..3b1fd8ad 100644
+--- a/rust/crates/mradm-dsp/src/room/session.rs
++++ b/rust/crates/mradm-dsp/src/room/session.rs
+@@ -1505,6 +1505,15 @@ impl Session {
+             return Err(Error::InvalidArgument("Invalid room distance scale"));
+         }
+         let current = Box::new(Instance::new(prepared.clone(), 0)?);
++        let late_decoder = WorldTail::new_decoder(prepared.room.clone())?;
++        #[cfg(feature = "room-gpu-experiment")]
++        let late_decoder = {
++            let mut decoder = late_decoder;
++            if let Some(factory) = &prepared.gpu_factory {
++                decoder.enable_gpu_decoder(&**factory)?;
++            }
++            decoder
++        };
+         let paired = Arc::new(Mutex::new(BlockJob {
+             current: current.group.clone(),
+             incoming: None,
+@@ -1518,7 +1527,7 @@ impl Session {
+             new_gain: [0.; BLOCK],
+             marks: [false; BLOCK],
+             poses: [[0.; 3]; BLOCK],
+-            late_decoder: WorldTail::new_decoder(prepared.room.clone())?,
++            late_decoder,
+             late_output: [0.; BLOCK * 2],
+             output: [0.; BLOCK * 2],
+         }));
+diff --git a/rust/crates/mradm-dsp/src/room/signal.rs b/rust/crates/mradm-dsp/src/room/signal.rs
+index 0dd17fc4..54294faa 100644
+--- a/rust/crates/mradm-dsp/src/room/signal.rs
++++ b/rust/crates/mradm-dsp/src/room/signal.rs
+@@ -436,6 +436,8 @@ impl Emitter {
+ }
+ 
+ struct Decoder {
++    #[cfg(feature = "room-gpu-experiment")]
++    gpu: Option<super::gpu_experiment::DecoderVoice>,
+     convolution: Option<Dynamic>,
+     query: Option<super::hrir::TimeQuery>,
+     face: usize,
+@@ -463,6 +465,8 @@ struct Segment {
+ struct Decoders {
+     #[cfg(feature = "room-gpu-experiment")]
+     gpu_late: Option<GpuLate>,
++    #[cfg(feature = "room-gpu-experiment")]
++    gpu_decoder: Option<GpuDecoder>,
+     room: Arc<PreparedRoom>,
+     decoders: Vec<Decoder>,
+     orientation: [f32; 3],
+@@ -601,6 +605,17 @@ fn render_direction(
+             *value += next.input[i];
+         }
+     }
++    #[cfg(feature = "room-gpu-experiment")]
++    if let Some(gpu) = &mut decoder.gpu {
++        gpu.begin(&decoder.input)?;
++        for segment in segments {
++            if segment.changed {
++                gpu.target(segment.rotation)?;
++            }
++            gpu.render(segment.begin, segment.end - segment.begin)?;
++        }
++        return Ok(());
++    }
+     let Decoder {
+         convolution,
+         query,
+@@ -635,7 +650,40 @@ struct GpuLate {
+     pending: bool,
+     reset: bool,
+ }
++#[cfg(feature = "room-gpu-experiment")]
++struct GpuDecoder {
++    backend: Box<dyn super::gpu_experiment::Backend>,
++    output: Vec<f32>,
++}
+ impl WorldTail {
++    #[cfg(feature = "room-gpu-experiment")]
++    pub(crate) fn enable_gpu_decoder(
++        &mut self,
++        factory: &dyn super::gpu_experiment::Factory,
++    ) -> Result<()> {
++        let mut group = self.group.lock().unwrap();
++        if group.kind != TailKind::Decoder {
++            return Err(Error::InvalidArgument("Invalid GPU decoder kind"));
++        }
++        if let Some(backend) = factory.create_decoder(group.room.clone())? {
++            let room = group.room.clone();
++            for (decoder, direction) in group.decoders.iter_mut().zip(&room.profile.late_directions)
++            {
++                decoder.gpu = Some(super::gpu_experiment::DecoderVoice::new(
++                    room.clone(),
++                    *direction,
++                )?);
++                decoder.convolution = None;
++                decoder.query = None;
++                decoder.filter = Vec::new();
++            }
++            group.gpu_decoder = Some(GpuDecoder {
++                backend,
++                output: vec![0.; group.decoders.len() * 4 * BLOCK],
++            });
++        }
++        Ok(())
++    }
+     #[cfg(feature = "room-gpu-experiment")]
+     pub(crate) fn enable_gpu_late(
+         &mut self,
+@@ -676,6 +724,8 @@ impl WorldTail {
+         let decoders = (0..count)
+             .map(|index| {
+                 Ok(Decoder {
++                    #[cfg(feature = "room-gpu-experiment")]
++                    gpu: None,
+                     convolution: if point_decoder {
+                         Some(Dynamic::with_rate(
+                             2,
+@@ -714,6 +764,8 @@ impl WorldTail {
+             group: Arc::new(Mutex::new(Decoders {
+                 #[cfg(feature = "room-gpu-experiment")]
+                 gpu_late: None,
++                #[cfg(feature = "room-gpu-experiment")]
++                gpu_decoder: None,
+                 history: if kind != TailKind::Decoder {
+                     Some(SharedLongHistory::new(&room.late[0])?)
+                 } else {
+@@ -747,6 +799,10 @@ impl WorldTail {
+             gpu.reset = true;
+         }
+         for decoder in &mut group.decoders {
++            #[cfg(feature = "room-gpu-experiment")]
++            if let Some(gpu) = &mut decoder.gpu {
++                gpu.reset();
++            }
+             if let Some(convolution) = &mut decoder.convolution {
+                 convolution.reset();
+             }
+@@ -897,6 +953,8 @@ impl WorldTail {
+         let Decoders {
+             room,
+             decoders,
++            #[cfg(feature = "room-gpu-experiment")]
++            gpu_decoder,
+             orientation,
+             initialized,
+             segments,
+@@ -994,6 +1052,21 @@ impl WorldTail {
+                     .try_for_each(task)?;
+             }
+         }
++        #[cfg(feature = "room-gpu-experiment")]
++        if let Some(gpu) = gpu_decoder {
++            gpu.backend.begin(count)?;
++            for (index, decoder) in decoders.iter().enumerate() {
++                gpu.backend
++                    .voice(index, &decoder.gpu.as_ref().unwrap().frame)?;
++            }
++            gpu.backend.submit()?;
++            gpu.backend.finish(&mut gpu.output)?;
++            for (index, decoder) in decoders.iter_mut().enumerate() {
++                decoder
++                    .output
++                    .copy_from_slice(&gpu.output[index * 4 * BLOCK..(index * 4 + 2) * BLOCK]);
++            }
++        }
+         // Direction order is independent of worker scheduling.
+         output.fill(0.);
+         for decoder in decoders.iter() {
+diff --git a/rust/crates/mradm-room-cuda/examples/support/options.rs b/rust/crates/mradm-room-cuda/examples/support/options.rs
+index 1f43bb4e..68a3d31c 100644
+--- a/rust/crates/mradm-room-cuda/examples/support/options.rs
++++ b/rust/crates/mradm-room-cuda/examples/support/options.rs
+@@ -4,6 +4,7 @@ pub struct Options {
+     enabled: bool,
+     library: Option<PathBuf>,
+     compact_control: bool,
++    resident_decoder: bool,
+ }
+ impl Options {
+     pub fn parse(args: &mut Vec<String>) -> std::result::Result<Self, Box<dyn std::error::Error>> {
+@@ -25,10 +26,16 @@ impl Options {
+         if compact_control && !enabled {
+             return Err("--cuda-compact-control requires a CUDA backend".into());
+         }
++        let resident_decoder = args.iter().any(|v| v == "--cuda-resident-decoder");
++        args.retain(|v| v != "--cuda-resident-decoder");
++        if resident_decoder && !enabled {
++            return Err("--cuda-resident-decoder requires a CUDA backend".into());
++        }
+         Ok(Self {
+             enabled,
+             library,
+             compact_control,
++            resident_decoder,
+         })
+     }
+     pub fn prepare(
+@@ -36,7 +43,12 @@ impl Options {
+         prepared: Arc<PreparedSet>,
+     ) -> std::result::Result<Arc<PreparedSet>, Box<dyn std::error::Error>> {
+         if self.enabled {
+-            let bound = mradm_room_cuda::bind(prepared, self.library.as_deref())?.0;
++            let bound = mradm_room_cuda::bind_with_decoder(
++                prepared,
++                self.library.as_deref(),
++                self.resident_decoder,
++            )?
++            .0;
+             if self.compact_control {
+                 Ok(Arc::new(bound.with_gpu_compact_control()?))
+             } else {
+@@ -48,7 +60,7 @@ impl Options {
+     }
+     pub fn report(&self) -> serde_json::Value {
+         if self.enabled {
+-            serde_json::json!({"kind":"room-cuda-session","control":"production Session","finite_fade":true,"cpu_reference":false,"binding":"prepared-memory","eq_stagger_frames":256,"compact_control":self.compact_control})
++            serde_json::json!({"kind":"room-cuda-session","control":"production Session","finite_fade":true,"cpu_reference":false,"binding":"prepared-memory","eq_stagger_frames":256,"compact_control":self.compact_control,"resident_decoder":self.resident_decoder})
+         } else {
+             serde_json::Value::Null
+         }
+diff --git a/rust/crates/mradm-room-cuda/src/lib.rs b/rust/crates/mradm-room-cuda/src/lib.rs
+index 591a8ca7..0c91a56a 100644
+--- a/rust/crates/mradm-room-cuda/src/lib.rs
++++ b/rust/crates/mradm-room-cuda/src/lib.rs
+@@ -13,6 +13,14 @@ pub use native::NativeFactory;
+ pub fn bind(
+     prepared: Arc<PreparedSet>,
+     library: Option<&Path>,
++) -> Result<(Arc<PreparedSet>, serde_json::Value)> {
++    bind_with_decoder(prepared, library, false)
++}
++
++pub fn bind_with_decoder(
++    prepared: Arc<PreparedSet>,
++    library: Option<&Path>,
++    decoder: bool,
+ ) -> Result<(Arc<PreparedSet>, serde_json::Value)> {
+     #[cfg(windows)]
+     {
+@@ -22,6 +30,7 @@ pub fn bind(
+         };
+         struct CachedFactory {
+             native: Arc<NativeFactory>,
++            decoder: bool,
+             // Keep the CPU weak-cache entry alive without duplicating its data.
+             _prepared: Arc<PreparedSet>,
+         }
+@@ -32,11 +41,19 @@ pub fn bind(
+             fn create_late(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn LateBackend>>> {
+                 self.native.create_late(room)
+             }
++            fn create_decoder(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn Backend>>> {
++                if self.decoder {
++                    self.native.create_decoder(room)
++                } else {
++                    Ok(None)
++                }
++            }
+         }
+         let native = NativeFactory::new(prepared.room.clone(), library)?;
+         let metadata = native.metadata()?;
+         let factory = Arc::new(CachedFactory {
+             native,
++            decoder,
+             _prepared: prepared.clone(),
+         });
+         let bound = prepared
+@@ -46,7 +63,7 @@ pub fn bind(
+     }
+     #[cfg(not(windows))]
+     {
+-        let _ = (prepared, library);
++        let _ = (prepared, library, decoder);
+         Err(Error::Unsupported("ROOM CUDA is available only on Windows"))
+     }
+ }
+diff --git a/rust/crates/mradm-room-cuda/src/native.rs b/rust/crates/mradm-room-cuda/src/native.rs
+index 0409737a..8b8d019e 100644
+--- a/rust/crates/mradm-room-cuda/src/native.rs
++++ b/rust/crates/mradm-room-cuda/src/native.rs
+@@ -392,6 +392,47 @@ impl NativeFactory {
+ }
+ 
+ impl Factory for NativeFactory {
++    fn create_decoder(&self, room: Arc<PreparedRoom>) -> Result<Option<Box<dyn Backend>>> {
++        let bank = self.bank();
++        if !Arc::ptr_eq(&room.decoder_hrir, &bank.cpu) || room.profile.late_directions.len() > 32 {
++            return Err(Error::Unsupported(
++                "Resident decoder requires the shared HRIR bank and at most 32 directions",
++            ));
++        }
++        let bins = bank.cpu.fft_length / 2 + 1;
++        let materials: Vec<f32> = (0..bins).flat_map(|_| [1., 0.]).collect();
++        let propagation: Vec<f32> = (0..(PHASES + 1) * bins).flat_map(|_| [1., 0.]).collect();
++        let layers = bank
++            .cpu
++            .data
++            .collection
++            .as_ref()
++            .map_or(1, |c| c.layers.len());
++        let taps = bank.cpu.data.output_taps;
++        let params = Params {
++            rate: room.profile.sample_rate,
++            fft: bank.cpu.fft_length as u32,
++            taps: taps as u32,
++            stride: bank.cpu.fft_length as u32,
++            buckets: 1,
++            rows: (layers * bank.cpu.data.directions.len() * 2) as u32,
++            images: 1,
++            history_parts: taps.div_ceil(256) as u32,
++            materials: materials.as_ptr(),
++            material_floats: materials.len(),
++            propagation: propagation.as_ptr(),
++            propagation_floats: propagation.len(),
++        };
++        let context = unsafe { (bank.library.create)(bank.handle, &params) };
++        if context.is_null() {
++            bank.library.check(1)?;
++        }
++        Ok(Some(Box::new(Native {
++            _entry: self.entry.clone(),
++            library: bank.library.clone(),
++            context,
++        })))
++    }
+     fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>> {
+         let bank = self.bank();
+         if !Arc::ptr_eq(&room.hrir, &bank.cpu) || room.quality != Quality::Realtime {
+diff --git a/scripts/research/room_gpu/session_backend.cpp b/scripts/research/room_gpu/session_backend.cpp
+index 8f12dcc9..1c75ee7e 100644
+--- a/scripts/research/room_gpu/session_backend.cpp
++++ b/scripts/research/room_gpu/session_backend.cpp
+@@ -73,7 +73,7 @@ struct FusedKernel {
+     }
+ };
+ #endif
+-constexpr unsigned max_voices = 32, max_updates = 256, max_ranges = 1024, max_tasks = 2048, max_jobs = 32 * 8192;
++constexpr unsigned max_voices = 32, max_updates = 512, max_ranges = 1024, max_tasks = 2048, max_jobs = 32 * 8192;
+ struct NativeUpdate {
+     unsigned group, slot, parts, support, first_row;
+     unsigned rows[64];
+@@ -280,7 +280,7 @@ struct Engine {
+ #endif
+         Plans plans(stream);
+         for (const auto& shape : std::array<std::array<unsigned, 3>, 5>{
+-                 {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, 256, 2048}}}) {
++                 {{128, 32, 256}, {128, 64, 384}, {320, 96, 384}, {512, 128, 512}, {2048, max_updates, 2048}}}) {
+             const unsigned maximum = shape[1] * 2 * static_cast<unsigned>(parts);
+             for (unsigned rows = 128; rows < maximum; rows *= 2)
+                 variants.emplace_back(std::make_unique<Variant>(shape[0], shape[1], shape[2], rows, c, plans));

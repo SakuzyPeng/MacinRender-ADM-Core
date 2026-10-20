@@ -1,0 +1,44 @@
+   Compiling mradm-dsp v0.1.0 (<checkout>/rust/crates/mradm-dsp)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.56s
+     Running tests/binaural_convolution.rs (build/rust/cargo/rust_0e004/debug/deps/binaural_convolution-d2ff1f16938858a4)
+
+running 6 tests
+test diffuse_delay_and_live_ramps_match_direct_tapped_delay ... ok
+test diffuse_ring_matches_ordered_direct_delay_bitwise_at_both_rates ... ok
+test invalid_and_empty_calls_do_not_advance_state_or_modify_output ... ok
+test ola_short_segments_crossfades_gains_and_silent_gaps_match_direct_fir ... ok
+test live_interrupted_control_and_explicit_ramp_use_same_input_history ... ok
+test live_full_fir_stereo_partitioning_tail_and_reset ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/room_no_alloc.rs (build/rust/cargo/rust_0e004/debug/deps/room_no_alloc-1943c23fc44d7574)
+
+running 1 test
+test regular_room_dsp_does_not_allocate_on_any_worker ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.01s
+
+     Running tests/room_quality.rs (build/rust/cargo/rust_0e004/debug/deps/room_quality-512c94c4def6fe33)
+
+running 9 tests
+test small_pose_steps_keep_the_reference_geometry_catch_up ... ok
+test reflection_pose_budget_preserves_direct_sound_and_bypasses_on_jumps_and_deadlines ... ok
+test quality_is_fixed_and_incompatible_prepared_banks_are_rejected ... ok
+test branch_updates_clear_previous_buckets_and_match_full_responses ... ok
+test hard_geometry_events_bypass_the_grid_while_another_field_is_ramping ... ok
+test small_head_motion_is_independent_of_packetization_and_finite_preroll ... ok
+test realtime_ramps_switches_and_tail_are_independent_of_packetization ... ok
+test realtime_preroll_reproduces_continuous_ramps_on_each_source_phase ... ok
+test short_room_switch_preserves_ramps_on_each_reflection_phase ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+     Running tests/room_sample_rate.rs (build/rust/cargo/rust_0e004/debug/deps/room_sample_rate-bb407a3a3a4f6e08)
+
+running 3 tests
+test filter_fade_and_diffuse_keep_physical_duration_at_96k ... ok
+test native_bank_retains_samples_high_band_and_authenticated_geometry ... ok
+test clocks_propagation_and_room_switches_are_session_local ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s

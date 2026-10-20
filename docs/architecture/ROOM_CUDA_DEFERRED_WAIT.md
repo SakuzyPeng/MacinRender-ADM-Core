@@ -141,3 +141,6 @@ foreach ($scenario in @('ramps', 'distance-ramps')) {
 仅保留原生回归工具的跨线程完成及未完成批次释放检查。Windows 恢复原源码、HEAD 和改动状态，
 关闭本轮 CMake CUDA 入口并重建 canonical CPU CLI／C API；删除本轮私有资源与临时输出，保留共享缓存。
 逐项恢复与清理结果记录于 validation.json 的 `restoration`。
+
+后续 [1 ms 目标与关键路径实验](ROOM_CUDA_CRITICAL_PATH.md) 根据 CPU／GPU 时间线重新组合优化，
+最佳短测平均改善 0.654／0.728 ms，但仍未达到 1 ms 目标；GPU 候选继续归档。

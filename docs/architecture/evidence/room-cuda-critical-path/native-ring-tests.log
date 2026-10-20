@@ -1,0 +1,16 @@
+   Compiling mradm-dsp v0.1.0 (<checkout>\rust\crates\mradm-dsp)
+    Finished `release` profile [optimized] target(s) in 1.45s
+     Running tests\binaural_convolution.rs (<checkout>\build\rust\cargo\rust_636e7\x86_64-pc-windows-msvc\release\deps\binaural_convolution-537d4c28bee636a1.exe)
+
+running 2 tests
+test diffuse_delay_and_live_ramps_match_direct_tapped_delay ... ok
+test diffuse_ring_matches_ordered_direct_delay_bitwise_at_both_rates ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\room_sample_rate.rs (<checkout>\build\rust\cargo\rust_636e7\x86_64-pc-windows-msvc\release\deps\room_sample_rate-9e90440416b20293.exe)
+
+running 1 test
+test filter_fade_and_diffuse_keep_physical_duration_at_96k ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s

@@ -1,0 +1,175 @@
+diff --git a/rust/crates/mradm-dsp/examples/room_support/room_bench.rs b/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
+index 6a4d25da..d732957e 100644
+--- a/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
++++ b/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
+@@ -310,6 +310,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
+             let mut rss_peak = 0u64;
+             for block in 0..blocks + 32 {
+                 if block == 32 {
++                    crate::timeline::capture(true)?;
+                     mradm_dsp::room::profile::reset();
+                     let (cpu, rss) = process_counters(ticks);
+                     cpu_start = cpu;
+@@ -443,7 +444,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
+             report["coordinate_mapping"] =
+                 serde_json::json!(if automatic { "room" } else { "uniform" });
+             report["thread_scheduling"] = scheduling.clone();
+-            println!("{report}");
++            std::fs::write(std::env::var("MR_ROOM_DIAGNOSTIC_JSON")?, report.to_string())?;
+         }
+     }
+     Ok(())
+diff --git a/rust/crates/mradm-dsp/src/room/profile.rs b/rust/crates/mradm-dsp/src/room/profile.rs
+index a2f9e493..5711a423 100644
+--- a/rust/crates/mradm-dsp/src/room/profile.rs
++++ b/rust/crates/mradm-dsp/src/room/profile.rs
+@@ -24,8 +24,9 @@ pub enum Stage {
+     ResponseTransform,
+     GpuSubmit,
+     GpuWait,
++    SourceEq,
+ }
+-pub const STAGE_COUNT: usize = 19;
++pub const STAGE_COUNT: usize = 20;
+ pub const NAMES: [&str; STAGE_COUNT] = [
+     "session_process",
+     "canonical_block",
+@@ -46,6 +47,7 @@ pub const NAMES: [&str; STAGE_COUNT] = [
+     "response_transform",
+     "gpu_submit",
+     "gpu_wait",
++    "source_eq",
+ ];
+ #[cfg(feature = "room-profile")]
+ mod enabled {
+@@ -60,6 +62,10 @@ mod enabled {
+         time::Instant,
+     };
+     static CPU_CLOCK: OnceLock<fn() -> Option<u64>> = OnceLock::new();
++    static TIMELINE: OnceLock<fn(Stage, bool)> = OnceLock::new();
++    pub fn set_timeline(hook: fn(Stage, bool)) {
++        let _ = TIMELINE.set(hook);
++    }
+     // Each room worker updates its own counters. Shared stage atomics otherwise
+     // distort the very scheduling/memory behavior that this profiler measures.
+     // Slot zero also safely aggregates any callers outside the 32-worker pool.
+@@ -114,6 +120,9 @@ mod enabled {
+                     _thread_bound: PhantomData,
+                 };
+             }
++            if let Some(hook) = TIMELINE.get() {
++                hook(stage, true);
++            }
+             Self {
+                 stage,
+                 start: Some(Instant::now()),
+@@ -159,6 +168,9 @@ mod enabled {
+             }
+             counter.nanos.fetch_add(nanos, Ordering::Relaxed);
+             counter.calls.fetch_add(1, Ordering::Relaxed);
++            if let Some(hook) = TIMELINE.get() {
++                hook(self.stage, false);
++            }
+         }
+     }
+     pub fn reset() {
+@@ -206,7 +218,7 @@ mod enabled {
+     }
+ }
+ #[cfg(feature = "room-profile")]
+-pub use enabled::{Guard, cpu_snapshot, reset, set_thread_cpu_clock, snapshot};
++pub use enabled::{Guard, cpu_snapshot, reset, set_thread_cpu_clock, set_timeline, snapshot};
+ #[cfg(not(feature = "room-profile"))]
+ pub struct Guard;
+ #[cfg(not(feature = "room-profile"))]
+diff --git a/rust/crates/mradm-dsp/src/room/signal.rs b/rust/crates/mradm-dsp/src/room/signal.rs
+index 0dd17fc4..06866d5c 100644
+--- a/rust/crates/mradm-dsp/src/room/signal.rs
++++ b/rust/crates/mradm-dsp/src/room/signal.rs
+@@ -364,7 +364,10 @@ impl Emitter {
+         }
+         self.render_direct = direct;
+         if direct {
+-            self.direct_eq.process(input, &mut self.direct_input)?;
++            {
++                let _eq = super::profile::Guard::new(super::profile::Stage::SourceEq);
++                self.direct_eq.process(input, &mut self.direct_input)?;
++            }
+             self.direct
+                 .begin_with_history(&mut self.direct_history, &self.direct_input)?;
+         }
+@@ -372,7 +375,10 @@ impl Emitter {
+             for i in 0..BLOCK {
+                 self.scaled[i] = input[i] * wet_gain[i];
+             }
+-            self.wet_eq.process(&self.scaled, &mut self.wet_input)?;
++            {
++                let _eq = super::profile::Guard::new(super::profile::Stage::SourceEq);
++                self.wet_eq.process(&self.scaled, &mut self.wet_input)?;
++            }
+             self.early
+                 .begin_with_history(&mut self.wet_history, &self.wet_input)?;
+         } else {
+diff --git a/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs b/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
+index 477144d8..09279cfe 100644
+--- a/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
++++ b/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
+@@ -9,6 +9,8 @@ mod implementation;
+ #[cfg(feature = "room-profile")]
+ #[path = "../../mradm-dsp/examples/room_bench/trace.rs"]
+ mod trace;
++mod timeline;
+ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
++    timeline::initialize()?;
+     implementation::run()
+ }
+diff --git a/rust/crates/mradm-room-cuda/examples/timeline.rs b/rust/crates/mradm-room-cuda/examples/timeline.rs
+new file mode 100644
+index 00000000..ca2703ac
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/examples/timeline.rs
+@@ -0,0 +1,44 @@
++//! Temporary Windows diagnostic binding. Never linked into acceptance binaries.
++use std::{ffi::c_void, os::windows::ffi::OsStrExt, sync::OnceLock};
++type Event = unsafe extern "C" fn(u32, u32);
++type Capture = unsafe extern "C" fn(u32) -> i32;
++static FUNCTIONS: OnceLock<(Event, Capture)> = OnceLock::new();
++#[link(name = "kernel32")]
++unsafe extern "system" {
++    fn LoadLibraryW(path: *const u16) -> *mut c_void;
++    fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
++}
++fn hook(stage: mradm_dsp::room::profile::Stage, begin: bool) {
++    unsafe { (FUNCTIONS.get().unwrap().0)(stage as u32, u32::from(begin)) };
++}
++pub fn initialize() -> Result<(), Box<dyn std::error::Error>> {
++    let path = std::env::current_exe()?.with_file_name("room_timeline.dll");
++    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
++    let library = unsafe { LoadLibraryW(wide.as_ptr()) };
++    if library.is_null() {
++        return Err("Cannot load diagnostic timeline helper".into());
++    }
++    let event = unsafe { GetProcAddress(library, c"room_timeline_event".as_ptr().cast()) };
++    let capture = unsafe { GetProcAddress(library, c"room_timeline_capture".as_ptr().cast()) };
++    if event.is_null() || capture.is_null() {
++        return Err("Incomplete timeline helper".into());
++    }
++    let functions = unsafe {
++        (
++            std::mem::transmute::<*mut c_void, Event>(event),
++            std::mem::transmute::<*mut c_void, Capture>(capture),
++        )
++    };
++    FUNCTIONS
++        .set(functions)
++        .map_err(|_| "Timeline initialized twice")?;
++    mradm_dsp::room::profile::set_timeline(hook);
++    Ok(())
++}
++pub fn capture(begin: bool) -> Result<(), Box<dyn std::error::Error>> {
++    let code = unsafe { (FUNCTIONS.get().unwrap().1)(u32::from(begin)) };
++    if code != 0 {
++        return Err(format!("CUDA capture marker failed: {code}").into());
++    }
++    Ok(())
++}

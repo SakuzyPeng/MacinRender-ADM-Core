@@ -1,0 +1,6 @@
+start short-v3-1-baseline-ramps
+{"variant": "baseline", "repetition": 1, "scenario": "ramps", "mean_ms": 2.789880761718748, "p99_ms": 3.2765, "maximum_ms": 3.7942, "deadline_misses": 0}
+start short-v3-1-decoder-ramps
+{"variant": "decoder", "repetition": 1, "scenario": "ramps", "mean_ms": 2.4540677734374974, "p99_ms": 3.0057, "maximum_ms": 3.3719, "deadline_misses": 0}
+First paired position short test did not save the required 1 ms 0.33581298828125083
+short complete {"decoder": {"complete": false, "deadline_passed": false, "scenarios": {}, "eligible": false}}

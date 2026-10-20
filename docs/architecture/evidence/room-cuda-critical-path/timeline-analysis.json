@@ -1,0 +1,169 @@
+{
+  "acceptance_evidence": false,
+  "scenario": "distance-ramps",
+  "calls": 512,
+  "native_result": "distance-exit-result.json",
+  "nvtx": {
+    "gpu_submit": {
+      "calls": 1024,
+      "per_call_ms": 0.494749396484375
+    },
+    "gpu_wait": {
+      "calls": 1024,
+      "per_call_ms": 0.251177033203125
+    },
+    "late_decoder": {
+      "calls": 1024,
+      "per_call_ms": 1.1341653046875
+    },
+    "late_field": {
+      "calls": 32768,
+      "per_call_ms": 0.438980642578125
+    },
+    "session_process": {
+      "calls": 512,
+      "per_call_ms": 3.689215087890625
+    },
+    "source_eq": {
+      "calls": 32768,
+      "per_call_ms": 1.07935191015625
+    },
+    "voice_batch": {
+      "calls": 1024,
+      "per_call_ms": 1.41626890234375
+    },
+    "voice_render": {
+      "calls": 32768,
+      "per_call_ms": 3.685055234375
+    },
+    "worker_execution": {
+      "calls": 1024,
+      "per_call_ms": 2.9099046171875
+    },
+    "worker_roundtrip": {
+      "calls": 1024,
+      "per_call_ms": 3.01439573828125
+    }
+  },
+  "kernels": {
+    "late_convolve": {
+      "calls": 128,
+      "per_call_ms": 0.02253812109375
+    },
+    "late_extract": {
+      "calls": 128,
+      "per_call_ms": 0.00069997265625
+    },
+    "late_input": {
+      "calls": 128,
+      "per_call_ms": 0.000358580078125
+    },
+    "session_convolve": {
+      "calls": 1024,
+      "per_call_ms": 0.179812443359375
+    },
+    "session_input": {
+      "calls": 1024,
+      "per_call_ms": 0.00503103515625
+    },
+    "session_install": {
+      "calls": 1024,
+      "per_call_ms": 0.069017697265625
+    },
+    "session_mix": {
+      "calls": 1024,
+      "per_call_ms": 0.018829251953125
+    },
+    "session_pack": {
+      "calls": 1024,
+      "per_call_ms": 0.08996727734375
+    },
+    "session_response": {
+      "calls": 1024,
+      "per_call_ms": 0.633169927734375
+    },
+    "vector_fft_c2r": {
+      "calls": 1152,
+      "per_call_ms": 0.023027017578125
+    },
+    "vector_fft_r2c": {
+      "calls": 1024,
+      "per_call_ms": 0.081647466796875
+    },
+    "vector_fft_symm_c2r": {
+      "calls": 1024,
+      "per_call_ms": 0.064806478515625
+    }
+  },
+  "api": {
+    "cuCtxGetId": {
+      "calls": 2405,
+      "per_call_ms": 0.004275154296875
+    },
+    "cuCtxSynchronize": {
+      "calls": 1,
+      "per_call_ms": 9.04453125e-05
+    },
+    "cuMemFree_v2": {
+      "calls": 1,
+      "per_call_ms": 0.000676341796875
+    },
+    "cuModuleUnload": {
+      "calls": 23,
+      "per_call_ms": 0.004463294921875
+    },
+    "cudaFreeHost_v3020": {
+      "calls": 12,
+      "per_call_ms": 0.01141917578125
+    },
+    "cudaFree_v3020": {
+      "calls": 50,
+      "per_call_ms": 0.066822814453125
+    },
+    "cudaGraphDestroy_v10000": {
+      "calls": 34,
+      "per_call_ms": 0.000345109375
+    },
+    "cudaGraphExecDestroy_v10000": {
+      "calls": 34,
+      "per_call_ms": 0.001427671875
+    },
+    "cudaGraphLaunch_v10000": {
+      "calls": 1152,
+      "per_call_ms": 0.161485521484375
+    },
+    "cudaMemcpyAsync_v3020": {
+      "calls": 8192,
+      "per_call_ms": 0.250495306640625
+    },
+    "cudaStreamDestroy_v5050": {
+      "calls": 2,
+      "per_call_ms": 4.64609375e-05
+    },
+    "cudaStreamSynchronize_v3020": {
+      "calls": 1153,
+      "per_call_ms": 0.209711337890625
+    }
+  },
+  "overlap": {
+    "cpu_late_ms": 1.1341653046875,
+    "gpu_finish_after_cpu_late_ms": 0.182121091796875,
+    "cpu_late_after_gpu_finish_ms": 0.11528035546875
+  },
+  "note": "CUPTI intervals include scheduling effects. Nested CPU stage sums and GPU execution overlap; do not add them as predicted savings.",
+  "binary_sha256": {
+    "room_cuda_bench.exe": "368bdfc1d5e1a6ce1dacf3ac6f4ebc0362f8d9f8467fe423cc1f18d712150ed1",
+    "mradm_room_cuda.dll": "6caa073c3696ce2bd8aff883072aef968e8d8459fb5d42a5f5a7c8cfa4e248f3",
+    "room_timeline.dll": "3df257a5a89fdc4369630e68d72c115bfa97d9f6bc44b56a43d256cc5f39d485"
+  },
+  "trace_files": {
+    "distance-exit.sqlite": {
+      "bytes": 113532928,
+      "sha256": "cadc5e945d27feeefc62e6bb621c41690a8d47e30625a22073bf23cd5198ca81"
+    },
+    "distance-exit.nsys-rep": {
+      "bytes": 6861779,
+      "sha256": "aec2c93fbc8f50ba8213bf65a3832251111fa3479766ad3080459ae12345c5b2"
+    }
+  }
+}
