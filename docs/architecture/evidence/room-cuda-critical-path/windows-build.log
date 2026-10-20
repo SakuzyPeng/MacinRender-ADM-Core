@@ -1,0 +1,11 @@
+examples
+configure-baseline
+build-baseline
+native regression baseline
+configure-combined
+build-combined
+native regression combined
+configure-frequency
+build-frequency
+native regression frequency
+All uninstrumented variants frozen and native regression passed

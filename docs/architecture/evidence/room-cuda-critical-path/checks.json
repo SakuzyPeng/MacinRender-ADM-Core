@@ -1,0 +1,65 @@
+{
+  "local-tests-v2.log": {
+    "sha256": "e7bf095a0318cd3e5597f7d87c85b7dd77c0b29aeb614df43b465fd505d6e48a"
+  },
+  "local-tests-v3.log": {
+    "sha256": "039b481bbe095f8142d44e151319531f1ff94575950fdf66f65108952361b8d5"
+  },
+  "local-ring-tests.log": {
+    "sha256": "e9d4b5fe717eaa35a2f7290790be52709f33f8e1a18338625c4eec3e68dec472"
+  },
+  "local-retained-tests.log": {
+    "sha256": "12d156f81697686a9b8edff4a4a3e9122edcf7204508d20e0b2cb4f68c6b5954"
+  },
+  "local-clippy-v2.log": {
+    "sha256": "a29fa150e2613e39fc09336c9ad532637f32c9a67ff21049577adeb5029d6984"
+  },
+  "local-clippy-v3.log": {
+    "sha256": "12b8760d0f5aaf67763d7f4618708428903784d6da3e49ed5a969215f406c6fb"
+  },
+  "local-quality.log": {
+    "sha256": "7448fe1a2638d594d13976680363830c9ceb0bc15c7a59614cc77d7e21ed60f8"
+  },
+  "windows-build.log": {
+    "sha256": "1d6498114ed0c069de9b5963427b25c56aa3247188ac91ba03cad26b28e1084a"
+  },
+  "windows-build-v2.log": {
+    "sha256": "6c57cce6a2adf8250ea4a1a0e9331f7593e6cb3684ac820f47c5fd001d5088f4"
+  },
+  "windows-build-v3.log": {
+    "sha256": "a22d55dd73aa203d65512a77acd8b33adc540219a94b7f35cf7feddf0e45697f"
+  },
+  "windows-short-v2.log": {
+    "sha256": "211c17fc789e5a84d659736863413af5bab9d85927decfffdf079f23a4187bdd"
+  },
+  "windows-short-v3.log": {
+    "sha256": "0450bf50e00700709451639d26ba60aac3dea5b6687b78a2ad9ca858d2e53534"
+  },
+  "native-ring-tests.log": {
+    "sha256": "1d76f996bfa0439329c821f392bbfc00cfb27e19325904e3f383e8d87f71c14a"
+  },
+  "build-baseline.log": {
+    "sha256": "ac538a2913164b08a6acc8c84a66fcf898a24b48d4eb4459777c10d89a1b1fba"
+  },
+  "build-combined.log": {
+    "sha256": "ac538a2913164b08a6acc8c84a66fcf898a24b48d4eb4459777c10d89a1b1fba"
+  },
+  "build-frequency.log": {
+    "sha256": "ac538a2913164b08a6acc8c84a66fcf898a24b48d4eb4459777c10d89a1b1fba"
+  },
+  "build-decoder.log": {
+    "sha256": "ac538a2913164b08a6acc8c84a66fcf898a24b48d4eb4459777c10d89a1b1fba"
+  },
+  "examples.log": {
+    "sha256": "91521ff84bafa836bfe397f457837d9b831ff62c2a01939f09df50f7ed3f5fc8"
+  },
+  "examples-v2.log": {
+    "sha256": "ce410ca40f931aa2eb8d68486758b2764573a5652a6b666ab22efed94c4545f6"
+  },
+  "examples-v3.log": {
+    "sha256": "5c01d7c9af5c8f48bf822959ba5971c274cff3285847a9c787f3da8e1546d4b3"
+  },
+  "local-retained-clippy.log": {
+    "sha256": "5580f8aa39dbde6bf18d4733ee8cb9cf514a6cdc12165d1690870074ce07ac2f"
+  }
+}

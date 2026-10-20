@@ -1,0 +1,7 @@
+{
+  "room_cuda_bench-v1.exe": "5a3149ac92aa76b26c5ad9eb4afad2d32d3367a3a37810a5851aa3ec8cdf8715",
+  "room_cuda_replay-v1.exe": "06a0e92a9c7c90ff3003328426b862baeb2d21e32bcf81bf3de2c60581522e68",
+  "room_cuda_bench-v3.exe": "ec932209fa8d274aca016540af6cba7d62f7a08969ef46fa8b1ced97fb8ea89c",
+  "room_cuda_replay-v3.exe": "c3ed2a29bfdc2022d72d1fa04881019c3ed2db46c3f472d5507ab7350dd0c18b",
+  "decoder/mradm_room_cuda.dll": "bc1f94c8f32355b81b0e2698d79d15d98881c4e8cfbbc668e6cd685f6e4e8847"
+}

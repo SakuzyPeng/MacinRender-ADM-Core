@@ -1,0 +1,83 @@
+{
+  "baseline": {
+    "library": "mradm_room_cuda.dll",
+    "passed": true,
+    "cases": [
+      {
+        "voices": 1,
+        "epochs": 3,
+        "blocks_per_epoch": 32,
+        "relative_l2": 3.0486748119624083e-07,
+        "maximum_over_reference_peak": 2.384185791015625e-07,
+        "repeated_epoch_bit_identical": true,
+        "silence_and_empty_work": true
+      },
+      {
+        "voices": 32,
+        "epochs": 3,
+        "blocks_per_epoch": 32,
+        "relative_l2": 3.263327920694547e-07,
+        "maximum_over_reference_peak": 2.980232238769531e-07,
+        "repeated_epoch_bit_identical": true,
+        "silence_and_empty_work": true
+      }
+    ],
+    "released_resources": true,
+    "cross_thread_completion": false,
+    "destroy_with_pending_batch": true
+  },
+  "combined": {
+    "library": "mradm_room_cuda.dll",
+    "passed": true,
+    "cases": [
+      {
+        "voices": 1,
+        "epochs": 3,
+        "blocks_per_epoch": 32,
+        "relative_l2": 3.5828048906697884e-07,
+        "maximum_over_reference_peak": 3.5762786865234375e-07,
+        "repeated_epoch_bit_identical": true,
+        "silence_and_empty_work": true
+      },
+      {
+        "voices": 32,
+        "epochs": 3,
+        "blocks_per_epoch": 32,
+        "relative_l2": 3.287507161508518e-07,
+        "maximum_over_reference_peak": 3.5762786865234375e-07,
+        "repeated_epoch_bit_identical": true,
+        "silence_and_empty_work": true
+      }
+    ],
+    "released_resources": true,
+    "cross_thread_completion": false,
+    "destroy_with_pending_batch": true
+  },
+  "frequency": {
+    "library": "mradm_room_cuda.dll",
+    "passed": true,
+    "cases": [
+      {
+        "voices": 1,
+        "epochs": 3,
+        "blocks_per_epoch": 32,
+        "relative_l2": 3.5828048906697884e-07,
+        "maximum_over_reference_peak": 3.5762786865234375e-07,
+        "repeated_epoch_bit_identical": true,
+        "silence_and_empty_work": true
+      },
+      {
+        "voices": 32,
+        "epochs": 3,
+        "blocks_per_epoch": 32,
+        "relative_l2": 3.287507161508518e-07,
+        "maximum_over_reference_peak": 3.5762786865234375e-07,
+        "repeated_epoch_bit_identical": true,
+        "silence_and_empty_work": true
+      }
+    ],
+    "released_resources": true,
+    "cross_thread_completion": false,
+    "destroy_with_pending_batch": true
+  }
+}

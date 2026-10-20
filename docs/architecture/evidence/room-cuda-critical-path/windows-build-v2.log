@@ -1,0 +1,6 @@
+{"overlaid": 2, "tracked_entries": 1378}
+   Compiling mradm-dsp v0.1.0 (<checkout>\rust\crates\mradm-dsp)
+   Compiling mradm-room-cuda v0.1.0 (<checkout>\rust\crates\mradm-room-cuda)
+    Finished `release` profile [optimized] target(s) in 17.14s
+
+V1 baseline and V2 candidate EXEs frozen; native DLLs unchanged

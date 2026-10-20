@@ -1,0 +1,3 @@
+   Compiling mradm-dsp v0.1.0 (<checkout>\rust\crates\mradm-dsp)
+   Compiling mradm-room-cuda v0.1.0 (<checkout>\rust\crates\mradm-room-cuda)
+    Finished `release` profile [optimized] target(s) in 17.13s
