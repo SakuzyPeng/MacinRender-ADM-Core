@@ -156,6 +156,7 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.write("src/adm_core/a.cpp", 10)
         self.write("include/adm/a.h", 2)
         self.write("src/adm_apple/b.mm", 4)
+        self.write("src/adm_render_room/cuda/backend.cpp", 4)
         self.write("tests/unit/c.cpp", 7)
         self.write("tests/reference/hoa/d.h", 3)
         self.write("rust/crates/mradm-dsp/src/lib.rs", 5)
@@ -177,6 +178,7 @@ class LanguageSurfaceTests(unittest.TestCase):
         areas = surface.measure(self.root)["areas"]
         self.assertEqual(areas["production"]["lines"], 12)
         self.assertEqual(areas["islands"]["lines"], 4)
+        self.assertEqual(areas["cuda"]["lines"], 4)
         self.assertEqual(areas["tests"]["lines"], 7)
         self.assertEqual(areas["reference"]["lines"], 3)
         self.assertEqual(areas["rust"]["lines"], 5)
@@ -197,6 +199,26 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("islands", output)
 
+    def test_cuda_growth_is_rejected_independently(self):
+        self.write("src/adm_render_room/cuda/new.cpp", 1)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1, output)
+        self.assertIn("cuda", output)
+
+    def test_cuda_classification_does_not_cover_neighboring_modules(self):
+        self.write("src/adm_render_room/cuda_other/new.cpp", 1)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1, output)
+        self.assertIn("production", output)
+
+    def test_cuda_shrink_must_tighten_its_own_limit(self):
+        self.write("src/adm_render_room/cuda/backend.cpp", 3)
+        self.assertEqual(self.run_surface("--check")[0], 1)
+        self.assertEqual(self.run_surface("--update")[0], 0)
+        self.assertEqual(self.run_surface("--check")[0], 0)
+        self.write("src/adm_render_room/cuda/backend.cpp", 4)
+        self.assertEqual(self.run_surface("--check")[0], 1)
+
     def test_tests_and_rust_are_reported_only(self):
         self.write("tests/unit/more.cpp", 50)
         self.write("rust/crates/mradm-dsp/src/more.rs", 50)
@@ -215,7 +237,7 @@ class LanguageSurfaceTests(unittest.TestCase):
 
     def test_update_cannot_raise_existing_limits_or_overwrite_on_failure(self):
         original = self.baseline.read_bytes()
-        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp"):
+        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp", "src/adm_render_room/cuda/new.cpp"):
             with self.subTest(path=relative):
                 self.write(relative, 1)
                 result, output = self.run_surface("--update")
@@ -236,7 +258,7 @@ class LanguageSurfaceTests(unittest.TestCase):
 
     def test_base_ref_rejects_manually_raised_limits(self):
         ref = self.commit_baseline()
-        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp"):
+        for relative in ("src/adm_core/new.cpp", "src/adm_windows/new.cpp", "src/adm_render_room/cuda/new.cpp"):
             with self.subTest(path=relative):
                 self.write(relative, 1)
                 self.baseline.write_text(json.dumps(surface.measure(self.root)))
@@ -263,6 +285,21 @@ class LanguageSurfaceTests(unittest.TestCase):
         result, output = self.run_surface("--check", "--base-ref", "missing-ref")
         self.assertEqual(result, 1, output)
         self.assertIn("无法读取基准提交", output)
+
+    def test_legacy_baseline_seeds_only_the_fixed_cuda_ceiling(self):
+        legacy = json.loads(self.baseline.read_text())
+        del legacy["areas"]["cuda"]
+        self.baseline.write_text(json.dumps(legacy))
+        ref = self.commit_baseline()
+        self.write("src/adm_render_room/cuda/backend.cpp", surface.LEGACY_CUDA_LIMIT)
+        self.assertEqual(self.run_surface("--update", "--base-ref", ref)[0], 0)
+        self.assertEqual(self.run_surface("--check", "--base-ref", ref)[0], 0)
+        self.write("src/adm_render_room/cuda/backend.cpp", surface.LEGACY_CUDA_LIMIT + 1)
+        self.baseline.write_text(json.dumps(surface.measure(self.root)))
+        for mode in ("--check", "--update"):
+            result, output = self.run_surface(mode, "--base-ref", ref)
+            self.assertEqual(result, 1, output)
+            self.assertIn("基线上限", output)
 
 
 if __name__ == "__main__":

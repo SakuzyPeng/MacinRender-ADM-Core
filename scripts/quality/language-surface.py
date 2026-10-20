@@ -2,8 +2,9 @@
 """Measure the C/C++ surface and ratchet it down (ADR 0021).
 
 Lines are newline counts (as `wc -l`). Production C/C++ is `src/` plus `include/`, excluding the
-platform islands; islands are ratcheted separately. Tests, frozen references and Rust are reported
-only. `--check` requires an up-to-date baseline; after deleting C++, run `--update` in the same
+platform islands; islands and the optional CUDA SDK boundary are ratcheted separately. Tests,
+frozen references and Rust are reported only. `--check` requires an up-to-date baseline;
+after deleting C++, run `--update` in the same
 commit to tighten it. Existing limits cannot be raised by `--update`. CI also uses `--base-ref`
 to reject limits raised in the candidate commit. See docs/architecture/RUST_INVERSION_ROADMAP.md.
 """
@@ -22,7 +23,11 @@ BASELINE = Path(__file__).with_name("language-surface-baseline.json")
 SCHEMA = "mradm.language-surface.v1"
 CXX_SUFFIXES = {".c", ".h", ".cc", ".cpp", ".hpp", ".inl", ".m", ".mm"}
 ISLANDS = ("src/adm_apple", "src/adm_windows")
-RATCHETED = ("production", "islands")
+CUDA_ISLAND = "src/adm_render_room/cuda"
+RATCHETED = ("production", "islands", "cuda")
+# Legacy snapshots did not separate this SDK boundary. Its existing V2 trial
+# implementation at 3558e88d is the one-time ceiling, not a general allowance.
+LEGACY_CUDA_LIMIT = 512
 
 
 def files(root: Path, relative: str, suffixes: set[str]):
@@ -39,6 +44,8 @@ def lines(path: Path) -> int:
 
 
 def area_of(relative: str) -> str:
+    if relative.startswith(CUDA_ISLAND + "/"):
+        return "cuda"
     if relative.startswith(tuple(island + "/" for island in ISLANDS)):
         return "islands"
     if relative.startswith(("src/", "include/")):
@@ -49,7 +56,7 @@ def area_of(relative: str) -> str:
 
 
 def measure(root: Path = REPO_ROOT) -> dict:
-    areas = {name: {"files": 0, "lines": 0} for name in ("production", "islands", "tests", "reference", "rust", "rust-vendor")}
+    areas = {name: {"files": 0, "lines": 0} for name in (*RATCHETED, "tests", "reference", "rust", "rust-vendor")}
     modules: dict[str, int] = {}
 
     def add(area: str, module: str, path: Path) -> None:
@@ -62,12 +69,19 @@ def measure(root: Path = REPO_ROOT) -> dict:
         for path in files(root, top, CXX_SUFFIXES):
             relative = path.relative_to(root).as_posix()
             parts = relative.split("/")
-            module = "/".join(parts[:2]) if top != "tests" or parts[1] != "reference" else "/".join(parts[:3])
+            module = (CUDA_ISLAND if area_of(relative) == "cuda" else
+                      "/".join(parts[:2]) if top != "tests" or parts[1] != "reference" else "/".join(parts[:3]))
             add(area_of(relative), module, path)
     for top, area in (("rust/crates", "rust"), ("rust/vendor", "rust-vendor")):
         for path in files(root, top, {".rs"}):
             add(area, "/".join(path.relative_to(root).as_posix().split("/")[:3]), path)
     return {"schema": SCHEMA, "areas": areas, "modules": dict(sorted(modules.items()))}
+
+
+def limit(baseline: dict, area: str) -> int:
+    if area == "cuda" and area not in baseline["areas"]:
+        return LEGACY_CUDA_LIMIT
+    return baseline["areas"][area]["lines"]
 
 
 def check(current: dict, baseline: dict) -> list[str]:
@@ -76,7 +90,7 @@ def check(current: dict, baseline: dict) -> list[str]:
         errors.append(f"基线 schema 必须为 {SCHEMA}")
         return errors
     for area in RATCHETED:
-        now, before = current["areas"][area]["lines"], baseline["areas"][area]["lines"]
+        now, before = current["areas"][area]["lines"], limit(baseline, area)
         if now > before:
             grown = sorted(((m, n - baseline["modules"].get(m, 0)) for m, n in current["modules"].items()
                             if area_of(m + "/") == area and n > baseline["modules"].get(m, 0)),
@@ -128,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
                 errors.extend(f"相对 {args.base_ref} 的基线上限：{error}" for error in check(candidate, previous))
         if args.check and not errors:
             for area in RATCHETED:
-                now, before = current["areas"][area]["lines"], baseline["areas"][area]["lines"]
+                now, before = current["areas"][area]["lines"], limit(baseline, area)
                 if now < before:
                     errors.append(f"{area} C/C++ 由 {before} 行减至 {now} 行；请在同一提交运行 --update 收紧基线")
     except (OSError, ValueError, KeyError, TypeError) as error:

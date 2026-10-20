@@ -12,6 +12,7 @@ PCM 写出、实时引擎与设备调度、公开 C ABI 的实现和 `mradm` CLI
 C/C++/ObjC++ 只保留在“岛”里，经窄 C 接口由 Rust 调用：
 - Apple 框架：AUSpatialMixer 后端、系统空间监听 sink、APAC 与 CAF 元数据；
 - Windows `ISpatialAudioClient` sink；
+- 可选 NVIDIA CUDA SDK 资源／模块适配边界，房间语义、时钟和控制保留在 Rust；
 - 第三方 C 库：libFLAC、libopus、miniaudio、dr_flac、IAMF bridge。
 
 对外契约只有 `include/adm/c_api.h`（ADR 0007）、`mradm` CLI 的行为，以及锁定矩阵上逐位不变的渲染结果。
@@ -24,14 +25,19 @@ C/C++/ObjC++ 只保留在“岛”里，经窄 C 接口由 Rust 调用：
 | --- | --- | --- |
 | `production` | `src/` + `include/`，不含岛 | 棘轮：只减不增 |
 | `islands` | `src/adm_apple`、`src/adm_windows` | 棘轮：只减不增 |
+| `cuda` | `src/adm_render_room/cuda`，仅可选 CUDA SDK 边界 | 独立棘轮：只减不增 |
 | `tests` | `tests/`，不含冻结参考 | 只报告；四期补覆盖时一致性工具仍会增长 |
 | `reference` | `tests/reference/` | 只报告，随参考退役减少 |
 | `rust`、`rust-vendor` | `rust/crates`、`rust/vendor` | 只报告 |
 
-`--check` 读 `scripts/quality/language-surface-baseline.json`，要求两个棘轮区域的实测行数与基线一致。
+`--check` 读 `scripts/quality/language-surface-baseline.json`，要求三个棘轮区域的实测行数与基线一致。
 删除 C++ 后，在同一提交运行 `--update` 收紧基线；已有基线的上限不能通过 `--update` 提高。
 CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有相对 PR 目标提交或 push 前提交放宽；
 手动运行以当前提交的第一父提交为基准。基准提交尚无该文件时允许首次引入，基准提交不可读取时失败。
+
+2026-10-20 将 CUDA V2 已有 SDK 适配单列为平台例外，初始上限固定为 `3558e88d` 的 512 行。
+兼容旧基线时只为缺失的 `cuda` 区域使用这个固定上限；一旦登记，`--update` 和 `--base-ref`
+都拒绝增加其上限。原有生产代码与 Apple／Windows 岛的上限不变，SDK 目录不接受通用渲染实现。
 
 基线 `0a3b362` 时的生产 C/C++（共 44,834 行，另有岛 3,213 行）：
 

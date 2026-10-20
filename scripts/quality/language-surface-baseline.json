@@ -9,17 +9,21 @@
       "files": 5,
       "lines": 3213
     },
+    "cuda": {
+      "files": 4,
+      "lines": 512
+    },
     "tests": {
       "files": 101,
-      "lines": 47867
+      "lines": 47889
     },
     "reference": {
       "files": 38,
       "lines": 12042
     },
     "rust": {
-      "files": 199,
-      "lines": 63629
+      "files": 217,
+      "lines": 69167
     },
     "rust-vendor": {
       "files": 175,
@@ -29,12 +33,13 @@
   "modules": {
     "include/adm": 4582,
     "rust/crates/mradm-adm": 2676,
-    "rust/crates/mradm-dsp": 34888,
+    "rust/crates/mradm-dsp": 39266,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 14196,
+    "rust/crates/mradm-ffi": 14607,
     "rust/crates/mradm-json": 1260,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
+    "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 3666,
     "rust/crates/mradm-wav": 2413,
     "rust/vendor/ebur128": 9931,
@@ -48,7 +53,7 @@
     "src/adm_c_api": 3613,
     "src/adm_cli": 1642,
     "src/adm_core": 1829,
-    "src/adm_dsp": 3475,
+    "src/adm_dsp": 3476,
     "src/adm_engine": 4095,
     "src/adm_io": 458,
     "src/adm_loudness": 165,
@@ -59,12 +64,13 @@
     "src/adm_render_common": 2603,
     "src/adm_render_ear": 1039,
     "src/adm_render_hoa": 770,
-    "src/adm_render_room": 1344,
+    "src/adm_render_room": 1343,
+    "src/adm_render_room/cuda": 512,
     "src/adm_render_triple_balance": 2055,
     "src/adm_render_vbap": 1236,
     "src/adm_renderer_factory": 387,
     "src/adm_windows": 709,
-    "tests/manual": 2318,
+    "tests/manual": 2340,
     "tests/reference/dr_wav_reference_test.cpp": 274,
     "tests/reference/ear_post_legacy.h": 147,
     "tests/reference/ebur128_reference_test.cpp": 207,
