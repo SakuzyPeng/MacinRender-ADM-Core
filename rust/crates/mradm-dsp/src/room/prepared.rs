@@ -26,6 +26,18 @@ pub struct PreparedRoom {
 }
 
 impl PreparedRoom {
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn gpu_material(&self) -> &[Complex32] {
+        &self.material
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn gpu_propagation_row(&self, phase: usize) -> Result<&[Complex32]> {
+        if phase > PHASES {
+            return Err(Error::InvalidArgument("Invalid GPU propagation phase"));
+        }
+        let (a, b, _) = self.propagation.rows(phase as f64 / PHASES as f64);
+        Ok(if phase == PHASES { b } else { a })
+    }
     /// Preparation-only stage checksums for room-scoped cross-platform replay.
     pub fn fingerprint(&self) -> serde_json::Value {
         serde_json::json!({"hrir":self.hrir.fingerprint(),"decoder_hrir":self.decoder_hrir.fingerprint(),
@@ -190,7 +202,8 @@ impl PreparedRoom {
         }
     }
 
-    pub(crate) fn early_channels(&self) -> usize {
+    /// Channel count of the prepared early-field representation.
+    pub fn early_channels(&self) -> usize {
         2
     }
     pub(crate) fn field_channels(&self) -> usize {

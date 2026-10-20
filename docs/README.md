@@ -82,6 +82,7 @@
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
+- [ROOM CUDA V2 保留候选（启用方式、收益与待验收项）](architecture/ROOM_CUDA_V2_CANDIDATE.md)
 
 ## 架构决策记录
 

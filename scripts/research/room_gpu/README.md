@@ -1,5 +1,9 @@
 # ROOM GPU 可行性探针
 
+当前保留的完整会话候选及构建入口见
+[ROOM CUDA V2](../../../docs/architecture/ROOM_CUDA_V2_CANDIDATE.md)。V2 尚未完成正式数值和长测验收；
+本页以下的独立探针、首个 Session 及后续实验说明保留各自的适用范围。
+
 独立 Windows／CUDA 研究程序，生产 v2 和 exact 不选择此路径。它回答的是：真实 ROOM 数据的
 频谱响应构造、目标准备和多目标卷积，连同 CPU／GPU 往返，能否装进 512／96 kHz 的时间预算。
 **它不运行完整 Session，因此通过本探针不等于完整 ROOM 零超时通过。**

@@ -2,14 +2,30 @@
 // The long partition result is consumed by the next canonical block, preserving
 // the original 2048-frame tail offset. A separate stream overlaps current audio.
 struct LateStream {
+#ifdef ROOM_GPU_RESIDENT
+    Context context;
+#endif
     cudaStream_t value = nullptr;
     LateStream() { runtime(cudaStreamCreateWithFlags(&value, cudaStreamNonBlocking)); }
-    ~LateStream() { cudaStreamDestroy(value); }
+    ~LateStream() {
+#ifdef ROOM_GPU_RESIDENT
+        if (!context.valid())
+            return;
+#endif
+        cudaStreamDestroy(value);
+    }
 };
 struct LateGraph {
+#ifdef ROOM_GPU_RESIDENT
+    Context context;
+#endif
     cudaGraph_t graph = nullptr;
     cudaGraphExec_t execution = nullptr;
     ~LateGraph() {
+#ifdef ROOM_GPU_RESIDENT
+        if (!context.valid())
+            return;
+#endif
         if (execution)
             cudaGraphExecDestroy(execution);
         if (graph)
@@ -22,6 +38,10 @@ cudaDeviceProp late_device_properties() {
     return properties;
 }
 struct LateEngine {
+#ifdef ROOM_GPU_RESIDENT
+    ResidentHandle resident_;
+    room_cuda::Counted active_{room_cuda::late_engines};
+#endif
     unsigned parts, channels, head;
     bool pending = false;
     LateStream stream;
@@ -32,12 +52,26 @@ struct LateEngine {
     Plan inverse;
     LateGraph graph;
     CUfunction input_fn, convolve_fn, extract_fn;
+#ifdef ROOM_GPU_RESIDENT
+    LateEngine(ResidentHandle resource, unsigned p, unsigned c, const float* f)
+        : resident_(std::move(resource)), parts(p), channels(c), head(p - 1), filters(size_t(c) * p * 2049 * 8),
+          history(size_t(p) * 2049 * 8), input(2049 * 8), parameters(8), spectrum(c * 2049 * 8), time(c * 4096 * 4),
+          output(c * 2048 * 4), host_input(input.bytes), host_parameters(parameters.bytes), host_output(output.bytes),
+          module(resident_->source, resident_->config, 32, properties.major, properties.minor),
+          inverse(4096, CUFFT_C2R, c, stream.value) {
+        initialize(f);
+    }
+#else
     LateEngine(const fs::path& fixture, const fs::path& source, unsigned p, unsigned c, const float* f)
         : parts(p), channels(c), head(p - 1), filters(size_t(c) * p * 2049 * 8), history(size_t(p) * 2049 * 8),
           input(2049 * 8), parameters(8), spectrum(c * 2049 * 8), time(c * 4096 * 4), output(c * 2048 * 4),
           host_input(input.bytes), host_parameters(parameters.bytes), host_output(output.bytes),
           module(source, Config(fixture / "config.txt"), 32, properties.major, properties.minor),
           inverse(4096, CUFFT_C2R, c, stream.value) {
+        initialize(f);
+    }
+#endif
+    void initialize(const float* f) {
         runtime(cudaMemcpy(filters.data, f, filters.bytes, cudaMemcpyHostToDevice));
         runtime(cudaMemset(history.data, 0, history.bytes));
         std::memset(host_input.data, 0, host_input.bytes);
@@ -47,12 +81,20 @@ struct LateEngine {
         extract_fn = module.function("late_extract");
         execute();
         runtime(cudaStreamSynchronize(stream.value));
+#ifdef ROOM_GPU_RESIDENT
+        capture_graph(stream.value, [&] { execute(); }, graph.graph, graph.execution);
+#else
         runtime(cudaStreamBeginCapture(stream.value, cudaStreamCaptureModeThreadLocal));
         execute();
         runtime(cudaStreamEndCapture(stream.value, &graph.graph));
         runtime(cudaGraphInstantiate(&graph.execution, graph.graph, 0));
+#endif
     }
     ~LateEngine() {
+#ifdef ROOM_GPU_RESIDENT
+        if (!resident_->context.valid())
+            return;
+#endif
         cudaSetDevice(0);
         if (pending)
             cudaStreamSynchronize(stream.value);
@@ -75,6 +117,9 @@ struct LateEngine {
         runtime(cudaMemcpyAsync(host_output.data, output.data, output.bytes, cudaMemcpyDeviceToHost, stream.value));
     }
     void submit(const float* row, size_t floats, bool reset) {
+#ifdef ROOM_GPU_RESIDENT
+        resident_->context.require();
+#endif
         if (pending || floats != 4098)
             throw std::runtime_error("Invalid GPU late submission");
         runtime(cudaSetDevice(0));
@@ -87,6 +132,9 @@ struct LateEngine {
         pending = true;
     }
     void finish(float* out, size_t samples) {
+#ifdef ROOM_GPU_RESIDENT
+        resident_->context.require();
+#endif
         if (!pending || samples * sizeof(float) != output.bytes)
             throw std::runtime_error("Invalid GPU late completion");
         runtime(cudaSetDevice(0));

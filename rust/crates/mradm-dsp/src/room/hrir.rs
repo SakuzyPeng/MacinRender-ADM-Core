@@ -248,6 +248,56 @@ impl TimeQuery {
 }
 
 impl HrirBank {
+    /// Copy validated resident spectra into a bounded upload window. No FFT or
+    /// resource I/O is repeated by the optional native GPU adapter.
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn gpu_copy_rows(&self, first: usize, output: &mut [f32]) -> Result<()> {
+        let bins = self.fft_length / 2 + 1;
+        let rows_per_layer = self.data.directions.len() * 2;
+        let layers = self.data.collection.as_ref().map_or(1, |c| c.layers.len());
+        let count = output.len() / (bins * 2);
+        if count == 0
+            || !output.len().is_multiple_of(bins * 2)
+            || first
+                .checked_add(count)
+                .is_none_or(|end| end > rows_per_layer * layers)
+        {
+            return Err(Error::InvalidArgument("Invalid GPU HRIR upload window"));
+        }
+        for (offset, row) in output.chunks_exact_mut(bins * 2).enumerate() {
+            let index = first + offset;
+            let bank = self
+                .radial_spectra
+                .get(index / rows_per_layer)
+                .and_then(Option::as_ref)
+                .unwrap_or(&self.spectra);
+            let (real, imaginary) = bank.row(index % rows_per_layer);
+            for (bin, pair) in row.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                pair.copy_from_slice(&[real[bin], imaginary[bin]]);
+            }
+        }
+        Ok(())
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn gpu_copy_fractions(&self, first: usize, output: &mut [f32]) -> Result<()> {
+        let bins = self.fft_length / 2 + 1;
+        let count = output.len() / (bins * 2);
+        if count == 0
+            || !output.len().is_multiple_of(bins * 2)
+            || first.checked_add(count).is_none_or(|end| end > PHASES + 1)
+        {
+            return Err(Error::InvalidArgument(
+                "Invalid GPU fractional upload window",
+            ));
+        }
+        for (offset, row) in output.chunks_exact_mut(bins * 2).enumerate() {
+            let (real, imaginary) = self.fractions.row(first + offset);
+            for (bin, pair) in row.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                pair.copy_from_slice(&[real[bin], imaginary[bin]]);
+            }
+        }
+        Ok(())
+    }
     pub fn fingerprint(&self) -> serde_json::Value {
         use super::resources::{hash_complex, hash_f64};
         let mut value = serde_json::json!({"fft_length":self.fft_length,"spectra":self.spectra.fingerprint(),

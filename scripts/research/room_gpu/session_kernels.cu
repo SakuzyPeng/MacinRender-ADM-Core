@@ -51,7 +51,11 @@ extern "C" __global__ void session_response(const Header* h,
                                             const Complex* materials,
                                             const Complex* phases,
                                             Complex* out) {
+#ifdef ROOM_GPU_FREQUENCY_MAJOR
+    unsigned bin = blockIdx.y * blockDim.x + threadIdx.x, row = blockIdx.x;
+#else
     unsigned bin = blockIdx.x * blockDim.x + threadIdx.x, row = blockIdx.y;
+#endif
     if (bin >= FFT_N / 2 + 1)
         return;
     Complex sum = {0, 0};
@@ -198,3 +202,132 @@ extern "C" __global__ void late_extract(const float* time, float* out) {
     unsigned i = blockIdx.x * blockDim.x + threadIdx.x, direction = blockIdx.y;
     out[direction * 2048 + i] = time[direction * 4096 + 2048 + i] * (1.f / 4096);
 }
+
+
+#if defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)
+#include <cufftdx.hpp>
+namespace room_fft {
+using namespace cufftdx;
+using Common = decltype(Block() + Size<512>() + Precision<float>() + SM<ROOM_FFT_SM>() + ElementsPerThread<8>() +
+                        FFTsPerBlock<4>());
+using Forward = decltype(Common() + Type<fft_type::r2c>() + Direction<fft_direction::forward>() +
+                         RealFFTOptions<complex_layout::natural, real_mode::folded>());
+using Inverse = decltype(Common() + Type<fft_type::c2r>() + Direction<fft_direction::inverse>() +
+                         RealFFTOptions<complex_layout::natural, real_mode::folded>());
+static_assert(!Forward::requires_workspace && !Inverse::requires_workspace);
+static_assert(Forward::input_length == 256 && Forward::output_length == 257);
+static_assert(Inverse::input_length == 257 && Inverse::output_length == 256);
+static_assert(sizeof(Forward::input_type) == 8 && sizeof(Inverse::output_type) == 8);
+static_assert(Forward::implicit_type_batching == 1 && Inverse::implicit_type_batching == 1);
+} // namespace room_fft
+#endif
+
+#ifdef ROOM_GPU_FUSE_TARGET
+extern "C" __device__ __constant__ unsigned session_target_fft_traits[] = {room_fft::Forward::block_dim.x,
+                                                                           room_fft::Forward::block_dim.y,
+                                                                           room_fft::Forward::shared_memory_size,
+                                                                           room_fft::Forward::ffts_per_block};
+
+__device__ float
+target_time_sample(const Update& update, unsigned ear, unsigned part, unsigned sample, const float* buckets) {
+    const unsigned t = part * 256 + sample;
+    float sum = 0;
+    if (part < update.parts && sample < 256 && t < update.support) {
+        for (unsigned b = 0; b < BUCKETS; ++b) {
+            const unsigned r = update.rows[b];
+            const int at = int(t) - int(b * BUCKET_STRIDE);
+            if (r != 0xffffffffu && at >= 0 && at < FFT_N)
+                sum += buckets[(r * 2 + ear) * FFT_N + at] * (1.f / FFT_N);
+        }
+    }
+    return sum;
+}
+
+extern "C" __global__ void
+session_target_fused(const Header* h, const Update* updates, const float* buckets, Complex* filters) {
+    using FFT = room_fft::Forward;
+    const unsigned target = blockIdx.y / 2, ear = blockIdx.y % 2;
+    // This return is uniform across the block. Partial FFT groups still
+    // participate in all shared-memory synchronization, with zero input.
+    if (target >= h->updates)
+        return;
+    const Update& update = updates[target];
+    const unsigned part = blockIdx.x * FFT::ffts_per_block + threadIdx.y;
+    FFT::value_type data[FFT::storage_size] = {};
+    auto* input_data = reinterpret_cast<FFT::input_type*>(data);
+    for (unsigned i = 0; i < FFT::input_ept; ++i) {
+        const unsigned k = threadIdx.x + i * FFT::stride;
+        if (k < FFT::input_length) {
+            input_data[i].x = target_time_sample(update, ear, part, k * 2, buckets);
+            input_data[i].y = target_time_sample(update, ear, part, k * 2 + 1, buckets);
+        }
+    }
+    extern __shared__ __align__(16) unsigned char fft_shared[];
+    FFT().execute(data, reinterpret_cast<FFT::value_type*>(fft_shared));
+    const auto* output_data = reinterpret_cast<const FFT::output_type*>(data);
+    if (part < update.parts) {
+        for (unsigned i = 0; i < FFT::output_ept; ++i) {
+            const unsigned k = threadIdx.x + i * FFT::stride;
+            if (k < 257) {
+                const auto value = output_data[i];
+                filters[(((update.group * TARGETS + update.slot) * 2 + ear) * PARTS + part) * 257 + k] = {
+                    value.x, (k == 0 || k == 256) ? 0.f : value.y};
+            }
+        }
+    }
+}
+#endif
+
+#ifdef ROOM_GPU_FUSE_CONVOLVE
+extern "C" __device__ __constant__ unsigned session_convolution_fft_traits[] = {room_fft::Inverse::block_dim.x,
+                                                                                room_fft::Inverse::block_dim.y,
+                                                                                room_fft::Inverse::shared_memory_size,
+                                                                                room_fft::Inverse::ffts_per_block};
+
+extern "C" __global__ void session_convolve_fused(
+    const Header* h, const Info* info, const Task* tasks, const Complex* history, const Complex* filters, float* time) {
+    using FFT = room_fft::Inverse;
+    if (blockIdx.x * FFT::ffts_per_block >= h->tasks * 2)
+        return;
+    const unsigned row = blockIdx.x * FFT::ffts_per_block + threadIdx.y;
+    const bool active = row / 2 < h->tasks;
+    unsigned group = 0, head = 0, slot = 0, parts = 0;
+    if (active) {
+        const Task& task = tasks[row / 2];
+        group = task.branch;
+        head = info[group / 2].heads[group % 2];
+        slot = task.slot;
+        parts = task.parts;
+    }
+    FFT::value_type data[FFT::storage_size] = {};
+    auto* input_data = reinterpret_cast<FFT::input_type*>(data);
+    for (unsigned i = 0; i < FFT::input_ept; ++i) {
+        const unsigned k = threadIdx.x + i * FFT::stride;
+        if (k < 257) {
+            Complex sum = {0, 0};
+            for (unsigned p = 0; p < parts; ++p) {
+                const unsigned at = (head + PARTS - p) % PARTS;
+                const Complex x = history[(group * PARTS + at) * 257 + k];
+                const Complex f = filters[(((group * TARGETS + slot) * 2 + row % 2) * PARTS + p) * 257 + k];
+                sum = plus(sum, product(x, f));
+            }
+            input_data[i].x = sum.r;
+            input_data[i].y = (k == 0 || k == 256) ? 0.f : sum.i;
+        }
+    }
+    extern __shared__ __align__(16) unsigned char fft_shared[];
+    FFT().execute(data, reinterpret_cast<FFT::value_type*>(fft_shared));
+    const auto* output_data = reinterpret_cast<const FFT::output_type*>(data);
+    if (active) {
+        for (unsigned i = 0; i < FFT::output_ept; ++i) {
+            const unsigned k = (threadIdx.x + i * FFT::stride) * 2;
+            if (k >= 256 && k < 512) {
+                // Keep the original unnormalised valid half. session_mix still
+                // applies exactly the original 1/512 and finite-fade weights.
+                time[row * 512 + k] = output_data[i].x;
+                time[row * 512 + k + 1] = output_data[i].y;
+            }
+        }
+    }
+}
+#endif

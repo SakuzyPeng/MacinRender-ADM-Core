@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-scene", "crates/mradm-json", "crates/mradm-ffi"]
+members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-scene", "crates/mradm-json", "crates/mradm-ffi", "crates/mradm-room-cuda"]
 resolver = "2"
 exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft", "vendor/rayon-core", "vendor/ebur128"]
 

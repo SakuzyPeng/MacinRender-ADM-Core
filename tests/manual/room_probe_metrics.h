@@ -77,10 +77,9 @@ struct Window {
 };
 class Recording {
   public:
-    Recording(Clock::time_point origin, unsigned seconds, bool enabled)
-        : origin_(origin), first_second_(seconds > 20 ? 10U : 2U),
-          windows_(enabled ? ((seconds - first_second_) / 60U) + 1U : 0U),
-          samples_(windows_.size() * 48000U * 2U, 0.F) {
+    Recording(Clock::time_point origin, unsigned seconds, bool enabled, std::uint32_t rate = 48000)
+        : origin_(origin), rate_(rate), first_second_(seconds > 20 ? 10U : 2U),
+          windows_(enabled ? ((seconds - first_second_) / 60U) + 1U : 0U), samples_(windows_.size() * rate_ * 2U, 0.F) {
         // Commit recording pages before measuring RSS; logging must not look
         // like a growing renderer merely because later windows are first touched.
         for (std::size_t i = 0; i < samples_.size(); i += 1024U) {
@@ -101,8 +100,8 @@ class Recording {
         if (window.frames == 0) {
             window.first_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - origin_).count();
         }
-        const auto count = std::min<std::size_t>({frames, 48000U - window.frames, samples.size() / 2U});
-        const auto start = ((index * 48000U) + window.frames) * 2U;
+        const auto count = std::min<std::size_t>({frames, rate_ - window.frames, samples.size() / 2U});
+        const auto start = ((index * rate_) + window.frames) * 2U;
         std::copy_n(samples.begin(), count * 2U, samples_.begin() + static_cast<std::ptrdiff_t>(start));
         window.frames += static_cast<std::uint32_t>(count);
         window.maximum_callback_frames = std::max(window.maximum_callback_frames, static_cast<std::uint32_t>(frames));
@@ -114,7 +113,7 @@ class Recording {
             rows.push_back({{"first_callback_ns", w.first_ns},
                             {"frames", w.frames},
                             {"maximum_callback_frames", w.maximum_callback_frames},
-                            {"offset_frames", i * 48000U}});
+                            {"offset_frames", i * rate_}});
         }
         if (!windows_.empty()) {
             std::ofstream file(root / (name + ".f32"), std::ios::binary);
@@ -125,7 +124,7 @@ class Recording {
             }
         }
         return {{"file", name + ".f32"},
-                {"sample_rate", 48000},
+                {"sample_rate", rate_},
                 {"channels", 2},
                 {"windows", rows},
                 {"timestamp", "steady clock at callback entry; first sample presentation/capture time is unknown"}};
@@ -133,12 +132,14 @@ class Recording {
 
   private:
     Clock::time_point origin_;
+    std::uint32_t rate_;
     unsigned first_second_;
     std::vector<Window> windows_;
     std::vector<float> samples_;
 };
 struct OutputTrace {
-    OutputTrace(Clock::time_point origin, unsigned seconds, bool record) : recording(origin, seconds, record) {}
+    OutputTrace(Clock::time_point origin, unsigned seconds, bool record, std::uint32_t rate = 48000)
+        : recording(origin, seconds, record, rate) {}
     Histogram intervals;
     Histogram pull_duration;
     Recording recording;
@@ -182,8 +183,9 @@ class CaptureTap {
     CaptureTap(Clock::time_point origin,
                unsigned seconds,
                const std::string& name,
-               const std::string& loopback_output_token)
-        : recording_(origin, seconds, true) {
+               const std::string& loopback_output_token,
+               std::uint32_t rate = 48000)
+        : recording_(origin, seconds, true, rate) {
         if (ma_context_init(nullptr, 0, nullptr, &context_) != MA_SUCCESS) {
             throw std::runtime_error("Capture context initialization failed");
         }
@@ -213,7 +215,7 @@ class CaptureTap {
             config.capture.pDeviceID = &id_;
             config.capture.format = ma_format_f32;
             config.capture.channels = 2;
-            config.sampleRate = 48000;
+            config.sampleRate = rate;
             config.pUserData = this;
             config.dataCallback = [](ma_device* device, void*, const void* input, ma_uint32 frames) {
                 if (input != nullptr) {

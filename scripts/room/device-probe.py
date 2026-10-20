@@ -124,6 +124,7 @@ def main():
     parser.add_argument('--probe', type=Path, required=True)
     parser.add_argument('--room', type=Path, required=True)
     parser.add_argument('--other-room', type=Path, required=True)
+    parser.add_argument('--hrir', type=Path, help='normal SOFA/HRIR/collection override')
     parser.add_argument('--device', required=True, help='exact output name or current opaque ID; "null" for a dry run')
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--sources', type=int, choices=[1, 16, 32], default=32)
@@ -143,6 +144,8 @@ def main():
     command = [str(args.probe.resolve()), str(args.room.resolve()), str(args.other_room.resolve()),
                str(args.seconds), mode, str(args.sources),
                '--osc-port', '0', '--volume', str(args.volume), '--quality', args.quality]
+    if args.hrir:
+        command += ['--hrir', str(args.hrir.resolve())]
     if args.source_ramps:
         command += ['--source-ramps']
     if args.device != 'null':

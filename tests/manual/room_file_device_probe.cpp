@@ -51,8 +51,9 @@ int main(int argc, char** argv) {
     return 2;
 #endif
     try {
-        if (argc != 5) {
-            throw std::runtime_error("usage: room_file_device_probe INPUT_ADM ROOM_JSON OTHER_ROOM_JSON DEVICE_ID");
+        if (argc != 5 && (argc != 7 || std::string_view(argv[5]) != "--hrir")) {
+            throw std::runtime_error(
+                "usage: room_file_device_probe INPUT_ADM ROOM_JSON OTHER_ROOM_JSON DEVICE_ID [--hrir PATH]");
         }
         const auto devices = MonitorSession::list_output_devices();
         const auto device = std::ranges::find(devices, std::string(argv[4]), &AudioOutputDeviceInfo::id);
@@ -65,8 +66,12 @@ int main(int argc, char** argv) {
         options.output_layout = "binaural";
         options.binaural_spread_mode = BinauralSpreadMode::none;
         options.room = {take(RoomProfile::load(argv[2])), {}, 1.5, RoomQuality::realtime};
-        const RoomConfig next{take(RoomProfile::load(argv[3])), {}, 1.5, RoomQuality::realtime};
+        RoomConfig next{take(RoomProfile::load(argv[3])), {}, 1.5, RoomQuality::realtime};
+        if (argc == 7) {
+            options.room.hrir_manifest = next.hrir_manifest = argv[6];
+        }
         auto monitor = take(MonitorSession::create(argv[1], options, device->id));
+        const auto prepared_report = Json::parse(take(inspect_room(options.room)));
         const auto control = monitor->room_control();
         if (!control || control->status().quality != RoomQuality::realtime) {
             throw std::runtime_error("File monitor did not select the realtime room backend");
@@ -177,6 +182,7 @@ int main(int argc, char** argv) {
                           {"quality", "realtime"},
                           {"requested_seconds", requested_seconds},
                           {"sample_rate", rate},
+                          {"room_prepared", prepared_report},
                           {"input_channels", scene.info.num_channels},
                           {"objects", scene.objects.size()},
                           {"wall_seconds", wall},

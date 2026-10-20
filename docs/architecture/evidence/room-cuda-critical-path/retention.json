@@ -1,0 +1,307 @@
+{
+  "schema": "mradm.room-cuda-v2-retention",
+  "version": 1,
+  "date": "2026-10-19",
+  "parent": "a35034f1a12b7c427d600965562ef4f96ca77c2e",
+  "status": "Retain V2 frequency-major as an explicit opt-in candidate; full Windows numerical and long acceptance pending",
+  "decision": "The 1 ms reduction is an optimization goal, not a hard retention gate. Meaningful paired full-session gains justify preserving V2 for remaining validation.",
+  "restoration": {
+    "archived_base": "28f3dc0b4df3ef8166ac2fb60bba39417fe54245",
+    "patch_chain": [
+      "../room-cuda-integration/candidate.patch",
+      "combined-v2.patch",
+      "integer-rings.patch"
+    ],
+    "entire_chain_matches": true,
+    "files_verified": 38,
+    "core_files_matching_v2_provenance": 11,
+    "source_sha256": {
+      "CMakeLists.txt": "f0bbbd3adcfe4b67c34cbcfc2651631cb565ff32788b3f230a07e696ab4984f3",
+      "cmake/MRRoomCuda.cmake": "8b0b7c3d900163f5dde5e29596e8cf1a1f409554fcbea8b93cfe92004c8a63b1",
+      "cmake/MRRust.cmake": "c47d133a2ab2e3515ef55a6f5a8f4f8d9126ae23b5f616d96ca1d0d189c3fecd",
+      "rust/Cargo.lock": "8db2cdfb82a16674c4eddb56a3f0531dc25ca70ae5632df9823cd36b3ef0ce71",
+      "rust/Cargo.toml": "52f96e2d5cd00d86c6c5a0f32898fc9bd3753186bb6c8ff038705bcbca1dcd61",
+      "rust/crates/mradm-dsp/examples/room_bench.rs": "3ac7cdd3b3d0bc6f43393d5c8c2f27a11498c19cf954767f0fe2a28c89bb4fb6",
+      "rust/crates/mradm-dsp/examples/room_replay.rs": "3fb241c0a64a4e09b5b5c40f434e50cdf7bd4bc22bae381440be7500a6edbbf7",
+      "rust/crates/mradm-dsp/examples/room_support/room_bench.rs": "004cc50bc79f7035dc6cc356d2b8ce3b209a9b97de7c2fd2d2e8b41a87368825",
+      "rust/crates/mradm-dsp/examples/room_support/room_replay.rs": "615058ec01e708501b05cd4ec6c8a1cde2eb92cb26117a0f59ac8a327bf5ee96",
+      "rust/crates/mradm-dsp/src/diffuse.rs": "3ba610c384778d240102a80c47a942161cf76a5c25e803ac42ade637f281f3a3",
+      "rust/crates/mradm-dsp/src/room/hrir.rs": "92b276f7b9c562c5d82c0a11d0c66de199f339bba2f414ee665314fb97718533",
+      "rust/crates/mradm-dsp/src/room/prepared.rs": "f41aa6d1f76ea2ca992676cb81b5224de685af002124395f95c2abe42d6c2d42",
+      "rust/crates/mradm-dsp/src/room/session.rs": "c3cf4567546beba6e208b09b01353c16fc2cae73ab9c45d2b1a66c7e42655e90",
+      "rust/crates/mradm-dsp/tests/binaural_convolution.rs": "b38ce9f7f5da4f3cae7f92180dc721e4e4d1e8a4f9d370b2f0ecc06ea10a1d56",
+      "rust/crates/mradm-dsp/tests/room_cuda_resources.rs": "1f326bc9576f0b2fdb5320972e6ed1c89a53d1a2ca9726da9ff620760df9726d",
+      "rust/crates/mradm-dsp/tests/room_gpu.rs": "9bf562ece2bbff02480c29d731cff4a9829a15b443ee0121874a6b23bce4e17b",
+      "rust/crates/mradm-ffi/Cargo.toml": "dfdd79ebd030ca18bf8cd107263fbbbdcad1d3193354879f86452923347708c6",
+      "rust/crates/mradm-ffi/src/lib.rs": "bdf94026ab10273ad379c091a7a3b840dc6af195709f293922fc47b13bfd17bf",
+      "rust/crates/mradm-ffi/src/room.rs": "2a6b100bb818b3a7537de6bfecc47287c8c8692a2a6910efdefa60032499492a",
+      "rust/crates/mradm-ffi/src/room_cuda_selection.rs": "629177d0d26340d7761073644b6a158fa38da1308bbdecc319e00d0d37e2847f",
+      "rust/crates/mradm-room-cuda/Cargo.toml": "57e96eb48b20873e1edfd0bd6e767f921782905f87d75c370b93a48a1ca9387a",
+      "rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs": "88a2f46ccfe8c53a137d602fd93c51e201768b7c565b218e75ad665ba315b3ff",
+      "rust/crates/mradm-room-cuda/examples/room_cuda_replay.rs": "821562e2f06da95114c9d4b59d8f048791c166ac6b9420664713161661135893",
+      "rust/crates/mradm-room-cuda/examples/support/options.rs": "4f15996ae7a4da7348a65c4a28cd16e3176c26e128caa63bc699c32e6771b89b",
+      "rust/crates/mradm-room-cuda/src/lib.rs": "761d444e3fbb38477661882909836d9d3a579ff3948c997975ca356432d3e14a",
+      "rust/crates/mradm-room-cuda/src/native.rs": "5577ccb313cdec34b6613f33146829f3112d137dfea3f6f9443ffd9ad7bae91c",
+      "scripts/quality/check-changed.sh": "86f065486281e02941cf55da33ae00f96535d249d3f61e55404216b3ac194659",
+      "scripts/research/room_gpu/session_backend.cpp": "3c779a14a35ca4f2608b8d42cd2b4bb539ae35578581e46027bb59bff7cf5741",
+      "scripts/research/room_gpu/session_kernels.cu": "7e12aeeaea6b235976f263431f1abdb374bf2d94ffbabb19bb31264fad86ee26",
+      "scripts/research/room_gpu/session_late.h": "9c528d0027a5c534be0d50d4bfbc28067b28528598fc31734376282a0878960f",
+      "scripts/research/room_gpu/session_layout.h": "9a09819f937d2f5b09b942958f979d12acfa360d7c05003ae1d6193b216217df",
+      "scripts/room/device-probe.py": "9ad7ec3ce51aaab579eb72bddc901e8e289c09ec4ee2ffe64825d72256056331",
+      "src/adm_render_room/cuda/backend.cpp": "b7728dc02c30765585abde9969cab474939a9d865ffa7b8f1f22eadd420d637c",
+      "src/adm_render_room/cuda/resident_support.h": "5be9aa7f9a6045f25cb42f9fbed53a27bd48d7d84523e505f3c7c0136be2b767",
+      "tests/manual/room_cuda_integration.py": "4bad6ac722c3819d2c91a9d42b96fc3efbd1f5414bd96c42c7fc5c0a1c91e62a",
+      "tests/manual/room_file_device_probe.cpp": "c45408b8a57ad5876ae48ac62ad4e7b15edff6d73b1d0fadd83cbd252d8af9f3",
+      "tests/manual/room_probe_metrics.h": "7e285ae283f88d326bdc6f1fb71832943555dbf4719848c6afec12a104ae8954",
+      "tests/manual/room_scene_benchmark.cpp": "97afc15a16b5be8d48f0ee2877694803777e08ba57bd2d749419a0f900b0e7be"
+    },
+    "cmake_hash_note": "Committed candidate content; unrelated working-tree DVF test registration excluded.",
+    "integer_changes_already_committed": "15c61583",
+    "excluded": [
+      "decoder-v3.patch",
+      "diagnostic.patch",
+      "../room-cuda-integration/packaging-draft.patch"
+    ]
+  },
+  "configuration": {
+    "build_default_cuda": false,
+    "exact_selects_cuda": false,
+    "full_v2_entry": "room_cuda_bench / room_cuda_replay with --cuda-library and --cuda-compact-control",
+    "native_options": {
+      "MR_ADM_ROOM_CUDA_FUSE_TARGET": true,
+      "MR_ADM_ROOM_CUDA_FUSE_CONVOLVE": false,
+      "MR_ADM_ROOM_CUDA_COMPACT_UPLOAD": true,
+      "MR_ADM_ROOM_CUDA_FREQUENCY_MAJOR": true
+    },
+    "native_capability_bits": 22,
+    "max_updates": 256,
+    "eq_stagger_frames": 256,
+    "c_api_selection_note": "MR_ADM_ROOM_CUDA=1 selects the restored binding in a CUDA-enabled build; it does not enable compact position control. Do not equate this foundation configuration with the best measured V2 combination."
+  },
+  "existing_short_evidence": {
+    "file": "short-v2.json",
+    "candidate": "frequency",
+    "calls": 4096,
+    "deadline_misses": 0,
+    "maximum_ms": 3.185,
+    "mean_reduction_ms": {
+      "ramps": 0.65398046875,
+      "distance-ramps": 0.7275220214843747
+    },
+    "paired_p99_improved": true
+  },
+  "local_validation": {
+    "host": "macOS arm64",
+    "profile": "Debug/dev correctness only; no performance evidence",
+    "environment": {
+      "RUSTFLAGS": "-Crelocation-model=pic",
+      "CARGO_INCREMENTAL": "0"
+    },
+    "rust_tests": {
+      "gpu_feature": 15,
+      "default": 19,
+      "backend_selection": 1
+    },
+    "ctest_passed": 3,
+    "checks": [
+      {
+        "name": "gpu-tests",
+        "exit_code": 0,
+        "seconds": 22.109859958989546,
+        "command": [
+          "cargo",
+          "+1.98.0",
+          "test",
+          "--manifest-path",
+          "rust/Cargo.toml",
+          "--locked",
+          "--no-default-features",
+          "-p",
+          "mradm-dsp",
+          "--features",
+          "room-gpu-experiment",
+          "--test",
+          "room_gpu",
+          "--test",
+          "room_cuda_resources",
+          "--test",
+          "room_no_alloc",
+          "--test",
+          "room_quality",
+          "--target-dir",
+          "build/rust/cargo/rust_0e004"
+        ],
+        "log_sha256": "c1fb84fe33807d826b9b83e08c7b7303ae639bdcec92bbbfb4f4ab50aa629686"
+      },
+      {
+        "name": "default-tests",
+        "exit_code": 0,
+        "seconds": 26.34203104104381,
+        "command": [
+          "cargo",
+          "+1.98.0",
+          "test",
+          "--manifest-path",
+          "rust/Cargo.toml",
+          "--locked",
+          "--no-default-features",
+          "-p",
+          "mradm-dsp",
+          "--test",
+          "room_quality",
+          "--test",
+          "room_no_alloc",
+          "--test",
+          "binaural_convolution",
+          "--test",
+          "room_sample_rate",
+          "--target-dir",
+          "build/rust/cargo/rust_0e004"
+        ],
+        "log_sha256": "c188efe25deb7ebcc1ab697616befe6e27948d2b0382eea51a761185291073b3"
+      },
+      {
+        "name": "selection-tests",
+        "exit_code": 0,
+        "seconds": 22.791512374999,
+        "command": [
+          "cargo",
+          "+1.98.0",
+          "test",
+          "--manifest-path",
+          "rust/Cargo.toml",
+          "--locked",
+          "--no-default-features",
+          "-p",
+          "mradm-ffi",
+          "--lib",
+          "--target-dir",
+          "build/rust/cargo/rust_0e004",
+          "room_cuda_selection"
+        ],
+        "log_sha256": "08c6edbc299719754e0a4bb695caf689a44a87d5be0574ef7096ccbfc9b34cc0"
+      },
+      {
+        "name": "rustfmt",
+        "exit_code": 0,
+        "seconds": 0.5282022090395913,
+        "command": [
+          "cargo",
+          "+1.98.0",
+          "fmt",
+          "--manifest-path",
+          "rust/Cargo.toml",
+          "--all",
+          "--check"
+        ],
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "clippy",
+        "exit_code": 0,
+        "seconds": 3.0344303749734536,
+        "command": [
+          "cargo",
+          "+1.98.0",
+          "clippy",
+          "--manifest-path",
+          "rust/Cargo.toml",
+          "--locked",
+          "--no-default-features",
+          "-p",
+          "mradm-dsp",
+          "-p",
+          "mradm-room-cuda",
+          "-p",
+          "mradm-ffi",
+          "--features",
+          "mradm-ffi/room-cuda",
+          "--lib",
+          "--examples",
+          "--test",
+          "room_gpu",
+          "--test",
+          "room_cuda_resources",
+          "--target-dir",
+          "build/rust/cargo/rust_0e004",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "log_sha256": "207438822608304f19c9fac5ecd3c09d3aaf553e17f91ef8092080b0b5bb4edb"
+      },
+      {
+        "name": "cpp-format",
+        "exit_code": 0,
+        "seconds": 0.27203791693318635,
+        "command": [
+          "/opt/homebrew/opt/llvm/bin/clang-format",
+          "--dry-run",
+          "--Werror",
+          "src/adm_render_room/cuda/backend.cpp",
+          "src/adm_render_room/cuda/resident_support.h",
+          "scripts/research/room_gpu/session_backend.cpp",
+          "scripts/research/room_gpu/session_late.h",
+          "scripts/research/room_gpu/session_layout.h"
+        ],
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "quality",
+        "exit_code": 0,
+        "seconds": 19.001043832977302,
+        "command": [
+          "scripts/quality/check-changed.sh",
+          "--base",
+          "HEAD",
+          "--build-dir",
+          "build/debug"
+        ],
+        "log_sha256": "abea3e472775629825b2cf1571d933cd3a5bdf50dc1e01cd60ebaa125afc155e"
+      },
+      {
+        "name": "debug-build",
+        "exit_code": 0,
+        "seconds": 15.64287741703447,
+        "command": [
+          "cmake",
+          "--build",
+          "build/debug",
+          "--target",
+          "mr_adm_room_tests",
+          "mr_adm_room_scene_benchmark",
+          "mr_adm_room_file_device_probe",
+          "-j",
+          "4"
+        ],
+        "log_sha256": "669011986b48f57401788a64725352342d4d1baba4d69e6f62bead8f7bf39ebf"
+      },
+      {
+        "name": "ctest",
+        "exit_code": 0,
+        "seconds": 4.485162750002928,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build/debug",
+          "-R",
+          "^mr_adm_room_(tests|realtime_tools_tests|device_probe_tests)$",
+          "--parallel",
+          "4",
+          "--output-on-failure"
+        ],
+        "log_sha256": "a7de22623c36608ad3df6c23e4f6af66df8e8df12509aa09fa2b9187b821ed47"
+      }
+    ]
+  },
+  "acceptance": {
+    "complete": false,
+    "windows_full_numerical_replay": "pending",
+    "windows_six_round_long": "pending",
+    "new_windows_performance_runs": 0,
+    "macos_performance_matrix": "pending after Windows passes",
+    "new_exact_718a804_full_certification": false
+  },
+  "scope": "Restore the tested candidate and document it. No Windows-host changes, device tests, packaging, publishing, or unrelated research edits in this retention step.",
+  "historical_evidence": "validation.json and source-provenance.json preserve the original stopping/rollback decision; their bytes are unchanged."
+}
