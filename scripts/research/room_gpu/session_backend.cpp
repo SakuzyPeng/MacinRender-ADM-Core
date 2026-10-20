@@ -180,6 +180,9 @@ struct Engine {
     cudaStream_t stream = nullptr;
 #endif
     std::unique_ptr<Module> module;
+#ifdef ROOM_GPU_PRECOMPILED_TARGET
+    std::unique_ptr<Module> target_module;
+#endif
     size_t bins, parts, job_count = 0;
     Header header{};
     bool pending = false;
@@ -273,7 +276,23 @@ struct Engine {
         convolve_fn = module->function("session_convolve");
         mix_fn = module->function("session_mix");
 #ifdef ROOM_GPU_FUSE_TARGET
+#ifdef ROOM_GPU_PRECOMPILED_TARGET
+        target_module = std::make_unique<Module>(room_cuda::target_module_path(props.major, props.minor));
+        std::array<unsigned, 4> contract{};
+        CUdeviceptr contract_address = 0;
+        size_t contract_bytes = 0;
+        driver(
+            cuModuleGetGlobal(&contract_address, &contract_bytes, target_module->value, "session_target_fft_contract"));
+        if (contract_bytes != sizeof(contract))
+            throw std::runtime_error("Incompatible ROOM CUDA target FFT device code");
+        driver(cuMemcpyDtoH(contract.data(), contract_address, contract_bytes));
+        if (contract != std::array<unsigned, 4>{1, static_cast<unsigned>(c.n), 32, 3 * sizeof(unsigned)})
+            throw std::runtime_error("Incompatible ROOM CUDA target FFT layout");
+        const auto target_name = "session_target_fused_" + std::to_string(c.buckets);
+        target_fused.load(*target_module, target_name.c_str(), "session_target_fft_traits");
+#else
         target_fused.load(*module, "session_target_fused", "session_target_fft_traits");
+#endif
 #endif
 #ifdef ROOM_GPU_FUSE_CONVOLVE
         convolution_fused.load(*module, "session_convolve_fused", "session_convolution_fft_traits");
@@ -367,10 +386,12 @@ struct Engine {
             v.inverse->value, static_cast<cufftComplex*>(spectrum.data), static_cast<float*>(bucket_time.data)));
         trace.mark(3, stream);
 #ifdef ROOM_GPU_FUSE_TARGET
+        std::array<unsigned, 3> target_config{
+            static_cast<unsigned>(c.buckets), static_cast<unsigned>(c.bucket_stride), static_cast<unsigned>(parts)};
         target_fused.launch((static_cast<unsigned>(parts) + target_fused.shape[3] - 1) / target_fused.shape[3],
                             v.updates * 2,
                             stream,
-                            {&header_address, &updates_address, &bucket_time.data, &filters.data});
+                            {&header_address, &updates_address, &bucket_time.data, &filters.data, &target_config});
         trace.mark(4, stream);
         trace.mark(5, stream);
 #else

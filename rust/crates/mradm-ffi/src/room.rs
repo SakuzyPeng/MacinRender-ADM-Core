@@ -517,7 +517,7 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
         let metadata = None;
         #[cfg(all(windows, feature = "room-cuda"))]
         let (prepared, metadata) = if cuda {
-            let (value, metadata) = mradm_room_cuda::bind(prepared, None)?;
+            let (value, metadata) = mradm_room_cuda::bind_realtime(prepared, None)?;
             (value, Some(metadata))
         } else {
             (prepared, metadata)

@@ -1,6 +1,7 @@
 # ROOM CUDA V2 保留候选
 
-日期：2026-10-19。状态：**源码保留、显式启用，完整 Windows 数值回放和六轮零超时长测待验收**。
+日期：2026-10-19，2026-10-20 更新。状态：**完整数值回放和显式产品试用接入已验证，正式零超时验收仍未通过**。
+当前入口、可移植 GUI 试用包和本轮数据见 [产品试用接入](ROOM_CUDA_PRODUCT_TRIAL.md)。
 
 恢复的是 [关键路径实验](ROOM_CUDA_CRITICAL_PATH.md) 中的最佳 V2 组合，平均每次调用降低
 0.654／0.728 ms，配对 p99 改善。1 ms 继续作为优化目标，不作为保留有实测收益候选的硬门槛。
@@ -19,16 +20,17 @@
 
 没有恢复 V3 GPU 世界方向解码扩展，也没有其 512 目标容量变更；V2 的 `max_updates` 仍为 256。
 卷积 FFT 融合、收紧批次和延后等待不属于保留组合。可对照的卷积融合开关仍默认关闭。
-诊断插桩和打包草稿没有恢复。
+诊断插桩没有恢复。当前打包采用构建时预编译设备程序的部署方式，历史打包草稿继续作为历史资料保留。
 
 `MR_ADM_ENABLE_ROOM_CUDA` 默认 OFF，默认渲染继续使用 CPU，exact 不读取 GPU 选项。
 公开 C ABI 的函数、结构和枚举不变。启用 CUDA 构建后，私有环境变量 `MR_ADM_ROOM_CUDA=1`
-可选择接入基础；未设置或 `0` 使用 CPU，无效值报错，换房继承会话后端。
-**这个环境变量不启用紧凑位置控制。** 当前完整 V2 组合由 `room_cuda_bench`／`room_cuda_replay`
-的显式参数选择，不能把公共接口的基础配置等同于下表的最佳组合。
+选择完整 V2，包括紧凑位置控制；未设置或 `0` 使用 CPU，无效值报错，换房继承会话后端。
+生产适配器要求原生能力位 `22` 及兼容的私有 kernel contract，旧插件会在绑定前被拒绝。
+研究程序 `room_cuda_bench`／`room_cuda_replay` 继续用 `--cuda-compact-control` 明确选择该组合。
 
 候选的实测范围为 Windows x64、96 kHz、4096 点 HRIR FFT、最多 32 源、realtime 和指定 NVIDIA GPU。
-尚未将其认定为离线渲染、文件流式渲染、Scene 流式渲染或设备播放的正式 CUDA 支持。
+离线渲染、文件流式渲染、Scene 流式渲染已有显式试用接入和正确性证据；
+尚未通过正式实时截止时间验收，也没有实际声卡持续播放的验收结论。
 
 ## 已有收益与代价
 
@@ -55,8 +57,9 @@
 当前源码已包含 V2，无需再次应用历史补丁。使用 canonical Rust 1.98.0，复用 Windows MSVC/Ninja 构建和既有 Cargo／
 FetchContent 缓存。`$CargoCache` 为该 checkout 的既有 Cargo target 目录，`$MathDxInclude` 为
 MathDx 24.08 的 `nvidia/mathdx/24.08/include`；归档与 SHA-256 见
-[mathdx.json](evidence/room-cuda-critical-path/mathdx.json)。MathDx 头文件必须在运行期间保留，供 NVRTC 使用，
-不加入仓库。当前支持 CUDA 12 和 cuFFTDx 1.2.1 的已测组合。
+[mathdx.json](evidence/room-cuda-critical-path/mathdx.json)。当前 V2 在构建时预编译目标 FFT，
+MathDx 头文件只需在构建机保留，不加入仓库。部署时必须携带插件旁的 `room_cuda/` 和 CUDA 运行库。
+当前实测组合为 CUDA 12 和 cuFFTDx 1.2.1。
 
 ```powershell
 cmake -S . -B build/win-canon -G Ninja -DCMAKE_BUILD_TYPE=Release `
@@ -100,14 +103,18 @@ foreach ($scenario in @('ramps', 'distance-ramps')) {
 先前的 Windows 原生解析 FIR 检查、局部参考测试及整数索引逐位测试仍有各自的适用范围，
 不能替代完整原生候选会话的数值门槛。
 
-1. 完整 Windows 数值回放：同机旧 CPU realtime 对照 V2，默认和 world-only 场景均覆盖密集事件、
+1. 完整 Windows 数值回放已通过，详见 [本轮证据](ROOM_CUDA_PRODUCT_TRIAL.md#正确性证据)：
+   同机旧 CPU realtime 对照 V2，默认和 world-only 场景均覆盖密集事件、
    屏幕、wrap 头姿、固定与碎片分包及完整尾声。严格核对实验标签后才生成供比较器读取的副本；
    原始 manifest 不改。相对 L2 ≤ `2e-5`、最大误差／参考峰值 ≤ `2e-4`，静音保持静音，输出有限；
    帧数、事件样本位置、延迟及尾长完全相同，不对齐、不拟合增益、不裁剪。
-2. 六轮零超时长测：位置、距离各三轮，每轮 22,500 次，合计 135,000 次，单次不得超过
-   `5.333333 ms`。任一超时立即停止，不替换失败轮次。1 ms 收益目标不再阻止这一候选进入验收。
-3. Windows 通过后完成适用的 macOS 验证及接口覆盖；频繁换房只记录性能，不承诺零超时。
+2. 正式验收仍未通过，本轮只完成接入回归短测，没有重启六轮长测。正式规则仍是位置、距离各三轮，
+   每轮 22,500 次，合计 135,000 次，单次不得超过
+   `5.333333 ms`。按维护者后续调整，已确认的硬件长停顿时段单列排除并保留原始记录；
+   其余任一超时立即停止，不替换失败轮次，不能只按耗时大小自动排除。
+   1 ms 收益目标不再阻止这一候选进入验收。
+3. 本轮适用的 macOS CPU／exact 验证及接口覆盖已完成；频繁换房只记录性能，不承诺零超时。
    exact 的离线渲染、文件流式渲染和 Scene 流式渲染逐位基线不放宽。
 
-本次只整理并提交候选，没有启动新的 Windows 性能轮次、设备测试或打包发布。
-旧报告和原始 JSON 保留初次停止时的状态，本页与 retention.json 记录后续保留决定。
+2026-10-19 的整理只提交候选，没有启动新的 Windows 性能轮次、设备测试或打包发布。
+该历史状态不改写；2026-10-20 的接入与试用打包另行记录。旧报告和原始 JSON 保留初次停止时的状态。

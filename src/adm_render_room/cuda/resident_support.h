@@ -8,6 +8,8 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <cufft.h>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <nvrtc.h>
@@ -16,6 +18,10 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#ifdef ROOM_GPU_PRECOMPILED_TARGET
+#include "runtime_files.h"
+#endif
 
 using Clock = std::chrono::steady_clock;
 // CUDA resource handles become invalid after a context reset. Keep its unique
@@ -150,6 +156,29 @@ struct Config {
 struct Module {
     Context context;
     CUmodule value = nullptr;
+#ifdef ROOM_GPU_PRECOMPILED_TARGET
+    explicit Module(const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary | std::ios::ate);
+        if (!input)
+            throw std::runtime_error(
+                "ROOM CUDA target FFT device code is missing or this GPU architecture is unsupported");
+        const auto size = input.tellg();
+        if (size <= 0 || size > 64 * 1024 * 1024)
+            throw std::runtime_error("Invalid ROOM CUDA target FFT device code");
+        input.seekg(0);
+        std::vector<char> ptx(static_cast<size_t>(size) + 1);
+        input.read(ptx.data(), static_cast<std::streamsize>(size));
+        if (!input)
+            throw std::runtime_error("Cannot read ROOM CUDA target FFT device code");
+        try {
+            driver(cuModuleLoadData(&value, ptx.data()));
+        } catch (...) {
+            if (value)
+                cuModuleUnload(value);
+            throw;
+        }
+    }
+#endif
     Module(const std::string& source, const Config& c, int targets, int major, int minor, bool fusion = false) {
         nvrtcProgram program = nullptr;
         auto check = [](nvrtcResult r) {
@@ -172,7 +201,7 @@ struct Module {
                                                 "-DBUCKET_STRIDE=" + std::to_string(c.bucket_stride),
                                                 "-DPARTS=" + std::to_string((c.taps + 255) / 256),
                                                 "-DTARGETS=" + std::to_string(targets)};
-#if defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)
+#if defined(ROOM_GPU_FUSE_CONVOLVE) || (defined(ROOM_GPU_FUSE_TARGET) && !defined(ROOM_GPU_PRECOMPILED_TARGET))
             if (fusion) {
                 options[0] = "--std=c++17";
                 options.emplace_back("--device-as-default-execution-space");
@@ -180,7 +209,7 @@ struct Module {
                 options.emplace_back("--include-path=" ROOM_CUDA_MATHDX_INCLUDE);
                 options.emplace_back("--include-path=" ROOM_CUDA_TOOLKIT_INCLUDE);
                 options.emplace_back("-DROOM_FFT_SM=" + std::to_string(major * 100 + minor * 10));
-#ifdef ROOM_GPU_FUSE_TARGET
+#if defined(ROOM_GPU_FUSE_TARGET) && !defined(ROOM_GPU_PRECOMPILED_TARGET)
                 options.emplace_back("-DROOM_GPU_FUSE_TARGET");
 #endif
 #ifdef ROOM_GPU_FUSE_CONVOLVE

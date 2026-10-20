@@ -136,6 +136,7 @@ type LateSubmit = unsafe extern "C" fn(*mut c_void, *const f32, usize, u32) -> i
 struct Library {
     _module: ModuleHandle,
     _directory: Directory,
+    optimizations: u32,
     bank_create: BankCreate,
     bank_upload: BankUpload,
     bank_seal: BankSeal,
@@ -200,7 +201,19 @@ impl Library {
         if unsafe { version() } != ABI {
             return Err(Error::Unsupported("Incompatible ROOM CUDA ABI"));
         }
+        let kernel_contract = get!(
+            "mradm_room_cuda_kernel_contract",
+            unsafe extern "C" fn() -> u32
+        );
+        if unsafe { kernel_contract() } != 2 {
+            return Err(Error::Unsupported("Incompatible ROOM CUDA kernel contract"));
+        }
+        let optimizations = get!(
+            "mradm_room_cuda_optimizations",
+            unsafe extern "C" fn() -> u32
+        );
         let value = Self {
+            optimizations: unsafe { optimizations() },
             bank_create: get!("mradm_room_cuda_bank_create", BankCreate),
             bank_upload: get!("mradm_room_cuda_bank_upload", BankUpload),
             bank_seal: get!("mradm_room_cuda_bank_seal", BankSeal),
@@ -379,6 +392,9 @@ impl NativeFactory {
             .check(unsafe { (self.bank().library.stats)(&mut value) })?;
         Ok(value)
     }
+    pub fn optimizations(&self) -> u32 {
+        self.bank().library.optimizations
+    }
     pub fn metadata(&self) -> Result<serde_json::Value> {
         let bank = self.bank();
         let name = unsafe { (bank.library.bank_device)(bank.handle) };
@@ -386,7 +402,7 @@ impl NativeFactory {
             bank.library.check(1)?;
         }
         Ok(
-            serde_json::json!({"kind":"cuda","abi":ABI,"device":unsafe { CStr::from_ptr(name) }.to_string_lossy(),"binding":"prepared-memory","kernel_sha256":mradm_dsp::room::resources::sha256(SOURCE.as_bytes()),"eq_stagger_frames":256,"maximum_sources":32}),
+            serde_json::json!({"kind":"cuda","abi":ABI,"device":unsafe { CStr::from_ptr(name) }.to_string_lossy(),"binding":"prepared-memory","kernel_sha256":mradm_dsp::room::resources::sha256(SOURCE.as_bytes()),"eq_stagger_frames":256,"maximum_sources":32,"native_optimizations":self.optimizations()}),
         )
     }
 }

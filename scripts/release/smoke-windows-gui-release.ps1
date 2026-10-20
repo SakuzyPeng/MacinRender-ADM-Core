@@ -52,9 +52,50 @@ try {
         }
     }
 
+    if ($buildInfo -match "(?m)^room_cuda: v2-trial") {
+        foreach ($required in @("ROOM_CUDA.json", "ROOM_CUDA_README.txt", "MacinRender ADM CUDA Trial.cmd",
+                "licenses\room-cuda\CUDA-EULA.txt", "licenses\room-cuda\CUDA-LICENSE.txt", "licenses\room-cuda\MathDx-LICENSE.txt")) {
+            if (!(Test-Path -LiteralPath (Join-Path $packageRoot $required))) {
+                throw "CUDA trial package is missing $required"
+            }
+        }
+        $cuda = Get-Content -LiteralPath (Join-Path $packageRoot "ROOM_CUDA.json") -Raw | ConvertFrom-Json
+        if ($cuda.profile -ne "room-cuda-v2" -or $cuda.native_optimizations -ne 22 -or
+            $cuda.kernel_contract -ne 2 -or !$cuda.architectures.Count) {
+            throw "CUDA trial package does not describe the retained V2 configuration"
+        }
+        $payload = @($cuda.files | ForEach-Object { $_.path })
+        foreach ($pattern in @("mradm_room_cuda.dll", "cudart64*.dll", "cufft64*.dll", "nvrtc64*.dll", "nvrtc-builtins64*.dll")) {
+            if (!($payload -like $pattern)) { throw "CUDA trial manifest is missing $pattern" }
+        }
+        foreach ($arch in $cuda.architectures) {
+            $device = "room_cuda/target-$($cuda.target_source_sha256.Substring(0, 16))-sm$arch.ptx"
+            if ($device -notin $payload) { throw "CUDA trial manifest is missing $device" }
+        }
+        foreach ($file in $cuda.files) {
+            if ([System.IO.Path]::IsPathRooted($file.path) -or $file.path -match "(^|[/\\])\.\.([/\\]|$)") {
+                throw "CUDA manifest contains a non-relative payload path"
+            }
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $packageRoot ("app/" + $file.path))).Hash.ToLowerInvariant()
+            if ($actual -ne $file.sha256) { throw "CUDA payload checksum mismatch: $($file.path)" }
+        }
+        $cudaLauncher = Get-Content -LiteralPath (Join-Path $packageRoot "MacinRender ADM CUDA Trial.cmd") -Raw
+        if ($cudaLauncher -notmatch 'set "MR_ADM_ROOM_CUDA=1"' -or
+            $cudaLauncher -notmatch [regex]::Escape("app\MacinRender.Gui.exe")) {
+            throw "CUDA trial launcher does not explicitly select the packaged backend"
+        }
+    } elseif (Test-Path -LiteralPath (Join-Path $packageRoot "app\mradm_room_cuda.dll")) {
+        throw "CPU package unexpectedly contains an unrecorded ROOM CUDA plugin"
+    }
+
     $deps = Join-Path $packageRoot "DEPENDENCIES.txt"
     if (Select-String -Path $deps -Pattern "\[missing\]" -Quiet) {
         throw "package dependency manifest contains missing DLLs"
+    }
+    foreach ($external in @("avrt.dll", "nvcuda.dll")) {
+        if (Test-Path -LiteralPath (Join-Path $packageRoot ("app/" + $external))) {
+            throw "package must use the installed Windows/driver library: $external"
+        }
     }
 
     $exe = Join-Path $packageRoot "app\MacinRender.Gui.exe"

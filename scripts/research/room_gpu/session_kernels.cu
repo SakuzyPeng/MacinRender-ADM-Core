@@ -29,6 +29,7 @@ struct Info {
 struct Header {
     unsigned voices, ranges, updates, tasks, fft_rows;
 };
+#ifndef ROOM_GPU_FFT_LIBRARY
 __device__ Complex plus(Complex a, Complex b) {
     return {a.r + b.r, a.i + b.i};
 }
@@ -204,6 +205,8 @@ extern "C" __global__ void late_extract(const float* time, float* out) {
 }
 
 
+#endif // ROOM_GPU_FFT_LIBRARY
+
 #if defined(ROOM_GPU_FUSE_TARGET) || defined(ROOM_GPU_FUSE_CONVOLVE)
 #include <cufftdx.hpp>
 namespace room_fft {
@@ -223,19 +226,24 @@ static_assert(Forward::implicit_type_batching == 1 && Inverse::implicit_type_bat
 #endif
 
 #ifdef ROOM_GPU_FUSE_TARGET
+struct TargetConfig {
+    unsigned buckets, bucket_stride, parts;
+};
+extern "C" __device__ __constant__ unsigned session_target_fft_contract[] = {1, FFT_N, TARGETS, sizeof(TargetConfig)};
 extern "C" __device__ __constant__ unsigned session_target_fft_traits[] = {room_fft::Forward::block_dim.x,
                                                                            room_fft::Forward::block_dim.y,
                                                                            room_fft::Forward::shared_memory_size,
                                                                            room_fft::Forward::ffts_per_block};
 
-__device__ float
-target_time_sample(const Update& update, unsigned ear, unsigned part, unsigned sample, const float* buckets) {
+template <unsigned BucketCount>
+__device__ float target_time_sample(
+    const Update& update, unsigned ear, unsigned part, unsigned sample, const float* buckets, TargetConfig config) {
     const unsigned t = part * 256 + sample;
     float sum = 0;
     if (part < update.parts && sample < 256 && t < update.support) {
-        for (unsigned b = 0; b < BUCKETS; ++b) {
+        for (unsigned b = 0; b < BucketCount; ++b) {
             const unsigned r = update.rows[b];
-            const int at = int(t) - int(b * BUCKET_STRIDE);
+            const int at = int(t) - int(b * config.bucket_stride);
             if (r != 0xffffffffu && at >= 0 && at < FFT_N)
                 sum += buckets[(r * 2 + ear) * FFT_N + at] * (1.f / FFT_N);
         }
@@ -243,8 +251,9 @@ target_time_sample(const Update& update, unsigned ear, unsigned part, unsigned s
     return sum;
 }
 
-extern "C" __global__ void
-session_target_fused(const Header* h, const Update* updates, const float* buckets, Complex* filters) {
+template <unsigned BucketCount>
+__device__ __forceinline__ void
+target_fused(const Header* h, const Update* updates, const float* buckets, Complex* filters, TargetConfig config) {
     using FFT = room_fft::Forward;
     const unsigned target = blockIdx.y / 2, ear = blockIdx.y % 2;
     // This return is uniform across the block. Partial FFT groups still
@@ -258,8 +267,8 @@ session_target_fused(const Header* h, const Update* updates, const float* bucket
     for (unsigned i = 0; i < FFT::input_ept; ++i) {
         const unsigned k = threadIdx.x + i * FFT::stride;
         if (k < FFT::input_length) {
-            input_data[i].x = target_time_sample(update, ear, part, k * 2, buckets);
-            input_data[i].y = target_time_sample(update, ear, part, k * 2 + 1, buckets);
+            input_data[i].x = target_time_sample<BucketCount>(update, ear, part, k * 2, buckets, config);
+            input_data[i].y = target_time_sample<BucketCount>(update, ear, part, k * 2 + 1, buckets, config);
         }
     }
     extern __shared__ __align__(16) unsigned char fft_shared[];
@@ -270,12 +279,91 @@ session_target_fused(const Header* h, const Update* updates, const float* bucket
             const unsigned k = threadIdx.x + i * FFT::stride;
             if (k < 257) {
                 const auto value = output_data[i];
-                filters[(((update.group * TARGETS + update.slot) * 2 + ear) * PARTS + part) * 257 + k] = {
+                filters[(((update.group * TARGETS + update.slot) * 2 + ear) * config.parts + part) * 257 + k] = {
                     value.x, (k == 0 || k == 256) ? 0.f : value.y};
             }
         }
     }
 }
+// Preserve the fixed loop bound of the original per-room NVRTC compilation.
+// Instantiate every supported bucket count; selection happens during prepare.
+#define ROOM_TARGET_ENTRY(N)                                                                                           \
+    extern "C" __global__ void session_target_fused_##N(                                                               \
+        const Header* h, const Update* updates, const float* buckets, Complex* filters, TargetConfig config) {         \
+        target_fused<N>(h, updates, buckets, filters, config);                                                         \
+    }
+#ifdef ROOM_GPU_FFT_LIBRARY
+ROOM_TARGET_ENTRY(1)
+ROOM_TARGET_ENTRY(2)
+ROOM_TARGET_ENTRY(3)
+ROOM_TARGET_ENTRY(4)
+ROOM_TARGET_ENTRY(5)
+ROOM_TARGET_ENTRY(6)
+ROOM_TARGET_ENTRY(7)
+ROOM_TARGET_ENTRY(8)
+ROOM_TARGET_ENTRY(9)
+ROOM_TARGET_ENTRY(10)
+ROOM_TARGET_ENTRY(11)
+ROOM_TARGET_ENTRY(12)
+ROOM_TARGET_ENTRY(13)
+ROOM_TARGET_ENTRY(14)
+ROOM_TARGET_ENTRY(15)
+ROOM_TARGET_ENTRY(16)
+ROOM_TARGET_ENTRY(17)
+ROOM_TARGET_ENTRY(18)
+ROOM_TARGET_ENTRY(19)
+ROOM_TARGET_ENTRY(20)
+ROOM_TARGET_ENTRY(21)
+ROOM_TARGET_ENTRY(22)
+ROOM_TARGET_ENTRY(23)
+ROOM_TARGET_ENTRY(24)
+ROOM_TARGET_ENTRY(25)
+ROOM_TARGET_ENTRY(26)
+ROOM_TARGET_ENTRY(27)
+ROOM_TARGET_ENTRY(28)
+ROOM_TARGET_ENTRY(29)
+ROOM_TARGET_ENTRY(30)
+ROOM_TARGET_ENTRY(31)
+ROOM_TARGET_ENTRY(32)
+ROOM_TARGET_ENTRY(33)
+ROOM_TARGET_ENTRY(34)
+ROOM_TARGET_ENTRY(35)
+ROOM_TARGET_ENTRY(36)
+ROOM_TARGET_ENTRY(37)
+ROOM_TARGET_ENTRY(38)
+ROOM_TARGET_ENTRY(39)
+ROOM_TARGET_ENTRY(40)
+ROOM_TARGET_ENTRY(41)
+ROOM_TARGET_ENTRY(42)
+ROOM_TARGET_ENTRY(43)
+ROOM_TARGET_ENTRY(44)
+ROOM_TARGET_ENTRY(45)
+ROOM_TARGET_ENTRY(46)
+ROOM_TARGET_ENTRY(47)
+ROOM_TARGET_ENTRY(48)
+ROOM_TARGET_ENTRY(49)
+ROOM_TARGET_ENTRY(50)
+ROOM_TARGET_ENTRY(51)
+ROOM_TARGET_ENTRY(52)
+ROOM_TARGET_ENTRY(53)
+ROOM_TARGET_ENTRY(54)
+ROOM_TARGET_ENTRY(55)
+ROOM_TARGET_ENTRY(56)
+ROOM_TARGET_ENTRY(57)
+ROOM_TARGET_ENTRY(58)
+ROOM_TARGET_ENTRY(59)
+ROOM_TARGET_ENTRY(60)
+ROOM_TARGET_ENTRY(61)
+ROOM_TARGET_ENTRY(62)
+ROOM_TARGET_ENTRY(63)
+ROOM_TARGET_ENTRY(64)
+#else
+extern "C" __global__ void session_target_fused(
+    const Header* h, const Update* updates, const float* buckets, Complex* filters, TargetConfig config) {
+    target_fused<BUCKETS>(h, updates, buckets, filters, config);
+}
+#endif
+#undef ROOM_TARGET_ENTRY
 #endif
 
 #ifdef ROOM_GPU_FUSE_CONVOLVE

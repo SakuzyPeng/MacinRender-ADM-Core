@@ -32,6 +32,11 @@ extern "C" __declspec(dllexport) unsigned mradm_room_cuda_optimizations() noexce
 extern "C" __declspec(dllexport) unsigned mradm_room_cuda_abi() noexcept {
     return 1;
 }
+// Host entry points are unchanged, but the target FFT's device arguments now
+// include the runtime partition layout. Reject stale plugins before binding.
+extern "C" __declspec(dllexport) unsigned mradm_room_cuda_kernel_contract() noexcept {
+    return 2;
+}
 extern "C" __declspec(dllexport) void*
 mradm_room_cuda_bank_create(const RoomCudaBankDesc* desc, const char* source, size_t length) noexcept {
     try {
