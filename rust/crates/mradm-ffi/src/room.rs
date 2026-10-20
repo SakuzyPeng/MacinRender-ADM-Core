@@ -82,6 +82,7 @@ pub struct RoomProfileHandle {
 pub struct RoomPreparedHandle {
     prepared: Arc<PreparedSet>,
     json: CString,
+    cuda: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -171,7 +172,11 @@ unsafe fn path(bytes: *const u8, length: usize) -> Result<PathBuf> {
         Error::InvalidArgument("Room paths must be UTF-8")
     })?))
 }
-fn description(prepared: &PreparedSet, metres: f64) -> Result<CString> {
+fn description(
+    prepared: &PreparedSet,
+    metres: f64,
+    cuda: Option<serde_json::Value>,
+) -> Result<CString> {
     let room = &prepared.room;
     let mut value = serde_json::json!({"schema":"mradm.room-prepared","version":1,
         "id":room.profile.id,"name":room.profile.name,"room_hash":room.profile.identity,
@@ -201,6 +206,10 @@ fn description(prepared: &PreparedSet, metres: f64) -> Result<CString> {
         "scope":"Validated resource integrity; acoustic and realtime acceptance are separate."});
     if let Some(collection) = &room.hrir.data.collection {
         value["hrtf_collection"] = collection.summary();
+    }
+    if let Some(cuda) = cuda {
+        value["execution_backend"] = serde_json::json!("cuda");
+        value["cuda"] = cuda;
     }
     CString::new(value.to_string()).map_err(|_| invalid())
 }
@@ -420,6 +429,13 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
             return Err(Error::InvalidArgument("Invalid room distance scale"));
         }
         let profile = &*profile;
+        if !reuse.is_null() {
+            separate(reuse, 1, out, 1)?;
+        }
+        let cuda = crate::room_cuda_selection::selected(
+            quality,
+            (!reuse.is_null()).then(|| (&*reuse).cuda),
+        )?;
         let data = if !reuse.is_null() {
             separate(reuse, 1, out, 1)?;
             if hrir_length != 0 {
@@ -498,8 +514,20 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
                 prepared
             }
         };
-        let json = description(&prepared, metres)?;
-        *out = Box::into_raw(Box::new(RoomPreparedHandle { prepared, json }));
+        let metadata = None;
+        #[cfg(all(windows, feature = "room-cuda"))]
+        let (prepared, metadata) = if cuda {
+            let (value, metadata) = mradm_room_cuda::bind(prepared, None)?;
+            (value, Some(metadata))
+        } else {
+            (prepared, metadata)
+        };
+        let json = description(&prepared, metres, metadata)?;
+        *out = Box::into_raw(Box::new(RoomPreparedHandle {
+            prepared,
+            json,
+            cuda,
+        }));
         Ok(())
     })
 }

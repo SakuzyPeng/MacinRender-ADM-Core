@@ -44,6 +44,8 @@ fn adapted(base: &Arc<PreparedSet>) -> Arc<PreparedSet> {
         PreparedSet::new(base.room.clone())
             .unwrap()
             .with_gpu_experiment(Arc::new(ReferenceFactory))
+            .unwrap()
+            .with_gpu_compact_control()
             .unwrap(),
     )
 }
@@ -316,9 +318,21 @@ fn pipelined_position_ramps_preserve_fragmentation_screens_origin_and_zero_alloc
             output
         };
         let baseline = render(cpu, &[512], false);
+        let legacy = render(
+            Arc::new(gpu.with_gpu_experiment(Arc::new(ReferenceFactory)).unwrap()),
+            &[512],
+            false,
+        );
         let canonical = render(gpu.clone(), &[512], true);
         let fragmented = render(gpu, &[1, 137, 375, 511, 257, 19], true);
         assert_eq!(canonical.len(), baseline.len());
+        assert!(
+            canonical
+                .iter()
+                .map(|v| v.to_bits())
+                .eq(legacy.iter().map(|v| v.to_bits())),
+            "Compact controls changed reference GPU output"
+        );
         assert!(
             canonical
                 .iter()
@@ -342,8 +356,104 @@ fn tuned(base: &Arc<PreparedSet>) -> Arc<PreparedSet> {
         base.with_gpu_experiment(Arc::new(ReferenceFactory))
             .unwrap()
             .with_gpu_tuning(true, 4)
+            .unwrap()
+            .with_gpu_compact_control()
             .unwrap(),
     )
+}
+
+#[test]
+fn compact_controls_preserve_origin_history_and_clears_across_packets_bitwise() {
+    let _lock = TEST_LOCK.lock().unwrap();
+    let base = common::fixture_at_rate(Quality::Realtime, 96000);
+    let legacy = Arc::new(
+        base.with_gpu_experiment(Arc::new(ReferenceFactory))
+            .unwrap(),
+    );
+    let compact = Arc::new(legacy.with_gpu_compact_control().unwrap());
+    let events: Vec<_> = [
+        (0, 0, [-0.3, 0.5, 0.1], false),
+        (17, 301, [0.; 3], false),
+        (400, 57, [-1e-14, 0., 0.], false),
+        (457, 256, [1e-14, 0., 0.], false),
+        (713, 0, [0.; 3], false),
+        (800, 512, [1., 0., 0.4], false),
+        (1050, 61, [0.; 3], true),
+        (1300, 512, [0.7, 0.1, -0.1], false),
+    ]
+    .into_iter()
+    .map(|(sample, duration, position, clear)| {
+        (
+            sample,
+            RoomCommand {
+                duration,
+                changed: if clear { 0 } else { 4 },
+                cleared: if clear { 4 } else { 0 },
+                state: State {
+                    position,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+    })
+    .collect();
+    let input: Vec<_> = (0..2305)
+        .map(|i| (i % 29) as f32 * 0.0001 - 0.0014)
+        .collect();
+    for metres in [0., 1.5] {
+        let render = |prepared: Arc<PreparedSet>, packets: &[usize]| {
+            let mut session = Session::new(prepared, metres, true, true).unwrap();
+            session
+                .configure(&[RoomDescription {
+                    id: 1,
+                    position: [0.; 3],
+                    ..Default::default()
+                }])
+                .unwrap();
+            let mut output = vec![0.; input.len() * 2];
+            let mut at = 0;
+            let mut packet = 0;
+            while at < input.len() {
+                let n = packets[packet % packets.len()].min(input.len() - at);
+                let commands: Vec<_> = events
+                    .iter()
+                    .filter(|(sample, _)| *sample >= at && *sample < at + n)
+                    .map(|(sample, command)| RoomCommand {
+                        offset: (*sample - at) as u32,
+                        ..*command
+                    })
+                    .collect();
+                session
+                    .process(
+                        n,
+                        [Some(&input[at..at + n])].into_iter(),
+                        &[],
+                        &commands,
+                        &mut output[at * 2..(at + n) * 2],
+                    )
+                    .unwrap();
+                at += n;
+                packet += 1;
+            }
+            session.end_input();
+            let tail = session.info().tail_frames as usize;
+            let mut block = [0.; 1024];
+            for _ in 0..tail.div_ceil(512) + 1 {
+                session
+                    .process(512, [None].into_iter(), &[], &[], &mut block)
+                    .unwrap();
+                output.extend_from_slice(&block);
+            }
+            output.into_iter().map(f32::to_bits).collect::<Vec<_>>()
+        };
+        let reference = render(legacy.clone(), &[512]);
+        assert_eq!(reference, render(compact.clone(), &[512]));
+        assert_eq!(
+            reference,
+            render(compact.clone(), &[1, 19, 137, 255, 7, 511, 3])
+        );
+    }
 }
 #[test]
 fn staggered_long_eq_preserves_forks_reset_restart_and_complete_switch_tail() {

@@ -23,6 +23,8 @@ pub struct PreparedSet {
     eq_stagger: bool,
     #[cfg(feature = "room-gpu-experiment")]
     voice_chunk: usize,
+    #[cfg(feature = "room-gpu-experiment")]
+    compact_control: bool,
     pub room: Arc<PreparedRoom>,
     pub lfe: Arc<LongFilters>,
     workers: Arc<super::workers::Workers>,
@@ -46,6 +48,8 @@ impl PreparedSet {
             eq_stagger: false,
             #[cfg(feature = "room-gpu-experiment")]
             voice_chunk: 0,
+            #[cfg(feature = "room-gpu-experiment")]
+            compact_control: false,
             room,
             lfe,
             workers: super::workers::shared()?,
@@ -65,6 +69,7 @@ impl PreparedSet {
             gpu_factory: Some(factory),
             eq_stagger: false,
             voice_chunk: 0,
+            compact_control: false,
             room: self.room.clone(),
             lfe: self.lfe.clone(),
             workers: self.workers.clone(),
@@ -80,6 +85,23 @@ impl PreparedSet {
         self.eq_stagger = eq_stagger;
         self.voice_chunk = voice_chunk;
         Ok(self)
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    pub fn with_gpu_compact_control(&self) -> Result<Self> {
+        if self.gpu_factory.is_none() {
+            return Err(Error::InvalidArgument(
+                "Compact GPU control requires a GPU backend",
+            ));
+        }
+        Ok(Self {
+            gpu_factory: self.gpu_factory.clone(),
+            eq_stagger: self.eq_stagger,
+            voice_chunk: self.voice_chunk,
+            compact_control: true,
+            room: self.room.clone(),
+            lfe: self.lfe.clone(),
+            workers: self.workers.clone(),
+        })
     }
     pub fn tail_frames(&self) -> usize {
         (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
@@ -413,6 +435,7 @@ impl Slot {
         offset: usize,
         scene: bool,
         snapshots: &[bool],
+        compact: bool,
     ) -> Result<()> {
         if !self.control.only_position_ramping(sample) || !self.live.is_settled(sample) {
             return self.input_span(input, sample, offset, scene, snapshots);
@@ -420,6 +443,13 @@ impl Slot {
         // All non-position fields remain constant until the next command;
         // each position still uses the original absolute-sample f64 expression.
         let base = self.input_state(sample);
+        let mapped = !self.automatic
+            && base.valid & 128 != 0
+            && base.screen_reference != 0
+            && self.description.screens.enabled != 0;
+        if compact && !mapped {
+            return self.input_span_compact(input, sample, offset, scene, snapshots, base);
+        }
         for (i, snapshot) in snapshots.iter().copied().enumerate() {
             let mut state = base;
             if i != 0 {
@@ -452,6 +482,86 @@ impl Slot {
                 scene,
                 snapshot || self.marks[offset + i],
             )?;
+        }
+        Ok(())
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn position_state(&self, mut base: State, sample: u64) -> State {
+        let (position, valid) = self.control.position_at(sample);
+        base.position = position;
+        base.valid = (base.valid & !4) | valid;
+        base
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn track_compact_position(&mut self, base: State, begin: u64, end: u64) -> State {
+        let state = self.position_state(base, end);
+        let position = if state.valid & 4 != 0 {
+            state.position
+        } else {
+            self.description.position
+        };
+        let length = crate::geometry::norm(position.map(f64::from));
+        if length <= 1e-15 {
+            // Origin fallback depends on the latest nonzero sample, not on the
+            // latest metadata snapshot. Search only the skipped part of this
+            // span, using the same f64 evaluation and f32 rounding as Control.
+            for sample in (begin..end).rev() {
+                let previous = self.position_state(base, sample);
+                let p = if previous.valid & 4 != 0 {
+                    previous.position
+                } else {
+                    self.description.position
+                };
+                if crate::geometry::norm(p.map(f64::from)) > 1e-15 {
+                    self.track_direction(previous);
+                    break;
+                }
+            }
+        }
+        self.track_direction(state);
+        state
+    }
+    #[cfg(feature = "room-gpu-experiment")]
+    fn input_span_compact(
+        &mut self,
+        input: Option<&[f32]>,
+        sample: u64,
+        offset: usize,
+        scene: bool,
+        snapshots: &[bool],
+        base: State,
+    ) -> Result<()> {
+        let mut tracked = 0;
+        for (i, snapshot) in snapshots.iter().copied().enumerate() {
+            let snapshot = snapshot || self.marks[offset + i];
+            let state = if snapshot && i != 0 {
+                let state = self.track_compact_position(
+                    base,
+                    sample + tracked as u64 + 1,
+                    sample + i as u64,
+                );
+                tracked = i;
+                state
+            } else {
+                base
+            };
+            // Non-position fields are constant, so every sample retains its
+            // original diffuse, gain and head-lock history/audio operations.
+            self.input_with_state(
+                input.map_or(0., |v| v[i]),
+                &state,
+                sample + i as u64,
+                offset + i,
+                scene,
+                snapshot,
+            )?;
+        }
+        if let Some(last) = snapshots
+            .len()
+            .checked_sub(1)
+            .filter(|last| *last > tracked)
+        {
+            self.track_compact_position(base, sample + tracked as u64 + 1, sample + last as u64);
         }
         Ok(())
     }
@@ -2152,6 +2262,7 @@ impl Session {
                         self.fill,
                         self.scene,
                         &self.marks[self.fill..self.fill + count],
+                        self.current.prepared.compact_control,
                     )?;
                 }
             }
@@ -2162,6 +2273,7 @@ impl Session {
                     self.fill,
                     self.scene,
                     &self.marks[self.fill..self.fill + count],
+                    self.current.prepared.compact_control,
                 )?;
             }
             self.fill += count;

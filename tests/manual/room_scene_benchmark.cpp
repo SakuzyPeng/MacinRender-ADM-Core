@@ -169,9 +169,13 @@ class Fixture {
     bool broadband_;
     bool moving_;
 };
+std::uint32_t room_rate(const RoomConfig& room) {
+    return nlohmann::json::parse(room.profile->manifest_json()).at("sample_rate").get<std::uint32_t>();
+}
 RendererConfig renderer_config(const RoomConfig& room) {
     RendererConfig config;
     config.renderer = RendererSelection::room_binaural;
+    config.sample_rate = room_rate(room);
     config.room = room;
     config.output_layout = "binaural";
     config.binaural_spread_mode = BinauralSpreadMode::none;
@@ -179,6 +183,7 @@ RendererConfig renderer_config(const RoomConfig& room) {
 }
 void kernel(const RoomConfig& first, const RoomConfig& next, unsigned seconds, uint32_t quantum = 256) {
     set_room_worker_active(quantum == 512);
+    const auto rate = room_rate(first);
     for (const std::size_t sources : {1U, 16U, 32U}) {
         for (unsigned mode = 0; mode < 3; ++mode) {
             auto renderer = take(create_live_room_renderer(renderer_config(first), {}));
@@ -189,7 +194,7 @@ void kernel(const RoomConfig& first, const RoomConfig& next, unsigned seconds, u
                 fixture.update(block);
                 done(renderer->render(fixture.frame(), output));
             }
-            const std::size_t blocks = static_cast<std::size_t>(seconds) * 48000 / quantum;
+            const std::size_t blocks = static_cast<std::size_t>(seconds) * rate / quantum;
             std::vector<double> times(blocks);
             uint64_t peak_rss = rss();
             auto control = renderer->room_control();
@@ -212,14 +217,15 @@ void kernel(const RoomConfig& first, const RoomConfig& next, unsigned seconds, u
             }
             const double elapsed = std::chrono::duration<double>(Clock::now() - begin).count();
             const double cpu = cpu_seconds() - cpu_start;
-            const double audio = static_cast<double>(blocks) * quantum / 48000.;
-            const auto misses = std::ranges::count_if(times, [quantum](double t) { return t > quantum / 48000.; });
+            const double audio = static_cast<double>(blocks) * quantum / static_cast<double>(rate);
+            const auto misses = std::ranges::count_if(
+                times, [quantum, rate](double t) { return t > quantum / static_cast<double>(rate); });
             std::ranges::sort(times);
             const auto status = control->status();
             std::cout << nlohmann::json{{"case", "kernel"},
                                         {"sources", sources},
                                         {"call_frames", quantum},
-                                        {"pose_update_hz", mode > 0 ? 48000. / quantum : 0.},
+                                        {"pose_update_hz", mode > 0 ? static_cast<double>(rate) / quantum : 0.},
                                         {"continuous_pose", mode > 0},
                                         {"room_switch", mode == 2},
                                         {"audio_seconds", audio},
@@ -271,7 +277,7 @@ void control_latency(const RoomConfig& room) {
     }
     std::cout << nlohmann::json{{"case", "control_latency"},
                                 {"frames_to_first_change", first},
-                                {"milliseconds", static_cast<double>(first) / 48.},
+                                {"milliseconds", static_cast<double>(first) * 1000. / room_rate(room)},
                                 {"scope", "Room PCM only; excludes host queue, sensor and physical device"}}
                      .dump()
               << '\n'
@@ -306,7 +312,10 @@ bool streaming(const RoomConfig& first,
                const ProbeOptions& options) {
     SceneStreamConfig config;
     config.renderer = renderer_config(first);
+    config.output_sample_rate = config.renderer.sample_rate;
+    const auto rate = config.renderer.sample_rate;
     auto stream = std::shared_ptr<SceneStreamEngine>(take(SceneStreamEngine::create(config)));
+    const auto prepared_report = nlohmann::json::parse(take(inspect_room(first)));
     const bool real_device = !options.device_name.empty();
     const auto selected = real_device ? select_device(options.device_name) : AudioDeviceInfo{};
     const bool capture = options.loopback || !options.capture_name.empty();
@@ -323,11 +332,11 @@ bool streaming(const RoomConfig& first,
         done(receiver->start());
     }
     const auto begin = Clock::now();
-    auto trace = std::make_shared<room_probe::OutputTrace>(begin, seconds, capture);
+    auto trace = std::make_shared<room_probe::OutputTrace>(begin, seconds, capture, rate);
     std::unique_ptr<room_probe::CaptureTap> tap;
     if (capture) {
         tap = std::make_unique<room_probe::CaptureTap>(
-            begin, seconds, options.capture_name, options.loopback ? selected.id : "");
+            begin, seconds, options.capture_name, options.loopback ? selected.id : "", rate);
     }
     auto device = std::make_unique<room_probe::MeasuredDevice>(make_miniaudio_device(!real_device, selected.id), trace);
     auto output = take(SceneOutputSession::create_with_device(stream, std::move(device), true));
@@ -345,7 +354,8 @@ bool streaming(const RoomConfig& first,
                                 {"device", real_device ? selected.name : "null"},
                                 {"osc_port", receiver ? receiver->snapshot().bound_port : 0},
                                 {"seconds", seconds},
-                                {"sample_rate", 48000},
+                                {"sample_rate", rate},
+                                {"room_prepared", prepared_report},
                                 {"quality", first.quality == RoomQuality::realtime ? "realtime" : "exact"},
                                 {"source_ramps", options.moving},
                                 {"volume", options.volume}}
@@ -447,7 +457,7 @@ bool streaming(const RoomConfig& first,
     std::vector<double> queued_ms;
     prepare_samples(queued_ms, static_cast<std::size_t>(seconds + 10) * 2U);
     auto next_observation = Clock::now();
-    const uint64_t frames = static_cast<uint64_t>(seconds) * 48000;
+    const uint64_t frames = static_cast<uint64_t>(seconds) * rate;
     for (uint64_t sample = 0, block = 0; sample < frames; ++block) {
         if (tracking_failed.load()) {
             break;
@@ -490,7 +500,7 @@ bool streaming(const RoomConfig& first,
             const auto resident = rss();
             peak_rss = std::max(peak_rss, resident);
             resident_samples.push_back({time, resident});
-            queued_ms.push_back(static_cast<double>(current.queued_frames) / 48.);
+            queued_ms.push_back(1000. * static_cast<double>(current.queued_frames) / rate);
             std::cout << nlohmann::json{{"case", "device_progress"},
                                         {"seconds", time},
                                         {"rss_bytes", resident},
@@ -530,6 +540,8 @@ bool streaming(const RoomConfig& first,
                           {"quality", first.quality == RoomQuality::realtime ? "realtime" : "exact"},
                           {"source_ramps", options.moving},
                           {"requested_seconds", seconds},
+                          {"sample_rate", rate},
+                          {"room_prepared", prepared_report},
                           {"control_transport", receiver ? "OSC loopback UDP" : "direct API"},
                           {"nominal_head_update_hz", 100},
                           {"poses_applied", poses_applied},
@@ -598,7 +610,7 @@ int main(int argc, char** argv) {
                 "usage: room_scene_benchmark ROOM_JSON OTHER_ROOM_JSON [SECONDS=10] "
                 "[all|stream|stream-cycles|stream-device|kernel|kernel-worker|latency] [SOURCES=32] [--device NAME|ID] "
                 "[--osc-port PORT] [--capture NAME|--capture-loopback] [--recordings NEW_DIR] [--volume GAIN] "
-                "[--quality exact|realtime] [--source-ramps]");
+                "[--quality exact|realtime] [--hrir PATH] [--source-ramps]");
         }
         const unsigned seconds = argc > 3 ? static_cast<unsigned>(std::stoul(argv[3])) : 10;
         if (seconds < 5 || seconds > 3600) {
@@ -635,6 +647,8 @@ int main(int argc, char** argv) {
                 options.volume = std::stof(argv[i]);
             } else if (flag == "--osc-port") {
                 options.osc_port = std::stoi(argv[i]);
+            } else if (flag == "--hrir") {
+                first.hrir_manifest = next.hrir_manifest = argv[i];
             } else if (flag == "--quality") {
                 const std::string_view quality = argv[i];
                 if (quality != "exact" && quality != "realtime") {

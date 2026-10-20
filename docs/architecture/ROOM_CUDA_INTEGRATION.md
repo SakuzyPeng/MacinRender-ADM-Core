@@ -9,7 +9,9 @@
 [完整验证记录](evidence/room-cuda-integration/validation.json)、
 [实测接入候选补丁](evidence/room-cuda-integration/candidate.patch) 和
 [未执行的打包／文件检查草稿](evidence/room-cuda-integration/packaging-draft.patch) 分开保存。
-以下实现说明及构建命令针对归档候选，**不表示当前活动源码已增加正式 CUDA 入口**。
+以下实现说明及构建命令针对该轮归档候选，**不表示正式 CUDA 接入已经通过验收**。
+接入基础后来作为 [V2 保留候选](ROOM_CUDA_V2_CANDIDATE.md) 的前置恢复到活动源码，默认仍关闭；
+该轮 1/135,000 超时记录继续保留，不能转记为 V2 的验收结果。
 没有改动公共 C ABI 函数、结构字段或枚举。原已验收组合的历史数据不转记为新二进制结果。
 
 ## 实现与适用范围

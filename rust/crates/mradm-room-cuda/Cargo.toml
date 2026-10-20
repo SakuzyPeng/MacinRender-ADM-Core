@@ -1,0 +1,27 @@
+[package]
+name = "mradm-room-cuda"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mradm-dsp = { path = "../mradm-dsp", default-features = false, features = ["room-gpu-experiment"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+libc = "=0.2.190"
+
+[features]
+default = ["room-gpu-experiment"]
+room-gpu-experiment = []
+room-profile = ["mradm-dsp/room-profile"]
+room-trace = ["room-profile", "mradm-dsp/room-trace"]
+
+[[example]]
+name = "room_cuda_bench"
+required-features = ["room-gpu-experiment"]
+
+[[example]]
+name = "room_cuda_replay"
+required-features = ["room-gpu-experiment"]

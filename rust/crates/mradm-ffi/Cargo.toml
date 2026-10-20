@@ -15,6 +15,7 @@ mradm-adm = { path = "../mradm-adm" }
 mradm-osc = { path = "../mradm-osc" }
 mradm-scene = { path = "../mradm-scene" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
+mradm-room-cuda = { path = "../mradm-room-cuda", optional = true, default-features = false }
 serde_json.workspace = true
 libm.workspace = true
 
@@ -25,3 +26,4 @@ mradm-math = { path = "../mradm-math" }
 diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
 default = ["sofa"]
 sofa = ["mradm-dsp/sofa"]
+room-cuda = ["dep:mradm-room-cuda"]

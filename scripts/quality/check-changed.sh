@@ -69,7 +69,7 @@ done < <(
 # how the macOS-only Apple paths are skipped on non-macOS hosts.
 is_platform_excluded() {
     case "$1" in
-        src/adm_windows/*) return 0 ;;
+        src/adm_windows/* | src/adm_render_room/cuda/*) return 0 ;;
         tests/reference/libbw64/*)
             if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
                 return 0

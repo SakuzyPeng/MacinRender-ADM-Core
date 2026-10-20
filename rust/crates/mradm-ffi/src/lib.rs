@@ -28,6 +28,7 @@ mod pcm_mix;
 mod post_gain;
 mod resampler;
 mod room;
+mod room_cuda_selection;
 mod room_environment;
 mod scene;
 mod scene_math;
