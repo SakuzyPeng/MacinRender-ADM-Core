@@ -9,8 +9,7 @@ if ! command -v cppcheck >/dev/null 2>&1; then
     exit 127
 fi
 
-# -i src/adm_windows: Windows-only sink (windows.h / spatialaudioclient.h) — cppcheck can't parse the
-# Windows COM TUs on the macOS quality host; the windows-debug CI build verifies it instead.
+# Windows COM and the optional CUDA SDK boundary require native SDK headers.
 reference_excludes=()
 if ! grep -q '^MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
     reference_excludes+=(-i "$repo_root/tests/reference/libear")
@@ -40,5 +39,6 @@ cppcheck \
     --suppressions-list="$repo_root/CppcheckSuppressions.txt" \
     -I "$repo_root/include" \
     -i "$repo_root/src/adm_windows" \
+    -i "$repo_root/src/adm_render_room/cuda" \
     "${reference_excludes[@]}" \
     "$repo_root/include" "$repo_root/src" "$repo_root/tests"

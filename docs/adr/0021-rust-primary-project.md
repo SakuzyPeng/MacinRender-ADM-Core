@@ -55,6 +55,9 @@ C++ 现在主要承担这些工作：
 C/C++/ObjC++ 只保留在“岛”中，经窄 C 接口由 Rust 调用：
 - Apple 框架：AUSpatialMixer 后端、系统空间监听 sink、APAC 与 CAF 元数据；
 - Windows `ISpatialAudioClient` sink；
+- 可选 NVIDIA CUDA SDK 边界（`src/adm_render_room/cuda/`）：仅原生资源、模块与 SDK 编译适配，
+  经私有 C 接口由 `mradm-room-cuda` 调用；房间语义、时钟和控制在 Rust，设备内核由 CUDA 编译器处理。
+  该平台例外单独设棘轮，见下文；
 - 第三方 C 库：libFLAC、libopus、miniaudio、dr_flac、IAMF bridge。
 
 是否进一步以 Rust 绑定（如 objc2、windows crate）取代这些岛，另行评估。
@@ -98,7 +101,9 @@ ADR 0008 决策三“当前集成方向为 C++ 调 Rust”和决策四“`AdmSce
    [参考实现保留与退役](../architecture/RUST_REFERENCE_RETENTION.md) 冻结到 `tests/reference/` 并登记。
 5. **不新增 C++。** 新功能、新工具与新测试用 Rust（工具脚本可用 Python）。平台岛内的例外须在提交中说明。
 6. **C++ 规模只减不增。** `scripts/quality/language-surface.py --check` 对生产 C++（`src/` + `include/`，不含岛）
-   与岛分别设棘轮，每个切片报告变化。
+   与岛分别设棘轮，每个切片报告变化。2026-10-20 补登记 CUDA V2 已有 SDK 边界为独立 `cuda` 区域，
+   初始上限是 `3558e88d` 的 512 行；旧快照缺少该区域时只使用这个固定上限，后续上限只减不增。
+   原有 `production`、`islands` 上限不提高，不允许把通用实现移入该 SDK 目录绕过棘轮。
 7. **unsafe 边界。** 算法 crate 保持 `#![forbid(unsafe_code)]`。unsafe 只写在 FFI crate 中，C ABI crate 出现后也计入此列。
 8. **依赖。** 新 Rust 依赖按 ADR 0004 锁定精确版本、关闭不需要的 features、登记许可证。
    迁出 C++ 后不再使用的 C++ 依赖（CLI11、spdlog/fmt、nlohmann_json、tl-expected）随之移除。
