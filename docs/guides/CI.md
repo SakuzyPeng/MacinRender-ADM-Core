@@ -278,6 +278,9 @@ Windows CLI release、GUI release（`scripts/release/package-windows-gui-release
 `saf_utility_filters.c` 上的 `/O2` 内部编译器错误；SAF 已不在生产构建中，该绕行随之取消。
 Cargo 因此使用 `release` profile（而非 `minsizerel`）。
 
+Windows GUI 普通包和 CUDA 试用包都启用 `MR_ADM_ENABLE_SOFA=ON`，保留自定义 SOFA HRIR 的批渲染和监听能力。
+打包脚本会覆盖复用构建树中的 SOFA 关闭配置；使用 `-SkipNative` 时则要求原生 bundle 已按此配置构建。
+
 `release-windows` 在打包前用 ctest 运行一组优化构建下的测试，覆盖各渲染后端和主要编码器：
 `mr_adm_flac_io_smoke_tests`、`mr_adm_opus_mka_smoke_tests`、`mr_adm_cli_smoke_tests`、
 `mr_adm_ear_fixture_tests`、`mr_adm_vbap_smoke_tests`、`mr_adm_hoa_encode_fixture_tests`、

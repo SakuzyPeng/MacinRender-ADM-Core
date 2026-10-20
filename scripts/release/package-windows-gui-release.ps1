@@ -202,7 +202,7 @@ if (!$SkipNative) {
         "-DMR_ADM_FLAC_PROVIDER=VENDORED",
         "-DMR_ADM_OPUS_PROVIDER=VENDORED",
         "-DMR_ADM_ENABLE_IAMF=OFF",
-        "-DMR_ADM_ENABLE_SOFA=OFF",
+        "-DMR_ADM_ENABLE_SOFA=ON",
         "-DMR_ADM_ENABLE_ROOM_CUDA=$(if ($RoomCuda) { 'ON' } else { 'OFF' })",
         "-DMR_ADM_BUILD_SAF_REFERENCE_TESTS=OFF"
     )
@@ -248,6 +248,9 @@ foreach ($line in Get-Content (Join-Path $nativeBuildDir "CMakeCache.txt")) {
 }
 if ($cache["CMAKE_BUILD_TYPE"] -ne "Release") {
     throw "GUI packaging requires a Release native build"
+}
+if ($cache["MR_ADM_ENABLE_SOFA"] -notin @("ON", "TRUE", "1")) {
+    throw "GUI packaging requires MR_ADM_ENABLE_SOFA=ON; rebuild the native bundle with SOFA support"
 }
 $cudaEnabled = $cache["MR_ADM_ENABLE_ROOM_CUDA"] -in @("ON", "TRUE", "1")
 if ($cudaEnabled -ne [bool]$RoomCuda) {
