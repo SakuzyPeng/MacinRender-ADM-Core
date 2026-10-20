@@ -37,8 +37,8 @@ def child(args):
     report = room96.PTR()
     quality = 0 if args.case == 'exact' else 1
     code = api.lib.adm_room_inspect_with_quality(api.context, C.byref(room), quality, C.byref(report))
-    if args.case in ('bad-request', 'missing'):
-        assert code != 0 and not report.value
+    if args.case in ('bad-request', 'missing', 'wrong-variant'):
+        assert code == (1 if args.case == 'bad-request' else 2) and not report.value, code
         error = api.lib.adm_context_last_error_message(api.context).decode()
         api.lib.adm_room_destroy(handle)
         api.lib.adm_destroy_context(api.context)
@@ -47,8 +47,13 @@ def child(args):
     info = json.loads(C.string_at(report).decode())
     api.lib.adm_free_string(report)
     api.lib.adm_room_destroy(handle)
-    expected_cuda = args.case in ('cuda', 'concurrent', 'device-reset')
+    expected_cuda = args.case in ('cuda', 'portable', 'concurrent', 'device-reset', 'missing-target')
     assert (info.get('execution_backend') == 'cuda') == expected_cuda
+    if expected_cuda:
+        assert info['cuda']['implementation'] == 'room-cuda-v2', info
+        assert info['cuda']['compact_control'] is True, info
+        assert info['cuda']['native_optimizations'] == 22, info
+    (args.output / (args.case + '-inspection.json')).write_text(json.dumps(info, indent=2))
     samples = [(i % 179) * .00001 - .00089 for i in range(3333)]
     if not expected_cuda:
         result = api.scene(args.room, args.hrir, samples, [512, 137, 375], quality=quality, epoch_twice=True)
@@ -73,6 +78,26 @@ def child(args):
         return value
 
     observed = []
+    if args.case == 'missing-target':
+        handle, stream = room96.PTR(), room96.PTR()
+        api.ok(api.lib.adm_room_load(api.context, str(args.room).encode(), C.byref(handle)))
+        room = room96.Room(handle=handle, hrir=str(args.hrir).encode(), metres=1.5)
+        config = room96.Config(rendering=room96.Renderer(renderer=8, layout=b'binaural'),
+                               input_rate=96000, output_rate=96000, ring=32768, watermark=1)
+        try:
+            code = api.lib.adm_create_scene_stream_with_room_quality(
+                api.context, C.byref(config), C.byref(room), 1, None, C.byref(stream))
+            assert code == 4 and not stream.value, code
+            message = api.lib.adm_context_last_error_message(api.context).decode()
+            assert 'ROOM CUDA' in message, message
+        finally:
+            if stream.value:
+                api.lib.adm_destroy_scene_stream(stream)
+            api.lib.adm_room_destroy(handle)
+            api.lib.adm_destroy_context(api.context)
+        return {'case': args.case, 'error_code': code, 'message': message,
+                'after_release': cleared(), 'passed': True}
+
     if args.case == 'device-reset':
         # cudaDeviceReset affects this fresh subprocess's primary context, not
         # other applications or the physical device/driver.
@@ -120,7 +145,7 @@ def child(args):
         return {'case': args.case, 'error': message, 'recreated': True,
                 'active_resources': observed, 'after_release': cleared(), 'passed': True}
 
-    if args.case == 'cuda':
+    if args.case in ('cuda', 'portable'):
         original = api.ok
         def checked(code):
             original(code)
@@ -129,13 +154,20 @@ def child(args):
                 observed.append(value)
         api.ok = checked
         results = []
-        for packets in [[512], [137, 375, 1, 511], [512]]:
-            results.append(api.scene(args.room, args.hrir, samples, packets, quality=1, epoch_twice=True))
+        packet_sets = [[512], [137, 375, 1, 511], [512]] if args.case == 'cuda' else [[137, 375, 1, 511]]
+        for packets in packet_sets:
+            results.append(api.scene(args.room, args.hrir, samples, packets, quality=1,
+                                     epoch_twice=args.case == 'cuda'))
             cleared()
         assert observed and all(v == results[0] for v in results)
-        (args.output / 'cuda.f32').write_bytes(results[0])
+        (args.output / (args.case + '.f32')).write_bytes(results[0])
+        if args.case == 'cuda':
+            silence = api.scene(args.room, args.hrir, [0.] * len(samples), [1, 137, 375], quality=1)
+            assert len(silence) == len(results[0]) and all(v == 0 for v in array.array('f', silence))
+            cleared()
         api.lib.adm_destroy_context(api.context)
-        return {'case': args.case, 'cycles': 3, 'epochs_per_cycle': 2, 'frames': len(results[0]) // 8,
+        return {'case': args.case, 'cycles': len(packet_sets), 'epochs_per_cycle': 2 if args.case == 'cuda' else 1,
+                'frames': len(results[0]) // 8, 'silence_preserved': True if args.case == 'cuda' else None,
                 'active_resources': observed, 'after_release': cleared(), 'passed': True}
 
     barrier = threading.Barrier(2)
@@ -165,7 +197,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['library', 'plugin', 'room', 'hrir', 'output']:
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--case', choices=['cpu', 'cuda', 'exact', 'bad-request', 'missing', 'concurrent', 'device-reset'])
+    parser.add_argument('--case', choices=['cpu', 'default', 'cuda', 'portable', 'exact', 'bad-request', 'missing',
+                                          'missing-target', 'wrong-variant', 'concurrent', 'device-reset'])
     args = parser.parse_args()
     assert os.name == 'nt'
     if args.case:
@@ -174,13 +207,17 @@ def main():
         return
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'cases': []}
-    for name, value in [('cpu', '0'), ('exact', 'invalid'), ('cuda', '1'), ('concurrent', '1'),
+    for name, value in [('cpu', '0'), ('default', None), ('exact', 'invalid'), ('cuda', '1'), ('concurrent', '1'),
                         ('bad-request', 'invalid'), ('device-reset', '1')]:
         command = [sys.executable, str(Path(__file__).resolve())]
         for key in ['library', 'plugin', 'room', 'hrir', 'output']:
             command += ['--' + key, str(getattr(args, key).resolve())]
         command += ['--case', name]
-        env = dict(os.environ, MR_ADM_ROOM_CUDA=value, MR_ADM_ROOM_WORKERS='8')
+        env = dict(os.environ, MR_ADM_ROOM_WORKERS='8')
+        if value is None:
+            env.pop('MR_ADM_ROOM_CUDA', None)
+        else:
+            env['MR_ADM_ROOM_CUDA'] = value
         print('lifecycle', name, flush=True)
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=240)
         (args.output / (name + '.stdout')).write_text(result.stdout)
@@ -189,6 +226,7 @@ def main():
             raise RuntimeError(result.stdout + result.stderr)
         report['cases'].append(json.loads(result.stdout.strip().splitlines()[-1]))
         (args.output / 'report.json').write_text(json.dumps(report, indent=2))
+    assert (args.output / 'default.f32').read_bytes() == (args.output / 'cpu.f32').read_bytes()
     reference = array.array('f', (args.output / 'cpu.f32').read_bytes())
     actual = array.array('f', (args.output / 'cuda.f32').read_bytes())
     assert len(actual) == len(reference)

@@ -3,6 +3,9 @@ param(
     [string]$OpenBlasRoot = "",
     [string]$VcpkgRoot = "",
     [string]$CmakeOptions = "",
+    [string]$NativeBuildDir = "",
+    [switch]$RoomCuda,
+    [string]$MathDxIncludeDir = "",
     [switch]$SkipNative
 )
 
@@ -19,6 +22,8 @@ if (![System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.R
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $project = Join-Path $repoRoot "gui\MacinRender.Gui\MacinRender.Gui.csproj"
 $resolvedVcpkgRoot = if ($VcpkgRoot) { $VcpkgRoot } else { $env:VCPKG_INSTALLATION_ROOT }
+$nativeBuildDir = if ($NativeBuildDir) { [System.IO.Path]::GetFullPath($NativeBuildDir) } else { Join-Path $repoRoot "build\win-canon" }
+$runtimeNativeDir = Join-Path $repoRoot "gui\MacinRender.Gui\runtimes\$Rid\native"
 
 function Test-ExistingPath {
     param([AllowNull()][object]$Path)
@@ -119,7 +124,7 @@ function Test-SystemDll {
 
     $systemDlls = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     @(
-        "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "cfgmgr32.dll",
+        "advapi32.dll", "avrt.dll", "bcrypt.dll", "bcryptprimitives.dll", "cfgmgr32.dll",
         "combase.dll", "comctl32.dll", "comdlg32.dll", "coremessaging.dll",
         "crypt32.dll", "cryptbase.dll", "cryptsp.dll", "d2d1.dll", "d3d11.dll",
         "d3d12.dll", "d3dcompiler_47.dll", "dcomp.dll", "dnsapi.dll",
@@ -127,7 +132,7 @@ function Test-SystemDll {
         "gdi32full.dll", "gdiplus.dll", "hid.dll", "imm32.dll",
         "iphlpapi.dll", "kernel32.dll", "kernelbase.dll", "mf.dll", "mfplat.dll",
         "mfreadwrite.dll", "mpr.dll", "msvcp_win.dll", "msvcrt.dll", "ncrypt.dll",
-        "netapi32.dll", "ntdll.dll", "ole32.dll", "oleacc.dll", "oleaut32.dll",
+        "netapi32.dll", "ntdll.dll", "nvcuda.dll", "ole32.dll", "oleacc.dll", "oleaut32.dll",
         "opengl32.dll", "powrprof.dll", "propsys.dll", "psapi.dll", "rpcrt4.dll",
         "sechost.dll", "setupapi.dll", "shcore.dll", "shell32.dll", "shlwapi.dll",
         "textinputframework.dll", "ucrtbase.dll", "user32.dll", "userenv.dll",
@@ -186,9 +191,6 @@ function Find-Dll {
 }
 
 if (!$SkipNative) {
-    $nativeBuildDir = Join-Path $repoRoot "build\gui-native-package\$Rid"
-    $runtimeNativeDir = Join-Path $repoRoot "gui\MacinRender.Gui\runtimes\$Rid\native"
-
     $cmakeArgs = @(
         "-S", $repoRoot,
         "-B", $nativeBuildDir,
@@ -197,13 +199,24 @@ if (!$SkipNative) {
         "-DCMAKE_C_COMPILER=cl",
         "-DCMAKE_CXX_COMPILER=cl",
         "-DMR_ADM_BUILD_CAPI_BUNDLE=ON",
-        "-DMR_ADM_CORE_BUILD_CLI=OFF",
-        "-DMR_ADM_CORE_BUILD_TESTS=OFF",
         "-DMR_ADM_FLAC_PROVIDER=VENDORED",
         "-DMR_ADM_OPUS_PROVIDER=VENDORED",
         "-DMR_ADM_ENABLE_IAMF=OFF",
+        "-DMR_ADM_ENABLE_SOFA=OFF",
+        "-DMR_ADM_ENABLE_ROOM_CUDA=$(if ($RoomCuda) { 'ON' } else { 'OFF' })",
         "-DMR_ADM_BUILD_SAF_REFERENCE_TESTS=OFF"
     )
+    if ($RoomCuda) {
+        $cmakeArgs += @(
+            "-DMR_ADM_ROOM_CUDA_FUSE_TARGET=ON",
+            "-DMR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF",
+            "-DMR_ADM_ROOM_CUDA_COMPACT_UPLOAD=ON",
+            "-DMR_ADM_ROOM_CUDA_FREQUENCY_MAJOR=ON"
+        )
+        if ($MathDxIncludeDir) {
+            $cmakeArgs += "-DMR_ADM_ROOM_CUDA_MATHDX_INCLUDE_DIR=$MathDxIncludeDir"
+        }
+    }
 
     $toolchainFile = ""
     if ($resolvedVcpkgRoot) {
@@ -223,27 +236,42 @@ if (!$SkipNative) {
     $configure = "cmake " + (($cmakeArgs | ForEach-Object { Quote-CmdArg $_ }) -join " ")
     $build = "cmake --build " + (Quote-CmdArg $nativeBuildDir) + " --target mradm_capi_bundle --config Release"
     Invoke-VcvarsCommand -CommandLines @($configure, $build)
-
-    $nativeDll = @(
-        (Join-Path $nativeBuildDir "mradm_capi.dll"),
-        (Join-Path $nativeBuildDir "Release\mradm_capi.dll")
-    ) | Where-Object { Test-ExistingPath $_ } | Select-Object -First 1
-    if (!$nativeDll) {
-        $nativeDll = Get-ChildItem -Path $nativeBuildDir -Filter "mradm_capi.dll" -Recurse -File |
-            Select-Object -First 1 -ExpandProperty FullName
-    }
-    if (!$nativeDll) {
-        throw "native C ABI bundle is missing under $nativeBuildDir"
-    }
-    & python (Join-Path $repoRoot "scripts\quality\check-capi-exports.py") $nativeDll
-    if ($LASTEXITCODE -ne 0) {
-        throw "native C ABI bundle export surface does not match c_api.h"
-    }
-
-    New-Item -ItemType Directory -Force -Path $runtimeNativeDir | Out-Null
-    Copy-Item $nativeDll -Destination (Join-Path $runtimeNativeDir "mradm_capi.dll") -Force
-    Write-Host "copied native bundle: $(Join-Path $runtimeNativeDir 'mradm_capi.dll')"
 }
+
+# SkipNative skips compilation only. Always stage the selected canonical build,
+# so a stale GUI runtime cannot silently select a different native variant.
+$cache = @{}
+foreach ($line in Get-Content (Join-Path $nativeBuildDir "CMakeCache.txt")) {
+    if ($line -match "^([^#/:][^:]*):[^=]+=(.*)$") {
+        $cache[$Matches[1]] = $Matches[2]
+    }
+}
+if ($cache["CMAKE_BUILD_TYPE"] -ne "Release") {
+    throw "GUI packaging requires a Release native build"
+}
+$cudaEnabled = $cache["MR_ADM_ENABLE_ROOM_CUDA"] -in @("ON", "TRUE", "1")
+if ($cudaEnabled -ne [bool]$RoomCuda) {
+    throw "native ROOM CUDA configuration does not match -RoomCuda; rebuild the requested variant"
+}
+if ($RoomCuda) {
+    foreach ($key in @("MR_ADM_ROOM_CUDA_FUSE_TARGET", "MR_ADM_ROOM_CUDA_COMPACT_UPLOAD", "MR_ADM_ROOM_CUDA_FREQUENCY_MAJOR")) {
+        if ($cache[$key] -notin @("ON", "TRUE", "1")) { throw "V2 trial package requires $key=ON" }
+    }
+    if ($cache["MR_ADM_ROOM_CUDA_FUSE_CONVOLVE"] -notin @("OFF", "FALSE", "0")) {
+        throw "V2 trial package requires MR_ADM_ROOM_CUDA_FUSE_CONVOLVE=OFF"
+    }
+}
+$nativeDll = @(
+    (Join-Path $nativeBuildDir "mradm_capi.dll"),
+    (Join-Path $nativeBuildDir "Release\mradm_capi.dll")
+) | Where-Object { Test-ExistingPath $_ } | Select-Object -First 1
+if (!$nativeDll) { throw "native C ABI bundle is missing under $nativeBuildDir" }
+& python (Join-Path $repoRoot "scripts\quality\check-capi-exports.py") $nativeDll
+if ($LASTEXITCODE -ne 0) { throw "native C ABI bundle export surface does not match c_api.h" }
+
+New-Item -ItemType Directory -Force -Path $runtimeNativeDir | Out-Null
+Copy-Item $nativeDll -Destination (Join-Path $runtimeNativeDir "mradm_capi.dll") -Force
+Write-Host "copied native bundle: $(Join-Path $runtimeNativeDir 'mradm_capi.dll')"
 
 function Get-VersionMetadata {
     param([Parameter(Mandatory = $true)][string]$Field)
@@ -257,6 +285,7 @@ function Get-VersionMetadata {
 
 $shortSha = (& git -C $repoRoot rev-parse --short=12 HEAD).Trim()
 $commitSha = (& git -C $repoRoot rev-parse HEAD).Trim()
+$workingTreeDirty = [bool](& git -C $repoRoot status --porcelain --untracked-files=normal)
 $productVersion = Get-VersionMetadata "product-version"
 $cApiVersion = Get-VersionMetadata "c-api-version"
 $version = Get-VersionMetadata "package-version"
@@ -264,6 +293,7 @@ $version = Get-VersionMetadata "package-version"
 $distDir = Join-Path $repoRoot "dist"
 $publishDir = Join-Path $repoRoot "build\gui-publish\$Rid"
 $packageName = "MacinRender-Gui-$version-windows-x64"
+if ($RoomCuda) { $packageName += "-cuda-trial" }
 $packageRoot = Join-Path $distDir $packageName
 $appDir = Join-Path $packageRoot "app"
 $archive = Join-Path $distDir "$packageName.zip"
@@ -299,6 +329,69 @@ $launcher = Join-Path $packageRoot "MacinRender ADM.cmd"
     "@echo off",
     "start """" ""%~dp0app\MacinRender.Gui.exe"" %*"
 ) | Set-Content -Path $launcher -Encoding ASCII
+
+if ($RoomCuda) {
+    $nativeDir = Split-Path -Parent $nativeDll
+    $plugin = Join-Path $nativeDir "mradm_room_cuda.dll"
+    if (!(Test-ExistingPath $plugin)) { throw "optional ROOM CUDA plugin is missing" }
+    Copy-Item $plugin -Destination $appDir -Force
+    $cudaFiles = @("mradm_room_cuda.dll")
+    foreach ($runtime in ($cache["MR_ADM_ROOM_CUDA_RUNTIME_FILES"] -split ";")) {
+        if (!(Test-ExistingPath $runtime)) { throw "missing ROOM CUDA runtime: $runtime" }
+        Copy-Item $runtime -Destination $appDir -Force
+        $cudaFiles += Split-Path -Leaf $runtime
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $appDir "room_cuda") | Out-Null
+    foreach ($device in ($cache["MR_ADM_ROOM_CUDA_DEVICE_FILES"] -split ";")) {
+        if (!(Test-ExistingPath $device)) { throw "missing precompiled ROOM CUDA target FFT: $device" }
+        Copy-Item $device -Destination (Join-Path $appDir "room_cuda") -Force
+        $cudaFiles += "room_cuda/" + (Split-Path -Leaf $device)
+    }
+    $cudaLicenseDir = Join-Path $packageRoot "licenses\room-cuda"
+    New-Item -ItemType Directory -Force -Path $cudaLicenseDir | Out-Null
+    $cudaRoot = Split-Path -Parent $cache["CUDAToolkit_BIN_DIR"]
+    Copy-Item (Join-Path $cudaRoot "EULA.txt") -Destination (Join-Path $cudaLicenseDir "CUDA-EULA.txt")
+    Copy-Item (Join-Path $cudaRoot "LICENSE") -Destination (Join-Path $cudaLicenseDir "CUDA-LICENSE.txt")
+    Copy-Item $cache["MR_ADM_ROOM_CUDA_MATHDX_LICENSE"] -Destination (Join-Path $cudaLicenseDir "MathDx-LICENSE.txt")
+    $manifest = [ordered]@{
+        profile = "room-cuda-v2"
+        native_optimizations = 22
+        kernel_contract = 2
+        architectures = @($cache["MR_ADM_ROOM_CUDA_ARCHITECTURES"] -split ";")
+        target_source_sha256 = $cache["MR_ADM_ROOM_CUDA_TARGET_SOURCE_SHA256"]
+        files = @($cudaFiles | Sort-Object -Unique | ForEach-Object {
+            [ordered]@{ path = $_; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $appDir $_)).Hash.ToLowerInvariant() }
+        })
+    }
+    $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $packageRoot "ROOM_CUDA.json") -Encoding utf8
+    @(
+        "@echo off",
+        "setlocal",
+        'set "MR_ADM_ROOM_CUDA=1"',
+        'start "" "%~dp0app\MacinRender.Gui.exe" %*'
+    ) | Set-Content -Path (Join-Path $packageRoot "MacinRender ADM CUDA Trial.cmd") -Encoding ASCII
+    @"
+ROOM CUDA V2 trial
+
+Use "MacinRender ADM CUDA Trial.cmd" to opt in for this launch.
+The ordinary launcher uses CPU unless MR_ADM_ROOM_CUDA is set externally.
+Select the ROOM renderer, a 96 kHz room/HRIR and realtime quality.
+Exact quality always uses CPU. Other renderers are unaffected.
+This package requires a compatible NVIDIA driver and one of the SM
+architectures listed in ROOM_CUDA.json. No CUDA Toolkit or MathDx SDK is
+needed on the target computer. Keep the entire app directory together.
+Unsupported configurations and missing dependencies report an error;
+they do not silently substitute a different processing backend.
+
+This is an explicit trial package. Windows 5.333333 ms zero-overrun
+acceptance has not passed. Frequent room switching has no zero-overrun
+promise. Preserve normal device buffering when evaluating playback.
+
+NVIDIA runtime and MathDx notices are in licenses/room-cuda.
+The root SBOM describes the base application; ROOM_CUDA.json lists this
+optional component's binary/device payload and SHA-256 hashes.
+"@ | Set-Content -Path (Join-Path $packageRoot "ROOM_CUDA_README.txt") -Encoding utf8
+}
 
 $dllSearchDirs = @()
 if (Test-ExistingPath $OpenBlasRoot) {
@@ -371,9 +464,10 @@ foreach ($binary in Get-ChildItem -Path $appDir -File | Where-Object { $_.Extens
     "" | Add-Content -Path $depsFile -Encoding utf8
 }
 
-"Packaged DLL sources:" | Add-Content -Path $depsFile -Encoding utf8
+"Packaged DLL identities:" | Add-Content -Path $depsFile -Encoding utf8
 foreach ($entry in $packagedDlls.GetEnumerator() | Sort-Object Name) {
-    "  $($entry.Key) <= $($entry.Value)" | Add-Content -Path $depsFile -Encoding utf8
+    $identity = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $appDir $entry.Key)).Hash.ToLowerInvariant()
+    "  $($entry.Key) [sha256: $identity]" | Add-Content -Path $depsFile -Encoding utf8
 }
 
 $buildInfo = @(
@@ -384,10 +478,12 @@ $buildInfo = @(
     "product_version: $productVersion",
     "c_api_version: $cApiVersion",
     "commit: $commitSha",
+    "working_tree_dirty: $workingTreeDirty",
+    "room_cuda: $(if ($RoomCuda) { 'v2-trial (explicit opt-in)' } else { 'off' })",
     "rid: $Rid",
     "built_at_utc: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))",
     "cmake_options: $(if ($CmakeOptions) { $CmakeOptions } else { 'not recorded' })",
-    "dependency_policy: Windows GUI packages may depend on Windows system DLLs only; every non-system DLL discovered by dumpbin /dependents must be copied into the package app directory."
+    "dependency_policy: Windows system DLLs and the installed NVIDIA driver (optional CUDA trial) are external; all other dependencies must be packaged."
 )
 $buildInfo | Set-Content -Path (Join-Path $packageRoot "BUILD_INFO.txt") -Encoding utf8
 
