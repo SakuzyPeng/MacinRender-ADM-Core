@@ -38,12 +38,15 @@ impl DiffuseDelay {
         const OFFSETS: [usize; 8] = [3, 7, 11, 17, 19, 23, 29, 31];
         const POLARITY: [f32; 8] = [1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0];
         let length = DELAY_LENGTH * self.step;
+        // Construction permits only 48/96 kHz: the ring has 32 or 64 entries.
+        // Integer wrap changes no sample, tap order or floating-point operation.
+        let mask = length - 1;
         self.delay[self.position] = input;
         let mut sum = 0.0;
         for (offset, polarity) in OFFSETS.into_iter().zip(POLARITY) {
-            sum += self.delay[(self.position + length - offset * self.step) % length] * polarity;
+            sum += self.delay[(self.position + length - offset * self.step) & mask] * polarity;
         }
-        self.position = (self.position + 1) % length;
+        self.position = (self.position + 1) & mask;
         sum * 0.35355339
     }
 

@@ -345,3 +345,44 @@ fn diffuse_delay_and_live_ramps_match_direct_tapped_delay() {
     delay.process(&[0.0; 32], &mut delayed[..32]).unwrap();
     assert!(delayed[..32].iter().all(|v| *v == 0.0));
 }
+
+#[test]
+fn diffuse_ring_matches_ordered_direct_delay_bitwise_at_both_rates() {
+    let input = signal(513);
+    for rate in [48000, 96000] {
+        let step = (rate / 48000) as usize;
+        let mut delay = DiffuseDelay::with_sample_rate(rate).unwrap();
+        let mut expected = Vec::with_capacity(input.len());
+        for i in 0..input.len() {
+            let mut sum = 0f32;
+            for (offset, polarity) in [
+                (3, 1.),
+                (7, -1.),
+                (11, 1.),
+                (17, 1.),
+                (19, -1.),
+                (23, 1.),
+                (29, -1.),
+                (31, -1.),
+            ] {
+                let value = i.checked_sub(offset * step).map_or(0., |j| input[j]);
+                sum += value * polarity;
+            }
+            expected.push((sum * 0.35355339).to_bits());
+        }
+        for packet in [1, 7, 32, 65, 128] {
+            delay.reset();
+            let mut output = vec![0.; input.len()];
+            for at in (0..input.len()).step_by(packet) {
+                let end = (at + packet).min(input.len());
+                delay
+                    .process(&input[at..end], &mut output[at..end])
+                    .unwrap();
+            }
+            assert_eq!(
+                expected,
+                output.into_iter().map(f32::to_bits).collect::<Vec<_>>()
+            );
+        }
+    }
+}
