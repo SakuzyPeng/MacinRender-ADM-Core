@@ -16,7 +16,6 @@ unusedStructMember:*/include/adm/capability.h
 unusedStructMember:*/include/adm/direct_speakers_matrix.h
 unusedStructMember:*/include/adm/render.h
 unusedStructMember:*/include/adm/scene.h
-unusedStructMember:*/include/adm/semantic_policy.h
 unusedStructMember:*/include/adm/monitor.h
 unusedStructMember:*/include/adm/hptf.h
 unusedStructMember:*/include/adm/head_tracking.h

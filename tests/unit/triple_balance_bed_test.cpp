@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -6,7 +7,6 @@
 #include <nlohmann/json.hpp>
 
 #include "adm/render.h"
-#include "adm/semantic_policy.h"
 
 #include "bed.h"
 #include "semantics.h"
@@ -83,16 +83,16 @@ int main(int argc, char** argv) {
         ok &= check(diagnostic["beds"][0]["tracks"][0]["events"][0]["source_rtime_sample"] == 48000,
                     "renderer report preserves authored relative time");
     }
-    mradm::SemanticPolicyOverride object_policy;
-    object_policy.gain = mradm::GainPolicy{.scale = .5F, .mute = false};
-    mradm::apply_resolved_semantic_object(plan.scene.objects.front(), object_policy);
-    mradm::DirectSpeakersPolicy channel_policy;
-    channel_policy.speaker_label = "RC_Lts";
-    channel_policy.gain = mradm::GainPolicy{.scale = .25F, .gain_db = 6.0206F, .mute = false};
-    const std::vector<mradm::DirectSpeakersPolicy> policies{channel_policy};
-    for (auto& track : plan.scene.objects.front().tracks) {
+    // User levels as a semantic policy sets them: the object at half level, and RC_Lts at half.
+    auto& bed_object = plan.scene.objects.front();
+    bed_object.gain *= .5F;
+    bed_object.user_level = {.gain_multiplier = .5F, .mute = false};
+    for (auto& track : bed_object.tracks) {
         for (auto& block : track.ds_blocks) {
-            mradm::apply_resolved_semantic_direct_speaker(block, policies, {});
+            if (std::ranges::find(block.speaker_labels, "RC_Lts") != block.speaker_labels.end()) {
+                block.gain *= .5F;
+                block.user_level = {.gain_multiplier = .5F, .mute = false};
+            }
         }
     }
     auto prepared = mradm::triple_balance::prepare_semantics(plan, report);

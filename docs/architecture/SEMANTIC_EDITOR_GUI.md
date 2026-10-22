@@ -2,7 +2,7 @@
 
 ## 1. 背景与目标
 
-ADM 语义策略(`mradm.semantic-policy.v1`,见 `include/adm/semantic_policy.h`)目前只能通过手写
+ADM 语义策略(`mradm.semantic-policy.v1`,见 `rust/crates/mradm-scene/src/policy.rs`)目前只能通过手写
 JSON + CLI(`--semantic-policy` / `--write-semantic-report`)使用,交互门槛高。本功能在现有
 批渲染 GUI(Avalonia,`gui/MacinRender.Gui`)中新增一个**语义编辑模式/Tab**,让用户:
 
