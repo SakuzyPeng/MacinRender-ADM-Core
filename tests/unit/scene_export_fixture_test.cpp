@@ -16,6 +16,8 @@
 
 // Our library (mradm namespace)
 #include "adm/io.h"
+#include "adm/logging.h"
+#include "adm/render.h"
 #include "adm/scene.h"
 
 // libadm / libbw64 — used here only to construct and inspect the fixture file.
@@ -240,6 +242,17 @@ std::vector<char> read_data_chunk_bytes(const std::string& path) {
     return {};
 }
 
+// Exports through RenderService with an in-memory semantic policy ("" exports unchanged).
+mradm::Result<void>
+export_with(const std::filesystem::path& src, const std::filesystem::path& dst, const std::string& policy) {
+    mradm::RenderOptions options;
+    if (!policy.empty()) {
+        options.semantic_policy_json = policy;
+    }
+    mradm::NullLogSink logs;
+    return mradm::RenderService{}.export_file(src.string(), dst.string(), options, logs);
+}
+
 const mradm::SceneObjectBlock* first_block(const mradm::AdmScene& scene) {
     if (scene.objects.empty() || scene.objects[0].tracks.empty() || scene.objects[0].tracks[0].blocks.empty()) {
         return nullptr;
@@ -264,9 +277,9 @@ bool verify_export_roundtrip() {
 
     auto dst = std::filesystem::temp_directory_path() / "mr_adm_export_roundtrip.wav";
     FileGuard dst_guard{dst};
-    auto written = mradm::io::write_scene(src.string(), *original, *original, dst.string());
+    auto written = export_with(src, dst, "");
     if (!written) {
-        std::cerr << "FAIL: write_scene roundtrip: " << written.error().message << "\n";
+        std::cerr << "FAIL: export roundtrip: " << written.error().message << "\n";
         return false;
     }
 
@@ -301,7 +314,8 @@ bool verify_export_roundtrip() {
     return ok;
 }
 
-// Gain override: write back a changed block + object gain; everything else stays.
+// Object gain policy: the object gain is written back; block fields stay (block gain edits are
+// tested in mradm-scene, since no policy changes them).
 bool verify_export_gain_override() {
     bool ok = true;
     auto [doc, uid_str] = make_objects_doc();
@@ -314,15 +328,11 @@ bool verify_export_gain_override() {
         return false;
     }
 
-    mradm::AdmScene effective = *original;
-    effective.objects[0].gain *= 0.5F;
-    effective.objects[0].tracks[0].blocks[0].gain *= 0.5F;
-
     auto dst = std::filesystem::temp_directory_path() / "mr_adm_export_gain.wav";
     FileGuard dst_guard{dst};
-    auto written = mradm::io::write_scene(src.string(), *original, effective, dst.string());
+    auto written = export_with(src, dst, R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}})");
     if (!written) {
-        std::cerr << "FAIL: write_scene gain override: " << written.error().message << "\n";
+        std::cerr << "FAIL: export gain override: " << written.error().message << "\n";
         return false;
     }
 
@@ -339,7 +349,7 @@ bool verify_export_gain_override() {
     const auto* blk = first_block(*reimported);
     ok &= check(blk != nullptr, "gain override: block present");
     if (blk != nullptr) {
-        ok &= check(std::fabs(blk->gain - 0.4F) < 0.001F, "gain override: block gain 0.8 -> 0.4");
+        ok &= check(std::fabs(blk->gain - 0.8F) < 0.001F, "gain override: block gain unchanged");
         // Untouched fields stay put.
         ok &= check(std::fabs(blk->position.azimuth - 30.0F) < 0.01F, "gain override: azimuth unchanged");
         ok &= check(std::fabs(blk->diffuse - 0.3F) < 0.001F, "gain override: diffuse unchanged");
@@ -370,14 +380,12 @@ bool verify_export_interpolation_override() {
     ok &= check(before != nullptr && before->interp_length_samples == 48000U,
                 "interpolation override: source has 1s interpolationLength");
 
-    mradm::AdmScene effective = *original;
-    effective.objects[0].tracks[0].blocks[0].interp_length_samples = 12000U;
-
     auto dst = std::filesystem::temp_directory_path() / "mr_adm_export_interpolation.wav";
     FileGuard dst_guard{dst};
-    auto written = mradm::io::write_scene(src.string(), *original, effective, dst.string());
+    auto written =
+        export_with(src, dst, R"({"schema":"mradm.semantic-policy.v1","global":{"interpolation":{"max_ms":250}}})");
     if (!written) {
-        std::cerr << "FAIL: write_scene interpolation override: " << written.error().message << "\n";
+        std::cerr << "FAIL: export interpolation override: " << written.error().message << "\n";
         return false;
     }
 
@@ -418,15 +426,12 @@ bool verify_export_position_override_deferred() {
         return false;
     }
 
-    mradm::AdmScene effective = *original;
-    effective.objects[0].tracks[0].blocks[0].position.azimuth = -90.0F;
-    effective.objects[0].tracks[0].blocks[0].position.elevation = 0.0F;
-
     auto dst = std::filesystem::temp_directory_path() / "mr_adm_export_position.wav";
     FileGuard dst_guard{dst};
-    auto written = mradm::io::write_scene(src.string(), *original, effective, dst.string());
+    auto written = export_with(
+        src, dst, R"({"schema":"mradm.semantic-policy.v1","global":{"position":{"azimuth":-90.0,"elevation":0.0}}})");
     if (!written) {
-        std::cerr << "FAIL: write_scene deferred position override: " << written.error().message << "\n";
+        std::cerr << "FAIL: export deferred position override: " << written.error().message << "\n";
         return false;
     }
 
@@ -475,19 +480,11 @@ bool verify_export_head_locked_block_override() {
             continue;
         }
 
-        auto effective = *original;
-        if (type == fixture::TypeDefinition::objects) {
-            effective.objects.at(0).tracks.at(0).blocks.at(0).head_locked = false;
-        } else if (type == fixture::TypeDefinition::direct_speakers) {
-            effective.objects.at(0).tracks.at(0).ds_blocks.at(0).head_locked = false;
-        } else {
-            effective.hoa_tracks.at(0).channels.at(0).blocks.at(0).head_locked = false;
-        }
-
         const auto dst =
             std::filesystem::temp_directory_path() / (std::string{"mr_adm_export_head_locked_"} + type_name + ".wav");
         const FileGuard dst_guard{dst};
-        const auto written = mradm::io::write_scene(src.string(), *original, effective, dst.string());
+        const auto written =
+            export_with(src, dst, R"({"schema":"mradm.semantic-policy.v1","global":{"head_locked":false}})");
         if (!written) {
             std::cerr << "FAIL: headLocked " << type_name << " write: " << written.error().message << "\n";
             ok = false;
@@ -636,9 +633,9 @@ bool verify_export_bw64_roundtrip() {
 
     auto dst = std::filesystem::temp_directory_path() / "mr_adm_export_bw64_out.wav";
     FileGuard dst_guard{dst};
-    auto written = mradm::io::write_scene(bw64_src.string(), *original, *original, dst.string());
+    auto written = export_with(bw64_src, dst, "");
     if (!written) {
-        std::cerr << "FAIL: write_scene bw64: " << written.error().message << "\n";
+        std::cerr << "FAIL: export bw64: " << written.error().message << "\n";
         return false;
     }
 
