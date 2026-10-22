@@ -1118,6 +1118,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_hrir_prepare_test.py")
             add_test(NAME mr_adm_room_acoustic_tools_tests COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -B
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_acoustic_tools_test.py")
+            add_test(NAME mr_adm_hrtf_dvf_tests COMMAND "${MR_ADM_ROOM_PREP_PYTHON}" -B
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/hrtf_dvf_test.py")
         else()
             message(STATUS "Room HRIR preparation tests need numpy/scipy/h5py in MR_ADM_ROOM_PREP_PYTHON")
         endif()
