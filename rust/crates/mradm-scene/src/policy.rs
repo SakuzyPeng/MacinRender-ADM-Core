@@ -575,7 +575,7 @@ fn lower(text: &str) -> Vec<u8> {
 }
 
 fn equal_ignore_case(a: &str, b: &str) -> bool {
-    a.len() == b.len() && lower(a) == lower(b)
+    a.eq_ignore_ascii_case(b)
 }
 
 fn any_equal_ignore_case(values: &[String], target: &str) -> bool {
@@ -896,7 +896,7 @@ fn value(v: Option<f32>) -> PolicyValue {
     }
 }
 
-fn gain_rule(gain: &Gain) -> PolicyGain {
+pub(crate) fn gain_rule(gain: &Gain) -> PolicyGain {
     PolicyGain {
         scale: value(gain.scale),
         gain_db: value(gain.gain_db),
@@ -933,7 +933,7 @@ fn section(enabled: Option<Option<bool>>) -> u32 {
     }
 }
 
-fn object_rule(policy: &Override) -> PolicyObject {
+pub(crate) fn object_rule(policy: &Override) -> PolicyObject {
     let mut rule = PolicyObject {
         diffuse: section(policy.diffuse.as_ref().map(|d| d.enabled)),
         extent: section(policy.extent.as_ref().map(|e| e.enabled)),
@@ -964,7 +964,7 @@ fn object_rule(policy: &Override) -> PolicyObject {
 }
 
 /// One Objects block: booleans here, arithmetic in `mradm_dsp::semantic_policy`.
-fn apply_block(
+pub(crate) fn apply_block(
     block: &mut mradm_adm::records::ObjectBlock,
     policy: &Override,
     rule: &PolicyObject,
@@ -1113,29 +1113,30 @@ impl Overlay {
     }
 }
 
-fn apply_direct(
-    s: &Snapshot,
-    block: &mut mradm_adm::records::DirectBlock,
+/// The DirectSpeakers block fields a policy changes.
+pub(crate) struct DirectFields {
+    pub head_locked: bool,
+    pub gain: f32,
+    pub polar: [f32; 3],
+}
+
+/// One DirectSpeakers action: the speaker-label and LFE filters, then headLocked, gain and
+/// position. `has_label` tests the block's labels (ASCII case-insensitive).
+pub(crate) fn apply_direct_fields(
+    has_label: impl Fn(&str) -> bool,
+    lfe: bool,
+    fields: &mut DirectFields,
     state: &mut DirectState,
     policy: &DirectSpeakers,
 ) {
-    if !policy.speaker_label.is_empty() {
-        let labels = &s.indices[block.labels.offset..block.labels.offset + block.labels.len];
-        if !labels
-            .iter()
-            .any(|&l| equal_ignore_case(&s.strings[l as usize], &policy.speaker_label))
-        {
-            return;
-        }
+    if !policy.speaker_label.is_empty() && !has_label(&policy.speaker_label) {
+        return;
     }
-    if policy
-        .lfe
-        .is_some_and(|lfe| lfe != (block.low_pass_present != 0))
-    {
+    if policy.lfe.is_some_and(|wanted| wanted != lfe) {
         return;
     }
     if let Some(head_locked) = policy.head_locked {
-        block.head_locked = u32::from(head_locked);
+        fields.head_locked = head_locked;
     }
     let mut rule = PolicyDirect {
         position: position_rule(&policy.position),
@@ -1149,18 +1150,47 @@ fn apply_direct(
         }
     }
     let mut numeric_block = PolicyDirectBlock {
-        gain: block.gain,
+        gain: fields.gain,
         user_gain_multiplier: state.user.gain_multiplier,
         has_position: u32::from(state.has_position),
-        polar: [block.azimuth, block.elevation, block.distance],
+        polar: fields.polar,
         user_position_override: u32::from(state.position_override),
     };
     numeric::apply_direct(&rule, &mut numeric_block);
-    block.gain = numeric_block.gain;
+    fields.gain = numeric_block.gain;
     state.user.gain_multiplier = numeric_block.user_gain_multiplier;
     state.has_position = numeric_block.has_position != 0;
-    [block.azimuth, block.elevation, block.distance] = numeric_block.polar;
+    fields.polar = numeric_block.polar;
     state.position_override = numeric_block.user_position_override != 0;
+}
+
+fn apply_direct(
+    s: &Snapshot,
+    block: &mut mradm_adm::records::DirectBlock,
+    state: &mut DirectState,
+    policy: &DirectSpeakers,
+) {
+    let labels = &s.indices[block.labels.offset..block.labels.offset + block.labels.len];
+    let has_label = |wanted: &str| {
+        labels
+            .iter()
+            .any(|&l| equal_ignore_case(&s.strings[l as usize], wanted))
+    };
+    let mut fields = DirectFields {
+        head_locked: block.head_locked != 0,
+        gain: block.gain,
+        polar: [block.azimuth, block.elevation, block.distance],
+    };
+    apply_direct_fields(
+        has_label,
+        block.low_pass_present != 0,
+        &mut fields,
+        state,
+        policy,
+    );
+    block.head_locked = u32::from(fields.head_locked);
+    block.gain = fields.gain;
+    [block.azimuth, block.elevation, block.distance] = fields.polar;
 }
 
 /// Applies a policy in place and returns the "rule did not match" warnings.

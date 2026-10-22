@@ -28,11 +28,11 @@
 #include <fmt/format.h>
 
 #include "adm/scene.h"
-#include "adm/semantic_policy.h"
 
 #include "../adm_render_common/consistency_trace.h"
 #include "../adm_render_common/live_scene_trace.h"
 #include "live_binaural_renderer.h"
+#include "live_policy_ffi.h"
 #include "live_room_renderer.h"
 #include "live_scene_state.h"
 #include "live_triple_balance_renderer.h"
@@ -42,7 +42,6 @@
 #include "room_worker_wait.h"
 #include "scene_math.h"
 #include "scene_transition.h"
-#include "semantic_policy_ffi.h"
 
 namespace mradm::realtime {
 
@@ -227,90 +226,78 @@ class PlayerOutputEngine {
     return true;
 }
 
-void append_unique(std::vector<std::string>& values, const std::string& value) {
-    if (!value.empty() && std::ranges::find(values, value) == values.end()) {
-        values.push_back(value);
+// The semantic policy is Rust (mradm-scene `live_policy`, PCM consistency 4.4); these own its handles.
+using LivePolicy = std::shared_ptr<MradmLivePolicy>;
+using LiveGeneration = std::shared_ptr<MradmLiveGeneration>;
+using LiveResolution = std::shared_ptr<MradmLiveResolution>;
+
+[[nodiscard]] MradmAdmText live_text(const std::string& value) {
+    return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
+}
+
+[[nodiscard]] Error live_policy_error(int32_t code, const std::array<uint8_t, 1024>& message) {
+    const auto error = code >= 1 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
+    return {error, reinterpret_cast<const char*>(message.data()), {}};
+}
+
+// 0 object, 1 DirectSpeakers, 2 LFE (live_policy_ffi.h).
+[[nodiscard]] uint32_t live_policy_role(live_scene::ElementRole role) {
+    switch (role) {
+    case live_scene::ElementRole::object:
+        return 0U;
+    case live_scene::ElementRole::lfe:
+        return 2U;
+    default:
+        return 1U;
     }
 }
 
-[[nodiscard]] Result<std::vector<SemanticPolicyIdentity>>
-// NOLINTNEXTLINE(readability-function-size)
-build_policy_identities(std::span<const live_scene::ElementDescriptor> elements) {
-    std::vector<SemanticPolicyIdentity> identities(elements.size());
-    std::unordered_map<std::string, std::vector<std::size_t>> groups;
+// Elements sharing an object_id are matched as one AudioObject; conflicting identities are errors.
+[[nodiscard]] Result<LiveGeneration> build_policy_generation(std::span<const live_scene::ElementDescriptor> elements) {
+    std::vector<std::vector<MradmLivePolicyEntity>> contents(elements.size());
+    std::vector<std::vector<MradmLivePolicyEntity>> programmes(elements.size());
+    std::vector<MradmLivePolicyElement> records(elements.size());
     for (std::size_t index = 0U; index < elements.size(); ++index) {
-        const auto& optional = elements[index].semantic_identity;
-        if (!optional) {
+        const auto& element = elements[index];
+        auto& record = records[index];
+        record.role = live_policy_role(element.role);
+        record.speaker_label = live_text(element.speaker_label);
+        record.has_position = element.has_position ? 1U : 0U;
+        record.position[0] = element.x;
+        record.position[1] = element.y;
+        record.position[2] = element.z;
+        if (!element.semantic_identity) {
             continue;
         }
-        const auto& source = *optional;
-        auto& identity = identities[index];
-        identity.object_id = source.object_id;
-        identity.object_name = source.object_name;
-        append_unique(identity.track_uids, source.track_uid);
-        identity.importance = source.importance;
-        identity.dialogue_id = source.dialogue_id;
+        const auto& source = *element.semantic_identity;
         for (const auto& content : source.contents) {
-            append_unique(identity.content_ids, content.id);
-            append_unique(identity.content_names, content.name);
+            contents[index].push_back({live_text(content.id), live_text(content.name)});
         }
         for (const auto& programme : source.programmes) {
-            append_unique(identity.programme_ids, programme.id);
-            append_unique(identity.programme_names, programme.name);
+            programmes[index].push_back({live_text(programme.id), live_text(programme.name)});
         }
-        if (!source.object_id.empty()) {
-            groups[source.object_id].push_back(index);
-        }
+        record.identity = {1U,
+                           live_text(source.object_id),
+                           live_text(source.object_name),
+                           live_text(source.track_uid),
+                           source.importance ? 1U : 0U,
+                           source.importance.value_or(0),
+                           source.dialogue_id ? 1U : 0U,
+                           source.dialogue_id.value_or(0),
+                           contents[index].data(),
+                           contents[index].size(),
+                           programmes[index].data(),
+                           programmes[index].size()};
     }
-
-    for (const auto& [object_id, indices] : groups) {
-        SemanticPolicyIdentity aggregate;
-        aggregate.object_id = object_id;
-        for (const auto index : indices) {
-            const auto& source = identities[index];
-            if (!aggregate.object_name.empty() && !source.object_name.empty() &&
-                aggregate.object_name != source.object_name) {
-                return make_error(ErrorCode::invalid_argument,
-                                  "Scene semantic identities disagree on object_name for object_id " + object_id);
-            }
-            if (aggregate.importance && source.importance && aggregate.importance != source.importance) {
-                return make_error(ErrorCode::invalid_argument,
-                                  "Scene semantic identities disagree on importance for object_id " + object_id);
-            }
-            if (aggregate.dialogue_id && source.dialogue_id && aggregate.dialogue_id != source.dialogue_id) {
-                return make_error(ErrorCode::invalid_argument,
-                                  "Scene semantic identities disagree on dialogue_id for object_id " + object_id);
-            }
-            if (aggregate.object_name.empty()) {
-                aggregate.object_name = source.object_name;
-            }
-            if (!aggregate.importance) {
-                aggregate.importance = source.importance;
-            }
-            if (!aggregate.dialogue_id) {
-                aggregate.dialogue_id = source.dialogue_id;
-            }
-            for (const auto& value : source.track_uids) {
-                append_unique(aggregate.track_uids, value);
-            }
-            for (const auto& value : source.content_ids) {
-                append_unique(aggregate.content_ids, value);
-            }
-            for (const auto& value : source.content_names) {
-                append_unique(aggregate.content_names, value);
-            }
-            for (const auto& value : source.programme_ids) {
-                append_unique(aggregate.programme_ids, value);
-            }
-            for (const auto& value : source.programme_names) {
-                append_unique(aggregate.programme_names, value);
-            }
-        }
-        for (const auto index : indices) {
-            identities[index] = aggregate;
-        }
+    std::array<uint8_t, 1024> message{};
+    MradmLiveGeneration* raw = nullptr;
+    const auto code =
+        mradm_live_policy_generation(records.data(), records.size(), &raw, message.data(), message.size());
+    LiveGeneration generation{raw, mradm_live_policy_generation_destroy};
+    if (code != 0) {
+        return tl::unexpected{live_policy_error(code, message)};
     }
-    return identities;
+    return generation;
 }
 
 } // namespace
@@ -320,7 +307,7 @@ struct SceneStreamEngine::Impl {
     struct Generation {
         std::uint64_t id{0U};
         std::vector<live_scene::ElementDescriptor> elements;
-        std::vector<SemanticPolicyIdentity> policy_identities;
+        LiveGeneration policy_generation;
     };
 
     struct PendingBackend {
@@ -332,7 +319,7 @@ struct SceneStreamEngine::Impl {
         std::unique_ptr<PendingBackend> backend;
         std::optional<ListenerOrientation> orientation;
         bool has_policy_update{false};
-        std::shared_ptr<const SemanticPolicy> policy;
+        LivePolicy policy;
         std::uint64_t policy_revision{0U};
 
         [[nodiscard]] bool empty() const noexcept {
@@ -565,24 +552,26 @@ struct SceneStreamEngine::Impl {
         start_deferred_backend_switch();
     }
 
-    [[nodiscard]] std::vector<ResolvedSemanticPolicy>
-    resolve_policy_for_current_generation(const std::shared_ptr<const SemanticPolicy>& policy) {
-        if (!current_generation_model) {
+    [[nodiscard]] LiveResolution resolve_policy_for_current_generation(const LivePolicy& policy) {
+        if (!current_generation_model || !policy) {
             return {};
         }
-        std::vector<ResolvedSemanticPolicy> resolved(current_generation_model->elements.size());
-        if (!policy) {
-            return resolved;
+        std::array<uint8_t, 1024> message{};
+        MradmLiveResolution* raw = nullptr;
+        const std::size_t* unmatched = nullptr;
+        std::size_t unmatched_len = 0U;
+        const auto code = mradm_live_policy_resolve(policy.get(),
+                                                    current_generation_model->policy_generation.get(),
+                                                    &raw,
+                                                    &unmatched,
+                                                    &unmatched_len,
+                                                    message.data(),
+                                                    message.size());
+        LiveResolution resolved{raw, mradm_live_policy_resolution_destroy};
+        if (code != 0) {
+            throw std::runtime_error(reinterpret_cast<const char*>(message.data()));
         }
-        std::unordered_set<std::size_t> matched;
-        for (std::size_t index = 0U; index < current_generation_model->policy_identities.size(); ++index) {
-            resolved[index] = resolve_semantic_policy(*policy, current_generation_model->policy_identities[index]);
-            matched.insert(resolved[index].matched_rule_indices.begin(), resolved[index].matched_rule_indices.end());
-        }
-        for (std::size_t index = 0U; index < policy->objects.size(); ++index) {
-            if (matched.contains(index)) {
-                continue;
-            }
+        for (const auto index : std::span{unmatched, unmatched_len}) {
             add_diagnostic({LogLevel::warning,
                             live_scene::DiagnosticCode::semantic_degraded,
                             epoch_status.load(std::memory_order_relaxed),
@@ -598,139 +587,64 @@ struct SceneStreamEngine::Impl {
         resolved_policy = resolve_policy_for_current_generation(current_policy);
     }
 
-    // Effective level (content level times object level) and, for polar results, Cartesian x/y/z.
-    [[nodiscard]] static std::array<float, 4>
-    finish_state(float block_gain, float object_gain, bool polar, std::array<float, 3> position) {
-        const std::array input{block_gain, object_gain, position[0], position[1], position[2]};
-        std::array<float, 4> result{};
-        dsp::scene_check(mradm_dsp_policy_scene_state(
-            input.data(), input.size(), polar ? 1U : 0U, result.data(), polar ? result.size() : 1U));
-        return result;
-    }
-
-    // NOLINTNEXTLINE(readability-function-size)
+    // The resolved policy applied to one element's producer state (and an update's timing).
     [[nodiscard]] live_scene::ObjectState apply_policy_to_state(std::size_t element_index,
                                                                 const live_scene::ObjectState& base,
                                                                 live_scene::MetadataUpdate* update = nullptr) const {
-        if (!current_policy || element_index >= resolved_policy.size() || !current_generation_model) {
+        if (!current_policy || !resolved_policy || !current_generation_model) {
             return base;
         }
-        const auto& descriptor = current_generation_model->elements[element_index];
-        const auto& resolved = resolved_policy[element_index];
+        MradmLivePolicyState policy_state{(base.valid_fields & live_scene::state_position) != 0U ? 1U : 0U,
+                                          base.linear_gain,
+                                          {base.x, base.y, base.z},
+                                          base.width,
+                                          base.height,
+                                          base.depth,
+                                          base.diffuse,
+                                          base.divergence,
+                                          base.channel_lock ? 1U : 0U,
+                                          base.screen_reference ? 1U : 0U,
+                                          base.head_locked ? 1U : 0U,
+                                          base.divergence_azimuth_range,
+                                          base.divergence_position_range,
+                                          base.channel_lock_max_distance ? 1U : 0U,
+                                          base.channel_lock_max_distance.value_or(0.0F)};
+        MradmLivePolicyUpdate timing{};
+        if (update != nullptr) {
+            timing = {update->jump_position ? 1U : 0U, update->ramp_duration_samples};
+        }
+        if (mradm_live_policy_apply(resolved_policy.get(),
+                                    element_index,
+                                    config.renderer.sample_rate,
+                                    &policy_state,
+                                    update != nullptr ? &timing : nullptr) != 0) {
+            return base;
+        }
         live_scene::ObjectState out = base;
-
-        SceneObject object;
-        object.gain = 1.0F;
-        apply_resolved_semantic_object(object, resolved.object);
-        const float object_gain = object.mute ? 0.0F : object.gain;
-
-        if (descriptor.role == live_scene::ElementRole::object) {
-            SceneObjectBlock block;
-            block.position.cartesian = true;
-            block.position.x = base.x;
-            block.position.y = base.y;
-            block.position.z = base.z;
-            block.gain = base.linear_gain;
-            block.diffuse = base.diffuse;
-            block.width = base.width;
-            block.height = base.height;
-            block.depth = base.depth;
-            block.channel_lock = base.channel_lock;
-            block.channel_lock_max_distance = base.channel_lock_max_distance;
-            block.divergence = base.divergence;
-            block.divergence_azimuth_range = base.divergence_azimuth_range;
-            block.divergence_position_range = base.divergence_position_range;
-            block.screen_ref = base.screen_reference;
-            block.head_locked = base.head_locked;
-            if (update != nullptr) {
-                block.jump_position = update->jump_position;
-                if (update->ramp_duration_samples != 0U) {
-                    block.interp_length_samples = update->ramp_duration_samples;
-                }
-            }
-            apply_resolved_semantic_object_block(block, resolved.object, config.renderer.sample_rate);
-            const auto finished =
-                finish_state(block.gain,
-                             object_gain,
-                             !block.position.cartesian,
-                             {block.position.azimuth, block.position.elevation, block.position.distance});
-            out.linear_gain = finished[0];
-            out.diffuse = block.diffuse;
-            out.width = block.width;
-            out.height = block.height;
-            out.depth = block.depth;
-            out.channel_lock = block.channel_lock;
-            out.channel_lock_max_distance = block.channel_lock_max_distance;
-            out.divergence = block.divergence;
-            out.divergence_azimuth_range = block.divergence_azimuth_range;
-            out.divergence_position_range = block.divergence_position_range;
-            out.screen_reference = block.screen_ref;
-            out.head_locked = block.head_locked;
-            if (!block.position.cartesian) {
-                out.x = finished[1];
-                out.y = finished[2];
-                out.z = finished[3];
-            } else {
-                out.x = block.position.x;
-                out.y = block.position.y;
-                out.z = block.position.z;
-            }
-            if (update != nullptr) {
-                update->jump_position = block.jump_position;
-                update->ramp_duration_samples =
-                    block.interp_length_samples.has_value()
-                        ? static_cast<std::uint32_t>(std::min<std::uint64_t>(*block.interp_length_samples,
-                                                                             std::numeric_limits<std::uint32_t>::max()))
-                        : 0U;
-            }
-            return out;
-        }
-
-        SceneDirectSpeakersBlock block;
-        if (!descriptor.speaker_label.empty()) {
-            block.speaker_labels.push_back(descriptor.speaker_label);
-        }
-        if (descriptor.role == live_scene::ElementRole::lfe) {
-            block.low_pass_hz = 120.0F;
-        }
-        block.gain = base.linear_gain;
-        block.head_locked = base.head_locked;
-        const bool producer_has_position = (base.valid_fields & live_scene::state_position) != 0U;
-        if (producer_has_position) {
-            const auto polar =
-                scene_position_to_polar(SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, base.x, base.y, base.z});
-            block.azimuth = polar.azimuth;
-            block.elevation = polar.elevation;
-            block.distance = polar.distance;
-            block.has_position = true;
-        } else if (descriptor.has_position) {
-            const auto polar = scene_position_to_polar(
-                SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, descriptor.x, descriptor.y, descriptor.z});
-            block.azimuth = polar.azimuth;
-            block.elevation = polar.elevation;
-            block.distance = polar.distance;
-            block.has_position = true;
-        }
-        // A descriptor position is only a routing fallback. Probe the resolved
-        // DirectSpeakers rules separately so only a matching position operation
-        // promotes that fallback into the renderer's explicit state.
-        auto position_probe = block;
-        position_probe.has_position = false;
-        apply_resolved_semantic_direct_speaker(position_probe, resolved.direct_speakers, resolved.object);
-        const bool policy_has_position = position_probe.has_position;
-        apply_resolved_semantic_direct_speaker(block, resolved.direct_speakers, resolved.object);
-        const bool positioned = block.has_position && (producer_has_position || policy_has_position);
-        const auto finished =
-            finish_state(block.gain, object_gain, positioned, {block.azimuth, block.elevation, block.distance});
-        out.linear_gain = finished[0];
-        out.head_locked = block.head_locked;
-        if (positioned) {
-            out.x = finished[1];
-            out.y = finished[2];
-            out.z = finished[3];
+        out.linear_gain = policy_state.linear_gain;
+        out.x = policy_state.position[0];
+        out.y = policy_state.position[1];
+        out.z = policy_state.position[2];
+        out.width = policy_state.width;
+        out.height = policy_state.height;
+        out.depth = policy_state.depth;
+        out.diffuse = policy_state.diffuse;
+        out.divergence = policy_state.divergence;
+        out.channel_lock = policy_state.channel_lock != 0U;
+        out.screen_reference = policy_state.screen_reference != 0U;
+        out.head_locked = policy_state.head_locked != 0U;
+        out.divergence_azimuth_range = policy_state.divergence_azimuth_range;
+        out.divergence_position_range = policy_state.divergence_position_range;
+        out.channel_lock_max_distance =
+            policy_state.has_max_distance != 0U ? std::optional<float>{policy_state.max_distance} : std::nullopt;
+        if (policy_state.has_position != 0U) {
             out.valid_fields |= live_scene::state_position;
         } else {
             out.valid_fields &= ~live_scene::state_position;
+        }
+        if (update != nullptr) {
+            update->jump_position = timing.jump_position != 0U;
+            update->ramp_duration_samples = timing.ramp_duration_samples;
         }
         return out;
     }
@@ -773,7 +687,7 @@ struct SceneStreamEngine::Impl {
     void apply_pending_controls(std::unique_ptr<PendingBackend> backend,
                                 std::optional<ListenerOrientation> orientation,
                                 bool has_policy_update,
-                                std::shared_ptr<const SemanticPolicy> policy,
+                                LivePolicy policy,
                                 std::uint64_t policy_revision) {
         if (has_policy_update) {
             try {
@@ -877,7 +791,7 @@ struct SceneStreamEngine::Impl {
         has_current_generation = false;
         current_generation_model.reset();
         current_element_index.clear();
-        resolved_policy.clear();
+        resolved_policy.reset();
         base_states.clear();
         effective_states.clear();
         policy_retarget_pending = false;
@@ -1062,7 +976,7 @@ struct SceneStreamEngine::Impl {
         try {
             compile_policy_for_current_generation();
         } catch (const std::exception& exception) {
-            resolved_policy.assign(item.generation->elements.size(), {});
+            resolved_policy.reset();
             add_diagnostic({LogLevel::error,
                             live_scene::DiagnosticCode::semantic_degraded,
                             item.frame.epoch_id,
@@ -1073,7 +987,7 @@ struct SceneStreamEngine::Impl {
                                         "using producer state: "} +
                                 exception.what()});
         } catch (...) {
-            resolved_policy.assign(item.generation->elements.size(), {});
+            resolved_policy.reset();
             add_diagnostic({LogLevel::error,
                             live_scene::DiagnosticCode::semantic_degraded,
                             item.frame.epoch_id,
@@ -1728,7 +1642,7 @@ struct SceneStreamEngine::Impl {
     bool orientation_pending{false};
     ListenerOrientation pending_orientation{};
     bool policy_pending{false};
-    std::shared_ptr<const SemanticPolicy> pending_policy;
+    LivePolicy pending_policy;
     std::uint64_t pending_policy_revision{0U};
     std::uint64_t reserved_samples{0U};
     std::uint64_t reserved_bytes{0U};
@@ -1762,8 +1676,8 @@ struct SceneStreamEngine::Impl {
     std::uint64_t current_generation{0U};
     bool has_current_generation{false};
     std::shared_ptr<const Generation> current_generation_model;
-    std::shared_ptr<const SemanticPolicy> current_policy;
-    std::vector<ResolvedSemanticPolicy> resolved_policy;
+    LivePolicy current_policy;
+    LiveResolution resolved_policy;
     bool policy_retarget_pending{false};
     ListenerOrientation current_orientation{};
     std::atomic<std::int64_t> last_orientation_update_ns{0};
@@ -1918,16 +1832,20 @@ void SceneStreamEngine::set_listener_orientation(const ListenerOrientation& orie
 }
 
 Result<void> SceneStreamEngine::set_semantic_policy_json(std::string_view json, std::uint64_t revision) {
-    std::shared_ptr<const SemanticPolicy> parsed;
+    LivePolicy parsed;
     if (!json.empty()) {
-        auto policy = parse_semantic_policy(json, "<scene-stream>");
-        if (!policy) {
-            return tl::unexpected{policy.error()};
-        }
-        try {
-            parsed = std::make_shared<const SemanticPolicy>(std::move(*policy));
-        } catch (...) {
-            return make_error(ErrorCode::internal_error, "failed to retain the live Scene semantic policy");
+        std::array<uint8_t, 1024> message{};
+        uint32_t context = 0U;
+        MradmLivePolicy* raw = nullptr;
+        const auto code = mradm_live_policy_parse(
+            reinterpret_cast<const uint8_t*>(json.data()), json.size(), &raw, &context, message.data(), message.size());
+        parsed = LivePolicy{raw, mradm_live_policy_destroy};
+        if (code != 0) {
+            auto error = live_policy_error(code, message);
+            if (context == 3U) {
+                error.context = "<scene-stream>";
+            }
+            return tl::unexpected{std::move(error)};
         }
     }
     {
@@ -2018,11 +1936,11 @@ Result<void> SceneStreamEngine::configure_generation(std::uint64_t epoch_id,
         auto generation = std::make_shared<Impl::Generation>();
         generation->id = generation_id;
         generation->elements.assign(elements.begin(), elements.end());
-        auto identities = build_policy_identities(generation->elements);
-        if (!identities) {
-            return tl::unexpected{identities.error()};
+        auto policy_generation = build_policy_generation(generation->elements);
+        if (!policy_generation) {
+            return tl::unexpected{policy_generation.error()};
         }
-        generation->policy_identities = std::move(*identities);
+        generation->policy_generation = std::move(*policy_generation);
         const std::lock_guard<std::mutex> lock(impl_->queue_mutex);
         if (!impl_->has_epoch || epoch_id != impl_->control_epoch) {
             return make_error(ErrorCode::invalid_argument, "Scene generation uses an unknown epoch");

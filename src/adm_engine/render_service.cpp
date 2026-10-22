@@ -842,6 +842,9 @@ RenderResult RenderService::render(const RenderRequest& request,
     }
     plan.cancel_token = request.options.cancel_token;
     plan.scene = std::move(*scene_result);
+    if (render_scene.has_value()) {
+        plan.scene_handle = render_scene->handle();
+    }
     std::string renderer_semantics;
     if (needs_semantic_report) {
         plan.renderer_semantics_sink = [&renderer_semantics](std::string value) {
