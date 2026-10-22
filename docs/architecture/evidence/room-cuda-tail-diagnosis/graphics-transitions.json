@@ -1,0 +1,127 @@
+{
+  "timebase": "milliseconds from flight start_before",
+  "renderer_adapter": "adapter-A",
+  "event_thread": 103176,
+  "target_pid": 105168,
+  "csv_variant_ambiguities": 0,
+  "events": [
+    {
+      "time_ms": 9987.16195,
+      "event": "FlushScheduler/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "FlushSchedulerReason": "6",
+        "VidPnSourceId": "4294967295"
+      }
+    },
+    {
+      "time_ms": 9995.10095,
+      "event": "FlushPresentReferencesAndDisableOverlays/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "SourceMaskFlushHwAndAbortSwQueue": "0",
+        "SourceMaskFlushHwAndKeepSwQueue": "65535",
+        "SourceMaskDisableAllPlanes": "0",
+        "SourceMaskSuspendScheduler": "65535"
+      }
+    },
+    {
+      "time_ms": 9995.10395,
+      "event": "DdiNotifyAcpiEvent/win:Start",
+      "details": {
+        "MiniportContext": "miniport-A",
+        "EventType": "1",
+        "Event": "210",
+        "AcpiFlags": "0",
+        "Status": "0x00000000"
+      }
+    },
+    {
+      "time_ms": 9998.66095,
+      "event": "DdiNotifyAcpiEvent/win:Stop",
+      "details": {
+        "MiniportContext": "miniport-A",
+        "EventType": "1",
+        "Event": "210",
+        "AcpiFlags": "0",
+        "Status": "0x00000000"
+      }
+    },
+    {
+      "time_ms": 9998.66295,
+      "event": "FlushScheduler/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "FlushSchedulerReason": "7",
+        "VidPnSourceId": "4294967295"
+      }
+    },
+    {
+      "time_ms": 9998.66495,
+      "event": "ResumeSchedulerForVidPnSource/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "SourceMaskResumeScheduler": "65535"
+      }
+    },
+    {
+      "time_ms": 15808.02495,
+      "event": "FlushScheduler/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "FlushSchedulerReason": "6",
+        "VidPnSourceId": "4294967295"
+      }
+    },
+    {
+      "time_ms": 15831.71095,
+      "event": "FlushPresentReferencesAndDisableOverlays/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "SourceMaskFlushHwAndAbortSwQueue": "0",
+        "SourceMaskFlushHwAndKeepSwQueue": "65535",
+        "SourceMaskDisableAllPlanes": "0",
+        "SourceMaskSuspendScheduler": "65535"
+      }
+    },
+    {
+      "time_ms": 15831.71295,
+      "event": "DdiNotifyAcpiEvent/win:Start",
+      "details": {
+        "MiniportContext": "miniport-A",
+        "EventType": "1",
+        "Event": "209",
+        "AcpiFlags": "0",
+        "Status": "0x00000000"
+      }
+    },
+    {
+      "time_ms": 15838.27195,
+      "event": "DdiNotifyAcpiEvent/win:Stop",
+      "details": {
+        "MiniportContext": "miniport-A",
+        "EventType": "1",
+        "Event": "209",
+        "AcpiFlags": "0",
+        "Status": "0x00000000"
+      }
+    },
+    {
+      "time_ms": 15838.27295,
+      "event": "FlushScheduler/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "FlushSchedulerReason": "7",
+        "VidPnSourceId": "4294967295"
+      }
+    },
+    {
+      "time_ms": 15838.27495,
+      "event": "ResumeSchedulerForVidPnSource/win:Info",
+      "details": {
+        "pDxgAdapter": "adapter-A",
+        "SourceMaskResumeScheduler": "65535"
+      }
+    }
+  ]
+}

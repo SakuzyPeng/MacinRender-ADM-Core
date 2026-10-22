@@ -1,0 +1,70 @@
+{
+  "targets": [
+    {
+      "call": 5421,
+      "tid": 95888,
+      "start": 15823395950,
+      "state": "Waiting",
+      "reason": "WrResource",
+      "cpu_out": 11,
+      "old_priority": 21,
+      "next_priority": 0,
+      "end": 15842462950,
+      "cpu_in": 8,
+      "priority_in": 21,
+      "ready": 15842451950
+    },
+    {
+      "call": 4814,
+      "tid": 95888,
+      "start": 9987711950,
+      "state": "Waiting",
+      "reason": "WrResource",
+      "cpu_out": 6,
+      "old_priority": 21,
+      "next_priority": 0,
+      "end": 10001677950,
+      "cpu_in": 11,
+      "priority_in": 21,
+      "ready": 10001662950
+    }
+  ],
+  "hits": [
+    {
+      "call": 4814,
+      "wait_ms": 13.966,
+      "ready_delay_ms": 0.015,
+      "ready_time_ns": 10001662950,
+      "waker": {
+        "ReadyThread": "ReadyThread",
+        "TimeStamp": "27473036",
+        "Process Name ( PID)": "System (   4)",
+        "ThreadID": "103176",
+        "Rdy Process Name ( PID)": "room_cuda_bench.exe (105168)",
+        "Rdy TID": "95888",
+        "AdjustReason": "Unwait",
+        "AdjustIncrement": "0",
+        "CPU": "11",
+        "InDPC": ""
+      }
+    },
+    {
+      "call": 5421,
+      "wait_ms": 19.067,
+      "ready_delay_ms": 0.011,
+      "ready_time_ns": 15842451950,
+      "waker": {
+        "ReadyThread": "ReadyThread",
+        "TimeStamp": "33313825",
+        "Process Name ( PID)": "System (   4)",
+        "ThreadID": "103176",
+        "Rdy Process Name ( PID)": "room_cuda_bench.exe (105168)",
+        "Rdy TID": "95888",
+        "AdjustReason": "Unwait",
+        "AdjustIncrement": "0",
+        "CPU": "8",
+        "InDPC": ""
+      }
+    }
+  ]
+}

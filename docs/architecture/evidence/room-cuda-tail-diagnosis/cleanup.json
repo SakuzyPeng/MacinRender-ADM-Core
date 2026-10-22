@@ -1,0 +1,21 @@
+{
+  "head": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+  "archive_verified_on_mac": {
+    "archive_sha256": "af9213dc2507af52568cc29cf3008332e892316c42d0a1c2fcab80b54a4841db",
+    "bytes": 691166796,
+    "members_verified": 135,
+    "member_sha256_verified": true,
+    "zip_crc_verified": true
+  },
+  "removed": [
+    "assets",
+    "bin",
+    "diagnostic",
+    "raw-evidence.zip",
+    "owned temporary MathDx restore"
+  ],
+  "free_bytes_before": 5384404992,
+  "free_bytes_after": 15984852992,
+  "canonical_cargo_fetchcontent_preserved": true,
+  "source_clean": true
+}

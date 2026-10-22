@@ -1,0 +1,185 @@
+--- a/rust/crates/mradm-dsp/src/room/profile.rs
++++ b/rust/crates/mradm-dsp/src/room/profile.rs
+@@ -208,12 +208,40 @@
+ #[cfg(feature = "room-profile")]
+ pub use enabled::{Guard, cpu_snapshot, reset, set_thread_cpu_clock, snapshot};
+ #[cfg(not(feature = "room-profile"))]
+-pub struct Guard;
++static TIMELINE: std::sync::OnceLock<fn(Stage, bool)> = std::sync::OnceLock::new();
++#[cfg(not(feature = "room-profile"))]
++pub fn set_timeline(hook: fn(Stage, bool)) {
++    let _ = TIMELINE.set(hook);
++}
++#[cfg(not(feature = "room-profile"))]
++pub struct Guard {
++    stage: Stage,
++    hook: Option<fn(Stage, bool)>,
++}
+ #[cfg(not(feature = "room-profile"))]
+ impl Guard {
+     #[inline(always)]
+-    pub fn new(_: Stage) -> Self {
+-        Self
++    pub fn new(stage: Stage) -> Self {
++        // Temporary diagnostic: selected NVTX ranges only, no stage clocks/counters.
++        let hook = if matches!(
++            stage,
++            Stage::SessionProcess
++                | Stage::CanonicalBlock
++                | Stage::WorkerRoundtrip
++                | Stage::WorkerExecution
++                | Stage::VoiceBatch
++                | Stage::LateDecoder
++                | Stage::GpuSubmit
++                | Stage::GpuWait
++        ) {
++            TIMELINE.get().copied()
++        } else {
++            None
++        };
++        if let Some(hook) = hook {
++            hook(stage, true);
++        }
++        Self { stage, hook }
+     }
+ }
+ #[cfg(not(feature = "room-profile"))]
+@@ -234,5 +262,9 @@
+ #[cfg(not(feature = "room-profile"))]
+ impl Drop for Guard {
+     #[inline(always)]
+-    fn drop(&mut self) {}
+-}
++    fn drop(&mut self) {
++        if let Some(hook) = self.hook {
++            hook(self.stage, false);
++        }
++    }
++}
+--- a/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
++++ b/rust/crates/mradm-dsp/examples/room_support/room_bench.rs
+@@ -308,6 +308,8 @@
+             let mut peak = 0f32;
+             let mut cpu_start = None;
+             let mut rss_peak = 0u64;
++            // Warm the collector along with the renderer before measured calls.
++            crate::timeline::capture()?;
+             for block in 0..blocks + 32 {
+                 if block == 32 {
+                     mradm_dsp::room::profile::reset();
+@@ -375,6 +377,7 @@
+                 let trace_start = (block >= 32)
+                     .then(|| trace.as_ref().map(|_| trace::start(session.info().phase)))
+                     .flatten();
++                crate::timeline::call(block as u64, true);
+                 let start = Instant::now();
+                 session.process(
+                     frames,
+@@ -384,6 +387,7 @@
+                     &mut output,
+                 )?;
+                 let duration = start.elapsed().as_secs_f64();
++                crate::timeline::call(block as u64, false);
+                 if block >= 32 {
+                     elapsed.push(duration);
+                     #[cfg(feature = "room-profile")]
+@@ -443,7 +447,17 @@
+             report["coordinate_mapping"] =
+                 serde_json::json!(if automatic { "room" } else { "uniform" });
+             report["thread_scheduling"] = scheduling.clone();
+-            println!("{report}");
++            report["profiling"] = serde_json::json!(true);
++            report["diagnostic"] = serde_json::json!({"kind":"nvtx-coarse", "stage_clocks":false, "capture_warmup_calls":32, "call_payload":"benchmark_call including 32 warmups"});
++            if std::env::var_os("MR_ROOM_FLIGHT_LOG").is_some() {
++                report["diagnostic"]["kind"] = serde_json::json!("flight-coarse");
++                report["diagnostic"]["stage_clocks"] = serde_json::json!(true);
++                report["diagnostic"]["rust_stage_counters"] = serde_json::json!(false);
++            }
++            std::fs::write(
++                std::env::var("MR_ROOM_DIAGNOSTIC_JSON")?,
++                report.to_string(),
++            )?;
+         }
+     }
+     Ok(())
+--- a/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
++++ b/rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs
+@@ -9,6 +9,13 @@
+ #[cfg(feature = "room-profile")]
+ #[path = "../../mradm-dsp/examples/room_bench/trace.rs"]
+ mod trace;
++#[cfg(feature = "room-profile")]
++compile_error!("Coarse marker diagnostic must be built without stage profiling features");
++#[path = "support/timeline.rs"]
++mod timeline;
+ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+-    implementation::run()
++    timeline::initialize()?;
++    let result = implementation::run();
++    timeline::flush()?;
++    result
+ }
+--- /dev/null
++++ b/rust/crates/mradm-room-cuda/examples/support/timeline.rs
+@@ -0,0 +1,61 @@
++//! Temporary Windows diagnostic binding. Never used by acceptance binaries.
++use std::{ffi::c_void, os::windows::ffi::OsStrExt, sync::OnceLock};
++type Event = unsafe extern "C" fn(u32, u32);
++type Call = unsafe extern "C" fn(u64, u32);
++type Capture = unsafe extern "C" fn() -> i32;
++type Flush = unsafe extern "C" fn() -> i32;
++static FUNCTIONS: OnceLock<(Event, Call, Capture, Flush)> = OnceLock::new();
++#[link(name = "kernel32")]
++unsafe extern "system" {
++    fn LoadLibraryW(path: *const u16) -> *mut c_void;
++    fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
++}
++fn hook(stage: mradm_dsp::room::profile::Stage, begin: bool) {
++    unsafe { (FUNCTIONS.get().unwrap().0)(stage as u32, u32::from(begin)) };
++}
++pub fn initialize() -> Result<(), Box<dyn std::error::Error>> {
++    let path = std::env::current_exe()?.with_file_name("room_timeline.dll");
++    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
++    let library = unsafe { LoadLibraryW(wide.as_ptr()) };
++    if library.is_null() {
++        return Err("Cannot load diagnostic timeline helper".into());
++    }
++    let event = unsafe { GetProcAddress(library, c"room_timeline_event".as_ptr().cast()) };
++    let call = unsafe { GetProcAddress(library, c"room_timeline_call".as_ptr().cast()) };
++    let capture = unsafe { GetProcAddress(library, c"room_timeline_capture".as_ptr().cast()) };
++    let flush = unsafe { GetProcAddress(library, c"room_timeline_flush".as_ptr().cast()) };
++    if event.is_null() || call.is_null() || capture.is_null() || flush.is_null() {
++        return Err("Incomplete timeline helper".into());
++    }
++    let functions = unsafe {
++        (
++            std::mem::transmute::<*mut c_void, Event>(event),
++            std::mem::transmute::<*mut c_void, Call>(call),
++            std::mem::transmute::<*mut c_void, Capture>(capture),
++            std::mem::transmute::<*mut c_void, Flush>(flush),
++        )
++    };
++    FUNCTIONS
++        .set(functions)
++        .map_err(|_| "Timeline initialized twice")?;
++    mradm_dsp::room::profile::set_timeline(hook);
++    Ok(())
++}
++pub fn call(id: u64, begin: bool) {
++    unsafe { (FUNCTIONS.get().unwrap().1)(id, u32::from(begin)) };
++}
++pub fn capture() -> Result<(), Box<dyn std::error::Error>> {
++    let code = unsafe { (FUNCTIONS.get().unwrap().2)() };
++    if code != 0 {
++        return Err(format!("Timeline capture marker failed: {code}").into());
++    }
++    Ok(())
++}
++
++pub fn flush() -> Result<(), Box<dyn std::error::Error>> {
++    let code = unsafe { (FUNCTIONS.get().unwrap().3)() };
++    if code != 0 {
++        return Err(format!("Timeline flush failed: {code}").into());
++    }
++    Ok(())
++}

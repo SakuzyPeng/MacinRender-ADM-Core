@@ -1,0 +1,1700 @@
+{
+  "clock": {
+    "offset_ns": -19014117000,
+    "uncertainty_bound_ns": 17500,
+    "binning_provisional_offset_ns": -19014117450
+  },
+  "method": "Only wholly contained CSwitch intervals contribute hardware counters",
+  "selected_calls": [
+    {
+      "call": 1000,
+      "regions": {
+        "call": [
+          {
+            "start_ms": 2017.0507,
+            "wall_ms": 1.9618,
+            "on_cpu_ms": 0.4418,
+            "counter_covered_on_cpu_ms": 0.066,
+            "counter_coverage_fraction": 0.14938886373924853,
+            "instructions": 46653,
+            "core_cycles": 272710,
+            "reference_cycles": 149940,
+            "core_ghz": 4.131969696969697,
+            "reference_ghz": 2.271818181818182,
+            "ipc": 0.17107183454952146,
+            "cpu_ms": {
+              "8": 0.3533,
+              "7": 0.066,
+              "14": 0.0225
+            }
+          }
+        ],
+        "roundtrip": [
+          {
+            "start_ms": 2017.2634,
+            "wall_ms": 1.0649,
+            "on_cpu_ms": 0.1579,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "8": 0.1406,
+              "7": 0.0173
+            }
+          },
+          {
+            "start_ms": 2018.3853,
+            "wall_ms": 0.6217,
+            "on_cpu_ms": 0.017,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "14": 0.017
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 2017.2721,
+            "wall_ms": 1.0482,
+            "on_cpu_ms": 0.9199,
+            "counter_covered_on_cpu_ms": 0.711,
+            "counter_coverage_fraction": 0.772910098923796,
+            "instructions": 3567021,
+            "core_cycles": 2959969,
+            "reference_cycles": 1627440,
+            "core_ghz": 4.163106891701829,
+            "reference_ghz": 2.2889451476793248,
+            "ipc": 1.2050872830087072,
+            "cpu_ms": {
+              "3": 0.8649,
+              "14": 0.012,
+              "7": 0.043
+            }
+          },
+          {
+            "start_ms": 2018.394,
+            "wall_ms": 0.6036,
+            "on_cpu_ms": 0.589,
+            "counter_covered_on_cpu_ms": 0.413,
+            "counter_coverage_fraction": 0.7011884550084889,
+            "instructions": 2301033,
+            "core_cycles": 1716139,
+            "reference_cycles": 943560,
+            "core_ghz": 4.1553002421307506,
+            "reference_ghz": 2.2846489104116223,
+            "ipc": 1.3408197121561831,
+            "cpu_ms": {
+              "3": 0.176,
+              "14": 0.413
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 2017.2724,
+            "wall_ms": 0.4109,
+            "on_cpu_ms": 0.3209,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.3209
+            }
+          },
+          {
+            "start_ms": 2018.3943,
+            "wall_ms": 0.2839,
+            "on_cpu_ms": 0.2769,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.1757,
+              "14": 0.1012
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 2017.7263,
+            "wall_ms": 0.5694,
+            "on_cpu_ms": 0.5404,
+            "counter_covered_on_cpu_ms": 0.024,
+            "counter_coverage_fraction": 0.04441154700222058,
+            "instructions": 107211,
+            "core_cycles": 101156,
+            "reference_cycles": 55680,
+            "core_ghz": 4.214833333333333,
+            "reference_ghz": 2.32,
+            "ipc": 1.0598580410455138,
+            "cpu_ms": {
+              "3": 0.5007,
+              "14": 0.012,
+              "7": 0.0277
+            }
+          },
+          {
+            "start_ms": 2018.687,
+            "wall_ms": 0.1316,
+            "on_cpu_ms": 0.1316,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "14": 0.1316
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 2017.5975,
+            "wall_ms": 0.0856,
+            "on_cpu_ms": 0.0856,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.0856
+            }
+          },
+          {
+            "start_ms": 2018.5952,
+            "wall_ms": 0.0829,
+            "on_cpu_ms": 0.0829,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "14": 0.0829
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 2018.296,
+            "wall_ms": 0.0188,
+            "on_cpu_ms": 0.015,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "7": 0.015
+            }
+          },
+          {
+            "start_ms": 2018.8187,
+            "wall_ms": 0.1737,
+            "on_cpu_ms": 0.1713,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "14": 0.1713
+            }
+          }
+        ]
+      }
+    },
+    {
+      "call": 15000,
+      "regions": {
+        "call": [
+          {
+            "start_ms": 35881.6763,
+            "wall_ms": 2.197,
+            "on_cpu_ms": 0.729,
+            "counter_covered_on_cpu_ms": 0.088,
+            "counter_coverage_fraction": 0.12071330589849108,
+            "instructions": 46713,
+            "core_cycles": 343753,
+            "reference_cycles": 198540,
+            "core_ghz": 3.906284090909091,
+            "reference_ghz": 2.256136363636364,
+            "ipc": 0.13589117767699482,
+            "cpu_ms": {
+              "9": 0.729
+            }
+          }
+        ],
+        "roundtrip": [
+          {
+            "start_ms": 35882.0366,
+            "wall_ms": 1.1285,
+            "on_cpu_ms": 0.2745,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "9": 0.2745
+            }
+          },
+          {
+            "start_ms": 35883.2382,
+            "wall_ms": 0.6281,
+            "on_cpu_ms": 0.0183,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "9": 0.0183
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 35882.0632,
+            "wall_ms": 1.088,
+            "on_cpu_ms": 1.0018,
+            "counter_covered_on_cpu_ms": 0.802,
+            "counter_coverage_fraction": 0.8005589938111399,
+            "instructions": 3880226,
+            "core_cycles": 3179654,
+            "reference_cycles": 1835700,
+            "core_ghz": 3.964655860349127,
+            "reference_ghz": 2.2889027431421445,
+            "ipc": 1.2203296333500437,
+            "cpu_ms": {
+              "3": 0.1998,
+              "10": 0.802
+            }
+          },
+          {
+            "start_ms": 35883.2502,
+            "wall_ms": 0.6002,
+            "on_cpu_ms": 0.5938,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.5938
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 35882.0636,
+            "wall_ms": 0.4073,
+            "on_cpu_ms": 0.3293,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.1994,
+              "10": 0.1299
+            }
+          },
+          {
+            "start_ms": 35883.2506,
+            "wall_ms": 0.2896,
+            "on_cpu_ms": 0.2896,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.2896
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 35882.5139,
+            "wall_ms": 0.5543,
+            "on_cpu_ms": 0.5543,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "10": 0.5543
+            }
+          },
+          {
+            "start_ms": 35883.5487,
+            "wall_ms": 0.1216,
+            "on_cpu_ms": 0.1216,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.1216
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 35882.3901,
+            "wall_ms": 0.0807,
+            "on_cpu_ms": 0.0807,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "10": 0.0807
+            }
+          },
+          {
+            "start_ms": 35883.4645,
+            "wall_ms": 0.0755,
+            "on_cpu_ms": 0.0755,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.0755
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 35883.0684,
+            "wall_ms": 0.0772,
+            "on_cpu_ms": 0.0746,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "10": 0.0746
+            }
+          },
+          {
+            "start_ms": 35883.6704,
+            "wall_ms": 0.1747,
+            "on_cpu_ms": 0.1736,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.1736
+            }
+          }
+        ]
+      }
+    },
+    {
+      "call": 16973,
+      "regions": {
+        "call": [
+          {
+            "start_ms": 40065.4162,
+            "wall_ms": 5.9673,
+            "on_cpu_ms": 0.5553,
+            "counter_covered_on_cpu_ms": 0.093,
+            "counter_coverage_fraction": 0.16747703943814155,
+            "instructions": 46634,
+            "core_cycles": 282230,
+            "reference_cycles": 210240,
+            "core_ghz": 3.034731182795699,
+            "reference_ghz": 2.2606451612903227,
+            "ipc": 0.1652340289834532,
+            "cpu_ms": {
+              "4": 0.4623,
+              "2": 0.093
+            }
+          }
+        ],
+        "roundtrip": [
+          {
+            "start_ms": 40065.6765,
+            "wall_ms": 1.4658,
+            "on_cpu_ms": 0.1898,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.1715,
+              "2": 0.0183
+            }
+          },
+          {
+            "start_ms": 40067.2196,
+            "wall_ms": 4.1535,
+            "on_cpu_ms": 0.0201,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.0201
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 40065.6871,
+            "wall_ms": 1.4433,
+            "on_cpu_ms": 1.4009,
+            "counter_covered_on_cpu_ms": 1.16,
+            "counter_coverage_fraction": 0.8280391177100436,
+            "instructions": 4349230,
+            "core_cycles": 4495404,
+            "reference_cycles": 2662380,
+            "core_ghz": 3.875348275862069,
+            "reference_ghz": 2.2951551724137933,
+            "ipc": 0.9674836788862581,
+            "cpu_ms": {
+              "3": 0.9359,
+              "4": 0.465
+            }
+          },
+          {
+            "start_ms": 40067.2316,
+            "wall_ms": 4.1285,
+            "on_cpu_ms": 4.0684,
+            "counter_covered_on_cpu_ms": 3.825,
+            "counter_coverage_fraction": 0.9401730409989185,
+            "instructions": 16391055,
+            "core_cycles": 15412366,
+            "reference_cycles": 8795460,
+            "core_ghz": 4.029376732026144,
+            "reference_ghz": 2.2994666666666665,
+            "ipc": 1.0635002438950645,
+            "cpu_ms": {
+              "4": 0.2434,
+              "3": 3.825
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 40065.6874,
+            "wall_ms": 0.3689,
+            "on_cpu_ms": 0.3389,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.3389
+            }
+          },
+          {
+            "start_ms": 40067.232,
+            "wall_ms": 0.4614,
+            "on_cpu_ms": 0.4184,
+            "counter_covered_on_cpu_ms": 0.016,
+            "counter_coverage_fraction": 0.03824091778202677,
+            "instructions": 51619,
+            "core_cycles": 49113,
+            "reference_cycles": 36540,
+            "core_ghz": 3.0695625,
+            "reference_ghz": 2.28375,
+            "ipc": 1.0510251868140819,
+            "cpu_ms": {
+              "4": 0.243,
+              "3": 0.1754
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 40066.0665,
+            "wall_ms": 0.6339,
+            "on_cpu_ms": 0.6279,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.5865,
+              "4": 0.0414
+            }
+          },
+          {
+            "start_ms": 40067.7057,
+            "wall_ms": 0.2141,
+            "on_cpu_ms": 0.2021,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.2021
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 40065.9803,
+            "wall_ms": 0.0757,
+            "on_cpu_ms": 0.0757,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.0757
+            }
+          },
+          {
+            "start_ms": 40067.5654,
+            "wall_ms": 0.1277,
+            "on_cpu_ms": 0.1277,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.1277
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 40066.7008,
+            "wall_ms": 0.4218,
+            "on_cpu_ms": 0.4218,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "4": 0.4218
+            }
+          },
+          {
+            "start_ms": 40067.9202,
+            "wall_ms": 3.4301,
+            "on_cpu_ms": 3.4301,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 3.4301
+            }
+          }
+        ]
+      }
+    },
+    {
+      "call": 19649,
+      "regions": {
+        "call": [
+          {
+            "start_ms": 46350.4422,
+            "wall_ms": 5.3739,
+            "on_cpu_ms": 2.4229,
+            "counter_covered_on_cpu_ms": 0.175,
+            "counter_coverage_fraction": 0.07222749597589666,
+            "instructions": 73498,
+            "core_cycles": 712087,
+            "reference_cycles": 391500,
+            "core_ghz": 4.069068571428572,
+            "reference_ghz": 2.237142857142857,
+            "ipc": 0.10321491615490803,
+            "cpu_ms": {
+              "12": 2.1828,
+              "0": 0.051,
+              "1": 0.045,
+              "5": 0.079,
+              "8": 0.0651
+            }
+          }
+        ],
+        "roundtrip": [
+          {
+            "start_ms": 46351.1724,
+            "wall_ms": 2.6962,
+            "on_cpu_ms": 1.4666,
+            "counter_covered_on_cpu_ms": 0.014,
+            "counter_coverage_fraction": 0.009545888449474977,
+            "instructions": 8403,
+            "core_cycles": 52844,
+            "reference_cycles": 29040,
+            "core_ghz": 3.7745714285714285,
+            "reference_ghz": 2.0742857142857143,
+            "ipc": 0.15901521459389903,
+            "cpu_ms": {
+              "12": 1.4526,
+              "0": 0.014
+            }
+          },
+          {
+            "start_ms": 46354.0799,
+            "wall_ms": 1.6969,
+            "on_cpu_ms": 0.0258,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "8": 0.0258
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 46351.2264,
+            "wall_ms": 2.5853,
+            "on_cpu_ms": 2.3676,
+            "counter_covered_on_cpu_ms": 0.843,
+            "counter_coverage_fraction": 0.3560567663456665,
+            "instructions": 2884267,
+            "core_cycles": 3347230,
+            "reference_cycles": 1908240,
+            "core_ghz": 3.9706168446026098,
+            "reference_ghz": 2.263629893238434,
+            "ipc": 0.8616877238791478,
+            "cpu_ms": {
+              "14": 1.5246,
+              "3": 0.771,
+              "0": 0.006,
+              "2": 0.012,
+              "1": 0.054
+            }
+          },
+          {
+            "start_ms": 46354.0908,
+            "wall_ms": 1.6228,
+            "on_cpu_ms": 1.5708,
+            "counter_covered_on_cpu_ms": 0.022,
+            "counter_coverage_fraction": 0.014005602240896359,
+            "instructions": 62744,
+            "core_cycles": 83936,
+            "reference_cycles": 46140,
+            "core_ghz": 3.815272727272727,
+            "reference_ghz": 2.097272727272727,
+            "ipc": 0.7475219214639726,
+            "cpu_ms": {
+              "0": 0.2382,
+              "7": 0.022,
+              "1": 1.3106
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 46351.2292,
+            "wall_ms": 1.8108,
+            "on_cpu_ms": 1.7168,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "14": 1.5218,
+              "3": 0.195
+            }
+          },
+          {
+            "start_ms": 46354.0913,
+            "wall_ms": 0.4867,
+            "on_cpu_ms": 0.4347,
+            "counter_covered_on_cpu_ms": 0.022,
+            "counter_coverage_fraction": 0.05060961582700713,
+            "instructions": 62744,
+            "core_cycles": 83936,
+            "reference_cycles": 46140,
+            "core_ghz": 3.815272727272727,
+            "reference_ghz": 2.097272727272727,
+            "ipc": 0.7475219214639726,
+            "cpu_ms": {
+              "0": 0.2377,
+              "7": 0.022,
+              "1": 0.175
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 46353.054,
+            "wall_ms": 0.72,
+            "on_cpu_ms": 0.606,
+            "counter_covered_on_cpu_ms": 0.018,
+            "counter_coverage_fraction": 0.0297029702970297,
+            "instructions": 27659,
+            "core_cycles": 72217,
+            "reference_cycles": 39720,
+            "core_ghz": 4.0120555555555555,
+            "reference_ghz": 2.2066666666666666,
+            "ipc": 0.38299846296578366,
+            "cpu_ms": {
+              "3": 0.562,
+              "0": 0.006,
+              "2": 0.012,
+              "1": 0.026
+            }
+          },
+          {
+            "start_ms": 46354.6398,
+            "wall_ms": 0.9256,
+            "on_cpu_ms": 0.9256,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.9256
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 46352.9072,
+            "wall_ms": 0.1327,
+            "on_cpu_ms": 0.1327,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "3": 0.1327
+            }
+          },
+          {
+            "start_ms": 46354.4351,
+            "wall_ms": 0.1412,
+            "on_cpu_ms": 0.1412,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.1412
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 46353.7744,
+            "wall_ms": 0.0303,
+            "on_cpu_ms": 0.0276,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.0276
+            }
+          },
+          {
+            "start_ms": 46355.5665,
+            "wall_ms": 0.1121,
+            "on_cpu_ms": 0.1121,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.1121
+            }
+          }
+        ]
+      }
+    },
+    {
+      "call": 19648,
+      "regions": {
+        "call": [
+          {
+            "start_ms": 46346.4372,
+            "wall_ms": 3.9973,
+            "on_cpu_ms": 1.5263,
+            "counter_covered_on_cpu_ms": 0.113,
+            "counter_coverage_fraction": 0.07403524864050318,
+            "instructions": 46632,
+            "core_cycles": 361941,
+            "reference_cycles": 256020,
+            "core_ghz": 3.203017699115044,
+            "reference_ghz": 2.265663716814159,
+            "ipc": 0.12883867812709807,
+            "cpu_ms": {
+              "0": 1.3898,
+              "7": 0.113,
+              "12": 0.0235
+            }
+          }
+        ],
+        "roundtrip": [
+          {
+            "start_ms": 46346.687,
+            "wall_ms": 2.8374,
+            "on_cpu_ms": 1.1574,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "0": 1.14,
+              "7": 0.0174
+            }
+          },
+          {
+            "start_ms": 46349.6256,
+            "wall_ms": 0.8026,
+            "on_cpu_ms": 0.0172,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "12": 0.0172
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 46346.6977,
+            "wall_ms": 2.8128,
+            "on_cpu_ms": 2.4303,
+            "counter_covered_on_cpu_ms": 1.635,
+            "counter_coverage_fraction": 0.6727564498210098,
+            "instructions": 2923180,
+            "core_cycles": 3098588,
+            "reference_cycles": 3696960,
+            "core_ghz": 1.8951608562691131,
+            "reference_ghz": 2.261137614678899,
+            "ipc": 0.9433909897024064,
+            "cpu_ms": {
+              "4": 0.7953,
+              "3": 0.057,
+              "1": 1.499,
+              "7": 0.079
+            }
+          },
+          {
+            "start_ms": 46349.6368,
+            "wall_ms": 0.7816,
+            "on_cpu_ms": 0.7022,
+            "counter_covered_on_cpu_ms": 0.508,
+            "counter_coverage_fraction": 0.7234406152093421,
+            "instructions": 1952297,
+            "core_cycles": 2076720,
+            "reference_cycles": 1141680,
+            "core_ghz": 4.088031496062992,
+            "reference_ghz": 2.2474015748031495,
+            "ipc": 0.9400867714472823,
+            "cpu_ms": {
+              "14": 0.1942,
+              "0": 0.346,
+              "15": 0.014,
+              "12": 0.148
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 46346.698,
+            "wall_ms": 1.8106,
+            "on_cpu_ms": 1.4386,
+            "counter_covered_on_cpu_ms": 0.057,
+            "counter_coverage_fraction": 0.03962185458084248,
+            "instructions": 34317,
+            "core_cycles": 45253,
+            "reference_cycles": 130560,
+            "core_ghz": 0.7939122807017543,
+            "reference_ghz": 2.2905263157894735,
+            "ipc": 0.7583364638808476,
+            "cpu_ms": {
+              "4": 0.795,
+              "3": 0.057,
+              "1": 0.5866
+            }
+          },
+          {
+            "start_ms": 46349.6375,
+            "wall_ms": 0.4645,
+            "on_cpu_ms": 0.3985,
+            "counter_covered_on_cpu_ms": 0.033,
+            "counter_coverage_fraction": 0.08281053952321205,
+            "instructions": 115544,
+            "core_cycles": 133953,
+            "reference_cycles": 73560,
+            "core_ghz": 4.059181818181818,
+            "reference_ghz": 2.229090909090909,
+            "ipc": 0.8625712003463901,
+            "cpu_ms": {
+              "14": 0.1935,
+              "0": 0.191,
+              "15": 0.014
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 46348.7332,
+            "wall_ms": 0.7385,
+            "on_cpu_ms": 0.7315,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.6878,
+              "7": 0.0437
+            }
+          },
+          {
+            "start_ms": 46350.1119,
+            "wall_ms": 0.1881,
+            "on_cpu_ms": 0.1821,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "0": 0.1451,
+              "12": 0.037
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 46347.9486,
+            "wall_ms": 0.5587,
+            "on_cpu_ms": 0.5587,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.5587
+            }
+          },
+          {
+            "start_ms": 46349.9538,
+            "wall_ms": 0.148,
+            "on_cpu_ms": 0.148,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "0": 0.148
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 46349.4722,
+            "wall_ms": 0.0281,
+            "on_cpu_ms": 0.0281,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "7": 0.0281
+            }
+          },
+          {
+            "start_ms": 46350.3006,
+            "wall_ms": 0.1124,
+            "on_cpu_ms": 0.1104,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "12": 0.1104
+            }
+          }
+        ]
+      }
+    },
+    {
+      "call": 19650,
+      "regions": {
+        "call": [
+          {
+            "start_ms": 46355.85,
+            "wall_ms": 4.5041,
+            "on_cpu_ms": 1.7461,
+            "counter_covered_on_cpu_ms": 0.29,
+            "counter_coverage_fraction": 0.16608441670007446,
+            "instructions": 1612213,
+            "core_cycles": 1074182,
+            "reference_cycles": 666180,
+            "core_ghz": 3.7040758620689656,
+            "reference_ghz": 2.2971724137931036,
+            "ipc": 1.5008750844828902,
+            "cpu_ms": {
+              "8": 1.429,
+              "5": 0.164,
+              "10": 0.126,
+              "12": 0.0271
+            }
+          }
+        ],
+        "roundtrip": [
+          {
+            "start_ms": 46357.1756,
+            "wall_ms": 1.5746,
+            "on_cpu_ms": 0.2856,
+            "counter_covered_on_cpu_ms": 0.164,
+            "counter_coverage_fraction": 0.5742296918767507,
+            "instructions": 1564722,
+            "core_cycles": 687160,
+            "reference_cycles": 377880,
+            "core_ghz": 4.19,
+            "reference_ghz": 2.3041463414634147,
+            "ipc": 2.2770853949589616,
+            "cpu_ms": {
+              "8": 0.1034,
+              "5": 0.164,
+              "10": 0.0182
+            }
+          },
+          {
+            "start_ms": 46358.8601,
+            "wall_ms": 1.4854,
+            "on_cpu_ms": 0.0185,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "12": 0.0185
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 46357.2419,
+            "wall_ms": 1.4922,
+            "on_cpu_ms": 1.4101,
+            "counter_covered_on_cpu_ms": 1.039,
+            "counter_coverage_fraction": 0.7368271753776328,
+            "instructions": 3015634,
+            "core_cycles": 3539494,
+            "reference_cycles": 2366100,
+            "core_ghz": 3.4066352261790183,
+            "reference_ghz": 2.277285851780558,
+            "ipc": 0.85199579374905,
+            "cpu_ms": {
+              "3": 0.3711,
+              "1": 0.025,
+              "0": 0.856,
+              "14": 0.087,
+              "9": 0.071
+            }
+          },
+          {
+            "start_ms": 46358.8748,
+            "wall_ms": 1.4557,
+            "on_cpu_ms": 1.4152,
+            "counter_covered_on_cpu_ms": 0.167,
+            "counter_coverage_fraction": 0.11800452232899944,
+            "instructions": 312434,
+            "core_cycles": 441429,
+            "reference_cycles": 377700,
+            "core_ghz": 2.6432874251497007,
+            "reference_ghz": 2.261676646706587,
+            "ipc": 0.7077786008621998,
+            "cpu_ms": {
+              "6": 1.2482,
+              "5": 0.032,
+              "11": 0.025,
+              "1": 0.11
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 46357.2424,
+            "wall_ms": 0.6351,
+            "on_cpu_ms": 0.5981,
+            "counter_covered_on_cpu_ms": 0.025,
+            "counter_coverage_fraction": 0.04179903026249791,
+            "instructions": 57540,
+            "core_cycles": 95997,
+            "reference_cycles": 52740,
+            "core_ghz": 3.83988,
+            "reference_ghz": 2.1096,
+            "ipc": 0.5993937310540954,
+            "cpu_ms": {
+              "3": 0.3706,
+              "1": 0.025,
+              "0": 0.2025
+            }
+          },
+          {
+            "start_ms": 46358.8753,
+            "wall_ms": 1.036,
+            "on_cpu_ms": 1.036,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "6": 1.036
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 46357.8883,
+            "wall_ms": 0.8047,
+            "on_cpu_ms": 0.7647,
+            "counter_covered_on_cpu_ms": 0.087,
+            "counter_coverage_fraction": 0.11377010592389172,
+            "instructions": 459818,
+            "core_cycles": 268869,
+            "reference_cycles": 200280,
+            "core_ghz": 3.090448275862069,
+            "reference_ghz": 2.3020689655172415,
+            "ipc": 1.7101934399279948,
+            "cpu_ms": {
+              "0": 0.6427,
+              "14": 0.087,
+              "9": 0.035
+            }
+          },
+          {
+            "start_ms": 46359.929,
+            "wall_ms": 0.3265,
+            "on_cpu_ms": 0.2895,
+            "counter_covered_on_cpu_ms": 0.057,
+            "counter_coverage_fraction": 0.19689119170984457,
+            "instructions": 126102,
+            "core_cycles": 155522,
+            "reference_cycles": 133020,
+            "core_ghz": 2.728456140350877,
+            "reference_ghz": 2.333684210526316,
+            "ipc": 0.8108306220341817,
+            "cpu_ms": {
+              "6": 0.194,
+              "5": 0.032,
+              "11": 0.025,
+              "1": 0.0385
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 46357.6957,
+            "wall_ms": 0.1816,
+            "on_cpu_ms": 0.1816,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "0": 0.1816
+            }
+          },
+          {
+            "start_ms": 46359.5261,
+            "wall_ms": 0.3848,
+            "on_cpu_ms": 0.3848,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "6": 0.3848
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 46358.6935,
+            "wall_ms": 0.0314,
+            "on_cpu_ms": 0.0314,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "9": 0.0314
+            }
+          },
+          {
+            "start_ms": 46360.2559,
+            "wall_ms": 0.0648,
+            "on_cpu_ms": 0.0648,
+            "counter_covered_on_cpu_ms": 0.0,
+            "counter_coverage_fraction": 0.0,
+            "instructions": 0,
+            "core_cycles": 0,
+            "reference_cycles": 0,
+            "core_ghz": null,
+            "reference_ghz": null,
+            "ipc": null,
+            "cpu_ms": {
+              "1": 0.0648
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "windows": [
+    {
+      "first_call": 975,
+      "end_call_exclusive": 1025,
+      "start_ms": 1964.0956,
+      "end_ms": 2070.1266,
+      "caller": {
+        "wall_ms": 106.031,
+        "on_cpu_ms": 29.767,
+        "counter_covered_on_cpu_ms": 29.192,
+        "counter_coverage_fraction": 0.9806833070178386,
+        "instructions": 263772951,
+        "core_cycles": 121786150,
+        "reference_cycles": 66962700,
+        "core_ghz": 4.171901548369417,
+        "reference_ghz": 2.2938716086599067,
+        "ipc": 2.165869854659171,
+        "cpu_ms": {
+          "8": 8.1934,
+          "6": 1.458,
+          "15": 1.474,
+          "3": 2.408,
+          "10": 1.355,
+          "0": 1.915,
+          "2": 1.557,
+          "13": 0.59,
+          "5": 0.774,
+          "9": 7.2386,
+          "12": 0.61,
+          "4": 1.027,
+          "7": 0.141,
+          "14": 0.935,
+          "1": 0.011,
+          "11": 0.08
+        }
+      },
+      "coordinator": {
+        "wall_ms": 106.031,
+        "on_cpu_ms": 82.658,
+        "counter_covered_on_cpu_ms": 82.658,
+        "counter_coverage_fraction": 1.0,
+        "instructions": 464072493,
+        "core_cycles": 342307628,
+        "reference_cycles": 188660640,
+        "core_ghz": 4.141252244186891,
+        "reference_ghz": 2.2824244477243583,
+        "ipc": 1.3557176499730237,
+        "cpu_ms": {
+          "3": 36.305,
+          "12": 2.918,
+          "6": 4.058,
+          "7": 2.301,
+          "5": 2.573,
+          "10": 2.029,
+          "11": 0.633,
+          "4": 10.398,
+          "15": 2.606,
+          "2": 1.919,
+          "14": 4.872,
+          "0": 6.339,
+          "13": 2.829,
+          "9": 1.115,
+          "1": 1.149,
+          "8": 0.614
+        }
+      }
+    },
+    {
+      "first_call": 14975,
+      "end_call_exclusive": 15025,
+      "start_ms": 35828.4023,
+      "end_ms": 35936.0841,
+      "caller": {
+        "wall_ms": 107.6818,
+        "on_cpu_ms": 32.3818,
+        "counter_covered_on_cpu_ms": 31.74,
+        "counter_coverage_fraction": 0.9801802246941183,
+        "instructions": 263713132,
+        "core_cycles": 126300197,
+        "reference_cycles": 72778440,
+        "core_ghz": 3.9792122558286076,
+        "reference_ghz": 2.2929565217391303,
+        "ipc": 2.087986703615355,
+        "cpu_ms": {
+          "9": 16.2657,
+          "6": 0.389,
+          "10": 2.061,
+          "0": 1.859,
+          "2": 3.848,
+          "3": 1.467,
+          "4": 1.4001,
+          "12": 0.139,
+          "8": 3.775,
+          "14": 0.16,
+          "11": 0.395,
+          "5": 0.623
+        }
+      },
+      "coordinator": {
+        "wall_ms": 107.6818,
+        "on_cpu_ms": 82.225,
+        "counter_covered_on_cpu_ms": 82.225,
+        "counter_coverage_fraction": 1.0,
+        "instructions": 472687968,
+        "core_cycles": 325366069,
+        "reference_cycles": 187540920,
+        "core_ghz": 3.9570212100942537,
+        "reference_ghz": 2.280826026147765,
+        "ipc": 1.4527881455272462,
+        "cpu_ms": {
+          "3": 41.626,
+          "10": 5.009,
+          "6": 3.855,
+          "15": 2.758,
+          "13": 1.549,
+          "7": 0.582,
+          "0": 5.279,
+          "1": 1.677,
+          "12": 3.408,
+          "4": 8.596,
+          "14": 2.057,
+          "2": 1.866,
+          "5": 1.275,
+          "8": 0.956,
+          "11": 0.433,
+          "9": 1.299
+        }
+      }
+    },
+    {
+      "first_call": 16948,
+      "end_call_exclusive": 16998,
+      "start_ms": 40012.1146,
+      "end_ms": 40125.5978,
+      "caller": {
+        "wall_ms": 113.4832,
+        "on_cpu_ms": 29.0952,
+        "counter_covered_on_cpu_ms": 28.6,
+        "counter_coverage_fraction": 0.9829800104484588,
+        "instructions": 263746943,
+        "core_cycles": 104592633,
+        "reference_cycles": 65531040,
+        "core_ghz": 3.65708506993007,
+        "reference_ghz": 2.291295104895105,
+        "ipc": 2.5216588915970783,
+        "cpu_ms": {
+          "15": 0.4724,
+          "3": 5.951,
+          "4": 2.889,
+          "7": 1.124,
+          "9": 3.05,
+          "6": 1.537,
+          "8": 3.14,
+          "14": 1.7568,
+          "0": 1.787,
+          "10": 1.719,
+          "12": 0.138,
+          "2": 4.913,
+          "13": 0.447,
+          "11": 0.171
+        }
+      },
+      "coordinator": {
+        "wall_ms": 113.4832,
+        "on_cpu_ms": 89.252,
+        "counter_covered_on_cpu_ms": 89.252,
+        "counter_coverage_fraction": 1.0,
+        "instructions": 480299360,
+        "core_cycles": 338287634,
+        "reference_cycles": 203710740,
+        "core_ghz": 3.790252700219603,
+        "reference_ghz": 2.282422130596513,
+        "ipc": 1.4197957942500494,
+        "cpu_ms": {
+          "4": 12.557,
+          "13": 0.902,
+          "3": 38.544,
+          "14": 6.847,
+          "6": 6.773,
+          "7": 2.107,
+          "11": 1.5,
+          "2": 2.344,
+          "0": 5.275,
+          "10": 6.164,
+          "15": 0.692,
+          "5": 0.932,
+          "12": 3.017,
+          "1": 1.302,
+          "8": 0.049,
+          "9": 0.247
+        }
+      }
+    },
+    {
+      "first_call": 19624,
+      "end_call_exclusive": 19674,
+      "start_ms": 46287.0948,
+      "end_ms": 46438.0747,
+      "caller": {
+        "wall_ms": 150.9799,
+        "on_cpu_ms": 45.7899,
+        "counter_covered_on_cpu_ms": 45.115,
+        "counter_coverage_fraction": 0.9852609418234152,
+        "instructions": 264125413,
+        "core_cycles": 121274513,
+        "reference_cycles": 103174140,
+        "core_ghz": 2.6881195389560015,
+        "reference_ghz": 2.2869143300454393,
+        "ipc": 2.17791361487471,
+        "cpu_ms": {
+          "0": 5.4062,
+          "4": 2.638,
+          "10": 2.69,
+          "8": 5.71,
+          "14": 1.934,
+          "5": 0.513,
+          "2": 6.385,
+          "15": 0.872,
+          "12": 4.5117,
+          "3": 4.279,
+          "7": 1.695,
+          "9": 4.142,
+          "1": 1.658,
+          "13": 0.796,
+          "11": 0.627,
+          "6": 1.933
+        }
+      },
+      "coordinator": {
+        "wall_ms": 150.9799,
+        "on_cpu_ms": 115.716,
+        "counter_covered_on_cpu_ms": 115.716,
+        "counter_coverage_fraction": 1.0,
+        "instructions": 444429037,
+        "core_cycles": 341845247,
+        "reference_cycles": 263567940,
+        "core_ghz": 2.954174418403678,
+        "reference_ghz": 2.2777138857202117,
+        "ipc": 1.3000883905810163,
+        "cpu_ms": {
+          "3": 28.022,
+          "5": 2.561,
+          "10": 5.356,
+          "1": 5.201,
+          "2": 4.009,
+          "8": 3.597,
+          "0": 8.062,
+          "4": 12.688,
+          "12": 11.778,
+          "6": 7.358,
+          "14": 10.494,
+          "11": 3.197,
+          "7": 1.587,
+          "15": 2.881,
+          "9": 3.107,
+          "13": 5.818
+        }
+      }
+    }
+  ]
+}

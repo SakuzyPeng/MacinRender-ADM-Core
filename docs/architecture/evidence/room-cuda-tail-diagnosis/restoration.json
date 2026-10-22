@@ -1,0 +1,29 @@
+{
+  "head": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+  "source_restored_exact_bytes": true,
+  "clean_worktree": true,
+  "cmake_cache_unchanged": true,
+  "files": {
+    "rust/crates/mradm-dsp/src/room/profile.rs": "bd1913ad7952a38541d34fb9d096c1d98fd9c5e352eee97afefa559af11e5f44",
+    "rust/crates/mradm-dsp/examples/room_support/room_bench.rs": "911f98c8f90f936b2c4a26a02d3519989a3083f58107cbd651b319e275b66345",
+    "rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs": "92c27ecafa1111d5c89164ddb4d1d4d06d9179594149ec98b43d489e15ff22e7",
+    "rust/crates/mradm-room-cuda/examples/support/timeline.rs": null
+  },
+  "build_exit_code": 0,
+  "checks": [
+    {
+      "name": "cli-backends",
+      "exit_code": 0
+    },
+    {
+      "name": "ctest",
+      "exit_code": 0
+    }
+  ],
+  "ctest_count": 4,
+  "uninstrumented_examples_rebuilt": true,
+  "normal_benchmark_sha256": "c4af31201f2283ff5b2ef475edfe4a04fb6ec4a69fdb220c803ba707046cfa54",
+  "no_owned_etw_loggers": true,
+  "nsys_sessions_output": "ID         TIME                       STATE LAUNCH NAME",
+  "nsys_sessions_exit_code": 0
+}

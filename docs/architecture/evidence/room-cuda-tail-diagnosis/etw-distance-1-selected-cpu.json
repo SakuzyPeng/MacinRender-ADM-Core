@@ -1,0 +1,3847 @@
+{
+  "clock": {
+    "method": "two ETW markers bracketed by QPC reads, same PerfCounter clock",
+    "offset_ns": -17471373050,
+    "offset_lower_ns": -17471375000,
+    "offset_upper_ns": -17471371100,
+    "uncertainty_bound_ns": 1950,
+    "marker_bounds_ns": [
+      [
+        -17471375000,
+        -17471371100
+      ],
+      [
+        -17471378000,
+        -17471371100
+      ]
+    ]
+  },
+  "calls": [
+    {
+      "benchmark_call": 32,
+      "call": {
+        "wall_ms": 2.0619,
+        "on_cpu_ms": 0.6519,
+        "ready_delay_ms": 0.013,
+        "blocked_ms": 1.397,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.4100000000000001
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 2.0612,
+            "on_cpu_ms": 0.6512,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 1.397,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.4100000000000001
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 2.0614
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.0603,
+            "on_cpu_ms": 0.3173,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.736,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.743
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2608,
+            "end_ms": 1.3211
+          },
+          {
+            "wall_ms": 0.6768,
+            "on_cpu_ms": 0.0098,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.661,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.667
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.3803,
+            "end_ms": 2.0571
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.0279,
+            "on_cpu_ms": 0.9609,
+            "ready_delay_ms": 0.016,
+            "blocked_ms": 0.051,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.065,
+              "DeferredReady/WrAlertByThreadId": 0.002
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2846,
+            "end_ms": 1.3125
+          },
+          {
+            "wall_ms": 0.6606,
+            "on_cpu_ms": 0.6306,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.016,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.3883,
+            "end_ms": 2.0489
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.5086,
+            "on_cpu_ms": 0.5066,
+            "ready_delay_ms": 0.002,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.002
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.6793,
+            "end_ms": 1.1879
+          },
+          {
+            "wall_ms": 0.1273,
+            "on_cpu_ms": 0.1273,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.7159,
+            "end_ms": 1.8432
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.3541,
+            "on_cpu_ms": 0.2891,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.051,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.065
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2859,
+            "end_ms": 0.64
+          },
+          {
+            "wall_ms": 0.3185,
+            "on_cpu_ms": 0.2885,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.016,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.3886,
+            "end_ms": 1.7071
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.084,
+            "on_cpu_ms": 0.084,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.5559,
+            "end_ms": 0.6399
+          },
+          {
+            "wall_ms": 0.0848,
+            "on_cpu_ms": 0.0848,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.6221,
+            "end_ms": 1.7069
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.1188,
+            "on_cpu_ms": 0.1188,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.1882,
+            "end_ms": 1.307
+          },
+          {
+            "wall_ms": 0.2003,
+            "on_cpu_ms": 0.2003,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.8433,
+            "end_ms": 2.0436
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 1000,
+      "call": {
+        "wall_ms": 2.3031,
+        "on_cpu_ms": 0.6531,
+        "ready_delay_ms": 0.015,
+        "blocked_ms": 1.635,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.65
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 2.3022,
+            "on_cpu_ms": 0.6522,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 1.635,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.65
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 2.3024
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.1219,
+            "on_cpu_ms": 0.2409,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.874,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.881
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3171,
+            "end_ms": 1.439
+          },
+          {
+            "wall_ms": 0.7809,
+            "on_cpu_ms": 0.0119,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.761,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.769
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.504,
+            "end_ms": 2.2849
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.0823,
+            "on_cpu_ms": 0.9833,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.087,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.099
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3471,
+            "end_ms": 1.4294
+          },
+          {
+            "wall_ms": 0.7615,
+            "on_cpu_ms": 0.7215,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.034,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.5124,
+            "end_ms": 2.2739
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.5633,
+            "on_cpu_ms": 0.5383,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.018,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.025
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.843,
+            "end_ms": 1.4063
+          },
+          {
+            "wall_ms": 0.1513,
+            "on_cpu_ms": 0.1513,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.8848,
+            "end_ms": 2.0361
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.4521,
+            "on_cpu_ms": 0.3781,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.069,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.074
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3481,
+            "end_ms": 0.8002
+          },
+          {
+            "wall_ms": 0.3631,
+            "on_cpu_ms": 0.3231,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.034,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.5126,
+            "end_ms": 1.8757
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.0942,
+            "on_cpu_ms": 0.0942,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.7058,
+            "end_ms": 0.8
+          },
+          {
+            "wall_ms": 0.0842,
+            "on_cpu_ms": 0.0842,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.7913,
+            "end_ms": 1.8755
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.0176,
+            "on_cpu_ms": 0.0176,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.4065,
+            "end_ms": 1.4241
+          },
+          {
+            "wall_ms": 0.2325,
+            "on_cpu_ms": 0.2325,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.0362,
+            "end_ms": 2.2687
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 2000,
+      "call": {
+        "wall_ms": 1.8289,
+        "on_cpu_ms": 0.4339,
+        "ready_delay_ms": 0.01,
+        "blocked_ms": 1.385,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.395
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 1.8279,
+            "on_cpu_ms": 0.4329,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 1.385,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.395
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0001,
+            "end_ms": 1.828
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 0.9708,
+            "on_cpu_ms": 0.1528,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.813,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.818
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2129,
+            "end_ms": 1.1837
+          },
+          {
+            "wall_ms": 0.5866,
+            "on_cpu_ms": 0.0096,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.572,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.577
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.2367,
+            "end_ms": 1.8233
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 0.9556,
+            "on_cpu_ms": 0.9066,
+            "ready_delay_ms": 0.02,
+            "blocked_ms": 0.029,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.043000000000000003,
+              "DeferredReady/WrAlertByThreadId": 0.006
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2207,
+            "end_ms": 1.1763
+          },
+          {
+            "wall_ms": 0.5697,
+            "on_cpu_ms": 0.5437,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.015,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.026000000000000002
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.2468,
+            "end_ms": 1.8165
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.4445,
+            "on_cpu_ms": 0.4035,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.028,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.035,
+              "DeferredReady/WrAlertByThreadId": 0.006
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.6139,
+            "end_ms": 1.0584
+          },
+          {
+            "wall_ms": 0.1113,
+            "on_cpu_ms": 0.1063,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.5036,
+            "end_ms": 1.6149
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.353,
+            "on_cpu_ms": 0.345,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.008
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.221,
+            "end_ms": 0.574
+          },
+          {
+            "wall_ms": 0.2482,
+            "on_cpu_ms": 0.2272,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.015,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.021
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.2471,
+            "end_ms": 1.4953
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.0811,
+            "on_cpu_ms": 0.0811,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.4927,
+            "end_ms": 0.5738
+          },
+          {
+            "wall_ms": 0.0779,
+            "on_cpu_ms": 0.0779,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.4173,
+            "end_ms": 1.4952
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.1124,
+            "on_cpu_ms": 0.1124,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.0586,
+            "end_ms": 1.171
+          },
+          {
+            "wall_ms": 0.1952,
+            "on_cpu_ms": 0.1952,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.6152,
+            "end_ms": 1.8104
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4000,
+      "call": {
+        "wall_ms": 2.1085,
+        "on_cpu_ms": 0.6125,
+        "ready_delay_ms": 0.015,
+        "blocked_ms": 1.481,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.496
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 2.1076,
+            "on_cpu_ms": 0.6116,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 1.481,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.496
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 2.1078
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.1318,
+            "on_cpu_ms": 0.2478,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.876,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.884
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2703,
+            "end_ms": 1.4021
+          },
+          {
+            "wall_ms": 0.6247,
+            "on_cpu_ms": 0.0127,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.605,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.612
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.4785,
+            "end_ms": 2.1032
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.1127,
+            "on_cpu_ms": 0.9517,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.143,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.161
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2782,
+            "end_ms": 1.3909
+          },
+          {
+            "wall_ms": 0.6054,
+            "on_cpu_ms": 0.5844,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 0.012,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.020999999999999998
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.4886,
+            "end_ms": 2.094
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.5821,
+            "on_cpu_ms": 0.4811,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.098,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.101
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.7831,
+            "end_ms": 1.3652
+          },
+          {
+            "wall_ms": 0.1464,
+            "on_cpu_ms": 0.1464,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.7805,
+            "end_ms": 1.9269
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.4626,
+            "on_cpu_ms": 0.4026,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 0.045,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.060000000000000005
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2786,
+            "end_ms": 0.7412
+          },
+          {
+            "wall_ms": 0.2818,
+            "on_cpu_ms": 0.2608,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 0.012,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.020999999999999998
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.4891,
+            "end_ms": 1.7709
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1046,
+            "on_cpu_ms": 0.1046,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.6365,
+            "end_ms": 0.7411
+          },
+          {
+            "wall_ms": 0.0857,
+            "on_cpu_ms": 0.0857,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.6851,
+            "end_ms": 1.7708
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.0199,
+            "on_cpu_ms": 0.0199,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.3655,
+            "end_ms": 1.3854
+          },
+          {
+            "wall_ms": 0.1609,
+            "on_cpu_ms": 0.1609,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.9271,
+            "end_ms": 2.088
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4814,
+      "call": {
+        "wall_ms": 16.5014,
+        "on_cpu_ms": 0.4524,
+        "ready_delay_ms": 0.013,
+        "blocked_ms": 16.036,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 16.049
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 16.5007,
+            "on_cpu_ms": 0.4517,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 16.036,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 16.049
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0001,
+            "end_ms": 16.5008
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.5233,
+            "on_cpu_ms": 0.1533,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 1.364,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.37
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2065,
+            "end_ms": 1.7298
+          },
+          {
+            "wall_ms": 14.6924,
+            "on_cpu_ms": 0.0134,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 14.672,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 14.679
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.7859,
+            "end_ms": 16.4783
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.5055,
+            "on_cpu_ms": 1.4385,
+            "ready_delay_ms": 0.016,
+            "blocked_ms": 0.051,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.067
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2158,
+            "end_ms": 1.7213
+          },
+          {
+            "wall_ms": 14.6703,
+            "on_cpu_ms": 0.6803,
+            "ready_delay_ms": 0.035,
+            "blocked_ms": 13.955,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.024,
+              "Waiting/WrResource": 13.966
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.7981,
+            "end_ms": 16.4684
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.459,
+            "on_cpu_ms": 0.445,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.003,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.014
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.598,
+            "end_ms": 1.057
+          },
+          {
+            "wall_ms": 0.206,
+            "on_cpu_ms": 0.19,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.003,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.016
+            },
+            "tid": "1764426348176",
+            "start_ms": 16.0975,
+            "end_ms": 16.3035
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.3739,
+            "on_cpu_ms": 0.3209,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.048,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.053
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2161,
+            "end_ms": 0.59
+          },
+          {
+            "wall_ms": 14.2861,
+            "on_cpu_ms": 0.3121,
+            "ready_delay_ms": 0.022,
+            "blocked_ms": 13.952,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.008,
+              "Waiting/WrResource": 13.966
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.7984,
+            "end_ms": 16.0845
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.077,
+            "on_cpu_ms": 0.077,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.5129,
+            "end_ms": 0.5899
+          },
+          {
+            "wall_ms": 14.0935,
+            "on_cpu_ms": 0.1275,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 13.951,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrResource": 13.966
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.9908,
+            "end_ms": 16.0843
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.6584,
+            "on_cpu_ms": 0.6584,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.0573,
+            "end_ms": 1.7157
+          },
+          {
+            "wall_ms": 0.1591,
+            "on_cpu_ms": 0.1591,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 16.3038,
+            "end_ms": 16.4629
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4840,
+      "call": {
+        "wall_ms": 13.6204,
+        "on_cpu_ms": 0.4714,
+        "ready_delay_ms": 0.015,
+        "blocked_ms": 13.134,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 13.149000000000001
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 13.6195,
+            "on_cpu_ms": 0.4705,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 13.134,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 13.149000000000001
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 13.6197
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 6.5214,
+            "on_cpu_ms": 0.1574,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 6.357,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 6.364
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2205,
+            "end_ms": 6.7419
+          },
+          {
+            "wall_ms": 6.7972,
+            "on_cpu_ms": 0.0122,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 6.777,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 6.785
+            },
+            "tid": "1764426310348",
+            "start_ms": 6.8155,
+            "end_ms": 13.6127
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 6.4978,
+            "on_cpu_ms": 6.3958,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.092,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.096,
+              "Standby/WrDispatchInt": 0.006
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.232,
+            "end_ms": 6.7298
+          },
+          {
+            "wall_ms": 6.7767,
+            "on_cpu_ms": 6.7287,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.037,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.048
+            },
+            "tid": "1764426348176",
+            "start_ms": 6.8259,
+            "end_ms": 13.6026
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.6243,
+            "on_cpu_ms": 0.6243,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.1926,
+            "end_ms": 1.8169
+          },
+          {
+            "wall_ms": 0.177,
+            "on_cpu_ms": 0.177,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 7.2808,
+            "end_ms": 7.4578
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.4671,
+            "on_cpu_ms": 0.3711,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 0.092,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.096
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2323,
+            "end_ms": 0.6994
+          },
+          {
+            "wall_ms": 0.4429,
+            "on_cpu_ms": 0.3949,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.037,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.048
+            },
+            "tid": "1764426348176",
+            "start_ms": 6.8264,
+            "end_ms": 7.2693
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1142,
+            "on_cpu_ms": 0.1142,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.5851,
+            "end_ms": 0.6993
+          },
+          {
+            "wall_ms": 0.1443,
+            "on_cpu_ms": 0.1443,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 7.1248,
+            "end_ms": 7.2691
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 4.9042,
+            "on_cpu_ms": 4.8982,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrDispatchInt": 0.006
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.8171,
+            "end_ms": 6.7213
+          },
+          {
+            "wall_ms": 6.1391,
+            "on_cpu_ms": 6.1391,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 7.4579,
+            "end_ms": 13.597
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4922,
+      "call": {
+        "wall_ms": 13.5134,
+        "on_cpu_ms": 0.7384,
+        "ready_delay_ms": 0.049,
+        "blocked_ms": 12.726,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Ready/WrDispatchInt": 0.032,
+          "Waiting/WrAlertByThreadId": 12.742999999999999
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 13.512,
+            "on_cpu_ms": 0.737,
+            "ready_delay_ms": 0.049,
+            "blocked_ms": 12.726,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.032,
+              "Waiting/WrAlertByThreadId": 12.742999999999999
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 13.5122
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 10.2812,
+            "on_cpu_ms": 0.1742,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 10.099,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 10.107
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.4847,
+            "end_ms": 10.7659
+          },
+          {
+            "wall_ms": 2.6503,
+            "on_cpu_ms": 0.0143,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 2.627,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 2.636
+            },
+            "tid": "1764426310348",
+            "start_ms": 10.8553,
+            "end_ms": 13.5056
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 10.2567,
+            "on_cpu_ms": 10.2397,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.01,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.017
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.4949,
+            "end_ms": 10.7516
+          },
+          {
+            "wall_ms": 2.6273,
+            "on_cpu_ms": 2.5803,
+            "ready_delay_ms": 0.022,
+            "blocked_ms": 0.025,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.047
+            },
+            "tid": "1764426348176",
+            "start_ms": 10.8665,
+            "end_ms": 13.4938
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.5877,
+            "on_cpu_ms": 0.5877,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.0978,
+            "end_ms": 1.6855
+          },
+          {
+            "wall_ms": 0.2306,
+            "on_cpu_ms": 0.2196,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 0.007,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.011
+            },
+            "tid": "1764426348176",
+            "start_ms": 11.3428,
+            "end_ms": 11.5734
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.5925,
+            "on_cpu_ms": 0.5755,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.01,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.017
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.4953,
+            "end_ms": 1.0878
+          },
+          {
+            "wall_ms": 0.4652,
+            "on_cpu_ms": 0.4292,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.018,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.036000000000000004
+            },
+            "tid": "1764426348176",
+            "start_ms": 10.8671,
+            "end_ms": 11.3323
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1558,
+            "on_cpu_ms": 0.1558,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.9318,
+            "end_ms": 1.0876
+          },
+          {
+            "wall_ms": 0.1584,
+            "on_cpu_ms": 0.1584,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 11.1738,
+            "end_ms": 11.3322
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 9.0578,
+            "on_cpu_ms": 9.0578,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.6857,
+            "end_ms": 10.7435
+          },
+          {
+            "wall_ms": 1.9136,
+            "on_cpu_ms": 1.9136,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 11.5743,
+            "end_ms": 13.4879
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4935,
+      "call": {
+        "wall_ms": 13.4502,
+        "on_cpu_ms": 0.6922,
+        "ready_delay_ms": 0.011,
+        "blocked_ms": 12.747,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 12.758
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 13.4493,
+            "on_cpu_ms": 0.6913,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 12.747,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 12.758
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 13.4495
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 8.1327,
+            "on_cpu_ms": 0.2977,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 7.827,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 7.835
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2838,
+            "end_ms": 8.4165
+          },
+          {
+            "wall_ms": 4.9382,
+            "on_cpu_ms": 0.0152,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 4.92,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 4.923
+            },
+            "tid": "1764426310348",
+            "start_ms": 8.5031,
+            "end_ms": 13.4413
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 8.11,
+            "on_cpu_ms": 8.065,
+            "ready_delay_ms": 0.02,
+            "blocked_ms": 0.025,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.045
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2937,
+            "end_ms": 8.4037
+          },
+          {
+            "wall_ms": 4.9155,
+            "on_cpu_ms": 4.8705,
+            "ready_delay_ms": 0.021,
+            "blocked_ms": 0.024,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.031,
+              "Ready/WrYieldExecution": 0.012,
+              "Standby/WrYieldExecution": 0.002
+            },
+            "tid": "1764426348176",
+            "start_ms": 8.516,
+            "end_ms": 13.4315
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.8222,
+            "on_cpu_ms": 0.7772,
+            "ready_delay_ms": 0.02,
+            "blocked_ms": 0.025,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.045
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.9245,
+            "end_ms": 1.7467
+          },
+          {
+            "wall_ms": 0.304,
+            "on_cpu_ms": 0.29,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.012,
+              "Standby/WrYieldExecution": 0.002
+            },
+            "tid": "1764426348176",
+            "start_ms": 9.2864,
+            "end_ms": 9.5904
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.6164,
+            "on_cpu_ms": 0.6164,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.2939,
+            "end_ms": 0.9103
+          },
+          {
+            "wall_ms": 0.5008,
+            "on_cpu_ms": 0.4698,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.024,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.031
+            },
+            "tid": "1764426348176",
+            "start_ms": 8.5176,
+            "end_ms": 9.0184
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1572,
+            "on_cpu_ms": 0.1572,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.7529,
+            "end_ms": 0.9101
+          },
+          {
+            "wall_ms": 0.171,
+            "on_cpu_ms": 0.171,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 8.8472,
+            "end_ms": 9.0182
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 6.6471,
+            "on_cpu_ms": 6.6471,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.7472,
+            "end_ms": 8.3943
+          },
+          {
+            "wall_ms": 3.8323,
+            "on_cpu_ms": 3.8323,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 9.591,
+            "end_ms": 13.4233
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4974,
+      "call": {
+        "wall_ms": 15.084,
+        "on_cpu_ms": 0.668,
+        "ready_delay_ms": 0.017,
+        "blocked_ms": 14.399,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 14.416
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 15.0828,
+            "on_cpu_ms": 0.6668,
+            "ready_delay_ms": 0.017,
+            "blocked_ms": 14.399,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 14.416
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0005,
+            "end_ms": 15.0833
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 11.5014,
+            "on_cpu_ms": 0.2854,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 11.207,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 11.216
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2672,
+            "end_ms": 11.7686
+          },
+          {
+            "wall_ms": 3.2107,
+            "on_cpu_ms": 0.0107,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 3.192,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 3.2
+            },
+            "tid": "1764426310348",
+            "start_ms": 11.8636,
+            "end_ms": 15.0743
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 11.4783,
+            "on_cpu_ms": 11.4163,
+            "ready_delay_ms": 0.017,
+            "blocked_ms": 0.045,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.049999999999999996,
+              "DeferredReady/WrAlertByThreadId": 0.007,
+              "Standby/WrDispatchInt": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2772,
+            "end_ms": 11.7555
+          },
+          {
+            "wall_ms": 3.1886,
+            "on_cpu_ms": 3.1196,
+            "ready_delay_ms": 0.034,
+            "blocked_ms": 0.035,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.069
+            },
+            "tid": "1764426348176",
+            "start_ms": 11.8747,
+            "end_ms": 15.0633
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.802,
+            "on_cpu_ms": 0.795,
+            "ready_delay_ms": 0.002,
+            "blocked_ms": 0.005,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.007
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.8809,
+            "end_ms": 1.6829
+          },
+          {
+            "wall_ms": 0.299,
+            "on_cpu_ms": 0.255,
+            "ready_delay_ms": 0.028,
+            "blocked_ms": 0.016,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.044
+            },
+            "tid": "1764426348176",
+            "start_ms": 12.5491,
+            "end_ms": 12.8481
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.5807,
+            "on_cpu_ms": 0.5307,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.04,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.043,
+              "DeferredReady/WrAlertByThreadId": 0.007
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2777,
+            "end_ms": 0.8584
+          },
+          {
+            "wall_ms": 0.6426,
+            "on_cpu_ms": 0.6176,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.019,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.025
+            },
+            "tid": "1764426348176",
+            "start_ms": 11.8757,
+            "end_ms": 12.5183
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1651,
+            "on_cpu_ms": 0.1651,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.6932,
+            "end_ms": 0.8583
+          },
+          {
+            "wall_ms": 0.2764,
+            "on_cpu_ms": 0.2764,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.2417,
+            "end_ms": 12.5181
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 10.0617,
+            "on_cpu_ms": 10.0567,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrDispatchInt": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.6833,
+            "end_ms": 11.745
+          },
+          {
+            "wall_ms": 2.2076,
+            "on_cpu_ms": 2.2076,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.8485,
+            "end_ms": 15.0561
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4985,
+      "call": {
+        "wall_ms": 15.4132,
+        "on_cpu_ms": 0.6952,
+        "ready_delay_ms": 0.015,
+        "blocked_ms": 14.703,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 14.718
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 15.4122,
+            "on_cpu_ms": 0.6942,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 14.703,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 14.718
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 15.4124
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 11.7582,
+            "on_cpu_ms": 0.2102,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 11.541,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 11.548
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3556,
+            "end_ms": 12.1138
+          },
+          {
+            "wall_ms": 3.1843,
+            "on_cpu_ms": 0.0143,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 3.162,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 3.17
+            },
+            "tid": "1764426310348",
+            "start_ms": 12.2175,
+            "end_ms": 15.4018
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 11.7347,
+            "on_cpu_ms": 11.6947,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.029,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.004,
+              "Waiting/WrAlertByThreadId": 0.036
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3661,
+            "end_ms": 12.1008
+          },
+          {
+            "wall_ms": 3.1592,
+            "on_cpu_ms": 3.1122,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.037,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.047
+            },
+            "tid": "1764426348176",
+            "start_ms": 12.2314,
+            "end_ms": 15.3906
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.7057,
+            "on_cpu_ms": 0.7057,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.0403,
+            "end_ms": 1.746
+          },
+          {
+            "wall_ms": 0.2324,
+            "on_cpu_ms": 0.2324,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.7872,
+            "end_ms": 13.0196
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.6602,
+            "on_cpu_ms": 0.6202,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.029,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.004,
+              "Waiting/WrAlertByThreadId": 0.036
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3666,
+            "end_ms": 1.0268
+          },
+          {
+            "wall_ms": 0.5444,
+            "on_cpu_ms": 0.4974,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.037,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.047
+            },
+            "tid": "1764426348176",
+            "start_ms": 12.2317,
+            "end_ms": 12.7761
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1696,
+            "on_cpu_ms": 0.1696,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.857,
+            "end_ms": 1.0266
+          },
+          {
+            "wall_ms": 0.1294,
+            "on_cpu_ms": 0.1294,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.6466,
+            "end_ms": 12.776
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 10.3445,
+            "on_cpu_ms": 10.3445,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.7464,
+            "end_ms": 12.0909
+          },
+          {
+            "wall_ms": 2.365,
+            "on_cpu_ms": 2.365,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 13.0197,
+            "end_ms": 15.3847
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 4997,
+      "call": {
+        "wall_ms": 13.806,
+        "on_cpu_ms": 0.791,
+        "ready_delay_ms": 0.021,
+        "blocked_ms": 12.994,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 13.015
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 13.8052,
+            "on_cpu_ms": 0.7902,
+            "ready_delay_ms": 0.021,
+            "blocked_ms": 12.994,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 13.015
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 13.8054
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 10.5006,
+            "on_cpu_ms": 0.2986,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 10.19,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 10.202
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3631,
+            "end_ms": 10.8637
+          },
+          {
+            "wall_ms": 2.8299,
+            "on_cpu_ms": 0.0169,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 2.804,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 2.813
+            },
+            "tid": "1764426310348",
+            "start_ms": 10.9651,
+            "end_ms": 13.795
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 10.4561,
+            "on_cpu_ms": 10.3771,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.065,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrAlertByThreadId": 0.001,
+              "Waiting/WrAlertByThreadId": 0.078
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3897,
+            "end_ms": 10.8458
+          },
+          {
+            "wall_ms": 2.8024,
+            "on_cpu_ms": 2.7514,
+            "ready_delay_ms": 0.051,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.051000000000000004
+            },
+            "tid": "1764426348176",
+            "start_ms": 10.9793,
+            "end_ms": 13.7817
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.7346,
+            "on_cpu_ms": 0.7226,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.004,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.012
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.0901,
+            "end_ms": 1.8247
+          },
+          {
+            "wall_ms": 0.3749,
+            "on_cpu_ms": 0.3239,
+            "ready_delay_ms": 0.051,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.051000000000000004
+            },
+            "tid": "1764426348176",
+            "start_ms": 11.5531,
+            "end_ms": 11.928
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.6861,
+            "on_cpu_ms": 0.6191,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.061,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrAlertByThreadId": 0.001,
+              "Waiting/WrAlertByThreadId": 0.066
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3902,
+            "end_ms": 1.0763
+          },
+          {
+            "wall_ms": 0.5622,
+            "on_cpu_ms": 0.5622,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 10.9795,
+            "end_ms": 11.5417
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1494,
+            "on_cpu_ms": 0.1494,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.9268,
+            "end_ms": 1.0762
+          },
+          {
+            "wall_ms": 0.1509,
+            "on_cpu_ms": 0.1509,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 11.3907,
+            "end_ms": 11.5416
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 9.0108,
+            "on_cpu_ms": 9.0108,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.825,
+            "end_ms": 10.8358
+          },
+          {
+            "wall_ms": 1.8477,
+            "on_cpu_ms": 1.8477,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 11.9283,
+            "end_ms": 13.776
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 5001,
+      "call": {
+        "wall_ms": 15.6343,
+        "on_cpu_ms": 0.8033,
+        "ready_delay_ms": 0.015,
+        "blocked_ms": 14.816,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 14.831
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 15.6334,
+            "on_cpu_ms": 0.8024,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 14.816,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 14.831
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0003,
+            "end_ms": 15.6337
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 11.1766,
+            "on_cpu_ms": 0.2926,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 10.877,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 10.884
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3813,
+            "end_ms": 11.5579
+          },
+          {
+            "wall_ms": 3.9644,
+            "on_cpu_ms": 0.0174,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 3.939,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 3.947
+            },
+            "tid": "1764426310348",
+            "start_ms": 11.6577,
+            "end_ms": 15.6221
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 11.1486,
+            "on_cpu_ms": 11.0076,
+            "ready_delay_ms": 0.024,
+            "blocked_ms": 0.117,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.137,
+              "DeferredReady/WrAlertByThreadId": 0.004
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3948,
+            "end_ms": 11.5434
+          },
+          {
+            "wall_ms": 3.9373,
+            "on_cpu_ms": 3.9243,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.009,
+              "DeferredReady/WrAlertByThreadId": 0.004
+            },
+            "tid": "1764426348176",
+            "start_ms": 11.672,
+            "end_ms": 15.6093
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.9229,
+            "on_cpu_ms": 0.8329,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.076,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.09000000000000001
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.1233,
+            "end_ms": 2.0462
+          },
+          {
+            "wall_ms": 0.2757,
+            "on_cpu_ms": 0.2717,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.004
+            },
+            "tid": "1764426348176",
+            "start_ms": 12.1993,
+            "end_ms": 12.475
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.7117,
+            "on_cpu_ms": 0.6607,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.041,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.047,
+              "DeferredReady/WrAlertByThreadId": 0.004
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3955,
+            "end_ms": 1.1072
+          },
+          {
+            "wall_ms": 0.5143,
+            "on_cpu_ms": 0.5053,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.009
+            },
+            "tid": "1764426348176",
+            "start_ms": 11.6723,
+            "end_ms": 12.1866
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1949,
+            "on_cpu_ms": 0.1949,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.912,
+            "end_ms": 1.1069
+          },
+          {
+            "wall_ms": 0.1615,
+            "on_cpu_ms": 0.1615,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.0249,
+            "end_ms": 12.1864
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 9.4861,
+            "on_cpu_ms": 9.4861,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.0465,
+            "end_ms": 11.5326
+          },
+          {
+            "wall_ms": 3.1256,
+            "on_cpu_ms": 3.1256,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.4754,
+            "end_ms": 15.601
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 5002,
+      "call": {
+        "wall_ms": 24.8076,
+        "on_cpu_ms": 0.8246,
+        "ready_delay_ms": 0.021,
+        "blocked_ms": 23.962,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 23.983
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 24.8067,
+            "on_cpu_ms": 0.8237,
+            "ready_delay_ms": 0.021,
+            "blocked_ms": 23.962,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 23.983
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 24.8069
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 21.3469,
+            "on_cpu_ms": 0.2849,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 21.053,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 21.062
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3648,
+            "end_ms": 21.7117
+          },
+          {
+            "wall_ms": 2.9558,
+            "on_cpu_ms": 0.0348,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 2.909,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 2.921
+            },
+            "tid": "1764426310348",
+            "start_ms": 21.8401,
+            "end_ms": 24.7959
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 21.3193,
+            "on_cpu_ms": 21.2253,
+            "ready_delay_ms": 0.022,
+            "blocked_ms": 0.072,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.094
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3764,
+            "end_ms": 21.6957
+          },
+          {
+            "wall_ms": 2.9085,
+            "on_cpu_ms": 2.8995,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.009
+            },
+            "tid": "1764426348176",
+            "start_ms": 21.8704,
+            "end_ms": 24.7789
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.7538,
+            "on_cpu_ms": 0.6828,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.057,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.07100000000000001
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.9838,
+            "end_ms": 1.7376
+          },
+          {
+            "wall_ms": 0.3061,
+            "on_cpu_ms": 0.3061,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 22.3833,
+            "end_ms": 22.6894
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.5949,
+            "on_cpu_ms": 0.5719,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.015,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.023
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3768,
+            "end_ms": 0.9717
+          },
+          {
+            "wall_ms": 0.4993,
+            "on_cpu_ms": 0.4903,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.009
+            },
+            "tid": "1764426348176",
+            "start_ms": 21.8714,
+            "end_ms": 22.3707
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1344,
+            "on_cpu_ms": 0.1344,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.8372,
+            "end_ms": 0.9716
+          },
+          {
+            "wall_ms": 0.1515,
+            "on_cpu_ms": 0.1515,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 22.219,
+            "end_ms": 22.3705
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 19.9473,
+            "on_cpu_ms": 19.9473,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.738,
+            "end_ms": 21.6853
+          },
+          {
+            "wall_ms": 2.0834,
+            "on_cpu_ms": 2.0834,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 22.6895,
+            "end_ms": 24.7729
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 5161,
+      "call": {
+        "wall_ms": 15.1036,
+        "on_cpu_ms": 0.6176,
+        "ready_delay_ms": 0.01,
+        "blocked_ms": 14.476,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 14.485999999999999
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 15.1025,
+            "on_cpu_ms": 0.6165,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 14.476,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 14.485999999999999
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0001,
+            "end_ms": 15.1026
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 11.7495,
+            "on_cpu_ms": 0.2995,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 11.447,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 11.45
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2226,
+            "end_ms": 11.9721
+          },
+          {
+            "wall_ms": 3.0491,
+            "on_cpu_ms": 0.0131,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 3.029,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 3.036
+            },
+            "tid": "1764426310348",
+            "start_ms": 12.0473,
+            "end_ms": 15.0964
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 11.716,
+            "on_cpu_ms": 11.641,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.064,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.068,
+              "DeferredReady/WrAlertByThreadId": 0.004,
+              "Standby/WrDispatchInt": 0.003
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2482,
+            "end_ms": 11.9642
+          },
+          {
+            "wall_ms": 3.03,
+            "on_cpu_ms": 3.021,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.009000000000000001
+            },
+            "tid": "1764426348176",
+            "start_ms": 12.0577,
+            "end_ms": 15.0877
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.533,
+            "on_cpu_ms": 0.461,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.064,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.068,
+              "DeferredReady/WrAlertByThreadId": 0.004
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.7878,
+            "end_ms": 1.3208
+          },
+          {
+            "wall_ms": 0.2294,
+            "on_cpu_ms": 0.2294,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.4989,
+            "end_ms": 12.7283
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.5299,
+            "on_cpu_ms": 0.5299,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.2495,
+            "end_ms": 0.7794
+          },
+          {
+            "wall_ms": 0.4176,
+            "on_cpu_ms": 0.4086,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.009000000000000001
+            },
+            "tid": "1764426348176",
+            "start_ms": 12.058,
+            "end_ms": 12.4756
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1354,
+            "on_cpu_ms": 0.1354,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.6439,
+            "end_ms": 0.7793
+          },
+          {
+            "wall_ms": 0.1138,
+            "on_cpu_ms": 0.1138,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.3616,
+            "end_ms": 12.4754
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 10.6343,
+            "on_cpu_ms": 10.6313,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrDispatchInt": 0.003
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.3212,
+            "end_ms": 11.9555
+          },
+          {
+            "wall_ms": 2.3539,
+            "on_cpu_ms": 2.3539,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 12.7284,
+            "end_ms": 15.0823
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 5372,
+      "call": {
+        "wall_ms": 14.8257,
+        "on_cpu_ms": 0.5307,
+        "ready_delay_ms": 0.011,
+        "blocked_ms": 14.284,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 14.295
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 14.8245,
+            "on_cpu_ms": 0.5295,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 14.284,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 14.295
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 14.8247
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 9.9293,
+            "on_cpu_ms": 0.1913,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 9.732,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 9.738
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2342,
+            "end_ms": 10.1635
+          },
+          {
+            "wall_ms": 4.5692,
+            "on_cpu_ms": 0.0122,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 4.552,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 4.557
+            },
+            "tid": "1764426310348",
+            "start_ms": 10.2482,
+            "end_ms": 14.8174
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 9.8777,
+            "on_cpu_ms": 9.6377,
+            "ready_delay_ms": 0.066,
+            "blocked_ms": 0.174,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.24000000000000002
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.277,
+            "end_ms": 10.1547
+          },
+          {
+            "wall_ms": 4.5506,
+            "on_cpu_ms": 4.4286,
+            "ready_delay_ms": 0.029,
+            "blocked_ms": 0.093,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.12,
+              "Standby/WrAlertByThreadId": 0.002
+            },
+            "tid": "1764426348176",
+            "start_ms": 10.2585,
+            "end_ms": 14.8091
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.6874,
+            "on_cpu_ms": 0.6094,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.06,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.078
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.4975,
+            "end_ms": 2.1849
+          },
+          {
+            "wall_ms": 0.2784,
+            "on_cpu_ms": 0.2764,
+            "ready_delay_ms": 0.002,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrAlertByThreadId": 0.002
+            },
+            "tid": "1764426348176",
+            "start_ms": 10.9293,
+            "end_ms": 11.2077
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.7832,
+            "on_cpu_ms": 0.6212,
+            "ready_delay_ms": 0.048,
+            "blocked_ms": 0.114,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.162
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2774,
+            "end_ms": 1.0606
+          },
+          {
+            "wall_ms": 0.6528,
+            "on_cpu_ms": 0.5328,
+            "ready_delay_ms": 0.027,
+            "blocked_ms": 0.093,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.12
+            },
+            "tid": "1764426348176",
+            "start_ms": 10.2588,
+            "end_ms": 10.9116
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1799,
+            "on_cpu_ms": 0.1799,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.8803,
+            "end_ms": 1.0602
+          },
+          {
+            "wall_ms": 0.2121,
+            "on_cpu_ms": 0.2121,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 10.6992,
+            "end_ms": 10.9113
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 7.9618,
+            "on_cpu_ms": 7.9618,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.1852,
+            "end_ms": 10.147
+          },
+          {
+            "wall_ms": 3.5952,
+            "on_cpu_ms": 3.5952,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 11.2082,
+            "end_ms": 14.8034
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 5421,
+      "call": {
+        "wall_ms": 44.7698,
+        "on_cpu_ms": 0.5478,
+        "ready_delay_ms": 0.012,
+        "blocked_ms": 44.21,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 44.222
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 44.7687,
+            "on_cpu_ms": 0.5467,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 44.21,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 44.222
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0003,
+            "end_ms": 44.769
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 18.4871,
+            "on_cpu_ms": 0.1661,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 18.316,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 18.321
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2531,
+            "end_ms": 18.7402
+          },
+          {
+            "wall_ms": 25.914,
+            "on_cpu_ms": 0.013,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 25.894,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 25.901
+            },
+            "tid": "1764426310348",
+            "start_ms": 18.84,
+            "end_ms": 44.754
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 18.469,
+            "on_cpu_ms": 18.406,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.045,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.063
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2615,
+            "end_ms": 18.7305
+          },
+          {
+            "wall_ms": 25.8914,
+            "on_cpu_ms": 6.6604,
+            "ready_delay_ms": 0.077,
+            "blocked_ms": 19.154,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.16399999999999998,
+              "Waiting/WrResource": 19.067
+            },
+            "tid": "1764426348176",
+            "start_ms": 18.8511,
+            "end_ms": 44.7425
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.7108,
+            "on_cpu_ms": 0.6478,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.045,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.063
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.3437,
+            "end_ms": 2.0545
+          },
+          {
+            "wall_ms": 0.4479,
+            "on_cpu_ms": 0.3589,
+            "ready_delay_ms": 0.033,
+            "blocked_ms": 0.056,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.089
+            },
+            "tid": "1764426348176",
+            "start_ms": 38.6233,
+            "end_ms": 39.0712
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 1.0547,
+            "on_cpu_ms": 1.0547,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.2619,
+            "end_ms": 1.3166
+          },
+          {
+            "wall_ms": 19.7581,
+            "on_cpu_ms": 0.6161,
+            "ready_delay_ms": 0.044,
+            "blocked_ms": 19.098,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.075,
+              "Waiting/WrResource": 19.067
+            },
+            "tid": "1764426348176",
+            "start_ms": 18.8512,
+            "end_ms": 38.6093
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.3454,
+            "on_cpu_ms": 0.3454,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.9706,
+            "end_ms": 1.316
+          },
+          {
+            "wall_ms": 19.2582,
+            "on_cpu_ms": 0.1912,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 19.056,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrResource": 19.067
+            },
+            "tid": "1764426348176",
+            "start_ms": 19.3507,
+            "end_ms": 38.6089
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 16.6682,
+            "on_cpu_ms": 16.6682,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.0548,
+            "end_ms": 18.723
+          },
+          {
+            "wall_ms": 5.6641,
+            "on_cpu_ms": 5.6641,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 39.0714,
+            "end_ms": 44.7355
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6000,
+      "call": {
+        "wall_ms": 2.6541,
+        "on_cpu_ms": 0.7911,
+        "ready_delay_ms": 0.018,
+        "blocked_ms": 1.845,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Standby/WrDispatchInt": 0.003,
+          "Waiting/WrAlertByThreadId": 1.8599999999999999
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 2.6534,
+            "on_cpu_ms": 0.7904,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 1.845,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrDispatchInt": 0.003,
+              "Waiting/WrAlertByThreadId": 1.8599999999999999
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 2.6536
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.4466,
+            "on_cpu_ms": 0.3306,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 1.106,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrDispatchInt": 0.003,
+              "Waiting/WrAlertByThreadId": 1.113
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3625,
+            "end_ms": 1.8091
+          },
+          {
+            "wall_ms": 0.7601,
+            "on_cpu_ms": 0.0131,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.739,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.747
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.8869,
+            "end_ms": 2.647
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.4267,
+            "on_cpu_ms": 1.2887,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.126,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.138
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3729,
+            "end_ms": 1.7996
+          },
+          {
+            "wall_ms": 0.7377,
+            "on_cpu_ms": 0.6977,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.026,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.8982,
+            "end_ms": 2.6359
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.7192,
+            "on_cpu_ms": 0.7092,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.004,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.01
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.0513,
+            "end_ms": 1.7705
+          },
+          {
+            "wall_ms": 0.1763,
+            "on_cpu_ms": 0.1763,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.2941,
+            "end_ms": 2.4704
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.6266,
+            "on_cpu_ms": 0.4986,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.122,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.128
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3734,
+            "end_ms": 1.0
+          },
+          {
+            "wall_ms": 0.3846,
+            "on_cpu_ms": 0.3446,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.026,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.8985,
+            "end_ms": 2.2831
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1524,
+            "on_cpu_ms": 0.1524,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.8473,
+            "end_ms": 0.9997
+          },
+          {
+            "wall_ms": 0.099,
+            "on_cpu_ms": 0.099,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.1839,
+            "end_ms": 2.2829
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.0219,
+            "on_cpu_ms": 0.0219,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.7708,
+            "end_ms": 1.7927
+          },
+          {
+            "wall_ms": 0.1587,
+            "on_cpu_ms": 0.1587,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.4705,
+            "end_ms": 2.6292
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 7000,
+      "call": {
+        "wall_ms": 2.422,
+        "on_cpu_ms": 0.678,
+        "ready_delay_ms": 0.012,
+        "blocked_ms": 1.732,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.7439999999999998
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 2.4213,
+            "on_cpu_ms": 0.6773,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 1.732,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.7439999999999998
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0002,
+            "end_ms": 2.4215
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.2516,
+            "on_cpu_ms": 0.2026,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 1.044,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.049
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.3531,
+            "end_ms": 1.6047
+          },
+          {
+            "wall_ms": 0.708,
+            "on_cpu_ms": 0.013,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.688,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.695
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.7047,
+            "end_ms": 2.4127
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.2149,
+            "on_cpu_ms": 1.0889,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.108,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.126
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.382,
+            "end_ms": 1.5969
+          },
+          {
+            "wall_ms": 0.6868,
+            "on_cpu_ms": 0.6598,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.016,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.027
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.7159,
+            "end_ms": 2.4027
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.6612,
+            "on_cpu_ms": 0.5742,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.074,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.087
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.9013,
+            "end_ms": 1.5625
+          },
+          {
+            "wall_ms": 0.1879,
+            "on_cpu_ms": 0.1679,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.014,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.02
+            },
+            "tid": "1764426348176",
+            "start_ms": 2.081,
+            "end_ms": 2.2689
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.4729,
+            "on_cpu_ms": 0.4339,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.034,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.039
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.3834,
+            "end_ms": 0.8563
+          },
+          {
+            "wall_ms": 0.3543,
+            "on_cpu_ms": 0.3473,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.007
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.7163,
+            "end_ms": 2.0706
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.115,
+            "on_cpu_ms": 0.115,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.7411,
+            "end_ms": 0.8561
+          },
+          {
+            "wall_ms": 0.0924,
+            "on_cpu_ms": 0.0924,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.978,
+            "end_ms": 2.0704
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.0265,
+            "on_cpu_ms": 0.0265,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.5631,
+            "end_ms": 1.5896
+          },
+          {
+            "wall_ms": 0.128,
+            "on_cpu_ms": 0.128,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 2.2692,
+            "end_ms": 2.3972
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 15000,
+      "call": {
+        "wall_ms": 1.8852,
+        "on_cpu_ms": 0.4402,
+        "ready_delay_ms": 0.014,
+        "blocked_ms": 1.431,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.4449999999999998
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 1.8847,
+            "on_cpu_ms": 0.4397,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 1.431,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.4449999999999998
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0,
+            "end_ms": 1.8847
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.0185,
+            "on_cpu_ms": 0.1605,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.851,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.858
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2076,
+            "end_ms": 1.2261
+          },
+          {
+            "wall_ms": 0.5981,
+            "on_cpu_ms": 0.0111,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.58,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.587
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.2815,
+            "end_ms": 1.8796
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 0.9971,
+            "on_cpu_ms": 0.9521,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.037,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04,
+              "DeferredReady/WrAlertByThreadId": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2201,
+            "end_ms": 1.2172
+          },
+          {
+            "wall_ms": 0.5797,
+            "on_cpu_ms": 0.5487,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.019,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.031
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.2917,
+            "end_ms": 1.8714
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.4631,
+            "on_cpu_ms": 0.4631,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.6154,
+            "end_ms": 1.0785
+          },
+          {
+            "wall_ms": 0.1205,
+            "on_cpu_ms": 0.1115,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.009
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.5654,
+            "end_ms": 1.6859
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.3564,
+            "on_cpu_ms": 0.3114,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.037,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04,
+              "DeferredReady/WrAlertByThreadId": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2203,
+            "end_ms": 0.5767
+          },
+          {
+            "wall_ms": 0.2651,
+            "on_cpu_ms": 0.2431,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.017,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.022
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.292,
+            "end_ms": 1.5571
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.0792,
+            "on_cpu_ms": 0.0792,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.4973,
+            "end_ms": 0.5765
+          },
+          {
+            "wall_ms": 0.0724,
+            "on_cpu_ms": 0.0724,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.4845,
+            "end_ms": 1.5569
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.1331,
+            "on_cpu_ms": 0.1331,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.0786,
+            "end_ms": 1.2117
+          },
+          {
+            "wall_ms": 0.18,
+            "on_cpu_ms": 0.18,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.6861,
+            "end_ms": 1.8661
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 22531,
+      "call": {
+        "wall_ms": 1.9981,
+        "on_cpu_ms": 0.4511,
+        "ready_delay_ms": 0.013,
+        "blocked_ms": 1.534,
+        "unknown_off_ms": 0.0,
+        "off_states_ms": {
+          "Waiting/WrAlertByThreadId": 1.547
+        },
+        "tid": "1764426310348"
+      },
+      "stages": {
+        "session": [
+          {
+            "wall_ms": 1.9974,
+            "on_cpu_ms": 0.4504,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 1.534,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.547
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.0001,
+            "end_ms": 1.9975
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "wall_ms": 1.0151,
+            "on_cpu_ms": 0.1631,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.846,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.852
+            },
+            "tid": "1764426310348",
+            "start_ms": 0.2157,
+            "end_ms": 1.2308
+          },
+          {
+            "wall_ms": 0.7054,
+            "on_cpu_ms": 0.0104,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.688,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.695
+            },
+            "tid": "1764426310348",
+            "start_ms": 1.2879,
+            "end_ms": 1.9933
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 0.981,
+            "on_cpu_ms": 0.976,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.2412,
+            "end_ms": 1.2222
+          },
+          {
+            "wall_ms": 0.6876,
+            "on_cpu_ms": 0.6666,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.015,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.021
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.2973,
+            "end_ms": 1.9849
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.4881,
+            "on_cpu_ms": 0.4831,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.005
+            },
+            "tid": "1764426348176",
+            "start_ms": 0.6046,
+            "end_ms": 1.0927
+          },
+          {
+            "wall_ms": 0.1732,
+            "on_cpu_ms": 0.1522,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.015,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.021
+            },
+            "tid": "1764426348176",
+            "start_ms": 1.7873,
+            "end_ms": 1.9605
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.3544,
+            "on_cpu_ms": 0.3544,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.2424,
+            "end_ms": 0.5968
+          },
+          {
+            "wall_ms": 0.2943,
+            "on_cpu_ms": 0.2943,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.2976,
+            "end_ms": 1.5919
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.0865,
+            "on_cpu_ms": 0.0865,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 0.5102,
+            "end_ms": 0.5967
+          },
+          {
+            "wall_ms": 0.077,
+            "on_cpu_ms": 0.077,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.5148,
+            "end_ms": 1.5918
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.1233,
+            "on_cpu_ms": 0.1233,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.0932,
+            "end_ms": 1.2165
+          },
+          {
+            "wall_ms": 0.0185,
+            "on_cpu_ms": 0.0185,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "tid": "1764426348176",
+            "start_ms": 1.9609,
+            "end_ms": 1.9794
+          }
+        ]
+      }
+    }
+  ]
+}

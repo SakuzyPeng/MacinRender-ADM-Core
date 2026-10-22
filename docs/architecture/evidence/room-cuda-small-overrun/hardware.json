@@ -1,0 +1,132 @@
+{
+  "cpu": {
+    "Name": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz",
+    "NumberOfCores": 8,
+    "NumberOfLogicalProcessors": 16,
+    "MaxClockSpeed": 2304
+  },
+  "processor_topology": [
+    {
+      "core": 0,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 3,
+          "processors": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "core": 1,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 12,
+          "processors": [
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "core": 2,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 48,
+          "processors": [
+            4,
+            5
+          ]
+        }
+      ]
+    },
+    {
+      "core": 3,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 192,
+          "processors": [
+            6,
+            7
+          ]
+        }
+      ]
+    },
+    {
+      "core": 4,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 768,
+          "processors": [
+            8,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "core": 5,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 3072,
+          "processors": [
+            10,
+            11
+          ]
+        }
+      ]
+    },
+    {
+      "core": 6,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 12288,
+          "processors": [
+            12,
+            13
+          ]
+        }
+      ]
+    },
+    {
+      "core": 7,
+      "smt": true,
+      "efficiency_class": 0,
+      "groups": [
+        {
+          "group": 0,
+          "mask": 49152,
+          "processors": [
+            14,
+            15
+          ]
+        }
+      ]
+    }
+  ],
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "gpu_driver": "610.88"
+}
