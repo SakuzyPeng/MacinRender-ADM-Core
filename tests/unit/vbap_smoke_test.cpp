@@ -22,7 +22,6 @@
 #include "adm/render.h"
 #include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
-#include "adm/semantic_policy.h"
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
@@ -1692,10 +1691,10 @@ bool verify_triple_balance_size_window_and_validation() {
         }
         ok &=
             check(render(std::nullopt) == whole, "native mute/zero gain/short lifetime match ignored reference fields");
-        mradm::SemanticPolicyOverride user;
-        user.gain = mradm::GainPolicy{.scale = 0.5F};
+        // User volume as a semantic policy sets it: gain and user level scale together.
         for (auto& object : plan.scene.objects) {
-            mradm::apply_resolved_semantic_object(object, user);
+            object.gain *= 0.5F;
+            object.user_level.gain_multiplier *= 0.5F;
         }
         prepared = renderer->prepare(plan, logs);
         if (!prepared) {
@@ -1704,9 +1703,9 @@ bool verify_triple_balance_size_window_and_validation() {
         auto half = whole;
         std::ranges::transform(whole, half.begin(), [](float sample) { return sample * 0.5F; });
         ok &= check(render(std::nullopt) == half, "user volume scales combined dry/size output exactly once");
-        user.gain = mradm::GainPolicy{.mute = true};
         for (auto& object : plan.scene.objects) {
-            mradm::apply_resolved_semantic_object(object, user);
+            object.mute = true;
+            object.user_level.mute = true;
         }
         prepared = renderer->prepare(plan, logs);
         if (!prepared) {

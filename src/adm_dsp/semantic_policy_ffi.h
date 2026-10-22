@@ -72,7 +72,6 @@ typedef struct MradmPolicyDirectBlock {
 int mradm_dsp_policy_gain(const MradmPolicyGain* rule, float* values, size_t n);
 int mradm_dsp_policy_object(const MradmPolicyObject* rule, uint32_t sample_rate, MradmPolicyBlock* block);
 int mradm_dsp_policy_direct(const MradmPolicyDirect* rule, MradmPolicyDirectBlock* block);
-int mradm_dsp_policy_scene_state(const float* src, size_t n, uint32_t polar, float* dst, size_t m);
 #ifdef __cplusplus
 }
 #endif

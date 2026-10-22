@@ -117,7 +117,7 @@ CLI 共七个用户可见子命令：`render`、`inspect`（输入为位置参�
 
 ## ADM 语义策略（semantic policy）
 
-在 import 之后、渲染之前，可用语义策略 JSON 改写场景中各 ADM 语义维度（diffuse / extent / divergence / channelLock / jumpPosition / objectImportance 等，定义见 `include/adm/semantic_policy.h`），schema 为 `mradm.semantic-policy.v1`。这是**验证 ADM 语义行为的首选路径**——不要直接编辑源 ADM BWF/WAV 文件。
+在 import 之后、渲染之前，可用语义策略 JSON 改写场景中各 ADM 语义维度（diffuse / extent / divergence / channelLock / jumpPosition / objectImportance 等，定义见 `rust/crates/mradm-scene/src/policy.rs`），schema 为 `mradm.semantic-policy.v1`。这是**验证 ADM 语义行为的首选路径**——不要直接编辑源 ADM BWF/WAV 文件。
 
 ```bash
 # 1. 生成可编辑的中性策略模板（含场景实际取值）
