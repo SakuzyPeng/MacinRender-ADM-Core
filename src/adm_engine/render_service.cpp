@@ -1346,8 +1346,7 @@ Result<void> RenderService::export_file(const std::string& input_path,
     if (!scene) {
         return tl::unexpected(scene.error());
     }
-    const AdmScene original = scene->scene();
-    for (const auto& w : original.import_warnings) {
+    for (const auto& w : scene->scene().import_warnings) {
         logs.log(LogLevel::warning, "importer", w);
     }
     std::vector<std::string> warnings;
@@ -1355,7 +1354,7 @@ Result<void> RenderService::export_file(const std::string& input_path,
     if (!policy_res) {
         return tl::unexpected(policy_res.error());
     }
-    return io::write_scene(input_path, original, scene->scene(), output_path);
+    return scene->write(output_path);
 }
 
 Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,

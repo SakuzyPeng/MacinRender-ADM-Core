@@ -12,7 +12,7 @@ use mradm_scene::{
     layouts::{Geometry, Layout, layouts},
     live_policy,
     policy::{self, UserLevel},
-    report,
+    report, writeback,
 };
 use std::{
     borrow::Cow,
@@ -543,6 +543,30 @@ pub unsafe extern "C" fn mradm_scene_template(
         }
         let handle = unsafe { &mut *handle };
         handle.output = report::template(&handle.scene);
+        unsafe {
+            *output = Text::new(&handle.output);
+        }
+        Ok(())
+    })
+}
+
+/// The source AXML `xml` with this scene's semantic edits patched in, held by the handle until
+/// the next report, template or export call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_export_axml(
+    handle: *mut SceneHandle,
+    xml: *const u8,
+    xml_len: usize,
+    output: *mut Text,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if handle.is_null() || output.is_null() {
+            return Err(invalid("无效导出参数"));
+        }
+        let handle = unsafe { &mut *handle };
+        handle.output = writeback::patched_axml(&handle.scene, unsafe { bytes(xml, xml_len)? })?;
         unsafe {
             *output = Text::new(&handle.output);
         }
