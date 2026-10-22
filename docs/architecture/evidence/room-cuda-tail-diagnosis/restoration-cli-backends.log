@@ -1,0 +1,74 @@
+Backend: libear rust-ear-0.1.0
+  Objects:        yes
+  DirectSpeakers: yes
+  HOA:            yes
+  ChannelLock:    yes
+  Divergence:     yes
+  ScreenRef:      no
+  Diffuse:        yes
+  Layouts (8):
+    5.1           5.1                             6ch 1lfe spread
+    5.1.2         5.1.2                           8ch 1lfe 3d spread
+    5.1.4         5.1.4                           10ch 1lfe 3d spread
+    7.1           7.1                             8ch 1lfe spread
+    7.1.4         7.1.4                           12ch 1lfe 3d spread
+    9.1.4         9.1.4                           14ch 1lfe 3d spread
+    9.1.6         9.1.6 (Dolby Atmos)             16ch 1lfe 3d spread
+    22.2          22.2                            24ch 2lfe 3d spread
+
+Backend: saf-vbap 1.3.4
+  Objects:        yes
+  DirectSpeakers: yes
+  HOA:            no
+  ChannelLock:    yes
+  Divergence:     yes
+  ScreenRef:      no
+  Diffuse:        no
+  Layouts (8):
+    5.1           5.1                             6ch 1lfe
+    5.1.2         5.1.2                           8ch 1lfe 3d spread
+    5.1.4         5.1.4                           10ch 1lfe 3d spread
+    7.1           7.1                             8ch 1lfe
+    7.1.4         7.1.4                           12ch 1lfe 3d spread
+    9.1.4         9.1.4                           14ch 1lfe 3d spread
+    9.1.6         9.1.6 (Dolby Atmos)             16ch 1lfe 3d spread
+    22.2          22.2                            24ch 2lfe 3d spread
+
+Backend: triple-balance 1
+  Objects:        yes
+  DirectSpeakers: yes
+  HOA:            no
+  ChannelLock:    no
+  Divergence:     no
+  ScreenRef:      no
+  Diffuse:        no
+  Mode: Standard (standard)
+  Mode: D mode (d) — offline only
+    Sample rates: 48000 Hz
+  Layouts (3):
+    7.1.4         7.1.4                           12ch 1lfe 3d spread
+    9.1.6         9.1.6                           16ch 1lfe 3d spread
+    22.2          22.2 (experimental)             24ch 2lfe 3d spread
+
+Backend: hoa-encode 1.0
+  Objects:        yes
+  DirectSpeakers: yes
+  HOA:            no
+  ChannelLock:    no
+  Divergence:     yes
+  ScreenRef:      no
+  Diffuse:        yes
+  Layouts (1):
+    hoa3          HOA 3rd Order (16ch, ACN/SN3D)  16ch 3d
+
+Backend: saf-binaural-hrtf 1.0
+  Objects:        yes
+  DirectSpeakers: yes
+  HOA:            no
+  ChannelLock:    yes
+  Divergence:     yes
+  ScreenRef:      no
+  Diffuse:        yes
+  HRTF sources:   built-in
+  Layouts (1):
+    binaural      SAF HRTF binaural (KEMAR or user SOFA HRIR)  2ch spread binaural

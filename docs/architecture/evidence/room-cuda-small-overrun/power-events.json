@@ -1,0 +1,42 @@
+{
+  "pmu-distance-1": [
+    {
+      "utc": "2026-10-20T10:07:47.9468318Z",
+      "id": 521,
+      "data": {
+        "ValidBatteryCount": "0",
+        "ErrorBatteryCount": "0",
+        "AbandonedBatteryCount": "0"
+      }
+    },
+    {
+      "utc": "2026-10-20T10:07:53.9944246Z",
+      "id": 521,
+      "data": {
+        "ValidBatteryCount": "1",
+        "ErrorBatteryCount": "0",
+        "AbandonedBatteryCount": "0"
+      }
+    }
+  ],
+  "gpu-distance-1": [
+    {
+      "utc": "2026-10-20T10:30:41.1127175Z",
+      "id": 521,
+      "data": {
+        "ValidBatteryCount": "0",
+        "ErrorBatteryCount": "0",
+        "AbandonedBatteryCount": "0"
+      }
+    },
+    {
+      "utc": "2026-10-20T10:30:47.1598085Z",
+      "id": 521,
+      "data": {
+        "ValidBatteryCount": "1",
+        "ErrorBatteryCount": "0",
+        "AbandonedBatteryCount": "0"
+      }
+    }
+  ]
+}

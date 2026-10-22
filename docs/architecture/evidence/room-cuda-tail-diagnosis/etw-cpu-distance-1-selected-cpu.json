@@ -1,0 +1,4540 @@
+{
+  "source": "CSwitch/ReadyThread from ETL; no SCHED_EVENTS inference",
+  "clock": {
+    "offset_ns": -17433720950,
+    "uncertainty_bound_ns": 16050,
+    "anchors_ns": {
+      "1": 17433736000,
+      "2": 72756468000
+    },
+    "bounds_ns": [
+      [
+        -17433737000,
+        -17433704500
+      ],
+      [
+        -17433740700,
+        -17433704900
+      ]
+    ]
+  },
+  "calls": [
+    {
+      "benchmark_call": 32,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 76.3346,
+            "wall_ms": 2.151,
+            "tid": 100252,
+            "on_cpu_ms": 0.451,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 1.686,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.7
+            },
+            "long_off_intervals": [
+              {
+                "start": 17510414000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 17511398000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 17511405000,
+                "overlap_ms": 0.991
+              },
+              {
+                "start": 17511476000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 17512178000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 17512185000,
+                "overlap_ms": 0.709
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 76.5545,
+            "wall_ms": 1.1448,
+            "tid": 100252,
+            "on_cpu_ms": 0.1538,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.984,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.991
+            },
+            "long_off_intervals": [
+              {
+                "start": 17510414000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 17511398000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 17511405000,
+                "overlap_ms": 0.991
+              }
+            ]
+          },
+          {
+            "start_ms": 77.7618,
+            "wall_ms": 0.7177,
+            "tid": 100252,
+            "on_cpu_ms": 0.01545,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.69525,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.70225
+            },
+            "long_off_intervals": [
+              {
+                "start": 17511476000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 17512178000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 17512185000,
+                "overlap_ms": 0.70225
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 76.5625,
+            "wall_ms": 1.1282,
+            "tid": 45768,
+            "on_cpu_ms": 1.02155,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.08865,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.10665
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 77.7696,
+            "wall_ms": 0.7005,
+            "tid": 45768,
+            "on_cpu_ms": 0.62445,
+            "ready_delay_ms": 0.016,
+            "blocked_ms": 0.06005,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.07605
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 77.0495,
+            "wall_ms": 0.6137,
+            "tid": 45768,
+            "on_cpu_ms": 0.5607,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.041,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.053
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 78.111,
+            "wall_ms": 0.1539,
+            "tid": 45768,
+            "on_cpu_ms": 0.1509,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.003
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 76.5629,
+            "wall_ms": 0.442,
+            "tid": 45768,
+            "on_cpu_ms": 0.395,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.041,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.047
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 77.7701,
+            "wall_ms": 0.3323,
+            "tid": 45768,
+            "on_cpu_ms": 0.2653,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.054,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.067
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 76.9128,
+            "wall_ms": 0.092,
+            "tid": 45768,
+            "on_cpu_ms": 0.092,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 78.0296,
+            "wall_ms": 0.0726,
+            "tid": 45768,
+            "on_cpu_ms": 0.0726,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 77.6635,
+            "wall_ms": 0.0223,
+            "tid": 45768,
+            "on_cpu_ms": 0.02055,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00175,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00175
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 78.2652,
+            "wall_ms": 0.2001,
+            "tid": 45768,
+            "on_cpu_ms": 0.19885,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00125,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00125
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 76.3344,
+            "wall_ms": 2.1518,
+            "tid": 100252,
+            "on_cpu_ms": 0.4518,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 1.686,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.7
+            },
+            "long_off_intervals": [
+              {
+                "start": 17510414000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 17511398000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 17511405000,
+                "overlap_ms": 0.991
+              },
+              {
+                "start": 17511476000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 17512178000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 17512185000,
+                "overlap_ms": 0.709
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 1000,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 2211.8888,
+            "wall_ms": 2.1472,
+            "tid": 100252,
+            "on_cpu_ms": 0.6542,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 1.479,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.493
+            },
+            "long_off_intervals": [
+              {
+                "start": 19646168000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 19646954000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 19646961000,
+                "overlap_ms": 0.793
+              },
+              {
+                "start": 19647037000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 19647730000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 19647737000,
+                "overlap_ms": 0.7
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 2212.2124,
+            "wall_ms": 1.0424,
+            "tid": 100252,
+            "on_cpu_ms": 0.2494,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.786,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.793
+            },
+            "long_off_intervals": [
+              {
+                "start": 19646168000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 19646954000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 19646961000,
+                "overlap_ms": 0.793
+              }
+            ]
+          },
+          {
+            "start_ms": 2213.3215,
+            "wall_ms": 0.7093,
+            "tid": 100252,
+            "on_cpu_ms": 0.01475,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.68755,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.69455
+            },
+            "long_off_intervals": [
+              {
+                "start": 19647037000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 19647730000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 19647737000,
+                "overlap_ms": 0.69455
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 2212.2223,
+            "wall_ms": 1.0244,
+            "tid": 45768,
+            "on_cpu_ms": 0.98475,
+            "ready_delay_ms": 0.019,
+            "blocked_ms": 0.02065,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03965
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 2213.3267,
+            "wall_ms": 0.6961,
+            "tid": 45768,
+            "on_cpu_ms": 0.62935,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.05275,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.06675
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 2212.6469,
+            "wall_ms": 0.5529,
+            "tid": 45768,
+            "on_cpu_ms": 0.5259,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.013,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.027
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 2213.6792,
+            "wall_ms": 0.1727,
+            "tid": 45768,
+            "on_cpu_ms": 0.1697,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.003
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 2212.2227,
+            "wall_ms": 0.3788,
+            "tid": 45768,
+            "on_cpu_ms": 0.3728,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.006
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 2213.3271,
+            "wall_ms": 0.342,
+            "tid": 45768,
+            "on_cpu_ms": 0.285,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.046,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.057
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 2212.5161,
+            "wall_ms": 0.0852,
+            "tid": 45768,
+            "on_cpu_ms": 0.0852,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 2213.5923,
+            "wall_ms": 0.0766,
+            "tid": 45768,
+            "on_cpu_ms": 0.0766,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 2213.2002,
+            "wall_ms": 0.0414,
+            "tid": 45768,
+            "on_cpu_ms": 0.03985,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00155,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00155
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 2213.8522,
+            "wall_ms": 0.1659,
+            "tid": 45768,
+            "on_cpu_ms": 0.16385,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00205,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00205
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 2211.8886,
+            "wall_ms": 2.1478,
+            "tid": 100252,
+            "on_cpu_ms": 0.6548,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 1.479,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.493
+            },
+            "long_off_intervals": [
+              {
+                "start": 19646168000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 19646954000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 19646961000,
+                "overlap_ms": 0.793
+              },
+              {
+                "start": 19647037000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 19647730000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 19647737000,
+                "overlap_ms": 0.7
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6164,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13021.9819,
+            "wall_ms": 25.8511,
+            "tid": 100252,
+            "on_cpu_ms": 0.6801,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 25.159,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 25.171
+            },
+            "long_off_intervals": [
+              {
+                "start": 30456231000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30474164000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30474170000,
+                "overlap_ms": 17.939
+              },
+              {
+                "start": 30474299000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30481525000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30481531000,
+                "overlap_ms": 7.232
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13022.2168,
+            "wall_ms": 18.2497,
+            "tid": 100252,
+            "on_cpu_ms": 0.3107,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 17.933,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 17.939
+            },
+            "long_off_intervals": [
+              {
+                "start": 30456231000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30474164000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30474170000,
+                "overlap_ms": 17.939
+              }
+            ]
+          },
+          {
+            "start_ms": 13040.5797,
+            "wall_ms": 7.2464,
+            "tid": 100252,
+            "on_cpu_ms": 0.01605,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 7.22435,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 7.23035
+            },
+            "long_off_intervals": [
+              {
+                "start": 30474299000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30481525000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30481531000,
+                "overlap_ms": 7.23035
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13022.2447,
+            "wall_ms": 18.2107,
+            "tid": 45768,
+            "on_cpu_ms": 18.13035,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.07335,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.08035
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13040.5934,
+            "wall_ms": 7.2236,
+            "tid": 45768,
+            "on_cpu_ms": 7.14365,
+            "ready_delay_ms": 0.049,
+            "blocked_ms": 0.03095,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.07995
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13023.222,
+            "wall_ms": 0.7119,
+            "tid": 45768,
+            "on_cpu_ms": 0.7119,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13041.2236,
+            "wall_ms": 0.2752,
+            "tid": 45768,
+            "on_cpu_ms": 0.2622,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.013
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13022.2464,
+            "wall_ms": 0.9197,
+            "tid": 45768,
+            "on_cpu_ms": 0.8447,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.068,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.075
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13040.5936,
+            "wall_ms": 0.6181,
+            "tid": 45768,
+            "on_cpu_ms": 0.5581,
+            "ready_delay_ms": 0.037,
+            "blocked_ms": 0.023,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.06
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13022.9858,
+            "wall_ms": 0.1802,
+            "tid": 45768,
+            "on_cpu_ms": 0.1802,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13041.0383,
+            "wall_ms": 0.1732,
+            "tid": 45768,
+            "on_cpu_ms": 0.1732,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13023.9341,
+            "wall_ms": 16.5124,
+            "tid": 45768,
+            "on_cpu_ms": 16.5124,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13041.4991,
+            "wall_ms": 6.3123,
+            "tid": 45768,
+            "on_cpu_ms": 6.31095,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00135,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00135
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13021.9816,
+            "wall_ms": 25.8528,
+            "tid": 100252,
+            "on_cpu_ms": 0.6818,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 25.159,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 25.171
+            },
+            "long_off_intervals": [
+              {
+                "start": 30456231000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30474164000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30474170000,
+                "overlap_ms": 17.939
+              },
+              {
+                "start": 30474299000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30481525000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30481531000,
+                "overlap_ms": 7.232
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6166,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13064.8773,
+            "wall_ms": 25.5879,
+            "tid": 100252,
+            "on_cpu_ms": 0.6839,
+            "ready_delay_ms": 0.019,
+            "blocked_ms": 24.885,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrQuantumEnd": 0.003,
+              "Waiting/WrAlertByThreadId": 24.901
+            },
+            "long_off_intervals": [
+              {
+                "start": 30499148000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30521289000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30521293000,
+                "overlap_ms": 22.145
+              },
+              {
+                "start": 30521400000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30524144000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30524156000,
+                "overlap_ms": 2.756
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13065.1019,
+            "wall_ms": 22.4887,
+            "tid": 100252,
+            "on_cpu_ms": 0.3407,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 22.141,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrQuantumEnd": 0.003,
+              "Waiting/WrAlertByThreadId": 22.145
+            },
+            "long_off_intervals": [
+              {
+                "start": 30499148000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30521289000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30521293000,
+                "overlap_ms": 22.145
+              }
+            ]
+          },
+          {
+            "start_ms": 13087.6819,
+            "wall_ms": 2.7706,
+            "tid": 100252,
+            "on_cpu_ms": 0.01745,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 2.74115,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 2.75315
+            },
+            "long_off_intervals": [
+              {
+                "start": 30521400000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30524144000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30524156000,
+                "overlap_ms": 2.75315
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13065.1512,
+            "wall_ms": 22.4287,
+            "tid": 45768,
+            "on_cpu_ms": 22.38685,
+            "ready_delay_ms": 0.03,
+            "blocked_ms": 0.01085,
+            "unknown_off_ms": 0.001,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.02885,
+              "Running/WrYieldExecution": 0.001,
+              "Ready/WrYieldExecution": 0.012
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13087.6931,
+            "wall_ms": 2.7427,
+            "tid": 45768,
+            "on_cpu_ms": 2.70195,
+            "ready_delay_ms": 0.028,
+            "blocked_ms": 0.01275,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04075
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13065.7598,
+            "wall_ms": 0.7034,
+            "tid": 45768,
+            "on_cpu_ms": 0.6904,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.001,
+            "off_states_ms": {
+              "Running/WrYieldExecution": 0.001,
+              "Ready/WrYieldExecution": 0.012
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13088.2848,
+            "wall_ms": 0.2457,
+            "tid": 45768,
+            "on_cpu_ms": 0.2337,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.005,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.012
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13065.1515,
+            "wall_ms": 0.5971,
+            "tid": 45768,
+            "on_cpu_ms": 0.5721,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.007,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.025
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13087.694,
+            "wall_ms": 0.5769,
+            "tid": 45768,
+            "on_cpu_ms": 0.5539,
+            "ready_delay_ms": 0.021,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.023
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13065.5747,
+            "wall_ms": 0.1737,
+            "tid": 45768,
+            "on_cpu_ms": 0.1737,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13088.089,
+            "wall_ms": 0.1817,
+            "tid": 45768,
+            "on_cpu_ms": 0.1817,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13066.4635,
+            "wall_ms": 21.1066,
+            "tid": 45768,
+            "on_cpu_ms": 21.1066,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13088.5309,
+            "wall_ms": 1.8998,
+            "tid": 45768,
+            "on_cpu_ms": 1.89915,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00065,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00065
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13064.8768,
+            "wall_ms": 25.5895,
+            "tid": 100252,
+            "on_cpu_ms": 0.6855,
+            "ready_delay_ms": 0.019,
+            "blocked_ms": 24.885,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrQuantumEnd": 0.003,
+              "Waiting/WrAlertByThreadId": 24.901
+            },
+            "long_off_intervals": [
+              {
+                "start": 30499148000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30521289000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30521293000,
+                "overlap_ms": 22.145
+              },
+              {
+                "start": 30521400000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30524144000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30524156000,
+                "overlap_ms": 2.756
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6175,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13264.9372,
+            "wall_ms": 25.1841,
+            "tid": 100252,
+            "on_cpu_ms": 0.5631,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 24.61,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.621
+            },
+            "long_off_intervals": [
+              {
+                "start": 30699045000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30716851000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30716858000,
+                "overlap_ms": 17.813
+              },
+              {
+                "start": 30717005000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30723809000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30723813000,
+                "overlap_ms": 6.808
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13265.1732,
+            "wall_ms": 17.9823,
+            "tid": 100252,
+            "on_cpu_ms": 0.1693,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 17.806,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 17.813
+            },
+            "long_off_intervals": [
+              {
+                "start": 30699045000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30716851000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30716858000,
+                "overlap_ms": 17.813
+              }
+            ]
+          },
+          {
+            "start_ms": 13283.2837,
+            "wall_ms": 6.8273,
+            "tid": 100252,
+            "on_cpu_ms": 0.0193,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 6.804,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 6.808
+            },
+            "long_off_intervals": [
+              {
+                "start": 30717005000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30723809000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30723813000,
+                "overlap_ms": 6.808
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13265.2011,
+            "wall_ms": 17.9398,
+            "tid": 45768,
+            "on_cpu_ms": 17.92295,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.00985,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.01685
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13283.2987,
+            "wall_ms": 6.8006,
+            "tid": 45768,
+            "on_cpu_ms": 6.73335,
+            "ready_delay_ms": 0.017,
+            "blocked_ms": 0.05025,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.06725
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13265.8351,
+            "wall_ms": 0.7509,
+            "tid": 45768,
+            "on_cpu_ms": 0.7509,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13284.243,
+            "wall_ms": 0.3132,
+            "tid": 45768,
+            "on_cpu_ms": 0.2892,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.018,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.024
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13265.2016,
+            "wall_ms": 0.6215,
+            "tid": 45768,
+            "on_cpu_ms": 0.6065,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.008,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.015
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13283.2993,
+            "wall_ms": 0.613,
+            "tid": 45768,
+            "on_cpu_ms": 0.574,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.028,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.039
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13265.6334,
+            "wall_ms": 0.1894,
+            "tid": 45768,
+            "on_cpu_ms": 0.1894,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13283.7346,
+            "wall_ms": 0.1775,
+            "tid": 45768,
+            "on_cpu_ms": 0.1775,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13266.5863,
+            "wall_ms": 16.5441,
+            "tid": 45768,
+            "on_cpu_ms": 16.5441,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13284.5569,
+            "wall_ms": 5.5334,
+            "tid": 45768,
+            "on_cpu_ms": 5.5334,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13264.937,
+            "wall_ms": 25.1854,
+            "tid": 100252,
+            "on_cpu_ms": 0.5644,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 24.61,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.621
+            },
+            "long_off_intervals": [
+              {
+                "start": 30699045000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30716851000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30716858000,
+                "overlap_ms": 17.813
+              },
+              {
+                "start": 30717005000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30723809000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30723813000,
+                "overlap_ms": 6.808
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6179,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13362.5938,
+            "wall_ms": 30.4272,
+            "tid": 100252,
+            "on_cpu_ms": 0.5552,
+            "ready_delay_ms": 0.027,
+            "blocked_ms": 29.845,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 29.872
+            },
+            "long_off_intervals": [
+              {
+                "start": 30796707000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30819516000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30819535000,
+                "overlap_ms": 22.828
+              },
+              {
+                "start": 30819665000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30826701000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30826709000,
+                "overlap_ms": 7.044
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13362.8416,
+            "wall_ms": 22.992,
+            "tid": 100252,
+            "on_cpu_ms": 0.164,
+            "ready_delay_ms": 0.019,
+            "blocked_ms": 22.809,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 22.828
+            },
+            "long_off_intervals": [
+              {
+                "start": 30796707000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30819516000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30819535000,
+                "overlap_ms": 22.828
+              }
+            ]
+          },
+          {
+            "start_ms": 13385.9439,
+            "wall_ms": 7.0633,
+            "tid": 100252,
+            "on_cpu_ms": 0.0193,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 7.036,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 7.044
+            },
+            "long_off_intervals": [
+              {
+                "start": 30819665000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30826701000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30826709000,
+                "overlap_ms": 7.044
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13362.8672,
+            "wall_ms": 22.9396,
+            "tid": 45768,
+            "on_cpu_ms": 22.7276,
+            "ready_delay_ms": 0.031,
+            "blocked_ms": 0.181,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.212
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13385.9588,
+            "wall_ms": 7.0337,
+            "tid": 45768,
+            "on_cpu_ms": 7.02425,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.00345,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00945
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13363.5974,
+            "wall_ms": 1.0001,
+            "tid": 45768,
+            "on_cpu_ms": 0.7971,
+            "ready_delay_ms": 0.027,
+            "blocked_ms": 0.176,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.203
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13386.7491,
+            "wall_ms": 0.2745,
+            "tid": 45768,
+            "on_cpu_ms": 0.2675,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.007
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13362.868,
+            "wall_ms": 0.7089,
+            "tid": 45768,
+            "on_cpu_ms": 0.6999,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 0.005,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.009
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13385.9591,
+            "wall_ms": 0.5661,
+            "tid": 45768,
+            "on_cpu_ms": 0.5661,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13363.3897,
+            "wall_ms": 0.1869,
+            "tid": 45768,
+            "on_cpu_ms": 0.1869,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13386.3421,
+            "wall_ms": 0.1829,
+            "tid": 45768,
+            "on_cpu_ms": 0.1829,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13364.5978,
+            "wall_ms": 21.1991,
+            "tid": 45768,
+            "on_cpu_ms": 21.1991,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13387.0241,
+            "wall_ms": 5.9603,
+            "tid": 45768,
+            "on_cpu_ms": 5.9603,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13362.5936,
+            "wall_ms": 30.4284,
+            "tid": 100252,
+            "on_cpu_ms": 0.5564,
+            "ready_delay_ms": 0.027,
+            "blocked_ms": 29.845,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 29.872
+            },
+            "long_off_intervals": [
+              {
+                "start": 30796707000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30819516000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30819535000,
+                "overlap_ms": 22.828
+              },
+              {
+                "start": 30819665000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 30826701000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 30826709000,
+                "overlap_ms": 7.044
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6188,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13567.5568,
+            "wall_ms": 25.5079,
+            "tid": 100252,
+            "on_cpu_ms": 0.5759,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 24.917,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.932
+            },
+            "long_off_intervals": [
+              {
+                "start": 31001657000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31020677000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31020685000,
+                "overlap_ms": 19.028
+              },
+              {
+                "start": 31020841000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31026738000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31026745000,
+                "overlap_ms": 5.904
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13567.7806,
+            "wall_ms": 19.2012,
+            "tid": 100252,
+            "on_cpu_ms": 0.1732,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 19.02,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 19.028
+            },
+            "long_off_intervals": [
+              {
+                "start": 31001657000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31020677000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31020685000,
+                "overlap_ms": 19.028
+              }
+            ]
+          },
+          {
+            "start_ms": 13587.1226,
+            "wall_ms": 5.9202,
+            "tid": 100252,
+            "on_cpu_ms": 0.01875,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 5.89445,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 5.90145
+            },
+            "long_off_intervals": [
+              {
+                "start": 31020841000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31026738000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31026745000,
+                "overlap_ms": 5.90145
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13567.8779,
+            "wall_ms": 19.0897,
+            "tid": 45768,
+            "on_cpu_ms": 18.81215,
+            "ready_delay_ms": 0.067,
+            "blocked_ms": 0.21055,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.27755
+            },
+            "long_off_intervals": [
+              {
+                "start": 31003044000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31003232000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "102924",
+                  "reason": "Unwait"
+                },
+                "end": 31003241000,
+                "overlap_ms": 0.197
+              }
+            ]
+          },
+          {
+            "start_ms": 13587.1327,
+            "wall_ms": 5.8966,
+            "tid": 45768,
+            "on_cpu_ms": 5.75635,
+            "ready_delay_ms": 0.076,
+            "blocked_ms": 0.06425,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.14025
+            },
+            "long_off_intervals": [
+              {
+                "start": 31021154000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31021214000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "7520",
+                  "reason": "Unwait"
+                },
+                "end": 31021290000,
+                "overlap_ms": 0.136
+              }
+            ]
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13568.6513,
+            "wall_ms": 0.9274,
+            "tid": 45768,
+            "on_cpu_ms": 0.7014,
+            "ready_delay_ms": 0.036,
+            "blocked_ms": 0.19,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.226
+            },
+            "long_off_intervals": [
+              {
+                "start": 31003044000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31003232000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "102924",
+                  "reason": "Unwait"
+                },
+                "end": 31003241000,
+                "overlap_ms": 0.197
+              }
+            ]
+          },
+          {
+            "start_ms": 13587.8064,
+            "wall_ms": 0.3653,
+            "tid": 45768,
+            "on_cpu_ms": 0.3653,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13567.8783,
+            "wall_ms": 0.6092,
+            "tid": 45768,
+            "on_cpu_ms": 0.5582,
+            "ready_delay_ms": 0.031,
+            "blocked_ms": 0.02,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.051
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13587.1331,
+            "wall_ms": 0.6593,
+            "tid": 45768,
+            "on_cpu_ms": 0.5233,
+            "ready_delay_ms": 0.076,
+            "blocked_ms": 0.06,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.136
+            },
+            "long_off_intervals": [
+              {
+                "start": 31021154000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31021214000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "7520",
+                  "reason": "Unwait"
+                },
+                "end": 31021290000,
+                "overlap_ms": 0.136
+              }
+            ]
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13568.3596,
+            "wall_ms": 0.1278,
+            "tid": 45768,
+            "on_cpu_ms": 0.1278,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13587.6102,
+            "wall_ms": 0.1821,
+            "tid": 45768,
+            "on_cpu_ms": 0.1821,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13569.579,
+            "wall_ms": 17.3781,
+            "tid": 45768,
+            "on_cpu_ms": 17.3781,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13588.172,
+            "wall_ms": 4.8398,
+            "tid": 45768,
+            "on_cpu_ms": 4.8398,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13567.5567,
+            "wall_ms": 25.5093,
+            "tid": 100252,
+            "on_cpu_ms": 0.5773,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 24.917,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.932
+            },
+            "long_off_intervals": [
+              {
+                "start": 31001657000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31020677000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31020685000,
+                "overlap_ms": 19.028
+              },
+              {
+                "start": 31020841000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31026738000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31026745000,
+                "overlap_ms": 5.904
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6190,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13617.0791,
+            "wall_ms": 35.8153,
+            "tid": 100252,
+            "on_cpu_ms": 0.7773,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 35.02,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 35.038
+            },
+            "long_off_intervals": [
+              {
+                "start": 31051446000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31075568000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31075576000,
+                "overlap_ms": 24.13
+              },
+              {
+                "start": 31075684000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31086582000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31086592000,
+                "overlap_ms": 10.908
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13617.4515,
+            "wall_ms": 24.4192,
+            "tid": 100252,
+            "on_cpu_ms": 0.2892,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 24.122,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.13
+            },
+            "long_off_intervals": [
+              {
+                "start": 31051446000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31075568000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31075576000,
+                "overlap_ms": 24.13
+              }
+            ]
+          },
+          {
+            "start_ms": 13641.9668,
+            "wall_ms": 10.9197,
+            "tid": 100252,
+            "on_cpu_ms": 0.01545,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 10.89425,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 10.90425
+            },
+            "long_off_intervals": [
+              {
+                "start": 31075684000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31086582000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31086592000,
+                "overlap_ms": 10.90425
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13617.48,
+            "wall_ms": 24.3716,
+            "tid": 45768,
+            "on_cpu_ms": 24.2216,
+            "ready_delay_ms": 0.027,
+            "blocked_ms": 0.123,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.15
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13641.9995,
+            "wall_ms": 10.8731,
+            "tid": 45768,
+            "on_cpu_ms": 10.87155,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00155,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00155
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13618.1845,
+            "wall_ms": 0.9192,
+            "tid": 45768,
+            "on_cpu_ms": 0.7982,
+            "ready_delay_ms": 0.017,
+            "blocked_ms": 0.104,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.121
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13642.5472,
+            "wall_ms": 0.2768,
+            "tid": 45768,
+            "on_cpu_ms": 0.2768,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13617.481,
+            "wall_ms": 0.6869,
+            "tid": 45768,
+            "on_cpu_ms": 0.6579,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.019,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.029
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13642.0004,
+            "wall_ms": 0.5226,
+            "tid": 45768,
+            "on_cpu_ms": 0.5226,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13617.9977,
+            "wall_ms": 0.1701,
+            "tid": 45768,
+            "on_cpu_ms": 0.1701,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13642.3851,
+            "wall_ms": 0.1377,
+            "tid": 45768,
+            "on_cpu_ms": 0.1377,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13619.104,
+            "wall_ms": 22.7383,
+            "tid": 45768,
+            "on_cpu_ms": 22.7383,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13642.8241,
+            "wall_ms": 10.0389,
+            "tid": 45768,
+            "on_cpu_ms": 10.0389,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13617.0789,
+            "wall_ms": 35.8164,
+            "tid": 100252,
+            "on_cpu_ms": 0.7784,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 35.02,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 35.038
+            },
+            "long_off_intervals": [
+              {
+                "start": 31051446000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31075568000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31075576000,
+                "overlap_ms": 24.13
+              },
+              {
+                "start": 31075684000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31086582000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31086592000,
+                "overlap_ms": 10.908
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6191,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13652.9045,
+            "wall_ms": 25.8148,
+            "tid": 100252,
+            "on_cpu_ms": 0.5868,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 25.215,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 25.228
+            },
+            "long_off_intervals": [
+              {
+                "start": 31087077000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31105218000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31105224000,
+                "overlap_ms": 18.147
+              },
+              {
+                "start": 31105334000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31112408000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31112415000,
+                "overlap_ms": 7.081
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13653.1576,
+            "wall_ms": 18.3644,
+            "tid": 100252,
+            "on_cpu_ms": 0.2174,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 18.141,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 18.147
+            },
+            "long_off_intervals": [
+              {
+                "start": 31087077000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31105218000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31105224000,
+                "overlap_ms": 18.147
+              }
+            ]
+          },
+          {
+            "start_ms": 13671.6153,
+            "wall_ms": 7.095,
+            "tid": 100252,
+            "on_cpu_ms": 0.01625,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 7.07175,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 7.07875
+            },
+            "long_off_intervals": [
+              {
+                "start": 31105334000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31112408000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31112415000,
+                "overlap_ms": 7.07875
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13653.1867,
+            "wall_ms": 18.3206,
+            "tid": 45768,
+            "on_cpu_ms": 18.23135,
+            "ready_delay_ms": 0.025,
+            "blocked_ms": 0.06425,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.016,
+              "Waiting/WrAlertByThreadId": 0.07325
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13671.6263,
+            "wall_ms": 7.0722,
+            "tid": 45768,
+            "on_cpu_ms": 7.05975,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.00445,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.008,
+              "Waiting/WrAlertByThreadId": 0.00445
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13653.8797,
+            "wall_ms": 0.851,
+            "tid": 45768,
+            "on_cpu_ms": 0.778,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 0.064,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.073
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13672.4191,
+            "wall_ms": 0.294,
+            "tid": 45768,
+            "on_cpu_ms": 0.294,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13653.1889,
+            "wall_ms": 0.6754,
+            "tid": 45768,
+            "on_cpu_ms": 0.6594,
+            "ready_delay_ms": 0.016,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.016
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13671.6268,
+            "wall_ms": 0.5012,
+            "tid": 45768,
+            "on_cpu_ms": 0.4932,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.008
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13653.7104,
+            "wall_ms": 0.1538,
+            "tid": 45768,
+            "on_cpu_ms": 0.1538,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13671.9956,
+            "wall_ms": 0.1323,
+            "tid": 45768,
+            "on_cpu_ms": 0.1323,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13654.7314,
+            "wall_ms": 16.7637,
+            "tid": 45768,
+            "on_cpu_ms": 16.7637,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13672.7133,
+            "wall_ms": 5.9594,
+            "tid": 45768,
+            "on_cpu_ms": 5.9594,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13652.904,
+            "wall_ms": 25.8167,
+            "tid": 100252,
+            "on_cpu_ms": 0.5887,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 25.215,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 25.228
+            },
+            "long_off_intervals": [
+              {
+                "start": 31087077000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31105218000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31105224000,
+                "overlap_ms": 18.147
+              },
+              {
+                "start": 31105334000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31112408000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31112415000,
+                "overlap_ms": 7.081
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6192,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13678.7305,
+            "wall_ms": 28.8432,
+            "tid": 100252,
+            "on_cpu_ms": 0.8022,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 28.032,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 28.041
+            },
+            "long_off_intervals": [
+              {
+                "start": 31113132000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31134824000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31134828000,
+                "overlap_ms": 21.696
+              },
+              {
+                "start": 31134926000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31141266000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31141271000,
+                "overlap_ms": 6.345
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13679.1164,
+            "wall_ms": 22.008,
+            "tid": 100252,
+            "on_cpu_ms": 0.312,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 21.692,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 21.696
+            },
+            "long_off_intervals": [
+              {
+                "start": 31113132000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31134824000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31134828000,
+                "overlap_ms": 21.696
+              }
+            ]
+          },
+          {
+            "start_ms": 13701.2099,
+            "wall_ms": 6.3562,
+            "tid": 100252,
+            "on_cpu_ms": 0.01605,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 6.33515,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 6.34015
+            },
+            "long_off_intervals": [
+              {
+                "start": 31134926000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31141266000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31141271000,
+                "overlap_ms": 6.34015
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13679.2,
+            "wall_ms": 21.916,
+            "tid": 45768,
+            "on_cpu_ms": 21.88205,
+            "ready_delay_ms": 0.021,
+            "blocked_ms": 0.01295,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03395
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13701.2199,
+            "wall_ms": 6.3381,
+            "tid": 45768,
+            "on_cpu_ms": 6.29515,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.03195,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03695,
+              "Standby/WrAlertByThreadId": 0.006
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13683.8625,
+            "wall_ms": 0.8664,
+            "tid": 45768,
+            "on_cpu_ms": 0.8424,
+            "ready_delay_ms": 0.018,
+            "blocked_ms": 0.006,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.024
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13701.7641,
+            "wall_ms": 0.2609,
+            "tid": 45768,
+            "on_cpu_ms": 0.2549,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrAlertByThreadId": 0.006
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13679.2005,
+            "wall_ms": 0.7587,
+            "tid": 45768,
+            "on_cpu_ms": 0.7547,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.004
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13701.2205,
+            "wall_ms": 0.5328,
+            "tid": 45768,
+            "on_cpu_ms": 0.5028,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.025,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13679.8173,
+            "wall_ms": 0.1418,
+            "tid": 45768,
+            "on_cpu_ms": 0.1418,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13701.6039,
+            "wall_ms": 0.1493,
+            "tid": 45768,
+            "on_cpu_ms": 0.1493,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13684.7295,
+            "wall_ms": 16.3781,
+            "tid": 45768,
+            "on_cpu_ms": 16.3781,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13702.0256,
+            "wall_ms": 5.5273,
+            "tid": 45768,
+            "on_cpu_ms": 5.52545,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00185,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00185
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13678.7304,
+            "wall_ms": 28.8443,
+            "tid": 100252,
+            "on_cpu_ms": 0.8033,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 28.032,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 28.041
+            },
+            "long_off_intervals": [
+              {
+                "start": 31113132000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31134824000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31134828000,
+                "overlap_ms": 21.696
+              },
+              {
+                "start": 31134926000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31141266000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31141271000,
+                "overlap_ms": 6.345
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6193,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13707.583,
+            "wall_ms": 25.2189,
+            "tid": 100252,
+            "on_cpu_ms": 0.5039,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 24.706,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.715
+            },
+            "long_off_intervals": [
+              {
+                "start": 31141684000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31159630000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31159635000,
+                "overlap_ms": 17.951
+              },
+              {
+                "start": 31159734000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31166494000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31166498000,
+                "overlap_ms": 6.764
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13707.8133,
+            "wall_ms": 18.1189,
+            "tid": 100252,
+            "on_cpu_ms": 0.1679,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 17.946,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 17.951
+            },
+            "long_off_intervals": [
+              {
+                "start": 31141684000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31159630000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31159635000,
+                "overlap_ms": 17.951
+              }
+            ]
+          },
+          {
+            "start_ms": 13726.0159,
+            "wall_ms": 6.7784,
+            "tid": 100252,
+            "on_cpu_ms": 0.01725,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 6.75715,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 6.76115
+            },
+            "long_off_intervals": [
+              {
+                "start": 31159734000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31166494000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31166498000,
+                "overlap_ms": 6.76115
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13707.8224,
+            "wall_ms": 18.0993,
+            "tid": 45768,
+            "on_cpu_ms": 18.05165,
+            "ready_delay_ms": 0.028,
+            "blocked_ms": 0.01965,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.04765
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13726.0282,
+            "wall_ms": 6.7587,
+            "tid": 45768,
+            "on_cpu_ms": 6.74885,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.00685,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.003,
+              "Waiting/WrAlertByThreadId": 0.00685
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13708.4786,
+            "wall_ms": 0.721,
+            "tid": 45768,
+            "on_cpu_ms": 0.706,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.015
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13726.5309,
+            "wall_ms": 0.2787,
+            "tid": 45768,
+            "on_cpu_ms": 0.2787,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13707.8227,
+            "wall_ms": 0.6443,
+            "tid": 45768,
+            "on_cpu_ms": 0.6173,
+            "ready_delay_ms": 0.014,
+            "blocked_ms": 0.013,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.027
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13726.0283,
+            "wall_ms": 0.4921,
+            "tid": 45768,
+            "on_cpu_ms": 0.4891,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.003
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13708.302,
+            "wall_ms": 0.1648,
+            "tid": 45768,
+            "on_cpu_ms": 0.1648,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13726.3555,
+            "wall_ms": 0.1648,
+            "tid": 45768,
+            "on_cpu_ms": 0.1648,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13709.1999,
+            "wall_ms": 16.7145,
+            "tid": 45768,
+            "on_cpu_ms": 16.7145,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13726.8097,
+            "wall_ms": 5.9724,
+            "tid": 45768,
+            "on_cpu_ms": 5.97035,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00205,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00205
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13707.5829,
+            "wall_ms": 25.2198,
+            "tid": 100252,
+            "on_cpu_ms": 0.5048,
+            "ready_delay_ms": 0.009,
+            "blocked_ms": 24.706,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.715
+            },
+            "long_off_intervals": [
+              {
+                "start": 31141684000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31159630000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31159635000,
+                "overlap_ms": 17.951
+              },
+              {
+                "start": 31159734000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31166494000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31166498000,
+                "overlap_ms": 6.764
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6196,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13767.8071,
+            "wall_ms": 30.5965,
+            "tid": 100252,
+            "on_cpu_ms": 0.8975,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 29.687,
+            "unknown_off_ms": 0.001,
+            "off_states_ms": {
+              "Running/WrDispatchInt": 0.001,
+              "Waiting/WrAlertByThreadId": 29.698
+            },
+            "long_off_intervals": [
+              {
+                "start": 31202277000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31227191000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31227194000,
+                "overlap_ms": 24.917
+              },
+              {
+                "start": 31227305000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31232078000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31232086000,
+                "overlap_ms": 4.781
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13768.2627,
+            "wall_ms": 25.2293,
+            "tid": 100252,
+            "on_cpu_ms": 0.3113,
+            "ready_delay_ms": 0.003,
+            "blocked_ms": 24.914,
+            "unknown_off_ms": 0.001,
+            "off_states_ms": {
+              "Running/WrDispatchInt": 0.001,
+              "Waiting/WrAlertByThreadId": 24.917
+            },
+            "long_off_intervals": [
+              {
+                "start": 31202277000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31227191000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31227194000,
+                "overlap_ms": 24.917
+              }
+            ]
+          },
+          {
+            "start_ms": 13793.5877,
+            "wall_ms": 4.795,
+            "tid": 100252,
+            "on_cpu_ms": 0.01765,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 4.76935,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 4.77735
+            },
+            "long_off_intervals": [
+              {
+                "start": 31227305000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31232078000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31232086000,
+                "overlap_ms": 4.77735
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13768.2751,
+            "wall_ms": 25.2067,
+            "tid": 45768,
+            "on_cpu_ms": 25.06995,
+            "ready_delay_ms": 0.081,
+            "blocked_ms": 0.05575,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.076,
+              "Waiting/WrAlertByThreadId": 0.06075
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13793.5995,
+            "wall_ms": 4.7699,
+            "tid": 45768,
+            "on_cpu_ms": 4.64555,
+            "ready_delay_ms": 0.038,
+            "blocked_ms": 0.08635,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.12435
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13768.9602,
+            "wall_ms": 0.8307,
+            "tid": 45768,
+            "on_cpu_ms": 0.6997,
+            "ready_delay_ms": 0.081,
+            "blocked_ms": 0.05,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.076,
+              "Waiting/WrAlertByThreadId": 0.055
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13794.2528,
+            "wall_ms": 0.3642,
+            "tid": 45768,
+            "on_cpu_ms": 0.3332,
+            "ready_delay_ms": 0.004,
+            "blocked_ms": 0.027,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.031
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13768.2756,
+            "wall_ms": 0.6314,
+            "tid": 45768,
+            "on_cpu_ms": 0.6314,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13793.6001,
+            "wall_ms": 0.6368,
+            "tid": 45768,
+            "on_cpu_ms": 0.5478,
+            "ready_delay_ms": 0.034,
+            "blocked_ms": 0.055,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.089
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13768.7553,
+            "wall_ms": 0.1516,
+            "tid": 45768,
+            "on_cpu_ms": 0.1516,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13794.057,
+            "wall_ms": 0.1798,
+            "tid": 45768,
+            "on_cpu_ms": 0.1798,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13769.7913,
+            "wall_ms": 23.6804,
+            "tid": 45768,
+            "on_cpu_ms": 23.6804,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13794.6175,
+            "wall_ms": 3.7446,
+            "tid": 45768,
+            "on_cpu_ms": 3.7446,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13767.8068,
+            "wall_ms": 30.5976,
+            "tid": 100252,
+            "on_cpu_ms": 0.8986,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 29.687,
+            "unknown_off_ms": 0.001,
+            "off_states_ms": {
+              "Running/WrDispatchInt": 0.001,
+              "Waiting/WrAlertByThreadId": 29.698
+            },
+            "long_off_intervals": [
+              {
+                "start": 31202277000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31227191000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31227194000,
+                "overlap_ms": 24.917
+              },
+              {
+                "start": 31227305000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31232078000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31232086000,
+                "overlap_ms": 4.781
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6197,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 13798.414,
+            "wall_ms": 25.1436,
+            "tid": 100252,
+            "on_cpu_ms": 0.8256,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 24.303,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.318
+            },
+            "long_off_intervals": [
+              {
+                "start": 31232813000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31250454000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31250461000,
+                "overlap_ms": 17.648
+              },
+              {
+                "start": 31250582000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31257244000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31257252000,
+                "overlap_ms": 6.67
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 13798.7903,
+            "wall_ms": 17.9684,
+            "tid": 100252,
+            "on_cpu_ms": 0.3204,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 17.641,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 17.648
+            },
+            "long_off_intervals": [
+              {
+                "start": 31232813000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31250454000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31250461000,
+                "overlap_ms": 17.648
+              }
+            ]
+          },
+          {
+            "start_ms": 13816.8624,
+            "wall_ms": 6.6869,
+            "tid": 100252,
+            "on_cpu_ms": 0.01825,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 6.66065,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 6.66865
+            },
+            "long_off_intervals": [
+              {
+                "start": 31250582000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31257244000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31257252000,
+                "overlap_ms": 6.66865
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 13798.8046,
+            "wall_ms": 17.9397,
+            "tid": 45768,
+            "on_cpu_ms": 17.86645,
+            "ready_delay_ms": 0.019,
+            "blocked_ms": 0.05425,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.07325
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13816.8726,
+            "wall_ms": 6.6636,
+            "tid": 45768,
+            "on_cpu_ms": 6.62645,
+            "ready_delay_ms": 0.011,
+            "blocked_ms": 0.02615,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03715
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 13799.4909,
+            "wall_ms": 0.8479,
+            "tid": 45768,
+            "on_cpu_ms": 0.8269,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.014,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.021
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13817.3733,
+            "wall_ms": 0.2591,
+            "tid": 45768,
+            "on_cpu_ms": 0.2521,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.007
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 13798.8051,
+            "wall_ms": 0.6728,
+            "tid": 45768,
+            "on_cpu_ms": 0.6248,
+            "ready_delay_ms": 0.012,
+            "blocked_ms": 0.036,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.048
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13816.8732,
+            "wall_ms": 0.4883,
+            "tid": 45768,
+            "on_cpu_ms": 0.4633,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.019,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.025
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 13799.3167,
+            "wall_ms": 0.1611,
+            "tid": 45768,
+            "on_cpu_ms": 0.1611,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13817.2114,
+            "wall_ms": 0.15,
+            "tid": 45768,
+            "on_cpu_ms": 0.15,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 13800.3392,
+            "wall_ms": 16.3954,
+            "tid": 45768,
+            "on_cpu_ms": 16.3954,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 13817.6328,
+            "wall_ms": 5.8964,
+            "tid": 45768,
+            "on_cpu_ms": 5.8964,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 13798.4135,
+            "wall_ms": 25.145,
+            "tid": 100252,
+            "on_cpu_ms": 0.827,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 24.303,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 24.318
+            },
+            "long_off_intervals": [
+              {
+                "start": 31232813000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31250454000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31250461000,
+                "overlap_ms": 17.648
+              },
+              {
+                "start": 31250582000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 31257244000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 31257252000,
+                "overlap_ms": 6.67
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 6666,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 18396.9314,
+            "wall_ms": 85.4794,
+            "tid": 100252,
+            "on_cpu_ms": 0.8184,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 84.648,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 84.661
+            },
+            "long_off_intervals": [
+              {
+                "start": 35831320000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 35912738000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 35912744000,
+                "overlap_ms": 81.424
+              },
+              {
+                "start": 35912873000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 35916103000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 35916110000,
+                "overlap_ms": 3.237
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 18397.3085,
+            "wall_ms": 81.733,
+            "tid": 100252,
+            "on_cpu_ms": 0.309,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 81.418,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 81.424
+            },
+            "long_off_intervals": [
+              {
+                "start": 35831320000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 35912738000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 35912744000,
+                "overlap_ms": 81.424
+              }
+            ]
+          },
+          {
+            "start_ms": 18479.1468,
+            "wall_ms": 3.2573,
+            "tid": 100252,
+            "on_cpu_ms": 0.0203,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 3.23,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 3.237
+            },
+            "long_off_intervals": [
+              {
+                "start": 35912873000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 35916103000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 35916110000,
+                "overlap_ms": 3.237
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 18397.3713,
+            "wall_ms": 81.6572,
+            "tid": 45768,
+            "on_cpu_ms": 81.52775,
+            "ready_delay_ms": 0.04,
+            "blocked_ms": 0.08945,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.11445,
+              "Standby/WrDispatchInt": 0.015
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 18479.169,
+            "wall_ms": 3.2263,
+            "tid": 45768,
+            "on_cpu_ms": 3.14705,
+            "ready_delay_ms": 0.069,
+            "blocked_ms": 0.01025,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.05825,
+              "DeferredReady/WrAlertByThreadId": 0.021
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 18397.9672,
+            "wall_ms": 0.6181,
+            "tid": 45768,
+            "on_cpu_ms": 0.5731,
+            "ready_delay_ms": 0.01,
+            "blocked_ms": 0.035,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.045
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 18479.8074,
+            "wall_ms": 0.3718,
+            "tid": 45768,
+            "on_cpu_ms": 0.3378,
+            "ready_delay_ms": 0.032,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.021,
+              "Waiting/WrAlertByThreadId": 0.013
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 18397.3718,
+            "wall_ms": 0.5856,
+            "tid": 45768,
+            "on_cpu_ms": 0.5206,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 0.05,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.065
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 18479.1692,
+            "wall_ms": 0.6215,
+            "tid": 45768,
+            "on_cpu_ms": 0.5825,
+            "ready_delay_ms": 0.037,
+            "blocked_ms": 0.002,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.039
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 18397.754,
+            "wall_ms": 0.2032,
+            "tid": 45768,
+            "on_cpu_ms": 0.2032,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 18479.5931,
+            "wall_ms": 0.1973,
+            "tid": 45768,
+            "on_cpu_ms": 0.1973,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 18398.5856,
+            "wall_ms": 80.4323,
+            "tid": 45768,
+            "on_cpu_ms": 80.4173,
+            "ready_delay_ms": 0.015,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrDispatchInt": 0.015
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 18480.1796,
+            "wall_ms": 2.2112,
+            "tid": 45768,
+            "on_cpu_ms": 2.20945,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.00175,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.00175
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 18396.9312,
+            "wall_ms": 85.4804,
+            "tid": 100252,
+            "on_cpu_ms": 0.8194,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 84.648,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 84.661
+            },
+            "long_off_intervals": [
+              {
+                "start": 35831320000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 35912738000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 35912744000,
+                "overlap_ms": 81.424
+              },
+              {
+                "start": 35912873000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 35916103000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 35916110000,
+                "overlap_ms": 3.237
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 18403,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 43701.4268,
+            "wall_ms": 5.3625,
+            "tid": 100252,
+            "on_cpu_ms": 2.1375,
+            "ready_delay_ms": 0.073,
+            "blocked_ms": 3.152,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.029,
+              "Waiting/WrAlertByThreadId": 3.196
+            },
+            "long_off_intervals": [
+              {
+                "start": 61136950000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61138274000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61138310000,
+                "overlap_ms": 1.36
+              },
+              {
+                "start": 61138653000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61140481000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61140489000,
+                "overlap_ms": 1.836
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 43702.3412,
+            "wall_ms": 2.2703,
+            "tid": 100252,
+            "on_cpu_ms": 0.8813,
+            "ready_delay_ms": 0.065,
+            "blocked_ms": 1.324,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.029,
+              "Waiting/WrAlertByThreadId": 1.36
+            },
+            "long_off_intervals": [
+              {
+                "start": 61136950000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61138274000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61138310000,
+                "overlap_ms": 1.36
+              }
+            ]
+          },
+          {
+            "start_ms": 43704.8955,
+            "wall_ms": 1.8873,
+            "tid": 100252,
+            "on_cpu_ms": 0.0513,
+            "ready_delay_ms": 0.008,
+            "blocked_ms": 1.828,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 1.836
+            },
+            "long_off_intervals": [
+              {
+                "start": 61138653000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61140481000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61140489000,
+                "overlap_ms": 1.836
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 43702.3696,
+            "wall_ms": 2.1636,
+            "tid": 45768,
+            "on_cpu_ms": 2.0036,
+            "ready_delay_ms": 0.042,
+            "blocked_ms": 0.118,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.156,
+              "Standby/WrAlertByThreadId": 0.004
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 43704.9444,
+            "wall_ms": 1.8288,
+            "tid": 45768,
+            "on_cpu_ms": 1.81165,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.01115,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.01715
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 43703.4784,
+            "wall_ms": 0.9449,
+            "tid": 45768,
+            "on_cpu_ms": 0.7909,
+            "ready_delay_ms": 0.037,
+            "blocked_ms": 0.117,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.15,
+              "Standby/WrAlertByThreadId": 0.004
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 43706.5174,
+            "wall_ms": 0.2284,
+            "tid": 45768,
+            "on_cpu_ms": 0.2164,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.006,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.012
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 43702.3716,
+            "wall_ms": 1.0915,
+            "tid": 45768,
+            "on_cpu_ms": 1.0855,
+            "ready_delay_ms": 0.005,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.006
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 43704.946,
+            "wall_ms": 1.0091,
+            "tid": 45768,
+            "on_cpu_ms": 1.0091,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 43703.2955,
+            "wall_ms": 0.1674,
+            "tid": 45768,
+            "on_cpu_ms": 0.1674,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 43705.5882,
+            "wall_ms": 0.3662,
+            "tid": 45768,
+            "on_cpu_ms": 0.3662,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 43704.4248,
+            "wall_ms": 0.0836,
+            "tid": 45768,
+            "on_cpu_ms": 0.0836,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 43706.7461,
+            "wall_ms": 0.0217,
+            "tid": 45768,
+            "on_cpu_ms": 0.0217,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 43701.4265,
+            "wall_ms": 5.3636,
+            "tid": 100252,
+            "on_cpu_ms": 2.1386,
+            "ready_delay_ms": 0.073,
+            "blocked_ms": 3.152,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.029,
+              "Waiting/WrAlertByThreadId": 3.196
+            },
+            "long_off_intervals": [
+              {
+                "start": 61136950000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61138274000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61138310000,
+                "overlap_ms": 1.36
+              },
+              {
+                "start": 61138653000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61140481000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61140489000,
+                "overlap_ms": 1.836
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "benchmark_call": 18539,
+      "regions": {
+        "session": [
+          {
+            "start_ms": 44167.2112,
+            "wall_ms": 5.7102,
+            "tid": 100252,
+            "on_cpu_ms": 2.0142,
+            "ready_delay_ms": 0.13,
+            "blocked_ms": 3.561,
+            "unknown_off_ms": 0.005,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.051,
+              "Running/WrDispatchInt": 0.005,
+              "Waiting/WrAlertByThreadId": 3.64
+            },
+            "long_off_intervals": [
+              {
+                "start": 61602686000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61603840000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61603876000,
+                "overlap_ms": 1.19
+              },
+              {
+                "start": 61604166000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61606573000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61606616000,
+                "overlap_ms": 2.45
+              }
+            ]
+          }
+        ],
+        "worker_roundtrip": [
+          {
+            "start_ms": 44168.1816,
+            "wall_ms": 1.9963,
+            "tid": 100252,
+            "on_cpu_ms": 0.7503,
+            "ready_delay_ms": 0.087,
+            "blocked_ms": 1.154,
+            "unknown_off_ms": 0.005,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.051,
+              "Running/WrDispatchInt": 0.005,
+              "Waiting/WrAlertByThreadId": 1.19
+            },
+            "long_off_intervals": [
+              {
+                "start": 61602686000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61603840000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61603876000,
+                "overlap_ms": 1.19
+              }
+            ]
+          },
+          {
+            "start_ms": 44170.4076,
+            "wall_ms": 2.5072,
+            "tid": 100252,
+            "on_cpu_ms": 0.0572,
+            "ready_delay_ms": 0.043,
+            "blocked_ms": 2.407,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 2.45
+            },
+            "long_off_intervals": [
+              {
+                "start": 61604166000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61606573000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61606616000,
+                "overlap_ms": 2.45
+              }
+            ]
+          }
+        ],
+        "worker_execution": [
+          {
+            "start_ms": 44168.2036,
+            "wall_ms": 1.9247,
+            "tid": 45768,
+            "on_cpu_ms": 1.8977,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.014,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.023,
+              "Ready/WrYieldExecution": 0.004
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 44170.4558,
+            "wall_ms": 2.4069,
+            "tid": 45768,
+            "on_cpu_ms": 2.3939,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrAlertByThreadId": 0.013
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "late_decoder": [
+          {
+            "start_ms": 44169.0245,
+            "wall_ms": 0.7477,
+            "tid": 45768,
+            "on_cpu_ms": 0.7397,
+            "ready_delay_ms": 0.007,
+            "blocked_ms": 0.001,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.004,
+              "Waiting/WrAlertByThreadId": 0.004
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 44172.014,
+            "wall_ms": 0.7464,
+            "tid": 45768,
+            "on_cpu_ms": 0.7334,
+            "ready_delay_ms": 0.013,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Standby/WrAlertByThreadId": 0.013
+            },
+            "long_off_intervals": []
+          }
+        ],
+        "voice_batch": [
+          {
+            "start_ms": 44168.2049,
+            "wall_ms": 0.8096,
+            "tid": 45768,
+            "on_cpu_ms": 0.7906,
+            "ready_delay_ms": 0.006,
+            "blocked_ms": 0.013,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.019
+            },
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 44170.4577,
+            "wall_ms": 0.9648,
+            "tid": 45768,
+            "on_cpu_ms": 0.9648,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_submit": [
+          {
+            "start_ms": 44168.9228,
+            "wall_ms": 0.0916,
+            "tid": 45768,
+            "on_cpu_ms": 0.0916,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 44171.0934,
+            "wall_ms": 0.3283,
+            "tid": 45768,
+            "on_cpu_ms": 0.3283,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "gpu_wait": [
+          {
+            "start_ms": 44169.7738,
+            "wall_ms": 0.3263,
+            "tid": 45768,
+            "on_cpu_ms": 0.3263,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          },
+          {
+            "start_ms": 44172.7621,
+            "wall_ms": 0.0765,
+            "tid": 45768,
+            "on_cpu_ms": 0.0765,
+            "ready_delay_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "long_off_intervals": []
+          }
+        ],
+        "call": [
+          {
+            "start_ms": 44167.2104,
+            "wall_ms": 5.7117,
+            "tid": 100252,
+            "on_cpu_ms": 2.0157,
+            "ready_delay_ms": 0.13,
+            "blocked_ms": 3.561,
+            "unknown_off_ms": 0.005,
+            "off_states_ms": {
+              "Ready/WrDispatchInt": 0.051,
+              "Running/WrDispatchInt": 0.005,
+              "Waiting/WrAlertByThreadId": 3.64
+            },
+            "long_off_intervals": [
+              {
+                "start": 61602686000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61603840000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61603876000,
+                "overlap_ms": 1.19
+              },
+              {
+                "start": 61604166000,
+                "state": "Waiting",
+                "reason": "WrAlertByThreadId",
+                "ready": 61606573000,
+                "waker": {
+                  "process": "room_cuda_bench.exe (103676)",
+                  "tid": "45768",
+                  "reason": "Unwait"
+                },
+                "end": 61606616000,
+                "overlap_ms": 2.45
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,463 @@
+{
+  "calls": [
+    {
+      "call": 16973,
+      "regions": {
+        "call": [
+          {
+            "wall_ms": 5.9673,
+            "on_cpu_ms": 0.5553,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.015,
+            "blocked_ms": 5.397,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 5.412
+            },
+            "switch_out_priorities": [
+              "9"
+            ],
+            "switch_out_qos": [
+              "Utility"
+            ],
+            "cpu_ms": {
+              "4": 0.4623,
+              "2": 0.093
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 1.4433,
+            "on_cpu_ms": 1.4009,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.013,
+            "blocked_ms": 0.0294,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.0364,
+              "DeferredReady/WrAlertByThreadId": 0.006
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "4": 0.465,
+              "3": 0.9359
+            }
+          },
+          {
+            "wall_ms": 4.1285,
+            "on_cpu_ms": 4.0684,
+            "recorded_interrupt_overlap_ms": 0.008,
+            "ready_ms": 0.029,
+            "blocked_ms": 0.0311,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.0601
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "4": 0.2434,
+              "3": 3.825
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 0.3689,
+            "on_cpu_ms": 0.3389,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.007,
+            "blocked_ms": 0.023,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.03
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "3": 0.3389
+            }
+          },
+          {
+            "wall_ms": 0.4614,
+            "on_cpu_ms": 0.4184,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.017,
+            "blocked_ms": 0.026,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.043
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "4": 0.243,
+              "3": 0.1754
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.6339,
+            "on_cpu_ms": 0.6279,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.006,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "DeferredReady/WrAlertByThreadId": 0.006
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "4": 0.0414,
+              "3": 0.5865
+            }
+          },
+          {
+            "wall_ms": 0.2141,
+            "on_cpu_ms": 0.2021,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.012,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.012
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "3": 0.2021
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.0757,
+            "on_cpu_ms": 0.0757,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "3": 0.0757
+            }
+          },
+          {
+            "wall_ms": 0.1277,
+            "on_cpu_ms": 0.1277,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "3": 0.1277
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.4218,
+            "on_cpu_ms": 0.4218,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "4": 0.4218
+            }
+          },
+          {
+            "wall_ms": 3.4301,
+            "on_cpu_ms": 3.4301,
+            "recorded_interrupt_overlap_ms": 0.008,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "3": 3.4301
+            }
+          }
+        ]
+      }
+    },
+    {
+      "call": 19649,
+      "regions": {
+        "call": [
+          {
+            "wall_ms": 5.3739,
+            "on_cpu_ms": 2.4229,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.154,
+            "blocked_ms": 2.797,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 2.899,
+              "Ready/WrDispatchInt": 0.052
+            },
+            "switch_out_priorities": [
+              "8",
+              "9"
+            ],
+            "switch_out_qos": [
+              "Utility"
+            ],
+            "cpu_ms": {
+              "8": 0.0651,
+              "5": 0.079,
+              "12": 2.1828,
+              "0": 0.051,
+              "1": 0.045
+            }
+          }
+        ],
+        "worker_execution": [
+          {
+            "wall_ms": 2.5853,
+            "on_cpu_ms": 2.3676,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.142,
+            "blocked_ms": 0.0757,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.1677,
+              "Ready/WrYieldExecution": 0.05
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "2": 0.012,
+              "3": 0.771,
+              "0": 0.006,
+              "1": 0.054,
+              "14": 1.5246
+            }
+          },
+          {
+            "wall_ms": 1.6228,
+            "on_cpu_ms": 1.5708,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.019,
+            "blocked_ms": 0.033,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.01,
+              "Waiting/WrAlertByThreadId": 0.042
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "0": 0.2382,
+              "1": 1.3106,
+              "7": 0.022
+            }
+          }
+        ],
+        "voice_batch": [
+          {
+            "wall_ms": 1.8108,
+            "on_cpu_ms": 1.7168,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.033,
+            "blocked_ms": 0.061,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.094
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "3": 0.195,
+              "14": 1.5218
+            }
+          },
+          {
+            "wall_ms": 0.4867,
+            "on_cpu_ms": 0.4347,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.019,
+            "blocked_ms": 0.033,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Ready/WrYieldExecution": 0.01,
+              "Waiting/WrAlertByThreadId": 0.042
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "0": 0.2377,
+              "1": 0.175,
+              "7": 0.022
+            }
+          }
+        ],
+        "late_decoder": [
+          {
+            "wall_ms": 0.72,
+            "on_cpu_ms": 0.606,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.109,
+            "blocked_ms": 0.005,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.064,
+              "Ready/WrYieldExecution": 0.05
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "2": 0.012,
+              "3": 0.562,
+              "0": 0.006,
+              "1": 0.026
+            }
+          },
+          {
+            "wall_ms": 0.9256,
+            "on_cpu_ms": 0.9256,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "1": 0.9256
+            }
+          }
+        ],
+        "gpu_submit": [
+          {
+            "wall_ms": 0.1327,
+            "on_cpu_ms": 0.1327,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "3": 0.1327
+            }
+          },
+          {
+            "wall_ms": 0.1412,
+            "on_cpu_ms": 0.1412,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "1": 0.1412
+            }
+          }
+        ],
+        "gpu_wait": [
+          {
+            "wall_ms": 0.0303,
+            "on_cpu_ms": 0.0276,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0027,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {
+              "Waiting/WrAlertByThreadId": 0.0027
+            },
+            "switch_out_priorities": [
+              "21"
+            ],
+            "switch_out_qos": [
+              "Important"
+            ],
+            "cpu_ms": {
+              "1": 0.0276
+            }
+          },
+          {
+            "wall_ms": 0.1121,
+            "on_cpu_ms": 0.1121,
+            "recorded_interrupt_overlap_ms": 0.0,
+            "ready_ms": 0.0,
+            "blocked_ms": 0.0,
+            "unknown_off_ms": 0.0,
+            "off_states_ms": {},
+            "switch_out_priorities": [],
+            "switch_out_qos": [],
+            "cpu_ms": {
+              "1": 0.1121
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "clock": {
+    "offset_ns": -19014117000,
+    "uncertainty_bound_ns": 17500,
+    "binning_provisional_offset_ns": -19014117450
+  }
+}

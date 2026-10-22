@@ -1,0 +1,48 @@
+{
+  "base": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+  "candidate": "V2 opt-in compact-control/frequency-major, native capability bits 22",
+  "native_cuda_dll_unchanged": true,
+  "native_cuda_sha256": "90e258d95901d694945b56c6eb78b632785e209a7ad861424afbe2ed8c45da48",
+  "frozen_v2_benchmark_sha256": "cc5d62b0020248bed7d50cb3871d49ca41c5267e0f0706446dba78d97cc931c2",
+  "diagnostic_binaries": {
+    "room_cuda_bench.exe": "7078513fccd6e714d94c3d9b94c9a3f6b9290deecc1300b8ff43424d36cb6430",
+    "room_timeline.dll": "2d026bdb4c837c8b83dfaf5a6cb1f53bc8bf93dff711410b7c08a570f726ec7b",
+    "mradm_room_cuda.dll": "90e258d95901d694945b56c6eb78b632785e209a7ad861424afbe2ed8c45da48"
+  },
+  "hrir_hash": "4f9f1cf97c364cd12724d590d0c2f52436e61832f4e73fa68f31c770b52b391b",
+  "diagnostic_overlay": {
+    "rust/crates/mradm-dsp/src/room/profile.rs": {
+      "before": "bd1913ad7952a38541d34fb9d096c1d98fd9c5e352eee97afefa559af11e5f44",
+      "applied": "6a45ed3d2557b02389c3d10fffaee878bd2b5a5689a4928d94207543ea174431",
+      "before_lf": "d02fa8487bc41423bd3c65021f7202d20b4694508db04c2da88e8b80ba13f273"
+    },
+    "rust/crates/mradm-dsp/examples/room_support/room_bench.rs": {
+      "before": "911f98c8f90f936b2c4a26a02d3519989a3083f58107cbd651b319e275b66345",
+      "applied": "f46cee47d0341082cb3a99bf447e251fac7b4c3403979f228e6d0f6537acfc0e",
+      "before_lf": "004cc50bc79f7035dc6cc356d2b8ce3b209a9b97de7c2fd2d2e8b41a87368825"
+    },
+    "rust/crates/mradm-room-cuda/examples/room_cuda_bench.rs": {
+      "before": "92c27ecafa1111d5c89164ddb4d1d4d06d9179594149ec98b43d489e15ff22e7",
+      "applied": "7e51bbed4cdd9515769553d663205993e5aa2e5ada7308ca4b37cf4bb2663c29",
+      "before_lf": "88a2f46ccfe8c53a137d602fd93c51e201768b7c565b218e75ad665ba315b3ff"
+    },
+    "rust/crates/mradm-room-cuda/examples/support/timeline.rs": {
+      "before": null,
+      "applied": "4971ca99eb18f712c4be46c170efaab8817affe495813c543b2cc200acfe18b1",
+      "before_lf": null
+    }
+  },
+  "private_archive": {
+    "file": "raw-evidence.zip",
+    "bytes": 691166796,
+    "sha256": "af9213dc2507af52568cc29cf3008332e892316c42d0a1c2fcab80b54a4841db",
+    "members": 135
+  },
+  "archive_verification": {
+    "archive_sha256": "af9213dc2507af52568cc29cf3008332e892316c42d0a1c2fcab80b54a4841db",
+    "bytes": 691166796,
+    "members_verified": 135,
+    "member_sha256_verified": true,
+    "zip_crc_verified": true
+  }
+}

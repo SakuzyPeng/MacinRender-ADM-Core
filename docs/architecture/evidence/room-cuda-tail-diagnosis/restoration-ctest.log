@@ -1,0 +1,13 @@
+Test project <repo>/build/win-canon
+    Start 10: mr_adm_scene_stream_c_api_tests
+    Start 23: mr_adm_room_tests
+    Start  6: mr_adm_c_api_tests
+    Start  7: mr_adm_c_api_header_smoke
+1/4 Test  #7: mr_adm_c_api_header_smoke .........   Passed    0.01 sec
+2/4 Test  #6: mr_adm_c_api_tests ................   Passed    1.53 sec
+3/4 Test #10: mr_adm_scene_stream_c_api_tests ...   Passed    5.07 sec
+4/4 Test #23: mr_adm_room_tests .................   Passed   22.69 sec
+
+100% tests passed out of 4
+
+Total Test time (real) =  22.73 sec

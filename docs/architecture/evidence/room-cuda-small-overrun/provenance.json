@@ -1,0 +1,34 @@
+{
+  "base": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+  "production_sources_changed": false,
+  "native_cuda_dll_changed": false,
+  "prior_archive": {
+    "file": "raw-evidence.zip",
+    "bytes": 691166796,
+    "sha256": "af9213dc2507af52568cc29cf3008332e892316c42d0a1c2fcab80b54a4841db",
+    "members": 135
+  },
+  "cpu_event_source": "Windows CSwitch/ReadyThread; DPC/DPCTmr/Interrupt; fixed PMU counters on CSWITCH",
+  "gpu_event_keywords": "Microsoft-Windows-DxgKrnl:0x8603:5",
+  "pmu_event_counters": [
+    "InstructionsRetiredFixed",
+    "UnhaltedCoreCyclesFixed",
+    "UnhaltedReferenceCyclesFixed"
+  ],
+  "all_measurements_diagnostic": true,
+  "no_power_policy_or_affinity_changes": true,
+  "raw_archive": {
+    "file": "raw-small-overrun.zip",
+    "bytes": 364936539,
+    "sha256": "92fc6ab3abf43352cef522c42a28cfbef1dbb576580e7c1377b7e9e99d4e9362",
+    "members": 58,
+    "prior_archive_sha256": "af9213dc2507af52568cc29cf3008332e892316c42d0a1c2fcab80b54a4841db"
+  },
+  "windows_source_state": {
+    "head": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+    "source_clean": true,
+    "cmake_cache_unchanged": true,
+    "no_owned_trace_sessions": true,
+    "production_sources_and_builds_unchanged": true
+  }
+}
