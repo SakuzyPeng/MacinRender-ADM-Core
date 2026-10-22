@@ -38,7 +38,6 @@ MradmAdmText text(std::string_view value) {
 std::string copy(MradmAdmText value) {
     return value.len == 0 ? std::string{} : std::string{reinterpret_cast<const char*>(value.data), value.len};
 }
-using Handle = std::unique_ptr<MradmAdmHandle, decltype(&mradm_adm_destroy)>;
 using Buffer = std::unique_ptr<MradmAdmBuffer, decltype(&mradm_adm_buffer_destroy)>;
 // Bounds-checked reads of a borrowed record view (an ADM document or an imported render scene). The
 // view is a plain set of pointers; the records stay owned by its handle.
@@ -66,28 +65,6 @@ struct Records {
                                std::back_inserter(output),
                                [this](uint32_t id) { return string(id); });
         return output;
-    }
-};
-// The parsed source document of a scene being exported; its records carry the patchable nodes.
-struct Parsed {
-    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter aggregate owns its borrowed view.
-    Handle handle{nullptr, mradm_adm_destroy};
-    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): view lifetime is bounded by the handle above.
-    MradmAdmView view{};
-    Parsed(std::string_view xml, uint32_t rate) {
-        std::array<uint8_t, 1024> error{};
-        MradmAdmHandle* raw = nullptr;
-        const auto code = mradm_adm_parse(reinterpret_cast<const uint8_t*>(xml.data()),
-                                          xml.size(),
-                                          rate,
-                                          nullptr,
-                                          0,
-                                          &raw,
-                                          error.data(),
-                                          error.size());
-        handle.reset(raw);
-        checked(code, error);
-        checked(mradm_adm_view(handle.get(), &view, error.data(), error.size()), error);
     }
 };
 template <class T> std::optional<T> optional(uint32_t present, T value) {
@@ -297,135 +274,6 @@ AdmScene scene(const Records& p, bool provenance, const MradmSceneOverlay* overl
     }
     return output;
 }
-struct Patches {
-    std::vector<MradmAdmPatch> values;
-    template <class T> void add(uint32_t node, uint32_t field, T baseline, T original, T effective) {
-        require(baseline == original, "原场景与源 AXML 语义不一致");
-        values.push_back({node, field, 1, 1, static_cast<double>(effective), static_cast<double>(original), 0, 0});
-    }
-    template <class T>
-    void add_optional(uint32_t node,
-                      uint32_t field,
-                      std::optional<T> baseline,
-                      std::optional<T> original,
-                      std::optional<T> effective) {
-        require(baseline == original, "原场景与源 AXML 可选字段不一致");
-        MradmAdmPatch patch{node,
-                            field,
-                            static_cast<uint32_t>(effective.has_value()),
-                            static_cast<uint32_t>(original.has_value()),
-                            0,
-                            0,
-                            0,
-                            0};
-        if (field == 14) {
-            patch.samples = static_cast<uint64_t>(effective.value_or(0));
-            patch.original_samples = static_cast<uint64_t>(original.value_or(0));
-        } else {
-            patch.value = static_cast<double>(effective.value_or(0));
-            patch.original = static_cast<double>(original.value_or(0));
-        }
-        values.push_back(patch);
-    }
-};
-template <class T> void same_size(const T& a, const T& b, const T& c) {
-    require(a.size() == b.size() && b.size() == c.size(), "ADM 场景结构不一致");
-}
-template <class T> void same_time(const T& baseline, const T& original, const T& effective) {
-    require(baseline.start_sample == original.start_sample && original.start_sample == effective.start_sample &&
-                baseline.end_sample == original.end_sample && original.end_sample == effective.end_sample,
-            "ADM 时间线结构不一致");
-}
-// NOLINTNEXTLINE(readability-function-size): validate and map the complete supported semantic field set together.
-Patches collect_patches(const Parsed& parsed, const AdmScene& original, const AdmScene& effective) {
-    const auto baseline = scene(Records{parsed.view}, true);
-    same_size(baseline.objects, original.objects, effective.objects);
-    same_size(baseline.hoa_tracks, original.hoa_tracks, effective.hoa_tracks);
-    Patches patches;
-    for (std::size_t oi = 0; oi < baseline.objects.size(); ++oi) {
-        const auto& b = baseline.objects[oi];
-        const auto& o = original.objects[oi];
-        const auto& e = effective.objects[oi];
-        const auto& record = parsed.view.objects[oi];
-        require(b.id == o.id && o.id == e.id && b.end_sample == o.end_sample && o.end_sample == e.end_sample,
-                "ADM 对象身份或时间不一致");
-        patches.add(record.node, 1, b.gain, o.gain, e.gain);
-        patches.add(record.node, 2, b.mute, o.mute, e.mute);
-        same_size(b.tracks, o.tracks, e.tracks);
-        for (std::size_t ti = 0; ti < b.tracks.size(); ++ti) {
-            const auto& bt = b.tracks[ti];
-            const auto& ot = o.tracks[ti];
-            const auto& et = e.tracks[ti];
-            const auto& track = parsed.view.tracks[record.tracks.offset + ti];
-            require(bt.track_uid == ot.track_uid && ot.track_uid == et.track_uid, "ADM 轨道顺序不一致");
-            same_size(bt.blocks, ot.blocks, et.blocks);
-            same_size(bt.ds_blocks, ot.ds_blocks, et.ds_blocks);
-            for (std::size_t bi = 0; bi < bt.blocks.size(); ++bi) {
-                const auto& bb = bt.blocks[bi];
-                const auto& ob = ot.blocks[bi];
-                const auto& eb = et.blocks[bi];
-                same_time(bb, ob, eb);
-                const auto node = parsed.view.object_blocks[track.blocks.offset + bi].node;
-                patches.add(node, 1, bb.gain, ob.gain, eb.gain);
-                patches.add(node, 3, bb.head_locked, ob.head_locked, eb.head_locked);
-                patches.add(node, 4, bb.diffuse, ob.diffuse, eb.diffuse);
-                patches.add(node, 5, bb.width, ob.width, eb.width);
-                patches.add(node, 6, bb.height, ob.height, eb.height);
-                patches.add(node, 7, bb.depth, ob.depth, eb.depth);
-                patches.add(node, 8, bb.divergence, ob.divergence, eb.divergence);
-                patches.add(
-                    node, 9, bb.divergence_azimuth_range, ob.divergence_azimuth_range, eb.divergence_azimuth_range);
-                patches.add(
-                    node, 10, bb.divergence_position_range, ob.divergence_position_range, eb.divergence_position_range);
-                patches.add(node, 11, bb.channel_lock, ob.channel_lock, eb.channel_lock);
-                patches.add_optional(
-                    node, 12, bb.channel_lock_max_distance, ob.channel_lock_max_distance, eb.channel_lock_max_distance);
-                patches.add(node, 13, bb.jump_position, ob.jump_position, eb.jump_position);
-                patches.add_optional(
-                    node, 14, bb.interp_length_samples, ob.interp_length_samples, eb.interp_length_samples);
-            }
-            for (std::size_t bi = 0; bi < bt.ds_blocks.size(); ++bi) {
-                const auto& bb = bt.ds_blocks[bi];
-                const auto& ob = ot.ds_blocks[bi];
-                const auto& eb = et.ds_blocks[bi];
-                same_time(bb, ob, eb);
-                const auto node = parsed.view.direct_blocks[track.ds_blocks.offset + bi].node;
-                patches.add(node, 1, bb.gain, ob.gain, eb.gain);
-                patches.add(node, 3, bb.head_locked, ob.head_locked, eb.head_locked);
-            }
-        }
-    }
-    for (std::size_t pi = 0; pi < baseline.hoa_tracks.size(); ++pi) {
-        const auto& b = baseline.hoa_tracks[pi];
-        const auto& o = original.hoa_tracks[pi];
-        const auto& e = effective.hoa_tracks[pi];
-        const auto& record = parsed.view.hoa[pi];
-        require(b.object_id == o.object_id && o.object_id == e.object_id && b.pack_format_id == o.pack_format_id &&
-                    o.pack_format_id == e.pack_format_id,
-                "HOA pack 身份不一致");
-        same_size(b.channels, o.channels, e.channels);
-        for (std::size_t ci = 0; ci < b.channels.size(); ++ci) {
-            const auto& bc = b.channels[ci];
-            const auto& oc = o.channels[ci];
-            const auto& ec = e.channels[ci];
-            const auto& channel = parsed.view.hoa_channels[record.channels.offset + ci];
-            require(bc.track_uid == oc.track_uid && oc.track_uid == ec.track_uid, "HOA 轨道顺序不一致");
-            same_size(bc.blocks, oc.blocks, ec.blocks);
-            for (std::size_t bi = 0; bi < bc.blocks.size(); ++bi) {
-                const auto& bb = bc.blocks[bi];
-                const auto& ob = oc.blocks[bi];
-                const auto& eb = ec.blocks[bi];
-                same_time(bb, ob, eb);
-                patches.add(parsed.view.hoa_blocks[channel.blocks.offset + bi].node,
-                            3,
-                            bb.head_locked,
-                            ob.head_locked,
-                            eb.head_locked);
-            }
-        }
-    }
-    return patches;
-}
 OutputMetadata output(Buffer buffer) {
     std::array<uint8_t, 1024> error{};
     MradmAdmText xml{};
@@ -442,22 +290,6 @@ OutputMetadata output(Buffer buffer) {
 Result<AdmScene> scene_from_view(const MradmAdmView& view, bool adm_provenance, const MradmSceneOverlay* overlay) {
     try {
         return scene(Records{view}, adm_provenance, overlay);
-    } catch (const Failure& e) {
-        return make_error(e.code(), e.what());
-    }
-}
-Result<std::string> patch_axml(std::string_view xml, const AdmScene& original, const AdmScene& effective) {
-    try {
-        require(original.info.sample_rate == effective.info.sample_rate, "ADM 采样率不一致");
-        Parsed parsed{xml, original.info.sample_rate};
-        const auto patches = collect_patches(parsed, original, effective);
-        std::array<uint8_t, 1024> error{};
-        MradmAdmBuffer* raw = nullptr;
-        const auto code = mradm_adm_patch(
-            parsed.handle.get(), patches.values.data(), patches.values.size(), &raw, error.data(), error.size());
-        Buffer buffer{raw, mradm_adm_buffer_destroy};
-        checked(code, error);
-        return output(std::move(buffer)).axml;
     } catch (const Failure& e) {
         return make_error(e.code(), e.what());
     }

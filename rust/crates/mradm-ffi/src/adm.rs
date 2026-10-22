@@ -1,5 +1,5 @@
 //! Private, borrowed ADM views. All owning allocations are released on this side.
-use mradm_adm::{Document, Error, GeneratedMetadata, Result, Snapshot, records::*};
+use mradm_adm::{Error, GeneratedMetadata, Result, Snapshot, records::*};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice, str,
@@ -18,11 +18,6 @@ impl Text {
             len: s.len(),
         }
     }
-}
-#[repr(C)]
-pub struct Chna {
-    uid: Text,
-    channel: u16,
 }
 #[repr(C)]
 pub struct OutputChna {
@@ -89,12 +84,6 @@ impl View {
         }
     }
 }
-pub struct Handle {
-    document: Document,
-    snapshot: Snapshot,
-    texts: Vec<Text>,
-    rate: u32,
-}
 pub struct Buffer {
     metadata: GeneratedMetadata,
     chna: Vec<OutputChna>,
@@ -153,102 +142,6 @@ unsafe fn text<'a>(value: Text) -> Result<&'a str> {
         .map_err(|_| Error::invalid("无效 UTF-8 字符串"))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_adm_parse(
-    xml: *const u8,
-    xml_len: usize,
-    rate: u32,
-    chna: *const Chna,
-    chna_len: usize,
-    output: *mut *mut Handle,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if output.is_null() {
-            return Err(Error::invalid("缺少 ADM 输出句柄"));
-        }
-        unsafe {
-            *output = ptr::null_mut();
-        }
-        let xml = str::from_utf8(unsafe { input(xml, xml_len)? })
-            .map_err(|_| Error::xml("AXML 必须使用 UTF-8"))?;
-        let entries = unsafe { input(chna, chna_len)? }
-            .iter()
-            .map(|c| Ok((unsafe { text(c.uid)? }.to_owned(), c.channel)))
-            .collect::<Result<Vec<_>>>()?;
-        let document = Document::parse(xml)?;
-        let snapshot = Snapshot::extract(&document, rate, &entries)?;
-        let texts = snapshot.strings.iter().map(|s| Text::new(s)).collect();
-        unsafe {
-            *output = Box::into_raw(Box::new(Handle {
-                document,
-                snapshot,
-                texts,
-                rate,
-            }));
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_adm_view(
-    handle: *const Handle,
-    output: *mut View,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if handle.is_null() || output.is_null() {
-            return Err(Error::invalid("无效 ADM view 参数"));
-        }
-        let handle = unsafe { &*handle };
-        unsafe {
-            *output = View::new(&handle.snapshot, &handle.texts);
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_adm_destroy(handle: *mut Handle) {
-    if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_adm_patch(
-    handle: *const Handle,
-    patches: *const Patch,
-    len: usize,
-    output: *mut *mut Buffer,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if output.is_null() {
-            return Err(Error::invalid("缺少 ADM 输出句柄"));
-        }
-        unsafe {
-            *output = ptr::null_mut();
-        }
-        if handle.is_null() {
-            return Err(Error::invalid("无效 ADM 句柄"));
-        }
-        let h = unsafe { &*handle };
-        let axml = h
-            .document
-            .apply_patches(unsafe { input(patches, len)? }, h.rate)?;
-        unsafe {
-            *output = Box::into_raw(Box::new(Buffer::new(GeneratedMetadata {
-                axml,
-                chna: Vec::new(),
-            })));
-        }
-        Ok(())
-    })
-}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_adm_generate(
     kind: u32,
@@ -328,31 +221,6 @@ pub unsafe extern "C" fn mradm_adm_buffer_destroy(handle: *mut Buffer) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn failed_parse_clears_handle_and_errors_are_utf8() {
-        let mut handle = ptr::dangling_mut();
-        let mut error = [0u8; 16];
-        let code = unsafe {
-            mradm_adm_parse(
-                ptr::null(),
-                1,
-                48000,
-                ptr::null(),
-                0,
-                &mut handle,
-                error.as_mut_ptr(),
-                error.len(),
-            )
-        };
-        assert_eq!(code, 1);
-        assert!(handle.is_null());
-        let end = error.iter().position(|b| *b == 0).unwrap();
-        assert!(str::from_utf8(&error[..end]).is_ok());
-        unsafe {
-            mradm_adm_destroy(handle);
-            mradm_adm_buffer_destroy(ptr::null_mut());
-        }
-    }
     #[test]
     fn panic_is_contained() {
         assert_eq!(boundary(ptr::null_mut(), 0, || panic!("test")), 6);

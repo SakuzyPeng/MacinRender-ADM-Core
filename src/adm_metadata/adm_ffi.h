@@ -1,4 +1,5 @@
-// Private ADM metadata boundary. Views are borrowed until the matching handle is destroyed.
+// Private ADM metadata boundary: the record view of a render scene (scene_ffi.h) and generated
+// metadata buffers, which are borrowed until mradm_adm_buffer_destroy.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -194,17 +195,6 @@ typedef struct MradmAdmHoaBlock {
     uint64_t end;
 } MradmAdmHoaBlock;
 
-typedef struct MradmAdmPatch {
-    uint32_t node;
-    uint32_t field;
-    uint32_t present;
-    uint32_t original_present;
-    double value;
-    double original;
-    uint64_t samples;
-    uint64_t original_samples;
-} MradmAdmPatch;
-
 typedef struct MradmAdmSpeaker {
     uint32_t label;
     float azimuth;
@@ -247,34 +237,13 @@ typedef struct MradmAdmView {
     const uint32_t* warnings;
     size_t warnings_len;
 } MradmAdmView;
-typedef struct MradmAdmHandle MradmAdmHandle;
 typedef struct MradmAdmBuffer MradmAdmBuffer;
-typedef struct MradmAdmChna {
-    MradmAdmText uid;
-    uint16_t channel;
-} MradmAdmChna;
 typedef struct MradmAdmOutputChna {
     uint16_t track;
     MradmAdmText uid;
     MradmAdmText format;
     MradmAdmText pack;
 } MradmAdmOutputChna;
-int32_t mradm_adm_parse(const uint8_t* xml,
-                        size_t xml_len,
-                        uint32_t sample_rate,
-                        const MradmAdmChna* chna,
-                        size_t chna_len,
-                        MradmAdmHandle** output,
-                        uint8_t* error,
-                        size_t capacity);
-int32_t mradm_adm_view(const MradmAdmHandle* handle, MradmAdmView* output, uint8_t* error, size_t capacity);
-void mradm_adm_destroy(MradmAdmHandle* handle);
-int32_t mradm_adm_patch(const MradmAdmHandle* handle,
-                        const MradmAdmPatch* patches,
-                        size_t length,
-                        MradmAdmBuffer** output,
-                        uint8_t* error,
-                        size_t capacity);
 int32_t mradm_adm_generate(uint32_t kind,
                            MradmAdmText name,
                            const MradmAdmSpeaker* speakers,

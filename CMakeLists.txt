@@ -1250,6 +1250,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_scene_export_tests tests/unit/scene_export_fixture_test.cpp)
     target_link_libraries(mr_adm_scene_export_tests
         PRIVATE
+            MacinRender::ADMEngine
             MacinRender::ADMIo
     )
     mr_adm_core_apply_warnings(mr_adm_scene_export_tests)

@@ -23,7 +23,6 @@ struct OutputMetadata {
 // effective object mute and DirectSpeakers position flags).
 Result<AdmScene>
 scene_from_view(const MradmAdmView& view, bool adm_provenance, const MradmSceneOverlay* overlay = nullptr);
-Result<std::string> patch_axml(std::string_view xml, const AdmScene& original, const AdmScene& effective);
 Result<OutputMetadata>
 generate(uint32_t kind, std::string_view name, const std::vector<render_layouts::SpeakerSpec>& speakers);
 } // namespace mradm::metadata

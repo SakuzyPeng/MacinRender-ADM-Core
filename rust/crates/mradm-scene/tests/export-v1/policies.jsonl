@@ -1,0 +1,12 @@
+{"label": "<memory>", "policy": null, "scene": "common-bed"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"id\":\"AO_1001\",\"direct_speakers\":{\"gain\":{\"scale\":0.5}}}]}", "scene": "common-bed"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"global\":{\"head_locked\":true}}", "scene": "common-bed"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"global\":{\"gain\":{\"scale\":0.5}}}", "scene": "common-bed"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"id\":\"AO_1001\",\"direct_speakers\":{\"speaker_label\":\"M+030\",\"gain\":{\"mute\":true}}}]}", "scene": "common-bed"}
+{"label": "<memory>", "policy": null, "scene": "shared-block"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"id\":\"AO_1001\",\"diffuse\":{\"enabled\":false}}]}", "scene": "shared-block"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"global\":{\"diffuse\":{\"enabled\":false},\"head_locked\":false}}", "scene": "shared-block"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"id\":\"AO_1002\",\"gain\":{\"mute\":true}}]}", "scene": "shared-block"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"all\":true,\"interpolation\":{\"max_ms\":2,\"honor_jump_position\":false}}]}", "scene": "shared-block"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"id\":\"AO_1001\",\"position\":{\"azimuth\":-90}},{\"id\":\"AO_1002\",\"extent\":{\"scale\":0.5}}]}", "scene": "shared-block"}
+{"label": "<memory>", "policy": "{\"schema\":\"mradm.semantic-policy.v1\",\"global\":{\"channel_lock\":{\"enabled\":true,\"max_distance\":0.25}}}", "scene": "shared-block"}
