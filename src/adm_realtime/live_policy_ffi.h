@@ -2,7 +2,7 @@
 // immutable once made and destroyed by their own *_destroy; a resolution's `unmatched` array lives
 // as long as the resolution. Status values follow adm::ErrorCode.
 #pragma once
-#include "adm_ffi.h"
+#include "../adm_metadata/adm_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
