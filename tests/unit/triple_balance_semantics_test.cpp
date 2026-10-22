@@ -13,7 +13,6 @@
 #include "adm/audio_io.h"
 #include "adm/render.h"
 #include "adm/render_triple_balance.h"
-#include "adm/semantic_policy.h"
 
 #include "semantics.h"
 #include "size_processor.h"
@@ -220,14 +219,18 @@ int main(int argc, char** argv) {
                     "diagnostics retain source absolute time before ignoring object start");
     }
     auto plan = make_plan(48000);
-    mradm::SemanticPolicyOverride user;
-    user.gain = mradm::GainPolicy{.scale = .25F, .gain_db = 6.0206F, .mute = false};
-    mradm::apply_resolved_semantic_object(plan.scene.objects.front(), user);
+    // User levels as a semantic policy sets them: gain and user level scale together, mute sets both.
+    const auto set_user_level = [](mradm::SceneObject& object, float scale, bool mute) {
+        object.gain *= scale;
+        object.user_level.gain_multiplier *= scale;
+        object.mute = mute;
+        object.user_level.mute = mute;
+    };
+    set_user_level(plan.scene.objects.front(), .5F, false);
     auto scene = mradm::triple_balance::prepare_semantics(plan, report);
     ok &= check(scene && std::fabs(mradm::triple_balance::user_output_gain(scene->objects.front()) - .5F) < 1e-6F,
                 "user level is an independent multiplier even with authored gain zero");
-    user.gain = mradm::GainPolicy{.mute = true};
-    mradm::apply_resolved_semantic_object(plan.scene.objects.front(), user);
+    set_user_level(plan.scene.objects.front(), 1.0F, true);
     scene = mradm::triple_balance::prepare_semantics(plan, report);
     ok &= check(scene && !scene->objects.front().mute &&
                     mradm::triple_balance::user_output_gain(scene->objects.front()) == 0,
@@ -260,8 +263,7 @@ int main(int argc, char** argv) {
         bed_track.ds_blocks.front().speaker_labels.push_back(labels[index]);
         bed.tracks.push_back(bed_track);
     }
-    user.gain = mradm::GainPolicy{.scale = .5F, .mute = false};
-    mradm::apply_resolved_semantic_object(bed, user);
+    set_user_level(bed, .5F, false);
     with_bed.scene.objects.push_back(bed);
     with_bed.scene.info.num_channels = 11;
     scene = mradm::triple_balance::prepare_semantics(with_bed, report);

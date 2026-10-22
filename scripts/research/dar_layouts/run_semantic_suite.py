@@ -28,8 +28,8 @@ MODEL_FILES = [ROOT / path for path in (
     "src/adm_render_triple_balance/size_processor.cpp", "src/adm_render_triple_balance/size_processor.h",
     "src/adm_render_triple_balance/triple_balance_renderer.cpp",
     "src/adm_render_common/speaker_pcm.cpp", "src/adm_render_common/speaker_pcm.h",
-    "src/adm_core/semantic_policy.cpp", "src/adm_io/scene_importer.cpp", "src/adm_engine/render_service.cpp",
-    "include/adm/scene.h", "include/adm/semantic_policy.h", "include/adm/render.h", "CMakeLists.txt")]
+    "rust/crates/mradm-scene/src/policy.rs", "src/adm_io/scene_importer.cpp", "src/adm_engine/render_service.cpp",
+    "include/adm/scene.h", "include/adm/render.h", "CMakeLists.txt")]
 ANALYSIS_FILES = [HERE / name for name in ("score_semantic_pcm.py", "measure_size_field.py", "measure_size_motion.py",
                                           "gain_trace_adm.py", "make_semantic_suite.py", "run_semantic_suite.py",
                                           "measure_gain_trace.py", "renderer55_semantic_parsers.json")]

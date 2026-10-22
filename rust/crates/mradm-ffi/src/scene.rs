@@ -10,6 +10,7 @@ use mradm_scene::{
     Context, ImportOptions, RenderScene, SourceKind,
     input::{InputChannel, channel_catalog, input_layouts, resolve_input_channel_labels},
     layouts::{Geometry, Layout, layouts},
+    live_policy,
     policy::{self, UserLevel},
     report,
 };
@@ -673,6 +674,315 @@ pub unsafe extern "C" fn mradm_scene_resolve_labels(
         let out = unsafe { slice::from_raw_parts_mut(indices, resolved.len()) };
         for (slot, index) in out.iter_mut().zip(resolved) {
             *slot = index as u32;
+        }
+        Ok(())
+    })
+}
+
+// ---------------------------------------------------------------------------------------------
+// Scene stream semantic policy (`mradm_scene::live_policy`). Each handle is immutable once made;
+// the stream swaps them by pointer. Strings are the producer's bytes; bytes that are not UTF-8 are
+// compared as replacement characters.
+
+pub struct LivePolicy(policy::Policy);
+pub struct LiveGeneration(live_policy::Generation);
+pub struct LiveResolution(live_policy::Resolution);
+
+#[repr(C)]
+pub struct LivePolicyEntity {
+    id: Text,
+    name: Text,
+}
+
+#[repr(C)]
+pub struct LivePolicyIdentity {
+    present: u32,
+    object_id: Text,
+    object_name: Text,
+    track_uid: Text,
+    has_importance: u32,
+    importance: i32,
+    has_dialogue_id: u32,
+    dialogue_id: i32,
+    contents: *const LivePolicyEntity,
+    contents_len: usize,
+    programmes: *const LivePolicyEntity,
+    programmes_len: usize,
+}
+
+/// `role`: 0 object, 1 DirectSpeakers, 2 LFE.
+#[repr(C)]
+pub struct LivePolicyElement {
+    role: u32,
+    speaker_label: Text,
+    has_position: u32,
+    position: [f32; 3],
+    identity: LivePolicyIdentity,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LivePolicyState {
+    has_position: u32,
+    linear_gain: f32,
+    position: [f32; 3],
+    width: f32,
+    height: f32,
+    depth: f32,
+    diffuse: f32,
+    divergence: f32,
+    channel_lock: u32,
+    screen_reference: u32,
+    head_locked: u32,
+    divergence_azimuth_range: f32,
+    divergence_position_range: f32,
+    has_max_distance: u32,
+    max_distance: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LivePolicyUpdate {
+    jump_position: u32,
+    ramp_duration_samples: u32,
+}
+
+fn live_flag(value: u32) -> mradm_scene::Result<bool> {
+    match value {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(invalid("无效场景策略标志")),
+    }
+}
+
+unsafe fn entities(
+    data: *const LivePolicyEntity,
+    len: usize,
+) -> mradm_scene::Result<Vec<(String, String)>> {
+    unsafe { bytes(data, len)? }
+        .iter()
+        .map(|e| {
+            Ok((
+                unsafe { lossy(e.id)? }.into_owned(),
+                unsafe { lossy(e.name)? }.into_owned(),
+            ))
+        })
+        .collect()
+}
+
+unsafe fn live_element(e: &LivePolicyElement) -> mradm_scene::Result<live_policy::Element> {
+    let role = match e.role {
+        0 => live_policy::Role::Object,
+        1 => live_policy::Role::DirectSpeakers,
+        2 => live_policy::Role::Lfe,
+        _ => return Err(invalid("无效场景元素角色")),
+    };
+    let i = &e.identity;
+    let identity = if live_flag(i.present)? {
+        Some(live_policy::SourceIdentity {
+            object_id: unsafe { lossy(i.object_id)? }.into_owned(),
+            object_name: unsafe { lossy(i.object_name)? }.into_owned(),
+            track_uid: unsafe { lossy(i.track_uid)? }.into_owned(),
+            importance: live_flag(i.has_importance)?.then_some(i.importance),
+            dialogue_id: live_flag(i.has_dialogue_id)?.then_some(i.dialogue_id),
+            contents: unsafe { entities(i.contents, i.contents_len)? },
+            programmes: unsafe { entities(i.programmes, i.programmes_len)? },
+        })
+    } else {
+        None
+    };
+    Ok(live_policy::Element {
+        role,
+        speaker_label: unsafe { lossy(e.speaker_label)? }.into_owned(),
+        position: live_flag(e.has_position)?.then_some(e.position),
+        identity,
+    })
+}
+
+/// Parses `mradm.semantic-policy.v1`; errors have context 3 (the caller's label).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_parse(
+    json: *const u8,
+    json_len: usize,
+    output: *mut *mut LivePolicy,
+    context: *mut u32,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(context, message, capacity, || {
+        if output.is_null() {
+            return Err(invalid("无效场景策略输出"));
+        }
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let parsed = policy::parse(unsafe { bytes(json, json_len)? })?;
+        unsafe {
+            *output = Box::into_raw(Box::new(LivePolicy(parsed)));
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_destroy(handle: *mut LivePolicy) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+
+/// The elements of one Scene generation with their merged semantic identities.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_generation(
+    elements: *const LivePolicyElement,
+    elements_len: usize,
+    output: *mut *mut LiveGeneration,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if output.is_null() {
+            return Err(invalid("无效场景策略输出"));
+        }
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let elements = unsafe { bytes(elements, elements_len)? }
+            .iter()
+            .map(|e| unsafe { live_element(e) })
+            .collect::<mradm_scene::Result<Vec<_>>>()?;
+        let generation = live_policy::Generation::new(elements)?;
+        unsafe {
+            *output = Box::into_raw(Box::new(LiveGeneration(generation)));
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_generation_destroy(handle: *mut LiveGeneration) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+
+/// Resolves `policy` for every element of `generation`; `unmatched` then points into the
+/// resolution at the indices of the rules no element matched, in order.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_resolve(
+    policy: *const LivePolicy,
+    generation: *const LiveGeneration,
+    output: *mut *mut LiveResolution,
+    unmatched: *mut *const usize,
+    unmatched_len: *mut usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if policy.is_null()
+            || generation.is_null()
+            || output.is_null()
+            || unmatched.is_null()
+            || unmatched_len.is_null()
+        {
+            return Err(invalid("无效场景策略句柄"));
+        }
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let resolution = Box::new(LiveResolution(live_policy::Resolution::new(
+            unsafe { &(*policy).0 },
+            unsafe { &(*generation).0 },
+        )));
+        unsafe {
+            *unmatched = resolution.0.unmatched().as_ptr();
+            *unmatched_len = resolution.0.unmatched().len();
+            *output = Box::into_raw(resolution);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_resolution_destroy(handle: *mut LiveResolution) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+
+/// Applies element `index`'s policy to its producer state in place; `update` is null outside a
+/// metadata update. Does not allocate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_live_policy_apply(
+    resolution: *const LiveResolution,
+    index: usize,
+    sample_rate: u32,
+    state: *mut LivePolicyState,
+    update: *mut LivePolicyUpdate,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), ptr::null_mut(), 0, || {
+        if resolution.is_null() || state.is_null() {
+            return Err(invalid("无效场景策略句柄"));
+        }
+        let raw = unsafe { &mut *state };
+        let mut s = live_policy::State {
+            has_position: live_flag(raw.has_position)?,
+            linear_gain: raw.linear_gain,
+            position: raw.position,
+            width: raw.width,
+            height: raw.height,
+            depth: raw.depth,
+            diffuse: raw.diffuse,
+            divergence: raw.divergence,
+            channel_lock: live_flag(raw.channel_lock)?,
+            screen_reference: live_flag(raw.screen_reference)?,
+            head_locked: live_flag(raw.head_locked)?,
+            divergence_azimuth_range: raw.divergence_azimuth_range,
+            divergence_position_range: raw.divergence_position_range,
+            max_distance: live_flag(raw.has_max_distance)?.then_some(raw.max_distance),
+        };
+        let mut u = if update.is_null() {
+            None
+        } else {
+            let raw = unsafe { &*update };
+            Some(live_policy::Update {
+                jump_position: live_flag(raw.jump_position)?,
+                ramp_duration_samples: raw.ramp_duration_samples,
+            })
+        };
+        unsafe { &(*resolution).0 }
+            .apply(index, sample_rate, &mut s, u.as_mut())
+            .ok_or_else(|| invalid("场景策略元素越界"))?;
+        *raw = LivePolicyState {
+            has_position: u32::from(s.has_position),
+            linear_gain: s.linear_gain,
+            position: s.position,
+            width: s.width,
+            height: s.height,
+            depth: s.depth,
+            diffuse: s.diffuse,
+            divergence: s.divergence,
+            channel_lock: u32::from(s.channel_lock),
+            screen_reference: u32::from(s.screen_reference),
+            head_locked: u32::from(s.head_locked),
+            divergence_azimuth_range: s.divergence_azimuth_range,
+            divergence_position_range: s.divergence_position_range,
+            has_max_distance: u32::from(s.max_distance.is_some()),
+            max_distance: s.max_distance.unwrap_or(0.),
+        };
+        if let Some(u) = u {
+            unsafe {
+                *update = LivePolicyUpdate {
+                    jump_position: u32::from(u.jump_position),
+                    ramp_duration_samples: u.ramp_duration_samples,
+                };
+            }
         }
         Ok(())
     })

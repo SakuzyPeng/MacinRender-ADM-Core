@@ -51,32 +51,6 @@ pub unsafe extern "C" fn mradm_dsp_policy_direct(
     })
 }
 
-/// Scene state finish: `src` is block gain, object gain, then azimuth/elevation/distance;
-/// `dst` receives the linear gain and, when `polar != 0`, x/y/z.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_policy_scene_state(
-    src: *const f32,
-    n: usize,
-    polar: u32,
-    dst: *mut f32,
-    m: usize,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, dst, m)?;
-        let polar = flag(polar)?;
-        if n != 5 || m != if polar { 4 } else { 1 } {
-            return Err(invalid());
-        }
-        let s = input(src, n)?;
-        let d = output(dst, m)?;
-        d[0] = policy::scene_level(s[0], s[1]);
-        if polar {
-            d[1..].copy_from_slice(&policy::scene_cartesian([s[2], s[3], s[4]]));
-        }
-        Ok(())
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,17 +74,6 @@ mod tests {
         };
         assert_eq!(
             unsafe { mradm_dsp_policy_object(&PolicyObject::default(), 48_000, &mut block) },
-            1
-        );
-        let src = [0.5f32, 0.25, 0., 0., 2.];
-        let mut dst = [0f32; 4];
-        assert_eq!(
-            unsafe { mradm_dsp_policy_scene_state(src.as_ptr(), 5, 1, dst.as_mut_ptr(), 4) },
-            0
-        );
-        assert_eq!(dst[0], 0.125);
-        assert_eq!(
-            unsafe { mradm_dsp_policy_scene_state(src.as_ptr(), 5, 1, dst.as_mut_ptr(), 1) },
             1
         );
     }

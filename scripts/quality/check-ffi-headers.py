@@ -46,6 +46,7 @@ FFI_HEADERS = [
     "src/adm_metadata/scene_ffi.h",
     "src/adm_audio/wav_ffi.h",
     "src/adm_realtime/osc_ffi.h",
+    "src/adm_realtime/live_policy_ffi.h",
 ]
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.

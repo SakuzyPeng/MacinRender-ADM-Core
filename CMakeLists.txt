@@ -152,7 +152,6 @@ target_sources(
         src/adm_core/direct_speakers_matrix.cpp
         src/adm_core/scene_math.cpp
         src/adm_core/screen.cpp
-        src/adm_core/semantic_policy.cpp
         "${MR_ADM_GENERATED_VERSION_CPP}"
     PUBLIC
         FILE_SET HEADERS
@@ -170,7 +169,6 @@ target_sources(
             include/adm/progress.h
             include/adm/render.h
             include/adm/screen.h
-            include/adm/semantic_policy.h
             include/adm/version.h
 )
 
@@ -662,7 +660,9 @@ target_link_libraries(mr_adm_realtime
         MacinRender::ADMRenderRoom
         MacinRender::ADMRenderTripleBalance
 )
+# src/adm_metadata only for the plain C adm_ffi.h that live_policy_ffi.h builds on.
 target_include_directories(mr_adm_realtime PRIVATE
+    src/adm_metadata
     src/adm_render_vbap
     src/adm_render_binaural
     src/adm_render_triple_balance
@@ -1233,7 +1233,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
-    target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)
+    target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)
     mr_adm_core_apply_static_analysis(mr_adm_semantic_policy_tests)
     add_test(NAME mr_adm_semantic_policy_tests COMMAND mr_adm_semantic_policy_tests)
@@ -1335,7 +1335,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
     target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon)
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE src/adm_render_triple_balance)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)

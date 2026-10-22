@@ -11,9 +11,9 @@
 
 #include "adm/audio_io.h"
 #include "adm/render_triple_balance.h"
-#include "adm/semantic_policy.h"
 
 #include "render_state.h"
+#include "semantic_policy_ffi.h"
 
 namespace {
 void require(bool value, const std::string& label) {
@@ -52,6 +52,39 @@ class Files {
     std::filesystem::path input_;
     std::filesystem::path output_;
 };
+
+// The offline reference of {"id":"object-10","gain":{"gain_db":-6},"extent":{"scale":<scale>}} through the
+// semantic policy arithmetic (mradm-dsp): object gain and user level, then each block's extent.
+void apply_object_policy(mradm::SceneObject& object, float scale) {
+    const MradmPolicyGain gain{{0U, 0.0F}, {1U, -6.0F}};
+    std::array levels{object.gain, object.user_level.gain_multiplier};
+    require(mradm_dsp_policy_gain(&gain, levels.data(), levels.size()) == 0, "policy gain");
+    object.gain = levels[0];
+    object.user_level.gain_multiplier = levels[1];
+    MradmPolicyObject rule{};
+    rule.extent = 2U;
+    rule.extent_scale = {1U, scale};
+    for (auto& track : object.tracks) {
+        for (auto& block : track.blocks) {
+            MradmPolicyBlock numeric{};
+            numeric.cartesian = block.position.cartesian ? 1U : 0U;
+            numeric.position[0] = block.position.x;
+            numeric.position[1] = block.position.y;
+            numeric.position[2] = block.position.z;
+            numeric.diffuse = block.diffuse;
+            numeric.width = block.width;
+            numeric.height = block.height;
+            numeric.depth = block.depth;
+            numeric.divergence = block.divergence;
+            numeric.divergence_azimuth_range = block.divergence_azimuth_range;
+            numeric.divergence_position_range = block.divergence_position_range;
+            require(mradm_dsp_policy_object(&rule, 48000, &numeric) == 0, "policy block");
+            block.width = numeric.width;
+            block.height = numeric.height;
+            block.depth = numeric.depth;
+        }
+    }
+}
 
 mradm::RenderPlan make_plan(const Files& files, const std::string& layout) {
     mradm::RenderPlan plan;
@@ -219,12 +252,7 @@ void run(const Files& files, const std::string& layout) {
         stream->set_overrides(overrides);
         done(stream->seek(0));
         auto effective = plan;
-        const auto policy =
-            take(mradm::parse_semantic_policy("{\"schema\":\"mradm.semantic-policy.v1\",\"objects\":[{\"id\":\"object-"
-                                              "10\",\"gain\":{\"gain_db\":-6},\"extent\":{\"scale\":" +
-                                                  std::to_string(scale) + "}}]}",
-                                              "test"));
-        done(mradm::apply_semantic_policy(effective.scene, policy, 48000));
+        apply_object_policy(effective.scene.objects.at(1), scale);
         effective.scene.objects.front().tracks.front().ds_blocks.front().user_level.mute = true;
         const auto scaled = offline(*renderer, effective);
         expect_equal(pull(*stream, plan.scene.info.num_frames, chunks), scaled, layout + " static scale/gain policy");
