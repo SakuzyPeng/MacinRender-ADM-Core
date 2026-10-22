@@ -1,6 +1,6 @@
 // Private render-scene boundary (PCM consistency 4.3, the semantic policy since 4.4); see mradm-scene.
 // Scene views are borrowed until the next call that changes the scene (apply_policy, report,
-// template) or mradm_scene_destroy; preset and catalog tables point at process-lifetime Rust data.
+// template, export) or mradm_scene_destroy; preset and catalog tables point at process-lifetime Rust data.
 // Status values follow adm::ErrorCode. `context` receives the error locator the caller attaches:
 // 0 none, 1 "input=<path>", 2 "path=<path>", 3 the caller's source label.
 #pragma once
@@ -112,6 +112,13 @@ int32_t mradm_scene_report(MradmSceneHandle* handle,
                            uint8_t* message,
                            size_t capacity);
 int32_t mradm_scene_template(MradmSceneHandle* handle, MradmAdmText* output, uint8_t* message, size_t capacity);
+// The source AXML with the scene's semantic edits patched in, held like a report.
+int32_t mradm_scene_export_axml(MradmSceneHandle* handle,
+                                const uint8_t* xml,
+                                size_t xml_len,
+                                MradmAdmText* output,
+                                uint8_t* message,
+                                size_t capacity);
 
 int32_t mradm_scene_input_layouts(const MradmInputLayoutRecord** entries,
                                   size_t* entries_len,

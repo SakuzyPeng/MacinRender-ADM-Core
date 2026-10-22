@@ -341,51 +341,32 @@ Result<std::string> get_axml(const std::string& path) {
     }
 }
 
-namespace {
-
-// ---- chunk-level BWF rewrite (bit-exact PCM) ----
-// mradm-wav 只替换 axml chunk 的 payload，其余 chunk（data / chna / fmt / bext / JUNK / 未知）
-// 的原始字节逐块复制，绝不解码 / 重编码 PCM —— 这是音频真正 bit-exact 的唯一方式。
-
-// Rewrite src_path → dst_path through a temporary file so a failure never corrupts the destination
-// (or the source when dst == src).
-Result<void>
-rewrite_bwf_replacing_axml(const std::string& src_path, const std::string& dst_path, const std::string& new_axml) {
-    auto written = audio::replace_wav_axml(src_path, dst_path, new_axml);
+// Only the axml payload is replaced (mradm-wav); every other chunk, PCM included, is copied byte for
+// byte through a temporary file, so a failure never corrupts the destination or the source.
+Result<void> RenderScene::write(const std::string& dst) const {
+    auto xml = get_axml(path_);
+    if (!xml) {
+        return tl::unexpected{xml.error()};
+    }
+    const auto locator = "input=" + path_ + " output=" + dst;
+    std::array<uint8_t, 1024> message{};
+    MradmAdmText output{};
+    if (const auto code = mradm_scene_export_axml(handle_->raw,
+                                                  reinterpret_cast<const uint8_t*>(xml->data()),
+                                                  xml->size(),
+                                                  &output,
+                                                  message.data(),
+                                                  message.size());
+        code != 0) {
+        return make_error(static_cast<ErrorCode>(code), message_text(message), locator);
+    }
+    auto written = audio::replace_wav_axml(path_, dst, copy(output));
     if (!written) {
         auto error = written.error();
-        error.context = "input=" + src_path + " output=" + dst_path;
+        error.context = locator;
         return tl::unexpected{std::move(error)};
     }
     return {};
-}
-
-} // namespace
-
-Result<void> write_scene(const std::string& src_path,
-                         const AdmScene& original,
-                         const AdmScene& effective,
-                         const std::string& dst_path) {
-    try {
-        auto xml_res = get_axml(src_path);
-        if (!xml_res) {
-            return tl::unexpected{xml_res.error()};
-        }
-        auto patched = metadata::patch_axml(*xml_res, original, effective);
-        if (!patched) {
-            auto error = patched.error();
-            error.context = "input=" + src_path + " output=" + dst_path;
-            return tl::unexpected{std::move(error)};
-        }
-        return rewrite_bwf_replacing_axml(src_path, dst_path, *patched);
-
-    } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error,
-                          std::string("写回 ADM 文件失败：") + e.what(),
-                          "input=" + src_path + " output=" + dst_path);
-    } catch (...) {
-        return make_error(ErrorCode::io_error, "写回 ADM 文件时发生未知异常", "input=" + src_path);
-    }
 }
 
 } // namespace mradm::io
