@@ -346,6 +346,50 @@ void atomic_renderer_errors(Stats& pcm) {
     done(subject->render(recover, x));
     require(diagnostics.size() == before_warning + 1, "failed frame consumed warn_once state");
 }
+void overlapping_renderer_pcm(Stats& pcm) {
+    RendererConfig config;
+    config.output_layout = "0+2+0";
+    const std::array elements{descriptor(7, ElementRole::direct_speaker, "M+030")};
+    auto subject = take(create_live_vbap_renderer(config, {}));
+    auto control = take(create_live_vbap_renderer(config, {}));
+    done(subject->configure_generation(0, elements));
+    done(control->configure_generation(0, elements));
+    auto seed = frame(0, 3, elements);
+    seed.updates.push_back(update(7, 1, state_linear_gain, state(0.1F), 30));
+    std::vector<float> actual(6);
+    auto expected = actual;
+    done(subject->render(seed, actual));
+    done(control->render(seed, expected));
+    for (const std::size_t offset : {0U, 1U}) {
+        auto invalid = frame(0, 3, elements);
+        invalid.pcm.front().samples.resize(actual.size() + offset, 0.25F);
+        invalid.updates.push_back(update(7, 0, state_linear_gain, state(0.9F), 8));
+        const auto original = invalid.pcm.front().samples;
+        const auto result =
+            subject->render(invalid, std::span{invalid.pcm.front().samples}.subspan(offset, actual.size()));
+        require(!result && result.error().code == ErrorCode::invalid_argument, "overlapping renderer PCM was accepted");
+        require(result.error().message == "Invalid Live VBAP FFI arguments" &&
+                    result.error().context == "Live VBAP DSP",
+                "overlapping renderer PCM error differs from main dd3f82b6");
+        require(invalid.pcm.front().samples == original, "rejected overlap changed input/output PCM");
+        // The rejected call must neither apply its update nor advance the pending ramp.
+        const auto next = frame(0, 3, elements);
+        done(subject->render(next, actual));
+        done(control->render(next, expected));
+        compare_vectors(actual, expected, pcm);
+    }
+    // Silent planes are not borrowed, and a zero-frame call has no writable PCM.
+    auto silent = frame(0, 3, elements);
+    silent.pcm.front().has_signal = false;
+    silent.pcm.front().samples.resize(actual.size(), 17.0F);
+    done(subject->render(silent, silent.pcm.front().samples));
+    require(std::ranges::all_of(silent.pcm.front().samples, [](float v) { return v == 0.0F; }),
+            "silent plane overlap was not ignored");
+    auto empty = frame(0, 0, elements);
+    empty.pcm.front().samples.assign(1, 17.0F);
+    done(subject->render(empty, std::span{empty.pcm.front().samples}.first(0)));
+    require(empty.pcm.front().samples.front() == 17.0F, "zero-frame render wrote PCM");
+}
 void print_stats(std::ostream& out, const Stats& s) {
     out << R"({"values":)" << s.values << R"(,"differing_values":)" << s.differing << R"(,"max_absolute_error":)"
         << s.max_error << '}';
@@ -360,6 +404,7 @@ int main(int argc, char** argv) {
         numeric_targets(numerical, states, counters);
         renderer_reference(renderer);
         atomic_renderer_errors(renderer);
+        overlapping_renderer_pcm(renderer);
         if (argc > 1) {
             std::ofstream out(argv[1]);
             require(out.good(), "cannot open report");

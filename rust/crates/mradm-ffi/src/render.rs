@@ -1504,9 +1504,44 @@ pub unsafe extern "C" fn mradm_render_live_vbap_render(
         };
         *list = ptr::null();
         *count = 0;
-        let h = unsafe { live_vbap(handle)? };
+        // Retain the mixer boundary's rejection of overlapping PCM. Validate the raw
+        // ranges before borrowing the handle, samples or mutable output.
+        let invalid_buffers = |_| Error {
+            code: 1,
+            message: b"Invalid Live VBAP FFI arguments".to_vec(),
+            context: b"Live VBAP DSP".to_vec(),
+        };
+        if handle.is_null() {
+            return Err(bad("无效 Live VBAP 句柄"));
+        }
+        if frame.is_null() {
+            return Err(bad("无效 Live VBAP 参数"));
+        }
+        crate::checked::separate(handle, 1, frame, 1).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, output, output_len).map_err(invalid_buffers)?;
+        crate::checked::separate(frame, 1, output, output_len).map_err(invalid_buffers)?;
         let f = unsafe { frame.as_ref() }.ok_or_else(|| bad("无效 Live VBAP 参数"))?;
-        let planes = unsafe { input(f.planes, f.planes_len)? }
+        crate::checked::separate(handle, 1, f.planes, f.planes_len).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, f.initial, f.initial_len).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, f.updates, f.updates_len).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, f.trace.data, f.trace.len).map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.planes, f.planes_len)
+            .map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.initial, f.initial_len)
+            .map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.updates, f.updates_len)
+            .map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.trace.data, f.trace.len)
+            .map_err(invalid_buffers)?;
+        let records = unsafe { input(f.planes, f.planes_len)? };
+        for p in records.iter().filter(|p| p.has_signal != 0) {
+            crate::checked::separate(handle, 1, p.samples, p.samples_len)
+                .map_err(invalid_buffers)?;
+            crate::checked::separate(output, output_len, p.samples, p.samples_len)
+                .map_err(invalid_buffers)?;
+        }
+        let h = unsafe { live_vbap(handle)? };
+        let planes = records
             .iter()
             .map(|p| {
                 Ok(live_vbap::Plane {
