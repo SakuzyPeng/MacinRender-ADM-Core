@@ -88,8 +88,8 @@ struct RenderPlan {
     std::string output_path;
     std::string output_layout;
     AdmScene scene; // populated by RenderService; backends must not re-parse ADM
-    // The policy-applied Rust render scene that `scene` was built from (PCM consistency 4.4). Null
-    // when the caller supplied a pre-imported scene (preview and monitor sessions).
+    // The policy-applied Rust render scene that `scene` was built from (PCM consistency 4.4); the
+    // Rust loudspeaker backends read only this (4.5).
     std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
     std::optional<std::filesystem::path> sofa_path; // binaural renderer only; empty = built-in KEMAR
     // Default gain-interpolation ramp in milliseconds (from RenderOptions).
@@ -134,6 +134,12 @@ struct RenderPlan {
     std::function<void(std::string)> renderer_semantics_sink{};
     RoomConfig room{};
     ScreenConfig screens{};
+};
+
+// A policy-applied scene with its Rust render scene, imported once for many renders.
+struct PreparedScene {
+    AdmScene scene;
+    std::shared_ptr<const detail::RenderSceneHandle> handle;
 };
 
 // Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,
@@ -406,14 +412,14 @@ class RenderService {
     [[nodiscard]] RenderResult render(const RenderRequest& request,
                                       ProgressSink& progress,
                                       LogSink& logs,
-                                      const AdmScene* preimported_scene = nullptr,
+                                      const PreparedScene* preimported_scene = nullptr,
                                       std::shared_ptr<IPreparedRender>* prepared_cache = nullptr) const;
 
     // Import the ADM scene and apply the semantic policy from `options` (in-memory
     // JSON preferred over file path), returning the policy-applied scene. Used by
     // PreviewSession to do the expensive import + policy once, then reuse the scene
     // across many window renders. Returns the import / policy error on failure.
-    [[nodiscard]] Result<AdmScene>
+    [[nodiscard]] Result<PreparedScene>
     prepare_preview_scene(const std::filesystem::path& input_path, const RenderOptions& options, LogSink& logs) const;
 
     // Quickly import the ADM scene and return file-level metadata without rendering.
@@ -515,14 +521,14 @@ class PreviewSession {
                                              ProgressSink& progress,
                                              LogSink& logs) const;
 
-    [[nodiscard]] const AdmScene& scene() const noexcept { return scene_; }
+    [[nodiscard]] const AdmScene& scene() const noexcept { return scene_.scene; }
 
   private:
-    PreviewSession(std::filesystem::path input, RenderOptions options, AdmScene scene);
+    PreviewSession(std::filesystem::path input, RenderOptions options, PreparedScene scene);
 
     std::filesystem::path input_;
     RenderOptions options_;
-    AdmScene scene_;
+    PreparedScene scene_;
     RenderService service_;
     // Backend prepared state (gain matrices / HRTF), built lazily on the first
     // render_window and reused for the rest. mutable: render_window is logically const

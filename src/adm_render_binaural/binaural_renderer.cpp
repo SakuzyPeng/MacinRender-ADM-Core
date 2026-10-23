@@ -1275,6 +1275,7 @@ class BinauralStream final : public IRenderStream {
         // sample-domain envelope per key, so every spatial component of an object follows the same
         // de-zippered trajectory (including per-channel DirectSpeakers overrides).
         live_overrides_ = overrides;
+        live_override_view_ = live_overrides_;
         update_live_gain_targets();
 
         // Topology changes need a new source graph and fresh convolution state. Queue the newest
@@ -1389,7 +1390,7 @@ class BinauralStream final : public IRenderStream {
     void update_live_gain_targets() {
         for (auto& slot : live_gain_slots_) {
             const float target =
-                render_common::resolve_live_channel_gain(live_overrides_, slot.object(), slot.speaker_label())
+                render_common::resolve_live_channel_gain(live_override_view_, slot.object(), slot.speaker_label())
                     .value_or(1.0F);
             slot.gain_ramp().set_target(target);
         }
@@ -1472,7 +1473,7 @@ class BinauralStream final : public IRenderStream {
         head_rotation_.update(listener_orientation_);
         ola_pool_.parallel_for(sources.size(), [&](std::size_t si) {
             const auto live_head_locked = render_common::resolve_live_head_locked(
-                live_overrides_, sources[si].object_id, sources[si].speaker_label_key);
+                live_override_view_, sources[si].object_id, sources[si].speaker_label_key);
             const HeadRotation* head = head_active ? &head_rotation_ : nullptr;
             render_source_ola_block(sources[si],
                                     *prepared_.bs,
@@ -1557,6 +1558,7 @@ class BinauralStream final : public IRenderStream {
     TrackWorkerPool ola_pool_;
     std::vector<float> in_block_;
     LiveOverrides live_overrides_; // latest snapshot; gain targets are projected into live_gain_slots_
+    render_common::LiveOverrideView live_override_view_{live_overrides_}; // borrows the owned snapshot's labels
     std::unordered_map<std::string, std::size_t> gain_slot_by_key_;
     std::vector<LiveGainSlot> live_gain_slots_;
     std::vector<std::size_t> source_gain_slots_; // sources_ index → live_gain_slots_ index

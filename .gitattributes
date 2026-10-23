@@ -28,3 +28,4 @@ resources/rooms/**/*.u32 filter=lfs diff=lfs merge=lfs -text
 
 # The synthetic room pack of the consistency matrix is pinned byte for byte (PCM consistency 4.2).
 /tests/fixtures/room/** -text
+/rust/crates/mradm-render/tests/routing-v1/** -text

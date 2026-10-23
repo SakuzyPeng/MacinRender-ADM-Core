@@ -419,7 +419,7 @@ class SceneNumericChecks {
         }
     }
     void independent() {
-        compare(render_common::canonical_vector_length(3, 4, 0), 5, "3-4-5", true);
+        compare(dsp::scene_math<3, 1>(2U, {3, 4, 0})[0], 5, "3-4-5", true);
         check(wrap_azimuth(-180) == 180 && wrap_azimuth(540) == 180, "azimuth seam");
         const std::array pose{0.0F, 0.0F, 0.0F};
         std::array<float, 7> result{};
