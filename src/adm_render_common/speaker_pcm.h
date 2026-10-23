@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -9,9 +10,12 @@
 #include <string_view>
 #include <vector>
 
+#include "adm/direct_speakers_matrix.h"
+#include "adm/live_override.h"
 #include "adm/render.h"
 
 #include "../adm_dsp/pcm_mix.h"
+#include "routing_ffi.h"
 
 namespace mradm::render_common {
 
@@ -39,9 +43,17 @@ struct ChannelBinding {
     std::string speaker_label_key;
 };
 
+// A Rust PcmMixer plan of `tracks` input channels, prepared in C++ or by a Rust backend.
+struct SpeakerMix {
+    const void* plan{nullptr};
+    std::size_t tracks{0};
+};
+
 struct PreparedPcmMix {
     std::vector<ChannelBinding> channels;
     dsp::PcmMixPlan plan;
+    // NOLINTNEXTLINE(google-explicit-constructor): every prepared mix is a driver plan.
+    operator SpeakerMix() const { return {plan.get(), channels.size()}; }
     [[nodiscard]] auto begin() const { return channels.begin(); }
     [[nodiscard]] auto end() const { return channels.end(); }
     [[nodiscard]] auto size() const { return channels.size(); }
@@ -69,8 +81,39 @@ struct AccumulateContext {
 using SpeakerBlockProcessor =
     std::function<Result<void>(std::span<const float> input, std::span<float> output, bool end_of_input)>;
 
+// A Rust driver or stream error with the locator its kind names (routing_ffi.h).
+class DriverError {
+  public:
+    uint32_t* location() noexcept { return &location_; }
+    uint8_t* message() noexcept { return message_.data(); }
+    std::size_t* message_len() noexcept {
+        message_len_ = message_.size();
+        return &message_len_;
+    }
+    [[nodiscard]] tl::unexpected<Error> error(int32_t code, const std::string& input_path) const;
+
+  private:
+    std::array<uint8_t, 512> message_{};
+    std::size_t message_len_{0};
+    uint32_t location_{0};
+};
+
+[[nodiscard]] inline MradmAdmText text(std::string_view value) noexcept {
+    return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
+}
+
+[[nodiscard]] std::vector<MradmRenderOverride> override_records(const LiveOverrides& overrides);
+
+// A DirectSpeakers matrix as Rust routing records, borrowing the matrix's labels.
+struct MatrixRecords {
+    explicit MatrixRecords(const DirectSpeakersMatrix& matrix);
+    std::vector<std::vector<MradmRenderMatrixTarget>> targets;
+    std::vector<MradmRenderMatrixRoute> routes;
+    std::size_t label_bytes{0};
+};
+
 [[nodiscard]] Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                                       const PreparedPcmMix& gain_matrix,
+                                                       SpeakerMix gain_matrix,
                                                        uint16_t num_out_ch,
                                                        std::string_view backend,
                                                        ProgressSink& progress,

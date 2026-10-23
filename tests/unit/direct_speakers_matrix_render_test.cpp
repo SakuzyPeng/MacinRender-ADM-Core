@@ -22,7 +22,6 @@
 #include "adm/direct_speakers_matrix.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
-#include "adm/render_vbap.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
 #endif
@@ -429,7 +428,7 @@ int main() {
 
     bool ok = verify_backend(
         "EAR", mradm::create_ear_renderer(), input_path, input_samples, dynamic_matrix, lfe_matrix, 255U);
-    ok &= verify_backend("SAF", mradm::create_vbap_renderer(), input_path, input_samples, dynamic_matrix, lfe_matrix);
+    // VBAP reads only the Rust render scene (PCM consistency 4.5); see mradm-render tests/vbap.rs.
 #ifdef __APPLE__
     ok &=
         verify_backend("Apple", mradm::create_apple_renderer(), input_path, input_samples, dynamic_matrix, lfe_matrix);

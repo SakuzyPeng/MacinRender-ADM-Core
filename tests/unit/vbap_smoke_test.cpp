@@ -25,6 +25,7 @@
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
+#include "scene_import_internal.h"
 
 #ifdef _WIN32
 #include <process.h>
@@ -35,6 +36,17 @@
 #include "test_portable.h"
 
 namespace {
+
+// The Rust render scene RenderService hands the backends; VBAP reads only it (PCM consistency 4.5).
+bool use_imported_scene(mradm::RenderPlan& plan, const std::filesystem::path& path) {
+    auto scene = mradm::io::RenderScene::import(path.string(), nullptr);
+    if (!scene) {
+        return false;
+    }
+    plan.scene = scene->scene();
+    plan.scene_handle = scene->handle();
+    return true;
+}
 
 // getpid() 在 POSIX 来自 <unistd.h>，Windows 用 <process.h> 的 _getpid()。
 [[nodiscard]] int current_process_id() {
@@ -889,60 +901,22 @@ bool verify_direct_speakers_routing_modes() {
     }
     ok &= check((*alias)[6U] > 0.0, "SAF alias L routes to 22.2 M+030 (ch6)");
 
+    // A block without coordinates (front-centre fallback) is not importable; mradm-render's
+    // tests/vbap.rs builds one directly.
     {
-        auto [missing_doc, missing_uid] = make_direct_speakers_doc("NOT_A_BS2051_LABEL", 0.0F);
-        const auto input = write_input_fixture(missing_doc, missing_uid);
-        FileGuard input_guard{input};
-        auto scene = mradm::io::import_scene(input.string());
-        if (!scene || scene->objects.empty() || scene->objects.front().tracks.empty() ||
-            scene->objects.front().tracks.front().ds_blocks.empty()) {
-            return check(false, "SAF missing-position fixture imports");
-        }
-        scene->objects.front().tracks.front().ds_blocks.front().has_position = false;
-
-        const auto output = std::filesystem::temp_directory_path() / "mr_vbap_ds_missing_position.wav";
-        FileGuard output_guard{output};
-        mradm::RenderPlan plan;
-        plan.input_path = input.string();
-        plan.output_path = output.string();
-        plan.output_layout = "9+10+3";
-        plan.scene = *scene;
-        plan.speaker_geometry = mradm::SpeakerGeometry::apple;
-        plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
-        auto renderer = mradm::create_vbap_renderer();
-        CapturingLogSink missing_logs;
-        mradm::NullProgressSink progress;
-        auto prepared = renderer->prepare(plan, missing_logs);
-        if (!prepared || !renderer->render_window(**prepared, plan, progress, missing_logs)) {
-            return check(false, "SAF missing-position render succeeds");
-        }
-        const auto missing = read_channel_sums(output, 24U);
-        ok &= check(missing.size() == 24U && missing[2U] > 0.0,
-                    "SAF missing position falls back to front-centre M+000 (ch2)");
-        ok &= check(missing_logs.has_warning_containing("no nominal position"),
-                    "SAF missing DirectSpeakers position emits warning");
-        ok &= check(missing_logs.has_warning_containing("not in output layout"),
-                    "SAF missing DirectSpeakers label emits fallback warning");
-    }
-
-    {
-        auto [rear_doc, rear_uid] = make_direct_speakers_doc("M+135", 0.0F);
+        auto [rear_doc, rear_uid] = make_direct_speakers_doc("M+135", 0.0F, 0.0F, false);
         const auto input = write_input_fixture(rear_doc, rear_uid);
         FileGuard input_guard{input};
-        auto scene = mradm::io::import_scene(input.string());
-        if (!scene || scene->objects.empty() || scene->objects.front().tracks.empty() ||
-            scene->objects.front().tracks.front().ds_blocks.empty()) {
+        mradm::RenderPlan plan;
+        if (!use_imported_scene(plan, input) || plan.scene.objects.empty() ||
+            plan.scene.objects.front().tracks.empty() || plan.scene.objects.front().tracks.front().ds_blocks.empty()) {
             return check(false, "SAF rear-label fixture imports");
         }
-        scene->objects.front().tracks.front().ds_blocks.front().has_position = false;
-
         const auto output = std::filesystem::temp_directory_path() / "mr_vbap_ds_rear_label_fallback.wav";
         FileGuard output_guard{output};
-        mradm::RenderPlan plan;
         plan.input_path = input.string();
         plan.output_path = output.string();
         plan.output_layout = "0+5+0";
-        plan.scene = *scene;
         plan.speaker_geometry = mradm::SpeakerGeometry::apple;
         plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
         auto renderer = mradm::create_vbap_renderer();
@@ -2376,14 +2350,12 @@ bool verify_vbap_stream_matches_window() {
     const auto in_path = write_input_fixture(doc, uid_str, 48000U, 4096U);
     FileGuard in_guard{in_path};
 
-    auto scene = mradm::io::import_scene(in_path.string());
-    if (!check(scene.has_value(), "vbap stream: import scene")) {
+    mradm::RenderPlan plan;
+    if (!check(use_imported_scene(plan, in_path), "vbap stream: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
     plan.input_path = in_path.string();
     plan.output_layout = "0+5+0";
-    plan.scene = *scene;
 
     auto renderer = mradm::create_vbap_renderer();
     mradm::NullLogSink logs;
@@ -2458,16 +2430,13 @@ bool verify_vbap_stream_gain_override() {
     const auto in_path = write_input_fixture(doc, uid_str, 48000U, 4096U);
     FileGuard in_guard{in_path};
 
-    auto scene = mradm::io::import_scene(in_path.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "vbap override: import scene")) {
+    mradm::RenderPlan plan;
+    if (!check(use_imported_scene(plan, in_path) && !plan.scene.objects.empty(), "vbap override: import scene")) {
         return false;
     }
-    const std::string object_id = scene->objects.front().id;
-
-    mradm::RenderPlan plan;
+    const std::string object_id = plan.scene.objects.front().id;
     plan.input_path = in_path.string();
     plan.output_layout = "0+5+0";
-    plan.scene = *scene;
 
     auto renderer = mradm::create_vbap_renderer();
     mradm::NullLogSink logs;

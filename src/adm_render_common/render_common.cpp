@@ -2,112 +2,96 @@
 
 #include <algorithm>
 #include <array>
-#include <charconv>
+#include <iterator>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
-
 #include "scene_math.h"
-#include "stream_dsp.h"
+#include "speaker_pcm.h"
 
 namespace mradm::render_common {
 
 namespace {
 
-struct DsLabelAlias {
-    std::string_view canonical;
-    std::string_view bs2051;
+// The routing rules live in Rust mradm-render `routing` (PCM consistency 4.5); these wrappers
+// keep the C++ interface for the backends that have not moved yet and for the Apple island.
+[[nodiscard]] std::string string_of(MradmAdmText value) {
+    return {reinterpret_cast<const char*>(value.data), value.len};
+}
+
+[[nodiscard]] std::vector<MradmAdmText> texts(const std::vector<std::string>& labels) {
+    std::vector<MradmAdmText> result;
+    result.reserve(labels.size());
+    std::ranges::transform(labels, std::back_inserter(result), [](const std::string& l) { return text(l); });
+    return result;
+}
+
+[[nodiscard]] std::vector<MradmRenderTarget> routing_targets(std::span<const DirectSpeakerRoutingTarget> targets) {
+    std::vector<MradmRenderTarget> result;
+    result.reserve(targets.size());
+    std::ranges::transform(targets, std::back_inserter(result), [](const DirectSpeakerRoutingTarget& t) {
+        return MradmRenderTarget{text(t.label), t.is_lfe ? 1U : 0U};
+    });
+    return result;
+}
+
+[[nodiscard]] std::string label_rule(uint32_t kind, std::string_view raw) {
+    std::string out(raw.size() + 8, '\0');
+    std::size_t len = out.size();
+    if (mradm_render_label(kind,
+                           reinterpret_cast<const uint8_t*>(raw.data()),
+                           raw.size(),
+                           reinterpret_cast<uint8_t*>(out.data()),
+                           &len) != 0) {
+        throw std::logic_error("speaker label rule failed");
+    }
+    out.resize(len);
+    return out;
+}
+
+// Rust error text: fixed wording plus input bytes, so `extra` (the inputs' size) always fits.
+class ErrorText {
+  public:
+    explicit ErrorText(std::size_t extra) : message_(extra + 512), context_(extra + 512) {}
+    uint8_t* message() noexcept { return message_.data(); }
+    uint8_t* context() noexcept { return context_.data(); }
+    // The capacity going in, the length written coming out.
+    std::size_t* message_len() noexcept { return &(message_len_ = message_.size()); }
+    std::size_t* context_len() noexcept { return &(context_len_ = context_.size()); }
+    [[nodiscard]] tl::unexpected<Error> error(int32_t code) const {
+        return make_error(static_cast<ErrorCode>(code),
+                          std::string{reinterpret_cast<const char*>(message_.data()), message_len_},
+                          std::string{reinterpret_cast<const char*>(context_.data()), context_len_});
+    }
+
+  private:
+    std::vector<uint8_t> message_;
+    std::vector<uint8_t> context_;
+    std::size_t message_len_{0};
+    std::size_t context_len_{0};
 };
 
-// Non-standard RoomCentric and DAW shorthand labels found in ADM BWF exports.
-// Keep this table shared so SAF and Apple make exactly the same routing decision.
-// clang-format off
-constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
-    {"RCL",   "M+030"}, {"RCR",   "M-030"}, {"RCC",   "M+000"},
-    {"RCLFE", "LFE1"},  {"RCLSS", "M+090"}, {"RCRSS", "M-090"},
-    {"RCLRS", "M+135"}, {"RCRRS", "M-135"},
-    {"RCLTS", "U+090"}, {"RCRTS", "U-090"},
-    {"L",     "M+030"}, {"R",     "M-030"}, {"C",     "M+000"},
-    {"LFE",   "LFE1"},  {"LFEL",  "LFE1"},  {"LFER",  "LFE2"},
-    {"LS",    "M+090"}, {"RS",    "M-090"},
-    {"LSS",   "M+090"}, {"RSS",   "M-090"},
-    {"LRS",   "M+135"}, {"RRS",   "M-135"},
-    {"LB",    "M+135"}, {"RB",    "M-135"},
-    {"LW",    "M+060"}, {"RW",    "M-060"},
-    {"CS",    "M+180"},
-    {"VHL",   "U+045"}, {"VHR",   "U-045"}, {"VHC",   "U+000"},
-    {"TSL",   "U+090"}, {"TSR",   "U-090"},
-    {"LTM",   "U+090"}, {"RTM",   "U-090"},
-}};
-// clang-format on
-
-[[nodiscard]] std::optional<DirectSpeakerPosition> bs2051_label_position(std::string_view label) noexcept {
-    if (label.size() != 5U || (label[1] != '+' && label[1] != '-')) {
-        return std::nullopt;
+[[nodiscard]] std::size_t total_size(const std::vector<std::string>& labels) {
+    std::size_t size = 0;
+    for (const auto& label : labels) {
+        size += label.size() + 1;
     }
-
-    int magnitude = 0;
-    const auto* const begin = label.data() + 2;
-    const auto* const end = label.data() + label.size();
-    const auto parsed = std::from_chars(begin, end, magnitude);
-    if (parsed.ec != std::errc{} || parsed.ptr != end || magnitude > 180) {
-        return std::nullopt;
-    }
-    const auto azimuth = static_cast<float>(label[1] == '+' ? magnitude : -magnitude);
-    switch (label[0]) {
-    case 'M':
-        return DirectSpeakerPosition{azimuth, 0.0F};
-    case 'U':
-        return DirectSpeakerPosition{azimuth, 30.0F};
-    case 'B':
-        return DirectSpeakerPosition{azimuth, -30.0F};
-    case 'T':
-        return magnitude == 0 ? std::optional<DirectSpeakerPosition>{{0.0F, 90.0F}} : std::nullopt;
-    default:
-        return std::nullopt;
-    }
-}
-
-// Speaker labels are ASCII protocol text: classify and fold case without the C locale, whose
-// tables may treat bytes of UTF-8 sequences as letters (PCM consistency 3.5).
-[[nodiscard]] constexpr bool ascii_alnum(char c) noexcept {
-    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-}
-[[nodiscard]] constexpr char ascii_upper(char c) noexcept {
-    return c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
+    return size;
 }
 
 } // namespace
 
 std::string normalise_speaker_label_key(std::string_view raw) {
-    std::string key;
-    key.reserve(raw.size());
-    for (const char c : raw) {
-        if (ascii_alnum(c)) {
-            key.push_back(ascii_upper(c));
-        }
-    }
-    return key;
+    return label_rule(0U, raw);
 }
 
 std::string canonicalise_speaker_label(std::string_view raw) {
-    std::string key;
-    key.reserve(raw.size());
-    for (const char c : raw) {
-        if (ascii_alnum(c) || c == '+' || c == '-') {
-            key.push_back(ascii_upper(c));
-        }
-    }
-    return key;
+    return label_rule(1U, raw);
 }
 
 std::string canonical_direct_speaker_label(std::string_view raw) {
-    const std::string key = canonicalise_speaker_label(raw);
-    const auto alias = // NOLINT(readability-qualified-auto): pointer on libc++, wrapper iterator on MSVC.
-        std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
-    return alias != k_ds_aliases.end() ? std::string{alias->bs2051} : key;
+    return label_rule(2U, raw);
 }
 
 std::string_view direct_speakers_routing_mode_name(DirectSpeakersRoutingMode mode) noexcept {
@@ -126,116 +110,49 @@ std::string_view direct_speakers_routing_mode_name(DirectSpeakersRoutingMode mod
 
 std::optional<std::size_t> direct_speaker_index_for_labels(std::span<const DirectSpeakerRoutingTarget> targets,
                                                            const std::vector<std::string>& labels) {
-    for (const auto& label : labels) {
-        const auto target = std::ranges::find_if(
-            targets, [&](const auto& speaker) { return !speaker.label.empty() && speaker.label == label; });
-        if (target != targets.end()) {
-            return static_cast<std::size_t>(std::distance(targets.begin(), target));
-        }
+    const auto records = routing_targets(targets);
+    const auto label_texts = texts(labels);
+    std::size_t index = 0;
+    if (mradm_render_target_index(records.data(), records.size(), label_texts.data(), label_texts.size(), &index) ==
+        0U) {
+        return std::nullopt;
     }
-
-    for (const auto& label : labels) {
-        const std::string key = canonicalise_speaker_label(label);
-        // libc++ exposes this iterator as a pointer, while MSVC uses a wrapper type.
-        const auto alias = // NOLINT(readability-qualified-auto)
-            std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
-        if (alias == k_ds_aliases.end()) {
-            continue;
-        }
-        const auto target = std::ranges::find_if(
-            targets, [&](const auto& speaker) { return !speaker.label.empty() && speaker.label == alias->bs2051; });
-        if (target != targets.end()) {
-            return static_cast<std::size_t>(std::distance(targets.begin(), target));
-        }
-    }
-    return std::nullopt;
+    return index;
 }
 
 Result<ResolvedDirectSpeakersMatrix>
 resolve_direct_speakers_matrix_targets(const DirectSpeakersMatrix& matrix,
                                        std::span<const DirectSpeakerRoutingTarget> targets,
                                        std::string_view layout_id) {
+    const MatrixRecords routes(matrix);
+    const auto records = routing_targets(targets);
+    MradmRenderMatrix* raw = nullptr;
+    MradmRenderMatrixView view{};
+    ErrorText error(layout_id.size() + routes.label_bytes);
+    const auto code = mradm_render_matrix_resolve(routes.routes.data(),
+                                                  routes.routes.size(),
+                                                  records.data(),
+                                                  records.size(),
+                                                  text(layout_id),
+                                                  &raw,
+                                                  &view,
+                                                  error.message(),
+                                                  error.message_len(),
+                                                  error.context(),
+                                                  error.context_len());
+    if (code != 0) {
+        return error.error(code);
+    }
     ResolvedDirectSpeakersMatrix resolved;
-    resolved.routes.reserve(matrix.routes.size());
-
-    for (const auto& route : matrix.routes) {
-        ResolvedDirectSpeakersMatrixRoute output_route;
-        output_route.source_label = route.source_label;
-        output_route.source_key = canonical_direct_speaker_label(route.source_label);
-        output_route.mute = route.mute;
-        if (output_route.source_key.empty()) {
-            return make_error(ErrorCode::invalid_argument,
-                              "DirectSpeakers matrix source_label resolves to an empty label",
-                              "source_label=" + route.source_label);
+    resolved.handle.reset(raw, &mradm_render_matrix_destroy);
+    for (const auto& route : std::span{view.routes, view.routes_len}) {
+        auto& output = resolved.routes.emplace_back();
+        output.source_label = string_of(route.source_label);
+        output.source_key = string_of(route.source_key);
+        output.mute = route.mute != 0U;
+        for (const auto& target : std::span{route.targets, route.targets_len}) {
+            output.targets.push_back({target.output, target.gain});
         }
-        if (is_lfe_label(output_route.source_key)) {
-            return make_error(
-                ErrorCode::invalid_argument,
-                fmt::format("DirectSpeakers matrix source '{}' is LFE; LFE uses dedicated routing", route.source_label),
-                "layout=" + std::string{layout_id});
-        }
-        if (std::ranges::any_of(resolved.routes,
-                                [&](const auto& existing) { return existing.source_key == output_route.source_key; })) {
-            return make_error(
-                ErrorCode::invalid_argument,
-                fmt::format("duplicate DirectSpeakers matrix source '{}' after alias resolution", route.source_label),
-                "layout=" + std::string{layout_id});
-        }
-
-        output_route.targets.reserve(route.targets.size());
-        for (const auto& target : route.targets) {
-            const std::string target_key = canonical_direct_speaker_label(target.label);
-            if (target_key.empty()) {
-                return make_error(ErrorCode::invalid_argument,
-                                  "DirectSpeakers matrix target label resolves to an empty label",
-                                  "source_label=" + route.source_label);
-            }
-            if (is_lfe_label(target_key)) {
-                return make_error(
-                    ErrorCode::invalid_argument,
-                    fmt::format("DirectSpeakers matrix target '{}' is LFE; LFE uses dedicated routing", target.label),
-                    "source_label=" + route.source_label);
-            }
-
-            std::optional<std::size_t> output_index;
-            for (std::size_t channel = 0; channel < targets.size(); ++channel) {
-                if (targets[channel].label.empty() ||
-                    canonical_direct_speaker_label(targets[channel].label) != target_key) {
-                    continue;
-                }
-                if (output_index.has_value()) {
-                    return make_error(
-                        ErrorCode::invalid_argument,
-                        fmt::format("DirectSpeakers matrix target '{}' is ambiguous in output layout '{}'",
-                                    target.label,
-                                    layout_id),
-                        "source_label=" + route.source_label);
-                }
-                output_index = channel;
-            }
-            if (!output_index.has_value()) {
-                return make_error(ErrorCode::invalid_argument,
-                                  fmt::format("DirectSpeakers matrix target '{}' is not present in output layout '{}'",
-                                              target.label,
-                                              layout_id),
-                                  "source_label=" + route.source_label);
-            }
-            if (targets[*output_index].is_lfe) {
-                return make_error(
-                    ErrorCode::invalid_argument,
-                    fmt::format("DirectSpeakers matrix target '{}' is LFE; LFE uses dedicated routing", target.label),
-                    "source_label=" + route.source_label);
-            }
-            if (std::ranges::any_of(output_route.targets,
-                                    [&](const auto& existing) { return existing.output_channel == *output_index; })) {
-                return make_error(
-                    ErrorCode::invalid_argument,
-                    fmt::format("duplicate DirectSpeakers matrix target '{}' after alias resolution", target.label),
-                    "source_label=" + route.source_label);
-            }
-            output_route.targets.push_back({*output_index, target.gain});
-        }
-        resolved.routes.push_back(std::move(output_route));
     }
     return resolved;
 }
@@ -243,42 +160,31 @@ resolve_direct_speakers_matrix_targets(const DirectSpeakersMatrix& matrix,
 Result<const ResolvedDirectSpeakersMatrixRoute*>
 direct_speakers_matrix_route_for_block(const ResolvedDirectSpeakersMatrix& matrix,
                                        const SceneDirectSpeakersBlock& block) {
-    const ResolvedDirectSpeakersMatrixRoute* match = nullptr;
-    for (const auto& label : block.speaker_labels) {
-        const std::string key = canonical_direct_speaker_label(label);
-        const auto route = std::ranges::find(matrix.routes, key, &ResolvedDirectSpeakersMatrixRoute::source_key);
-        if (route == matrix.routes.end()) {
-            continue;
-        }
-        if (match != nullptr && match != &*route) {
-            return make_error(ErrorCode::invalid_argument,
-                              "DirectSpeakers block matches multiple matrix source rows",
-                              fmt::format("labels={}", fmt::join(block.speaker_labels, ",")));
-        }
-        match = &*route;
+    const auto label_texts = texts(block.speaker_labels);
+    std::size_t index = 0;
+    ErrorText error(total_size(block.speaker_labels));
+    const auto code = mradm_render_matrix_route(matrix.handle.get(),
+                                                label_texts.data(),
+                                                label_texts.size(),
+                                                &index,
+                                                error.message(),
+                                                error.message_len(),
+                                                error.context(),
+                                                error.context_len());
+    if (code != 0) {
+        return error.error(code);
     }
-    if (match == nullptr) {
-        const std::string labels = block.speaker_labels.empty()
-                                       ? std::string{"<missing>"}
-                                       : fmt::format("{}", fmt::join(block.speaker_labels, ","));
-        return make_error(ErrorCode::invalid_argument,
-                          fmt::format("DirectSpeakers block label '{}' is not covered by the routing matrix", labels));
-    }
-    return match;
+    return &matrix.routes.at(index);
 }
 
 std::optional<DirectSpeakerPosition> direct_speaker_position_for_labels(const std::vector<std::string>& labels) {
-    for (const auto& label : labels) {
-        const std::string key = canonicalise_speaker_label(label);
-        // libc++ exposes this iterator as a pointer, while MSVC uses a wrapper type.
-        const auto alias = // NOLINT(readability-qualified-auto)
-            std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
-        const std::string_view bs2051 = alias != k_ds_aliases.end() ? alias->bs2051 : std::string_view{key};
-        if (const auto position = bs2051_label_position(bs2051)) {
-            return position;
-        }
+    const auto label_texts = texts(labels);
+    DirectSpeakerPosition position;
+    if (mradm_render_label_position(label_texts.data(), label_texts.size(), &position.azimuth, &position.elevation) ==
+        0U) {
+        return std::nullopt;
     }
-    return std::nullopt;
+    return position;
 }
 
 DirectSpeakerPosition
@@ -292,51 +198,37 @@ direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink&
     return {};
 }
 
+namespace {
+
+// Bit 1: gain written; bit 2: head_locked written.
+uint32_t live_override(const LiveOverrides& overrides,
+                       std::string_view object_id,
+                       std::string_view key,
+                       float& gain,
+                       uint32_t& head_locked) {
+    const auto records = override_records(overrides);
+    return mradm_render_live_override(records.data(), records.size(), text(object_id), text(key), &gain, &head_locked);
+}
+
+} // namespace
+
 std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
                                                std::string_view object_id,
                                                std::string_view channel_label_key) {
-    const LiveObjectOverride* whole = nullptr;
-    const LiveObjectOverride* specific = nullptr;
-    for (const auto& ov : overrides.objects) {
-        if (ov.object_id != object_id) {
-            continue;
-        }
-        if (ov.speaker_label.empty()) {
-            whole = &ov; // whole-object override (legacy / Objects / bed-wide)
-        } else if (!channel_label_key.empty() && canonicalise_speaker_label(ov.speaker_label) == channel_label_key) {
-            specific = &ov; // per-channel override wins over the whole-object one
-        }
-    }
-    const LiveObjectOverride* pick = (specific != nullptr) ? specific : whole;
-    if (pick == nullptr) {
-        return std::nullopt;
-    }
-    if (pick->mute) {
-        return 0.0F;
-    }
-    return dsp::live_gain(pick->gain_db);
+    float gain = 0.0F;
+    uint32_t head_locked = 0U;
+    return (live_override(overrides, object_id, channel_label_key, gain, head_locked) & 1U) != 0U ? std::optional{gain}
+                                                                                                  : std::nullopt;
 }
 
 std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
                                              std::string_view object_id,
                                              std::string_view channel_label_key) {
-    const LiveObjectOverride* whole = nullptr;
-    const LiveObjectOverride* specific = nullptr;
-    for (const auto& ov : overrides.objects) {
-        if (ov.object_id != object_id) {
-            continue;
-        }
-        if (!ov.head_locked.has_value()) {
-            continue;
-        }
-        if (ov.speaker_label.empty()) {
-            whole = &ov;
-        } else if (!channel_label_key.empty() && canonicalise_speaker_label(ov.speaker_label) == channel_label_key) {
-            specific = &ov;
-        }
-    }
-    const LiveObjectOverride* pick = (specific != nullptr) ? specific : whole;
-    return pick != nullptr ? pick->head_locked : std::nullopt;
+    float gain = 0.0F;
+    uint32_t head_locked = 0U;
+    return (live_override(overrides, object_id, channel_label_key, gain, head_locked) & 2U) != 0U
+               ? std::optional{head_locked != 0U}
+               : std::nullopt;
 }
 
 LiveGainRamp::LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms) : bank_(1U, sample_rate, ramp_ms) {}
@@ -382,13 +274,7 @@ void InterleavedLiveGainSmoother::reset() noexcept {
 }
 
 bool is_lfe_label(std::string_view raw) noexcept {
-    const std::string key = normalise_speaker_label_key(raw);
-    return key == "LF" || key.find("LFE") != std::string::npos || key.find("SUB") != std::string::npos ||
-           key.find("LOWFREQUENCY") != std::string::npos;
-}
-
-bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept {
-    return std::ranges::any_of(labels, [](const auto& label) { return is_lfe_label(label); });
+    return mradm_render_is_lfe(reinterpret_cast<const uint8_t*>(raw.data()), raw.size()) != 0U;
 }
 
 bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcept {
@@ -396,78 +282,63 @@ bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcep
 }
 
 LfeTarget direct_speakers_lfe_target(const SceneDirectSpeakersBlock& block) noexcept {
-    // Prefer an explicit second-LFE alias even if the metadata also carries a
-    // generic LFE label from another naming layer.
-    for (const auto& label : block.speaker_labels) {
-        const std::string key = normalise_speaker_label_key(label);
-        if (key == "LFE2" || key == "LFER") {
-            return LfeTarget::lfe2;
-        }
+    std::vector<MradmAdmText> labels;
+    try {
+        labels = texts(block.speaker_labels);
+    } catch (...) {
+        std::terminate();
     }
-    if (any_label_is_lfe(block.speaker_labels)) {
-        return LfeTarget::lfe1;
-    }
-    return block.low_pass_hz.has_value() ? LfeTarget::lfe1 : LfeTarget::none;
+    return static_cast<LfeTarget>(
+        mradm_render_lfe_target(labels.data(), labels.size(), block.low_pass_hz.has_value() ? 1U : 0U));
 }
 
+namespace {
+
+[[nodiscard]] MradmRenderLfeRouting lfe_record(const LfeRoutingPlan& plan) noexcept {
+    MradmRenderLfeRouting record{};
+    record.applies_to_22_2 = plan.applies_to_22_2 ? 1U : 0U;
+    record.split_power = plan.mode == LfeRoutingMode::split_power ? 1U : 0U;
+    record.has_lfe1 = plan.has_lfe1 ? 1U : 0U;
+    record.has_lfe2 = plan.has_lfe2 ? 1U : 0U;
+    return record;
+}
+
+} // namespace
+
 float LfeRoutingPlan::gain(LfeTarget input, LfeTarget output) const noexcept {
-    if (!applies_to_22_2 || input == LfeTarget::none || output == LfeTarget::none) {
-        return 0.0F;
-    }
-    if (mode == LfeRoutingMode::split_power) {
-        return k_lfe_split_power_gain;
-    }
-    return input == output ? 1.0F : 0.0F;
+    const auto record = lfe_record(*this);
+    return mradm_render_lfe_gain(&record, static_cast<uint32_t>(input), static_cast<uint32_t>(output));
 }
 
 Result<LfeRoutingPlan> resolve_lfe_routing(const RenderPlan& plan, LogSink& logs, std::string_view log_module) {
-    LfeRoutingPlan routing;
-    routing.mode = plan.lfe_routing_mode;
-    routing.applies_to_22_2 = plan.output_layout == "9+10+3";
-
-    if (!routing.applies_to_22_2) {
-        if (routing.mode == LfeRoutingMode::split_power) {
-            logs.log(LogLevel::warning,
-                     log_module,
-                     "LFE routing mode 'split-power' only applies to 22.2 ('9+10+3'); using existing LFE routing");
-        }
-        return routing;
-    }
-
+    std::vector<uint32_t> targets;
     for (const auto& object : plan.scene.objects) {
         for (const auto& track : object.tracks) {
-            for (const auto* resolved_block : last_blocks_at_each_start(track.ds_blocks)) {
-                const auto& block = *resolved_block;
-                switch (direct_speakers_lfe_target(block)) {
-                case LfeTarget::lfe1:
-                    routing.has_lfe1 = true;
-                    break;
-                case LfeTarget::lfe2:
-                    routing.has_lfe2 = true;
-                    break;
-                case LfeTarget::none:
-                    break;
-                }
+            for (const auto* block : last_blocks_at_each_start(track.ds_blocks)) {
+                targets.push_back(static_cast<uint32_t>(direct_speakers_lfe_target(*block)));
             }
         }
     }
-
-    const std::string_view mode_name =
-        routing.mode == LfeRoutingMode::direct ? std::string_view{"direct"} : std::string_view{"split-power"};
-    logs.log(LogLevel::info, log_module, std::string{"22.2 LFE routing mode: "} + std::string{mode_name});
-
-    if (routing.mode == LfeRoutingMode::split_power) {
-        if (routing.has_lfe1 && routing.has_lfe2) {
-            return make_error(ErrorCode::invalid_argument,
-                              "22.2 split-power requires a single semantic LFE channel; scene contains both LFE1 "
-                              "and LFE2");
-        }
-        if (!routing.has_lfe1 && !routing.has_lfe2) {
-            logs.log(LogLevel::warning,
-                     log_module,
-                     "22.2 split-power requested but no semantic LFE channel was found; LFE outputs remain silent");
-        }
+    MradmRenderLfeRouting record{};
+    ErrorText error(0);
+    const auto code = mradm_render_lfe_routing(plan.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U,
+                                               text(plan.output_layout),
+                                               targets.data(),
+                                               targets.size(),
+                                               &record,
+                                               error.message(),
+                                               error.message_len());
+    for (const auto& line : std::span{record.logs}.first(record.logs_len)) {
+        logs.log(static_cast<LogLevel>(line.level), log_module, string_of(line.message));
     }
+    if (code != 0) {
+        return error.error(code);
+    }
+    LfeRoutingPlan routing;
+    routing.mode = plan.lfe_routing_mode;
+    routing.applies_to_22_2 = record.applies_to_22_2 != 0U;
+    routing.has_lfe1 = record.has_lfe1 != 0U;
+    routing.has_lfe2 = record.has_lfe2 != 0U;
     return routing;
 }
 
@@ -538,15 +409,6 @@ PreparedObjectBlock prepare_object_block(const SceneObjectBlock& raw_block,
         raw_block.jump_position,
         raw_block.interp_length_samples,
     };
-}
-
-float canonical_vector_length(float x, float y, float z) noexcept {
-    return dsp::scene_math<3, 1>(2U, {x, y, z})[0];
-}
-
-ExtentRadii extent_disk_radii(float width, float height, float depth, float distance) {
-    const auto result = dsp::scene_math<4, 2>(5U, {width, height, depth, distance});
-    return {result[0], result[1]};
 }
 
 std::vector<ExtentDirection>
