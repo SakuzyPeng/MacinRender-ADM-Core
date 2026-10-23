@@ -103,12 +103,15 @@ void legacy_compatibility(std::size_t channels, std::size_t capacity, std::size_
     auto reference = direct;
     actual.process(direct, diffuse, tail);
     fresh.process(reference, diffuse, tail);
+    // Rust mutates both buffers through std::span; cppcheck does not track those writes.
+    // cppcheck-suppress knownConditionTrueFalse
     require(direct == reference, "reset differs from fresh state");
     auto moved = std::move(actual);
     std::ranges::fill(direct, 0.25F);
     reference = direct;
     moved.process(direct, diffuse, tail);
     fresh.process(reference, diffuse, tail);
+    // cppcheck-suppress knownConditionTrueFalse
     require(direct == reference, "moving a post processor lost history");
 }
 
