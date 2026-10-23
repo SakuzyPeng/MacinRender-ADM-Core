@@ -481,6 +481,7 @@ impl Renderer {
     /// Renders `frame.duration` interleaved frames into the start of `output`. On failure neither
     /// the output nor any state changes, and no warning is published.
     pub fn render(&mut self, frame: &Frame, output: &mut [f32]) -> Result<(), Error> {
+        self.diagnostics.clear();
         let channels = self.layout.speakers.len();
         let duration = frame.duration as usize;
         if duration > usize::MAX / channels || output.len() < duration * channels {
@@ -533,7 +534,6 @@ impl Renderer {
         self.initial.clear();
         self.events.clear();
         self.coefficients.clear();
-        self.diagnostics.clear();
         self.pending_warned.clone_from(&self.warned);
         for (j, plane) in frame.planes.iter().enumerate() {
             let found = self.index.get(&plane.element_id).copied();

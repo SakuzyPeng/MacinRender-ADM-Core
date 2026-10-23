@@ -304,6 +304,52 @@ fn frame_errors_change_nothing() {
 }
 
 #[test]
+fn early_frame_errors_clear_previous_diagnostics() {
+    for wrong_generation in [false, true] {
+        let mut r = renderer("0+2+0");
+        r.configure(0, &[element(1, Role::Lfe, "LFE1")]).unwrap();
+        render(&mut r, &[1], 2, &[], &[]).unwrap();
+        assert_eq!(r.diagnostics().len(), 1);
+        assert_eq!(r.diagnostics()[0].code, code::MISSING_LFE_OUTPUT);
+
+        let mut output = [17.; 4];
+        let error = r
+            .render(
+                &Frame {
+                    generation: u64::from(wrong_generation),
+                    duration: 2,
+                    planes: &[],
+                    initial: &[],
+                    updates: &[],
+                    trace: b"",
+                },
+                if wrong_generation {
+                    &mut output
+                } else {
+                    &mut output[..3]
+                },
+            )
+            .unwrap_err();
+        assert_eq!(
+            text(&error).1,
+            if wrong_generation {
+                "live VBAP frame uses an unconfigured generation"
+            } else {
+                "live VBAP output buffer is too small"
+            }
+        );
+        assert_eq!(output, [17.; 4]);
+        assert!(
+            r.diagnostics().is_empty(),
+            "failed frame retained a warning"
+        );
+        // Clearing the published list must not reset the generation's warning keys.
+        render(&mut r, &[1], 2, &[], &[]).unwrap();
+        assert!(r.diagnostics().is_empty());
+    }
+}
+
+#[test]
 fn unroutable_direct_speakers_fail_without_publishing_warnings() {
     let mut r = renderer("0+5+0");
     let elements = [

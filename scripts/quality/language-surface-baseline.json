@@ -15,7 +15,7 @@
     },
     "tests": {
       "files": 109,
-      "lines": 47921
+      "lines": 47966
     },
     "reference": {
       "files": 38,
@@ -23,7 +23,7 @@
     },
     "rust": {
       "files": 241,
-      "lines": 80147
+      "lines": 80228
     },
     "rust-vendor": {
       "files": 175,
@@ -35,11 +35,11 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 39296,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 16658,
+    "rust/crates/mradm-ffi": 16693,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
-    "rust/crates/mradm-render": 6862,
+    "rust/crates/mradm-render": 6908,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5679,
     "rust/crates/mradm-wav": 2413,
@@ -95,6 +95,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 1014,
     "tests/tools": 2823,
-    "tests/unit": 41744
+    "tests/unit": 41789
   }
 }
