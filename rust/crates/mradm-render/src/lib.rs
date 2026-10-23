@@ -2,6 +2,7 @@
 //! and LFE routing rules, the offline driver, file streaming and the loudspeaker and HOA backends.
 #![forbid(unsafe_code)]
 
+pub mod ear;
 pub mod hoa;
 pub mod offline;
 pub mod routing;

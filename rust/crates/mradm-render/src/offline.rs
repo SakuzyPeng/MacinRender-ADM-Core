@@ -5,6 +5,7 @@
 //! time: between `render` and `commit` it may run stateful DSP on the block and writes the
 //! emitted frames, and it owns cancellation and progress reporting.
 use mradm_dsp::diagnostics::{ENABLED, Words, process};
+use mradm_dsp::ear_post::{FilterBank, Processor};
 use mradm_dsp::hoa::{self, Encoder, MeterPreprocessor};
 use mradm_dsp::meter::{Meter, MeterChannel, MeterMode};
 use mradm_dsp::pcm_mix::{self, Mixer};
@@ -68,11 +69,21 @@ pub struct Window {
     pub count: u64,
 }
 
-/// A prepared plan: loudspeaker gains, or the HOA3 encoder.
+/// A prepared plan: loudspeaker gains, the HOA3 encoder, or EAR's direct and diffuse gains with
+/// its decorrelation filters.
 #[derive(Clone)]
 pub enum Kernel {
     Mix(Arc<pcm_mix::Plan>),
     Hoa(Arc<hoa::Plan>),
+    Ear(Arc<EarPlan>),
+}
+
+pub struct EarPlan {
+    pub mix: Arc<pcm_mix::Plan>,
+    pub filters: Arc<FilterBank>,
+    /// `wav71` renders in EAR's 0+7+0 order (L R C LFE Ls Rs Lrs Rrs) and is written in WAVE_7_1
+    /// order (L R C LFE Lrs Rrs Ls Rs).
+    pub wav71: bool,
 }
 
 /// The block renderer of a kernel.
@@ -80,6 +91,12 @@ pub enum Kernel {
 pub(crate) enum Engine {
     Mix(Mixer),
     Hoa(Encoder),
+    Ear {
+        mixer: Mixer,
+        post: Processor,
+        diffuse: Vec<f32>,
+        wav71: bool,
+    },
 }
 
 impl Engine {
@@ -102,10 +119,24 @@ impl Engine {
                 interpolation,
                 smoothing,
             )?),
+            Kernel::Ear(plan) => {
+                let post = Processor::new(Arc::clone(&plan.filters), block_size as usize)?;
+                Self::Ear {
+                    mixer: Mixer::new(
+                        Arc::clone(&plan.mix),
+                        block_size as usize,
+                        interpolation,
+                        smoothing,
+                    )?,
+                    post,
+                    diffuse: vec![0.; plan.filters.channels() * block_size as usize],
+                    wav71: plan.wav71,
+                }
+            }
         })
     }
 
-    /// Adds the block to the zeroed `output`.
+    /// Adds the block to the zeroed `output` (EAR overwrites it).
     pub(crate) fn process(
         &mut self,
         input: &[f32],
@@ -116,19 +147,45 @@ impl Engine {
         match self {
             Self::Mix(m) => m.speaker(input, output, &[], start, frames, None, None),
             Self::Hoa(e) => e.process(input, output, start, frames),
+            Self::Ear {
+                mixer,
+                post,
+                diffuse,
+                wav71,
+            } => {
+                mixer.ear(input, output, diffuse, start, frames)?;
+                post.process(output, diffuse, frames)?;
+                let outputs = output.len() / frames.max(1);
+                if *wav71 && outputs == 8 {
+                    for frame in output.as_chunks_mut::<8>().0 {
+                        frame.swap(4, 6);
+                        frame.swap(5, 7);
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
-    /// The mixer forgets its cursors; the HOA encoder also seeds its diffuse delay lines at `start`.
+    /// The mixer forgets its cursors; the HOA encoder also seeds its diffuse delay lines at
+    /// `start`; EAR also clears its decorrelation and delay state.
     pub(crate) fn reset(&mut self, start: u64) {
         match self {
             Self::Mix(m) => m.reset(),
             Self::Hoa(e) => e.reset(start),
+            Self::Ear { mixer, post, .. } => {
+                post.reset();
+                mixer.reset();
+            }
         }
     }
 
     pub(crate) fn is_hoa(&self) -> bool {
         matches!(self, Self::Hoa(_))
+    }
+
+    pub(crate) fn is_ear(&self) -> bool {
+        matches!(self, Self::Ear { .. })
     }
 
     /// The C++ HOA errors carried the wrapper's context.
@@ -358,7 +415,7 @@ impl Driver {
         let block_size = settings.smoothing_frames.max(1024);
         let meter_error = |e: mradm_dsp::Error| Error::dsp(&e, Location::Meter);
         let (engine, measure, failure) = match &settings.kernel {
-            Kernel::Mix(_) => {
+            Kernel::Mix(_) | Kernel::Ear(_) => {
                 let meter = Meter::new(
                     outputs as u32,
                     settings.sample_rate,
@@ -366,7 +423,11 @@ impl Driver {
                     &[],
                 )
                 .map_err(meter_error)?;
-                let failure = format!("{} render failed: ", settings.backend);
+                let failure = if matches!(settings.kernel, Kernel::Ear(_)) {
+                    "render failed: ".to_owned()
+                } else {
+                    format!("{} render failed: ", settings.backend)
+                };
                 let engine = Engine::new(
                     &settings.kernel,
                     block_size,
@@ -422,8 +483,9 @@ impl Driver {
             None => (0, frames),
         };
         // Loudspeaker mixing is stateless at block edges, so a window starts at its own block.
-        // HOA's 1024-frame diffuse delay line is refilled by one aligned pre-roll block.
-        let start_pos = match (settings.window, engine.is_hoa()) {
+        // HOA's 1024-frame diffuse delay line and EAR's decorrelation overlap and compensation
+        // delay are refilled by one aligned pre-roll block.
+        let start_pos = match (settings.window, engine.is_hoa() || engine.is_ear()) {
             (None, _) => 0,
             (Some(_), false) if !settings.stateful => win_start / block_size * block_size,
             (Some(_), false) => 0,
@@ -498,7 +560,12 @@ impl Driver {
             } else {
                 Error {
                     code: 3,
-                    message: "short input read while rendering speaker PCM".to_owned(),
+                    message: if self.engine.is_ear() {
+                        "short render input read"
+                    } else {
+                        "short input read while rendering speaker PCM"
+                    }
+                    .to_owned(),
                     location: Location::None,
                 }
             });
@@ -512,7 +579,7 @@ impl Driver {
                 Location::HoaDsp => Error::dsp(&e, location),
                 _ => Error::failed(&self.failure, e),
             })?;
-        if ENABLED && !self.engine.is_hoa() {
+        if ENABLED && matches!(self.engine, Engine::Mix(_)) {
             let key = format!("speaker/s{}", self.done);
             let _ = process(&format!("{key}.10-input.f32"), Words::F32(input));
             let _ = process(&format!("{key}.40-mix.f32"), Words::F32(output));
