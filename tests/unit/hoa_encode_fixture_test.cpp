@@ -13,6 +13,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,19 @@ namespace {
 constexpr int k_hoa3_channels = 16;
 constexpr float k_amplitude = 0.5F;
 constexpr uint32_t k_frames = 1000U;
+
+class CapturingLogSink final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel /*level*/, std::string_view /*module*/, std::string_view message) override {
+        messages_.emplace_back(message);
+    }
+    [[nodiscard]] bool contains(std::string_view message) const {
+        return std::ranges::find(messages_, message) != messages_.end();
+    }
+
+  private:
+    std::vector<std::string> messages_;
+};
 
 class FileGuard {
   public:
@@ -1145,8 +1159,12 @@ bool verify_hoa_stream_matches_window() {
     auto tail_plan = plan;
     tail_plan.output_path = tail_path.string();
     tail_plan.render_window = mradm::RenderWindow{1023, std::numeric_limits<uint64_t>::max()};
-    const auto rendered_tail = renderer->render_window(**prepared, tail_plan, progress, logs);
+    CapturingLogSink tail_logs;
+    const auto rendered_tail = renderer->render_window(**prepared, tail_plan, progress, tail_logs);
     ok &= check(rendered_tail.has_value(), "HOA window count clamps without integer overflow");
+    const auto expected_log = "wrote 3080 frames to " + tail_path.string() + " (window [1023, 4103) of 4103 frames)";
+    ok &=
+        check(tail_logs.contains(expected_log), "HOA overflow-clamped window logs the actual frame count and interval");
     if (rendered_tail) {
         auto tail = mradm::audio::FloatWavReader::open(tail_path.string());
         if (!tail) {
