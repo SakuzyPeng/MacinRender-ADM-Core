@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -73,11 +74,9 @@ class ErrorText {
 };
 
 [[nodiscard]] std::size_t total_size(const std::vector<std::string>& labels) {
-    std::size_t size = 0;
-    for (const auto& label : labels) {
-        size += label.size() + 1;
-    }
-    return size;
+    return std::accumulate(labels.begin(), labels.end(), std::size_t{0}, [](std::size_t size, const auto& label) {
+        return size + label.size() + 1;
+    });
 }
 
 } // namespace
@@ -198,35 +197,26 @@ direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink&
     return {};
 }
 
-namespace {
-
-// Bit 1: gain written; bit 2: head_locked written.
-uint32_t live_override(const LiveOverrides& overrides,
-                       std::string_view object_id,
-                       std::string_view key,
-                       float& gain,
-                       uint32_t& head_locked) {
-    const auto records = override_records(overrides);
-    return mradm_render_live_override(records.data(), records.size(), text(object_id), text(key), &gain, &head_locked);
-}
-
-} // namespace
-
-std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
+std::optional<float> resolve_live_channel_gain(const LiveOverrideView& overrides,
                                                std::string_view object_id,
                                                std::string_view channel_label_key) {
     float gain = 0.0F;
-    uint32_t head_locked = 0U;
-    return (live_override(overrides, object_id, channel_label_key, gain, head_locked) & 1U) != 0U ? std::optional{gain}
-                                                                                                  : std::nullopt;
+    const auto& records = overrides.records;
+    return (mradm_render_live_override(
+                records.data(), records.size(), text(object_id), text(channel_label_key), &gain, nullptr) &
+            1U) != 0U
+               ? std::optional{gain}
+               : std::nullopt;
 }
 
-std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
+std::optional<bool> resolve_live_head_locked(const LiveOverrideView& overrides,
                                              std::string_view object_id,
                                              std::string_view channel_label_key) {
-    float gain = 0.0F;
     uint32_t head_locked = 0U;
-    return (live_override(overrides, object_id, channel_label_key, gain, head_locked) & 2U) != 0U
+    const auto& records = overrides.records;
+    return (mradm_render_live_override(
+                records.data(), records.size(), text(object_id), text(channel_label_key), nullptr, &head_locked) &
+            2U) != 0U
                ? std::optional{head_locked != 0U}
                : std::nullopt;
 }
@@ -314,9 +304,10 @@ Result<LfeRoutingPlan> resolve_lfe_routing(const RenderPlan& plan, LogSink& logs
     std::vector<uint32_t> targets;
     for (const auto& object : plan.scene.objects) {
         for (const auto& track : object.tracks) {
-            for (const auto* block : last_blocks_at_each_start(track.ds_blocks)) {
-                targets.push_back(static_cast<uint32_t>(direct_speakers_lfe_target(*block)));
-            }
+            std::ranges::transform(
+                last_blocks_at_each_start(track.ds_blocks), std::back_inserter(targets), [](const auto* block) {
+                    return static_cast<uint32_t>(direct_speakers_lfe_target(*block));
+                });
         }
     }
     MradmRenderLfeRouting record{};

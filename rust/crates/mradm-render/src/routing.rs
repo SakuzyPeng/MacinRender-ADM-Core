@@ -59,11 +59,14 @@ pub fn label_key(raw: &[u8]) -> Vec<u8> {
 
 /// Uppercased alphanumerics, `+` and `-`: the sign survives, so `M+030` and `M-030` differ while
 /// `m+030` and `M_+030` match. Used for per-channel live overrides.
-pub fn canonical_label(raw: &[u8]) -> Vec<u8> {
+fn canonical_bytes(raw: &[u8]) -> impl Iterator<Item = u8> {
     raw.iter()
         .filter(|&&c| c.is_ascii_alphanumeric() || c == b'+' || c == b'-')
         .map(u8::to_ascii_uppercase)
-        .collect()
+}
+
+pub fn canonical_label(raw: &[u8]) -> Vec<u8> {
+    canonical_bytes(raw).collect()
 }
 
 /// The canonical label with the known aliases mapped to their BS.2051 label (`L` -> `M+030`).
@@ -448,37 +451,80 @@ pub struct Override<'a> {
     pub head_locked: Option<bool>,
 }
 
-/// Among the object's overrides that take part, the last one for the channel `key` (a canonical
-/// label) wins over the last whole-object one.
-fn pick<'a>(
-    overrides: &'a [Override<'a>],
+/// Resolve borrowed records without allocating, including when the boundary validates them as
+/// it walks them. The last matching channel override wins over the last whole-object override;
+/// gain and head lock select independently. Unrequested fields are not evaluated.
+pub fn try_live_override<'a, E>(
+    overrides: impl IntoIterator<Item = Result<Override<'a>, E>>,
     object_id: &[u8],
     key: &[u8],
-    eligible: impl Fn(&Override) -> bool,
-) -> Option<&'a Override<'a>> {
-    let (mut whole, mut specific) = (None, None);
-    for ov in overrides
-        .iter()
-        .filter(|o| o.object_id == object_id && eligible(o))
-    {
-        if ov.speaker_label.is_empty() {
-            whole = Some(ov);
-        } else if !key.is_empty() && canonical_label(ov.speaker_label) == key {
-            specific = Some(ov);
+    want_gain: bool,
+    want_head: bool,
+) -> Result<(Option<f32>, Option<bool>), E> {
+    let (mut whole_gain, mut channel_gain) = (None, None);
+    let (mut whole_head, mut channel_head) = (None, None);
+    for ov in overrides {
+        let ov = ov?;
+        if ov.object_id != object_id || !(want_gain || want_head && ov.head_locked.is_some()) {
+            continue;
+        }
+        let specific = !ov.speaker_label.is_empty();
+        if specific
+            && (key.is_empty() || !canonical_bytes(ov.speaker_label).eq(key.iter().copied()))
+        {
+            continue;
+        }
+        if want_gain {
+            *if specific {
+                &mut channel_gain
+            } else {
+                &mut whole_gain
+            } = Some(ov);
+        }
+        if want_head && ov.head_locked.is_some() {
+            *if specific {
+                &mut channel_head
+            } else {
+                &mut whole_head
+            } = ov.head_locked;
         }
     }
-    specific.or(whole)
+    let gain = channel_gain
+        .or(whole_gain)
+        .map(|o| if o.mute { 0. } else { live_gain(o.gain_db) });
+    Ok((gain, channel_head.or(whole_head)))
 }
 
 /// The live gain multiplier of one input channel: exactly 0 when muted, none without an override.
 pub fn live_channel_gain(overrides: &[Override], object_id: &[u8], key: &[u8]) -> Option<f32> {
-    pick(overrides, object_id, key, |_| true)
-        .map(|o| if o.mute { 0. } else { live_gain(o.gain_db) })
+    try_live_override(
+        overrides
+            .iter()
+            .copied()
+            .map(Ok::<_, std::convert::Infallible>),
+        object_id,
+        key,
+        true,
+        false,
+    )
+    .expect("infallible records")
+    .0
 }
 
 /// An explicit live head lock; overrides without one do not take part.
 pub fn live_head_locked(overrides: &[Override], object_id: &[u8], key: &[u8]) -> Option<bool> {
-    pick(overrides, object_id, key, |o| o.head_locked.is_some()).and_then(|o| o.head_locked)
+    try_live_override(
+        overrides
+            .iter()
+            .copied()
+            .map(Ok::<_, std::convert::Infallible>),
+        object_id,
+        key,
+        false,
+        true,
+    )
+    .expect("infallible records")
+    .1
 }
 
 #[cfg(test)]

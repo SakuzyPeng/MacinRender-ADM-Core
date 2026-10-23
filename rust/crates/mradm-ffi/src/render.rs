@@ -387,27 +387,20 @@ pub unsafe extern "C" fn mradm_render_matrix_route(
     })
 }
 
-unsafe fn overrides<'a>(
-    data: *const RenderOverride,
-    len: usize,
-) -> Result<Vec<Override<'a>>, Error> {
-    unsafe { input(data, len)? }
-        .iter()
-        .map(|o| {
-            Ok(Override {
-                object_id: unsafe { bytes(&o.object_id)? },
-                speaker_label: unsafe { bytes(&o.speaker_label)? },
-                mute: o.mute != 0,
-                gain_db: o.gain_db,
-                head_locked: (o.has_head_locked != 0).then_some(o.head_locked != 0),
-            })
-        })
-        .collect()
+unsafe fn override_value<'a>(o: &RenderOverride) -> Result<Override<'a>, Error> {
+    Ok(Override {
+        object_id: unsafe { bytes(&o.object_id)? },
+        speaker_label: unsafe { bytes(&o.speaker_label)? },
+        mute: o.mute != 0,
+        gain_db: o.gain_db,
+        head_locked: (o.has_head_locked != 0).then_some(o.head_locked != 0),
+    })
 }
 
 /// The live overrides of one input channel; `key` is its canonical speaker label (empty for
 /// Objects and HOA channels). Bit 1: a gain multiplier was written; bit 2: an explicit head lock
-/// (0 or 1) was written; otherwise the channel inherits.
+/// (0 or 1) was written; otherwise the channel inherits. Null output pointers skip that field.
+/// Valid queries borrow the records and do not allocate, even for noncanonical labels.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_override(
     values: *const RenderOverride,
@@ -419,22 +412,27 @@ pub unsafe extern "C" fn mradm_render_live_override(
 ) -> u32 {
     catch_unwind(|| {
         let (Ok(o), Ok(id), Ok(key)) = (
-            unsafe { overrides(values, values_len) },
+            unsafe { input(values, values_len) },
             unsafe { bytes(&object_id) },
             unsafe { bytes(&key) },
         ) else {
             return 0;
         };
+        let Ok((g, h)) = routing::try_live_override(
+            o.iter().map(|o| unsafe { override_value(o) }),
+            id,
+            key,
+            !gain.is_null(),
+            !head_locked.is_null(),
+        ) else {
+            return 0;
+        };
         let mut flags = 0;
-        if let (Some(g), Some(out)) = (routing::live_channel_gain(&o, id, key), unsafe {
-            gain.as_mut()
-        }) {
+        if let (Some(g), Some(out)) = (g, unsafe { gain.as_mut() }) {
             *out = g;
             flags |= 1;
         }
-        if let (Some(h), Some(out)) = (routing::live_head_locked(&o, id, key), unsafe {
-            head_locked.as_mut()
-        }) {
+        if let (Some(h), Some(out)) = (h, unsafe { head_locked.as_mut() }) {
             *out = u32::from(h);
             flags |= 2;
         }
@@ -1079,7 +1077,13 @@ pub unsafe extern "C" fn mradm_render_stream_overrides(
     values_len: usize,
 ) -> i32 {
     driver_boundary(ptr::null_mut(), ptr::null_mut(), ptr::null_mut(), || {
-        let o = unsafe { overrides(values, values_len) }
+        let o = unsafe { input(values, values_len) }
+            .and_then(|values| {
+                values
+                    .iter()
+                    .map(|o| unsafe { override_value(o) })
+                    .collect::<Result<Vec<_>, _>>()
+            })
             .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?;
         unsafe { speaker_stream(handle)? }.set_overrides(&o)
     })
@@ -1089,5 +1093,121 @@ pub unsafe extern "C" fn mradm_render_stream_overrides(
 pub unsafe extern "C" fn mradm_render_stream_destroy(handle: *mut RenderStream) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_alloc::COUNT;
+
+    fn record(id: &[u8], label: &[u8], gain_db: f32, head: Option<bool>) -> RenderOverride {
+        RenderOverride {
+            object_id: Text::bytes(id),
+            speaker_label: Text::bytes(label),
+            mute: 0,
+            gain_db,
+            has_head_locked: u32::from(head.is_some()),
+            head_locked: u32::from(head.unwrap_or(false)),
+        }
+    }
+
+    #[test]
+    fn borrowed_live_queries_do_not_allocate_and_select_fields_independently() {
+        let long_label = b"_x".repeat(256);
+        let long_key = b"X".repeat(256);
+        let mut records: Vec<_> = (0..128)
+            .map(|_| record(b"other", b"m_+030", -6., Some(false)))
+            .collect();
+        records.extend([
+            record(b"bed", b"", -12., Some(false)),
+            record(b"bed", b"", 0., Some(true)),
+            record(b"bed", b"M+030", -12., Some(false)),
+            record(b"bed", b"m_+030 \xc3\xa9", -6., Some(true)),
+            record(b"bed", b"M+030", -6., None),
+            record(b"bed", b"M-030", 0., Some(false)),
+            record(b"bed", &long_label, 0., Some(false)),
+        ]);
+        // A gain-only channel mute must not shadow the last explicit head-lock value.
+        records[132].mute = 1;
+        let cases: &[(&[u8], f32, u32)] = &[
+            (b"M+030", 0., 1),
+            (b"M-030", 1., 0),
+            (b"", 1., 1),
+            (b"L", 1., 1), // live labels are canonicalized, not alias-resolved
+            (&long_key, 1., 0),
+        ];
+        let mut correct = true;
+        COUNT.with(|c| c.set(Some(0)));
+        for _ in 0..100 {
+            for &(key, expected_gain, expected_head) in cases {
+                for fields in 0..4 {
+                    let (mut gain, mut head) = (17., 19);
+                    let flags = unsafe {
+                        mradm_render_live_override(
+                            records.as_ptr(),
+                            records.len(),
+                            Text::bytes(b"bed"),
+                            Text::bytes(key),
+                            if fields & 1 != 0 {
+                                &mut gain
+                            } else {
+                                ptr::null_mut()
+                            },
+                            if fields & 2 != 0 {
+                                &mut head
+                            } else {
+                                ptr::null_mut()
+                            },
+                        )
+                    };
+                    correct &= flags == fields
+                        && gain == if fields & 1 != 0 { expected_gain } else { 17. }
+                        && head == if fields & 2 != 0 { expected_head } else { 19 };
+                }
+            }
+        }
+        let allocations = COUNT.with(|c| c.replace(None).unwrap());
+        assert!(correct, "live precedence and nullable outputs");
+        assert_eq!(
+            allocations, 0,
+            "including the first lookup and label folding"
+        );
+    }
+
+    #[test]
+    fn live_queries_preserve_outputs_when_a_later_record_is_invalid() {
+        let mut records = [
+            record(b"bed", b"", 0., Some(true)),
+            record(b"other", b"", 0., None),
+        ];
+        records[1].speaker_label = Text {
+            data: ptr::null(),
+            len: 1,
+        };
+        let (mut gain, mut head) = (17., 19);
+        let flags = unsafe {
+            mradm_render_live_override(
+                records.as_ptr(),
+                records.len(),
+                Text::bytes(b"bed"),
+                Text::bytes(b"M+030"),
+                &mut gain,
+                &mut head,
+            )
+        };
+        assert_eq!((flags, gain, head), (0, 17., 19));
+        records[1] = record(b"other", b"", 0., None);
+        let flags = unsafe {
+            mradm_render_live_override(
+                records.as_ptr(),
+                records.len(),
+                Text::bytes(b"missing"),
+                Text::bytes(b"M+030"),
+                &mut gain,
+                &mut head,
+            )
+        };
+        assert_eq!((flags, gain, head), (0, 17., 19));
     }
 }

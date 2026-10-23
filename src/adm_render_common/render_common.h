@@ -28,8 +28,7 @@
 #include "adm/scene.h"
 
 #include "../adm_dsp/gain.h"
-
-struct MradmRenderMatrix; // Rust mradm-render `routing` (routing_ffi.h)
+#include "routing_ffi.h"
 
 namespace mradm::render_common {
 
@@ -134,12 +133,21 @@ direct_speaker_position_for_labels(const std::vector<std::string>& labels);
 [[nodiscard]] DirectSpeakerPosition
 direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink& logs, std::string_view log_module);
 
+[[nodiscard]] std::vector<MradmRenderOverride> override_records(const LiveOverrides& overrides);
+// Borrowed labels: rebuild after changing the owning LiveOverrides. Reuse across render queries.
+struct LiveOverrideView {
+    // cppcheck-suppress noExplicitConstructor
+    // NOLINTNEXTLINE(google-explicit-constructor): control callers may pass a temporary view.
+    LiveOverrideView(const LiveOverrides& overrides) : records(override_records(overrides)) {}
+    std::vector<MradmRenderOverride> records;
+};
+
 // Resolve the live linear gain multiplier for one input channel given its owning object id and
 // its canonicalised DirectSpeakers speaker label (empty for Objects / HOA channels). A channel-
 // specific override (non-empty speaker_label matching channel_label_key) wins over a whole-object
 // override (empty speaker_label); mute resolves to an exact 0 multiplier, and no matching override
 // returns nullopt.
-[[nodiscard]] std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
+[[nodiscard]] std::optional<float> resolve_live_channel_gain(const LiveOverrideView& overrides,
                                                              std::string_view object_id,
                                                              std::string_view channel_label_key);
 
@@ -147,7 +155,7 @@ direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink&
 // win over whole-object values; entries whose head_locked is nullopt do not
 // participate, so a gain-only channel override cannot shadow a whole-object
 // head-lock override. nullopt means inherit the active ADM block.
-[[nodiscard]] std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
+[[nodiscard]] std::optional<bool> resolve_live_head_locked(const LiveOverrideView& overrides,
                                                            std::string_view object_id,
                                                            std::string_view channel_label_key);
 
