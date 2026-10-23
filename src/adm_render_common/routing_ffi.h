@@ -166,6 +166,77 @@ typedef struct MradmRenderPreparedView {
     size_t tracks;
     size_t outputs;
 } MradmRenderPreparedView;
+// Scene stream VBAP renderer (live_scene::ILiveSceneRenderer). Roles: 0 object, 1 DirectSpeakers,
+// 2 LFE. A plane's samples are read only with a signal; `trace` is the checkpoint prefix.
+typedef struct MradmRenderLiveVbap MradmRenderLiveVbap;
+typedef struct MradmRenderLiveVbapRequest {
+    MradmAdmText layout_id;
+    uint32_t geometry;
+    uint32_t spread;
+    uint32_t split_power;
+    uint32_t smoothing_frames;
+} MradmRenderLiveVbapRequest;
+typedef struct MradmRenderLiveElement {
+    uint64_t element_id;
+    uint32_t role;
+    MradmAdmText speaker_label;
+    uint32_t has_position;
+    float position[3];
+} MradmRenderLiveElement;
+typedef struct MradmRenderLiveState {
+    uint64_t valid_fields;
+    uint32_t active;
+    float linear_gain;
+    float position[3];
+    float width;
+    float height;
+    float depth;
+    float diffuse;
+    float divergence;
+    uint32_t channel_lock;
+    uint32_t screen_reference;
+    uint32_t head_locked;
+    float divergence_azimuth_range;
+    float divergence_position_range;
+    uint32_t has_max_distance;
+    float max_distance;
+} MradmRenderLiveState;
+typedef struct MradmRenderLivePlane {
+    uint64_t element_id;
+    uint32_t has_signal;
+    const float* samples;
+    size_t samples_len;
+} MradmRenderLivePlane;
+typedef struct MradmRenderLiveEntry {
+    uint64_t element_id;
+    MradmRenderLiveState state;
+} MradmRenderLiveEntry;
+typedef struct MradmRenderLiveUpdate {
+    uint64_t element_id;
+    uint32_t offset;
+    uint32_t ramp;
+    uint32_t jump;
+    uint64_t changed;
+    uint64_t cleared;
+    MradmRenderLiveState state;
+} MradmRenderLiveUpdate;
+typedef struct MradmRenderLiveFrame {
+    uint64_t generation;
+    uint32_t duration;
+    const MradmRenderLivePlane* planes;
+    size_t planes_len;
+    const MradmRenderLiveEntry* initial;
+    size_t initial_len;
+    const MradmRenderLiveUpdate* updates;
+    size_t updates_len;
+    MradmAdmText trace;
+} MradmRenderLiveFrame;
+typedef struct MradmRenderLiveDiagnostic {
+    uint32_t code;
+    uint64_t element_id;
+    uint64_t field;
+    MradmAdmText message;
+} MradmRenderLiveDiagnostic;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -280,6 +351,33 @@ int32_t mradm_render_stream_seek(
     MradmRenderStream* handle, uint64_t frame, uint32_t* location, uint8_t* message, size_t* message_len);
 int32_t mradm_render_stream_overrides(MradmRenderStream* handle, const MradmRenderOverride* values, size_t values_len);
 void mradm_render_stream_destroy(MradmRenderStream* handle);
+
+int32_t mradm_render_live_vbap_create(const MradmRenderLiveVbapRequest* request,
+                                      MradmRenderLiveVbap** output,
+                                      uint8_t* message,
+                                      size_t* message_len);
+void mradm_render_live_vbap_destroy(MradmRenderLiveVbap* handle);
+uint32_t mradm_render_live_vbap_channels(const MradmRenderLiveVbap* handle);
+int32_t mradm_render_live_vbap_configure(MradmRenderLiveVbap* handle,
+                                         uint64_t generation,
+                                         const MradmRenderLiveElement* elements,
+                                         size_t elements_len,
+                                         uint8_t* message,
+                                         size_t* message_len,
+                                         uint8_t* context,
+                                         size_t* context_len);
+void mradm_render_live_vbap_reset(MradmRenderLiveVbap* handle);
+// On success *diagnostics lists the frame's warnings until the next call on the handle.
+int32_t mradm_render_live_vbap_render(MradmRenderLiveVbap* handle,
+                                      const MradmRenderLiveFrame* frame,
+                                      float* output,
+                                      size_t output_len,
+                                      const MradmRenderLiveDiagnostic** diagnostics,
+                                      size_t* diagnostics_len,
+                                      uint8_t* message,
+                                      size_t* message_len,
+                                      uint8_t* context,
+                                      size_t* context_len);
 
 #ifdef __cplusplus
 }
