@@ -1495,6 +1495,28 @@ public readonly record struct DimRange(double Min, double Max)
     }
 }
 
+// Width/height keep separate ranges by coordinate system until after scaling. A row can
+// contain both Cartesian and polar blocks, including changes within one object's timeline.
+public readonly record struct AngularExtentRange(DimRange? Polar, DimRange? Cartesian)
+{
+    private static DimRange? Union(DimRange? a, DimRange? b) =>
+        a is { } x ? b is { } y ? DimRange.Union(x, y) : x : b;
+
+    public DimRange Range => Union(Polar, Cartesian) ?? new DimRange(0, 0);
+
+    public DimRange Scaled(double scale) =>
+        Union(Polar?.ClampScaled(scale, 0, 360), Cartesian?.ClampScaled(scale, 0, 1)) ?? new DimRange(0, 0);
+
+    public AngularExtentRange Add(double value, bool cartesian)
+    {
+        var range = new DimRange(value, value);
+        return cartesian ? this with { Cartesian = Union(Cartesian, range) } : this with { Polar = Union(Polar, range) };
+    }
+
+    public static AngularExtentRange Union(AngularExtentRange a, AngularExtentRange b) =>
+        new(Union(a.Polar, b.Polar), Union(a.Cartesian, b.Cartesian));
+}
+
 public interface IResettableOverride
 {
     void Reset();
@@ -1515,7 +1537,7 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
         GainDb,
     }
 
-    public readonly record struct Axis(string Name, DimRange Range);
+    public readonly record struct Axis(string Name, DimRange Range, Func<double, DimRange>? Scale = null);
 
     private readonly IReadOnlyList<Axis> _axes;
     private readonly Mode _mode;
@@ -1638,19 +1660,22 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
 
         if (_axes.Count == 1)
         {
-            var r = scaled ? _axes[0].Range.ClampScaled(Value, _clampLo, _clampHi) : _axes[0].Range;
+            var r = scaled ? ScaleRange(_axes[0]) : _axes[0].Range;
             return r.Format();
         }
 
         var parts = new List<string>(_axes.Count);
         foreach (var ax in _axes)
         {
-            var r = scaled ? ax.Range.ClampScaled(Value, _clampLo, _clampHi) : ax.Range;
+            var r = scaled ? ScaleRange(ax) : ax.Range;
             parts.Add($"{ax.Name} {r.Format()}");
         }
 
         return string.Join("  ", parts);
     }
+
+    private DimRange ScaleRange(Axis axis) =>
+        axis.Scale?.Invoke(Value) ?? axis.Range.ClampScaled(Value, _clampLo, _clampHi);
 
     /// <summary>启用时写出该维度的 policy 片段(scale 或 gain_db);未启用返回 null。每次新建实例。</summary>
     public JsonObject? ToPolicyFragment()
@@ -1683,10 +1708,10 @@ public sealed partial class ExtentOverride : ObservableObject, IResettableOverri
 
     public event Action? Changed;
 
-    public ExtentOverride(DimRange width, DimRange height, DimRange depth)
+    public ExtentOverride(AngularExtentRange width, AngularExtentRange height, DimRange depth)
     {
-        Width = MakeAxis("Width", width);
-        Height = MakeAxis("Height", height);
+        Width = MakeAxis("Width", width.Range, width.Scaled);
+        Height = MakeAxis("Height", height.Range, height.Scaled);
         Depth = MakeAxis("Depth", depth);
         _axes = new[] { Width, Height, Depth };
         for (int i = 0; i < _axes.Length; i++)
@@ -1696,8 +1721,9 @@ public sealed partial class ExtentOverride : ObservableObject, IResettableOverri
         }
     }
 
-    private static ScalarOverride MakeAxis(string label, DimRange range) => new(label, ScalarOverride.Mode.ScaleLinear,
-        new[] { new ScalarOverride.Axis("", range) }, 1.0, 0.0, 4.0, 0.0, 1.0);
+    private static ScalarOverride MakeAxis(string label, DimRange range, Func<double, DimRange>? scale = null) =>
+        new(label, ScalarOverride.Mode.ScaleLinear,
+            new[] { new ScalarOverride.Axis("", range, scale) }, 1.0, 0.0, 4.0, 0.0, 1.0);
 
     // 每轴一个"联动"标志(单击轴名切换)。所有联动轴共享同一值 / 启用;未联动轴独立。
     [ObservableProperty] private bool _widthLinked = true;
@@ -1917,8 +1943,10 @@ public sealed class SemanticObjectItem
 
     public DimRange GainRange { get; init; }
     public DimRange DiffuseRange { get; init; }
-    public DimRange WidthRange { get; init; }
-    public DimRange HeightRange { get; init; }
+    public AngularExtentRange WidthExtent { get; init; }
+    public AngularExtentRange HeightExtent { get; init; }
+    public DimRange WidthRange => WidthExtent.Range;
+    public DimRange HeightRange => HeightExtent.Range;
     public DimRange DepthRange { get; init; }
     public DimRange DivergenceRange { get; init; }
 
@@ -1961,8 +1989,8 @@ public sealed class SemanticObjectItem
     internal static SemanticObjectItem From(InspectObject obj, string commonPrefix = "", bool isBed = false)
     {
         var diffuse = new List<double>();
-        var width = new List<double>();
-        var height = new List<double>();
+        var width = new AngularExtentRange();
+        var height = new AngularExtentRange();
         var depth = new List<double>();
         var divergence = new List<double>();
         var bedChannels = new List<BedChannelData>();
@@ -1971,8 +1999,8 @@ public sealed class SemanticObjectItem
             foreach (var b in track.ObjectBlocks)
             {
                 diffuse.Add(b.Diffuse);
-                width.Add(b.Width);
-                height.Add(b.Height);
+                width = width.Add(b.Width, b.Position?.Cartesian == true);
+                height = height.Add(b.Height, b.Position?.Cartesian == true);
                 depth.Add(b.Depth);
                 divergence.Add(b.Divergence);
             }
@@ -2011,8 +2039,8 @@ public sealed class SemanticObjectItem
             HeadTrackParticipate = AggregateHeadTrackParticipation(objectHeadLocked, obj.HeadLocked),
             GainRange = new DimRange(obj.Gain, obj.Gain),
             DiffuseRange = DimRange.Of(diffuse),
-            WidthRange = DimRange.Of(width),
-            HeightRange = DimRange.Of(height),
+            WidthExtent = width,
+            HeightExtent = height,
             DepthRange = DimRange.Of(depth),
             DivergenceRange = DimRange.Of(divergence),
         };
@@ -2141,7 +2169,9 @@ public sealed class SemanticRow : ObservableObject
             sourceMuted: members.All(m => m.Mute));
         DiffuseScale = new ScalarOverride("diffuse", ScalarOverride.Mode.ScaleLinear,
             new[] { new ScalarOverride.Axis("", Union(m => m.DiffuseRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
-        Extent = new ExtentOverride(Union(m => m.WidthRange), Union(m => m.HeightRange), Union(m => m.DepthRange));
+        Extent = new ExtentOverride(
+            members.Select(m => m.WidthExtent).Aggregate(AngularExtentRange.Union),
+            members.Select(m => m.HeightExtent).Aggregate(AngularExtentRange.Union), Union(m => m.DepthRange));
         DivergenceScale = new ScalarOverride("divergence", ScalarOverride.Mode.ScaleLinear,
             new[] { new ScalarOverride.Axis("", Union(m => m.DivergenceRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
 

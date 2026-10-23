@@ -256,6 +256,7 @@ Semantic policy applies to the current render while the source AXML remains inta
 `global` applies to all content. `objects[]` contains rule-based overrides. Match dimensions are OR-combined: `id`, `name`, `name_glob`, `track_uid`, `all`, `importance_min/max`, `dialogue_id`, `content`, `programme`; HOA rules also accept `pack_format`. Supported override areas:
 
 - **Objects**: object-level `gain` (`scale`, `gain_db`, `mute`), `position` (absolute `azimuth/elevation/distance` + `offset` + `lock_*`), `diffuse`, `extent`, `divergence`, `channel_lock` (including `max_distance`), and `interpolation`.
+  The `extent` `max` uses the block's own units (degrees for polar width and height); without it the extent is only clamped to the ADM ranges: polar width and height up to 360, depth up to 1, and all three Cartesian values up to 1.
 - **DirectSpeakers**: `direct_speakers` with per-block filters `speaker_label` / `lfe` (AND), `gain` (`mute` silences the channel), and `position` re-aiming.
 - **HOA**: `id` / `pack_format` / `all` matching, applying `gain` (`scale` / `gain_db` / `mute`) to the whole pack.
 

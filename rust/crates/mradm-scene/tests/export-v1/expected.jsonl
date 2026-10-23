@@ -313,7 +313,7 @@
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "len": 4337, "scene": "objects-extent-multi"}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 306, "len": 4337}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 307, "len": 4337}
-{"corpus": "policy-v1", "fnv": "1764025b4212ece9", "i": 308, "len": 4380}
+{"corpus": "policy-v1", "fnv": "4696525daa0135a4", "i": 308, "len": 4395, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 309, "len": 4337}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 310, "len": 4337}
 {"corpus": "policy-v1", "fnv": "17520a0fd7cc2a29", "i": 311, "len": 4392}
@@ -330,7 +330,7 @@
 {"corpus": "policy-v1", "fnv": "77014af52bbb32eb", "i": 322, "len": 4331}
 {"corpus": "policy-v1", "i": 323, "rejected": true}
 {"corpus": "policy-v1", "i": 324, "rejected": true}
-{"corpus": "policy-v1", "fnv": "9cfb593bed03cd30", "i": 325, "len": 4685}
+{"corpus": "policy-v1", "fnv": "0be8fec4a521a5c7", "i": 325, "len": 4703, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "77014af52bbb32eb", "i": 326, "len": 4331}
 {"corpus": "policy-v1", "fnv": "3aaf29feaa3ec470", "i": 327, "len": 4380}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 328, "len": 4337}
@@ -341,18 +341,18 @@
 {"corpus": "policy-v1", "fnv": "2b65106b77c9eaf7", "i": 333, "len": 4331}
 {"corpus": "policy-v1", "fnv": "08135ca02d2cf1fb", "i": 334, "len": 4463}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 335, "len": 4337}
-{"corpus": "policy-v1", "fnv": "59c315802d1f0b03", "i": 336, "len": 4325}
+{"corpus": "policy-v1", "fnv": "a720e1dfe0ed7f72", "i": 336, "len": 4331, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "61cb04cc173f66c5", "i": 337, "len": 4505}
 {"corpus": "policy-v1", "fnv": "adda5b2a15c8c387", "i": 338, "len": 4594}
 {"corpus": "policy-v1", "fnv": "1ae2a92bb3c97492", "i": 339, "len": 4379}
-{"corpus": "policy-v1", "fnv": "bfdb0d1df0539ba0", "i": 340, "len": 4325}
+{"corpus": "policy-v1", "fnv": "04bef6a5c36b9caa", "i": 340, "len": 4325, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "648ba02cba76fe8a", "i": 341, "len": 4654}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 342, "len": 4337}
 {"corpus": "policy-v1", "fnv": "7d8f8175001ea0d3", "i": 343, "len": 4520}
 {"corpus": "policy-v1", "fnv": "eb70efd3c39fc441", "i": 344, "len": 4343}
 {"corpus": "policy-v1", "i": 345, "rejected": true}
 {"corpus": "policy-v1", "fnv": "7e6be8dba2991d66", "i": 346, "len": 4343}
-{"corpus": "policy-v1", "fnv": "51f7ab909bc86e64", "i": 347, "len": 4409}
+{"corpus": "policy-v1", "fnv": "e0b4245cefb07b8a", "i": 347, "len": 4412, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "7228a6bc7e6fac26", "i": 348, "len": 4496}
 {"corpus": "policy-v1", "fnv": "9d9aefd8c659b421", "i": 349, "len": 4337}
 {"corpus": "policy-v1", "fnv": "c486df7c69b80c71", "i": 350, "len": 4502}
@@ -365,7 +365,7 @@
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "len": 1792, "scene": "objects-extent"}
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 357, "len": 1792}
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 358, "len": 1792}
-{"corpus": "policy-v1", "fnv": "e837feeff0a7dc9b", "i": 359, "len": 1839}
+{"corpus": "policy-v1", "fnv": "d5bbf19a269423fa", "i": 359, "len": 1844, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 360, "len": 1792}
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 361, "len": 1792}
 {"corpus": "policy-v1", "fnv": "5c28388581a887e7", "i": 362, "len": 1843}
@@ -375,7 +375,7 @@
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 366, "len": 1792}
 {"corpus": "policy-v1", "i": 367, "rejected": true}
 {"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 368, "len": 1792}
-{"corpus": "policy-v1", "fnv": "ecf02ba2f13b96a4", "i": 369, "len": 1837}
+{"corpus": "policy-v1", "fnv": "d3f6169651c8b5b0", "i": 369, "len": 1839, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "5428501c6fc34295", "i": 370, "len": 1866}
 {"corpus": "policy-v1", "fnv": "13c3ec5df3116d17", "i": 371, "len": 1854}
 {"corpus": "policy-v1", "fnv": "9fdac95707afd221", "i": 372, "len": 1818}
@@ -387,7 +387,7 @@
 {"corpus": "policy-v1", "i": 378, "rejected": true}
 {"corpus": "policy-v1", "fnv": "d63cb330cd45d2f1", "i": 379, "len": 1889}
 {"corpus": "policy-v1", "fnv": "4aad9e2dbf005b21", "i": 380, "len": 1893}
-{"corpus": "policy-v1", "fnv": "ae64f1399a72d86f", "i": 381, "len": 1790}
+{"corpus": "policy-v1", "fnv": "d73e814ec629acef", "i": 381, "len": 1793, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "i": 382, "rejected": true}
 {"corpus": "policy-v1", "i": 383, "rejected": true}
 {"corpus": "policy-v1", "i": 384, "rejected": true}
@@ -399,7 +399,7 @@
 {"corpus": "policy-v1", "i": 390, "rejected": true}
 {"corpus": "policy-v1", "i": 391, "rejected": true}
 {"corpus": "policy-v1", "fnv": "9fdac95707afd221", "i": 392, "len": 1818}
-{"corpus": "policy-v1", "fnv": "ae64f1399a72d86f", "i": 393, "len": 1790}
+{"corpus": "policy-v1", "fnv": "1b5feaa163bf02c3", "i": 393, "len": 1792, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "f37a418346cb7887", "i": 394, "len": 1849}
 {"corpus": "policy-v1", "fnv": "bdc1e98ce1dbbe27", "i": 395, "len": 1936}
 {"corpus": "policy-v1", "fnv": "9b5fb006100d795f", "i": 396, "len": 1893}
@@ -650,7 +650,7 @@
 {"corpus": "policy-v1", "error": {"code": 3, "message": "ADM maxDistance 超出范围 [0, 2]"}, "i": 636}
 {"corpus": "policy-v1", "fnv": "0d7bc91ad5b8b2ec", "i": 637, "len": 7988}
 {"corpus": "policy-v1", "fnv": "11efb6517aa4d576", "i": 638, "len": 7942}
-{"corpus": "policy-v1", "fnv": "ac5a92c2252a7173", "i": 639, "len": 8106}
+{"corpus": "policy-v1", "fnv": "49d2e6530847daa7", "i": 639, "len": 8110, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "c0e83f4d44a0d451", "i": 640, "len": 8568}
 {"corpus": "policy-v1", "i": 641, "rejected": true}
 {"corpus": "policy-v1", "error": {"code": 3, "message": "ADM maxDistance 超出范围 [0, 2]"}, "i": 642}
@@ -661,7 +661,7 @@
 {"corpus": "policy-v1", "fnv": "11efb6517aa4d576", "i": 647, "len": 7942}
 {"corpus": "policy-v1", "i": 648, "rejected": true}
 {"corpus": "policy-v1", "fnv": "4e610c8aafb1b0b9", "i": 649, "len": 7944}
-{"corpus": "policy-v1", "fnv": "674e2fbe940b01e6", "i": 650, "len": 7898}
+{"corpus": "policy-v1", "fnv": "cd17545367ca7f32", "i": 650, "len": 7902, "regenerated": "extent-adm-range"}
 {"corpus": "policy-v1", "fnv": "ff3f448cc9b823e2", "i": 651, "len": 7998}
 {"corpus": "policy-v1", "fnv": "a3250d9c95357c45", "i": 652, "len": 8180}
 {"corpus": "policy-v1", "fnv": "b0137b1945cf867a", "i": 653, "len": 7938}

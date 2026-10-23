@@ -238,6 +238,27 @@ fn block_sections_scale_clamp_and_disable() {
     assert!(near(cymbal.depth, 0.2), "extent depth clamped");
 }
 
+/// Polar extents are in degrees: without `max` a scale keeps them proportional within the ADM
+/// ranges (360 degrees for width and height, 1 for depth) instead of clamping them to 1, the
+/// default before the extent fix.
+#[test]
+fn extent_without_max_keeps_the_adm_ranges() {
+    let mut adm = Adm::default();
+    adm.objects(
+        "AO_1001",
+        r#"audioObjectName="Wide""#,
+        &format!(r#"{POLAR}<width>30</width><height>200</height><depth>0.5</depth>"#),
+    );
+    let mut scene = adm.scene();
+    let warnings = apply(
+        &mut scene,
+        r#"{"schema": "mradm.semantic-policy.v1", "global": {"extent": {"scale": 0.5, "height_scale": 4}}}"#,
+    );
+    assert!(warnings.is_empty());
+    let block = object_block(&scene, 0);
+    assert_eq!((block.width, block.height, block.depth), (15., 360., 0.25));
+}
+
 #[test]
 fn invalid_policies_are_rejected() {
     let unknown = policy::parse(

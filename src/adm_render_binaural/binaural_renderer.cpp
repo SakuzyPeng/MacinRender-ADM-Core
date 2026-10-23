@@ -1437,8 +1437,8 @@ class BinauralStream final : public IRenderStream {
 
     // Cheap re-prepare: rebuild sources_ from a copy of the scene with each overridden
     // object's block diffuse / extent (width,height,depth) / divergence multiplied by its
-    // scale (clamped to ADM's 0..1), then re-init per-source state. Empty `topo` rebuilds
-    // the unscaled scene, which reproduces the prepared list bit-for-bit.
+    // scale (clamped to the same ADM ranges as a semantic policy without max), then re-init per-source state. Empty
+    // `topo` rebuilds the unscaled scene, which reproduces the prepared list bit-for-bit.
     void rebuild_sources(const std::unordered_map<std::string, LiveTopologyScales>& topo) {
         AdmScene scaled = scene_;
         for (auto& obj : scaled.objects) {
@@ -1449,9 +1449,10 @@ class BinauralStream final : public IRenderStream {
             const auto& s = it->second;
             for (auto& track : obj.tracks) {
                 for (auto& blk : track.blocks) {
+                    const float angular_max = blk.position.cartesian ? 1.0F : 360.0F;
                     blk.diffuse = std::clamp(blk.diffuse * s[k_topology_diffuse], 0.0F, 1.0F);
-                    blk.width = std::clamp(blk.width * s[k_topology_width], 0.0F, 1.0F);
-                    blk.height = std::clamp(blk.height * s[k_topology_height], 0.0F, 1.0F);
+                    blk.width = std::clamp(blk.width * s[k_topology_width], 0.0F, angular_max);
+                    blk.height = std::clamp(blk.height * s[k_topology_height], 0.0F, angular_max);
                     blk.depth = std::clamp(blk.depth * s[k_topology_depth], 0.0F, 1.0F);
                     blk.divergence = std::clamp(blk.divergence * s[k_topology_divergence], 0.0F, 1.0F);
                 }

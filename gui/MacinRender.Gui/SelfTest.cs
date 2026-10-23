@@ -20,6 +20,46 @@ namespace MacinRender.Gui;
 /// </summary>
 internal static class SelfTest
 {
+    private static bool VerifyExtentPreview()
+    {
+        var polar = new InspectObjectBlock { Width = 30, Height = 200, Depth = 0.8 };
+        var cartesian = new InspectObjectBlock
+        {
+            Position = new InspectPosition { Cartesian = true }, Width = 0.8, Height = 0.6, Depth = 0.8,
+        };
+        // Mixed blocks must be clamped individually before forming the displayed interval.
+        var cases = new (InspectObjectBlock[] Blocks, double Scale, string[] Expected)[]
+        {
+            ([polar], 0.5, ["15", "100", "0.4"]),
+            ([polar], 4, ["120", "360", "1"]),
+            ([cartesian], 4, ["1", "1", "1"]),
+            ([polar, cartesian], 0.5, ["0.4–15", "0.3–100", "0.4"]),
+            ([new InspectObjectBlock { Width = 0.1, Height = 0.2 }, cartesian], 4, ["0.4–1", "0.8–1", "0–1"]),
+        };
+        foreach (var (blocks, scale, expected) in cases)
+        {
+            var item = SemanticObjectItem.From(new InspectObject
+            {
+                Id = "AO_EXTENT_PROBE", Name = "Extent", Tracks = [new InspectTrack { ObjectBlocks = [.. blocks] }],
+            });
+            var row = SemanticRow.BuildRows([item]).Single();
+            row.Extent.Width.Enabled = true;
+            row.Extent.Width.Value = scale;
+            var actual = new[] { row.Extent.Width.EffectiveText, row.Extent.Height.EffectiveText, row.Extent.Depth.EffectiveText };
+            var rule = row.BuildRules().Single()["extent"] as JsonObject;
+            var live = row.BuildLiveOverrides().Single();
+            if (!actual.SequenceEqual(expected) || rule is null || rule["scale"]?.GetValue<double>() != scale ||
+                rule.ContainsKey("max") || live.ExtentWidthScale != scale || live.ExtentHeightScale != scale ||
+                live.ExtentDepthScale != scale)
+            {
+                Console.Error.WriteLine($"[失败] extent 生效值或 policy/live 投影错误: {string.Join('/', actual)}");
+                return false;
+            }
+        }
+        Console.WriteLine("语义 extent:polar/Cartesian/mixed 生效值与 policy/live 投影 OK");
+        return true;
+    }
+
     public static async Task<int> Run(string? inputWav)
     {
         Console.WriteLine("== 麦渲峰桥接层自检 ==");
@@ -289,6 +329,11 @@ internal static class SelfTest
             return 11;
         }
         Console.WriteLine("语义 gain -inf:policy/live mute OK");
+
+        if (!VerifyExtentPreview())
+        {
+            return 11;
+        }
 
         // v1.33 interop tail layout: valid follows the reserved padding guard and is
         // included in the managed struct passed to adm_monitor_set_overrides.
