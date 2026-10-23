@@ -79,6 +79,7 @@
 - [方向与基线（四期 4.1）](architecture/RUST_INVERSION_BASELINE.md)
 - [覆盖先行（四期 4.2）](architecture/RUST_INVERSION_COVERAGE.md)
 - [Rust 渲染场景（四期 4.3）](architecture/RUST_INVERSION_SCENE.md)
+- [语义策略与参数 JSON 迁入 Rust（四期 4.4）](architecture/RUST_INVERSION_POLICY.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
