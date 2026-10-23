@@ -160,7 +160,7 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
-C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene
+C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json
 所有模块 ──→ ADMCore（领域模型、错误、选项、能力）
 ```
 
@@ -178,7 +178,8 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 | `rust/crates/mradm-adm` / `mradm-wav` | ADM XML 元数据；WAVE / RF64 / BW64 读写与容器编辑 |
 | `rust/crates/mradm-math` | 跨平台逐位一致的可移植 sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC 头追踪数据报解码（回环 UDP 输入） |
-| `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表 |
+| `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表；语义策略、报告与模板、导出回写、DirectSpeakers 矩阵与屏幕配置 |
+| `rust/crates/mradm-json` | 与 nlohmann/json 3.12.0 字节一致的 JSON 解析与写出 |
 | `rust/crates/mradm-ffi` | 唯一含 `unsafe` 的私有 C 边界 |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT 桌面 GUI，经 P/Invoke 调用 C ABI |
 
