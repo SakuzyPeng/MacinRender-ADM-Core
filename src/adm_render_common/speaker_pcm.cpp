@@ -92,7 +92,7 @@ MatrixRecords::MatrixRecords(const DirectSpeakersMatrix& matrix) {
 Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
                                                      MradmRenderPrepared* raw,
                                                      const MradmRenderPreparedView& view,
-                                                     uint32_t kernel,
+                                                     DriverStyle style,
                                                      LogSink& logs,
                                                      std::string_view module) {
     auto prepared = std::make_shared<RustPrepared>();
@@ -107,7 +107,8 @@ Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
     if (code != 0) {
         return make_error(static_cast<ErrorCode>(code), string_of(view.message), string_of(view.context));
     }
-    prepared->mix = {view.plan, view.tracks, kernel};
+    prepared->mix = {view.plan, view.tracks, 1U, style};
+    prepared->outputs = static_cast<uint16_t>(view.outputs);
     return prepared;
 }
 
@@ -188,7 +189,6 @@ Result<std::unique_ptr<IRenderStream>> open_file_stream(const RustPrepared& prep
 
 namespace {
 
-// The HOA encoder keeps its own wording.
 struct DriverText {
     std::string_view begin;
     std::string_view step;
@@ -197,15 +197,30 @@ struct DriverText {
 constexpr DriverText k_speaker_text{"rendering audio", "rendering", "short write while rendering"};
 constexpr DriverText k_hoa_text{"encoding HOA", "encoding", "short write while encoding HOA"};
 
-[[nodiscard]] std::string begin_log(bool hoa, std::size_t tracks, uint16_t outputs, uint64_t frames) {
-    return hoa ? fmt::format("encoding {} input channels (Objects + DirectSpeakers) → HOA3 ({} ch), {} frames",
-                             tracks,
-                             outputs,
-                             frames)
-               : fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames",
-                             tracks,
-                             outputs,
-                             frames);
+[[nodiscard]] std::string begin_log(DriverStyle style, std::size_t tracks, uint16_t outputs, uint64_t frames) {
+    switch (style) {
+    case DriverStyle::hoa:
+        return fmt::format(
+            "encoding {} input channels (Objects + DirectSpeakers) → HOA3 ({} ch), {} frames", tracks, outputs, frames);
+    case DriverStyle::ear:
+        return fmt::format("rendering {} tracks → {} channels, {} frames", tracks, outputs, frames);
+    case DriverStyle::speaker:
+        break;
+    }
+    return fmt::format(
+        "rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames", tracks, outputs, frames);
+}
+
+[[nodiscard]] std::string failure(DriverStyle style, std::string_view backend, const char* what) {
+    switch (style) {
+    case DriverStyle::hoa:
+        return fmt::format("HOA encode failed: {}", what);
+    case DriverStyle::ear:
+        return fmt::format("render failed: {}", what);
+    case DriverStyle::speaker:
+        break;
+    }
+    return fmt::format("{} render failed: {}", backend, what);
 }
 
 } // namespace
@@ -221,10 +236,10 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                                          LogSink& logs,
                                          const SpeakerBlockProcessor& process) {
     const auto& info = plan.scene.info;
-    const bool hoa = gain_matrix.kernel == 1U;
-    const auto& wording = hoa ? k_hoa_text : k_speaker_text;
+    const auto style = gain_matrix.style;
+    const auto& wording = style == DriverStyle::hoa ? k_hoa_text : k_speaker_text;
     try {
-        logs.log(LogLevel::info, backend, begin_log(hoa, gain_matrix.tracks, num_out_ch, info.num_frames));
+        logs.log(LogLevel::info, backend, begin_log(style, gain_matrix.tracks, num_out_ch, info.num_frames));
         progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, wording.begin});
 
         const auto& window = plan.render_window;
@@ -330,10 +345,7 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
         }
         return metrics;
     } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error,
-                          hoa ? fmt::format("HOA encode failed: {}", e.what())
-                              : fmt::format("{} render failed: {}", backend, e.what()),
-                          "input=" + plan.input_path);
+        return make_error(ErrorCode::io_error, failure(style, backend, e.what()), "input=" + plan.input_path);
     }
 }
 

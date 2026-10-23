@@ -21,10 +21,7 @@
 #include "adm/audio_io.h"
 #include "adm/direct_speakers_matrix.h"
 #include "adm/render.h"
-#include "adm/render_ear.h"
-#ifdef __APPLE__
 #include "adm/render_apple.h"
-#endif
 
 namespace {
 
@@ -426,13 +423,10 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    bool ok = verify_backend(
-        "EAR", mradm::create_ear_renderer(), input_path, input_samples, dynamic_matrix, lfe_matrix, 255U);
-    // VBAP reads only the Rust render scene (PCM consistency 4.5); see mradm-render tests/vbap.rs.
-#ifdef __APPLE__
-    ok &=
+    // VBAP and EAR read only the Rust render scene (PCM consistency 4.5); see mradm-render
+    // tests/vbap.rs and tests/ear.rs.
+    const bool ok =
         verify_backend("Apple", mradm::create_apple_renderer(), input_path, input_samples, dynamic_matrix, lfe_matrix);
-#endif
 
     if (ok) {
         std::cout << "DirectSpeakers matrix renderer test passed\n";

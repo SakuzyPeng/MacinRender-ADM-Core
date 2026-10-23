@@ -44,12 +44,17 @@ struct ChannelBinding {
     std::string speaker_label_key;
 };
 
-// A Rust offline driver plan of `tracks` input channels: a PcmMixer plan (kernel 0, prepared in
-// C++ or by a Rust backend) or an HOA3 encoder plan (kernel 1).
+// The driver's log, progress and error wording: the loudspeaker backends', or the HOA encoder's
+// and EAR's own.
+enum class DriverStyle : uint8_t { speaker, hoa, ear };
+
+// A Rust offline driver plan of `tracks` input channels: a PcmMixer plan prepared in C++ (kernel
+// 0) or a Rust backend's preparation (kernel 1).
 struct SpeakerMix {
     const void* plan{nullptr};
     std::size_t tracks{0};
     uint32_t kernel{0};
+    DriverStyle style{DriverStyle::speaker};
 };
 
 struct PreparedPcmMix {
@@ -113,8 +118,8 @@ struct MatrixRecords {
     std::size_t label_bytes{0};
 };
 
-// A VBAP or HOA plan prepared in Rust mradm-render; immutable and reused across render_window()
-// and open_stream() calls (PreviewSession scrubbing).
+// A VBAP, HOA or EAR plan prepared in Rust mradm-render; immutable and reused across
+// render_window() and open_stream() calls (PreviewSession scrubbing).
 struct RustPrepared final : IPreparedRender {
     std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
         nullptr, &mradm_render_prepared_destroy};
@@ -129,7 +134,7 @@ struct RustPrepared final : IPreparedRender {
 [[nodiscard]] Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
                                                                    MradmRenderPrepared* raw,
                                                                    const MradmRenderPreparedView& view,
-                                                                   uint32_t kernel,
+                                                                   DriverStyle style,
                                                                    LogSink& logs,
                                                                    std::string_view module);
 

@@ -14,8 +14,6 @@
 #include <utility>
 #include <vector>
 
-#include "adm/render_ear.h"
-
 #include "../reference/pcm_mix_legacy.h"
 #include "pcm_mix.h"
 #include "speaker_pcm.h"
@@ -78,45 +76,7 @@ std::vector<float> signal(std::size_t floats) {
     return result;
 }
 
-void check_clipped_object_preparation() {
-    // VBAP reads only the Rust render scene (PCM consistency 4.5); see mradm-render tests/vbap.rs.
-    mradm::NullLogSink logs;
-    auto renderer = mradm::create_ear_renderer();
-    for (const bool direct_speakers : {false, true}) {
-        for (const std::uint64_t end : {0U, 48000U, 144000U}) {
-            mradm::RenderPlan plan;
-            plan.output_layout = "0+2+0";
-            plan.scene.info.sample_rate = 48000U;
-            plan.scene.info.num_channels = 1U;
-            plan.scene.info.num_frames = 144000U;
-            mradm::SceneObject object;
-            object.id = "AO_1001";
-            object.end_sample = end;
-            mradm::SceneTrackRef track;
-            track.channel_index = 0U;
-            track.track_uid = "ATU_00000001";
-            for (const std::uint64_t start : {0U, 96000U}) {
-                if (direct_speakers) {
-                    mradm::SceneDirectSpeakersBlock block;
-                    block.speaker_labels = {"M+030"};
-                    block.start_sample = start;
-                    block.end_sample = start == 0U ? 96000U : 144000U;
-                    track.ds_blocks.push_back(std::move(block));
-                } else {
-                    mradm::SceneObjectBlock block;
-                    block.position.azimuth = 30.0F;
-                    block.start_sample = start;
-                    block.end_sample = start == 0U ? 96000U : 144000U;
-                    track.blocks.push_back(block);
-                }
-            }
-            object.tracks.push_back(std::move(track));
-            plan.scene.objects.push_back(std::move(object));
-            require(renderer->prepare(plan, logs).has_value(), "EAR rejects blocks clipped by object duration");
-        }
-    }
-}
-
+// Blocks clipped by the object duration in the Rust backends: mradm-render tests/vbap.rs, ear.rs.
 void check_clipped_timeline() {
     mradm::render_common::ChannelGainInfo channel;
     // Keep clipped blocks as interpolation predecessors when another object uses the same input channel.
@@ -307,7 +267,6 @@ void compare_matrix(Stats& stats) {
 
 int main(int argc, char** argv) {
     try {
-        check_clipped_object_preparation();
         check_clipped_timeline();
         Stats speaker;
         Stats ear;

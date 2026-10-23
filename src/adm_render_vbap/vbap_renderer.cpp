@@ -131,11 +131,11 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
     MradmRenderPrepared* raw = nullptr;
     MradmRenderPreparedView view{};
     const auto code = mradm_render_vbap_prepare(plan.scene_handle->raw, &request, &raw, &view);
-    auto prepared = render_common::adopt_prepared(code, raw, view, 0U, logs, "saf-vbap");
+    auto prepared =
+        render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::speaker, logs, "saf-vbap");
     if (!prepared) {
         return tl::unexpected{prepared.error()};
     }
-    (*prepared)->outputs = static_cast<uint16_t>(layout->speakers.size());
     return std::static_pointer_cast<IPreparedRender>(*prepared);
 }
 

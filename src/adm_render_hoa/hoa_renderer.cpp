@@ -53,11 +53,11 @@ class HoaRenderer final : public IRenderer {
         MradmRenderPrepared* raw = nullptr;
         MradmRenderPreparedView view{};
         const auto code = mradm_render_hoa_prepare(plan.scene_handle->raw, &request, &raw, &view);
-        auto prepared = render_common::adopt_prepared(code, raw, view, 1U, logs, "hoa-encode");
+        auto prepared =
+            render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::hoa, logs, "hoa-encode");
         if (!prepared) {
             return tl::unexpected{prepared.error()};
         }
-        (*prepared)->outputs = k_hoa3_channels;
         (*prepared)->inputs = plan.scene.info.num_channels;
         (*prepared)->sample_rate = plan.scene.info.sample_rate;
         return std::static_pointer_cast<IPreparedRender>(*prepared);
