@@ -201,10 +201,14 @@ pub fn apply_object(rule: &PolicyObject, sample_rate: u32, block: &mut PolicyBlo
             block.width *= scale * rule.width_scale.or(1.);
             block.height *= scale * rule.height_scale.or(1.);
             block.depth *= scale * rule.depth_scale.or(1.);
-            let max = rule.extent_max.or(1.);
-            block.width = math::clamp(block.width, 0., max);
-            block.height = math::clamp(block.height, 0., max);
-            block.depth = math::clamp(block.depth, 0., max);
+            // `max` is in the block's own units (degrees for polar width and height). Without it
+            // the extent stays within the ADM ranges: polar width and height up to 360 degrees,
+            // everything else up to 1.
+            let angle = if block.cartesian != 0 { 1. } else { 360. };
+            let limit = |v: f32, range: f32| math::clamp(v, 0., rule.extent_max.or(range));
+            block.width = limit(block.width, angle);
+            block.height = limit(block.height, angle);
+            block.depth = limit(block.depth, 1.);
         }
         _ => {}
     }
@@ -377,6 +381,30 @@ mod tests {
         rule.extent = SECTION_DISABLED;
         apply_object(&rule, 48_000, &mut block);
         assert_eq!((block.divergence, block.width), (0., 0.));
+    }
+
+    #[test]
+    fn extent_defaults_to_the_adm_ranges_unless_max_is_given() {
+        let mut block = PolicyBlock {
+            width: 30.,
+            height: 300.,
+            depth: 0.8,
+            ..PolicyBlock::default()
+        };
+        let mut rule = PolicyObject {
+            extent: SECTION_SCALED,
+            extent_scale: PolicyValue::some(0.5),
+            ..PolicyObject::default()
+        };
+        apply_object(&rule, 48_000, &mut block);
+        assert_eq!((block.width, block.height, block.depth), (15., 150., 0.4));
+        rule.extent_scale = PolicyValue::some(4.);
+        apply_object(&rule, 48_000, &mut block);
+        assert_eq!((block.width, block.height, block.depth), (60., 360., 1.));
+        rule.extent_max = PolicyValue::some(12.);
+        rule.extent_scale = PolicyValue::some(1.);
+        apply_object(&rule, 48_000, &mut block);
+        assert_eq!((block.width, block.height, block.depth), (12., 12., 1.));
     }
 
     #[test]

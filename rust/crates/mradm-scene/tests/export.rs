@@ -2,7 +2,9 @@
 //! the C++ implementation this module replaced (`metadata::patch_axml` at `c0a3720`) for every
 //! scene without a policy and every case of `policy-v1/policies.jsonl` and
 //! `export-v1/policies.jsonl`: the patched AXML's length and FNV-1a 64, or the error code and
-//! message. Policies the parser rejects never reach the export.
+//! message. Policies the parser rejects never reach the export. The 11 records marked
+//! `"regenerated":"extent-adm-range"` were recomputed by Rust when the extent default became the
+//! ADM ranges instead of a maximum of 1.
 use mradm_adm::{Document, Snapshot};
 use mradm_json::Value;
 use mradm_scene::{RenderScene, policy, writeback};
@@ -187,7 +189,7 @@ fn exports_reproduce_the_cpp_goldens() {
             }
         }
     }
-    assert_eq!((changed, errors, rejected), (283, 20, 160));
+    assert_eq!((changed, errors, rejected), (282, 20, 160));
     std::fs::remove_dir_all(&temp).unwrap();
 }
 

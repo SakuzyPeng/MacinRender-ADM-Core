@@ -377,7 +377,7 @@ fn neutral_position() -> Value {
 }
 
 /// Applied unmodified, the template changes nothing. channel_lock, head_locked and mute have no
-/// neutral value and are left out.
+/// neutral value and are left out, and so is `extent.max`: without it extents are only kept within the ADM ranges.
 fn neutral_override() -> Map {
     map! {
         "diffuse" => object! { "enabled" => true, "scale" => 1.0f32, "max" => 1.0f32 },
@@ -387,7 +387,6 @@ fn neutral_override() -> Map {
             "width_scale" => 1.0f32,
             "height_scale" => 1.0f32,
             "depth_scale" => 1.0f32,
-            "max" => 1.0f32,
         },
         "divergence" => object! { "enabled" => true, "scale" => 1.0f32, "range_scale" => 1.0f32, "max_range" => 120.0f32 },
         "interpolation" => object! { "honor_jump_position" => true, "max_ms" => 0u32 },

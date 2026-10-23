@@ -29,7 +29,7 @@ JSON + CLI(`--semantic-policy` / `--write-semantic-report`)使用,交互门槛�
 |---|---|---|
 | gain | 增益 | scale 缩放 · gain_db dB 偏移 · mute 静音 |
 | diffuse | 扩散 | enabled 启用 · scale 缩放 · max 上限 |
-| extent | 范围 | width/height/depth 宽/高/深 缩放 · max 上限 |
+| extent | 范围 | width/height/depth 宽/高/深 缩放 · max 上限（缺省为 ADM 取值范围：极坐标宽/高 360°、深 1，Cartesian 均为 1） |
 | divergence | 发散 | scale 缩放 · range_scale 范围缩放 · max_range 范围上限 |
 
 **一期排除**:`position`(整个定位家族,含动态对象轨迹被压平的坑)、`channelLock`(声道锁定)、
