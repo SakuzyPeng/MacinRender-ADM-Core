@@ -6,7 +6,7 @@
 use crate::adm::Text;
 use crate::scene::SceneHandle;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
-use mradm_render::{ear, hoa, offline, stream, vbap};
+use mradm_render::{ear, hoa, live_vbap, offline, stream, vbap};
 use std::ffi::c_void;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -1259,6 +1259,357 @@ pub unsafe extern "C" fn mradm_render_stream_destroy(handle: *mut RenderStream) 
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
     }
+}
+
+/// The Scene stream VBAP renderer's configuration (`live_scene::RendererConfig`).
+#[repr(C)]
+pub struct RenderLiveVbapRequest {
+    layout_id: Text,
+    /// 1 for the Apple speaker geometry.
+    geometry: u32,
+    /// `speaker_spread_mode != none`.
+    spread: u32,
+    split_power: u32,
+    smoothing_frames: u32,
+}
+
+/// `live_scene::ElementDescriptor`; role 0 object, 1 DirectSpeakers, 2 LFE.
+#[repr(C)]
+pub struct RenderLiveElement {
+    element_id: u64,
+    role: u32,
+    speaker_label: Text,
+    has_position: u32,
+    position: [f32; 3],
+}
+
+/// `live_scene::ObjectState`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RenderLiveState {
+    valid_fields: u64,
+    active: u32,
+    linear_gain: f32,
+    position: [f32; 3],
+    width: f32,
+    height: f32,
+    depth: f32,
+    diffuse: f32,
+    divergence: f32,
+    channel_lock: u32,
+    screen_reference: u32,
+    head_locked: u32,
+    divergence_azimuth_range: f32,
+    divergence_position_range: f32,
+    has_max_distance: u32,
+    max_distance: f32,
+}
+
+/// A PCM plane; the samples are read only with a signal.
+#[repr(C)]
+pub struct RenderLivePlane {
+    element_id: u64,
+    has_signal: u32,
+    samples: *const f32,
+    samples_len: usize,
+}
+
+#[repr(C)]
+pub struct RenderLiveEntry {
+    element_id: u64,
+    state: RenderLiveState,
+}
+
+#[repr(C)]
+pub struct RenderLiveUpdate {
+    element_id: u64,
+    offset: u32,
+    ramp: u32,
+    jump: u32,
+    changed: u64,
+    cleared: u64,
+    state: RenderLiveState,
+}
+
+/// One `live_scene::Frame`; `trace` is the checkpoint prefix, empty for none.
+#[repr(C)]
+pub struct RenderLiveFrame {
+    generation: u64,
+    duration: u32,
+    planes: *const RenderLivePlane,
+    planes_len: usize,
+    initial: *const RenderLiveEntry,
+    initial_len: usize,
+    updates: *const RenderLiveUpdate,
+    updates_len: usize,
+    trace: Text,
+}
+
+/// A warning of the rendered frame (`live_scene::DiagnosticCode`); the message is static text.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RenderLiveDiagnostic {
+    code: u32,
+    element_id: u64,
+    field: u64,
+    message: Text,
+}
+
+pub struct RenderLiveVbap {
+    renderer: live_vbap::Renderer,
+    initial: Vec<live_vbap::Entry>,
+    updates: Vec<live_vbap::Update>,
+    diagnostics: Vec<RenderLiveDiagnostic>,
+}
+
+fn live_state(s: &RenderLiveState) -> live_vbap::State {
+    live_vbap::State {
+        valid_fields: s.valid_fields,
+        active: s.active != 0,
+        linear_gain: s.linear_gain,
+        position: s.position,
+        width: s.width,
+        height: s.height,
+        depth: s.depth,
+        diffuse: s.diffuse,
+        divergence: s.divergence,
+        channel_lock: s.channel_lock != 0,
+        screen_reference: s.screen_reference != 0,
+        head_locked: s.head_locked != 0,
+        divergence_azimuth_range: s.divergence_azimuth_range,
+        divergence_position_range: s.divergence_position_range,
+        channel_lock_max_distance: (s.has_max_distance != 0).then_some(s.max_distance),
+    }
+}
+
+unsafe fn live_vbap<'a>(handle: *mut RenderLiveVbap) -> Result<&'a mut RenderLiveVbap, Error> {
+    unsafe { handle.as_mut() }.ok_or_else(|| bad("无效 Live VBAP 句柄"))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_vbap_create(
+    request: *const RenderLiveVbapRequest,
+    output: *mut *mut RenderLiveVbap,
+    message: *mut u8,
+    message_len: *mut usize,
+) -> i32 {
+    boundary(
+        message,
+        message_len,
+        ptr::null_mut(),
+        ptr::null_mut(),
+        || {
+            let (Some(out), Some(r)) = (unsafe { output.as_mut() }, unsafe { request.as_ref() })
+            else {
+                return Err(bad("无效 Live VBAP 参数"));
+            };
+            *out = ptr::null_mut();
+            let renderer = live_vbap::Renderer::new(&live_vbap::Config {
+                layout_id: unsafe { bytes(&r.layout_id)? },
+                geometry: if r.geometry == 1 {
+                    mradm_scene::layouts::Geometry::Apple
+                } else {
+                    mradm_scene::layouts::Geometry::Standard
+                },
+                spread: r.spread != 0,
+                split_power: r.split_power != 0,
+                smoothing_frames: r.smoothing_frames,
+            })?;
+            *out = Box::into_raw(Box::new(RenderLiveVbap {
+                renderer,
+                initial: Vec::new(),
+                updates: Vec::new(),
+                diagnostics: Vec::new(),
+            }));
+            Ok(())
+        },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_vbap_destroy(handle: *mut RenderLiveVbap) {
+    if !handle.is_null() {
+        unsafe { drop(Box::from_raw(handle)) };
+    }
+}
+
+/// The output channels; 0 for a null handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_vbap_channels(handle: *const RenderLiveVbap) -> u32 {
+    unsafe { handle.as_ref() }.map_or(0, |h| h.renderer.output_channels())
+}
+
+/// Replaces the element generation; a failure keeps the previous one.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_vbap_configure(
+    handle: *mut RenderLiveVbap,
+    generation: u64,
+    elements: *const RenderLiveElement,
+    elements_len: usize,
+    message: *mut u8,
+    message_len: *mut usize,
+    context: *mut u8,
+    context_len: *mut usize,
+) -> i32 {
+    boundary(message, message_len, context, context_len, || {
+        let h = unsafe { live_vbap(handle)? };
+        let elements = unsafe { input(elements, elements_len)? }
+            .iter()
+            .map(|e| {
+                Ok(live_vbap::Element {
+                    id: e.element_id,
+                    role: match e.role {
+                        0 => Some(live_vbap::Role::Object),
+                        1 => Some(live_vbap::Role::DirectSpeaker),
+                        2 => Some(live_vbap::Role::Lfe),
+                        _ => None,
+                    },
+                    speaker_label: unsafe { bytes(&e.speaker_label)? },
+                    has_position: e.has_position != 0,
+                    position: e.position,
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        h.renderer.configure(generation, &elements)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_vbap_reset(handle: *mut RenderLiveVbap) {
+    if let Some(h) = unsafe { handle.as_mut() } {
+        h.renderer.reset();
+    }
+}
+
+/// Renders the frame into the start of `output`. On success `*diagnostics` lists the frame's
+/// warnings until the next call on the handle; on failure the output is unchanged.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_vbap_render(
+    handle: *mut RenderLiveVbap,
+    frame: *const RenderLiveFrame,
+    output: *mut f32,
+    output_len: usize,
+    diagnostics: *mut *const RenderLiveDiagnostic,
+    diagnostics_len: *mut usize,
+    message: *mut u8,
+    message_len: *mut usize,
+    context: *mut u8,
+    context_len: *mut usize,
+) -> i32 {
+    boundary(message, message_len, context, context_len, || {
+        let (Some(list), Some(count)) = (unsafe { diagnostics.as_mut() }, unsafe {
+            diagnostics_len.as_mut()
+        }) else {
+            return Err(bad("无效 Live VBAP 参数"));
+        };
+        *list = ptr::null();
+        *count = 0;
+        // Retain the mixer boundary's rejection of overlapping PCM. Validate the raw
+        // ranges before borrowing the handle, samples or mutable output.
+        let invalid_buffers = |_| Error {
+            code: 1,
+            message: b"Invalid Live VBAP FFI arguments".to_vec(),
+            context: b"Live VBAP DSP".to_vec(),
+        };
+        if handle.is_null() {
+            return Err(bad("无效 Live VBAP 句柄"));
+        }
+        if frame.is_null() {
+            return Err(bad("无效 Live VBAP 参数"));
+        }
+        crate::checked::separate(handle, 1, frame, 1).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, output, output_len).map_err(invalid_buffers)?;
+        crate::checked::separate(frame, 1, output, output_len).map_err(invalid_buffers)?;
+        let f = unsafe { frame.as_ref() }.ok_or_else(|| bad("无效 Live VBAP 参数"))?;
+        crate::checked::separate(handle, 1, f.planes, f.planes_len).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, f.initial, f.initial_len).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, f.updates, f.updates_len).map_err(invalid_buffers)?;
+        crate::checked::separate(handle, 1, f.trace.data, f.trace.len).map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.planes, f.planes_len)
+            .map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.initial, f.initial_len)
+            .map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.updates, f.updates_len)
+            .map_err(invalid_buffers)?;
+        crate::checked::separate(output, output_len, f.trace.data, f.trace.len)
+            .map_err(invalid_buffers)?;
+        let records = unsafe { input(f.planes, f.planes_len)? };
+        for p in records.iter().filter(|p| p.has_signal != 0) {
+            crate::checked::separate(handle, 1, p.samples, p.samples_len)
+                .map_err(invalid_buffers)?;
+            crate::checked::separate(output, output_len, p.samples, p.samples_len)
+                .map_err(invalid_buffers)?;
+        }
+        let h = unsafe { live_vbap(handle)? };
+        let planes = records
+            .iter()
+            .map(|p| {
+                Ok(live_vbap::Plane {
+                    element_id: p.element_id,
+                    has_signal: p.has_signal != 0,
+                    samples: if p.has_signal != 0 {
+                        unsafe { input(p.samples, p.samples_len)? }
+                    } else {
+                        &[]
+                    },
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        h.initial.clear();
+        h.initial
+            .extend(
+                unsafe { input(f.initial, f.initial_len)? }
+                    .iter()
+                    .map(|e| live_vbap::Entry {
+                        element_id: e.element_id,
+                        state: live_state(&e.state),
+                    }),
+            );
+        h.updates.clear();
+        h.updates
+            .extend(unsafe { input(f.updates, f.updates_len)? }.iter().map(|u| {
+                live_vbap::Update {
+                    element_id: u.element_id,
+                    offset: u.offset,
+                    ramp: u.ramp,
+                    jump: u.jump != 0,
+                    changed: u.changed,
+                    cleared: u.cleared,
+                    state: live_state(&u.state),
+                }
+            }));
+        let output = unsafe { checked_output(output, output_len) }
+            .ok_or_else(|| bad("无效 Live VBAP 输出"))?;
+        h.renderer.render(
+            &live_vbap::Frame {
+                generation: f.generation,
+                duration: f.duration,
+                planes: &planes,
+                initial: &h.initial,
+                updates: &h.updates,
+                trace: unsafe { bytes(&f.trace)? },
+            },
+            output,
+        )?;
+        h.diagnostics.clear();
+        h.diagnostics.extend(
+            h.renderer
+                .diagnostics()
+                .iter()
+                .map(|d| RenderLiveDiagnostic {
+                    code: d.code,
+                    element_id: d.element_id,
+                    field: d.field,
+                    message: Text {
+                        data: d.message.as_ptr(),
+                        len: d.message.len(),
+                    },
+                }),
+        );
+        *list = h.diagnostics.as_ptr();
+        *count = h.diagnostics.len();
+        Ok(())
+    })
 }
 
 #[cfg(test)]

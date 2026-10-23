@@ -32,7 +32,7 @@ FFI_HEADERS = [
     "tests/unit/hoa_ffi.h",
     "src/adm_dsp/live_binaural_ffi.h",
     "src/adm_dsp/room_ffi.h",
-    "src/adm_dsp/live_vbap_ffi.h",
+    "tests/unit/live_vbap_ffi.h",
     "src/adm_dsp/live_triple_balance_ffi.h",
     "src/adm_dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
