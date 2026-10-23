@@ -1,8 +1,9 @@
 //! JSON compatible with the project's former nlohmann/json 3.12.0 handling (PCM consistency 4.4).
 //!
 //! Parsing follows nlohmann's acceptance: an optional UTF-8 BOM, RFC 8259 grammar with strict
-//! UTF-8 strings, no nesting limit, later duplicate keys replacing earlier ones, and nlohmann's
-//! number classes (a non-negative integer is unsigned, a negative one signed, `-0` the signed
+//! UTF-8 strings, no nesting limit, later duplicate keys replacing earlier ones,
+//! a NUL token after the complete root value ending input, and nlohmann's number classes
+//! (a non-negative integer is unsigned, a negative one signed, `-0` the signed
 //! integer 0, integers outside 64 bits become doubles, and a double that overflows is the
 //! `out_of_range.406` error). Objects keep their keys in byte order, as `std::map` did.
 //!
@@ -517,7 +518,9 @@ impl<'a> Parser<'a> {
                 self.skip_whitespace();
                 match stack.last_mut() {
                     None => {
-                        if self.pos != self.bytes.len() {
+                        // nlohmann's lexer treats NUL as end_of_input. Only accept it after a
+                        // complete root value; NUL inside strings or unfinished containers is invalid.
+                        if self.pos != self.bytes.len() && self.peek() != Some(0) {
                             return Err(self.error("值之后还有多余内容"));
                         }
                         return Ok(value);

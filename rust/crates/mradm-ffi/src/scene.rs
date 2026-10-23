@@ -273,10 +273,11 @@ unsafe impl<T> Sync for Static<T> {}
 
 /// Like `boundary`, plus the locator kind: 0 none, 1 `input=<path>`, 2 `path=<path>`, 3 the
 /// caller's source label.
-fn scene_boundary(
+fn scene_boundary_with_message_len(
     context: *mut u32,
     message: *mut u8,
     capacity: usize,
+    message_len: *mut usize,
     f: impl FnOnce() -> mradm_scene::Result<()>,
 ) -> i32 {
     let error = match catch_unwind(AssertUnwindSafe(f)) {
@@ -300,6 +301,7 @@ fn scene_boundary(
         }
     }
     let detail = error.as_ref().map_or("", |e| e.message.as_str());
+    let mut written = 0;
     if !message.is_null() && capacity != 0 {
         let mut len = detail.len().min(capacity - 1);
         while !detail.is_char_boundary(len) {
@@ -309,8 +311,23 @@ fn scene_boundary(
             ptr::copy_nonoverlapping(detail.as_ptr(), message, len);
             *message.add(len) = 0;
         }
+        written = len;
+    }
+    if !message_len.is_null() {
+        unsafe {
+            *message_len = written;
+        }
     }
     error.map_or(0, |e| e.code)
+}
+
+fn scene_boundary(
+    context: *mut u32,
+    message: *mut u8,
+    capacity: usize,
+    f: impl FnOnce() -> mradm_scene::Result<()>,
+) -> i32 {
+    scene_boundary_with_message_len(context, message, capacity, ptr::null_mut(), f)
 }
 
 fn invalid(message: &str) -> mradm_scene::Error {
@@ -1050,9 +1067,10 @@ pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
     output: *mut *mut DirectMatrix,
     view: *mut DirectMatrixView,
     message: *mut u8,
-    capacity: usize,
+    message_len: *mut usize,
 ) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
+    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
+    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
         if output.is_null() || view.is_null() {
             return Err(invalid("无效 DirectSpeakers 矩阵输出"));
         }
@@ -1127,9 +1145,10 @@ pub unsafe extern "C" fn mradm_scene_screen_parse(
     json_len: usize,
     output: *mut ScreenConfigView,
     message: *mut u8,
-    capacity: usize,
+    message_len: *mut usize,
 ) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
+    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
+    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
         if output.is_null() {
             return Err(invalid("无效屏幕配置输出"));
         }
@@ -1150,6 +1169,38 @@ pub unsafe extern "C" fn mradm_scene_screen_parse(
 mod tests {
     use super::*;
     use std::{ptr, slice, str};
+
+    #[test]
+    fn config_error_lengths_preserve_nul_and_bound_utf8_copies() {
+        let json = "{\"音\\u0000尾\":1}".as_bytes();
+        let expected = direct_matrix::parse(json).unwrap_err().message;
+        for capacity in [0, 1, 2, 58, 60, 256] {
+            let mut message = [0xCC; 256];
+            let mut len = capacity;
+            let mut handle = ptr::null_mut();
+            let mut view = std::mem::MaybeUninit::uninit();
+            let code = unsafe {
+                mradm_scene_direct_matrix_parse(
+                    json.as_ptr(),
+                    json.len(),
+                    &mut handle,
+                    view.as_mut_ptr(),
+                    message.as_mut_ptr(),
+                    &mut len,
+                )
+            };
+            assert_eq!(code, 1);
+            assert!(handle.is_null());
+            assert!(len <= capacity.saturating_sub(1));
+            assert_eq!(str::from_utf8(&message[..len]).unwrap(), &expected[..len]);
+            if capacity != 0 {
+                assert_eq!(message[len], 0);
+            }
+            if capacity > expected.len() {
+                assert_eq!(len, expected.len());
+            }
+        }
+    }
 
     #[test]
     fn layout_views_round_trip_and_reject_unknown_geometry() {
