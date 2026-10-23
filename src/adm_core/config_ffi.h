@@ -37,17 +37,18 @@ typedef struct MradmScreenConfigView {
 } MradmScreenConfigView;
 // cppcheck-suppress-end unusedStructMember
 
-// The caller attaches its source label to errors.
+// The caller attaches its source label to errors. For both parsers, message_len is the buffer
+// capacity on input and bytes copied (excluding the final terminator) on output. NULL disables it.
 int32_t mradm_scene_direct_matrix_parse(const uint8_t* json,
                                         size_t json_len,
                                         MradmDirectMatrix** output,
                                         MradmDirectMatrixView* view,
-                                        uint8_t* message,
-                                        size_t capacity);
+                                        char* message,
+                                        size_t* message_len);
 void mradm_scene_direct_matrix_destroy(MradmDirectMatrix* handle);
 // Parses without validating the geometry (mradm_room_validate_screens does that).
 int32_t mradm_scene_screen_parse(
-    const uint8_t* json, size_t json_len, MradmScreenConfigView* output, uint8_t* message, size_t capacity);
+    const uint8_t* json, size_t json_len, MradmScreenConfigView* output, char* message, size_t* message_len);
 
 #ifdef __cplusplus
 }
