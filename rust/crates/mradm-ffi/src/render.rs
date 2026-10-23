@@ -6,7 +6,7 @@
 use crate::adm::Text;
 use crate::scene::SceneHandle;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
-use mradm_render::{hoa, offline, stream, vbap};
+use mradm_render::{ear, hoa, offline, stream, vbap};
 use std::ffi::c_void;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -633,21 +633,14 @@ unsafe fn driver<'a>(handle: *mut RenderOffline) -> offline::Result<&'a mut offl
         .ok_or_else(|| driver_error("无效离线渲染句柄"))
 }
 
-/// The plan behind an opaque pointer of the given kernel.
+/// The plan behind an opaque pointer: 0, a `PcmMixer` plan prepared in C++; 1, the kernel of a
+/// Rust preparation (`RenderPreparedView::plan`).
 unsafe fn kernel(plan: *const c_void, kind: u32) -> Option<offline::Kernel> {
     match kind {
         0 => unsafe { plan.cast::<Arc<mradm_dsp::pcm_mix::Plan>>().as_ref() }
             .map(|p| offline::Kernel::Mix(Arc::clone(p))),
-        1 => unsafe { plan.cast::<Arc<mradm_dsp::hoa::Plan>>().as_ref() }
-            .map(|p| offline::Kernel::Hoa(Arc::clone(p))),
+        1 => unsafe { plan.cast::<offline::Kernel>().as_ref() }.cloned(),
         _ => None,
-    }
-}
-
-fn kernel_plan(kernel: &offline::Kernel) -> *const c_void {
-    match kernel {
-        offline::Kernel::Mix(p) => ptr::from_ref(p).cast(),
-        offline::Kernel::Hoa(p) => ptr::from_ref(p).cast(),
     }
 }
 
@@ -824,8 +817,8 @@ pub struct RenderVbapRequest {
     split_power: u32,
 }
 
-/// The log lines (also of a failed preparation) and the error, or the offline driver's plan (of
-/// the backend's kernel) and its input-channel count once prepared.
+/// The log lines (also of a failed preparation) and the error, or the offline driver's plan
+/// (kernel 1), its input-channel count and its output channels once prepared.
 #[repr(C)]
 pub struct RenderPreparedView {
     logs: *const RenderLogLine,
@@ -834,9 +827,10 @@ pub struct RenderPreparedView {
     context: Text,
     plan: *const c_void,
     tracks: usize,
+    outputs: usize,
 }
 
-/// A prepared VBAP or HOA render, or the log lines and error of a failed one.
+/// A prepared VBAP, HOA or EAR render, or the log lines and error of a failed one.
 pub struct RenderPrepared {
     texts: Vec<Vec<u8>>,
     lines: Vec<RenderLogLine>,
@@ -894,8 +888,12 @@ fn prepared(
         logs_len: handle.lines.len(),
         message: Text::bytes(&handle.error.message),
         context: Text::bytes(&handle.error.context),
-        plan: handle.kernel.as_ref().map_or(ptr::null(), kernel_plan),
+        plan: handle
+            .kernel
+            .as_ref()
+            .map_or(ptr::null(), |k| ptr::from_ref(k).cast()),
         tracks,
+        outputs: handle.settings.1,
     };
     *output = Box::into_raw(handle);
     if code == 0 {
@@ -907,6 +905,26 @@ fn prepared(
             context: Vec::new(),
         })
     }
+}
+
+/// A borrowed DirectSpeakers matrix.
+unsafe fn matrix_routes<'a>(
+    data: *const RenderMatrixRoute,
+    len: usize,
+) -> Result<Vec<MatrixRoute<'a>>, Error> {
+    unsafe { input(data, len)? }
+        .iter()
+        .map(|m| {
+            Ok(MatrixRoute {
+                source_label: unsafe { bytes(&m.source_label)? },
+                mute: m.mute != 0,
+                targets: unsafe { input(m.targets, m.targets_len)? }
+                    .iter()
+                    .map(|t| Ok((unsafe { bytes(&t.label)? }, t.gain)))
+                    .collect::<Result<_, Error>>()?,
+            })
+        })
+        .collect()
 }
 
 /// Prepares the VBAP gain plan of the policy-applied scene. `*output` and `*view` are set unless
@@ -944,19 +962,7 @@ pub unsafe extern "C" fn mradm_render_vbap_prepare(
                     })
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
-            let matrix = unsafe { input(r.matrix, r.matrix_len)? }
-                .iter()
-                .map(|m| {
-                    Ok(MatrixRoute {
-                        source_label: unsafe { bytes(&m.source_label)? },
-                        mute: m.mute != 0,
-                        targets: unsafe { input(m.targets, m.targets_len)? }
-                            .iter()
-                            .map(|t| Ok((unsafe { bytes(&t.label)? }, t.gain)))
-                            .collect::<Result<_, Error>>()?,
-                    })
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+            let matrix = unsafe { matrix_routes(r.matrix, r.matrix_len)? };
             let routing = match r.routing {
                 0 => vbap::Routing::Label,
                 1 => vbap::Routing::Position,
@@ -1033,6 +1039,82 @@ pub unsafe extern "C" fn mradm_render_hoa_prepare(
                 scene.info.sample_rate,
             );
             let result = result.map(|p| (offline::Kernel::Hoa(p.plan), p.bindings));
+            prepared(logs, result, settings, out, view)
+        },
+    )
+}
+
+/// `geometry`: 0 standard, 1 Apple. `matrix_routing` selects matrix DirectSpeakers routing
+/// (otherwise automatic); its matrix is read when `has_matrix != 0`.
+#[repr(C)]
+pub struct RenderEarRequest {
+    layout_id: Text,
+    geometry: u32,
+    input_path: Text,
+    matrix_routing: u32,
+    has_matrix: u32,
+    matrix: *const RenderMatrixRoute,
+    matrix_len: usize,
+    split_power: u32,
+}
+
+/// Prepares the EAR gain plan and filters of the policy-applied scene, like
+/// `mradm_render_vbap_prepare`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_ear_prepare(
+    scene: *const SceneHandle,
+    request: *const RenderEarRequest,
+    output: *mut *mut RenderPrepared,
+    view: *mut RenderPreparedView,
+) -> i32 {
+    boundary(
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        || {
+            let (Some(out), Some(view), Some(scene), Some(r)) = (
+                unsafe { output.as_mut() },
+                unsafe { view.as_mut() },
+                unsafe { scene.as_ref() },
+                unsafe { request.as_ref() },
+            ) else {
+                return Err(bad("无效 EAR 准备参数"));
+            };
+            *out = ptr::null_mut();
+            let matrix = unsafe { matrix_routes(r.matrix, r.matrix_len)? };
+            let layout_id = unsafe { bytes(&r.layout_id)? };
+            let scene = scene.scene();
+            let request = ear::Request {
+                scene,
+                layout_id,
+                geometry: match r.geometry {
+                    0 => mradm_scene::layouts::Geometry::Standard,
+                    1 => mradm_scene::layouts::Geometry::Apple,
+                    _ => return Err(bad("无效扬声器几何")),
+                },
+                matrix_routing: r.matrix_routing != 0,
+                matrix: (r.has_matrix != 0).then_some(&matrix[..]),
+                input_path: unsafe { bytes(&r.input_path)? },
+                split_power: r.split_power != 0,
+            };
+            let mut logs = Vec::new();
+            let result = ear::prepare(&request, &mut |level, text| logs.push((level, text)));
+            let outputs = result.as_ref().map_or(0, |p| p.outputs);
+            let settings = (
+                usize::from(scene.info.channels),
+                outputs,
+                scene.info.frames,
+                scene.info.sample_rate,
+            );
+            let result = result.map(|p| {
+                let plan = offline::EarPlan {
+                    mix: p.plan,
+                    filters: p.filters,
+                    wav71: layout_id == b"wav71",
+                };
+                (offline::Kernel::Ear(Arc::new(plan)), p.bindings)
+            });
             prepared(logs, result, settings, out, view)
         },
     )

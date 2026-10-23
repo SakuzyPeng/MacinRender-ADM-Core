@@ -81,10 +81,6 @@ class ErrorText {
 
 } // namespace
 
-std::string normalise_speaker_label_key(std::string_view raw) {
-    return label_rule(0U, raw);
-}
-
 std::string canonicalise_speaker_label(std::string_view raw) {
     return label_rule(1U, raw);
 }

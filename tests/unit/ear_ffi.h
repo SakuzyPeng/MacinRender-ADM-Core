@@ -1,7 +1,9 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
-// Preparation-only private ABI. Valid, aligned pointers and exclusive handles are required.
+// Preparation-only private ABI, kept for the EAR post test and the libear reference comparison:
+// production EAR rendering runs in Rust mradm-render (PCM consistency 4.5). Valid, aligned
+// pointers and exclusive handles are required.
 // Descriptors are copied; all writable buffers must be disjoint from the handle and message.
 #ifdef __cplusplus
 extern "C" {
