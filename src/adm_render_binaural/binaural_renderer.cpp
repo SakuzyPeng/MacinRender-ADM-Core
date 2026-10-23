@@ -1435,10 +1435,9 @@ class BinauralStream final : public IRenderStream {
         head_smooth_.assign(n, HeadSmoothState{});
     }
 
-    // Cheap re-prepare: rebuild sources_ from a copy of the scene with each overridden
-    // object's block diffuse / extent (width,height,depth) / divergence multiplied by its
-    // scale (clamped to the same ADM ranges as a semantic policy without max), then re-init per-source state. Empty
-    // `topo` rebuilds the unscaled scene, which reproduces the prepared list bit-for-bit.
+    // Cheap re-prepare: rebuild sources_ from a copy of the scene with each overridden object's block diffuse /
+    // extent (width,height,depth) / divergence multiplied by its scale (clamped to the same ADM ranges as a semantic
+    // policy without max), then re-init per-source state. Empty `topo` rebuilds the unscaled scene bit-for-bit.
     void rebuild_sources(const std::unordered_map<std::string, LiveTopologyScales>& topo) {
         AdmScene scaled = scene_;
         for (auto& obj : scaled.objects) {
