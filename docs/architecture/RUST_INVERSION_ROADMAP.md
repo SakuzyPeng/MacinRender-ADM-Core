@@ -45,18 +45,18 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | --- | ---: | --- | --- |
 | `src/adm_realtime` | 5,402 | Scene 引擎、Monitor、ring buffer、OSC UDP、设备调度 → Rust；miniaudio 留作 C 岛 | 五期 |
 | `src/adm_audio` | 4,909 | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据 → Rust（四期 4.8）；FLAC / Opus / IAMF 编码留作 C 岛，APAC 归 Apple 岛 | 四期、七期 |
-| `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除 | 四期～六期 |
+| `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除（4.4 删除 `semantic_policy.h` 与 `io::write_scene`） | 四期～六期 |
 | `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust | 五期 |
 | `src/adm_c_api` | 3,614 | Rust 实现同一 `c_api.h` | 六期 |
 | `src/adm_render_binaural` | 3,486 | Rust（4.7），只留适配壳 | 四期 |
 | `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除 | 四期～六期 |
 | `src/adm_render_common` | 2,777 | Rust（4.5；扬声器布局表提前到 4.3），适配壳到五期删除 | 四期 |
-| `src/adm_core` | 2,225 | 语义策略、DS 矩阵、屏幕 → Rust（4.4）；领域模型视图到五期删除 | 四期、五期 |
+| `src/adm_core` | 2,225 | 语义策略、DS 矩阵、屏幕 → Rust（4.4 已完成，剩 412 行）；领域模型视图到五期删除 | 四期、五期 |
 | `src/adm_render_triple_balance` | 2,055 | Rust（4.6） | 四期 |
 | `src/adm_cli` | 1,655 | Rust CLI，行为不变 | 六期 |
 | `src/adm_render_room` | 1,344 | Rust（4.6） | 四期 |
 | `src/adm_render_vbap` / `ear` / `hoa` | 1,236 / 1,039 / 770 | Rust（4.5） | 四期 |
-| `src/adm_metadata`、`src/adm_io` | 788、590 | Rust 渲染场景 `mradm-scene`（4.3）；导出回写随语义策略迁移 | 四期 |
+| `src/adm_metadata`、`src/adm_io` | 788、590 | Rust 渲染场景 `mradm-scene`（4.3）；导出回写随语义策略迁入（4.4 已完成，剩 765、444 行的场景视图与文件编排） | 四期 |
 | `src/adm_renderer_factory` | 387 | 五期随编排迁入 Rust | 五期 |
 | `src/adm_loudness`、`src/adm_peak` | 165、143 | Rust（4.8） | 四期 |
 

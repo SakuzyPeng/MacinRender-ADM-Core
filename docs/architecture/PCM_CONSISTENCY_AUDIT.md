@@ -133,7 +133,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 
 | 条目 | 状态 | 处理与剩余 |
 | --- | --- | --- |
-| N01 | 已处理 | 3.5：CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十进制解析（binary32 参数一次舍入），UID / 扬声器标签 / 布局名等的大小写规范化与字符分类改为只看 ASCII；JSON 数字仍经 nlohmann（`strtod`），按 1.6 登记为依赖三个 C 运行时的正确舍入，再转 binary32 的步骤与平台无关 |
+| N01 | 已处理 | 3.5：CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十进制解析（binary32 参数一次舍入），UID / 扬声器标签 / 布局名等的大小写规范化与字符分类改为只看 ASCII；JSON 数字原经 nlohmann（`strtod`），1.6 登记为依赖三个 C 运行时的正确舍入；4.4 起语义策略、DirectSpeakers 矩阵与屏幕配置的 JSON 由 Rust `mradm-json` 解析，不再经 C 运行时 |
 | N02 | 已处理 | 3.5：ADM 导入的 dB 增益与 Cartesian DirectSpeakers 投影改用 `libm`（`mradm-adm` `numeric`），`adm-import.*` 内核设为门禁 |
 | N03 | 已处理 | 语义策略的 dB 换算与乘积已迁入 Rust `semantic_policy`（1.2，`libm::powf`），离线与文件流式共用；3.1：`resolve_live_channel_gain`、HOA `set_overrides` 与覆盖溢出检查改用同一 `libm::powf`；3.3：HOA 文件流式改用共用的按声道解析（扬声器标签优先于整体覆盖）；3.5：核对语义策略、实时覆盖与 Monitor 的全部增益入口都经 Rust `libm::powf`，C++ 不再有 `std::pow` |
 | N04 | 已处理 | Scene 空间数学改用 `libm`（1.3） |
@@ -167,12 +167,12 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 
 | 路径 | 仍在 C++ 执行的工作 | 性质与归属 | 阶段 |
 | --- | --- | --- | --- |
-| Scene 策略与状态 | 只剩策略 JSON 数值解析（N01）；dB 换算、乘积、偏移/钳位和方向乘距离在 Rust `semantic_policy`（1.2），极坐标经 `libm`（1.3）。 | 匹配、过滤和布尔字段留在 C++。N01 已登记为依赖 C 运行时 `strtod` 正确舍入（1.6）。 | 一期（已结项） |
+| Scene 策略与状态 | dB 换算、乘积、偏移/钳位和方向乘距离在 Rust `semantic_policy`（1.2），极坐标经 `libm`（1.3）；解析、匹配、过滤、布尔字段与逐更新应用 4.4 起在 Rust `mradm-scene` `live_policy`。 | 4.4 起无 C++ 运算；JSON 数字由 `mradm-json` 解析（N01）。 | 一期（已结项）；四期 4.4 迁入其余部分 |
 | Scene VBAP | 声道映射与 LFE 路由；`split_power` 模式的 LFE 增益为常量 1 乘以固定系数，结果精确。channelLock 与 divergence 阈值已移入 Rust（1.3）。 | 不再有平台数学函数或舍入运算。 | 一期（已结项） |
 | Scene Triple Balance | 床系数由 Rust `triple_balance::bed` 生成，C++ 只识别床声道和布局。 | 文件、文件流式和 Scene 共用；系数为精确常数。 | 一期（已结项） |
 | Scene 输出 | 1.4 起 `SceneOutputSession` 不再有决定样本值的 C++ 浮点运算；无保护路径的音量在 Rust `gain::scale` 中相乘。 | 只剩缓冲清零和拷贝；回调路径无锁、无 C++ 分配（1.6）。 | 一期（已结项） |
 | Scene 帧计数 | `SceneStreamEngine` 的输入/输出帧边界有理数累加。 | S06；纯整数运算，规则与测试在 1.5 锁定。 | 一期（已结项） |
-| 公共路由与布局 | [`direct_speakers_matrix`](../../src/adm_core/direct_speakers_matrix.cpp#L135) 的权重归一化；声道床/布局常量；标签规范化。 | N01；`sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。1.6 核对确认 Scene 不调用 `direct_speakers_matrix`。 | 三期核对为确定性运算；四期 4.4（DS 矩阵 JSON）、4.5（路由、布局与标签）迁入 Rust |
+| 公共路由与布局 | DirectSpeakers 矩阵的权重归一化（4.4 起在 Rust `mradm-scene` `direct_matrix`）；声道床/布局常量；标签规范化。 | `sqrt(weight/sum)` 与固定求和本身确定，常量资源需保持语义同步。1.6 核对确认 Scene 不调用 DirectSpeakers 矩阵。 | 三期核对为确定性运算；4.3 迁入布局表，4.4 迁入 DS 矩阵 JSON，4.5 迁入路由与标签 |
 | 文件流式及离线后端准备 | EAR double 增益乘积与发散累加、VBAP 增益表组装、HOA 元数据分组、Triple Balance 床增益、5 处块排序。 | N03/N06/N07/N12/S08；包括确定性运算与顺序风险。 | 三期已收敛数学函数与同起点块；四期 4.5–4.7 整体迁入 Rust |
 | 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期（3.1 已迁移）；四期 4.7 迁移其余编排 |
 | 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期核对为确定性运算；四期 4.7 迁入 Rust |
@@ -465,6 +465,8 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 **4.2 状态**：覆盖用例、门禁与一致性工具扩展已合入，不改既有 PCM。Linux x64 本机上既有 242 个 PCM id、235 份内核测量与全部既有诊断检查点都与 4.1 候选逐字节相同，5 个策略用例的 `06-policy` 场景检查点与 `05-import` 不同。三平台 Consistency 39012071641（`45ab448`）在 config A、B 上 283 个 PCM id 相同、308 条门禁失败 0，诊断报告中 237 份内核、201 个内核检查点、31,100 条用例检查点与 21,380 项 Scene 检查点比较三平台相同。见 [4.2 记录](RUST_INVERSION_COVERAGE.md)。
 
 **4.3 状态**：扬声器布局表、输入导入（WAVE、CHNA 映射、ADM 投影调用）与声道床迁入 `mradm-scene`，`05-import` 场景检查点改由 Rust 写出，`RenderPlan` 的 Rust 场景句柄推迟到 4.4。Linux x64 本机上 283 个 PCM id、237 份内核测量、201 个内核检查点与 30,772 个诊断检查点都与 `main`（`f277b64`）逐字节相同；生产 C/C++ 由 45,026 行降到 44,632 行。三平台 Consistency 39022845303（`3e7a806`）在 config A、B 上 283 个 PCM id 相同、门禁失败 0，诊断报告中 237 份内核、201 个内核检查点、31,100 条用例检查点与 21,380 项 Scene 检查点比较三平台相同。见 [4.3 记录](RUST_INVERSION_SCENE.md)。
+
+**4.4 状态**：语义策略（解析、匹配、合并、应用、报告与模板）、Scene 流式的逐更新应用、导出回写，以及 DirectSpeakers 矩阵与屏幕配置的 JSON 迁入 `mradm-scene`，JSON 读写改用新 crate `mradm-json`，N01 的 JSON 残留随之消除。`06-policy` 由 Rust 写出，`RenderPlan` 携带策略后的 Rust 场景句柄。报告、模板、导出与错误消息与 C++ 逐字节相同，只有维护者同意的几项有意变化：语法错误正文、两处报告修正、LF、身份冲突的报错顺序，以及 extent 缺省上限改为 ADM 取值范围（唯一改变 PCM 的一项）。黄金数据分别来自 nlohmann 与删除前的 C++：JSON 格式化与解析语料、714 例策略、742 条导出、958 条配置。生产 C/C++ 由 44,632 行降到 42,406 行。三平台 Consistency 39031059419（`294415d`）、39824671399（`8fff2a8`）与 39891455786（`cdc23c8`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.4 记录](RUST_INVERSION_POLICY.md)。
 
 ## 每个迁移切片的验证
 
