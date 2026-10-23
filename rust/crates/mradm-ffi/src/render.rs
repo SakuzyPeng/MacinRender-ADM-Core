@@ -5,9 +5,9 @@
 //! context buffers (capacity in, length written out, NUL-terminated) with the C++ bytes.
 use crate::adm::Text;
 use crate::scene::SceneHandle;
-use mradm_dsp::pcm_mix::Plan;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
-use mradm_render::{offline, stream, vbap};
+use mradm_render::{hoa, offline, stream, vbap};
+use std::ffi::c_void;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
@@ -545,6 +545,8 @@ pub struct RenderOfflineSettings {
     has_meter_window: u32,
     meter_start: u64,
     meter_count: u64,
+    /// 0: `plan` is a loudspeaker `PcmMixer` plan; 1: an HOA3 encoder plan.
+    kernel: u32,
 }
 
 /// One rendered block; `frames` is 0 after the last one. The spans live until the next call.
@@ -581,7 +583,7 @@ pub struct RenderOfflineMetrics {
 pub struct RenderOffline(Option<offline::Driver>);
 
 /// Like `boundary` for the driver: the locator kind (0 none, 1 `path=<input>`, 2 `input=<input>`,
-/// 3 `meter`) and the message, cut at a character boundary as the WAVE reader did.
+/// 3 `meter`, 4 `HOA DSP`) and the message, cut at a character boundary as the WAVE reader did.
 fn driver_boundary(
     location: *mut u32,
     message: *mut u8,
@@ -603,6 +605,7 @@ fn driver_boundary(
             Some(offline::Location::Path) => 1,
             Some(offline::Location::Input) => 2,
             Some(offline::Location::Meter) => 3,
+            Some(offline::Location::HoaDsp) => 4,
         };
     }
     let detail = error.as_ref().map_or("", |e| e.message.as_str());
@@ -630,12 +633,30 @@ unsafe fn driver<'a>(handle: *mut RenderOffline) -> offline::Result<&'a mut offl
         .ok_or_else(|| driver_error("无效离线渲染句柄"))
 }
 
-/// Opens the input (UTF-8 path) and prepares the mixer and meter for `plan`.
+/// The plan behind an opaque pointer of the given kernel.
+unsafe fn kernel(plan: *const c_void, kind: u32) -> Option<offline::Kernel> {
+    match kind {
+        0 => unsafe { plan.cast::<Arc<mradm_dsp::pcm_mix::Plan>>().as_ref() }
+            .map(|p| offline::Kernel::Mix(Arc::clone(p))),
+        1 => unsafe { plan.cast::<Arc<mradm_dsp::hoa::Plan>>().as_ref() }
+            .map(|p| offline::Kernel::Hoa(Arc::clone(p))),
+        _ => None,
+    }
+}
+
+fn kernel_plan(kernel: &offline::Kernel) -> *const c_void {
+    match kernel {
+        offline::Kernel::Mix(p) => ptr::from_ref(p).cast(),
+        offline::Kernel::Hoa(p) => ptr::from_ref(p).cast(),
+    }
+}
+
+/// Opens the input (UTF-8 path) and prepares the renderer and meter for `plan`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_offline_open(
     path: *const u8,
     path_len: usize,
-    plan: *const Arc<Plan>,
+    plan: *const c_void,
     settings: *const RenderOfflineSettings,
     backend: Text,
     output: *mut *mut RenderOffline,
@@ -644,13 +665,12 @@ pub unsafe extern "C" fn mradm_render_offline_open(
     message_len: *mut usize,
 ) -> i32 {
     driver_boundary(location, message, message_len, || {
-        let (Some(out), Some(plan), Some(s)) = (
-            unsafe { output.as_mut() },
-            unsafe { plan.as_ref() },
-            unsafe { settings.as_ref() },
-        ) else {
+        let (Some(out), Some(s)) = (unsafe { output.as_mut() }, unsafe { settings.as_ref() })
+        else {
             return Err(driver_error("无效离线渲染参数"));
         };
+        let kernel =
+            unsafe { kernel(plan, s.kernel) }.ok_or_else(|| driver_error("无效离线渲染参数"))?;
         *out = ptr::null_mut();
         let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
             code: e.code,
@@ -668,7 +688,7 @@ pub unsafe extern "C" fn mradm_render_offline_open(
         let driver = offline::Driver::new(
             reader,
             offline::Settings {
-                plan: Arc::clone(plan),
+                kernel,
                 inputs: s.inputs,
                 outputs: s.outputs,
                 frames: s.frames,
@@ -804,26 +824,89 @@ pub struct RenderVbapRequest {
     split_power: u32,
 }
 
-/// The log lines (also of a failed preparation) and the error, or the `PcmMixer` plan and its
-/// input-channel count once prepared.
+/// The log lines (also of a failed preparation) and the error, or the offline driver's plan (of
+/// the backend's kernel) and its input-channel count once prepared.
 #[repr(C)]
-pub struct RenderVbapView {
+pub struct RenderPreparedView {
     logs: *const RenderLogLine,
     logs_len: usize,
     message: Text,
     context: Text,
-    plan: *const Arc<Plan>,
+    plan: *const c_void,
     tracks: usize,
 }
 
-/// A prepared VBAP render, or the log lines and error of a failed one.
-pub struct RenderVbap {
+/// A prepared VBAP or HOA render, or the log lines and error of a failed one.
+pub struct RenderPrepared {
     texts: Vec<Vec<u8>>,
     lines: Vec<RenderLogLine>,
     error: Error,
-    plan: Option<Arc<Plan>>,
+    kernel: Option<offline::Kernel>,
     bindings: Arc<[vbap::Binding]>,
     settings: (usize, usize, u64, u32),
+}
+
+/// Boxes a preparation's logs and result, fills `view` and returns the status.
+fn prepared(
+    logs: Vec<(routing::Level, Vec<u8>)>,
+    result: Result<(offline::Kernel, Vec<vbap::Binding>), Error>,
+    settings: (usize, usize, u64, u32),
+    output: &mut *mut RenderPrepared,
+    view: &mut RenderPreparedView,
+) -> Result<(), Error> {
+    let mut handle = Box::new(RenderPrepared {
+        texts: Vec::with_capacity(logs.len()),
+        lines: Vec::with_capacity(logs.len()),
+        error: Error {
+            code: 0,
+            message: Vec::new(),
+            context: Vec::new(),
+        },
+        kernel: None,
+        bindings: Arc::from([]),
+        settings,
+    });
+    for (level, text) in logs {
+        handle.lines.push(RenderLogLine {
+            level: match level {
+                routing::Level::Info => 1,
+                routing::Level::Warning => 2,
+            },
+            message: Text::bytes(&text),
+        });
+        handle.texts.push(text);
+    }
+    let (code, tracks) = match result {
+        Ok((kernel, bindings)) => {
+            handle.kernel = Some(kernel);
+            let tracks = bindings.len();
+            handle.bindings = Arc::from(bindings);
+            (0, tracks)
+        }
+        Err(e) => {
+            let code = e.code;
+            handle.error = e;
+            (code, 0)
+        }
+    };
+    *view = RenderPreparedView {
+        logs: handle.lines.as_ptr(),
+        logs_len: handle.lines.len(),
+        message: Text::bytes(&handle.error.message),
+        context: Text::bytes(&handle.error.context),
+        plan: handle.kernel.as_ref().map_or(ptr::null(), kernel_plan),
+        tracks,
+    };
+    *output = Box::into_raw(handle);
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(Error {
+            code,
+            message: Vec::new(),
+            context: Vec::new(),
+        })
+    }
 }
 
 /// Prepares the VBAP gain plan of the policy-applied scene. `*output` and `*view` are set unless
@@ -832,8 +915,8 @@ pub struct RenderVbap {
 pub unsafe extern "C" fn mradm_render_vbap_prepare(
     scene: *const SceneHandle,
     request: *const RenderVbapRequest,
-    output: *mut *mut RenderVbap,
-    view: *mut RenderVbapView,
+    output: *mut *mut RenderPrepared,
+    view: *mut RenderPreparedView,
 ) -> i32 {
     boundary(
         ptr::null_mut(),
@@ -893,82 +976,82 @@ pub unsafe extern "C" fn mradm_render_vbap_prepare(
             };
             let mut logs = Vec::new();
             let result = vbap::prepare(&request, &mut |level, text| logs.push((level, text)));
-            let mut handle = Box::new(RenderVbap {
-                texts: Vec::with_capacity(logs.len()),
-                lines: Vec::with_capacity(logs.len()),
-                error: Error {
-                    code: 0,
-                    message: Vec::new(),
-                    context: Vec::new(),
-                },
-                plan: None,
-                bindings: Arc::from([]),
-                settings: (
-                    usize::from(scene.info.channels),
-                    speakers.len(),
-                    scene.info.frames,
-                    scene.info.sample_rate,
-                ),
-            });
-            for (level, text) in logs {
-                handle.lines.push(RenderLogLine {
-                    level: match level {
-                        routing::Level::Info => 1,
-                        routing::Level::Warning => 2,
-                    },
-                    message: Text::bytes(&text),
-                });
-                handle.texts.push(text);
-            }
-            let (code, tracks) = match result {
-                Ok(prepared) => {
-                    handle.plan = Some(prepared.plan);
-                    let tracks = prepared.bindings.len();
-                    handle.bindings = Arc::from(prepared.bindings);
-                    (0, tracks)
-                }
-                Err(e) => {
-                    let code = e.code;
-                    handle.error = e;
-                    (code, 0)
-                }
+            let settings = (
+                usize::from(scene.info.channels),
+                speakers.len(),
+                scene.info.frames,
+                scene.info.sample_rate,
+            );
+            let result = result.map(|p| (offline::Kernel::Mix(p.plan), p.bindings));
+            prepared(logs, result, settings, out, view)
+        },
+    )
+}
+
+/// The HOA3 encoder request; the output layout must be `hoa3`.
+#[repr(C)]
+pub struct RenderHoaRequest {
+    layout_id: Text,
+    split_power: u32,
+}
+
+/// Prepares the HOA encoder plan of the policy-applied scene, like `mradm_render_vbap_prepare`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_hoa_prepare(
+    scene: *const SceneHandle,
+    request: *const RenderHoaRequest,
+    output: *mut *mut RenderPrepared,
+    view: *mut RenderPreparedView,
+) -> i32 {
+    boundary(
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        || {
+            let (Some(out), Some(view), Some(scene), Some(r)) = (
+                unsafe { output.as_mut() },
+                unsafe { view.as_mut() },
+                unsafe { scene.as_ref() },
+                unsafe { request.as_ref() },
+            ) else {
+                return Err(bad("无效 HOA 准备参数"));
             };
-            *view = RenderVbapView {
-                logs: handle.lines.as_ptr(),
-                logs_len: handle.lines.len(),
-                message: Text::bytes(&handle.error.message),
-                context: Text::bytes(&handle.error.context),
-                plan: handle.plan.as_ref().map_or(ptr::null(), |p| p as *const _),
-                tracks,
+            *out = ptr::null_mut();
+            let scene = scene.scene();
+            let request = hoa::Request {
+                scene,
+                layout_id: unsafe { bytes(&r.layout_id)? },
+                split_power: r.split_power != 0,
             };
-            *out = Box::into_raw(handle);
-            if code == 0 {
-                Ok(())
-            } else {
-                Err(Error {
-                    code,
-                    message: Vec::new(),
-                    context: Vec::new(),
-                })
-            }
+            let mut logs = Vec::new();
+            let result = hoa::prepare(&request, &mut |level, text| logs.push((level, text)));
+            let settings = (
+                usize::from(scene.info.channels),
+                mradm_dsp::hoa::CHANNELS,
+                scene.info.frames,
+                scene.info.sample_rate,
+            );
+            let result = result.map(|p| (offline::Kernel::Hoa(p.plan), p.bindings));
+            prepared(logs, result, settings, out, view)
         },
     )
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_vbap_destroy(handle: *mut RenderVbap) {
+pub unsafe extern "C" fn mradm_render_prepared_destroy(handle: *mut RenderPrepared) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
     }
 }
 
 /// File streaming over a prepared plan.
-pub struct RenderStream(stream::SpeakerStream);
+pub struct RenderStream(stream::FileStream);
 
-/// Opens the input (UTF-8 path) for streaming the prepared VBAP plan.
+/// Opens the input (UTF-8 path) for streaming the prepared plan.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_vbap_stream_open(
-    prepared: *const RenderVbap,
+pub unsafe extern "C" fn mradm_render_stream_open(
+    prepared: *const RenderPrepared,
     path: *const u8,
     path_len: usize,
     default_interp_ms: u32,
@@ -984,8 +1067,8 @@ pub unsafe extern "C" fn mradm_render_vbap_stream_open(
             return Err(driver_error("无效流式渲染参数"));
         };
         *out = ptr::null_mut();
-        let plan = p
-            .plan
+        let kernel = p
+            .kernel
             .as_ref()
             .ok_or_else(|| driver_error("无效流式渲染参数"))?;
         let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
@@ -994,9 +1077,9 @@ pub unsafe extern "C" fn mradm_render_vbap_stream_open(
             location: offline::Location::Path,
         })?;
         let (inputs, outputs, frames, sample_rate) = p.settings;
-        let s = stream::SpeakerStream::open(
+        let s = stream::FileStream::open(
             path,
-            Arc::clone(plan),
+            kernel,
             Arc::clone(&p.bindings),
             stream::Settings {
                 inputs,
@@ -1012,9 +1095,9 @@ pub unsafe extern "C" fn mradm_render_vbap_stream_open(
     })
 }
 
-unsafe fn speaker_stream<'a>(
+unsafe fn file_stream<'a>(
     handle: *mut RenderStream,
-) -> offline::Result<&'a mut stream::SpeakerStream> {
+) -> offline::Result<&'a mut stream::FileStream> {
     unsafe { handle.as_mut() }
         .map(|h| &mut h.0)
         .ok_or_else(|| driver_error("无效流式渲染句柄"))
@@ -1035,7 +1118,7 @@ pub unsafe extern "C" fn mradm_render_stream_process(
     driver_boundary(location, message, message_len, || {
         let out = unsafe { produced.as_mut() }.ok_or_else(|| driver_error("无效流式渲染输出"))?;
         *out = 0;
-        let s = unsafe { speaker_stream(handle)? };
+        let s = unsafe { file_stream(handle)? };
         let buffer = unsafe { checked_output(output, output_len) }
             .ok_or_else(|| driver_error("无效流式渲染输出"))?;
         *out = s.process(buffer, frames)?;
@@ -1065,7 +1148,7 @@ pub unsafe extern "C" fn mradm_render_stream_seek(
     message_len: *mut usize,
 ) -> i32 {
     driver_boundary(location, message, message_len, || {
-        unsafe { speaker_stream(handle)? }.seek(frame)
+        unsafe { file_stream(handle)? }.seek(frame)
     })
 }
 
@@ -1085,7 +1168,7 @@ pub unsafe extern "C" fn mradm_render_stream_overrides(
                     .collect::<Result<Vec<_>, _>>()
             })
             .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?;
-        unsafe { speaker_stream(handle)? }.set_overrides(&o)
+        unsafe { file_stream(handle)? }.set_overrides(&o)
     })
 }
 

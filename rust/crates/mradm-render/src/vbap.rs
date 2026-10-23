@@ -4,8 +4,7 @@
 //! Moved from the C++ `vbap_renderer` with the same block precedence, arithmetic, checkpoints,
 //! warnings and errors; the layout registry and capabilities stay with the C++ adapter.
 use crate::routing::{self, Error, Level, LfeRouting, MatrixRoute, ResolvedRoute, Target};
-use crate::scene::{self, in_effect, span};
-use mradm_adm::records::Span;
+use crate::scene::{self, in_effect, labels, span};
 use mradm_dsp::diagnostics::{ENABLED, Words, process};
 use mradm_dsp::pcm_mix::{Block, Coefficients, Plan, Row};
 use mradm_dsp::scene_math::{self as math, Speaker as SceneSpeaker};
@@ -47,7 +46,7 @@ pub struct Request<'a> {
 
 /// The live-override key of one input channel: its owning object and, for DirectSpeakers, the
 /// canonical label of its first in-effect block.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Binding {
     pub input_channel: u16,
     pub object_id: Vec<u8>,
@@ -59,8 +58,7 @@ pub struct Prepared {
     pub bindings: Vec<Binding>,
 }
 
-/// One log line of the `saf-vbap` module.
-pub type Log<'a> = dyn FnMut(Level, Vec<u8>) + 'a;
+pub use crate::scene::Log;
 
 fn error(code: i32, message: impl Into<Vec<u8>>, context: impl Into<Vec<u8>>) -> Error {
     Error {
@@ -212,33 +210,6 @@ fn has_elevated_sources(scene: &RenderScene) -> bool {
                 })
             })
     })
-}
-
-fn lfe_routing(r: &Request, log: &mut Log) -> Result<LfeRouting, Error> {
-    let s = &r.scene.snapshot;
-    let mut targets = Vec::new();
-    for object in &s.objects {
-        for track in span(&s.tracks, object.tracks) {
-            let blocks = span(&s.direct_blocks, track.ds_blocks);
-            for b in in_effect(blocks, |b| b.start) {
-                targets.push(routing::lfe_target(
-                    &labels(r.scene, blocks[b].labels),
-                    blocks[b].low_pass_present != 0,
-                ));
-            }
-        }
-    }
-    routing::lfe_routing(r.split_power, r.layout_id, targets, &mut |level, text| {
-        log(level, text.as_bytes().to_vec())
-    })
-}
-
-fn labels(scene: &RenderScene, labels: Span) -> Vec<&[u8]> {
-    let s = &scene.snapshot;
-    span(&s.indices, labels)
-        .iter()
-        .map(|&i| s.strings[i as usize].as_bytes())
-        .collect()
 }
 
 // A linear port of the C++ gain-table preparation keeps the block precedence visible.
@@ -443,7 +414,7 @@ fn gain_matrix(
 
 /// Prepares the gain plan; `log` receives the `saf-vbap` lines in order, also before an error.
 pub fn prepare(r: &Request, log: &mut Log) -> Result<Prepared, Error> {
-    let lfe = lfe_routing(r, log)?;
+    let lfe = scene::lfe_routing(r.scene, r.split_power, r.layout_id, log)?;
     let channels = gain_matrix(r, &lfe, log)?;
     if channels.is_empty() {
         log(

@@ -1,13 +1,13 @@
-//! File streaming over a prepared loudspeaker plan (PCM consistency 4.5), moved from the C++
-//! `VbapStream`: blocks of `max(1024, smoothing)` frames go through the same `PcmMixer` as the
-//! offline driver into a FIFO served at any frame count, so a gap-free run from frame 0 is
-//! bit-identical to the offline render. Live gain pre-scales each input channel (the mix is
-//! linear) through a 20 ms de-zipper; `seek` resets the mixer cursors but not the de-zipper.
-use crate::offline::{Driver, Error, Location, Result, dsp_code};
+//! File streaming over a prepared plan (PCM consistency 4.5), moved from the C++ `VbapStream`
+//! and `HoaStream`: blocks of `max(1024, smoothing)` frames go through the same `PcmMixer` or HOA
+//! encoder as the offline driver into a FIFO served at any frame count, so a gap-free run from
+//! frame 0 is bit-identical to the offline render. Live gain pre-scales each input channel (the
+//! render is linear) through a 20 ms de-zipper; `seek` resets the mixer cursors or the HOA
+//! diffuse delay lines but not the de-zipper.
+use crate::offline::{Driver, Engine, Error, HOA_SHORT_READ, Kernel, Location, Result};
 use crate::routing::{self, Override};
 use crate::vbap::Binding;
 use mradm_dsp::gain::GainBank;
-use mradm_dsp::pcm_mix::{Mixer, Plan};
 use mradm_wav::Reader;
 use std::fs::File;
 use std::io::BufReader;
@@ -22,9 +22,9 @@ pub struct Settings {
     pub smoothing_frames: u64,
 }
 
-pub struct SpeakerStream {
+pub struct FileStream {
     reader: Reader<BufReader<File>>,
-    mixer: Mixer,
+    engine: Engine,
     bindings: Arc<[Binding]>,
     inputs: usize,
     outputs: usize,
@@ -40,34 +40,34 @@ pub struct SpeakerStream {
 }
 
 fn failed(e: mradm_dsp::Error) -> Error {
-    Error {
-        code: dsp_code(&e),
-        message: e.to_string(),
-        location: Location::None,
-    }
+    Error::dsp(&e, Location::None)
 }
 
-impl SpeakerStream {
+impl FileStream {
     /// Opens `path` as the offline driver does; reader errors carry `Location::Path`.
     pub fn open(
         path: &str,
-        plan: Arc<Plan>,
+        kernel: &Kernel,
         bindings: Arc<[Binding]>,
         s: Settings,
     ) -> Result<Self> {
         let reader = Driver::open_reader(path)?;
         let block_size = s.smoothing_frames.max(1024);
         let default_interp = u64::from(s.sample_rate) * u64::from(s.default_interp_ms) / 1000;
-        let mixer = Mixer::new(
-            plan,
-            block_size as usize,
-            default_interp,
-            s.smoothing_frames > 0,
-        )
-        .map_err(failed)?;
+        let engine = Engine::new(kernel, block_size, default_interp, s.smoothing_frames > 0)
+            .map_err(|e| {
+                Error::dsp(
+                    &e,
+                    if matches!(kernel, Kernel::Hoa(_)) {
+                        Location::HoaDsp
+                    } else {
+                        Location::None
+                    },
+                )
+            })?;
         Ok(Self {
             reader,
-            mixer,
+            engine,
             bindings,
             inputs: s.inputs,
             outputs: s.outputs,
@@ -87,7 +87,11 @@ impl SpeakerStream {
     pub fn process(&mut self, output: &mut [f32], frames: usize) -> Result<usize> {
         if output.len() < frames.saturating_mul(self.outputs) {
             return Err(failed(mradm_dsp::Error::InvalidArgument(
-                "Invalid stream output buffer",
+                if self.engine.is_hoa() {
+                    "HOA output buffer is too small"
+                } else {
+                    "Invalid stream output buffer"
+                },
             )));
         }
         let mut produced = 0;
@@ -113,8 +117,8 @@ impl SpeakerStream {
     }
 
     pub fn seek(&mut self, frame: u64) -> Result<()> {
-        self.mixer.reset();
         self.done = frame.min(self.frames);
+        self.engine.reset(self.done);
         self.reader.seek_frame(self.done).map_err(Error::wav)?;
         self.fifo_len = 0;
         self.fifo_read = 0;
@@ -144,7 +148,12 @@ impl SpeakerStream {
         if read != frames as u64 {
             return Err(Error {
                 code: 3,
-                message: "short render input read".to_owned(),
+                message: if self.engine.is_hoa() {
+                    HOA_SHORT_READ
+                } else {
+                    "short render input read"
+                }
+                .to_owned(),
                 location: Location::None,
             });
         }
@@ -153,9 +162,10 @@ impl SpeakerStream {
         self.fifo_read = 0;
         let fifo = &mut self.fifo[..self.fifo_len];
         fifo.fill(0.);
-        self.mixer
-            .speaker(input, fifo, &[], self.done, frames, None, None)
-            .map_err(failed)?;
+        let location = self.engine.location();
+        self.engine
+            .process(input, fifo, self.done, frames)
+            .map_err(|e| Error::dsp(&e, location))?;
         self.done += frames as u64;
         Ok(())
     }

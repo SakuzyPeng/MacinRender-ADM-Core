@@ -1,10 +1,8 @@
 #include <algorithm>
 #include <cmath>
-#include <exception>
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -14,7 +12,6 @@
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
-#include "../adm_audio/wav_backend.h"
 #include "render_common.h"
 #include "scene_handle.h"
 #include "speaker_layouts.h"
@@ -64,71 +61,6 @@ std::vector<RegistryEntry>& custom_layout_registry() {
 
 using render_common::text;
 
-// The gain plan and its live-control bindings are built in Rust mradm-render `vbap` (PCM
-// consistency 4.5) from the Rust render scene; immutable and reused across render_window()
-// calls (PreviewSession scrubbing).
-struct VbapPrepared final : IPreparedRender {
-    std::unique_ptr<MradmRenderVbap, decltype(&mradm_render_vbap_destroy)> handle{nullptr, &mradm_render_vbap_destroy};
-    render_common::SpeakerMix mix;
-    uint16_t outputs{0};
-};
-
-// Realtime streaming over the prepared plan in Rust mradm-render `stream`: the offline block size
-// and mixer into a FIFO, so a gap-free run from frame 0 is bit-identical to render_window. Live
-// gain pre-scales each input channel by its object's (or speaker label's) override.
-class VbapStream final : public IRenderStream {
-  public:
-    VbapStream(MradmRenderStream* raw, const RenderPlan& plan, uint16_t outputs)
-        : handle_(raw, &mradm_render_stream_destroy), input_path_(plan.input_path), outputs_(outputs),
-          sample_rate_(plan.scene.info.sample_rate), output_layout_(plan.output_layout) {}
-
-    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
-        render_common::DriverError error;
-        std::size_t produced = 0;
-        if (const auto code = mradm_render_stream_process(handle_.get(),
-                                                          out.data(),
-                                                          out.size(),
-                                                          frames,
-                                                          &produced,
-                                                          error.location(),
-                                                          error.message(),
-                                                          error.message_len());
-            code != 0) {
-            return error.error(code, input_path_);
-        }
-        return produced;
-    }
-
-    [[nodiscard]] Result<void> seek(uint64_t frame) override {
-        render_common::DriverError error;
-        if (const auto code =
-                mradm_render_stream_seek(handle_.get(), frame, error.location(), error.message(), error.message_len());
-            code != 0) {
-            return error.error(code, input_path_);
-        }
-        return {};
-    }
-
-    // Topology scales (diffuse / extent / divergence) do not apply to VBAP and are ignored.
-    void set_overrides(const LiveOverrides& overrides) override {
-        const auto records = render_common::override_records(overrides);
-        if (mradm_render_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
-            std::terminate();
-        }
-    }
-
-    [[nodiscard]] uint32_t out_channels() const override { return outputs_; }
-    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
-    [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
-
-  private:
-    std::unique_ptr<MradmRenderStream, decltype(&mradm_render_stream_destroy)> handle_;
-    std::string input_path_;
-    uint16_t outputs_;
-    uint32_t sample_rate_;
-    std::string output_layout_;
-};
-
 class VbapRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -141,27 +73,12 @@ class VbapRenderer final : public IRenderer {
     [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
     open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
         (void) logs;
-        const auto* prepared = dynamic_cast<const VbapPrepared*>(&prep);
+        const auto* prepared = dynamic_cast<const render_common::RustPrepared*>(&prep);
         if (prepared == nullptr) {
             return make_error(
                 ErrorCode::internal_error, "saf-vbap: open_stream received an incompatible prepared state", {});
         }
-        const auto path = audio::wav_path_utf8(plan.input_path);
-        render_common::DriverError error;
-        MradmRenderStream* raw = nullptr;
-        if (const auto code = mradm_render_vbap_stream_open(prepared->handle.get(),
-                                                            reinterpret_cast<const uint8_t*>(path.data()),
-                                                            path.size(),
-                                                            plan.default_interp_ms,
-                                                            plan.object_smoothing_frames,
-                                                            &raw,
-                                                            error.location(),
-                                                            error.message(),
-                                                            error.message_len());
-            code != 0) {
-            return error.error(code, plan.input_path);
-        }
-        return std::unique_ptr<IRenderStream>{std::make_unique<VbapStream>(raw, plan, prepared->outputs)};
+        return render_common::open_file_stream(*prepared, plan);
     }
 };
 
@@ -211,31 +128,22 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
                                          routes.routes.data(),
                                          routes.routes.size(),
                                          plan.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U};
-    auto prepared = std::make_shared<VbapPrepared>();
-    MradmRenderVbap* raw = nullptr;
-    MradmRenderVbapView view{};
+    MradmRenderPrepared* raw = nullptr;
+    MradmRenderPreparedView view{};
     const auto code = mradm_render_vbap_prepare(plan.scene_handle->raw, &request, &raw, &view);
-    prepared->handle.reset(raw);
-    if (raw == nullptr) {
-        return make_error(static_cast<ErrorCode>(code), "saf-vbap preparation failed");
+    auto prepared = render_common::adopt_prepared(code, raw, view, 0U, logs, "saf-vbap");
+    if (!prepared) {
+        return tl::unexpected{prepared.error()};
     }
-    const auto string_of = [](MradmAdmText t) { return std::string{reinterpret_cast<const char*>(t.data), t.len}; };
-    for (const auto& line : std::span{view.logs, view.logs_len}) {
-        logs.log(static_cast<LogLevel>(line.level), "saf-vbap", string_of(line.message));
-    }
-    if (code != 0) {
-        return make_error(static_cast<ErrorCode>(code), string_of(view.message), string_of(view.context));
-    }
-    prepared->mix = {view.plan, view.tracks};
-    prepared->outputs = static_cast<uint16_t>(layout->speakers.size());
-    return std::static_pointer_cast<IPreparedRender>(prepared);
+    (*prepared)->outputs = static_cast<uint16_t>(layout->speakers.size());
+    return std::static_pointer_cast<IPreparedRender>(*prepared);
 }
 
 Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
                                                   const RenderPlan& plan,
                                                   ProgressSink& progress,
                                                   LogSink& logs) {
-    const auto* prepared = dynamic_cast<const VbapPrepared*>(&prep);
+    const auto* prepared = dynamic_cast<const render_common::RustPrepared*>(&prep);
     if (prepared == nullptr) {
         return make_error(ErrorCode::internal_error, "saf-vbap: incompatible prepared state");
     }

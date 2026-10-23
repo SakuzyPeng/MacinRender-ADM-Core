@@ -2,8 +2,13 @@
 //! effect and the Objects block preparation (position offset, channel lock, divergence), moved
 //! from the C++ `render_common` with the same arithmetic. Records are read as the C++ `AdmScene`
 //! copied them; the effective object mute and DirectSpeakers position come from the overlay.
+use crate::routing::{self, Error, Level, LfeRouting};
 use mradm_adm::records::{AdmPosition, Object, ObjectBlock, Span};
 use mradm_dsp::scene_math::{self as math, CloudPoint, Speaker};
+use mradm_scene::RenderScene;
+
+/// One log line of a backend's module.
+pub type Log<'a> = dyn FnMut(Level, Vec<u8>) + 'a;
 
 /// The records of one span.
 pub fn span<T>(values: &[T], s: Span) -> &[T] {
@@ -23,6 +28,40 @@ pub fn in_effect<T>(blocks: &[T], start: impl Fn(&T) -> u64) -> Vec<usize> {
         }
     }
     result
+}
+
+/// The speaker labels of a DirectSpeakers block.
+pub fn labels(scene: &RenderScene, labels: Span) -> Vec<&[u8]> {
+    let s = &scene.snapshot;
+    span(&s.indices, labels)
+        .iter()
+        .map(|&i| s.strings[i as usize].as_bytes())
+        .collect()
+}
+
+/// The 22.2 LFE routing of the scene's in-effect DirectSpeakers blocks for `layout_id`.
+pub fn lfe_routing(
+    scene: &RenderScene,
+    split_power: bool,
+    layout_id: &[u8],
+    log: &mut Log,
+) -> Result<LfeRouting, Error> {
+    let s = &scene.snapshot;
+    let mut targets = Vec::new();
+    for object in &s.objects {
+        for track in span(&s.tracks, object.tracks) {
+            let blocks = span(&s.direct_blocks, track.ds_blocks);
+            for b in in_effect(blocks, |b| b.start) {
+                targets.push(routing::lfe_target(
+                    &labels(scene, blocks[b].labels),
+                    blocks[b].low_pass_present != 0,
+                ));
+            }
+        }
+    }
+    routing::lfe_routing(split_power, layout_id, targets, &mut |level, text| {
+        log(level, text.as_bytes().to_vec())
+    })
 }
 
 /// The coordinates the position's own system uses.
@@ -90,7 +129,7 @@ fn channel_lock(block: &ObjectBlock, speakers: &[Speaker]) -> ObjectBlock {
 }
 
 /// The divergence sources of a block; a negligible divergence keeps the block unchanged.
-fn divergence(block: &ObjectBlock) -> Vec<ObjectBlock> {
+pub fn divergence(block: &ObjectBlock) -> Vec<ObjectBlock> {
     let p = &block.position;
     let mut points = [CloudPoint::default(); 3];
     let count = math::divergence(
