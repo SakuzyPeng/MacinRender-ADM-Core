@@ -1,18 +1,19 @@
-//! Private render-scene boundary (PCM consistency 4.3, the semantic policy since 4.4). Layout and
+//! Private render-scene boundary (PCM consistency 4.3, the semantic policy, DirectSpeakers matrix
+//! and screen configuration since 4.4). Layout and
 //! input-preset tables are process-lifetime views of `mradm-scene` static data and are never freed;
 //! an imported scene is owned by its handle and its views are borrowed until the next call that
 //! changes it (`mradm_scene_apply_policy`, `mradm_scene_report`, `mradm_scene_template`) or until
 //! `mradm_scene_destroy`.
 use crate::adm::{Text, View};
 use crate::boundary;
-use mradm_dsp::Error;
+use mradm_dsp::{Error, room::screen::RoomScreenGeometry};
 use mradm_scene::{
-    Context, ImportOptions, RenderScene, SourceKind,
+    Context, ImportOptions, RenderScene, SourceKind, direct_matrix,
     input::{InputChannel, channel_catalog, input_layouts, resolve_input_channel_labels},
     layouts::{Geometry, Layout, layouts},
     live_policy,
     policy::{self, UserLevel},
-    report, writeback,
+    report, screen, writeback,
 };
 use std::{
     borrow::Cow,
@@ -272,10 +273,11 @@ unsafe impl<T> Sync for Static<T> {}
 
 /// Like `boundary`, plus the locator kind: 0 none, 1 `input=<path>`, 2 `path=<path>`, 3 the
 /// caller's source label.
-fn scene_boundary(
+fn scene_boundary_with_message_len(
     context: *mut u32,
     message: *mut u8,
     capacity: usize,
+    message_len: *mut usize,
     f: impl FnOnce() -> mradm_scene::Result<()>,
 ) -> i32 {
     let error = match catch_unwind(AssertUnwindSafe(f)) {
@@ -299,6 +301,7 @@ fn scene_boundary(
         }
     }
     let detail = error.as_ref().map_or("", |e| e.message.as_str());
+    let mut written = 0;
     if !message.is_null() && capacity != 0 {
         let mut len = detail.len().min(capacity - 1);
         while !detail.is_char_boundary(len) {
@@ -308,8 +311,23 @@ fn scene_boundary(
             ptr::copy_nonoverlapping(detail.as_ptr(), message, len);
             *message.add(len) = 0;
         }
+        written = len;
+    }
+    if !message_len.is_null() {
+        unsafe {
+            *message_len = written;
+        }
     }
     error.map_or(0, |e| e.code)
+}
+
+fn scene_boundary(
+    context: *mut u32,
+    message: *mut u8,
+    capacity: usize,
+    f: impl FnOnce() -> mradm_scene::Result<()>,
+) -> i32 {
+    scene_boundary_with_message_len(context, message, capacity, ptr::null_mut(), f)
 }
 
 fn invalid(message: &str) -> mradm_scene::Error {
@@ -1012,10 +1030,177 @@ pub unsafe extern "C" fn mradm_live_policy_apply(
     })
 }
 
+#[repr(C)]
+pub struct DirectMatrixTarget {
+    label: Text,
+    weight: f32,
+    gain: f32,
+}
+
+#[repr(C)]
+pub struct DirectMatrixRoute {
+    source_label: Text,
+    mute: u32,
+    targets: *const DirectMatrixTarget,
+    targets_len: usize,
+}
+
+#[repr(C)]
+pub struct DirectMatrixView {
+    output_layout: Text,
+    routes: *const DirectMatrixRoute,
+    routes_len: usize,
+}
+
+/// A parsed DirectSpeakers matrix; its view borrows from it until `mradm_scene_direct_matrix_destroy`.
+pub struct DirectMatrix {
+    matrix: direct_matrix::Matrix,
+    _targets: Vec<Vec<DirectMatrixTarget>>,
+    routes: Vec<DirectMatrixRoute>,
+}
+
+/// Parses `mradm.direct-speakers-matrix.v1`; the caller attaches its source label to errors.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
+    json: *const u8,
+    json_len: usize,
+    output: *mut *mut DirectMatrix,
+    view: *mut DirectMatrixView,
+    message: *mut u8,
+    message_len: *mut usize,
+) -> i32 {
+    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
+    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
+        if output.is_null() || view.is_null() {
+            return Err(invalid("无效 DirectSpeakers 矩阵输出"));
+        }
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let matrix = direct_matrix::parse(unsafe { bytes(json, json_len)? })?;
+        let targets: Vec<Vec<DirectMatrixTarget>> = matrix
+            .routes
+            .iter()
+            .map(|route| {
+                route
+                    .targets
+                    .iter()
+                    .map(|t| DirectMatrixTarget {
+                        label: Text::new(&t.label),
+                        weight: t.weight,
+                        gain: t.gain,
+                    })
+                    .collect()
+            })
+            .collect();
+        let routes = matrix
+            .routes
+            .iter()
+            .zip(&targets)
+            .map(|(route, records)| DirectMatrixRoute {
+                source_label: Text::new(&route.source_label),
+                mute: u32::from(route.mute),
+                targets: records.as_ptr(),
+                targets_len: records.len(),
+            })
+            .collect();
+        let handle = Box::new(DirectMatrix {
+            matrix,
+            _targets: targets,
+            routes,
+        });
+        unsafe {
+            *view = DirectMatrixView {
+                output_layout: Text::new(&handle.matrix.output_layout),
+                routes: handle.routes.as_ptr(),
+                routes_len: handle.routes.len(),
+            };
+            *output = Box::into_raw(handle);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_direct_matrix_destroy(handle: *mut DirectMatrix) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+
+#[repr(C)]
+pub struct ScreenConfigView {
+    has_reference: u32,
+    has_reproduction: u32,
+    reference: RoomScreenGeometry,
+    reproduction: RoomScreenGeometry,
+}
+
+/// Parses `mradm.screen-config` version 1 without validating the geometry; errors have no context.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_screen_parse(
+    json: *const u8,
+    json_len: usize,
+    output: *mut ScreenConfigView,
+    message: *mut u8,
+    message_len: *mut usize,
+) -> i32 {
+    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
+    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
+        if output.is_null() {
+            return Err(invalid("无效屏幕配置输出"));
+        }
+        let screens = screen::parse(unsafe { bytes(json, json_len)? })?;
+        unsafe {
+            *output = ScreenConfigView {
+                has_reference: u32::from(screens.reference.is_some()),
+                has_reproduction: u32::from(screens.reproduction.is_some()),
+                reference: screens.reference.unwrap_or_default(),
+                reproduction: screens.reproduction.unwrap_or_default(),
+            };
+        }
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{ptr, slice, str};
+
+    #[test]
+    fn config_error_lengths_preserve_nul_and_bound_utf8_copies() {
+        let json = "{\"音\\u0000尾\":1}".as_bytes();
+        let expected = direct_matrix::parse(json).unwrap_err().message;
+        for capacity in [0, 1, 2, 58, 60, 256] {
+            let mut message = [0xCC; 256];
+            let mut len = capacity;
+            let mut handle = ptr::null_mut();
+            let mut view = std::mem::MaybeUninit::uninit();
+            let code = unsafe {
+                mradm_scene_direct_matrix_parse(
+                    json.as_ptr(),
+                    json.len(),
+                    &mut handle,
+                    view.as_mut_ptr(),
+                    message.as_mut_ptr(),
+                    &mut len,
+                )
+            };
+            assert_eq!(code, 1);
+            assert!(handle.is_null());
+            assert!(len <= capacity.saturating_sub(1));
+            assert_eq!(str::from_utf8(&message[..len]).unwrap(), &expected[..len]);
+            if capacity != 0 {
+                assert_eq!(message[len], 0);
+            }
+            if capacity > expected.len() {
+                assert_eq!(len, expected.len());
+            }
+        }
+    }
 
     #[test]
     fn layout_views_round_trip_and_reject_unknown_geometry() {

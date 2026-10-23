@@ -181,9 +181,6 @@ target_include_directories(
 
 target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE
     $<BUILD_INTERFACE:MacinRender::ADMDsp> $<INSTALL_INTERFACE:MacinRender::RustDSP>)
-target_include_directories(mr_adm_core SYSTEM PRIVATE
-    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
-)
 mr_adm_core_apply_warnings(mr_adm_core)
 mr_adm_core_apply_static_analysis(mr_adm_core)
 
@@ -1438,6 +1435,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
     mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
     add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
+
+    add_executable(mr_adm_config_json_compat_tests tests/unit/config_json_compat_test.cpp)
+    target_link_libraries(mr_adm_config_json_compat_tests PRIVATE MacinRender::ADMCore)
+    mr_adm_core_apply_warnings(mr_adm_config_json_compat_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_config_json_compat_tests)
+    add_test(NAME mr_adm_config_json_compat_tests COMMAND mr_adm_config_json_compat_tests)
 
     add_executable(mr_adm_direct_speakers_matrix_tests tests/unit/direct_speakers_matrix_test.cpp)
     target_link_libraries(mr_adm_direct_speakers_matrix_tests
