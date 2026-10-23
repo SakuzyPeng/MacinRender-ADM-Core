@@ -316,7 +316,7 @@ mr_adm_core_apply_warnings(mr_adm_render_triple_balance)
 mr_adm_core_apply_static_analysis(mr_adm_render_triple_balance)
 
 # ── adm_render_hoa ────────────────────────────────────────────────────────────
-# HOA encode renderer: Objects → HOA bed (ACN/SN3D).
+# HOA encode renderer: Objects → HOA bed (ACN/SN3D), prepared and rendered in Rust mradm-render.
 # Output order is selected via output_layout ("hoa3" = 3rd order, 16ch).
 
 add_library(mr_adm_render_hoa)
@@ -335,8 +335,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
-    PRIVATE MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
@@ -1558,6 +1557,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMIo
             MacinRender::ADMAudio
     )
+    target_include_directories(mr_adm_hoa_encode_fixture_tests PRIVATE src/adm_io)
     mr_adm_core_apply_warnings(mr_adm_hoa_encode_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
     add_test(NAME mr_adm_hoa_encode_fixture_tests COMMAND mr_adm_hoa_encode_fixture_tests)

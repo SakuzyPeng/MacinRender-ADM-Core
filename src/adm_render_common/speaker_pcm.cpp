@@ -1,6 +1,7 @@
 #include "speaker_pcm.h"
 
 #include <algorithm>
+#include <exception>
 #include <iterator>
 #include <memory>
 
@@ -53,6 +54,8 @@ tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_
         context = "input=" + input_path;
     } else if (location_ == 3U) {
         context = "meter";
+    } else if (location_ == 4U) {
+        context = "HOA DSP";
     }
     return make_error(static_cast<ErrorCode>(code),
                       std::string{reinterpret_cast<const char*>(message_.data()), message_len_},
@@ -86,26 +89,143 @@ MatrixRecords::MatrixRecords(const DirectSpeakersMatrix& matrix) {
     }
 }
 
+Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
+                                                     MradmRenderPrepared* raw,
+                                                     const MradmRenderPreparedView& view,
+                                                     uint32_t kernel,
+                                                     LogSink& logs,
+                                                     std::string_view module) {
+    auto prepared = std::make_shared<RustPrepared>();
+    prepared->handle.reset(raw);
+    if (raw == nullptr) {
+        return make_error(static_cast<ErrorCode>(code), std::string{module} + " preparation failed");
+    }
+    const auto string_of = [](MradmAdmText t) { return std::string{reinterpret_cast<const char*>(t.data), t.len}; };
+    for (const auto& line : std::span{view.logs, view.logs_len}) {
+        logs.log(static_cast<LogLevel>(line.level), module, string_of(line.message));
+    }
+    if (code != 0) {
+        return make_error(static_cast<ErrorCode>(code), string_of(view.message), string_of(view.context));
+    }
+    prepared->mix = {view.plan, view.tracks, kernel};
+    return prepared;
+}
+
+namespace {
+
+class FileStream final : public IRenderStream {
+  public:
+    FileStream(MradmRenderStream* raw, const RenderPlan& plan, uint16_t outputs)
+        : handle_(raw, &mradm_render_stream_destroy), input_path_(plan.input_path), outputs_(outputs),
+          sample_rate_(plan.scene.info.sample_rate), output_layout_(plan.output_layout) {}
+
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        DriverError error;
+        std::size_t produced = 0;
+        if (const auto code = mradm_render_stream_process(handle_.get(),
+                                                          out.data(),
+                                                          out.size(),
+                                                          frames,
+                                                          &produced,
+                                                          error.location(),
+                                                          error.message(),
+                                                          error.message_len());
+            code != 0) {
+            return error.error(code, input_path_);
+        }
+        return produced;
+    }
+
+    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+        DriverError error;
+        if (const auto code =
+                mradm_render_stream_seek(handle_.get(), frame, error.location(), error.message(), error.message_len());
+            code != 0) {
+            return error.error(code, input_path_);
+        }
+        return {};
+    }
+
+    void set_overrides(const LiveOverrides& overrides) override {
+        const auto records = override_records(overrides);
+        if (mradm_render_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
+            std::terminate();
+        }
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return outputs_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
+
+  private:
+    std::unique_ptr<MradmRenderStream, decltype(&mradm_render_stream_destroy)> handle_;
+    std::string input_path_;
+    uint16_t outputs_;
+    uint32_t sample_rate_;
+    std::string output_layout_;
+};
+
+} // namespace
+
+Result<std::unique_ptr<IRenderStream>> open_file_stream(const RustPrepared& prepared, const RenderPlan& plan) {
+    const auto path = audio::wav_path_utf8(plan.input_path);
+    DriverError error;
+    MradmRenderStream* raw = nullptr;
+    if (const auto code = mradm_render_stream_open(prepared.handle.get(),
+                                                   reinterpret_cast<const uint8_t*>(path.data()),
+                                                   path.size(),
+                                                   plan.default_interp_ms,
+                                                   plan.object_smoothing_frames,
+                                                   &raw,
+                                                   error.location(),
+                                                   error.message(),
+                                                   error.message_len());
+        code != 0) {
+        return error.error(code, plan.input_path);
+    }
+    return std::unique_ptr<IRenderStream>{std::make_unique<FileStream>(raw, plan, prepared.outputs)};
+}
+
+namespace {
+
+// The HOA encoder keeps its own wording.
+struct DriverText {
+    std::string_view begin;
+    std::string_view step;
+    std::string_view short_write;
+};
+constexpr DriverText k_speaker_text{"rendering audio", "rendering", "short write while rendering"};
+constexpr DriverText k_hoa_text{"encoding HOA", "encoding", "short write while encoding HOA"};
+
+[[nodiscard]] std::string begin_log(bool hoa, std::size_t tracks, uint16_t outputs, uint64_t frames) {
+    return hoa ? fmt::format("encoding {} input channels (Objects + DirectSpeakers) → HOA3 ({} ch), {} frames",
+                             tracks,
+                             outputs,
+                             frames)
+               : fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames",
+                             tracks,
+                             outputs,
+                             frames);
+}
+
+} // namespace
+
 // The loop itself runs in Rust mradm-render `offline` (PCM consistency 4.5): input reading,
 // mixing, checkpoints and the asynchronous meter. This side owns the writer, cancellation,
 // progress, logs and the optional stateful processor between two Rust steps.
 Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                         SpeakerMix gain_matrix,
+                                         const SpeakerMix& gain_matrix,
                                          uint16_t num_out_ch,
                                          std::string_view backend,
                                          ProgressSink& progress,
                                          LogSink& logs,
                                          const SpeakerBlockProcessor& process) {
     const auto& info = plan.scene.info;
+    const bool hoa = gain_matrix.kernel == 1U;
+    const auto& wording = hoa ? k_hoa_text : k_speaker_text;
     try {
-        logs.log(LogLevel::info,
-                 backend,
-                 fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames",
-                             gain_matrix.tracks,
-                             num_out_ch,
-                             info.num_frames));
-        progress.on_progress(
-            {RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
+        logs.log(LogLevel::info, backend, begin_log(hoa, gain_matrix.tracks, num_out_ch, info.num_frames));
+        progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, wording.begin});
 
         const auto& window = plan.render_window;
         const auto& meter_window = plan.meter_window;
@@ -121,7 +241,8 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                                                   window ? window->frame_count : 0,
                                                   meter_window ? 1U : 0U,
                                                   meter_window ? meter_window->start_frame : 0,
-                                                  meter_window ? meter_window->frame_count : 0};
+                                                  meter_window ? meter_window->frame_count : 0,
+                                                  gain_matrix.kernel};
         const auto path = audio::wav_path_utf8(plan.input_path);
         DriverError error;
         MradmRenderOffline* raw = nullptr;
@@ -166,7 +287,7 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
             }
             if (block.emit_frames > 0 && writer->write(block.output + (block.emit_offset * num_out_ch),
                                                        block.emit_frames) != block.emit_frames) {
-                return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
+                return make_error(ErrorCode::io_error, std::string{wording.short_write}, "output=" + plan.output_path);
             }
             MradmRenderOfflineProgress step{};
             if (const auto status = mradm_render_offline_commit(
@@ -180,7 +301,7 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                                   step.stage_fraction,
                                   step.done,
                                   step.total,
-                                  "rendering"});
+                                  wording.step});
         }
         MradmRenderOfflineMetrics measured{};
         if (const auto status = mradm_render_offline_finish(
@@ -190,16 +311,15 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
         }
 
         progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-        const uint64_t win_start = window ? std::min(window->start_frame, info.num_frames) : 0;
-        const uint64_t win_end = window ? std::min(win_start + window->frame_count, info.num_frames) : info.num_frames;
+        const uint64_t start = window ? std::min(window->start_frame, info.num_frames) : 0;
+        const uint64_t end = window ? start + std::min(window->frame_count, info.num_frames - start) : info.num_frames;
         logs.log(LogLevel::info,
                  backend,
                  fmt::format("wrote {} frames to {}{}",
-                             win_end - win_start,
+                             end - start,
                              plan.output_path,
-                             window
-                                 ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, info.num_frames)
-                                 : std::string{}));
+                             window ? fmt::format(" (window [{}, {}) of {} frames)", start, end, info.num_frames)
+                                    : std::string{}));
 
         RenderMetrics metrics;
         if (measured.has_lufs != 0U) {
@@ -210,8 +330,10 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
         }
         return metrics;
     } catch (const std::exception& e) {
-        return make_error(
-            ErrorCode::io_error, fmt::format("{} render failed: {}", backend, e.what()), "input=" + plan.input_path);
+        return make_error(ErrorCode::io_error,
+                          hoa ? fmt::format("HOA encode failed: {}", e.what())
+                              : fmt::format("{} render failed: {}", backend, e.what()),
+                          "input=" + plan.input_path);
     }
 }
 

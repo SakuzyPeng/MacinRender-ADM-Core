@@ -13,6 +13,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,12 +24,26 @@
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
+#include "scene_import_internal.h"
 
 namespace {
 
 constexpr int k_hoa3_channels = 16;
 constexpr float k_amplitude = 0.5F;
 constexpr uint32_t k_frames = 1000U;
+
+class CapturingLogSink final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel /*level*/, std::string_view /*module*/, std::string_view message) override {
+        messages_.emplace_back(message);
+    }
+    [[nodiscard]] bool contains(std::string_view message) const {
+        return std::ranges::find(messages_, message) != messages_.end();
+    }
+
+  private:
+    std::vector<std::string> messages_;
+};
 
 class FileGuard {
   public:
@@ -48,6 +63,21 @@ bool check(bool condition, const char* msg) {
         std::cerr << "FAIL: " << msg << "\n";
     }
     return condition;
+}
+
+// HOA reads only the Rust render scene (PCM consistency 4.5), so drive the renderer with the
+// imported scene and its handle.
+std::optional<mradm::RenderPlan> imported_plan(const std::filesystem::path& path) {
+    auto scene = mradm::io::RenderScene::import(path.string(), nullptr);
+    if (!scene || scene->scene().objects.empty()) {
+        return std::nullopt;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = path.string();
+    plan.output_layout = "hoa3";
+    plan.scene = scene->scene();
+    plan.scene_handle = scene->handle();
+    return plan;
 }
 
 std::pair<std::shared_ptr<fixture::Document>, std::string> make_objects_doc(float az_deg,
@@ -1026,8 +1056,7 @@ bool verify_ds_off_axis_position() {
 bool verify_hoa_stream_boundaries(mradm::IRenderer& renderer,
                                   const mradm::IPreparedRender& prepared,
                                   const mradm::RenderPlan& plan,
-                                  mradm::LogSink& logs,
-                                  mradm::ProgressSink& progress) {
+                                  mradm::LogSink& logs) {
     bool ok = true;
     auto stream = renderer.open_stream(prepared, plan, logs);
     auto fresh = renderer.open_stream(prepared, plan, logs);
@@ -1051,27 +1080,7 @@ bool verify_hoa_stream_boundaries(mradm::IRenderer& renderer,
     auto mismatched_plan = plan;
     ++mismatched_plan.scene.info.num_channels;
     ok &= check(!renderer.open_stream(prepared, mismatched_plan, logs), "HOA rejects prepared/input format mismatch");
-    auto truncated_plan = plan;
-    truncated_plan.scene.info.num_frames = 8192;
-    auto truncated = renderer.open_stream(prepared, truncated_plan, logs);
-    if (!truncated) {
-        return false;
-    }
-    std::vector<float> block(std::size_t{1024} * 16);
-    for (int i = 0; i < 4; ++i) {
-        ok &= check((*truncated)->process(block, 1024).value_or(0) == 1024, "HOA short-read prefix");
-    }
-    block.assign(block.size(), .125F);
-    const auto failed = (*truncated)->process(block, 1024);
-    ok &= check(!failed && failed.error().code == mradm::ErrorCode::io_error, "HOA premature EOF is an I/O error");
-    ok &= check(std::ranges::all_of(block, [](float x) { return x == .125F; }), "HOA short-read block is not encoded");
-    auto short_offline = truncated_plan;
-    const auto short_path = std::filesystem::temp_directory_path() / "mr_hoa_stream_short_error.wav";
-    FileGuard short_guard{short_path};
-    short_offline.output_path = short_path.string();
-    const auto short_result = renderer.render_window(prepared, short_offline, progress, logs);
-    ok &= check(!short_result && short_result.error().code == mradm::ErrorCode::io_error,
-                "HOA offline premature EOF is an I/O error");
+    // Premature EOF (offline and streaming) is covered by mradm-render tests/hoa.rs.
     return ok;
 }
 
@@ -1085,14 +1094,11 @@ bool verify_hoa_stream_matches_window() {
     const auto in_path = write_fixture_samples(doc, uid, "stream_in", noise);
     FileGuard in_guard{in_path};
 
-    auto scene = mradm::io::import_scene(in_path.string());
-    if (!check(scene.has_value(), "hoa stream: import scene")) {
-        return false;
+    auto imported = imported_plan(in_path);
+    if (!imported) {
+        return check(false, "hoa stream: import scene");
     }
-    mradm::RenderPlan plan;
-    plan.input_path = in_path.string();
-    plan.output_layout = "hoa3";
-    plan.scene = *scene;
+    const auto& plan = *imported;
 
     auto renderer = mradm::create_hoa_renderer();
     mradm::NullLogSink logs;
@@ -1153,8 +1159,12 @@ bool verify_hoa_stream_matches_window() {
     auto tail_plan = plan;
     tail_plan.output_path = tail_path.string();
     tail_plan.render_window = mradm::RenderWindow{1023, std::numeric_limits<uint64_t>::max()};
-    const auto rendered_tail = renderer->render_window(**prepared, tail_plan, progress, logs);
+    CapturingLogSink tail_logs;
+    const auto rendered_tail = renderer->render_window(**prepared, tail_plan, progress, tail_logs);
     ok &= check(rendered_tail.has_value(), "HOA window count clamps without integer overflow");
+    const auto expected_log = "wrote 3080 frames to " + tail_path.string() + " (window [1023, 4103) of 4103 frames)";
+    ok &=
+        check(tail_logs.contains(expected_log), "HOA overflow-clamped window logs the actual frame count and interval");
     if (rendered_tail) {
         auto tail = mradm::audio::FloatWavReader::open(tail_path.string());
         if (!tail) {
@@ -1165,7 +1175,7 @@ bool verify_hoa_stream_matches_window() {
         ok &= check(actual == std::vector<float>(ref.begin() + std::ptrdiff_t(1023 * ch), ref.end()),
                     "HOA overflow-clamped window equals full slice");
     }
-    ok &= verify_hoa_stream_boundaries(*renderer, **prepared, plan, logs, progress);
+    ok &= verify_hoa_stream_boundaries(*renderer, **prepared, plan, logs);
     return ok;
 }
 
@@ -1177,16 +1187,12 @@ bool verify_hoa_stream_gain_override() {
     const auto in_path = write_fixture_samples(doc, uid, "gain_in", noise);
     FileGuard in_guard{in_path};
 
-    auto scene = mradm::io::import_scene(in_path.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "hoa override: import scene")) {
-        return false;
+    auto imported = imported_plan(in_path);
+    if (!imported) {
+        return check(false, "hoa override: import scene");
     }
-    const std::string object_id = scene->objects.front().id;
-
-    mradm::RenderPlan plan;
-    plan.input_path = in_path.string();
-    plan.output_layout = "hoa3";
-    plan.scene = *scene;
+    const auto& plan = *imported;
+    const std::string object_id = plan.scene.objects.front().id;
 
     auto renderer = mradm::create_hoa_renderer();
     mradm::NullLogSink logs;
@@ -1244,15 +1250,12 @@ bool verify_hoa_stream_per_channel_override() {
     auto [doc, uid] = make_ds_doc({.azimuth = 0.0F, .elevation = 0.0F, .label = "M+000"});
     const auto in_path = write_fixture_samples(doc, uid, "per_channel_in", make_noise_samples(4096));
     FileGuard in_guard{in_path};
-    auto scene = mradm::io::import_scene(in_path.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "hoa per-channel: import scene")) {
-        return false;
+    auto imported = imported_plan(in_path);
+    if (!imported) {
+        return check(false, "hoa per-channel: import scene");
     }
-    const std::string object_id = scene->objects.front().id;
-    mradm::RenderPlan plan;
-    plan.input_path = in_path.string();
-    plan.output_layout = "hoa3";
-    plan.scene = *scene;
+    const auto& plan = *imported;
+    const std::string object_id = plan.scene.objects.front().id;
     auto renderer = mradm::create_hoa_renderer();
     mradm::NullLogSink logs;
     auto prepared = renderer->prepare(plan, logs);
