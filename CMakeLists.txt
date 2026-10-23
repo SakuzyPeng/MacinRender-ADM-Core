@@ -181,9 +181,6 @@ target_include_directories(
 
 target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE
     $<BUILD_INTERFACE:MacinRender::ADMDsp> $<INSTALL_INTERFACE:MacinRender::RustDSP>)
-target_include_directories(mr_adm_core SYSTEM PRIVATE
-    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
-)
 mr_adm_core_apply_warnings(mr_adm_core)
 mr_adm_core_apply_static_analysis(mr_adm_core)
 

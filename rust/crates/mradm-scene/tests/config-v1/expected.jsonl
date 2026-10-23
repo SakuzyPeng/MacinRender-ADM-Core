@@ -1,0 +1,958 @@
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value is missing required field 'schema'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unsupported schema 'x'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.schema must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value is missing required field 'output_layout'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"ok":{"output_layout":"x","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value.output_layout must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value is missing required field 'routes'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level routes must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] is missing required field 'source_label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] has unknown field 'a'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] is missing required field 'source_label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"x","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must define exactly one of 'targets' or 'mute'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] is missing required field 'label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] has unknown field 'a'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] is missing required field 'label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["x","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] is missing required field 'weight'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3fc00000","3f13cd3a"],["M-030","40400000","3f5105ec"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] is missing required field 'label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] has unknown field 'a'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] is missing required field 'label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["x","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] is missing required field 'weight'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f21e89b"],["M-030","3fc00000","3f464bf8"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] is missing required field 'source_label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] has unknown field 'a'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] is missing required field 'source_label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"x","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] must define exactly one of 'targets' or 'mute'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets must be a non-empty array","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] is missing required field 'label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] has unknown field 'a'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] is missing required field 'label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["x","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] is missing required field 'weight'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","3fc00000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0].weight must be numeric","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] is missing required field 'source_label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] has unknown field 'a'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] is missing required field 'source_label'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"x","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must not be empty","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].source_label must be a string","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] must define exactly one of 'targets' or 'mute'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unknown top-level field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unknown top-level field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unknown top-level field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unknown top-level field 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] has unknown field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] has unknown field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] has unknown field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] has unknown field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] has unknown field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0] has unknown field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] has unknown field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] has unknown field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[1] has unknown field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] has unknown field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] has unknown field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1] has unknown field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] has unknown field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] has unknown field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[1].targets[0] has unknown field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] has unknown field 'zz_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] has unknown field 'Aa_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[2] has unknown field 'a_extra'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value must be an object","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: top-level value is missing required field 'schema'","syntax":false}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"ok":{"output_layout":"5.1","routes":[{"mute":false,"source_label":"M+000","targets":[["M+030","3f800000","3f000000"],["M-030","40400000","3f5db3d7"]]},{"mute":false,"source_label":"M-030","targets":[["M-030","41100000","3f800000"]]},{"mute":true,"source_label":"LFE1","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","3f800000","3f3504f3"],["T1","3f800000","3f3504f3"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","40400000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","40400000","3f5db3d7"],["T1","3f800000","3f000000"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","00000001","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","00000001","1a3504f3"],["T1","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","00000001","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","00000001","1a3504f3"],["T1","3f800000","3f800000"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","00800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","00800000","20000000"],["T1","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","7f7fffff","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","7f7fffff","3f800000"],["T1","3f800000","1f800000"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: [json.exception.out_of_range.406] number overflow parsing '1e400'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: [json.exception.out_of_range.406] number overflow parsing '1e400'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: [json.exception.out_of_range.406] number overflow parsing '-1e400'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: [json.exception.out_of_range.406] number overflow parsing '-1e400'","syntax":false}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5f800000","3f800000"],["T1","3f800000","2f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5f800000","3f800000"],["T1","3f800000","2f800000"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5a000000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5a000000","3f800000"],["T1","3f800000","323504f3"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4b800000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4b800000","3f800000"],["T1","3f800000","39800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","3dcccccd","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","3dcccccd","3e9a5fb2"],["T1","3f800000","3f741620"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].targets[0].weight must be finite and > 0","syntax":false}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","6fc77488","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","6fc77488","3f800000"],["T1","3f800000","274d145b"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","7f7fffff","3f000000"],["T1","7f7fffff","3f000000"],["T2","7f7fffff","3f000000"],["T3","7f7fffff","3f000000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","7e967699","3f000000"],["T1","7e967699","3f000000"],["T2","7e967699","3f000000"],["T3","7e967699","3f000000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42f80000","287c54e5"],["T1","43420000","289dcf19"],["T2","41eaf32a","27f59a55"],["T3","70ff4363","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42a03806","3f04785a"],["T1","423bc253","3ecacdd6"],["T2","429b9422","3f0289aa"],["T3","42392b2f","3ec96674"],["T4","42402f0b","3ecd2e04"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","447a0000","27caa196"],["T1","4bd657f0","2b84abd0"],["T2","73c7840c","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","7061033c","3f800000"],["T1","429aa084","28960f4b"],["T2","420b6de7","28498493"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4212c699","3ef053e8"],["T1","2211912b","2eef560e"],["T2","428500d2","3f21c4a0"],["T3","427d63d1","3f1de29c"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","0702a365","0f9a81ca"],["T1","421dd60e","2d29d4a8"],["T2","09da5660","110d3dcc"],["T3","40ec8dbc","2c9303f0"],["T4","66b3516d","3f800000"],["T5","42033c83","2d1adc3c"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41192cd9","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42644337","2ad0592c"],["T1","43120000","2b26a0e1"],["T2","426b9151","2ad3a7ed"],["T3","42e00000","2b11f146"],["T4","6bac4ec3","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42675811","3f206643"],["T1","42b2f9ab","3f4784fb"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42b42b85","2eefd0c7"],["T1","63cd4f14","3f800000"],["T2","445f4000","2fbcc352"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43a70000","3f5b20ae"],["T1","3f9c2a9c","3d53e6a2"],["T2","42a62aa5","3eda9488"],["T3","42163a8f","3e92f5e0"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42a128d0","3f11b5dc"],["T1","42b8a052","3f1bf568"],["T2","41c00000","3e9f0ae3"],["T3","3f7ca166","3d810010"],["T4","00600bcf","1de0f961"],["T5","424b64a6","3ee77f4b"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","424554e6","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","428449f1","3e3f3c8d"],["T1","44660000","3f324d85"],["T2","421dbab7","3e13a7e3"],["T3","44450000","3f25043a"],["T4","4021e560","3d1597e7"],["T5","42a0c641","3e52d2a9"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42ac836f","3f3a0295"],["T1","426464ab","3f1756dc"],["T2","41400000","3e8ac244"],["T3","410067b8","3e62f359"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41bfdb33","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","421c8538","3e3fe4f3"],["T1","4283aec3","3e78eaf6"],["T2","43990000","3f0627b9"],["T3","44260000","3f459eb4"],["T4","421d277e","3e404852"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","3dc153f7","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4244e906","3e7d15c4"],["T1","428d3300","3e978aca"],["T2","440d4000","3f5659fb"],["T3","421448e9","3e5b9fd9"],["T4","42a7fb52","3ea54a68"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","44428000","3f57ee06"],["T1","416817b4","3debe034"],["T2","438c0000","3f018a14"],["T3","41a844e9","3e0e0454"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4226c4bf","2c94c135"],["T1","43d38000","2d6ce906"],["T2","67f6f52d","3f800000"],["T3","42c2ec0a","2ce36f9b"],["T4","421441cc","2c8c4186"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42acfb99","3f293388"],["T1","41459183","3e7fba04"],["T2","423cc66e","3ef9f892"],["T3","41d80000","3ebd12a4"],["T4","41c7a9a0","3eb5c829"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42a20000","3f4d18e0"],["T1","4234c8b9","3f1933f7"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","57d8af88","3f800000"],["T1","42adbd1b","34e53b1c"],["T2","40b355b4","33e8e4b4"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41842736","3e1db4a9"],["T1","429df01b","3eac67e1"],["T2","41f560e5","3e56e531"],["T3","43350000","3f0281b9"],["T4","43c08000","3f3e565c"],["T5","40896839","3da0cf61"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42d60000","3f09806a"],["T1","4224916e","3eaa8677"],["T2","42b17ac9","3efa70db"],["T3","42380b00","3eb45548"],["T4","42b00000","3ef9650b"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43ec0000","3c7a2026"],["T1","44354000","3c9aff7e"],["T2","421e7e88","3b90f11f"],["T3","49f70a8e","3f7fe8e6"],["T4","42b72127","3bdc5579"],["T5","42c6e3d8","3be59e92"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42fc0000","3e8362d3"],["T1","4449c000","3f2640e3"],["T2","42a39d91","3e53bbf9"],["T3","44528000","3f29d209"],["T4","42627ad5","3e3025fd"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","084c6faf","2257b35a"],["T1","41a4924c","3f08d8c8"],["T2","424dad21","3f585a91"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42b8cfb8","3e619d04"],["T1","44624000","3f3083a4"],["T2","432d0000","3e9a59c4"],["T3","44370000","3f1ebfbe"],["T4","3f952a0d","3ccab0b3"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42aa7135","3e9c47c5"],["T1","43490000","3ef0027c"],["T2","423c0000","3e681e54"],["T3","4294f4d8","3e92192f"],["T4","43fd8000","3f3e9790"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42ac1dc5","2501e457"],["T1","77a7238b","3f800000"],["T2","44700000","25d8ea89"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43d68000","3f4788a3"],["T1","421441e4","3e6a994d"],["T2","433b0000","3f03bcbb"],["T3","42546454","3e8c6589"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4215e42e","24d5b2ce"],["T1","43af0000","25a34628"],["T2","44548000","25fe71b9"],["T3","77571b48","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","52a9624f","3f800000"],["T1","2d3ec65f","2cc01c17"],["T2","4142daef","36c2273e"],["T3","41c276a6","37092627"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43bc0000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43e48000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41ed93f6","3e7ad1ae"],["T1","43cf0000","3f6a1f49"],["T2","424669ff","3ea21468"],["T3","227411b5","2eb3c32e"],["T4","3fd804b2","3d6f2af7"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43850000","3f233603"],["T1","439e8000","3f322be6"],["T2","428edbdb","3ea926e8"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","427f218c","33bdfce1"],["T1","4155d949","332df06f"],["T2","59e79cc5","3f800000"],["T3","42bbfd15","33e6a282"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43280000","3e99c047"],["T1","43818000","3ebee73e"],["T2","4426c000","3f192d93"],["T3","0444b215","1f265d56"],["T4","440b8000","3f0c1aa2"],["T5","43530000","3eac4ec7"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41eeb402","3ef94ecf"],["T1","42b267ec","3f578829"],["T2","40d9bc0f","3e6e1b2c"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41ac8050","3e39127c"],["T1","44078000","3f67f80a"],["T2","4265055a","3e96c9cf"],["T3","421d305e","3e79d863"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","422137ff","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","44288000","3f6e4e07"],["T1","429b17b3","3ea1a9fc"],["T2","41921ed9","3e1ceb11"],["T3","41000000","3dcfb35c"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43c78000","3f759b9c"],["T1","4209eac6","3e906633"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","440cc000","3f07c7d6"],["T1","4290beb5","3e42ba95"],["T2","43b78000","3edb40e7"],["T3","1beeb0a8","2afa0f95"],["T4","42c1dc4e","3e615bb1"],["T5","44618000","3f2bdd61"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42114ad1","3e5f078d"],["T1","441bc000","3f66eaa5"],["T2","42392ee1","3e7bcabb"],["T3","4270517c","3e8f6b14"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4118a7c3","3ede74bf"],["T1","42240000","3f6692ec"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42c4b5e1","2c6238f6"],["T1","43ff8000","2d00e908"],["T2","446e0000","2d2ff3da"],["T3","5a9dc2f4","384a9798"],["T4","68fbe787","3f800000"],["T5","42440000","2c1faca1"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43cd8000","3f166033"],["T1","443aabc7","3f4aafd0"],["T2","40efbfd2","3da26c96"],["T3","41cfc7df","3e17353c"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","3d3e0e4b","3cb43441"],["T1","42bfafbe","3f7ff024"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","426c1847","3e60d0ec"],["T1","434d0000","3ed17d2b"],["T2","445f4000","3f5a9d6f"],["T3","0844c112","214d3b86"],["T4","001c71a5","1cdcb602"],["T5","42870652","3e707081"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4276c5de","3e8aabc4"],["T1","41ca9d51","3e31b32a"],["T2","443c8000","3f7264f3"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","414f15ac","3e1a7960"],["T1","428a0000","3eb255bb"],["T2","421333de","3e823d11"],["T3","43e10000","3f63b68e"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42a715be","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43c40000","3f39fd4f"],["T1","41c7fc41","3e3bdef2"],["T2","428f521e","3e9f0b0b"],["T3","437e0000","3f15b6c5"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","5fe2c859","3f800000"],["T1","423f64a8","30a64bed"],["T2","42683341","30b72b34"],["T3","44264000","319afd30"],["T4","414b259d","302b53a7"],["T5","41f0f81b","3083f15e"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","1500be4b","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","435d0000","2e65712b"],["T1","4136d5f5","2d50b15b"],["T2","65898faf","3f800000"],["T3","51b7b804","3593ec8d"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","420eec2c","3f5fb09a"],["T1","12959b41","27a1d433"],["T2","4131144b","3ef8fd20"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42a1ff5a","3e8e8b18"],["T1","41047751","3db649f4"],["T2","41921442","3e075be3"],["T3","4462c000","3f6e7f07"],["T4","41f3da10","3e2ee2e5"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","432d0000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4189e058","3e077101"],["T1","445c4000","3f72176e"],["T2","3fc15060","3d206026"],["T3","42aac8d3","3e96bda5"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4447c000","3f6f7c1c"],["T1","42e40000","3eb4eb91"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43920000","3f301ca8"],["T1","43a28000","3f39cc12"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","44134000","39956ee6"],["T1","41dcb502","38815d1e"],["T2","4fd81407","3f7fffff"],["T3","4410c000","399428c3"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4187f1e9","3c891c04"],["T1","428e81b5","3d0c6120"],["T2","40fc0c7f","3c3ab16b"],["T3","476c961a","3f7fcc0e"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42280000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","44520000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","43c50000","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42c4e002","3f133644"],["T1","4258fb95","3eda8ff8"],["T2","43110000","3f32ab03"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","421a01e1","3eebd0f7"],["T1","422146ff","3ef15169"],["T2","412dc5f0","3e7a7e0a"],["T3","42b7a237","3f3614b1"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","44558000","3f5cd67d"],["T1","42266719","3e42f6d3"],["T2","437c0000","3eefecb5"],["T3","31d46a82","361bc250"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","42c64728","24b3ce5a"],["T1","443f4000","2579bca9"],["T2","42c21918","24b1e694"],["T3","7848f67c","3f800000"],["T4","430c0000","24d5abd8"],["T5","442d4000","256db1bc"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4ca406a7","3f7fffe6"],["T1","428a0000","3a6ad02e"],["T2","419c0522","39f9ac86"],["T3","42982a7c","3a769223"],["T4","42c3fb35","3a8be9e9"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","44200000","2687a78d"],["T1","422eb9e8","258dc284"],["T2","43170000","2603c8b4"],["T3","729d2bad","3dbe23fe"],["T4","760d39a0","3f7ee4f1"],["T5","41bd7178","2550c047"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","4281c5c7","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","41361f4e","3f800000"]]}]}}
+{"ok":{"output_layout":"7.1.4","routes":[{"mute":false,"source_label":"M+000","targets":[["T0","31b58dc5","36549282"],["T1","2f856f82","35363d06"],["T2","43b40000","3f53a925"],["T3","42a34047","3ec992a6"],["T4","42aa0000","3ecdb27e"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must define exactly one of 'targets' or 'mute'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must define exactly one of 'targets' or 'mute'","syntax":false}
+{"ok":{"output_layout":"M+030","routes":[{"mute":false,"source_label":"M+030","targets":[["M+030","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"café","routes":[{"mute":false,"source_label":"café","targets":[["café","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"é","routes":[{"mute":false,"source_label":"é","targets":[["é","3f800000","3f800000"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"ok":{"output_layout":"🎵","routes":[{"mute":false,"source_label":"🎵","targets":[["🎵","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":"🎵","routes":[{"mute":false,"source_label":"🎵","targets":[["🎵","3f800000","3f800000"]]}]}}
+{"ok":{"output_layout":" ","routes":[{"mute":false,"source_label":" ","targets":[[" ","3f800000","3f800000"]]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unsupported schema 'mradm.direct-speakers-matrix.v1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: ","syntax":true}
+{"ok":{"output_layout":"5.1","routes":[{"mute":true,"source_label":"C","targets":[]}]}}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: unsupported schema 'wrong'","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0].mute must be true","syntax":false}
+{"code":1,"context":"<memory>","message":"invalid DirectSpeakers matrix: routes[0] must be an object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'schema' not found","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'version' not found","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'coordinates' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'coordinates' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'coordinates' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'centre' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","bff0000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","3ff8000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","bff0000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","3ff8000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff8000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'width' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","3ff8000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'aspect_ratio' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[false,"3ff8000000000000","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":null}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":null}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'coordinates' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'coordinates' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'coordinates' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be string, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'centre' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","bff0000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","3ff8000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","bff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff8000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","bff0000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","3ff8000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'width' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'aspect_ratio' not found","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ff8000000000000","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with number","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.304] cannot use at() with boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'schema' not found","syntax":false}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"ok":{"reference":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"],"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ff8000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"code":1,"context":"","message":"无效的屏幕配置: ","syntax":true}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.406] number overflow parsing '1e400'","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.406] number overflow parsing '1e400'","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'version' not found","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":2,"context":"","message":"不支持的屏幕配置版本","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.403] key 'schema' not found","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"ok":{"reference":null,"reproduction":[false,"4000000000000000","0000000000000000","0000000000000000","3ff0000000000000","403e000000000000"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 coordinates 必须是 polar 或 cartesian","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is array","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: 屏幕 centre 必须有三个坐标","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is object","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.out_of_range.406] number overflow parsing '1e400'","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","01a56e1fc2f8f359"]}}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","01a56e1fc2f8f359"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","4076800000000000"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","4076900000000000"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","4066800000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","3fe0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3fe0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"3ffc7ae147ae147b","0000000000000000","0000000000000000","3ff0000000000000","3ee4f8b588e368f1"]}}
+{"ok":{"reference":null,"reproduction":[true,"3ffc7ae147ae147b","0000000000000000","3ff0000000000000","0000000000000000","3ee4f8b588e368f1"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"7fe1ccf385ebc8a0","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"7fe1ccf385ebc8a0","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is boolean","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is string","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"code":1,"context":"","message":"无效的屏幕配置: [json.exception.type_error.302] type must be number, but is null","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"4076800000000000","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"4076800000000000","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"4076900000000000","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"4076900000000000","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"4066800000000000","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"4066800000000000","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"3fe0000000000000","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"3fe0000000000000","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"3ee4f8b588e368f1","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"3ee4f8b588e368f1","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":[false,"43f0000000000000","0000000000000000","0000000000000000","3ff0000000000000","404d000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"43f0000000000000","0000000000000000","3ff0000000000000","0000000000000000","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"3ff0000000000000","4053d517786fcc64","c055c00000000000","3ff035c6da972e05","400d3cfdc452ae08"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"40003dbde985f10f","bff2c72038b30f66","3ffcdd44d177a93a","3ffb9ba9fefa31f8","4003e5704d9edec1"]}}
+{"ok":{"reference":null,"reproduction":[false,"400dd2a0ea5e9bfc","405ef4faca733974","403cd237dc2b0ac0","3ffc60d2d77d8f1c","404f48dca0aa4b22"]}}
+{"ok":{"reference":null,"reproduction":[false,"4003a32e6b0961fd","4051b68d137be610","c04dd8faf732b6bf","3fa6cdb559e0dfe0","4053335ba7301a1e"]}}
+{"ok":{"reference":null,"reproduction":[true,"400cdd1f8c537d7a","bfcb67052d1ba590","bfeebdb575eddf9c","3fded1553d474880","3ff3556fae329f63"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"40098c24b5a8cdbe","c000000000000000","3ffa388b15d50ec8","3ffc614cbd2325be","3f8db078633649c0"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"400bd58d50901027","4050c00000000000","c04b800000000000","3fb627adeb7d8df0","406604a82398d7c9"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"40073c42b4de9c2e","c054f3b087b9cabe","c04dc9175747089e","400607d2595141ad","4057127b59450331"]}}
+{"ok":{"reference":null,"reproduction":[true,"3fd703a94a3a8a74","bfffecaff078ffbe","3fd3de7e484d65f0","3ff13c0b01b8b596","4000000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"400910d99fe2eac3","0000000000000000","bff35ff91b3826b8","3fec50c34bcab66c","3fc9f2ceb20c9844"]}}
+{"ok":{"reference":null,"reproduction":[false,"3ff0000000000000","405db0c35ed8a2c0","404355ec29b83918","3ff0000000000000","4021cc20efaa3ad6"]}}
+{"ok":{"reference":null,"reproduction":[false,"400469fdb76541bb","404dac73099f2348","403df237045148c0","3fc3ffbc521a0fb0","4062f9c9060af927"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[true,"3feb65d796f7dae0","bff94b38bd2e42b2","3fb2455e970ee4c0","bff0000000000000","3ff0000000000000"],"reproduction":null}}
+{"ok":{"reference":[true,"3ffbd1edcfbcbd94","bfdd4d923e30f558","3ff0000000000000","bffa79d5f72920e2","3ff0000000000000"],"reproduction":null}}
+{"ok":{"reference":null,"reproduction":[false,"4000432d05c2f5cb","c04a7cf416e8ee1c","400c4d2176149180","4000000000000000","40661076b5045483"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3ff58b3d28887640","3ffe30084ebdf5ee","3ff3186b7a2af0ec","bffd6a65ea3c8800","3fe45e2011eea696"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"400d82ef8175bd04","40534e3a06e3e858","402b948af4aaaa18","4000000000000000","405a00a805cc94ac"]}}
+{"ok":{"reference":null,"reproduction":[true,"400811f9a7f6ca9f","bfc24466d39e8d70","3ffc97c80d6b4868","3ffb0018d9d2987c","3ff0000000000000"]}}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"4002455fa5ba23eb","c020664efb9fdcb0","4050d8dd91c7e286","3fe80a7ed066d164","405829e8d4eeb3c1"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3ff7d0b37732bc2e","bfee0ff9cc217344","3ff219a81fe320cc","c000000000000000","3fd0e6ec7e1fb2c4"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"400077544b9a39d9","bfb109b11446a660","3ff0000000000000","bfd657588036c198","4000000000000000"]}}
+{"ok":{"reference":null,"reproduction":[true,"3fe56b4d32201ea8","3ff09f8374e4ad00","3ffe0faa30316862","bfcee1bde5360990","3ffcb60923aaaffc"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[false,"4005cde8e7803504","c037afea4a74cc00","404be94d0c31ed78","3fe8e7c47c5e443e","4045800000000000"]}}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":[true,"3fe1ded9b3a990ee","bffdb71e703eeffe","3fb0b1fb6c743100","3ff0000000000000","3ff0000000000000"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":[true,"4000000000000000","3ff3f6749e921522","3ff680581280089a","bff5736ccc46ebc6","3ff42212cfb20de6"],"reproduction":null}}
+{"ok":{"reference":null,"reproduction":[false,"3ff0000000000000","401190d77aceda80","401e9059447fba80","3ffe8b970ee3f1d6","405b47f79cecf787"]}}
+{"code":1,"context":"screen","message":"Invalid screen geometry or edge ordering","syntax":false}
+{"ok":{"reference":null,"reproduction":null}}
+{"code":1,"context":"","message":"屏幕配置超过 1 MiB","syntax":false}

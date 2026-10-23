@@ -1,18 +1,19 @@
-//! Private render-scene boundary (PCM consistency 4.3, the semantic policy since 4.4). Layout and
+//! Private render-scene boundary (PCM consistency 4.3, the semantic policy, DirectSpeakers matrix
+//! and screen configuration since 4.4). Layout and
 //! input-preset tables are process-lifetime views of `mradm-scene` static data and are never freed;
 //! an imported scene is owned by its handle and its views are borrowed until the next call that
 //! changes it (`mradm_scene_apply_policy`, `mradm_scene_report`, `mradm_scene_template`) or until
 //! `mradm_scene_destroy`.
 use crate::adm::{Text, View};
 use crate::boundary;
-use mradm_dsp::Error;
+use mradm_dsp::{Error, room::screen::RoomScreenGeometry};
 use mradm_scene::{
-    Context, ImportOptions, RenderScene, SourceKind,
+    Context, ImportOptions, RenderScene, SourceKind, direct_matrix,
     input::{InputChannel, channel_catalog, input_layouts, resolve_input_channel_labels},
     layouts::{Geometry, Layout, layouts},
     live_policy,
     policy::{self, UserLevel},
-    report, writeback,
+    report, screen, writeback,
 };
 use std::{
     borrow::Cow,
@@ -1007,6 +1008,139 @@ pub unsafe extern "C" fn mradm_live_policy_apply(
                     ramp_duration_samples: u.ramp_duration_samples,
                 };
             }
+        }
+        Ok(())
+    })
+}
+
+#[repr(C)]
+pub struct DirectMatrixTarget {
+    label: Text,
+    weight: f32,
+    gain: f32,
+}
+
+#[repr(C)]
+pub struct DirectMatrixRoute {
+    source_label: Text,
+    mute: u32,
+    targets: *const DirectMatrixTarget,
+    targets_len: usize,
+}
+
+#[repr(C)]
+pub struct DirectMatrixView {
+    output_layout: Text,
+    routes: *const DirectMatrixRoute,
+    routes_len: usize,
+}
+
+/// A parsed DirectSpeakers matrix; its view borrows from it until `mradm_scene_direct_matrix_destroy`.
+pub struct DirectMatrix {
+    matrix: direct_matrix::Matrix,
+    _targets: Vec<Vec<DirectMatrixTarget>>,
+    routes: Vec<DirectMatrixRoute>,
+}
+
+/// Parses `mradm.direct-speakers-matrix.v1`; the caller attaches its source label to errors.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
+    json: *const u8,
+    json_len: usize,
+    output: *mut *mut DirectMatrix,
+    view: *mut DirectMatrixView,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if output.is_null() || view.is_null() {
+            return Err(invalid("无效 DirectSpeakers 矩阵输出"));
+        }
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let matrix = direct_matrix::parse(unsafe { bytes(json, json_len)? })?;
+        let targets: Vec<Vec<DirectMatrixTarget>> = matrix
+            .routes
+            .iter()
+            .map(|route| {
+                route
+                    .targets
+                    .iter()
+                    .map(|t| DirectMatrixTarget {
+                        label: Text::new(&t.label),
+                        weight: t.weight,
+                        gain: t.gain,
+                    })
+                    .collect()
+            })
+            .collect();
+        let routes = matrix
+            .routes
+            .iter()
+            .zip(&targets)
+            .map(|(route, records)| DirectMatrixRoute {
+                source_label: Text::new(&route.source_label),
+                mute: u32::from(route.mute),
+                targets: records.as_ptr(),
+                targets_len: records.len(),
+            })
+            .collect();
+        let handle = Box::new(DirectMatrix {
+            matrix,
+            _targets: targets,
+            routes,
+        });
+        unsafe {
+            *view = DirectMatrixView {
+                output_layout: Text::new(&handle.matrix.output_layout),
+                routes: handle.routes.as_ptr(),
+                routes_len: handle.routes.len(),
+            };
+            *output = Box::into_raw(handle);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_direct_matrix_destroy(handle: *mut DirectMatrix) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+
+#[repr(C)]
+pub struct ScreenConfigView {
+    has_reference: u32,
+    has_reproduction: u32,
+    reference: RoomScreenGeometry,
+    reproduction: RoomScreenGeometry,
+}
+
+/// Parses `mradm.screen-config` version 1 without validating the geometry; errors have no context.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_screen_parse(
+    json: *const u8,
+    json_len: usize,
+    output: *mut ScreenConfigView,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if output.is_null() {
+            return Err(invalid("无效屏幕配置输出"));
+        }
+        let screens = screen::parse(unsafe { bytes(json, json_len)? })?;
+        unsafe {
+            *output = ScreenConfigView {
+                has_reference: u32::from(screens.reference.is_some()),
+                has_reproduction: u32::from(screens.reproduction.is_some()),
+                reference: screens.reference.unwrap_or_default(),
+                reproduction: screens.reproduction.unwrap_or_default(),
+            };
         }
         Ok(())
     })
