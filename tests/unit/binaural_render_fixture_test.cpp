@@ -28,6 +28,7 @@
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
 #include "binaural_test_probe.h"
+#include "scene_import_internal.h"
 
 #ifdef _WIN32
 #include <process.h>
@@ -118,6 +119,7 @@ struct ObjectFixtureOptions {
     float depth{0.0F};
     std::optional<bool> object_head_locked;
     std::optional<bool> block_head_locked;
+    bool cartesian{false};
 };
 
 std::pair<std::shared_ptr<fixture::Document>, std::string> make_objects_doc(const ObjectFixtureOptions& opts) {
@@ -126,8 +128,10 @@ std::pair<std::shared_ptr<fixture::Document>, std::string> make_objects_doc(cons
     auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"BinauralCF"},
                                                   fixture::TypeDefinition::objects);
     {
-        fixture::AudioBlockFormatObjects block{
-            fixture::SphericalPosition{fixture::Azimuth{opts.azimuth}, fixture::Elevation{0.0F}}};
+        auto block = opts.cartesian ? fixture::AudioBlockFormatObjects{fixture::CartesianPosition{
+                                          fixture::X{0.0F}, fixture::Y{1.0F}, fixture::Z{0.0F}}}
+                                    : fixture::AudioBlockFormatObjects{fixture::SphericalPosition{
+                                          fixture::Azimuth{opts.azimuth}, fixture::Elevation{0.0F}}};
         block.set(fixture::Gain{1.0F});
         block.set(fixture::Rtime{fixture::Time{opts.rtime}});
         block.set(fixture::Duration{fixture::Time{opts.duration}});
@@ -1075,7 +1079,8 @@ bool verify_binaural_lateral_head_shadow() {
 std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::path& input,
                                                          const std::vector<std::size_t>& chunk_pattern,
                                                          const mradm::LiveOverrides* overrides,
-                                                         const mradm::ListenerOrientation* orient = nullptr) {
+                                                         const mradm::ListenerOrientation* orient = nullptr,
+                                                         std::string_view policy = {}) {
     auto scene = mradm::io::import_scene(input.string());
     if (!check(scene.has_value(), "stream: import scene")) {
         return std::nullopt;
@@ -1084,6 +1089,15 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
     plan.input_path = input.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+
+    if (!policy.empty()) {
+        auto effective = mradm::io::RenderScene::import(input.string(), nullptr);
+        if (!check(effective.has_value() && effective->apply_policy(policy, "<test>").has_value(),
+                   "stream: apply semantic policy")) {
+            return std::nullopt;
+        }
+        plan.scene = effective->scene();
+    }
 
     auto renderer = mradm::create_binaural_renderer();
     mradm::NullLogSink logs;
@@ -1744,6 +1758,40 @@ bool verify_binaural_stream_topology_reprepare() {
     return ok;
 }
 
+// Live topology edits and a policy applied before prepare must use the same extent units and limits.
+bool verify_binaural_stream_extent_policy_matches_live() {
+    bool ok = true;
+    for (const bool cartesian : {false, true}) {
+        const auto in = write_fixture(ObjectFixtureOptions{.width = cartesian ? 0.8F : 30.0F,
+                                                           .height = cartesian ? 0.6F : 200.0F,
+                                                           .depth = 0.8F,
+                                                           .cartesian = cartesian},
+                                      4096U);
+        FileGuard in_guard(in);
+        auto scene = mradm::io::import_scene(in.string());
+        if (!check(scene.has_value() && !scene->objects.empty(), "extent-policy: import fixture")) {
+            return false;
+        }
+        for (const float scale : {0.5F, 4.0F}) {
+            mradm::LiveOverrides overrides;
+            mradm::LiveObjectOverride edit;
+            edit.object_id = scene->objects.front().id;
+            edit.extent_width_scale = edit.extent_height_scale = edit.extent_depth_scale = scale;
+            overrides.objects.push_back(edit);
+            const auto policy = std::string{R"({"schema":"mradm.semantic-policy.v1","global":{"extent":{"scale":)"} +
+                                std::to_string(scale) + "}}}";
+            const auto authored = render_binaural_stream(in, {1024}, nullptr, nullptr, policy);
+            const auto live = render_binaural_stream(in, {333, 1024, 511}, &overrides);
+            if (!authored || !live) {
+                return false;
+            }
+            ok &= check(!authored->empty() && *authored == *live,
+                        "extent-policy: live scales and semantic policy produce identical PCM");
+        }
+    }
+    return ok;
+}
+
 // A listener head orientation rotates scene-relative sources into the head frame before HRTF lookup:
 // turning left (yaw +90°) swings a front source onto the right ear. ADM headLocked and explicit live
 // overrides exempt head-relative sources, while a gain-only live override must continue to inherit ADM.
@@ -2020,6 +2068,7 @@ int main() try {
     ok &= verify_binaural_stream_live_gain_ramp();
     ok &= verify_binaural_stream_topology_crossfade();
     ok &= verify_binaural_stream_topology_reprepare();
+    ok &= verify_binaural_stream_extent_policy_matches_live();
     ok &= verify_binaural_head_tracking();
     ok &= verify_binaural_head_locked_timeline();
     ok &= verify_binaural_head_tracking_dynamic();
