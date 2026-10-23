@@ -254,6 +254,7 @@ Apple binaural 的 `auto` 仍为 `position`，显式 `label` 返回 unsupported�
 `global` 作用于全部内容，`objects[]` 是按规则匹配的覆盖。匹配维度（OR 组合）：`id` / `name` / `name_glob` / `track_uid` / `all` / `importance_min·max` / `dialogue_id` / `content` / `programme`，以及 HOA 专用的 `pack_format`。覆盖项：
 
 - **Objects**：`gain`（`scale` / `gain_db` / `mute`，object 级）、`position`（绝对 `azimuth/elevation/distance` + `offset` + `lock_*`）、`diffuse` / `extent` / `divergence` / `channel_lock`（含 `max_distance`）/ `interpolation`。
+  `extent` 的 `max` 使用块自身的单位（极坐标 width / height 为度）；不写时只钳到 ADM 取值范围：极坐标 width / height ≤ 360、depth ≤ 1，Cartesian 三项 ≤ 1。
 - **DirectSpeakers**：`direct_speakers`，含块内过滤器 `speaker_label` / `lfe`（AND）+ `gain`（`mute` 即静音该声道）+ `position` 重瞄。
 - **HOA**：匹配 `id` / `pack_format` / `all`，应用 `gain`（`scale` / `gain_db` / `mute`）到整个 pack。
 
