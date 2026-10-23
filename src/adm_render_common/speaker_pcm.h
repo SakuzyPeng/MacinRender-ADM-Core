@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -43,10 +44,12 @@ struct ChannelBinding {
     std::string speaker_label_key;
 };
 
-// A Rust PcmMixer plan of `tracks` input channels, prepared in C++ or by a Rust backend.
+// A Rust offline driver plan of `tracks` input channels: a PcmMixer plan (kernel 0, prepared in
+// C++ or by a Rust backend) or an HOA3 encoder plan (kernel 1).
 struct SpeakerMix {
     const void* plan{nullptr};
     std::size_t tracks{0};
+    uint32_t kernel{0};
 };
 
 struct PreparedPcmMix {
@@ -110,8 +113,35 @@ struct MatrixRecords {
     std::size_t label_bytes{0};
 };
 
+// A VBAP or HOA plan prepared in Rust mradm-render; immutable and reused across render_window()
+// and open_stream() calls (PreviewSession scrubbing).
+struct RustPrepared final : IPreparedRender {
+    std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
+        nullptr, &mradm_render_prepared_destroy};
+    SpeakerMix mix;
+    uint16_t outputs{0};
+    uint16_t inputs{0};
+    uint32_t sample_rate{0};
+};
+
+// Takes ownership of a Rust preparation, logs its lines under `module` and returns its error or
+// the prepared plan.
+[[nodiscard]] Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
+                                                                   MradmRenderPrepared* raw,
+                                                                   const MradmRenderPreparedView& view,
+                                                                   uint32_t kernel,
+                                                                   LogSink& logs,
+                                                                   std::string_view module);
+
+// File streaming over a Rust preparation (mradm-render `stream`): the offline block size and
+// renderer into a FIFO, so a gap-free run from frame 0 is bit-identical to render_window. Live
+// gain pre-scales each input channel by its object's (or speaker label's) override; topology
+// scales (diffuse / extent / divergence) are ignored.
+[[nodiscard]] Result<std::unique_ptr<IRenderStream>> open_file_stream(const RustPrepared& prepared,
+                                                                      const RenderPlan& plan);
+
 [[nodiscard]] Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                                       SpeakerMix gain_matrix,
+                                                       const SpeakerMix& gain_matrix,
                                                        uint16_t num_out_ch,
                                                        std::string_view backend,
                                                        ProgressSink& progress,

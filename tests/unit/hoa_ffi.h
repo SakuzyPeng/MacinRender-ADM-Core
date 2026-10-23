@@ -2,7 +2,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Private transport only. Buffers are valid, aligned and disjoint; mutable handles are exclusive.
+// Private transport only, kept for the frozen-reference comparison in hoa_rust_test.cpp: production
+// HOA rendering runs in Rust mradm-render (PCM consistency 4.5). Buffers are valid, aligned and
+// disjoint; mutable handles are exclusive.
 // Lengths count elements; zero-length buffers may be null. The caller owns UTF-8 error storage.
 #ifdef __cplusplus
 extern "C" {
