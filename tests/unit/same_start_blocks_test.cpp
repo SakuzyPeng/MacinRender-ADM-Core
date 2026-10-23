@@ -4,8 +4,8 @@
 // decision. Each case renders a track with 40 blocks at each of two starts and compares the PCM
 // bit for bit against the same track holding only the winning blocks. Binaural PCM is covered by
 // binaural_render_fixture_test; its live label binding is checked here with the other backends.
-// VBAP reads only the Rust render scene (PCM consistency 4.5); its cases are in mradm-render's
-// tests/vbap.rs.
+// VBAP and HOA read only the Rust render scene (PCM consistency 4.5); their cases are in
+// mradm-render's tests/vbap.rs and tests/hoa.rs.
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -30,7 +30,6 @@
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
-#include "adm/render_hoa.h"
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
@@ -305,8 +304,6 @@ int main() try {
     const std::array backends{
         Backend{"ear", mradm::create_ear_renderer, "4+5+0", Kind::objects, mradm::LfeRoutingMode::direct},
         Backend{"ear", mradm::create_ear_renderer, "9+10+3", Kind::direct_speakers, mradm::LfeRoutingMode::split_power},
-        Backend{"hoa", mradm::create_hoa_renderer, "hoa3", Kind::objects, mradm::LfeRoutingMode::direct},
-        Backend{"hoa", mradm::create_hoa_renderer, "hoa3", Kind::direct_speakers, mradm::LfeRoutingMode::direct},
     };
     bool ok = true;
     {
