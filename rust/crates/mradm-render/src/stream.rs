@@ -1,9 +1,9 @@
-//! File streaming over a prepared plan (PCM consistency 4.5), moved from the C++ `VbapStream`
-//! and `HoaStream`: blocks of `max(1024, smoothing)` frames go through the same `PcmMixer` or HOA
-//! encoder as the offline driver into a FIFO served at any frame count, so a gap-free run from
+//! File streaming over a prepared plan (PCM consistency 4.5), moved from the C++ `VbapStream`,
+//! `HoaStream` and `EarStream`: blocks of `max(1024, smoothing)` frames go through the same
+//! renderer as the offline driver into a FIFO served at any frame count, so a gap-free run from
 //! frame 0 is bit-identical to the offline render. Live gain pre-scales each input channel (the
-//! render is linear) through a 20 ms de-zipper; `seek` resets the mixer cursors or the HOA
-//! diffuse delay lines but not the de-zipper.
+//! render is linear) through a 20 ms de-zipper; `seek` resets the mixer cursors, the HOA diffuse
+//! delay lines or EAR's decorrelation state, but not the de-zipper.
 use crate::offline::{Driver, Engine, Error, HOA_SHORT_READ, Kernel, Location, Result};
 use crate::routing::{self, Override};
 use crate::vbap::Binding;
@@ -55,15 +55,15 @@ impl FileStream {
         let block_size = s.smoothing_frames.max(1024);
         let default_interp = u64::from(s.sample_rate) * u64::from(s.default_interp_ms) / 1000;
         let engine = Engine::new(kernel, block_size, default_interp, s.smoothing_frames > 0)
-            .map_err(|e| {
-                Error::dsp(
-                    &e,
-                    if matches!(kernel, Kernel::Hoa(_)) {
-                        Location::HoaDsp
-                    } else {
-                        Location::None
-                    },
-                )
+            .map_err(|e| match kernel {
+                Kernel::Hoa(_) => Error::dsp(&e, Location::HoaDsp),
+                // The C++ EarStream reported its setup failures as a render failure.
+                Kernel::Ear(_) => Error {
+                    code: 4,
+                    message: format!("ear stream setup failed: {e}"),
+                    location: Location::None,
+                },
+                Kernel::Mix(_) => Error::dsp(&e, Location::None),
             })?;
         Ok(Self {
             reader,

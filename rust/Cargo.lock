@@ -338,6 +338,7 @@ version = "0.1.0"
 dependencies = [
  "mradm-adm",
  "mradm-dsp",
+ "mradm-ear",
  "mradm-json",
  "mradm-scene",
  "mradm-wav",

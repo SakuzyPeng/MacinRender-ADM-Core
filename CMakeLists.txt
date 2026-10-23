@@ -257,8 +257,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
-    PRIVATE MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
@@ -989,8 +988,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_output_dsp_tests PROPERTIES TIMEOUT 60)
 
     add_executable(mr_adm_pcm_mix_tests tests/unit/pcm_mix_test.cpp)
-    target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp
-        MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP)
+    target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_pcm_mix_tests)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_mix_tests)
     add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)
@@ -999,11 +997,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS)
         add_executable(mr_adm_libear_reference_tests tests/reference/libear/reference_test.cpp)
         target_link_libraries(mr_adm_libear_reference_tests PRIVATE ear MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+        target_include_directories(mr_adm_libear_reference_tests PRIVATE tests/unit)
         mr_adm_core_apply_warnings(mr_adm_libear_reference_tests)
         add_test(NAME mr_adm_libear_reference_tests COMMAND mr_adm_libear_reference_tests)
         set_tests_properties(mr_adm_libear_reference_tests PROPERTIES TIMEOUT 300)
         add_executable(mr_adm_libear_benchmark EXCLUDE_FROM_ALL tests/reference/libear/benchmark.cpp)
         target_link_libraries(mr_adm_libear_benchmark PRIVATE ear MacinRender::ADMDsp MacinRender::ADMCore)
+        target_include_directories(mr_adm_libear_benchmark PRIVATE tests/unit)
         mr_adm_core_apply_warnings(mr_adm_libear_benchmark)
     endif()
 
@@ -1453,20 +1453,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_tests)
     add_test(NAME mr_adm_direct_speakers_matrix_tests COMMAND mr_adm_direct_speakers_matrix_tests)
 
-    add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
-    target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
-        PRIVATE
-            MacinRender::ADMRenderEar
-            MacinRender::ADMRenderVBAP
-            MacinRender::ADMRenderTripleBalance
-            MacinRender::ADMAudio
-    )
+    # The Apple island's DirectSpeakers matrix rendering; the Rust backends' cases are Rust tests.
     if(APPLE)
-        target_link_libraries(mr_adm_direct_speakers_matrix_render_tests PRIVATE MacinRender::ADMRenderApple)
+        add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
+        target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
+            PRIVATE MacinRender::ADMRenderApple MacinRender::ADMAudio)
+        mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
+        add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
-    mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
-    add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
 
     # Smoke test: non-existent file → io_error via full engine stack.
     add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)
@@ -1506,6 +1501,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMIo
             MacinRender::ADMAudio
     )
+    target_include_directories(mr_adm_ear_fixture_tests PRIVATE src/adm_io)
     mr_adm_core_apply_warnings(mr_adm_ear_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
     add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)

@@ -55,12 +55,8 @@ template <typename Block>
     return ordered;
 }
 
-// Alphanumeric-only speaker-label key (uppercased; '+', '-' and separators dropped). Used for
-// LFE keyword detection where the sign / position digits do not matter (LFE / LFE1 / SUB …).
-[[nodiscard]] std::string normalise_speaker_label_key(std::string_view raw);
-
 // Canonical speaker-label key for per-channel matching: keep alphanumerics AND '+' / '-',
-// uppercased. Unlike normalise_speaker_label_key this PRESERVES the sign, so "M+030" and "M-030"
+// uppercased. Unlike the alphanumeric key this PRESERVES the sign, so "M+030" and "M-030"
 // (left vs right) stay distinct while "m+030" / "M+030" / "M_+030" compare equal. Used for the
 // per-channel live-gain match (channel key + override speaker_label canonicalised the same way).
 [[nodiscard]] std::string canonicalise_speaker_label(std::string_view raw);

@@ -1,11 +1,8 @@
 // Blocks of one track sharing a start (PCM consistency S08): the last block in scene (ADM document)
-// order is in effect for its whole interval. Overwritten blocks must leave nothing behind: no
-// interpolation predecessor, no lane resuming after a shorter winner ends, and no LFE routing
-// decision. Each case renders a track with 40 blocks at each of two starts and compares the PCM
-// bit for bit against the same track holding only the winning blocks. Binaural PCM is covered by
-// binaural_render_fixture_test; its live label binding is checked here with the other backends.
-// VBAP and HOA read only the Rust render scene (PCM consistency 4.5); their cases are in
-// mradm-render's tests/vbap.rs and tests/hoa.rs.
+// order is in effect for its whole interval, and live controls bind to the winning speaker label.
+// Binaural PCM is covered by binaural_render_fixture_test; its live label binding is checked here.
+// The loudspeaker backends read only the Rust render scene (PCM consistency 4.5); their cases are
+// in mradm-render's tests/vbap.rs, tests/hoa.rs and tests/ear.rs.
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -29,7 +26,6 @@
 #include "adm/live_override.h"
 #include "adm/render.h"
 #include "adm/render_binaural.h"
-#include "adm/render_ear.h"
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
@@ -112,55 +108,6 @@ std::filesystem::path write_input() {
 }
 
 enum class Kind : uint8_t { objects, direct_speakers };
-
-// Two starts written in reverse chronological order. Each winner is shorter than its overwritten
-// peers and interpolates from its predecessor, so a peer would show up either as the ramp origin
-// or by resuming after the winner ends.
-void set_blocks(mradm::SceneTrackRef& track, Kind kind, bool include_overwritten) {
-    track.blocks.clear();
-    track.ds_blocks.clear();
-    for (int i = include_overwritten ? 0 : 39; i < 40; ++i) {
-        for (int group = 1; group >= 0; --group) {
-            const bool winner = i == 39;
-            const uint64_t start = static_cast<uint64_t>(group) * 2048U;
-            const uint64_t end = start + (winner ? 1024U : 2048U);
-            const float winning_azimuth = group == 0 ? 97.5F : -37.5F;
-            const float azimuth = winner ? winning_azimuth : -97.5F + (5.0F * static_cast<float>(i));
-            if (kind == Kind::direct_speakers) {
-                mradm::SceneDirectSpeakersBlock block;
-                block.start_sample = start;
-                block.end_sample = end;
-                block.azimuth = azimuth;
-                block.has_position = true;
-                block.gain = winner ? 0.375F : 0.9F;
-                if (!winner) {
-                    // An overwritten LFE1 next to a winning LFE2 must not make 22.2 split-power
-                    // routing see two semantic LFE channels.
-                    block.low_pass_hz = 120.0F;
-                } else if (group == 0) {
-                    block.speaker_labels = {"LFE2"};
-                }
-                track.ds_blocks.push_back(block);
-                continue;
-            }
-            mradm::SceneObjectBlock block;
-            block.start_sample = start;
-            block.end_sample = end;
-            block.position.azimuth = azimuth;
-            block.position.elevation = winner ? 0.0F : 30.0F;
-            block.gain = winner ? 0.375F : 0.9F;
-            if (!winner) {
-                block.width = 40.0F;
-                block.height = 20.0F;
-                block.diffuse = 0.25F;
-                block.divergence = 0.5F;
-                block.divergence_azimuth_range = 30.0F;
-                block.jump_position = i % 2 == 0;
-            }
-            track.blocks.push_back(block);
-        }
-    }
-}
 
 struct Output {
     std::vector<float> offline;
@@ -301,10 +248,6 @@ int main() try {
     if (!check(scene && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U, "input scene")) {
         return 1;
     }
-    const std::array backends{
-        Backend{"ear", mradm::create_ear_renderer, "4+5+0", Kind::objects, mradm::LfeRoutingMode::direct},
-        Backend{"ear", mradm::create_ear_renderer, "9+10+3", Kind::direct_speakers, mradm::LfeRoutingMode::split_power},
-    };
     bool ok = true;
     {
         // Binaural PCM is covered by binaural_render_fixture_test; this adds its live label binding.
@@ -318,39 +261,6 @@ int main() try {
         plan.output_layout = std::string{binaural.layout};
         plan.scene = *scene;
         ok &= verify_live_label(std::move(plan), binaural);
-    }
-    for (const auto& backend : backends) {
-        if (backend.kind == Kind::direct_speakers) {
-            mradm::RenderPlan plan;
-            plan.input_path = input.string();
-            plan.output_layout = std::string{backend.layout};
-            plan.scene = *scene;
-            ok &= verify_live_label(std::move(plan), backend);
-        }
-        for (const uint32_t smoothing : {0U, 1024U}) {
-            const std::string label = std::string{backend.name} + " " + std::string{backend.layout} +
-                                      (backend.kind == Kind::objects ? " objects" : " direct-speakers") +
-                                      " smoothing=" + std::to_string(smoothing);
-            mradm::RenderPlan plan;
-            plan.input_path = input.string();
-            plan.output_layout = std::string{backend.layout};
-            plan.scene = *scene;
-            plan.object_smoothing_frames = smoothing;
-            plan.lfe_routing_mode = backend.lfe_mode;
-            auto& track = plan.scene.objects.front().tracks.front();
-            set_blocks(track, backend.kind, false);
-            const auto expected = render(plan, *backend.create(), label + " (winners only)");
-            set_blocks(track, backend.kind, true);
-            const auto actual = render(plan, *backend.create(), label);
-            if (!actual || !expected) {
-                ok = false;
-                continue;
-            }
-            ok &= check(nonzero(expected->offline), label + ": winners produce output");
-            ok &= check(bit_equal(actual->offline, expected->offline), label + ": offline PCM equals the last blocks");
-            ok &= check(bit_equal(actual->streaming, expected->streaming),
-                        label + ": file-streaming PCM equals the last blocks");
-        }
     }
     if (!ok) {
         return 1;

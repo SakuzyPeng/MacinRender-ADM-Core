@@ -1,6 +1,6 @@
 // Rust mradm-render (PCM consistency 4.5): the DirectSpeakers, speaker-label and LFE routing
-// rules, the offline driver stepped block by block (next, write, commit, finish), and the VBAP
-// and HOA backends with their file streams. Inputs are borrowed for the call; views live until the
+// rules, the offline driver stepped block by block (next, write, commit, finish), and the VBAP,
+// HOA and EAR backends with their file streams. Inputs are borrowed for the call; views live until the
 // handle's next call or destroy. Error buffers: capacity in *len, bytes written out,
 // NUL-terminated. Status values follow adm::ErrorCode.
 #pragma once
@@ -87,7 +87,7 @@ typedef struct MradmRenderOfflineSettings {
     uint32_t has_meter_window;
     uint64_t meter_start;
     uint64_t meter_count;
-    uint32_t kernel; // 0: plan is a loudspeaker PcmMixer plan; 1: an HOA3 encoder plan
+    uint32_t kernel; // 0: plan is a PcmMixer plan prepared in C++; 1: a Rust preparation's plan
 } MradmRenderOfflineSettings;
 
 // frames is 0 after the last block.
@@ -143,6 +143,19 @@ typedef struct MradmRenderHoaRequest {
     uint32_t split_power;
 } MradmRenderHoaRequest;
 
+// geometry: 0 standard, 1 Apple; matrix_routing selects matrix DirectSpeakers routing (otherwise
+// automatic), and matrix is read when has_matrix != 0.
+typedef struct MradmRenderEarRequest {
+    MradmAdmText layout_id;
+    uint32_t geometry;
+    MradmAdmText input_path;
+    uint32_t matrix_routing;
+    uint32_t has_matrix;
+    const MradmRenderMatrixRoute* matrix;
+    size_t matrix_len;
+    uint32_t split_power;
+} MradmRenderEarRequest;
+
 // The error text of a failed preparation; plan (the offline driver's plan) is null unless prepared.
 typedef struct MradmRenderPreparedView {
     const MradmRenderLogLine* logs;
@@ -151,6 +164,7 @@ typedef struct MradmRenderPreparedView {
     MradmAdmText context;
     const void* plan;
     size_t tracks;
+    size_t outputs;
 } MradmRenderPreparedView;
 // cppcheck-suppress-end unusedStructMember
 
@@ -237,6 +251,10 @@ int32_t mradm_render_vbap_prepare(const MradmSceneHandle* scene,
                                   MradmRenderPreparedView* view);
 int32_t mradm_render_hoa_prepare(const MradmSceneHandle* scene,
                                  const MradmRenderHoaRequest* request,
+                                 MradmRenderPrepared** output,
+                                 MradmRenderPreparedView* view);
+int32_t mradm_render_ear_prepare(const MradmSceneHandle* scene,
+                                 const MradmRenderEarRequest* request,
                                  MradmRenderPrepared** output,
                                  MradmRenderPreparedView* view);
 void mradm_render_prepared_destroy(MradmRenderPrepared* handle);
