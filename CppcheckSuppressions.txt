@@ -63,6 +63,9 @@ unusedStructMember:*/src/adm_dsp/hoa_ffi.h
 unusedStructMember:*/src/adm_metadata/adm_ffi.h
 unusedStructMember:*/src/adm_metadata/metadata.h
 
+# SemanticReportOptions fields are read by scene_importer.cpp, outside the standalone header scan.
+unusedStructMember:*/src/adm_io/scene_import_internal.h
+
 # Frozen migration references retain their original loops and registered hashes.
 # Only stylistic STL-rewrite suggestions are excluded; safety checks stay enabled.
 useStlAlgorithm:*/tests/reference/scene_numeric/live_binaural.h
