@@ -13,6 +13,7 @@
 /rust/crates/mradm-scene/tests/layouts-v1.txt -text
 /rust/crates/mradm-scene/tests/policy-v1/** -text
 /rust/crates/mradm-scene/tests/export-v1/** -text
+/rust/crates/mradm-scene/tests/config-v1/** -text
 
 # EAR source tables and spherical points are fingerprinted in PROVENANCE.json.
 /rust/crates/mradm-ear/src/data.rs text eol=lf
