@@ -14,7 +14,7 @@
 | 离线策略：解析、匹配、合并、布尔字段、HOA 与 DirectSpeakers 过滤、未匹配警告 | `src/adm_core/semantic_policy.cpp` | `mradm-scene` `policy`（数值仍由 `mradm-dsp` `semantic_policy` 计算） |
 | 语义报告与中性模板 | 同上（nlohmann `dump(2)`） | `mradm-scene` `report` |
 | `06-policy` 场景检查点 | `src/adm_engine/scene_checkpoint.h` | `mradm-scene` `checkpoint` |
-| Scene 流式的身份合并、逐代解析与逐元素应用 | `scene_stream_engine.cpp` 的 `build_policy_identities` / `apply_policy_to_state` | `mradm-scene` `live_policy`（不分配内存） |
+| Scene 流式的身份合并、逐代解析与逐元素应用 | `scene_stream_engine.cpp` 的 `build_policy_identities` / `apply_policy_to_state` | `mradm-scene` `live_policy`（逐更新应用不分配内存；身份合并与逐代解析会分配内存） |
 | 导出回写的差分与 AXML 修补 | `src/adm_metadata/metadata.cpp` 的 `collect_patches` / `patch_axml` | `mradm-scene` `writeback`（修补仍由 `mradm-adm` `Document::apply_patches` 完成） |
 | DirectSpeakers 矩阵 JSON | `src/adm_core/direct_speakers_matrix.cpp` | `mradm-scene` `direct_matrix` |
 | 屏幕配置 JSON | `src/adm_core/screen.cpp` | `mradm-scene` `screen`（几何校验仍走 `mradm-dsp` room） |
@@ -158,4 +158,4 @@ extent 缺省上限修复后，下面这些记录改由 Rust 重算，并标记�
 | [39031059419](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39031059419) | `294415d` | A–C | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
 | [39824671399](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39824671399) | `8fff2a8` | D、E | 同上 |
 | [39891455786](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39891455786) | `cdc23c8` | F | 同上 |
-| [39908037480](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39908037480) | `6ed2255` | extent 修复 | 运行中，结果待回填 |
+| [39908037480](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39908037480) | `6ed2255` | extent 修复 | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
