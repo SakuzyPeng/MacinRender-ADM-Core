@@ -3,43 +3,29 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
-#include <iterator>
 #include <set>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
 #include "adm/scene.h"
 
-#include "room_ffi.h"
+#include "config_ffi.h"
 
 namespace mradm {
 namespace {
 constexpr std::size_t k_max_screen_json = std::size_t{1024} * 1024;
 MradmRoomScreenGeometry convert(const ScreenGeometry& screen) {
-    MradmRoomScreenGeometry out{};
-    out.cartesian = screen.cartesian ? 1U : 0U;
-    out.aspect_ratio = screen.aspect_ratio;
-    std::ranges::copy(screen.centre, std::begin(out.centre));
-    out.width = screen.width;
-    return out;
+    return {screen.cartesian ? 1U : 0U,
+            0,
+            screen.aspect_ratio,
+            {screen.centre[0], screen.centre[1], screen.centre[2]},
+            screen.width};
 }
-ScreenGeometry read_geometry(const nlohmann::json& json) {
-    ScreenGeometry result;
-    const auto coordinates = json.at("coordinates").get<std::string>();
-    if (coordinates != "polar" && coordinates != "cartesian") {
-        throw std::invalid_argument("屏幕 coordinates 必须是 polar 或 cartesian");
-    }
-    result.cartesian = coordinates == "cartesian";
-    if (!json.at("centre").is_array() || json.at("centre").size() != 3) {
-        throw std::invalid_argument("屏幕 centre 必须有三个坐标");
-    }
-    result.centre = json.at("centre").get<std::array<double, 3>>();
-    result.width = json.at("width").get<double>();
-    result.aspect_ratio = json.at("aspect_ratio").get<double>();
-    return result;
+ScreenGeometry convert(const MradmRoomScreenGeometry& screen) {
+    return {screen.cartesian != 0U,
+            screen.aspect_ratio,
+            {screen.centre[0], screen.centre[1], screen.centre[2]},
+            screen.width};
 }
 bool contains_object(const AdmScene& scene, std::vector<std::string> pending, std::string_view wanted) {
     std::set<std::string> visited;
@@ -84,26 +70,22 @@ Result<ScreenConfig> parse_screen_config_json(std::string_view source) {
     if (source.size() > k_max_screen_json) {
         return make_error(ErrorCode::invalid_argument, "屏幕配置超过 1 MiB");
     }
-    try {
-        const auto json = nlohmann::json::parse(source);
-        if (json.at("schema") != "mradm.screen-config" || json.at("version") != 1) {
-            return make_error(ErrorCode::unsupported, "不支持的屏幕配置版本");
-        }
-        ScreenConfig config;
-        if (json.contains("reference") && !json.at("reference").is_null()) {
-            config.reference = read_geometry(json.at("reference"));
-        }
-        if (json.contains("reproduction") && !json.at("reproduction").is_null()) {
-            config.reproduction = read_geometry(json.at("reproduction"));
-        }
-        auto valid = validate_screen_config(config);
-        if (!valid) {
-            return tl::unexpected{valid.error()};
-        }
-        return config;
-    } catch (const std::exception& error) {
-        return make_error(ErrorCode::invalid_argument, std::string{"无效的屏幕配置: "} + error.what());
+    MradmScreenConfigView view{};
+    // Numeric overflow diagnostics contain the complete input token plus fixed text.
+    std::string message(source.size() + 1024, '\0');
+    auto message_len = message.size();
+    const auto code = mradm_scene_screen_parse(
+        reinterpret_cast<const uint8_t*>(source.data()), source.size(), &view, message.data(), &message_len);
+    if (code != 0) {
+        message.resize(message_len);
+        return make_error(static_cast<ErrorCode>(code), std::move(message));
     }
+    const ScreenConfig config{view.has_reference != 0U ? std::optional{convert(view.reference)} : std::nullopt,
+                              view.has_reproduction != 0U ? std::optional{convert(view.reproduction)} : std::nullopt};
+    if (auto valid = validate_screen_config(config); !valid) {
+        return tl::unexpected{valid.error()};
+    }
+    return config;
 }
 
 Result<ScreenConfig> load_screen_config(const std::filesystem::path& path) {
