@@ -4,7 +4,10 @@
 //! consistency policies and seeded random policies on 14 ADM scenes; see RUST_INVERSION_POLICY.md.
 //! Digests are FNV-1a 64; JSON syntax errors only keep their code and prefix. A golden's optional
 //! `nan_words` lists only floating-point words whose arithmetic result is NaN: assert that class
-//! and normalize those words to the C++ golden's NaN, whose sign is not portable.
+//! and normalize those words to the C++ golden's NaN, whose sign is not portable. Records marked
+//! `"regenerated":"extent-adm-range"` (12 cases and the 14 templates, all on polar scenes with
+//! extents in degrees) were recomputed by Rust when the extent default became the ADM ranges
+//! instead of a maximum of 1; every other record is still the C++ output.
 use mradm_json::Value;
 use mradm_scene::{Context, policy, report};
 use mradm_wav::{Chna, ChnaEntry, Format, SampleFormat, Writer, WriterOptions};
@@ -308,14 +311,13 @@ fn readable_samples_match() {
     std::fs::remove_dir_all(&temp).unwrap();
 }
 
-/// The neutral template, applied unmodified, changes nothing except one behaviour kept from the
-/// C++ template: its `extent.max` of 1 clamps extents above 1, although polar extents are in
-/// degrees (three of the 14 scenes lose extent this way).
+/// The neutral template, applied unmodified, changes nothing, polar extents in degrees included
+/// (until the extent default fix the template's `extent.max` of 1 clamped them).
 #[test]
-fn applying_the_template_is_an_identity_up_to_the_extent_clamp() {
+fn applying_the_template_is_an_identity() {
     let temp = std::env::temp_dir().join(format!("mradm-scene-identity-{}", std::process::id()));
     std::fs::create_dir_all(&temp).unwrap();
-    let (mut scenes, mut clamped) = (0, Vec::new());
+    let (mut scenes, mut wide) = (0, 0);
     for entry in std::fs::read_dir(dir().join("scenes")).unwrap() {
         let path = entry.unwrap().path();
         if path.extension().is_none_or(|e| e != "json") {
@@ -324,36 +326,21 @@ fn applying_the_template_is_an_identity_up_to_the_extent_clamp() {
         let name = path.file_stem().unwrap().to_str().unwrap().to_owned();
         let wav = scene_wav(&name, &temp);
         let mut scene = mradm_scene::import_adm(wav.to_str().unwrap().as_bytes()).unwrap();
-        let mut expected = scene.snapshot.object_blocks.clone();
-        for b in &mut expected {
-            if b.width > 1. || b.height > 1. || b.depth > 1. {
-                (b.width, b.height, b.depth) = (b.width.min(1.), b.height.min(1.), b.depth.min(1.));
-                if !clamped.contains(&name) {
-                    clamped.push(name.clone());
-                }
-            }
+        let blocks = &scene.snapshot.object_blocks;
+        if blocks
+            .iter()
+            .any(|b| b.width > 1. || b.height > 1. || b.depth > 1.)
+        {
+            wide += 1;
         }
-        let before = mradm_scene::checkpoint::encode(&scene);
+        let (expected, before) = (blocks.clone(), mradm_scene::checkpoint::encode(&scene));
         let template = report::template(&scene);
         scene.apply_policy(policy::parse(template.as_bytes()).unwrap());
         assert!(scene.policy_warnings.is_empty(), "{name}");
         assert_eq!(scene.snapshot.object_blocks, expected, "{name}");
-        if !clamped.contains(&name) {
-            assert_eq!(mradm_scene::checkpoint::encode(&scene), before, "{name}");
-        }
+        assert_eq!(mradm_scene::checkpoint::encode(&scene), before, "{name}");
         scenes += 1;
     }
-    clamped.sort();
-    assert_eq!(
-        (scenes, clamped),
-        (
-            14,
-            vec![
-                "objects-extent".to_owned(),
-                "objects-extent-multi".to_owned(),
-                "policy-objects".to_owned()
-            ]
-        )
-    );
+    assert_eq!((scenes, wide), (14, 3));
     std::fs::remove_dir_all(&temp).unwrap();
 }
