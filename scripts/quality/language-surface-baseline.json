@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 196,
-      "lines": 41306
+      "lines": 41305
     },
     "islands": {
       "files": 5,
@@ -15,7 +15,7 @@
     },
     "tests": {
       "files": 104,
-      "lines": 47613
+      "lines": 47631
     },
     "reference": {
       "files": 38,
@@ -62,7 +62,7 @@
     "src/adm_peak": 143,
     "src/adm_realtime": 5436,
     "src/adm_render_binaural": 3488,
-    "src/adm_render_common": 2855,
+    "src/adm_render_common": 2854,
     "src/adm_render_ear": 1039,
     "src/adm_render_hoa": 111,
     "src/adm_render_room": 1343,
@@ -95,6 +95,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 1014,
     "tests/tools": 2823,
-    "tests/unit": 41436
+    "tests/unit": 41454
   }
 }

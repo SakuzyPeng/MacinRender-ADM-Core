@@ -98,7 +98,7 @@ Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
     auto prepared = std::make_shared<RustPrepared>();
     prepared->handle.reset(raw);
     if (raw == nullptr) {
-        return make_error(static_cast<ErrorCode>(code), fmt::format("{} preparation failed", module));
+        return make_error(static_cast<ErrorCode>(code), std::string{module} + " preparation failed");
     }
     const auto string_of = [](MradmAdmText t) { return std::string{reinterpret_cast<const char*>(t.data), t.len}; };
     for (const auto& line : std::span{view.logs, view.logs_len}) {
@@ -214,7 +214,7 @@ constexpr DriverText k_hoa_text{"encoding HOA", "encoding", "short write while e
 // mixing, checkpoints and the asynchronous meter. This side owns the writer, cancellation,
 // progress, logs and the optional stateful processor between two Rust steps.
 Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                         SpeakerMix gain_matrix,
+                                         const SpeakerMix& gain_matrix,
                                          uint16_t num_out_ch,
                                          std::string_view backend,
                                          ProgressSink& progress,
@@ -311,16 +311,15 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
         }
 
         progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-        const uint64_t win_start = window ? std::min(window->start_frame, info.num_frames) : 0;
-        const uint64_t win_end = window ? std::min(win_start + window->frame_count, info.num_frames) : info.num_frames;
+        const uint64_t start = window ? std::min(window->start_frame, info.num_frames) : 0;
+        const uint64_t end = window ? start + std::min(window->frame_count, info.num_frames - start) : info.num_frames;
         logs.log(LogLevel::info,
                  backend,
                  fmt::format("wrote {} frames to {}{}",
-                             win_end - win_start,
+                             end - start,
                              plan.output_path,
-                             window
-                                 ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, info.num_frames)
-                                 : std::string{}));
+                             window ? fmt::format(" (window [{}, {}) of {} frames)", start, end, info.num_frames)
+                                    : std::string{}));
 
         RenderMetrics metrics;
         if (measured.has_lufs != 0U) {

@@ -141,7 +141,7 @@ struct RustPrepared final : IPreparedRender {
                                                                       const RenderPlan& plan);
 
 [[nodiscard]] Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                                       SpeakerMix gain_matrix,
+                                                       const SpeakerMix& gain_matrix,
                                                        uint16_t num_out_ch,
                                                        std::string_view backend,
                                                        ProgressSink& progress,
