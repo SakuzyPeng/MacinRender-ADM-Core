@@ -102,8 +102,6 @@ class DriverError {
     return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
 }
 
-[[nodiscard]] std::vector<MradmRenderOverride> override_records(const LiveOverrides& overrides);
-
 // A DirectSpeakers matrix as Rust routing records, borrowing the matrix's labels.
 struct MatrixRecords {
     explicit MatrixRecords(const DirectSpeakersMatrix& matrix);
