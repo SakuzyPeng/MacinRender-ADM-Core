@@ -10,7 +10,7 @@
 #include "adm/io.h"
 
 namespace mradm::detail {
-// One imported Rust render scene (mradm-scene); defined in scene_importer.cpp.
+// One imported Rust render scene (mradm-scene); defined in adm_render_common/scene_handle.h.
 struct RenderSceneHandle;
 } // namespace mradm::detail
 

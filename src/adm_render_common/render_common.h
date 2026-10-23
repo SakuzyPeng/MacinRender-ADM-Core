@@ -11,6 +11,7 @@
 #include <ios>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -27,6 +28,8 @@
 #include "adm/scene.h"
 
 #include "../adm_dsp/gain.h"
+
+struct MradmRenderMatrix; // Rust mradm-render `routing` (routing_ffi.h)
 
 namespace mradm::render_common {
 
@@ -52,14 +55,6 @@ template <typename Block>
     ordered.resize(count);
     return ordered;
 }
-
-// 方向归一化的规范长度计算；用于替代各标准库算法不同的三参数 std::hypot。
-// 对有限 binary32 分量，平方在 binary64 中精确（至多 48 位有效位），也不会溢出或下溢。
-// 在默认最近偶数舍入下，固定计算 (x² + y²) + z²，再做 binary64 sqrt 和 binary32 窄化。
-// 精确的乘积使 FP contraction 不改变这条路径，但两次加法仍会舍入：不能重排求和，
-// 也不能保证任意置换分量后长度的位模式相同。括号表达运算顺序，不覆盖 fast-math 等重排选项。
-// 三平台 PCM 验收及此约束的边界见 docs/architecture/CONSISTENCY_LOCALIZATION.md。
-[[nodiscard]] float canonical_vector_length(float x, float y, float z) noexcept;
 
 // Alphanumeric-only speaker-label key (uppercased; '+', '-' and separators dropped). Used for
 // LFE keyword detection where the sign / position digits do not matter (LFE / LFE1 / SUB …).
@@ -107,6 +102,7 @@ struct ResolvedDirectSpeakersMatrixRoute {
 
 struct ResolvedDirectSpeakersMatrix {
     std::vector<ResolvedDirectSpeakersMatrixRoute> routes;
+    std::shared_ptr<MradmRenderMatrix> handle; // the Rust resolution `routes` copies
 };
 
 // Resolve every matrix target label to a concrete output slot. Unknown labels,
@@ -194,7 +190,6 @@ class InterleavedLiveGainSmoother {
 // channelFrequency lowPass, while others only encode the role in labels like
 // RC_LFE/RCLFE/LFE1. Use this helper before positional fallback/spatialization.
 [[nodiscard]] bool is_lfe_label(std::string_view raw) noexcept;
-[[nodiscard]] bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept;
 [[nodiscard]] bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcept;
 
 // Semantic destination encoded by one DirectSpeakers LFE block. LFE2/LFER are
@@ -299,24 +294,6 @@ struct PreparedObjectBlock {
                                                        std::string_view log_module,
                                                        bool& screen_ref_warned);
 
-// One sample of the canonical 17-point extent "disk cloud": a unit-disk coordinate
-// (x, y in [-1, 1]) and its linear gain weight. Layout: index 0 is the centre (weight 0,
-// skipped); 1..8 the outer ring (radius 1.0); 9..16 the inner ring (radius 0.5). The
-// active weights sum to 1 (linear partition of unity) — they multiply the source's linear
-// gain / SH coefficients directly, so this is a gain weight, not an energy/power weight.
-// Shared verbatim by the apple, binaural, and HOA extent paths — the sample values and
-// weights are bit-identical across them; only the per-backend geometry (vector normalise /
-// direction / output) differs, so each backend keeps its own tangent-frame loop.
-// Disk half-angle radii (degrees) for an object's extent. width*60, height*45, depth*20,
-// with a distance-based spread scale (nearer sources subtend a wider angle). distance is
-// supplied by the caller (each backend computes it the same way). Bit-identical to the
-// formula previously inlined in the binaural and HOA renderers.
-struct ExtentRadii {
-    float width_radius{0.0F};
-    float height_radius{0.0F};
-};
-[[nodiscard]] ExtentRadii extent_disk_radii(float width, float height, float depth, float distance);
-
 // One direction of the 17-point "disk cloud" used to approximate ADM object extent
 // (width/height/depth) as a set of coherent point sources. azimuth/elevation are in the
 // project polar convention (azimuth +ve = left, BS.2051). weight is a linear gain weight: a
@@ -337,32 +314,5 @@ struct ExtentDirection {
 // HOA extent clouds.
 [[nodiscard]] std::vector<ExtentDirection>
 extent_disk_cloud(const SceneBlockPosition& position, float width, float height, float depth);
-
-template <typename Channel>
-[[nodiscard]] uint64_t block_active_length(const Channel& channel, std::size_t block_index) {
-    const auto& block = channel.blocks[block_index];
-    uint64_t active_end = block.end_sample;
-    if (block_index + 1 < channel.blocks.size()) {
-        active_end = std::min(active_end, channel.blocks[block_index + 1].start_sample);
-    }
-    if (active_end <= block.start_sample) {
-        return 0;
-    }
-    return active_end - block.start_sample;
-}
-
-template <typename Channel>
-[[nodiscard]] uint64_t interpolation_length(const Channel& channel, std::size_t block_index, uint64_t default_interp) {
-    const auto& block = channel.blocks[block_index];
-    if (block.jump_position || block_index == 0) {
-        return 0;
-    }
-    return std::min(block.interp_length_samples.value_or(default_interp), block_active_length(channel, block_index));
-}
-
-template <typename T> [[nodiscard]] T interpolated_scalar(T previous, T current, uint64_t delta, uint64_t interp_len) {
-    const auto alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
-    return static_cast<T>((static_cast<double>(previous) * (1.0 - alpha)) + (static_cast<double>(current) * alpha));
-}
 
 } // namespace mradm::render_common

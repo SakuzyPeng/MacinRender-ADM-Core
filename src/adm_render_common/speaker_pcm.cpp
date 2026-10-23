@@ -1,19 +1,14 @@
 #include "speaker_pcm.h"
 
 #include <algorithm>
-#include <array>
-#include <cmath>
-#include <future>
+#include <iterator>
 #include <memory>
-#include <stdexcept>
 
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
 
-#include "consistency_trace.h"
-#include "meter.h"
-#include "post_gain.h"
+#include "../adm_audio/wav_backend.h"
 #include "render_common.h"
 
 namespace mradm::render_common {
@@ -50,204 +45,168 @@ prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, s
     return result;
 }
 
-// NOLINTNEXTLINE(readability-function-size): keep writer and asynchronous meter buffer lifetimes in one scope.
+tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_path) const {
+    std::string context;
+    if (location_ == 1U) {
+        context = "path=" + input_path;
+    } else if (location_ == 2U) {
+        context = "input=" + input_path;
+    } else if (location_ == 3U) {
+        context = "meter";
+    }
+    return make_error(static_cast<ErrorCode>(code),
+                      std::string{reinterpret_cast<const char*>(message_.data()), message_len_},
+                      std::move(context));
+}
+
+std::vector<MradmRenderOverride> override_records(const LiveOverrides& overrides) {
+    std::vector<MradmRenderOverride> result;
+    result.reserve(overrides.objects.size());
+    std::ranges::transform(overrides.objects, std::back_inserter(result), [](const LiveObjectOverride& o) {
+        return MradmRenderOverride{text(o.object_id),
+                                   text(o.speaker_label),
+                                   o.mute ? 1U : 0U,
+                                   o.gain_db,
+                                   o.head_locked.has_value() ? 1U : 0U,
+                                   o.head_locked.value_or(false) ? 1U : 0U};
+    });
+    return result;
+}
+
+MatrixRecords::MatrixRecords(const DirectSpeakersMatrix& matrix) {
+    targets.reserve(matrix.routes.size());
+    for (const auto& route : matrix.routes) {
+        auto& records = targets.emplace_back();
+        for (const auto& target : route.targets) {
+            records.push_back({text(target.label), target.gain});
+            label_bytes += target.label.size();
+        }
+        routes.push_back({text(route.source_label), route.mute ? 1U : 0U, records.data(), records.size()});
+        label_bytes += route.source_label.size();
+    }
+}
+
+// The loop itself runs in Rust mradm-render `offline` (PCM consistency 4.5): input reading,
+// mixing, checkpoints and the asynchronous meter. This side owns the writer, cancellation,
+// progress, logs and the optional stateful processor between two Rust steps.
 Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                         const PreparedPcmMix& gain_matrix,
+                                         SpeakerMix gain_matrix,
                                          uint16_t num_out_ch,
                                          std::string_view backend,
                                          ProgressSink& progress,
                                          LogSink& logs,
                                          const SpeakerBlockProcessor& process) {
     const auto& info = plan.scene.info;
-    const auto num_in_ch = info.num_channels;
-    const auto num_frames = info.num_frames;
-    const auto sample_rate = info.sample_rate;
     try {
         logs.log(LogLevel::info,
                  backend,
                  fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames",
-                             gain_matrix.size(),
+                             gain_matrix.tracks,
                              num_out_ch,
-                             num_frames));
+                             info.num_frames));
         progress.on_progress(
             {RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
-        auto reader_res = audio::RenderInputReader::open(plan.input_path);
-        if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
+        const auto& window = plan.render_window;
+        const auto& meter_window = plan.meter_window;
+        const MradmRenderOfflineSettings settings{info.num_channels,
+                                                  num_out_ch,
+                                                  info.num_frames,
+                                                  static_cast<uint32_t>(info.sample_rate),
+                                                  plan.default_interp_ms,
+                                                  plan.object_smoothing_frames,
+                                                  window ? 1U : 0U,
+                                                  process ? 1U : 0U,
+                                                  window ? window->start_frame : 0,
+                                                  window ? window->frame_count : 0,
+                                                  meter_window ? 1U : 0U,
+                                                  meter_window ? meter_window->start_frame : 0,
+                                                  meter_window ? meter_window->frame_count : 0};
+        const auto path = audio::wav_path_utf8(plan.input_path);
+        DriverError error;
+        MradmRenderOffline* raw = nullptr;
+        const auto code = mradm_render_offline_open(reinterpret_cast<const uint8_t*>(path.data()),
+                                                    path.size(),
+                                                    gain_matrix.plan,
+                                                    &settings,
+                                                    {reinterpret_cast<const uint8_t*>(backend.data()), backend.size()},
+                                                    &raw,
+                                                    error.location(),
+                                                    error.message(),
+                                                    error.message_len());
+        if (code != 0) {
+            return error.error(code, plan.input_path);
         }
-        auto reader = std::move(*reader_res);
-        auto writer_res = audio::WriterHandle::open(
-            plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), plan.output_layout);
-        if (!writer_res) {
-            return tl::unexpected{writer_res.error()};
+        const std::unique_ptr<MradmRenderOffline, decltype(&mradm_render_offline_destroy)> driver(
+            raw, &mradm_render_offline_destroy);
+        auto writer = audio::WriterHandle::open(
+            plan.output_path, num_out_ch, static_cast<uint32_t>(info.sample_rate), plan.output_layout);
+        if (!writer) {
+            return tl::unexpected{writer.error()};
         }
-        auto& writer = *writer_res;
-
-        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
-
-
-        auto lufs_st =
-            dsp::Meter::create(num_out_ch, static_cast<uint32_t>(sample_rate), dsp::MeterMode::integrated_true_peak);
-        if (!lufs_st) {
-            return tl::unexpected{lufs_st.error()};
-        }
-
-        constexpr uint64_t k_min_block_size = 1024;
-        const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
-        dsp::PcmMixer mix(gain_matrix.plan,
-                          static_cast<std::size_t>(k_block_size),
-                          k_default_interp,
-                          plan.object_smoothing_frames > 0);
-        std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-
-        // Loudness / true-peak measurement dominates this renderer (≈70% at 22.2). Run it on a
-        // background thread so it overlaps with the next block's read + mix. Double-buffer the output
-        // so the next block can be mixed while the meter still reads the previous one; reuse of a
-        // buffer waits on its outstanding measurement future. Block order is preserved on the worker,
-        // so the measured loudness / true peak is identical to the inline version.
-        constexpr std::size_t k_num_buffers = 2;
-        std::array<std::vector<float>, k_num_buffers> out_buffers;
-        for (auto& buffer : out_buffers) {
-            buffer.assign(static_cast<std::size_t>(num_out_ch) * k_block_size, 0.0F);
-        }
-        std::array<std::future<void>, k_num_buffers> meter_pending;
-        render_common::SerialWorker meter;
-        std::size_t buf_idx = 0;
-
-        // Stateful backend DSP warms from frame zero; stateless gain mixing can seek.
-        // Only frames inside the requested window enter the writer and meter.
-        const bool windowed = plan.render_window.has_value();
-        const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
-        const uint64_t win_end =
-            windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
-        const uint64_t start_pos = windowed && !process ? (win_start / k_block_size) * k_block_size : 0;
-        if (start_pos > 0) {
-            if (auto result = reader->seek_frame(start_pos); !result) {
-                return tl::unexpected{result.error()};
-            }
-        }
-        const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
-        const auto progress_span = static_cast<double>(progress_total);
-        uint64_t frames_done = start_pos;
-
-        while (frames_done < win_end) {
+        for (;;) {
             if (plan.cancel_token.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
             }
-            const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
-            const std::size_t out_samples = static_cast<std::size_t>(num_out_ch) * frames_now;
-
-            // Reclaim this buffer once the meter has finished its previous use of it.
-            if (meter_pending.at(buf_idx).valid()) {
-                meter_pending.at(buf_idx).get();
+            MradmRenderOfflineBlock block{};
+            if (const auto status = mradm_render_offline_next(
+                    driver.get(), &block, error.location(), error.message(), error.message_len());
+                status != 0) {
+                return error.error(status, plan.input_path);
             }
-            std::vector<float>& out_block = out_buffers.at(buf_idx);
-
-            const auto read_result = reader->read(in_block.data(), frames_now);
-            if (!read_result) {
-                return tl::unexpected{read_result.error()};
+            if (block.frames == 0) {
+                break;
             }
-            if (*read_result != frames_now) {
-                return make_error(ErrorCode::io_error, "short input read while rendering speaker PCM");
-            }
-            std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
-
-            mix.speaker(std::span{in_block}.first(static_cast<std::size_t>(frames_now) * num_in_ch),
-                        out_block,
-                        {},
-                        frames_done,
-                        static_cast<std::size_t>(frames_now));
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-            const std::string trace_key = "speaker/s" + std::to_string(frames_done);
-            consistency::dump(trace_key + ".10-input.f32",
-                              std::span<const float>{in_block}.first(static_cast<std::size_t>(frames_now) * num_in_ch));
-            consistency::dump(trace_key + ".40-mix.f32", std::span<const float>{out_block}.first(out_samples));
-#endif
             if (process) {
                 auto status =
-                    process(std::span<const float>(in_block.data(), static_cast<std::size_t>(num_in_ch) * frames_now),
-                            std::span<float>(out_block.data(), out_samples),
-                            frames_done + frames_now == num_frames);
+                    process({block.input, block.input_len}, {block.output, block.output_len}, block.last != 0);
                 if (!status) {
                     return tl::unexpected{status.error()};
                 }
             }
-
-            // Sub-range of this block inside the output window [win_start, win_end).
-            const uint64_t w_lo = std::max(frames_done, win_start);
-            const uint64_t w_hi = std::min(frames_done + frames_now, win_end);
-            const bool emit = w_hi > w_lo;
-            const std::size_t emit_off = emit ? static_cast<std::size_t>(w_lo - frames_done) : 0;
-            const std::size_t emit_count = emit ? static_cast<std::size_t>(w_hi - w_lo) : 0;
-
-            if (emit && writer.write(out_block.data() + (emit_off * num_out_ch), emit_count) != emit_count) {
+            if (block.emit_frames > 0 && writer->write(block.output + (block.emit_offset * num_out_ch),
+                                                       block.emit_frames) != block.emit_frames) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
-
-            // Meter the written frames. Windowed → exactly emit_count; otherwise honor meter_window.
-            if (lufs_st) {
-                std::size_t meter_off = 0;
-                std::size_t meter_count = 0;
-                if (windowed) {
-                    meter_off = emit_off;
-                    meter_count = emit_count;
-                } else {
-                    const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
-                    meter_off = chunk.offset_frames;
-                    meter_count = static_cast<std::size_t>(chunk.frame_count);
-                }
-                if (meter_count > 0) {
-                    auto* state = &*lufs_st;
-                    const float* data = out_block.data() + (meter_off * num_out_ch);
-                    const auto frame_count = meter_count;
-                    meter_pending.at(buf_idx) = meter.post([state, data, frame_count] {
-                        if (const auto result = state->add_frames(data, frame_count); !result) {
-                            throw std::runtime_error(result.error().message);
-                        }
-                    });
-                }
+            MradmRenderOfflineProgress step{};
+            if (const auto status = mradm_render_offline_commit(
+                    driver.get(), &step, error.location(), error.message(), error.message_len());
+                status != 0) {
+                return error.error(status, plan.input_path);
             }
-
-            frames_done += frames_now;
-            buf_idx = (buf_idx + 1) % k_num_buffers;
-
-            const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
-            const double stage_fraction = static_cast<double>(progress_done) / progress_span;
-            const double frac = 0.3 + (0.6 * stage_fraction);
             progress.on_progress({RenderStage::rendering,
                                   RenderOperation::render_audio,
-                                  frac,
-                                  stage_fraction,
-                                  progress_done,
-                                  progress_total,
+                                  step.fraction,
+                                  step.stage_fraction,
+                                  step.done,
+                                  step.total,
                                   "rendering"});
         }
-
-        // All audio is written; wait for outstanding measurements before querying global metrics.
-        for (auto& pending : meter_pending) {
-            if (pending.valid()) {
-                pending.get();
-            }
+        MradmRenderOfflineMetrics measured{};
+        if (const auto status = mradm_render_offline_finish(
+                driver.get(), &measured, error.location(), error.message(), error.message_len());
+            status != 0) {
+            return error.error(status, plan.input_path);
         }
 
         progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
+        const uint64_t win_start = window ? std::min(window->start_frame, info.num_frames) : 0;
+        const uint64_t win_end = window ? std::min(win_start + window->frame_count, info.num_frames) : info.num_frames;
         logs.log(LogLevel::info,
                  backend,
                  fmt::format("wrote {} frames to {}{}",
                              win_end - win_start,
                              plan.output_path,
-                             windowed ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, num_frames)
-                                      : std::string{}));
+                             window
+                                 ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, info.num_frames)
+                                 : std::string{}));
 
         RenderMetrics metrics;
-        if (lufs_st) {
-            if (const auto loudness = lufs_st->integrated(); loudness && std::isfinite(*loudness)) {
-                metrics.measured_lufs = *loudness;
-            }
-            if (const auto peak = lufs_st->max_true_peak(); peak && *peak > 0.0) {
-                metrics.measured_peak_dbtp = dsp::amplitude_to_db(*peak);
-            }
+        if (measured.has_lufs != 0U) {
+            metrics.measured_lufs = measured.lufs;
+        }
+        if (measured.has_peak != 0U) {
+            metrics.measured_peak_dbtp = measured.peak_dbtp;
         }
         return metrics;
     } catch (const std::exception& e) {

@@ -78,7 +78,7 @@ fn valid<T>(pointer: *const T, len: usize) -> Result<()> {
     }
     Ok(())
 }
-unsafe fn path<'a>(data: *const u8, len: usize) -> Result<&'a str> {
+pub(crate) unsafe fn path<'a>(data: *const u8, len: usize) -> Result<&'a str> {
     valid(data, len)?;
     if len == 0 {
         return Err(Error::invalid("WAVE 路径为空"));

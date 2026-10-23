@@ -190,6 +190,9 @@ fn user_mute(user: UserLevel) -> u32 {
 }
 
 impl SceneHandle {
+    pub(crate) fn scene(&self) -> &RenderScene {
+        &self.scene
+    }
     fn new(scene: RenderScene) -> Self {
         let mut handle = Self {
             texts: scene

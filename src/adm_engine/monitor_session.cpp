@@ -79,7 +79,8 @@ class BufferingLogSink final : public LogSink {
 // at once, so neither prepared may be freed while a stream still references it.
 class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
   public:
-    explicit RealtimeStreamFactory(std::string input_path) : input_path_(std::move(input_path)) {}
+    RealtimeStreamFactory(std::string input_path, std::shared_ptr<const detail::RenderSceneHandle> scene_handle)
+        : input_path_(std::move(input_path)), scene_handle_(std::move(scene_handle)) {}
 
     Result<std::unique_ptr<IRenderStream>>
     open(const AdmScene& scene, const RenderOptions& options, LogSink& logs) override {
@@ -111,6 +112,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.input_path = input_path_;
         plan.output_layout = resolved->effective_output_layout;
         plan.scene = scene;
+        plan.scene_handle = scene_handle_;
         plan.sofa_path = options.sofa_path;
         plan.room = options.room;
         plan.screens = options.screens;
@@ -165,6 +167,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         std::shared_ptr<IPreparedRender> prepared;
     };
     std::string input_path_;
+    std::shared_ptr<const detail::RenderSceneHandle> scene_handle_; // the Rust scene of every `scene`
     std::vector<BackendKeepAlive> keepalive_;
 };
 
@@ -318,13 +321,13 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     if (!scene) {
         return tl::unexpected{scene.error()};
     }
-    impl.sample_rate = scene->info.sample_rate;
-    impl.total_frames = scene->info.num_frames;
-    impl.scene = std::move(*scene);
+    impl.sample_rate = scene->scene.info.sample_rate;
+    impl.total_frames = scene->scene.info.num_frames;
+    impl.scene = std::move(scene->scene);
     impl.current_options = options;
     impl.device_id = device_id;
 
-    impl.factory = std::make_unique<RealtimeStreamFactory>(input_path);
+    impl.factory = std::make_unique<RealtimeStreamFactory>(input_path, std::move(scene->handle));
     impl.device = make_monitor_device(options, device_id);
 
     auto engine = realtime::MonitorEngine::create(*impl.factory, *impl.device, impl.scene, options, impl.log_sink);

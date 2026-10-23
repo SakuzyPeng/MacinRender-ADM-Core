@@ -41,6 +41,8 @@ pub enum Words<'a> {
     F64(&'a [f64]),
     I32(&'a [i32]),
 }
+/// Whether production-path checkpoints are compiled in; lets callers skip building their names.
+pub const ENABLED: bool = cfg!(feature = "diagnostics");
 /// Write one production-path checkpoint (no-op without the `diagnostics` feature).
 #[inline]
 pub fn process(name: &str, words: Words<'_>) -> std::io::Result<()> {

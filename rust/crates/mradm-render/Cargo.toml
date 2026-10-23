@@ -1,0 +1,16 @@
+[package]
+name = "mradm-render"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Loudspeaker backends, routing rules and the offline render driver"
+
+[dependencies]
+mradm-adm = { path = "../mradm-adm" }
+mradm-dsp = { path = "../mradm-dsp", default-features = false }
+mradm-scene = { path = "../mradm-scene" }
+mradm-wav = { path = "../mradm-wav" }
+
+[dev-dependencies]
+mradm-json = { path = "../mradm-json" }
