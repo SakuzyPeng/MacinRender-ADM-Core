@@ -1,6 +1,6 @@
 #include "live_vbap_renderer.h"
 
-#include <array>
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -96,25 +96,24 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
     void reset() override { mradm_render_live_vbap_reset(handle_.get()); }
 
     [[nodiscard]] Result<void> render(const Frame& frame, std::span<float> output) override {
-        planes_.clear();
-        initial_.clear();
-        updates_.clear();
-        for (const auto& plane : frame.pcm) {
-            planes_.push_back(
-                {plane.element_id, plane.has_signal ? 1U : 0U, plane.samples.data(), plane.samples.size()});
-        }
-        for (const auto& entry : frame.initial_states) {
-            initial_.push_back({entry.element_id, state_record(entry.state)});
-        }
-        for (const auto& update : frame.updates) {
-            updates_.push_back({update.element_id,
-                                update.offset_samples,
-                                update.ramp_duration_samples,
-                                update.jump_position ? 1U : 0U,
-                                update.changed_fields,
-                                update.cleared_fields,
-                                state_record(update.state)});
-        }
+        planes_.resize(frame.pcm.size());
+        initial_.resize(frame.initial_states.size());
+        updates_.resize(frame.updates.size());
+        std::ranges::transform(frame.pcm, planes_.begin(), [](const auto& plane) -> MradmRenderLivePlane {
+            return {plane.element_id, plane.has_signal ? 1U : 0U, plane.samples.data(), plane.samples.size()};
+        });
+        std::ranges::transform(frame.initial_states, initial_.begin(), [](const auto& entry) -> MradmRenderLiveEntry {
+            return {entry.element_id, state_record(entry.state)};
+        });
+        std::ranges::transform(frame.updates, updates_.begin(), [](const auto& update) -> MradmRenderLiveUpdate {
+            return {update.element_id,
+                    update.offset_samples,
+                    update.ramp_duration_samples,
+                    update.jump_position ? 1U : 0U,
+                    update.changed_fields,
+                    update.cleared_fields,
+                    state_record(update.state)};
+        });
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
         trace_ = consistency::scene_renderer_key(frame) + ".30-vbap" + std::to_string(output_channels());
 #endif

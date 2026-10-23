@@ -107,8 +107,6 @@ std::filesystem::path write_input() {
     return path;
 }
 
-enum class Kind : uint8_t { objects, direct_speakers };
-
 struct Output {
     std::vector<float> offline;
     std::vector<float> streaming;
@@ -181,8 +179,6 @@ struct Backend {
     std::string_view name;
     std::unique_ptr<mradm::IRenderer> (*create)(){nullptr};
     std::string_view layout;
-    Kind kind{Kind::objects};
-    mradm::LfeRoutingMode lfe_mode{mradm::LfeRoutingMode::direct};
 };
 
 bool verify_live_label(mradm::RenderPlan plan, const Backend& backend) {
@@ -251,11 +247,7 @@ int main() try {
     bool ok = true;
     {
         // Binaural PCM is covered by binaural_render_fixture_test; this adds its live label binding.
-        const Backend binaural{"binaural",
-                               mradm::create_binaural_renderer,
-                               "binaural",
-                               Kind::direct_speakers,
-                               mradm::LfeRoutingMode::direct};
+        const Backend binaural{"binaural", mradm::create_binaural_renderer, "binaural"};
         mradm::RenderPlan plan;
         plan.input_path = input.string();
         plan.output_layout = std::string{binaural.layout};
