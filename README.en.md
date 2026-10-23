@@ -170,7 +170,7 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
-C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene
+C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json
 All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
 
@@ -188,7 +188,8 @@ All modules ──→ ADMCore (domain model, errors, options, capabilities)
 | `rust/crates/mradm-adm` / `mradm-wav` | ADM XML metadata; WAVE / RF64 / BW64 I/O and container editing |
 | `rust/crates/mradm-math` | Portable, cross-platform bit-identical sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC head-tracking datagram decoding (loopback UDP input) |
-| `rust/crates/mradm-scene` | Render scene: input import, CHNA mapping, channel beds and loudspeaker layout tables |
+| `rust/crates/mradm-scene` | Render scene: input import, CHNA mapping, channel beds and loudspeaker layout tables; semantic policy, report and template, export writeback, DirectSpeakers matrix and screen configuration |
+| `rust/crates/mradm-json` | JSON parsing and output byte-compatible with nlohmann/json 3.12.0 |
 | `rust/crates/mradm-ffi` | The only private C boundary containing `unsafe` |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT desktop GUI calling the C ABI through P/Invoke |
 
