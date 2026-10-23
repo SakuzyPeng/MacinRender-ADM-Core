@@ -16,6 +16,7 @@
 
 #include "metadata.h"
 #include "scene_ffi.h"
+#include "scene_handle.h"
 #include "scene_import_internal.h"
 #include "wav_backend.h"
 
@@ -56,22 +57,6 @@ std::string message_text(const std::array<uint8_t, 1024>& message) {
 }
 
 } // namespace
-} // namespace mradm::io
-
-namespace mradm::detail {
-struct RenderSceneHandle {
-    explicit RenderSceneHandle(MradmSceneHandle* scene) : raw(scene) {}
-    RenderSceneHandle(const RenderSceneHandle&) = delete;
-    RenderSceneHandle& operator=(const RenderSceneHandle&) = delete;
-    RenderSceneHandle(RenderSceneHandle&&) = delete;
-    RenderSceneHandle& operator=(RenderSceneHandle&&) = delete;
-    ~RenderSceneHandle() { mradm_scene_destroy(raw); }
-    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter owning one Rust handle.
-    MradmSceneHandle* raw;
-};
-} // namespace mradm::detail
-
-namespace mradm::io {
 
 Result<RenderScene>
 RenderScene::import(const std::string& path, const SceneImportOptions* options, const char* checkpoint) {

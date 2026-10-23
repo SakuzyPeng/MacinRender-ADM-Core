@@ -13,6 +13,9 @@ pub struct Text {
 }
 impl Text {
     pub(crate) fn new(s: &str) -> Self {
+        Self::bytes(s.as_bytes())
+    }
+    pub(crate) fn bytes(s: &[u8]) -> Self {
         Self {
             data: s.as_ptr(),
             len: s.len(),

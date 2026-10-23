@@ -402,7 +402,7 @@ RenderService::RenderService() = default;
 RenderResult RenderService::render(const RenderRequest& request,
                                    ProgressSink& progress,
                                    LogSink& logs,
-                                   const AdmScene* preimported_scene,
+                                   const PreparedScene* preimported_scene,
                                    std::shared_ptr<IPreparedRender>* prepared_cache) const {
     emit_progress(progress, RenderStage::validating, RenderOperation::validate_request, 0.0, 0.0, "validating request");
 
@@ -446,7 +446,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     std::optional<io::RenderScene> render_scene;
     Result<AdmScene> scene_result = [&]() -> Result<AdmScene> {
         if (preimported_scene != nullptr) {
-            return *preimported_scene;
+            return preimported_scene->scene;
         }
         auto imported = io::RenderScene::import(request.input_path.string(), &import_options, "05-import");
         if (!imported) {
@@ -842,9 +842,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     }
     plan.cancel_token = request.options.cancel_token;
     plan.scene = std::move(*scene_result);
-    if (render_scene.has_value()) {
-        plan.scene_handle = render_scene->handle();
-    }
+    plan.scene_handle = render_scene.has_value() ? render_scene->handle() : preimported_scene->handle;
     std::string renderer_semantics;
     if (needs_semantic_report) {
         plan.renderer_semantics_sink = [&renderer_semantics](std::string value) {
@@ -1357,9 +1355,9 @@ Result<void> RenderService::export_file(const std::string& input_path,
     return scene->write(output_path);
 }
 
-Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,
-                                                      const RenderOptions& options,
-                                                      LogSink& logs) const {
+Result<PreparedScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,
+                                                           const RenderOptions& options,
+                                                           LogSink& logs) const {
     const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
     auto scene = io::RenderScene::import(input_path.string(), &import_options);
     if (!scene) {
@@ -1373,12 +1371,12 @@ Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::pat
     if (!policy_res) {
         return tl::unexpected(policy_res.error());
     }
-    return scene->scene();
+    return PreparedScene{scene->scene(), scene->handle()};
 }
 
 // ── PreviewSession ──────────────────────────────────────────────────────────────
 
-PreviewSession::PreviewSession(std::filesystem::path input, RenderOptions options, AdmScene scene)
+PreviewSession::PreviewSession(std::filesystem::path input, RenderOptions options, PreparedScene scene)
     : input_(std::move(input)), options_(std::move(options)), scene_(std::move(scene)) {}
 
 Result<PreviewSession> PreviewSession::create(std::filesystem::path input_path, RenderOptions options, LogSink& logs) {

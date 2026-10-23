@@ -24,6 +24,7 @@
 
 #include "phase2_io.h"
 #include "renderer_factory.h"
+#include "scene_import_internal.h"
 
 namespace {
 using Json = nlohmann::json;
@@ -97,8 +98,9 @@ uint64_t configure_room(const Json& spec, const std::filesystem::path& fixtures,
 std::vector<float> replay(const Json& spec,
                           const std::filesystem::path& input,
                           const std::filesystem::path& fixtures,
-                          const mradm::AdmScene& scene,
+                          const mradm::io::RenderScene& render_scene,
                           uint32_t& sample_rate) {
+    const auto& scene = render_scene.scene();
     // Version 4 (PCM consistency 4.2) adds a room pack and the tail the room appends after EOS.
     const auto version = spec.at("version").get<int>();
     phase2::require(version == 3 || version == 4, "unsupported file-streaming replay version");
@@ -117,6 +119,7 @@ std::vector<float> replay(const Json& spec,
     plan.input_path = input.string();
     plan.output_layout = resolved->effective_output_layout;
     plan.scene = scene;
+    plan.scene_handle = render_scene.handle();
     if (spec.contains("spread")) {
         plan.binaural_spread_mode = spread_mode(spec.at("spread").get<std::string>());
     }
@@ -199,7 +202,7 @@ int main(int argc, char** argv) {
         const std::filesystem::path input(argv[2]);
         const std::filesystem::path directory(argv[3]);
         std::filesystem::create_directories(directory);
-        auto scene = mradm::io::import_scene(input.string());
+        auto scene = mradm::io::RenderScene::import(input.string(), nullptr);
         phase2::require(scene.has_value(), "cannot import the replay fixture");
         for (int pass = 1; pass <= 2; ++pass) {
             uint32_t sample_rate = 0;

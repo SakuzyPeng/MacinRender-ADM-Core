@@ -26,6 +26,7 @@ mod osc;
 mod output_dsp;
 mod pcm_mix;
 mod post_gain;
+mod render;
 mod resampler;
 mod room;
 mod room_cuda_selection;

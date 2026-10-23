@@ -15,11 +15,14 @@
 #include <iostream>
 #include <string_view>
 
-#include "render_common.h"
+#include "scene_math.h"
 
 namespace {
 
-using mradm::render_common::canonical_vector_length;
+// The Rust scene length (scene-math operation 2) the loudspeaker backends use.
+float canonical_vector_length(float x, float y, float z) {
+    return mradm::dsp::scene_math<3, 1>(2U, {x, y, z})[0];
+}
 
 struct LengthCase {
     std::uint32_t x{};
