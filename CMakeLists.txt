@@ -1586,7 +1586,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
      MacinRender::ADMDsp)
     # Test-only access to the non-installed binaural internal/probe headers.
 
-    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
+    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_io")
     mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
