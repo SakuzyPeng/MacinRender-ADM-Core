@@ -297,7 +297,6 @@ target_sources(mr_adm_render_triple_balance
     PRIVATE
         src/adm_render_triple_balance/live_triple_balance_renderer.cpp
         src/adm_render_triple_balance/triple_balance_renderer.cpp
-        src/adm_render_triple_balance/render_state.cpp
         src/adm_render_triple_balance/triple_balance_stream.cpp
         src/adm_render_triple_balance/bed.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
@@ -984,6 +983,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_pcm_mix_tests tests/unit/pcm_mix_test.cpp)
     target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_include_directories(mr_adm_pcm_mix_tests PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_pcm_mix_tests)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_mix_tests)
     add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)
@@ -1315,9 +1315,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Test-only C++ adapters over the Triple Balance numeric FFI (out of production, PCM consistency 4.6).
     add_library(mr_adm_triple_balance_test_support STATIC
         tests/support/triple_balance/panner.cpp tests/support/triple_balance/layout_222.cpp
-        tests/support/triple_balance/size_panner.cpp tests/support/triple_balance/size_processor.cpp)
-    target_include_directories(mr_adm_triple_balance_test_support PUBLIC tests/support/triple_balance)
-    target_link_libraries(mr_adm_triple_balance_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp)
+        tests/support/triple_balance/size_panner.cpp tests/support/triple_balance/size_processor.cpp
+        tests/support/triple_balance/size_mixer.cpp)
+    target_include_directories(mr_adm_triple_balance_test_support PUBLIC tests/support/triple_balance tests/support)
+    target_link_libraries(mr_adm_triple_balance_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp
+        MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_test_support)
 
@@ -1327,6 +1329,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/reference/triple_balance/render_state.cpp)
     target_link_libraries(mr_adm_triple_balance_rust_tests PRIVATE MacinRender::ADMRenderTripleBalance
         MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_triple_balance_test_support nlohmann_json::nlohmann_json)
+    target_include_directories(mr_adm_triple_balance_rust_tests BEFORE PRIVATE tests/support/legacy_speaker_pcm)
     target_include_directories(mr_adm_triple_balance_rust_tests PRIVATE src/adm_render_triple_balance src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_rust_tests)
     add_test(NAME mr_adm_triple_balance_rust_tests COMMAND mr_adm_triple_balance_rust_tests)

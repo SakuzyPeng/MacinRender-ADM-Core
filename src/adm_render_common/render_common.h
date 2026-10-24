@@ -174,22 +174,6 @@ class LiveGainRamp {
     dsp::GainBank bank_;
 };
 
-// Applies one LiveGainRamp per channel to interleaved PCM. Render streams use this before their
-// linear spatial mix, so gain automation is smooth without altering unrelated objects/channels.
-class InterleavedLiveGainSmoother {
-  public:
-    InterleavedLiveGainSmoother(std::size_t channels, uint32_t sample_rate);
-
-    void set_targets(std::span<const float> targets) noexcept;
-    void apply(float* interleaved, std::size_t frames) noexcept;
-    void fill(std::span<float> output) noexcept;
-    void reset() noexcept;
-
-  private:
-    std::size_t channels_;
-    dsp::GainBank bank_;
-};
-
 // ADM producers are inconsistent: some LFE DirectSpeakers channels carry
 // channelFrequency lowPass, while others only encode the role in labels like
 // RC_LFE/RCLFE/LFE1. Use this helper before positional fallback/spatialization.
