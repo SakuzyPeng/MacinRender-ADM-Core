@@ -13,17 +13,15 @@
 
 #include <nlohmann/json.hpp>
 
-// clang-format off
-// The frozen motion reference reads render_common::BlockGains, now a test-only declaration.
-#include "speaker_mix.h"
 #include "../reference/triple_balance/motion.h"
-// clang-format on
 #include "../reference/triple_balance/render_state.h"
 #include "../reference/triple_balance/size_processor.h"
 #include "layout_222.h"
 #include "panner.h"
-#include "render_state.h"
+#include "size_mixer.h"
 #include "size_processor.h"
+#include "speaker_mix.h"
+
 namespace {
 namespace old = mradm::triple_balance_legacy;
 namespace now = mradm::triple_balance;
@@ -297,15 +295,12 @@ void curves_and_mix(Stats& stats) {
         }
         legacy.size_tracks.push_back(sized);
         auto old_mix = take(old::SizeMixer::create(legacy, plan, true));
-        now::Prepared prepared;
-        prepared.output_channels = uint16_t(channels);
-        prepared.sample_rate = 48000;
         auto size_row = row;
         size_row.kind = 2;
         const auto size_plan = take(
             dsp::TbPlan::create(2, *dsp::tb_layout(layout), 48000, mono.size(), std::span{&size_row, 1}, events, {}));
-        prepared.numeric = size_plan.get();
-        auto new_mix = take(now::SizeMixer::create(prepared, plan, true));
+        const uint64_t interpolation = uint64_t{plan.scene.info.sample_rate} * plan.default_interp_ms / 1000;
+        auto new_mix = take(now::SizeMixer::create(size_plan.get(), 2, interpolation, true));
         for (std::size_t start = 0; start < mono.size(); start += 1024) {
             constexpr std::array<float, 4> steps{1, 0, .5F, 4};
             const float scale = steps.at(std::min<std::size_t>(start / 2048, 3));

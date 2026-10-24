@@ -36,7 +36,8 @@ void same_gain(float actual, float expected, Comparison& result) {
 void compare_multichannel_gains(std::uint32_t rate, std::span<const std::size_t> lengths, Comparison& result) {
     for (const std::size_t channels : {1U, 2U, 12U, 64U}) {
         output_dsp_legacy::InterleavedLiveGainSmoother before(channels, rate);
-        mradm::render_common::InterleavedLiveGainSmoother after(channels, rate);
+        // The live gain de-zipper of the Rust file streams (20 ms per channel).
+        mradm::dsp::GainBank after(channels, rate, mradm::render_common::LiveGainRamp::k_default_ramp_ms);
         for (const auto target_count : {channels, std::size_t{1}, std::size_t{0}, channels + 2}) {
             std::vector<float> gains(target_count, 0.125F);
             before.set_targets(gains);
@@ -48,7 +49,7 @@ void compare_multichannel_gains(std::uint32_t rate, std::span<const std::size_t>
                 }
                 auto actual = expected;
                 before.apply(expected.data(), frames);
-                after.apply(actual.data(), frames);
+                after.apply(actual);
                 for (std::size_t i = 0; i < actual.size(); ++i) {
                     same_gain(actual[i], expected[i], result);
                 }

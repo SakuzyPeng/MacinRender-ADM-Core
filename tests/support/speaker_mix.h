@@ -4,15 +4,46 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "pcm_mix.h"
 #include "speaker_pcm.h"
 
-// Per-channel gain blocks compiled into a PcmMixer plan, for tests comparing the Rust mixer with
-// the frozen legacy accumulation. Production plans are built in Rust mradm-render (4.5, 4.6).
+// Per-channel gain blocks compiled into a PcmMixer plan and the legacy accumulation context, for
+// tests comparing the Rust mixer and size session with the frozen legacy code. Production plans
+// are built in Rust mradm-render (PCM consistency 4.5, 4.6).
 namespace mradm::render_common {
+
+struct ChannelBinding {
+    uint16_t input_channel{0};
+    std::string object_id;
+    std::string speaker_label_key;
+};
+
+struct PreparedPcmMix {
+    std::vector<ChannelBinding> channels;
+    dsp::PcmMixPlan plan;
+    [[nodiscard]] auto begin() const { return channels.begin(); }
+    [[nodiscard]] auto end() const { return channels.end(); }
+    [[nodiscard]] auto size() const { return channels.size(); }
+    [[nodiscard]] bool empty() const { return channels.empty(); }
+    [[nodiscard]] const ChannelBinding& operator[](std::size_t index) const { return channels[index]; }
+};
+
+// One block's input, output and live gains, as the legacy accumulation took them.
+struct AccumulateContext {
+    const float* input{nullptr};
+    std::vector<float>* output{nullptr};
+    uint64_t frames_done{0};
+    uint16_t num_in_ch{0};
+    uint16_t num_out_ch{0};
+    uint64_t default_interp{0};
+    uint64_t object_smoothing_frames{0};
+    std::span<const float> live_gains{};
+};
 
 struct BlockGains {
     std::vector<float> gains;

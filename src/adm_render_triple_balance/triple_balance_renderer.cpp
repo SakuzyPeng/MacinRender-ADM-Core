@@ -21,7 +21,8 @@ using TripleBalancePrepared = triple_balance::Prepared;
 
 // The compatibility copy of the scene, its report, the input checks and the numeric plan are
 // built in Rust mradm-render `triple_balance` (PCM consistency 4.6) from the Rust render scene;
-// offline rendering, with the size and D-mode processors, runs in its `offline` driver.
+// offline rendering, with the size and D-mode processors, runs in its `offline` driver and file
+// streaming in its `triple_balance_stream`.
 class TripleBalanceRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return triple_balance_capabilities(); }
@@ -62,11 +63,11 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
                                                   text(plan.input_path)};
     MradmRenderPrepared* raw = nullptr;
     MradmRenderPreparedView view{};
-    MradmRenderTripleBalanceView numeric{};
-    const auto code = mradm_render_triple_balance_prepare(plan.scene_handle->raw, &request, &raw, &view, &numeric);
+    MradmRenderTripleBalanceView report{};
+    const auto code = mradm_render_triple_balance_prepare(plan.scene_handle->raw, &request, &raw, &view, &report);
     // The backend report also describes a rejected preparation.
     if (raw != nullptr && plan.renderer_semantics_sink) {
-        plan.renderer_semantics_sink(string_of(numeric.report));
+        plan.renderer_semantics_sink(string_of(report.report));
     }
     auto rust =
         render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::speaker, logs, "triple-balance");
@@ -76,28 +77,7 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
     auto prepared = std::make_shared<TripleBalancePrepared>();
     prepared->output_channels = (*rust)->outputs;
     prepared->sample_rate = plan.scene.info.sample_rate;
-    prepared->spread_mode = plan.speaker_spread_mode;
     prepared->mode = plan.triple_balance_mode;
-    prepared->numeric = numeric.session;
-    for (const auto& channel : std::span{numeric.channels, numeric.channels_len}) {
-        prepared->gain_matrix.channels.push_back(
-            {channel.input_channel, string_of(channel.object_id), string_of(channel.label_key)});
-    }
-    for (const auto& size : std::span{numeric.sizes, numeric.sizes_len}) {
-        prepared->size_tracks.push_back({size.input_channel,
-                                         string_of(size.object_id),
-                                         size.has_diffuse != 0U,
-                                         size.minimum_diffuse_size,
-                                         size.maximum_source_size});
-    }
-    if (prepared->numeric != nullptr) {
-        void* mix = nullptr;
-        auto status = dsp::tb_status(mradm_dsp_tb_plan_mix, prepared->numeric, &mix);
-        if (!status) {
-            return tl::unexpected{status.error()};
-        }
-        prepared->gain_matrix.plan = dsp::PcmMixPlan::adopt(mix);
-    }
     prepared->rust = std::move(*rust);
     return std::static_pointer_cast<IPreparedRender>(prepared);
 }

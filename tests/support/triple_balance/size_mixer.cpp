@@ -1,19 +1,14 @@
-#include "render_state.h"
+#include "size_mixer.h"
 namespace mradm::triple_balance {
-Result<SizeMixer> SizeMixer::create(const Prepared& prepared, const RenderPlan& plan, bool live) {
+Result<SizeMixer> SizeMixer::create(const void* numeric, std::size_t inputs, uint64_t interpolation, bool live) {
     SizeMixer result;
     void* raw = nullptr;
-    auto status = dsp::tb_status(mradm_dsp_tb_create,
-                                 prepared.numeric,
-                                 std::size_t{1024},
-                                 uint64_t{plan.scene.info.sample_rate} * plan.default_interp_ms / 1000,
-                                 live ? 1U : 0U,
-                                 &raw);
+    auto status = dsp::tb_status(mradm_dsp_tb_create, numeric, std::size_t{1024}, interpolation, live ? 1U : 0U, &raw);
     if (!status) {
         return tl::unexpected{status.error()};
     }
     result.handle_.reset(raw);
-    result.inputs_ = plan.scene.info.num_channels;
+    result.inputs_ = inputs;
     return result;
 }
 void SizeMixer::set_scales(std::span<const float> scales, bool immediate) {
@@ -28,10 +23,7 @@ void SizeMixer::reset() {
 Result<void> SizeMixer::prepare_points(uint64_t start, std::size_t frames) {
     return dsp::tb_status(mradm_dsp_tb_prepare_points, handle_.get(), start, frames);
 }
-void SizeMixer::accumulate_point(std::size_t track,
-                                 const render_common::AccumulateContext& c,
-                                 std::size_t frames,
-                                 bool user_gain) {
+void SizeMixer::accumulate_point(std::size_t track, const AccumulateContext& c, std::size_t frames, bool user_gain) {
     dsp::tb_checked(mradm_dsp_tb_point,
                     handle_.get(),
                     track,
