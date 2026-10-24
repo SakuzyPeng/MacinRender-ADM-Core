@@ -10,8 +10,6 @@ description = "Loudspeaker and HOA backends, routing rules and the offline rende
 mradm-adm = { path = "../mradm-adm" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-ear = { path = "../mradm-ear" }
+mradm-json = { path = "../mradm-json" }
 mradm-scene = { path = "../mradm-scene" }
 mradm-wav = { path = "../mradm-wav" }
-
-[dev-dependencies]
-mradm-json = { path = "../mradm-json" }

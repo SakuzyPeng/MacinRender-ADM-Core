@@ -6,7 +6,7 @@
 use crate::adm::Text;
 use crate::scene::SceneHandle;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
-use mradm_render::{ear, hoa, live_vbap, offline, stream, vbap};
+use mradm_render::{ear, hoa, live_vbap, offline, stream, triple_balance, vbap};
 use std::ffi::c_void;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -539,14 +539,11 @@ pub struct RenderOfflineSettings {
     default_interp_ms: u32,
     smoothing_frames: u64,
     has_window: u32,
-    stateful: u32,
     window_start: u64,
     window_count: u64,
     has_meter_window: u32,
     meter_start: u64,
     meter_count: u64,
-    /// 0: `plan` is a loudspeaker `PcmMixer` plan; 1: an HOA3 encoder plan.
-    kernel: u32,
 }
 
 /// One rendered block; `frames` is 0 after the last one. The spans live until the next call.
@@ -583,7 +580,8 @@ pub struct RenderOfflineMetrics {
 pub struct RenderOffline(Option<offline::Driver>);
 
 /// Like `boundary` for the driver: the locator kind (0 none, 1 `path=<input>`, 2 `input=<input>`,
-/// 3 `meter`, 4 `HOA DSP`) and the message, cut at a character boundary as the WAVE reader did.
+/// 3 `meter`, 4 `HOA DSP`, 5 `Triple Balance DSP`) and the message, cut at a character boundary
+/// as the WAVE reader did.
 fn driver_boundary(
     location: *mut u32,
     message: *mut u8,
@@ -606,6 +604,7 @@ fn driver_boundary(
             Some(offline::Location::Input) => 2,
             Some(offline::Location::Meter) => 3,
             Some(offline::Location::HoaDsp) => 4,
+            Some(offline::Location::TripleBalanceDsp) => 5,
         };
     }
     let detail = error.as_ref().map_or("", |e| e.message.as_str());
@@ -633,17 +632,6 @@ unsafe fn driver<'a>(handle: *mut RenderOffline) -> offline::Result<&'a mut offl
         .ok_or_else(|| driver_error("无效离线渲染句柄"))
 }
 
-/// The plan behind an opaque pointer: 0, a `PcmMixer` plan prepared in C++; 1, the kernel of a
-/// Rust preparation (`RenderPreparedView::plan`).
-unsafe fn kernel(plan: *const c_void, kind: u32) -> Option<offline::Kernel> {
-    match kind {
-        0 => unsafe { plan.cast::<Arc<mradm_dsp::pcm_mix::Plan>>().as_ref() }
-            .map(|p| offline::Kernel::Mix(Arc::clone(p))),
-        1 => unsafe { plan.cast::<offline::Kernel>().as_ref() }.cloned(),
-        _ => None,
-    }
-}
-
 /// Opens the input (UTF-8 path) and prepares the renderer and meter for `plan`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_offline_open(
@@ -662,8 +650,10 @@ pub unsafe extern "C" fn mradm_render_offline_open(
         else {
             return Err(driver_error("无效离线渲染参数"));
         };
-        let kernel =
-            unsafe { kernel(plan, s.kernel) }.ok_or_else(|| driver_error("无效离线渲染参数"))?;
+        // The kernel of a Rust preparation (`RenderPreparedView::plan`).
+        let kernel = unsafe { plan.cast::<offline::Kernel>().as_ref() }
+            .cloned()
+            .ok_or_else(|| driver_error("无效离线渲染参数"))?;
         *out = ptr::null_mut();
         let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
             code: e.code,
@@ -690,7 +680,6 @@ pub unsafe extern "C" fn mradm_render_offline_open(
                 smoothing_frames: s.smoothing_frames,
                 window: window(s.has_window, s.window_start, s.window_count),
                 meter_window: window(s.has_meter_window, s.meter_start, s.meter_count),
-                stateful: s.stateful != 0,
                 backend,
             },
         )?;
@@ -817,8 +806,8 @@ pub struct RenderVbapRequest {
     split_power: u32,
 }
 
-/// The log lines (also of a failed preparation) and the error, or the offline driver's plan
-/// (kernel 1), its input-channel count and its output channels once prepared.
+/// The log lines (also of a failed preparation) and the error, or the offline driver's plan,
+/// its input-channel count and its output channels once prepared.
 #[repr(C)]
 pub struct RenderPreparedView {
     logs: *const RenderLogLine,
@@ -830,7 +819,7 @@ pub struct RenderPreparedView {
     outputs: usize,
 }
 
-/// A prepared VBAP, HOA or EAR render, or the log lines and error of a failed one.
+/// A prepared VBAP, HOA, EAR or Triple Balance render, or the log lines and error of a failed one.
 pub struct RenderPrepared {
     texts: Vec<Vec<u8>>,
     lines: Vec<RenderLogLine>,
@@ -838,6 +827,7 @@ pub struct RenderPrepared {
     kernel: Option<offline::Kernel>,
     bindings: Arc<[vbap::Binding]>,
     settings: (usize, usize, u64, u32),
+    triple_balance: Option<Box<TripleBalanceData>>,
 }
 
 /// Boxes a preparation's logs and result, fills `view` and returns the status.
@@ -859,6 +849,7 @@ fn prepared(
         kernel: None,
         bindings: Arc::from([]),
         settings,
+        triple_balance: None,
     });
     for (level, text) in logs {
         handle.lines.push(RenderLogLine {
@@ -1116,6 +1107,178 @@ pub unsafe extern "C" fn mradm_render_ear_prepare(
                 (offline::Kernel::Ear(Arc::new(plan)), p.bindings)
             });
             prepared(logs, result, settings, out, view)
+        },
+    )
+}
+
+/// The Triple Balance request. `mode`: 0 standard, 1 D. `spread`: 0 automatic, 1 none, 2 MDAP.
+/// `routing`: 0 automatic, 1 label, 2 position, 3 matrix.
+#[repr(C)]
+pub struct RenderTripleBalanceRequest {
+    layout_id: Text,
+    mode: u32,
+    spread: u32,
+    split_power: u32,
+    standard_geometry: u32,
+    smoothing_frames: u32,
+    routing: u32,
+    has_matrix: u32,
+    input_path: Text,
+}
+
+/// One input channel's live-control key, in channel order.
+#[repr(C)]
+pub struct RenderTripleBalanceChannel {
+    input_channel: u16,
+    object_id: Text,
+    label_key: Text,
+}
+
+/// A size-mixed track with the scalars the live overrides check.
+#[repr(C)]
+pub struct RenderTripleBalanceSize {
+    input_channel: u16,
+    object_id: Text,
+    has_diffuse: u32,
+    minimum_diffuse_size: f32,
+    maximum_source_size: f32,
+}
+
+/// The backend report (also of a rejected preparation) and, once prepared, what the C++ file
+/// stream still reads: the standard-mode numeric plan (an `Arc<session::Plan>` for the
+/// `mradm_dsp_tb_*` calls; null in D mode), the channel keys and the size tracks.
+#[repr(C)]
+pub struct RenderTripleBalanceView {
+    report: Text,
+    session: *const c_void,
+    channels: *const RenderTripleBalanceChannel,
+    channels_len: usize,
+    sizes: *const RenderTripleBalanceSize,
+    sizes_len: usize,
+}
+
+struct TripleBalanceData {
+    report: Vec<u8>,
+    session: Option<Arc<mradm_dsp::triple_balance::session::Plan>>,
+    sizes: Vec<triple_balance::SizeTrack>,
+    channel_records: Vec<RenderTripleBalanceChannel>,
+    size_records: Vec<RenderTripleBalanceSize>,
+}
+
+/// Prepares the Triple Balance plan of the policy-applied scene. `*output`, `*view` and
+/// `*triple_balance` are set unless the arguments are invalid; the report is set on rejection too.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_triple_balance_prepare(
+    scene: *const SceneHandle,
+    request: *const RenderTripleBalanceRequest,
+    output: *mut *mut RenderPrepared,
+    view: *mut RenderPreparedView,
+    triple_balance: *mut RenderTripleBalanceView,
+) -> i32 {
+    boundary(
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        || {
+            let (Some(out), Some(view), Some(tb_view), Some(scene), Some(r)) = (
+                unsafe { output.as_mut() },
+                unsafe { view.as_mut() },
+                unsafe { triple_balance.as_mut() },
+                unsafe { scene.as_ref() },
+                unsafe { request.as_ref() },
+            ) else {
+                return Err(bad("无效 Triple Balance 准备参数"));
+            };
+            *out = ptr::null_mut();
+            let scene = scene.scene();
+            let request = triple_balance::Request {
+                scene,
+                layout_id: unsafe { bytes(&r.layout_id)? },
+                mode: match r.mode {
+                    0 => triple_balance::Mode::Standard,
+                    1 => triple_balance::Mode::D,
+                    _ => return Err(bad("invalid Triple Balance mode")),
+                },
+                spread: match r.spread {
+                    0 => triple_balance::Spread::Automatic,
+                    1 => triple_balance::Spread::None,
+                    2 => triple_balance::Spread::Mdap,
+                    _ => return Err(bad("无效扩展模式")),
+                },
+                split_power: r.split_power != 0,
+                standard_geometry: r.standard_geometry != 0,
+                smoothing_frames: r.smoothing_frames,
+                routing: match r.routing {
+                    0 => triple_balance::Routing::Automatic,
+                    1 => triple_balance::Routing::Label,
+                    2 => triple_balance::Routing::Position,
+                    3 => triple_balance::Routing::Matrix,
+                    _ => return Err(bad("无效 DirectSpeakers 路由")),
+                },
+                has_matrix: r.has_matrix != 0,
+                input_path: unsafe { bytes(&r.input_path)? },
+            };
+            let mut logs = Vec::new();
+            let outcome =
+                triple_balance::prepare(&request, &mut |level, text| logs.push((level, text)));
+            let outputs = outcome.result.as_ref().map_or(0, |p| p.outputs);
+            let settings = (
+                usize::from(scene.info.channels),
+                outputs,
+                scene.info.frames,
+                scene.info.sample_rate,
+            );
+            let mut data = TripleBalanceData {
+                report: outcome.report.into_bytes(),
+                session: None,
+                sizes: Vec::new(),
+                channel_records: Vec::new(),
+                size_records: Vec::new(),
+            };
+            let result = outcome.result.map(|p| {
+                if let offline::TbPlan::Standard { session, .. } = p.plan.as_ref() {
+                    data.session = Some(Arc::clone(session));
+                }
+                data.sizes = p.size_tracks;
+                (offline::Kernel::TripleBalance(p.plan), p.bindings)
+            });
+            let status = prepared(logs, result, settings, out, view);
+            // `prepared` boxed the handle; the records borrow its bindings and size tracks.
+            let handle = unsafe { &mut **out };
+            data.channel_records = handle
+                .bindings
+                .iter()
+                .map(|b| RenderTripleBalanceChannel {
+                    input_channel: b.input_channel,
+                    object_id: Text::bytes(&b.object_id),
+                    label_key: Text::bytes(&b.label_key),
+                })
+                .collect();
+            data.size_records = data
+                .sizes
+                .iter()
+                .map(|s| RenderTripleBalanceSize {
+                    input_channel: s.input_channel,
+                    object_id: Text::bytes(&s.object_id),
+                    has_diffuse: u32::from(s.has_diffuse),
+                    minimum_diffuse_size: s.minimum_diffuse_size,
+                    maximum_source_size: s.maximum_source_size,
+                })
+                .collect();
+            let data = handle.triple_balance.insert(Box::new(data));
+            *tb_view = RenderTripleBalanceView {
+                report: Text::bytes(&data.report),
+                session: data
+                    .session
+                    .as_ref()
+                    .map_or(ptr::null(), |s| ptr::from_ref(s).cast()),
+                channels: data.channel_records.as_ptr(),
+                channels_len: data.channel_records.len(),
+                sizes: data.size_records.as_ptr(),
+                sizes_len: data.size_records.len(),
+            };
+            status
         },
     )
 }

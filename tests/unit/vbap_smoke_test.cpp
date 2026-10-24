@@ -1589,127 +1589,6 @@ bool verify_triple_balance_block_gain_reference() {
            check(std::fabs((vbap_half / vbap_one) - 0.5) < 1.0e-5, "default VBAP still applies ADM block gain");
 }
 
-// NOLINTNEXTLINE(readability-function-size): single fixture for prepared state, windows and user controls.
-bool verify_triple_balance_size_window_and_validation() {
-    auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, 1.0F, 0.25F);
-    const auto input = write_input_fixture(doc, uid, 48000U, 10037U);
-    FileGuard input_guard{input};
-    const auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value(), "size fixture imports")) {
-        return false;
-    }
-    auto renderer = mradm::create_triple_balance_renderer();
-    mradm::NullLogSink logs;
-    mradm::NullProgressSink progress;
-    bool ok = true;
-    for (const auto* layout : {"4+7+0", "9.1.6"}) {
-        mradm::RenderPlan plan;
-        plan.input_path = input.string();
-        plan.scene = *scene;
-        plan.output_layout = layout;
-        auto prepared = renderer->prepare(plan, logs);
-        if (!check(prepared.has_value(), "equal-size offline input is supported")) {
-            return false;
-        }
-        const auto render = [&](std::optional<mradm::RenderWindow> window) -> std::vector<float> {
-            const auto output = std::filesystem::temp_directory_path() /
-                                ("mr_room_size_window_" + std::to_string(current_process_id()) + ".wav");
-            FileGuard output_guard{output};
-            auto request = plan;
-            request.output_path = output.string();
-            request.render_window = window;
-            if (!renderer->render_window(**prepared, request, progress, logs)) {
-                return {};
-            }
-            auto reader = mradm::audio::FloatWavReader::open(output.string());
-            if (!reader) {
-                return {};
-            }
-            std::vector<float> samples(reader->frame_count() * reader->channels());
-            reader->read(samples.data(), reader->frame_count());
-            return samples;
-        };
-        const auto whole = render(std::nullopt);
-        const auto crop = render(mradm::RenderWindow{4097, 4321});
-        const auto again = render(std::nullopt);
-        const std::size_t channels = plan.output_layout == "9.1.6" ? 16 : 12;
-        ok &= check(whole.size() == 10037U * channels && crop.size() == 4321U * channels,
-                    "size renderer retains EOF partial block and crop lengths");
-        if (whole.size() == 10037U * channels && crop.size() == 4321U * channels) {
-            ok &= check(
-                std::equal(crop.begin(), crop.end(), whole.begin() + static_cast<std::ptrdiff_t>(4097U * channels)),
-                "stateful crop equals full-render slice after warmup");
-        }
-        ok &= check(whole == again, "reusing prepared metadata starts a fresh size state");
-        ok &= check(renderer->open_stream(**prepared, plan, logs).has_value(),
-                    "size supports persistent realtime stream");
-        const auto unchanged_plan = plan;
-        for (auto& object : plan.scene.objects) {
-            object.gain = 0;
-            object.mute = true;
-            object.end_sample = 2000;
-            object.adm_source->gain = {true, false, 0, 0};
-            object.adm_source->mute = true;
-            object.adm_source->start_samples = 1000;
-            object.adm_source->absolute_start_samples = 1000;
-            for (auto& track : object.tracks) {
-                for (auto& block : track.blocks) {
-                    block.start_sample += 1000;
-                    block.end_sample = 1500;
-                }
-            }
-        }
-        prepared = renderer->prepare(plan, logs);
-        if (!check(prepared.has_value(), "measured native gain/mute/lifetime semantics are supported")) {
-            return false;
-        }
-        ok &=
-            check(render(std::nullopt) == whole, "native mute/zero gain/short lifetime match ignored reference fields");
-        // User volume as a semantic policy sets it: gain and user level scale together.
-        for (auto& object : plan.scene.objects) {
-            object.gain *= 0.5F;
-            object.user_level.gain_multiplier *= 0.5F;
-        }
-        prepared = renderer->prepare(plan, logs);
-        if (!prepared) {
-            return false;
-        }
-        auto half = whole;
-        std::ranges::transform(whole, half.begin(), [](float sample) { return sample * 0.5F; });
-        ok &= check(render(std::nullopt) == half, "user volume scales combined dry/size output exactly once");
-        for (auto& object : plan.scene.objects) {
-            object.mute = true;
-            object.user_level.mute = true;
-        }
-        prepared = renderer->prepare(plan, logs);
-        if (!prepared) {
-            return false;
-        }
-        const auto muted = render(std::nullopt);
-        ok &= check(muted.size() == whole.size() && std::ranges::all_of(muted, [](float value) { return value == 0; }),
-                    "explicit user mute overrides compatibility and includes filter tail");
-        plan = unchanged_plan;
-        auto invalid = plan;
-        invalid.scene.info.sample_rate = 44100;
-        ok &= check(!renderer->prepare(invalid, logs), "unverified size sample rate is rejected");
-        invalid = plan;
-        for (auto& object : invalid.scene.objects) {
-            for (auto& track : object.tracks) {
-                for (auto& block : track.blocks) {
-                    block.height = 0.5F;
-                }
-            }
-        }
-        ok &= check(!renderer->prepare(invalid, logs), "independent axis extent remains unsupported");
-        invalid.speaker_spread_mode = mradm::SpeakerSpreadMode::none;
-        ok &= check(renderer->prepare(invalid, logs).has_value(), "spread=none explicitly preserves point fallback");
-        invalid = plan;
-        invalid.speaker_spread_mode = mradm::SpeakerSpreadMode::mdap;
-        ok &= check(!renderer->prepare(invalid, logs), "room size and MDAP remain mutually exclusive");
-    }
-    return ok;
-}
-
 bool verify_triple_balance_semantic_report() {
     auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, 0.25F, 0.25F);
     const auto input = write_input_fixture(doc, uid, 48000, 10037);
@@ -2573,7 +2452,6 @@ int main() try {
     ok &= verify_mdap_spread_fixture();
     ok &= verify_audio_object_gain_scales_output();
     ok &= verify_triple_balance_block_gain_reference();
-    ok &= verify_triple_balance_size_window_and_validation();
     ok &= verify_triple_balance_semantic_report();
     ok &= verify_audio_object_mute_silences_output();
     ok &= verify_audio_object_duration_gates_output();

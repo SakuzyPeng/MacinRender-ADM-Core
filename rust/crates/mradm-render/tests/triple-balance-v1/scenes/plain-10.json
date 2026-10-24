@@ -1,0 +1,6 @@
+{
+ "channels": 10,
+ "sample_rate": 48000,
+ "frames": 48000,
+ "plain": true
+}

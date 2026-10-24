@@ -2,10 +2,7 @@
 
 #include <array>
 #include <cstdint>
-#include <functional>
-#include <limits>
 #include <memory>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -20,24 +17,6 @@
 
 namespace mradm::render_common {
 
-struct BlockGains {
-    std::vector<float> gains;
-    uint64_t start_sample{0};
-    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
-    bool jump_position{false};
-    bool smoothable_object{false};
-    std::optional<uint64_t> interp_length_samples;
-};
-
-// One input channel with its full sorted block sequence.
-struct ChannelGainInfo {
-    uint16_t input_channel{0};
-    std::string object_id;          // owning SceneObject::id, for live gain overrides
-    std::string speaker_label_key;  // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
-    std::vector<BlockGains> blocks; // sorted by start_sample
-    float output_gain{1.0F};
-};
-
 struct ChannelBinding {
     uint16_t input_channel{0};
     std::string object_id;
@@ -48,29 +27,23 @@ struct ChannelBinding {
 // and EAR's own.
 enum class DriverStyle : uint8_t { speaker, hoa, ear };
 
-// A Rust offline driver plan of `tracks` input channels: a PcmMixer plan prepared in C++ (kernel
-// 0) or a Rust backend's preparation (kernel 1).
+// A Rust backend's offline driver plan (its preparation's kernel) of `tracks` input channels.
 struct SpeakerMix {
     const void* plan{nullptr};
     std::size_t tracks{0};
-    uint32_t kernel{0};
     DriverStyle style{DriverStyle::speaker};
 };
 
+// The Triple Balance file stream's gain plan and live-control keys (until it moves to Rust).
 struct PreparedPcmMix {
     std::vector<ChannelBinding> channels;
     dsp::PcmMixPlan plan;
-    // NOLINTNEXTLINE(google-explicit-constructor): every prepared mix is a driver plan.
-    operator SpeakerMix() const { return {plan.get(), channels.size()}; }
     [[nodiscard]] auto begin() const { return channels.begin(); }
     [[nodiscard]] auto end() const { return channels.end(); }
     [[nodiscard]] auto size() const { return channels.size(); }
     [[nodiscard]] bool empty() const { return channels.empty(); }
     [[nodiscard]] const ChannelBinding& operator[](std::size_t index) const { return channels[index]; }
 };
-
-[[nodiscard]] Result<PreparedPcmMix>
-prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, std::size_t outputs);
 
 struct AccumulateContext {
     const float* input{nullptr};
@@ -83,11 +56,6 @@ struct AccumulateContext {
     // Optional sample-domain output gain per input channel, after spatial/user gain.
     std::span<const float> live_gains{};
 };
-
-// Optional per-render stateful DSP. Adds to interleaved output after the gain mix.
-// A non-empty processor requires warming from frame zero for cropped output.
-using SpeakerBlockProcessor =
-    std::function<Result<void>(std::span<const float> input, std::span<float> output, bool end_of_input)>;
 
 // A Rust driver or stream error with the locator its kind names (routing_ffi.h).
 class DriverError {
@@ -118,7 +86,7 @@ struct MatrixRecords {
     std::size_t label_bytes{0};
 };
 
-// A VBAP, HOA or EAR plan prepared in Rust mradm-render; immutable and reused across
+// A VBAP, HOA, EAR or Triple Balance plan prepared in Rust mradm-render; immutable and reused across
 // render_window() and open_stream() calls (PreviewSession scrubbing).
 struct RustPrepared final : IPreparedRender {
     std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
@@ -150,7 +118,6 @@ struct RustPrepared final : IPreparedRender {
                                                        uint16_t num_out_ch,
                                                        std::string_view backend,
                                                        ProgressSink& progress,
-                                                       LogSink& logs,
-                                                       const SpeakerBlockProcessor& process = {});
+                                                       LogSink& logs);
 
 } // namespace mradm::render_common

@@ -2,13 +2,15 @@
 //! prepared `PcmMixer` plan (loudspeakers) or HOA encoder plan and meters the written frames,
 //! moved from the C++ `render_speaker_pcm` and HOA `render_window` with the same block size,
 //! window and pre-roll rules, checkpoints and meter order. The caller steps it one block at a
-//! time: between `render` and `commit` it may run stateful DSP on the block and writes the
-//! emitted frames, and it owns cancellation and progress reporting.
+//! time: between `render` and `commit` it writes the emitted frames, and it owns cancellation
+//! and progress reporting. Triple Balance's size and D-mode processors (4.6) run inside the
+//! driver after the gain mix, as the C++ block processor did.
 use mradm_dsp::diagnostics::{ENABLED, Words, process};
 use mradm_dsp::ear_post::{FilterBank, Processor};
 use mradm_dsp::hoa::{self, Encoder, MeterPreprocessor};
 use mradm_dsp::meter::{Meter, MeterChannel, MeterMode};
 use mradm_dsp::pcm_mix::{self, Mixer};
+use mradm_dsp::triple_balance::{d_mode, session};
 use mradm_wav::Reader;
 use std::fs::File;
 use std::io::BufReader;
@@ -18,7 +20,7 @@ use std::thread::JoinHandle;
 
 /// Where the caller attaches its locator to an error: none, `path=<input>` (WAVE reader errors,
 /// as the C++ reader reported them), `input=<input>` (a failed render step), `meter` or
-/// `HOA DSP` (the C++ HOA wrapper's context).
+/// `HOA DSP` (the C++ HOA wrapper's context) or `Triple Balance DSP`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Location {
     None,
@@ -26,6 +28,7 @@ pub enum Location {
     Input,
     Meter,
     HoaDsp,
+    TripleBalanceDsp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,13 +72,58 @@ pub struct Window {
     pub count: u64,
 }
 
-/// A prepared plan: loudspeaker gains, the HOA3 encoder, or EAR's direct and diffuse gains with
-/// its decorrelation filters.
+/// A prepared plan: loudspeaker gains, the HOA3 encoder, EAR's direct and diffuse gains with
+/// its decorrelation filters, or Triple Balance's gains with its size or D-mode processor.
 #[derive(Clone)]
 pub enum Kernel {
     Mix(Arc<pcm_mix::Plan>),
     Hoa(Arc<hoa::Plan>),
     Ear(Arc<EarPlan>),
+    TripleBalance(Arc<TbPlan>),
+}
+
+/// Triple Balance: the point and bed gains, then the size mix of the `sized` tracks; or, in D
+/// mode, a silent mix and the processor that owns every route.
+pub enum TbPlan {
+    Standard {
+        mix: Arc<pcm_mix::Plan>,
+        session: Arc<session::Plan>,
+        sized: bool,
+    },
+    D {
+        mix: Arc<pcm_mix::Plan>,
+        plan: Arc<d_mode::Plan>,
+    },
+}
+
+/// The stateful Triple Balance stage after the gain mix.
+#[allow(clippy::large_enum_variant)] // one per driver or stream
+pub(crate) enum TbStage {
+    Size(session::Session),
+    D(d_mode::Session, Arc<d_mode::Plan>),
+}
+
+impl TbStage {
+    fn process(
+        &mut self,
+        input: &[f32],
+        output: &mut [f32],
+        start: u64,
+        frames: usize,
+        last: bool,
+    ) -> mradm_dsp::Result<()> {
+        match self {
+            Self::Size(s) => s.process(input, output, &[], start, frames, last),
+            Self::D(s, _) => s.process(input, output, start, frames),
+        }
+    }
+
+    fn reset(&mut self) {
+        match self {
+            Self::Size(s) => s.reset(),
+            Self::D(s, plan) => *s = d_mode::Session::new(Arc::clone(plan)),
+        }
+    }
 }
 
 pub struct EarPlan {
@@ -96,6 +144,10 @@ pub(crate) enum Engine {
         post: Processor,
         diffuse: Vec<f32>,
         wav71: bool,
+    },
+    TripleBalance {
+        mixer: Mixer,
+        stage: Option<TbStage>,
     },
 }
 
@@ -133,6 +185,44 @@ impl Engine {
                     wav71: plan.wav71,
                 }
             }
+            Kernel::TripleBalance(plan) => {
+                let (mix, stage) = match plan.as_ref() {
+                    TbPlan::Standard {
+                        mix,
+                        session,
+                        sized,
+                    } => (
+                        mix,
+                        sized
+                            .then(|| {
+                                session::Session::new(
+                                    Arc::clone(session),
+                                    block_size as usize,
+                                    interpolation,
+                                    false,
+                                )
+                            })
+                            .transpose()?
+                            .map(TbStage::Size),
+                    ),
+                    TbPlan::D { mix, plan } => (
+                        mix,
+                        Some(TbStage::D(
+                            d_mode::Session::new(Arc::clone(plan)),
+                            Arc::clone(plan),
+                        )),
+                    ),
+                };
+                Self::TripleBalance {
+                    mixer: Mixer::new(
+                        Arc::clone(mix),
+                        block_size as usize,
+                        interpolation,
+                        smoothing,
+                    )?,
+                    stage,
+                }
+            }
         })
     }
 
@@ -145,7 +235,9 @@ impl Engine {
         frames: usize,
     ) -> mradm_dsp::Result<()> {
         match self {
-            Self::Mix(m) => m.speaker(input, output, &[], start, frames, None, None),
+            Self::Mix(m) | Self::TripleBalance { mixer: m, .. } => {
+                m.speaker(input, output, &[], start, frames, None, None)
+            }
             Self::Hoa(e) => e.process(input, output, start, frames),
             Self::Ear {
                 mixer,
@@ -177,7 +269,39 @@ impl Engine {
                 post.reset();
                 mixer.reset();
             }
+            Self::TripleBalance { mixer, stage } => {
+                mixer.reset();
+                if let Some(stage) = stage {
+                    stage.reset();
+                }
+            }
         }
+    }
+
+    /// Triple Balance's size or D-mode stage, run on the mixed block after its checkpoints; its
+    /// errors carry the C++ `Triple Balance DSP` context.
+    pub(crate) fn finish_block(
+        &mut self,
+        input: &[f32],
+        output: &mut [f32],
+        start: u64,
+        frames: usize,
+        last: bool,
+    ) -> Result<()> {
+        if let Self::TripleBalance {
+            stage: Some(stage), ..
+        } = self
+        {
+            stage
+                .process(input, output, start, frames, last)
+                .map_err(|e| Error::dsp(&e, Location::TripleBalanceDsp))?;
+        }
+        Ok(())
+    }
+
+    /// A stateful stage needs every block from frame 0, so a window still renders from there.
+    pub(crate) fn is_stateful(&self) -> bool {
+        matches!(self, Self::TripleBalance { stage: Some(_), .. })
     }
 
     pub(crate) fn is_hoa(&self) -> bool {
@@ -212,8 +336,6 @@ pub struct Settings {
     pub window: Option<Window>,
     /// Metered frames when there is no output window.
     pub meter_window: Option<Window>,
-    /// Stateful DSP runs between `render` and `commit`, so a window still renders from frame 0.
-    pub stateful: bool,
     /// Backend name for failure messages.
     pub backend: String,
 }
@@ -415,7 +537,7 @@ impl Driver {
         let block_size = settings.smoothing_frames.max(1024);
         let meter_error = |e: mradm_dsp::Error| Error::dsp(&e, Location::Meter);
         let (engine, measure, failure) = match &settings.kernel {
-            Kernel::Mix(_) | Kernel::Ear(_) => {
+            Kernel::Mix(_) | Kernel::Ear(_) | Kernel::TripleBalance(_) => {
                 let meter = Meter::new(
                     outputs as u32,
                     settings.sample_rate,
@@ -485,9 +607,10 @@ impl Driver {
         // Loudspeaker mixing is stateless at block edges, so a window starts at its own block.
         // HOA's 1024-frame diffuse delay line and EAR's decorrelation overlap and compensation
         // delay are refilled by one aligned pre-roll block.
+        let stateful = engine.is_stateful();
         let start_pos = match (settings.window, engine.is_hoa() || engine.is_ear()) {
             (None, _) => 0,
-            (Some(_), false) if !settings.stateful => win_start / block_size * block_size,
+            (Some(_), false) if !stateful => win_start / block_size * block_size,
             (Some(_), false) => 0,
             (Some(_), true) if win_start >= block_size => (win_start / block_size - 1) * block_size,
             (Some(_), true) => 0,
@@ -579,12 +702,14 @@ impl Driver {
                 Location::HoaDsp => Error::dsp(&e, location),
                 _ => Error::failed(&self.failure, e),
             })?;
-        if ENABLED && matches!(self.engine, Engine::Mix(_)) {
+        if ENABLED && matches!(self.engine, Engine::Mix(_) | Engine::TripleBalance { .. }) {
             let key = format!("speaker/s{}", self.done);
             let _ = process(&format!("{key}.10-input.f32"), Words::F32(input));
             let _ = process(&format!("{key}.40-mix.f32"), Words::F32(output));
         }
         let end = self.done + frames as u64;
+        self.engine
+            .finish_block(input, output, self.done, frames, end == self.frames)?;
         let (lo, hi) = (self.done.max(self.win_start), end.min(self.win_end));
         let block = Block {
             start: self.done,

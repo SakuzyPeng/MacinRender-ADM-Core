@@ -4,7 +4,7 @@ Result<SizeMixer> SizeMixer::create(const Prepared& prepared, const RenderPlan& 
     SizeMixer result;
     void* raw = nullptr;
     auto status = dsp::tb_status(mradm_dsp_tb_create,
-                                 prepared.numeric.get(),
+                                 prepared.numeric,
                                  std::size_t{1024},
                                  uint64_t{plan.scene.info.sample_rate} * plan.default_interp_ms / 1000,
                                  live ? 1U : 0U,
