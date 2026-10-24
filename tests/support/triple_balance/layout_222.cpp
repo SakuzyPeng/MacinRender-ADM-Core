@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include "../adm_dsp/triple_balance.h"
+#include "triple_balance.h"
 namespace mradm::triple_balance {
 bool is_room_222(std::string_view layout) noexcept {
     return layout == "9+10+3" || layout == "22.2";

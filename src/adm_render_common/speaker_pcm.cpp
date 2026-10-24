@@ -13,39 +13,6 @@
 #include "render_common.h"
 
 namespace mradm::render_common {
-Result<PreparedPcmMix>
-prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, std::size_t outputs) {
-    PreparedPcmMix result;
-    std::vector<MradmDspMixRow> rows;
-    std::vector<MradmDspMixBlock> blocks;
-    std::vector<float> gains;
-    for (auto& channel : channels) {
-        result.channels.push_back(
-            {channel.input_channel, std::move(channel.object_id), std::move(channel.speaker_label_key)});
-        rows.push_back({channel.input_channel, blocks.size(), channel.blocks.size(), channel.output_gain});
-        for (auto& block : channel.blocks) {
-            if (block.gains.size() != outputs) {
-                return make_error(ErrorCode::invalid_argument, "PCM gain width mismatch");
-            }
-            // Object-duration clipping can put the end before the start. Preserve an empty block
-            // (and its gains) so later blocks retain the legacy interpolation predecessor.
-            blocks.push_back({block.start_sample,
-                              std::max(block.start_sample, block.end_sample),
-                              block.interp_length_samples.value_or(0),
-                              (block.jump_position ? 1U : 0U) | (block.smoothable_object ? 2U : 0U) |
-                                  (block.interp_length_samples ? 4U : 0U)});
-            gains.insert(gains.end(), block.gains.begin(), block.gains.end());
-        }
-        std::vector<BlockGains>{}.swap(channel.blocks);
-    }
-    auto prepared = dsp::PcmMixPlan::create(inputs, outputs, rows, blocks, gains);
-    if (!prepared) {
-        return tl::unexpected{prepared.error()};
-    }
-    result.plan = std::move(*prepared);
-    return result;
-}
-
 tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_path) const {
     std::string context;
     if (location_ == 1U) {
@@ -56,6 +23,8 @@ tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_
         context = "meter";
     } else if (location_ == 4U) {
         context = "HOA DSP";
+    } else if (location_ == 5U) {
+        context = "Triple Balance DSP";
     }
     return make_error(static_cast<ErrorCode>(code),
                       std::string{reinterpret_cast<const char*>(message_.data()), message_len_},
@@ -107,7 +76,7 @@ Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
     if (code != 0) {
         return make_error(static_cast<ErrorCode>(code), string_of(view.message), string_of(view.context));
     }
-    prepared->mix = {view.plan, view.tracks, 1U, style};
+    prepared->mix = {view.plan, view.tracks, style};
     prepared->outputs = static_cast<uint16_t>(view.outputs);
     return prepared;
 }
@@ -226,15 +195,14 @@ constexpr DriverText k_hoa_text{"encoding HOA", "encoding", "short write while e
 } // namespace
 
 // The loop itself runs in Rust mradm-render `offline` (PCM consistency 4.5): input reading,
-// mixing, checkpoints and the asynchronous meter. This side owns the writer, cancellation,
-// progress, logs and the optional stateful processor between two Rust steps.
+// mixing (with Triple Balance's size or D-mode processor, 4.6), checkpoints and the asynchronous
+// meter. This side owns the writer, cancellation, progress and logs.
 Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                                          const SpeakerMix& gain_matrix,
                                          uint16_t num_out_ch,
                                          std::string_view backend,
                                          ProgressSink& progress,
-                                         LogSink& logs,
-                                         const SpeakerBlockProcessor& process) {
+                                         LogSink& logs) {
     const auto& info = plan.scene.info;
     const auto style = gain_matrix.style;
     const auto& wording = style == DriverStyle::hoa ? k_hoa_text : k_speaker_text;
@@ -251,13 +219,11 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                                                   plan.default_interp_ms,
                                                   plan.object_smoothing_frames,
                                                   window ? 1U : 0U,
-                                                  process ? 1U : 0U,
                                                   window ? window->start_frame : 0,
                                                   window ? window->frame_count : 0,
                                                   meter_window ? 1U : 0U,
                                                   meter_window ? meter_window->start_frame : 0,
-                                                  meter_window ? meter_window->frame_count : 0,
-                                                  gain_matrix.kernel};
+                                                  meter_window ? meter_window->frame_count : 0};
         const auto path = audio::wav_path_utf8(plan.input_path);
         DriverError error;
         MradmRenderOffline* raw = nullptr;
@@ -292,13 +258,6 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
             }
             if (block.frames == 0) {
                 break;
-            }
-            if (process) {
-                auto status =
-                    process({block.input, block.input_len}, {block.output, block.output_len}, block.last != 0);
-                if (!status) {
-                    return tl::unexpected{status.error()};
-                }
             }
             if (block.emit_frames > 0 && writer->write(block.output + (block.emit_offset * num_out_ch),
                                                        block.emit_frames) != block.emit_frames) {

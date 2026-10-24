@@ -2,8 +2,12 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <vector>
 #ifdef __APPLE__
@@ -13,12 +17,18 @@
 #include "adm/audio_io.h"
 #include "adm/render_triple_balance.h"
 
+#include "../adm_audio/audio_io_internal.h"
+#include "../adm_io/scene_import_internal.h"
+#include "adm_fixture.h"
 #include "audio_output_device.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 
 namespace {
 using Clock = std::chrono::steady_clock;
+constexpr uint32_t k_sample_rate = 48000;
+constexpr uint16_t k_input_channels = 13;
+constexpr uint64_t k_frames = uint64_t{k_sample_rate} * 70;
 class Factory final : public mradm::realtime::IRenderStreamFactory {
   public:
     Factory(mradm::IRenderer& renderer, const mradm::IPreparedRender& prepared, const mradm::RenderPlan& plan)
@@ -52,45 +62,113 @@ class InputFile {
     return std::chrono::duration<double>(Clock::now() - start).count();
 }
 
-[[maybe_unused]] mradm::RenderPlan make_plan(const std::string& input, const std::string& layout) {
+// Author the same bed and motion as the original benchmark, then import them through the
+// production ADM path so both the public scene and its Rust handle describe the input file.
+mradm::audio::WavLayoutFinalization fixture_metadata() {
+    auto doc = fixture::Document::create();
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"benchmark"});
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"benchmark"});
+    doc->add(programme);
+    programme->add_reference(content);
+    auto bed = fixture::AudioObject::create(fixture::AudioObjectName{"bed"});
+    auto bed_pack =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"bed"}, fixture::TypeDefinition::direct_speakers);
+    bed->add_reference(bed_pack);
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids;
+    const std::array<std::string, 10> labels{
+        "RC_L", "RC_R", "RC_C", "RC_LFE", "RC_Lss", "RC_Rss", "RC_Lrs", "RC_Rrs", "RC_Lts", "RC_Rts"};
+    for (uint16_t channel = 0; channel < k_input_channels; ++channel) {
+        const auto name = "track-" + std::to_string(channel);
+        const auto type = channel < 10 ? fixture::TypeDefinition::direct_speakers : fixture::TypeDefinition::objects;
+        auto format = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{name}, type);
+        auto pack =
+            channel < 10 ? bed_pack : fixture::AudioPackFormat::create(fixture::AudioPackFormatName{name}, type);
+        auto object = channel < 10 ? bed : fixture::AudioObject::create(fixture::AudioObjectName{name});
+        if (channel < 10) {
+            format->add(fixture::AudioBlockFormatDirectSpeakers{fixture::CartesianSpeakerPosition{},
+                                                                fixture::SpeakerLabel{labels.at(channel)}});
+        } else {
+            for (uint64_t frame = 0; frame < k_frames; frame += k_sample_rate) {
+                const float x = .6F * std::sin(static_cast<float>(frame) / k_sample_rate);
+                const float y = .6F * std::cos(static_cast<float>(frame) / k_sample_rate);
+                const float size = channel == 12 ? 0 : .3F;
+                format->add(fixture::AudioBlockFormatObjects{
+                    fixture::CartesianPosition{fixture::X{x}, fixture::Y{y}, fixture::Z{.5F}},
+                    fixture::Cartesian{true},
+                    fixture::Rtime{fixture::Time{std::chrono::seconds{frame / k_sample_rate}}},
+                    fixture::Width{size},
+                    fixture::Height{size},
+                    fixture::Depth{size}});
+            }
+            object->add_reference(pack);
+            content->add_reference(object);
+        }
+        pack->add_reference(format);
+        auto stream =
+            fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{name}, fixture::FormatDefinition::pcm);
+        auto track =
+            fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{name}, fixture::FormatDefinition::pcm);
+        auto uid = fixture::AudioTrackUid::create();
+        doc->add(uid);
+        uid->set_reference(track);
+        uid->set_reference(pack);
+        track->set_reference(stream);
+        stream->set_reference(format);
+        stream->add_reference(track);
+        object->add_reference(uid);
+        uids.push_back(std::move(uid));
+    }
+    content->add_reference(bed);
+    fixture::reassign_ids(doc);
+    std::ostringstream xml;
+    fixture::write_xml(xml, doc);
+    mradm::audio::WavLayoutFinalization metadata;
+    metadata.axml = xml.str();
+    for (uint16_t channel = 0; channel < k_input_channels; ++channel) {
+        const auto& uid = uids.at(channel);
+        metadata.chna.push_back({static_cast<uint16_t>(channel + 1U),
+                                 uid->id,
+                                 uid->get_references<fixture::AudioTrackFormat>().front()->id,
+                                 uid->get_references<fixture::AudioPackFormat>().front()->id});
+    }
+    return metadata;
+}
+
+[[maybe_unused]] mradm::Result<mradm::RenderPlan> make_plan(const std::string& input, const std::string& layout) {
+    {
+        auto writer = mradm::audio::FloatWavWriter::open(input, k_input_channels, k_sample_rate);
+        if (!writer) {
+            return tl::unexpected{writer.error()};
+        }
+        std::vector<float> pcm(std::size_t{1024} * k_input_channels);
+        for (uint64_t start = 0; start < k_frames; start += 1024) {
+            const auto frames = std::min<uint64_t>(1024, k_frames - start);
+            for (std::size_t f = 0; f < frames; ++f) {
+                for (std::size_t ch = 0; ch < k_input_channels; ++ch) {
+                    pcm[(f * k_input_channels) + ch] =
+                        .025F * std::sin(static_cast<float>(start + f) * (.017F + .002F * static_cast<float>(ch)));
+                }
+            }
+            if (writer->write(pcm.data(), frames) != frames) {
+                return mradm::make_error(mradm::ErrorCode::io_error, "short benchmark input write");
+            }
+        }
+        if (auto finished = writer->finish(); !finished) {
+            return tl::unexpected{finished.error()};
+        }
+    }
+    if (auto finalized = mradm::audio::finalize_wav_layout(input, fixture_metadata()); !finalized) {
+        return tl::unexpected{finalized.error()};
+    }
+    auto scene = mradm::io::RenderScene::import(input, nullptr);
+    if (!scene) {
+        return tl::unexpected{scene.error()};
+    }
     mradm::RenderPlan plan;
     plan.input_path = input;
     plan.output_layout = layout;
-    plan.scene.info.sample_rate = 48000;
-    plan.scene.info.num_channels = 13;
-    plan.scene.info.num_frames = uint64_t{48000} * 70;
-    plan.scene.info.source_kind = mradm::SceneSourceKind::adm;
-    mradm::SceneObject bed;
-    bed.id = "bed";
-    const std::array<std::string, 10> labels{
-        "RC_L", "RC_R", "RC_C", "RC_LFE", "RC_Lss", "RC_Rss", "RC_Lrs", "RC_Rrs", "RC_Lts", "RC_Rts"};
-    for (uint16_t channel = 0; channel < 13; ++channel) {
-        mradm::SceneTrackRef track;
-        track.channel_index = channel;
-        track.track_uid = "track-" + std::to_string(channel);
-        if (channel < 10) {
-            mradm::SceneDirectSpeakersBlock block;
-            block.speaker_labels = {labels.at(channel)};
-            track.ds_blocks.push_back(block);
-            bed.tracks.push_back(track);
-        } else {
-            mradm::SceneObject object;
-            object.id = "object-" + std::to_string(channel);
-            for (uint64_t frame = 0; frame < plan.scene.info.num_frames; frame += 48000) {
-                mradm::SceneObjectBlock block;
-                block.start_sample = frame;
-                block.position.cartesian = true;
-                block.position.x = .6F * std::sin(static_cast<float>(frame) / 48000);
-                block.position.y = .6F * std::cos(static_cast<float>(frame) / 48000);
-                block.position.z = .5F;
-                block.width = block.height = block.depth = channel == 12 ? 0 : .3F;
-                track.blocks.push_back(block);
-            }
-            object.tracks.push_back(track);
-            plan.scene.objects.push_back(object);
-        }
-    }
-    plan.scene.objects.push_back(bed);
+    plan.scene = scene->scene();
+    plan.scene_handle = scene->handle();
     return plan;
 }
 } // namespace
@@ -105,26 +183,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     const auto path = std::filesystem::temp_directory_path() /
                       ("mr_triple_benchmark_" + std::to_string(Clock::now().time_since_epoch().count()) + ".wav");
     const InputFile guard(path);
-    const auto plan = make_plan(path.string(), layout);
-    {
-        auto writer = mradm::audio::FloatWavWriter::open(plan.input_path, 13, 48000);
-        if (!writer) {
-            return 1;
-        }
-        std::vector<float> pcm(std::size_t{1024} * 13);
-        for (uint64_t start = 0; start < plan.scene.info.num_frames; start += 1024) {
-            const auto frames = std::min<uint64_t>(1024, plan.scene.info.num_frames - start);
-            for (std::size_t f = 0; f < frames; ++f) {
-                for (std::size_t ch = 0; ch < 13; ++ch) {
-                    pcm[(f * 13) + ch] =
-                        .025F * std::sin(static_cast<float>(start + f) * (.017F + .002F * static_cast<float>(ch)));
-                }
-            }
-            if (writer->write(pcm.data(), frames) != frames) {
-                return 1;
-            }
-        }
+    const auto plan_result = make_plan(path.string(), layout);
+    if (!plan_result) {
+        std::cerr << plan_result.error().message << '\n';
+        return 1;
     }
+    const auto& plan = *plan_result;
     mradm::NullLogSink logs;
     auto renderer = mradm::create_triple_balance_renderer();
     auto prepared = renderer->prepare(plan, logs);

@@ -29,7 +29,7 @@
 ## 实现与报告
 
 导入器保存 gain 单位／是否省略、原生 mute、对象时间、相对 block 时间和对象引用关系。
-现有绝对采样时间继续供普通后端使用；私有 `adm_render_triple_balance/semantics` 只转换兼容模式的准备数据。
+现有绝对采样时间继续供普通后端使用；Triple Balance 的兼容副本只转换兼容模式的准备数据（4.6 起在 Rust `mradm-render` `triple_balance`）。
 嵌套对象、共享 PCM 绑定、未验证采样率和其他修饰字段继续返回 unsupported。
 
 复用原有离线命令：

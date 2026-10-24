@@ -22,10 +22,10 @@ from score_semantic_pcm import score
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 MODEL_FILES = [ROOT / path for path in (
-    "src/adm_render_triple_balance/semantics.cpp", "src/adm_render_triple_balance/semantics.h",
-    "src/adm_render_triple_balance/panner.cpp", "src/adm_render_triple_balance/panner.h",
-    "src/adm_render_triple_balance/size_panner.cpp", "src/adm_render_triple_balance/size_panner.h",
-    "src/adm_render_triple_balance/size_processor.cpp", "src/adm_render_triple_balance/size_processor.h",
+    "rust/crates/mradm-render/src/triple_balance.rs", "rust/crates/mradm-render/src/offline.rs",
+    "tests/support/triple_balance/panner.cpp", "tests/support/triple_balance/panner.h",
+    "tests/support/triple_balance/size_panner.cpp", "tests/support/triple_balance/size_panner.h",
+    "tests/support/triple_balance/size_processor.cpp", "tests/support/triple_balance/size_processor.h",
     "src/adm_render_triple_balance/triple_balance_renderer.cpp",
     "src/adm_render_common/speaker_pcm.cpp", "src/adm_render_common/speaker_pcm.h",
     "rust/crates/mradm-scene/src/policy.rs", "src/adm_io/scene_importer.cpp", "src/adm_engine/render_service.cpp",

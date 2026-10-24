@@ -16,7 +16,7 @@
 
 #include "../reference/pcm_mix_legacy.h"
 #include "pcm_mix.h"
-#include "speaker_pcm.h"
+#include "speaker_mix.h"
 
 namespace {
 class Stats {
