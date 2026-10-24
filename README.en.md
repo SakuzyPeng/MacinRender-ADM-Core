@@ -170,7 +170,7 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
-C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json
+C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render
 All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
 
@@ -190,6 +190,7 @@ All modules ──→ ADMCore (domain model, errors, options, capabilities)
 | `rust/crates/mradm-osc` | PoseBridge OSC head-tracking datagram decoding (loopback UDP input) |
 | `rust/crates/mradm-scene` | Render scene: input import, CHNA mapping, channel beds and loudspeaker layout tables; semantic policy, report and template, export writeback, DirectSpeakers matrix and screen configuration |
 | `rust/crates/mradm-json` | JSON parsing and output byte-compatible with nlohmann/json 3.12.0 |
+| `rust/crates/mradm-render` | Loudspeaker backends (VBAP, HOA, EAR, Scene stream VBAP) and the shared render layer: DirectSpeakers / label / LFE routing, the offline driver and file streaming |
 | `rust/crates/mradm-ffi` | The only private C boundary containing `unsafe` |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT desktop GUI calling the C ABI through P/Invoke |
 
