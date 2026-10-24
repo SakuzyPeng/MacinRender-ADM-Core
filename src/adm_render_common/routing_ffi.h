@@ -81,13 +81,11 @@ typedef struct MradmRenderOfflineSettings {
     uint32_t default_interp_ms;
     uint64_t smoothing_frames;
     uint32_t has_window;
-    uint32_t stateful;
     uint64_t window_start;
     uint64_t window_count;
     uint32_t has_meter_window;
     uint64_t meter_start;
     uint64_t meter_count;
-    uint32_t kernel; // 0: plan is a PcmMixer plan prepared in C++; 1: a Rust preparation's plan
 } MradmRenderOfflineSettings;
 
 // frames is 0 after the last block.
@@ -155,6 +153,46 @@ typedef struct MradmRenderEarRequest {
     size_t matrix_len;
     uint32_t split_power;
 } MradmRenderEarRequest;
+
+// mode: 0 standard, 1 D; spread: 0 automatic, 1 none, 2 MDAP; routing: 0 automatic, 1 label,
+// 2 position, 3 matrix.
+typedef struct MradmRenderTripleBalanceRequest {
+    MradmAdmText layout_id;
+    uint32_t mode;
+    uint32_t spread;
+    uint32_t split_power;
+    uint32_t standard_geometry;
+    uint32_t smoothing_frames;
+    uint32_t routing;
+    uint32_t has_matrix;
+    MradmAdmText input_path;
+} MradmRenderTripleBalanceRequest;
+
+typedef struct MradmRenderTripleBalanceChannel {
+    uint16_t input_channel;
+    MradmAdmText object_id;
+    MradmAdmText label_key;
+} MradmRenderTripleBalanceChannel;
+
+typedef struct MradmRenderTripleBalanceSize {
+    uint16_t input_channel;
+    MradmAdmText object_id;
+    uint32_t has_diffuse;
+    float minimum_diffuse_size;
+    float maximum_source_size;
+} MradmRenderTripleBalanceSize;
+
+// The backend report (also of a rejected preparation) and what the file stream reads: the
+// standard-mode numeric plan for the mradm_dsp_tb_* calls (null in D mode), the per-channel
+// live-control keys in channel order and the size tracks.
+typedef struct MradmRenderTripleBalanceView {
+    MradmAdmText report;
+    const void* session;
+    const MradmRenderTripleBalanceChannel* channels;
+    size_t channels_len;
+    const MradmRenderTripleBalanceSize* sizes;
+    size_t sizes_len;
+} MradmRenderTripleBalanceView;
 
 // The error text of a failed preparation; plan (the offline driver's plan) is null unless prepared.
 typedef struct MradmRenderPreparedView {
@@ -288,7 +326,8 @@ int32_t mradm_render_lfe_routing(uint32_t split_power,
                                  size_t* message_len);
 float mradm_render_lfe_gain(const MradmRenderLfeRouting* routing, uint32_t input_target, uint32_t output_target);
 
-// Driver errors set *location: 0 none, 1 path=<input>, 2 input=<input>, 3 meter, 4 HOA DSP.
+// Driver errors set *location: 0 none, 1 path=<input>, 2 input=<input>, 3 meter, 4 HOA DSP,
+// 5 Triple Balance DSP.
 int32_t mradm_render_offline_open(const uint8_t* path,
                                   size_t path_len,
                                   const void* plan,
@@ -324,6 +363,11 @@ int32_t mradm_render_hoa_prepare(const MradmSceneHandle* scene,
                                  const MradmRenderHoaRequest* request,
                                  MradmRenderPrepared** output,
                                  MradmRenderPreparedView* view);
+int32_t mradm_render_triple_balance_prepare(const MradmSceneHandle* scene,
+                                            const MradmRenderTripleBalanceRequest* request,
+                                            MradmRenderPrepared** output,
+                                            MradmRenderPreparedView* view,
+                                            MradmRenderTripleBalanceView* triple_balance);
 int32_t mradm_render_ear_prepare(const MradmSceneHandle* scene,
                                  const MradmRenderEarRequest* request,
                                  MradmRenderPrepared** output,

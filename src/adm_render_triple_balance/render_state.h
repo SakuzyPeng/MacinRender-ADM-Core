@@ -15,14 +15,17 @@ struct SizeTrack {
     float minimum_diffuse_size{1};
     float maximum_source_size{}; // Scalar summary for live override validation; events belong to Rust.
 };
+// The Rust preparation (mradm-render `triple_balance`, PCM consistency 4.6) and what the file
+// stream still reads from it: the standard-mode numeric plan it owns, the gain plan with the
+// per-channel live keys, and the size tracks.
 struct Prepared final : IPreparedRender {
+    std::shared_ptr<render_common::RustPrepared> rust;
     uint16_t output_channels{};
     uint32_t sample_rate{};
     SpeakerSpreadMode spread_mode{};
-    render_common::PreparedPcmMix gain_matrix;
-    dsp::TbPlan numeric;
     TripleBalanceMode mode{TripleBalanceMode::standard};
-    dsp::TbHandle<mradm_dsp_tb_d_plan_destroy> d_numeric{nullptr, mradm_dsp_tb_d_plan_destroy};
+    const void* numeric{nullptr}; // borrowed from `rust`; null in D mode
+    render_common::PreparedPcmMix gain_matrix;
     std::vector<SizeTrack> size_tracks;
 };
 class SizeMixer {

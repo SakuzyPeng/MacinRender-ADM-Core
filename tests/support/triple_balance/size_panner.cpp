@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "../adm_dsp/triple_balance.h"
+#include "triple_balance.h"
 namespace mradm::triple_balance {
 Result<QuantizedSizeParameters> quantize_size_parameters(SizePosition p, float size) {
     std::array<int32_t, 4> q{};

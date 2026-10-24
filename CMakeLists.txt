@@ -299,17 +299,12 @@ target_sources(mr_adm_render_triple_balance
         src/adm_render_triple_balance/triple_balance_renderer.cpp
         src/adm_render_triple_balance/render_state.cpp
         src/adm_render_triple_balance/triple_balance_stream.cpp
-        src/adm_render_triple_balance/panner.cpp
-        src/adm_render_triple_balance/layout_222.cpp
-        src/adm_render_triple_balance/size_panner.cpp
-        src/adm_render_triple_balance/size_processor.cpp
-        src/adm_render_triple_balance/semantics.cpp
         src/adm_render_triple_balance/bed.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
 )
 target_link_libraries(mr_adm_render_triple_balance
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp nlohmann_json::nlohmann_json
+    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_triple_balance)
 mr_adm_core_apply_static_analysis(mr_adm_render_triple_balance)
@@ -1316,12 +1311,21 @@ if(MR_ADM_CORE_BUILD_TESTS)
         MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
+    # Test-only C++ adapters over the Triple Balance numeric FFI (out of production, PCM consistency 4.6).
+    add_library(mr_adm_triple_balance_test_support STATIC
+        tests/support/triple_balance/panner.cpp tests/support/triple_balance/layout_222.cpp
+        tests/support/triple_balance/size_panner.cpp tests/support/triple_balance/size_processor.cpp)
+    target_include_directories(mr_adm_triple_balance_test_support PUBLIC tests/support/triple_balance)
+    target_link_libraries(mr_adm_triple_balance_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_test_support)
+
     add_executable(mr_adm_triple_balance_rust_tests tests/unit/triple_balance_rust_test.cpp
         tests/reference/triple_balance/panner.cpp tests/reference/triple_balance/layout_222.cpp
         tests/reference/triple_balance/size_panner.cpp tests/reference/triple_balance/size_processor.cpp
         tests/reference/triple_balance/render_state.cpp)
     target_link_libraries(mr_adm_triple_balance_rust_tests PRIVATE MacinRender::ADMRenderTripleBalance
-        MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json)
+        MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_triple_balance_test_support nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_triple_balance_rust_tests PRIVATE src/adm_render_triple_balance src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_rust_tests)
     add_test(NAME mr_adm_triple_balance_rust_tests COMMAND mr_adm_triple_balance_rust_tests)
@@ -1336,8 +1340,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
     target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE src/adm_render_triple_balance)
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
+        MacinRender::ADMIo)
+    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE src/adm_render_triple_balance tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)
     add_test(NAME mr_adm_triple_balance_stream_tests COMMAND mr_adm_triple_balance_stream_tests)
@@ -1345,28 +1350,21 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_point_tests tests/unit/triple_balance_point_test.cpp)
     add_executable(mr_adm_triple_balance_222_tests tests/unit/triple_balance_222_test.cpp)
     target_include_directories(mr_adm_triple_balance_222_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_222_tests PRIVATE MacinRender::ADMRenderTripleBalance)
+    target_link_libraries(mr_adm_triple_balance_222_tests PRIVATE MacinRender::ADMRenderTripleBalance
+        mr_adm_triple_balance_test_support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_222_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_222_tests)
     add_test(NAME mr_adm_triple_balance_222_tests COMMAND mr_adm_triple_balance_222_tests)
-    add_executable(mr_adm_triple_balance_bed_tests tests/unit/triple_balance_bed_test.cpp)
-    target_include_directories(mr_adm_triple_balance_bed_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_bed_tests PRIVATE
-        MacinRender::ADMRenderTripleBalance nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_bed_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_bed_tests)
-    add_test(NAME mr_adm_triple_balance_bed_tests COMMAND mr_adm_triple_balance_bed_tests
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_bed.json")
     add_executable(mr_adm_triple_balance_semantics_tests tests/unit/triple_balance_semantics_test.cpp)
     target_include_directories(mr_adm_triple_balance_semantics_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_semantics_tests PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio nlohmann_json::nlohmann_json)
+    target_link_libraries(mr_adm_triple_balance_semantics_tests PRIVATE mr_adm_triple_balance_test_support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_semantics_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_semantics_tests)
     add_test(NAME mr_adm_triple_balance_semantics_tests COMMAND mr_adm_triple_balance_semantics_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_semantics")
     target_include_directories(mr_adm_triple_balance_point_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_point_tests PRIVATE MacinRender::ADMRenderTripleBalance)
+    target_link_libraries(mr_adm_triple_balance_point_tests PRIVATE MacinRender::ADMRenderTripleBalance
+        mr_adm_triple_balance_test_support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_point_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_point_tests)
     add_test(NAME mr_adm_triple_balance_point_tests COMMAND mr_adm_triple_balance_point_tests)
@@ -1381,12 +1379,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_triple_balance_size_probe tests/unit/triple_balance_size_probe.cpp)
     target_include_directories(mr_adm_triple_balance_size_probe PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_size_probe PRIVATE MacinRender::ADMRenderTripleBalance nlohmann_json::nlohmann_json)
+    target_link_libraries(mr_adm_triple_balance_size_probe PRIVATE mr_adm_triple_balance_test_support
+        nlohmann_json::nlohmann_json)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_size_probe)
 
     add_executable(mr_adm_triple_balance_size_processor_tests tests/unit/triple_balance_size_processor_test.cpp)
     target_include_directories(mr_adm_triple_balance_size_processor_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_size_processor_tests PRIVATE MacinRender::ADMRenderTripleBalance nlohmann_json::nlohmann_json)
+    target_link_libraries(mr_adm_triple_balance_size_processor_tests PRIVATE mr_adm_triple_balance_test_support
+        nlohmann_json::nlohmann_json)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_size_processor_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_size_processor_tests)
     add_test(NAME mr_adm_triple_balance_size_processor_tests COMMAND mr_adm_triple_balance_size_processor_tests

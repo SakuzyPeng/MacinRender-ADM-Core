@@ -186,7 +186,6 @@ pub fn render_offline(
             smoothing_frames: smoothing,
             window,
             meter_window: None,
-            stateful: false,
             backend: "test".to_owned(),
         },
     )?;
