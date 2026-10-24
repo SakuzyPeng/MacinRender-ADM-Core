@@ -168,31 +168,23 @@ typedef struct MradmRenderTripleBalanceRequest {
     MradmAdmText input_path;
 } MradmRenderTripleBalanceRequest;
 
-typedef struct MradmRenderTripleBalanceChannel {
-    uint16_t input_channel;
-    MradmAdmText object_id;
-    MradmAdmText label_key;
-} MradmRenderTripleBalanceChannel;
-
-typedef struct MradmRenderTripleBalanceSize {
-    uint16_t input_channel;
-    MradmAdmText object_id;
-    uint32_t has_diffuse;
-    float minimum_diffuse_size;
-    float maximum_source_size;
-} MradmRenderTripleBalanceSize;
-
-// The backend report (also of a rejected preparation) and what the file stream reads: the
-// standard-mode numeric plan for the mradm_dsp_tb_* calls (null in D mode), the per-channel
-// live-control keys in channel order and the size tracks.
+// The backend report, also of a rejected preparation.
 typedef struct MradmRenderTripleBalanceView {
     MradmAdmText report;
-    const void* session;
-    const MradmRenderTripleBalanceChannel* channels;
-    size_t channels_len;
-    const MradmRenderTripleBalanceSize* sizes;
-    size_t sizes_len;
 } MradmRenderTripleBalanceView;
+
+// A Triple Balance live edit: the common override and the topology scales it validates.
+typedef struct MradmRenderTripleBalanceOverride {
+    MradmRenderOverride base;
+    float extent_scale;
+    float extent_width_scale;
+    float extent_height_scale;
+    float extent_depth_scale;
+    float diffuse_scale;
+    float divergence_scale;
+} MradmRenderTripleBalanceOverride;
+
+typedef struct MradmRenderTripleBalanceStream MradmRenderTripleBalanceStream;
 
 // The error text of a failed preparation; plan (the offline driver's plan) is null unless prepared.
 typedef struct MradmRenderPreparedView {
@@ -368,6 +360,52 @@ int32_t mradm_render_triple_balance_prepare(const MradmSceneHandle* scene,
                                             MradmRenderPrepared** output,
                                             MradmRenderPreparedView* view,
                                             MradmRenderTripleBalanceView* triple_balance);
+// Standard-mode file stream. Serialize process/seek/overrides; validate/requires_preroll may run concurrently.
+// Step seeks through begin/step/finish, checking cancellation while pending. Destroy after all calls return.
+int32_t mradm_render_triple_balance_stream_open(const MradmRenderPrepared* prepared,
+                                                const uint8_t* path,
+                                                size_t path_len,
+                                                uint32_t default_interp_ms,
+                                                MradmRenderTripleBalanceStream** output,
+                                                uint32_t* location,
+                                                uint8_t* message,
+                                                size_t* message_len);
+int32_t mradm_render_triple_balance_stream_process(MradmRenderTripleBalanceStream* handle,
+                                                   float* output,
+                                                   size_t output_len,
+                                                   size_t frames,
+                                                   size_t* produced,
+                                                   uint32_t* location,
+                                                   uint8_t* message,
+                                                   size_t* message_len);
+int32_t mradm_render_triple_balance_stream_seek_begin(MradmRenderTripleBalanceStream* handle,
+                                                      uint64_t frame,
+                                                      uint32_t* pending,
+                                                      uint32_t* location,
+                                                      uint8_t* message,
+                                                      size_t* message_len);
+int32_t mradm_render_triple_balance_stream_seek_step(MradmRenderTripleBalanceStream* handle,
+                                                     uint32_t* pending,
+                                                     uint32_t* location,
+                                                     uint8_t* message,
+                                                     size_t* message_len);
+int32_t mradm_render_triple_balance_stream_seek_finish(MradmRenderTripleBalanceStream* handle,
+                                                       uint32_t* location,
+                                                       uint8_t* message,
+                                                       size_t* message_len);
+int32_t mradm_render_triple_balance_stream_validate(const MradmRenderTripleBalanceStream* handle,
+                                                    const MradmRenderTripleBalanceOverride* values,
+                                                    size_t values_len,
+                                                    uint8_t* message,
+                                                    size_t* message_len,
+                                                    uint8_t* context,
+                                                    size_t* context_len);
+int32_t mradm_render_triple_balance_stream_overrides(MradmRenderTripleBalanceStream* handle,
+                                                     const MradmRenderTripleBalanceOverride* values,
+                                                     size_t values_len);
+// 1 when size tracks make a seek render from an earlier block.
+uint32_t mradm_render_triple_balance_stream_requires_preroll(const MradmRenderTripleBalanceStream* handle);
+void mradm_render_triple_balance_stream_destroy(MradmRenderTripleBalanceStream* handle);
 int32_t mradm_render_ear_prepare(const MradmSceneHandle* scene,
                                  const MradmRenderEarRequest* request,
                                  MradmRenderPrepared** output,

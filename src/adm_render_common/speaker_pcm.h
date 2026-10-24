@@ -12,16 +12,9 @@
 #include "adm/live_override.h"
 #include "adm/render.h"
 
-#include "../adm_dsp/pcm_mix.h"
 #include "routing_ffi.h"
 
 namespace mradm::render_common {
-
-struct ChannelBinding {
-    uint16_t input_channel{0};
-    std::string object_id;
-    std::string speaker_label_key;
-};
 
 // The driver's log, progress and error wording: the loudspeaker backends', or the HOA encoder's
 // and EAR's own.
@@ -32,29 +25,6 @@ struct SpeakerMix {
     const void* plan{nullptr};
     std::size_t tracks{0};
     DriverStyle style{DriverStyle::speaker};
-};
-
-// The Triple Balance file stream's gain plan and live-control keys (until it moves to Rust).
-struct PreparedPcmMix {
-    std::vector<ChannelBinding> channels;
-    dsp::PcmMixPlan plan;
-    [[nodiscard]] auto begin() const { return channels.begin(); }
-    [[nodiscard]] auto end() const { return channels.end(); }
-    [[nodiscard]] auto size() const { return channels.size(); }
-    [[nodiscard]] bool empty() const { return channels.empty(); }
-    [[nodiscard]] const ChannelBinding& operator[](std::size_t index) const { return channels[index]; }
-};
-
-struct AccumulateContext {
-    const float* input{nullptr};
-    std::vector<float>* output{nullptr};
-    uint64_t frames_done{0};
-    uint16_t num_in_ch{0};
-    uint16_t num_out_ch{0};
-    uint64_t default_interp{0};
-    uint64_t object_smoothing_frames{0};
-    // Optional sample-domain output gain per input channel, after spatial/user gain.
-    std::span<const float> live_gains{};
 };
 
 // A Rust driver or stream error with the locator its kind names (routing_ffi.h).
