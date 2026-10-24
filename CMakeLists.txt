@@ -1308,7 +1308,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_monitor_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime)
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo)
+    target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
     # Test-only C++ adapters over the Triple Balance numeric FFI (out of production, PCM consistency 4.6).
