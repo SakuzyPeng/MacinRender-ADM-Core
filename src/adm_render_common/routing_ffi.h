@@ -362,6 +362,8 @@ int32_t mradm_render_triple_balance_prepare(const MradmSceneHandle* scene,
                                             MradmRenderTripleBalanceView* triple_balance);
 // Standard-mode file streaming of a Triple Balance preparation. A seek is stepped: while
 // *pending the caller may cancel, then calls seek_step; seek_finish ends it.
+// Serialize process, seek and overrides on one worker. validate and requires_preroll may
+// run concurrently with that worker; destroy requires all calls to have returned.
 int32_t mradm_render_triple_balance_stream_open(const MradmRenderPrepared* prepared,
                                                 const uint8_t* path,
                                                 size_t path_len,
