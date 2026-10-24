@@ -8,8 +8,8 @@
 
 #include "adm/errors.h"
 
-#include "../adm_dsp/triple_balance.h"
 #include "size_panner.h"
+#include "triple_balance.h"
 namespace mradm::triple_balance {
 // Low-level adapters retained for tests/tools; production processes whole render blocks in Rust.
 class SizeDecorrelator final {

@@ -13,7 +13,11 @@
 
 #include <nlohmann/json.hpp>
 
+// clang-format off
+// The frozen motion reference reads render_common::BlockGains, now a test-only declaration.
+#include "speaker_mix.h"
 #include "../reference/triple_balance/motion.h"
+// clang-format on
 #include "../reference/triple_balance/render_state.h"
 #include "../reference/triple_balance/size_processor.h"
 #include "layout_222.h"
@@ -298,8 +302,9 @@ void curves_and_mix(Stats& stats) {
         prepared.sample_rate = 48000;
         auto size_row = row;
         size_row.kind = 2;
-        prepared.numeric = take(
+        const auto size_plan = take(
             dsp::TbPlan::create(2, *dsp::tb_layout(layout), 48000, mono.size(), std::span{&size_row, 1}, events, {}));
+        prepared.numeric = size_plan.get();
         auto new_mix = take(now::SizeMixer::create(prepared, plan, true));
         for (std::size_t start = 0; start < mono.size(); start += 1024) {
             constexpr std::array<float, 4> steps{1, 0, .5F, 4};

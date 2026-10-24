@@ -63,7 +63,7 @@ impl FileStream {
                     message: format!("ear stream setup failed: {e}"),
                     location: Location::None,
                 },
-                Kernel::Mix(_) => Error::dsp(&e, Location::None),
+                Kernel::Mix(_) | Kernel::TripleBalance(_) => Error::dsp(&e, Location::None),
             })?;
         Ok(Self {
             reader,

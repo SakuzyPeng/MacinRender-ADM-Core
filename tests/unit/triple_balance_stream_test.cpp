@@ -3,8 +3,11 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <locale>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -12,8 +15,9 @@
 #include "adm/audio_io.h"
 #include "adm/render_triple_balance.h"
 
+#include "../adm_io/scene_import_internal.h"
 #include "render_state.h"
-#include "semantic_policy_ffi.h"
+#include "wav_fixture.h"
 
 namespace {
 void require(bool value, const std::string& label) {
@@ -40,9 +44,18 @@ class Files {
     Files& operator=(const Files&) = delete;
     Files(Files&&) = delete;
     Files& operator=(Files&&) = delete;
+    // Removes the output and every variant input (paths starting with the input path).
     ~Files() {
         std::error_code ec;
-        std::filesystem::remove(input_, ec);
+        std::vector<std::filesystem::path> inputs;
+        for (const auto& entry : std::filesystem::directory_iterator(input_.parent_path(), ec)) {
+            if (entry.path().string().starts_with(input_.string())) {
+                inputs.push_back(entry.path());
+            }
+        }
+        for (const auto& path : inputs) {
+            std::filesystem::remove(path, ec);
+        }
         std::filesystem::remove(output_, ec);
     }
     [[nodiscard]] const std::filesystem::path& input() const { return input_; }
@@ -53,86 +66,166 @@ class Files {
     std::filesystem::path output_;
 };
 
-// The offline reference of {"id":"object-10","gain":{"gain_db":-6},"extent":{"scale":<scale>}} through the
-// semantic policy arithmetic (mradm-dsp): object gain and user level, then each block's extent.
-void apply_object_policy(mradm::SceneObject& object, float scale) {
-    const MradmPolicyGain gain{{0U, 0.0F}, {1U, -6.0F}};
-    std::array levels{object.gain, object.user_level.gain_multiplier};
-    require(mradm_dsp_policy_gain(&gain, levels.data(), levels.size()) == 0, "policy gain");
-    object.gain = levels[0];
-    object.user_level.gain_multiplier = levels[1];
-    MradmPolicyObject rule{};
-    rule.extent = 2U;
-    rule.extent_scale = {1U, scale};
-    for (auto& track : object.tracks) {
-        for (auto& block : track.blocks) {
-            MradmPolicyBlock numeric{};
-            numeric.cartesian = block.position.cartesian ? 1U : 0U;
-            numeric.position[0] = block.position.x;
-            numeric.position[1] = block.position.y;
-            numeric.position[2] = block.position.z;
-            numeric.diffuse = block.diffuse;
-            numeric.width = block.width;
-            numeric.height = block.height;
-            numeric.depth = block.depth;
-            numeric.divergence = block.divergence;
-            numeric.divergence_azimuth_range = block.divergence_azimuth_range;
-            numeric.divergence_position_range = block.divergence_position_range;
-            require(mradm_dsp_policy_object(&rule, 48000, &numeric) == 0, "policy block");
-            block.width = numeric.width;
-            block.height = numeric.height;
-            block.depth = numeric.depth;
-        }
-    }
+constexpr uint64_t k_frames = 100037;
+constexpr uint16_t k_channels = 13;
+
+// Variants of the fixture scene: object AO_1010 alone, the 22.2 lower layer after frame 1024,
+// no Objects extent, another sample rate.
+struct Variant {
+    bool solo{false};
+    bool lower{false};
+    bool zero{false};
+    uint32_t rate{48000};
+};
+
+std::string timecode(uint64_t frame, uint32_t rate) {
+    const auto ns = frame * 1000000000U / rate;
+    std::ostringstream out;
+    out << "00:00:" << std::setfill('0') << std::setw(2) << ns / 1000000000U << '.' << std::setw(9) << ns % 1000000000U;
+    return out.str();
 }
 
-mradm::RenderPlan make_plan(const Files& files, const std::string& layout) {
-    mradm::RenderPlan plan;
-    plan.input_path = files.input().string();
-    plan.output_path = files.output().string();
-    plan.output_layout = layout;
-    plan.scene.info.sample_rate = 48000;
-    plan.scene.info.num_channels = 13;
-    plan.scene.info.num_frames = 100037;
-    plan.scene.info.source_kind = mradm::SceneSourceKind::adm;
-    mradm::SceneObject bed;
-    bed.id = "bed";
+std::string hex(int value, int width) {
+    std::ostringstream out;
+    out << std::uppercase << std::hex << std::setfill('0') << std::setw(width) << value;
+    return out.str();
+}
+
+// The RC 7.1.2 bed AO_1001 on channels 1-10 (the route ignores its Cartesian positions) and
+// Objects AO_1010-AO_1012 on 11-13, with metadata events across control-block edges.
+std::pair<std::string, std::vector<fixture::WaveAudioId>> scene_xml(const Variant& v) {
     const std::array<std::string, 10> labels{
         "RC_L", "RC_R", "RC_C", "RC_LFE", "RC_Lss", "RC_Rss", "RC_Lrs", "RC_Rrs", "RC_Lts", "RC_Rts"};
-    for (uint16_t ch = 0; ch < 10; ++ch) {
-        mradm::SceneTrackRef track;
-        track.channel_index = ch;
-        track.track_uid = "bed-" + std::to_string(ch);
-        mradm::SceneDirectSpeakersBlock block;
-        block.speaker_labels = {labels.at(ch)};
-        track.ds_blocks.push_back(block);
-        bed.tracks.push_back(track);
-    }
-    plan.scene.objects.push_back(bed);
-    for (uint16_t ch = 10; ch < 13; ++ch) {
-        mradm::SceneObject object;
-        object.id = "object-" + std::to_string(ch);
-        mradm::SceneTrackRef track;
-        track.channel_index = ch;
-        track.track_uid = object.id;
-        for (uint64_t frame : {0U, 31U, 511U, 512U, 1025U, 1051U, 1126U, 16384U, 16391U, 66049U}) {
-            mradm::SceneObjectBlock block;
-            block.position.cartesian = true;
-            block.position.x = frame == 0 ? -.4F : .3F;
-            if (frame != 0 && frame % 3 == 0) {
-                block.position.x = -.2F;
-            }
-            block.position.y = frame < 16384 ? .2F : -.3F;
-            block.position.z = .5F;
-            const float size = frame == 16384 ? .7F : .3F;
-            block.width = block.height = block.depth = ch == 12 ? 0 : size;
-            block.start_sample = frame;
-            track.blocks.push_back(block);
+    std::ostringstream formats;
+    std::ostringstream uids;
+    std::ostringstream objects;
+    std::ostringstream top;
+    formats.imbue(std::locale::classic());
+    formats << std::setprecision(9);
+    std::vector<fixture::WaveAudioId> chna;
+    const auto track = [&](int n, const std::string& type, const std::string& blocks, const std::string& pack) {
+        const auto code = type + hex(0x1000 + n, 4);
+        const auto cf = "AC_" + code;
+        const auto tf = "AT_" + code + "_01";
+        const auto sf = "AS_" + code;
+        const auto uid = "ATU_" + hex(n, 8);
+        formats << R"(<audioChannelFormat audioChannelFormatID=")" << cf << R"(" audioChannelFormatName="CF)" << n
+                << R"(" typeLabel=")" << type << R"(">)" << blocks << "</audioChannelFormat>"
+                << R"(<audioStreamFormat audioStreamFormatID=")" << sf << R"(" audioStreamFormatName="SF)" << n
+                << R"(" formatDefinition="pcm" formatLabel="0001"><audioChannelFormatIDRef>)" << cf
+                << "</audioChannelFormatIDRef><audioTrackFormatIDRef>" << tf
+                << "</audioTrackFormatIDRef></audioStreamFormat>" << R"(<audioTrackFormat audioTrackFormatID=")" << tf
+                << R"(" audioTrackFormatName="TF)" << n
+                << R"(" formatDefinition="pcm" formatLabel="0001"><audioStreamFormatIDRef>)" << sf
+                << "</audioStreamFormatIDRef></audioTrackFormat>";
+        uids << R"(<audioTrackUID UID=")" << uid << R"("><audioTrackFormatIDRef>)" << tf
+             << "</audioTrackFormatIDRef><audioPackFormatIDRef>" << pack << "</audioPackFormatIDRef></audioTrackUID>";
+        chna.emplace_back(static_cast<uint16_t>(n), uid, tf, pack);
+        return std::pair{cf, uid};
+    };
+    if (!v.solo) {
+        std::string refs;
+        std::string bed_uids;
+        for (int ch = 1; ch <= 10; ++ch) {
+            const auto block =
+                R"(<audioBlockFormat audioBlockFormatID="AB_0001)" + std::to_string(1000 + ch) +
+                R"(_00000001"><position coordinate="X">0</position><position coordinate="Y">1</position>)"
+                R"(<position coordinate="Z">0</position><cartesian>1</cartesian><speakerLabel>)" +
+                labels.at(ch - 1) + "</speakerLabel></audioBlockFormat>";
+            const auto [cf, uid] = track(ch, "0001", block, "AP_00011000");
+            refs += "<audioChannelFormatIDRef>" + cf + "</audioChannelFormatIDRef>";
+            bed_uids += "<audioTrackUIDRef>" + uid + "</audioTrackUIDRef>";
         }
-        object.tracks.push_back(track);
-        plan.scene.objects.push_back(object);
+        formats << R"(<audioPackFormat audioPackFormatID="AP_00011000" audioPackFormatName="Bed" typeLabel="0001">)"
+                << refs << "</audioPackFormat>";
+        objects << R"(<audioObject audioObjectID="AO_1001" audioObjectName="bed">)" << bed_uids << "</audioObject>";
+        top << "<audioObjectIDRef>AO_1001</audioObjectIDRef>";
     }
+    for (int ch = 11; ch <= 13; ++ch) {
+        if (v.solo && ch != 11) {
+            continue;
+        }
+        std::ostringstream blocks;
+        blocks.imbue(std::locale::classic());
+        blocks << std::setprecision(9);
+        int index = 0;
+        for (uint64_t frame : {0U, 31U, 511U, 512U, 1025U, 1051U, 1126U, 16384U, 16391U, 66049U}) {
+            float x = frame == 0 ? -.4F : .3F;
+            if (frame != 0 && frame % 3 == 0) {
+                x = -.2F;
+            }
+            const float y = frame < 16384 ? .2F : -.3F;
+            const float z = v.lower && frame > 1024 ? -.5F : .5F;
+            float size = frame == 16384 ? .7F : .3F;
+            if (v.zero || ch == 13) {
+                size = 0;
+            }
+            blocks << R"(<audioBlockFormat audioBlockFormatID="AB_0003)" << 1000 + ch << '_' << std::setfill('0')
+                   << std::setw(8) << ++index << R"(" rtime=")" << timecode(frame, v.rate)
+                   << R"("><position coordinate="X">)" << x << R"(</position><position coordinate="Y">)" << y
+                   << R"(</position><position coordinate="Z">)" << z << "</position><cartesian>1</cartesian><width>"
+                   << size << "</width><height>" << size << "</height><depth>" << size << "</depth></audioBlockFormat>";
+        }
+        const auto pack = "AP_0003" + std::to_string(1000 + ch);
+        const auto [cf, uid] = track(ch, "0003", blocks.str(), pack);
+        formats << R"(<audioPackFormat audioPackFormatID=")" << pack << R"(" audioPackFormatName="PF)" << ch
+                << R"(" typeLabel="0003"><audioChannelFormatIDRef>)" << cf
+                << "</audioChannelFormatIDRef></audioPackFormat>";
+        const auto id = "AO_10" + std::to_string(ch - 1);
+        objects << R"(<audioObject audioObjectID=")" << id << R"(" audioObjectName="object-)" << ch - 1
+                << R"("><audioTrackUIDRef>)" << uid << "</audioTrackUIDRef></audioObject>";
+        top << "<audioObjectIDRef>" << id << "</audioObjectIDRef>";
+    }
+    std::ostringstream xml;
+    xml << R"(<?xml version="1.0" encoding="UTF-8"?><ebuCoreMain><coreMetadata><format><audioFormatExtended>)"
+        << formats.str() << uids.str() << objects.str()
+        << R"(<audioContent audioContentID="ACO_1001" audioContentName="C">)" << top.str()
+        << R"(</audioContent><audioProgramme audioProgrammeID="APR_1001" audioProgrammeName="P">)"
+        << "<audioContentIDRef>ACO_1001</audioContentIDRef></audioProgramme></audioFormatExtended></format>"
+        << "</coreMetadata></ebuCoreMain>";
+    return {xml.str(), chna};
+}
+
+// The input of a variant (the same PCM for every one) and the plan of its imported Rust scene,
+// with `policy` applied as RenderService does.
+mradm::RenderPlan
+make_plan(const Files& files, const std::string& layout, const Variant& v = {}, const std::string& policy = {}) {
+    const auto name = files.input().string() + (v.solo ? "-solo" : "") + (v.lower ? "-lower" : "") +
+                      (v.zero ? "-zero" : "") + "-" + std::to_string(v.rate) + ".wav";
+    if (!std::filesystem::exists(name)) {
+        auto [xml, chna] = scene_xml(v);
+        auto writer = fixture::write_wave(name,
+                                          k_channels,
+                                          v.rate,
+                                          24,
+                                          std::make_shared<fixture::WaveChna>(std::move(chna)),
+                                          std::make_shared<fixture::WaveAxml>(std::move(xml)));
+        std::vector<float> samples(k_frames * k_channels);
+        for (std::size_t i = 0; i < samples.size(); ++i) {
+            samples[i] = .05F * std::sin(static_cast<float>(i) * .019F);
+        }
+        writer->write(samples.data(), k_frames);
+    }
+    auto scene = take(mradm::io::RenderScene::import(name, nullptr));
+    if (!policy.empty()) {
+        done(scene.apply_policy(policy, "<memory>"));
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = name;
+    plan.output_path = files.output().string();
+    plan.output_layout = layout;
+    plan.scene = scene.scene();
+    plan.scene_handle = scene.handle();
     return plan;
+}
+
+// The offline reference of the live object edit and the RC_L bed mute.
+std::string object_policy(float scale) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    out << R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"AO_1010","gain":{"gain_db":-6},"extent":{"scale":)"
+        << scale << R"(}},{"id":"AO_1001","direct_speakers":{"speaker_label":"RC_L","gain":{"mute":true}}}]})";
+    return out.str();
 }
 
 std::vector<float> offline(mradm::IRenderer& renderer, const mradm::RenderPlan& plan) {
@@ -168,20 +261,20 @@ void expect_equal(const std::vector<float>& actual, const std::vector<float>& ex
     }
     require(actual == expected, label);
 }
-void check_live_edits(const mradm::RenderPlan& plan,
+void check_live_edits(const Files& files,
+                      const mradm::RenderPlan& plan,
                       mradm::IRenderer& renderer,
                       const mradm::IPreparedRender& prepared,
                       std::span<const std::size_t> chunks) {
     mradm::NullLogSink logs;
-    auto solo = plan;
-    solo.scene.objects = {plan.scene.objects.at(1)};
+    auto solo = make_plan(files, plan.output_layout, {.solo = true});
     auto solo_prepared = take(renderer.prepare(solo, logs));
     auto solo_stream = take(renderer.open_stream(*solo_prepared, solo, logs));
     const auto channels = std::size_t{solo_stream->out_channels()};
     const auto solo_reference = offline(renderer, solo);
     pull(*solo_stream, 4096, chunks);
     mradm::LiveObjectOverride mute;
-    mute.object_id = "object-10";
+    mute.object_id = "AO_1010";
     mute.mute = true;
     solo_stream->set_overrides({{mute}, 2});
     const auto muted = pull(*solo_stream, 2048, chunks);
@@ -198,7 +291,7 @@ void check_live_edits(const mradm::RenderPlan& plan,
         std::vector<float> pcm;
         for (float scale : {1.0F, 0.0F, .5F, 4.0F, 1.0F}) {
             mradm::LiveObjectOverride edit;
-            edit.object_id = "object-10";
+            edit.object_id = "AO_1010";
             edit.extent_scale = scale;
             edited->set_overrides({{edit}, 3});
             auto block = pull(*edited, 4096, sizes);
@@ -240,20 +333,18 @@ void run(const Files& files, const std::string& layout) {
 
     for (float scale : {0.0F, .5F, 1.0F, 4.0F}) {
         mradm::LiveObjectOverride object;
-        object.object_id = "object-10";
+        object.object_id = "AO_1010";
         object.extent_scale = scale;
         object.gain_db = -6;
         mradm::LiveObjectOverride bed;
-        bed.object_id = "bed";
+        bed.object_id = "AO_1001";
         bed.speaker_label = "rc_l";
         bed.mute = true;
         mradm::LiveOverrides overrides{{object, bed}, 1};
         done(stream->validate_overrides(overrides));
         stream->set_overrides(overrides);
         done(stream->seek(0));
-        auto effective = plan;
-        apply_object_policy(effective.scene.objects.at(1), scale);
-        effective.scene.objects.front().tracks.front().ds_blocks.front().user_level.mute = true;
+        const auto effective = make_plan(files, layout, {}, object_policy(scale));
         const auto scaled = offline(*renderer, effective);
         expect_equal(pull(*stream, plan.scene.info.num_frames, chunks), scaled, layout + " static scale/gain policy");
         done(stream->seek(66050));
@@ -291,7 +382,7 @@ void run(const Files& files, const std::string& layout) {
                          "eviction and zero-budget seeks retain exact output");
         }
     }
-    check_live_edits(plan, *renderer, *prepared, chunks);
+    check_live_edits(files, plan, *renderer, *prepared, chunks);
     std::cout << layout << ": stream, policy, checkpoint and seek checks passed\n";
 }
 void check_d_lfe_routes(mradm::IRenderer& renderer, const mradm::RenderPlan& plan, std::span<const float> full) {
@@ -310,21 +401,12 @@ void check_d_lfe_routes(mradm::IRenderer& renderer, const mradm::RenderPlan& pla
     }
 }
 void run_d(const Files& files, const std::string& layout) {
-    auto plan = make_plan(files, layout);
     const bool extended = layout == "9+10+3";
+    auto plan = make_plan(files, layout, {.lower = extended});
     const std::size_t channels = extended ? 24U : 16U;
     plan.triple_balance_mode = mradm::TripleBalanceMode::d;
     if (extended) {
         plan.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
-        for (auto& object : plan.scene.objects) {
-            for (auto& track : object.tracks) {
-                for (auto& block : track.blocks) {
-                    if (block.start_sample > 1024) {
-                        block.position.z = -.5F;
-                    }
-                }
-            }
-        }
     }
     auto renderer = mradm::create_triple_balance_renderer();
     mradm::NullLogSink logs;
@@ -368,14 +450,9 @@ void run_d(const Files& files, const std::string& layout) {
             "D mode prepared layout mismatch rejected");
     auto ignored = plan;
     ignored.speaker_spread_mode = mradm::SpeakerSpreadMode::none;
-    auto zero = plan;
-    for (auto& object : zero.scene.objects) {
-        for (auto& track : object.tracks) {
-            for (auto& block : track.blocks) {
-                block.width = block.height = block.depth = block.diffuse = 0;
-            }
-        }
-    }
+    auto zero = make_plan(files, layout, {.lower = extended, .zero = true});
+    zero.triple_balance_mode = plan.triple_balance_mode;
+    zero.lfe_routing_mode = plan.lfe_routing_mode;
     expect_equal(offline(*renderer, ignored), offline(*renderer, zero), "D mode spread none ignores size");
     for (const auto* rejected_layout : {"4+7+0", "0+5+0"}) {
         auto invalid = plan;
@@ -383,8 +460,8 @@ void run_d(const Files& files, const std::string& layout) {
         auto result = renderer->prepare(invalid, logs);
         require(!result && result.error().code == mradm::ErrorCode::unsupported, "D mode layout boundary");
     }
-    auto invalid = plan;
-    invalid.scene.info.sample_rate = 44100;
+    auto invalid = make_plan(files, layout, {.lower = extended, .rate = 44100});
+    invalid.triple_balance_mode = plan.triple_balance_mode;
     require(!renderer->prepare(invalid, logs), "D mode rate boundary");
     require(!renderer->render_window(*prepared, invalid, progress, logs), "D mode prepared rate mismatch rejected");
     std::cout << "D mode " << layout << ": offline, crop, repeat, LFE and unsupported-boundary checks passed\n";
@@ -396,16 +473,6 @@ int main() {
             std::filesystem::temp_directory_path() /
             ("mr_triple_stream_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         const Files files{prefix.string() + "-in.wav", prefix.string() + "-out.wav"};
-        const auto plan = make_plan(files, "9.1.6");
-        {
-            auto writer = take(mradm::audio::FloatWavWriter::open(files.input().string(), 13, 48000));
-            std::vector<float> samples(plan.scene.info.num_frames * 13);
-            for (std::size_t i = 0; i < samples.size(); ++i) {
-                samples[i] = .05F * std::sin(static_cast<float>(i) * .019F);
-            }
-            require(writer.write(samples.data(), plan.scene.info.num_frames) == plan.scene.info.num_frames,
-                    "write input");
-        }
         for (const auto* layout : {"4+7+0", "9.1.6", "9+10+3"}) {
             run(files, layout);
         }
