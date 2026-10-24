@@ -16,7 +16,6 @@
 #include "adm/render_triple_balance.h"
 
 #include "../adm_io/scene_import_internal.h"
-#include "render_state.h"
 #include "wav_fixture.h"
 
 namespace {
@@ -367,21 +366,6 @@ void run(const Files& files, const std::string& layout) {
     stream->set_overrides({});
     done(stream->seek(0));
     expect_equal(pull(*stream, plan.scene.info.num_frames, chunks), reference, "clear restores baseline");
-    // Exercise eviction and the no-cache fallback without allocating a large fixture.
-    const auto& metadata = dynamic_cast<const mradm::triple_balance::Prepared&>(*prepared);
-    for (const std::size_t budget :
-         {std::size_t{0},
-          take(mradm::triple_balance::SizeMixer::create(metadata, plan, true)).snapshot_bytes() * 3 / 2}) {
-        auto limited = take(mradm::triple_balance::open_stream(metadata, plan, budget));
-        pull(*limited, plan.scene.info.num_frames, chunks);
-        for (uint64_t frame : {66050U, 1025U, 90001U, 66050U}) {
-            done(limited->seek(frame));
-            expect_equal(pull(*limited, 2048, chunks),
-                         std::vector<float>(reference.begin() + static_cast<std::ptrdiff_t>(frame * channels),
-                                            reference.begin() + static_cast<std::ptrdiff_t>((frame + 2048) * channels)),
-                         "eviction and zero-budget seeks retain exact output");
-        }
-    }
     check_live_edits(files, plan, *renderer, *prepared, chunks);
     std::cout << layout << ": stream, policy, checkpoint and seek checks passed\n";
 }

@@ -237,28 +237,6 @@ void LiveGainRamp::fill(std::span<float> output) noexcept {
     bank_.fill(output);
 }
 
-InterleavedLiveGainSmoother::InterleavedLiveGainSmoother(std::size_t channels, uint32_t sample_rate)
-    : channels_(channels), bank_(channels, sample_rate, LiveGainRamp::k_default_ramp_ms) {}
-
-void InterleavedLiveGainSmoother::set_targets(std::span<const float> targets) noexcept {
-    bank_.set_targets(targets);
-}
-
-void InterleavedLiveGainSmoother::apply(float* interleaved, std::size_t frames) noexcept {
-    if (frames > std::numeric_limits<std::size_t>::max() / channels_) {
-        std::terminate();
-    }
-    bank_.apply(std::span{interleaved, frames * channels_});
-}
-
-void InterleavedLiveGainSmoother::fill(std::span<float> output) noexcept {
-    bank_.fill(output);
-}
-
-void InterleavedLiveGainSmoother::reset() noexcept {
-    bank_.reset();
-}
-
 bool is_lfe_label(std::string_view raw) noexcept {
     return mradm_render_is_lfe(reinterpret_cast<const uint8_t*>(raw.data()), raw.size()) != 0U;
 }
