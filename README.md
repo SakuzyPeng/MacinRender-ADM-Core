@@ -160,7 +160,7 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
-C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json
+C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render
 所有模块 ──→ ADMCore（领域模型、错误、选项、能力）
 ```
 
@@ -180,6 +180,7 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 | `rust/crates/mradm-osc` | PoseBridge OSC 头追踪数据报解码（回环 UDP 输入） |
 | `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表；语义策略、报告与模板、导出回写、DirectSpeakers 矩阵与屏幕配置 |
 | `rust/crates/mradm-json` | 与 nlohmann/json 3.12.0 字节一致的 JSON 解析与写出 |
+| `rust/crates/mradm-render` | 扬声器后端（VBAP、HOA、EAR、Scene 流式 VBAP）与公共渲染层：DirectSpeakers / 标签 / LFE 路由、离线驱动与文件流式 |
 | `rust/crates/mradm-ffi` | 唯一含 `unsafe` 的私有 C 边界 |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT 桌面 GUI，经 P/Invoke 调用 C ABI |
 
