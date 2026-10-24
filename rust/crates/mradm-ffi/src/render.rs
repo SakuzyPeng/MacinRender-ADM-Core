@@ -1239,15 +1239,33 @@ pub struct RenderTripleBalanceOverride {
     divergence_scale: f32,
 }
 
-/// Triple Balance file streaming over a standard-mode preparation.
-pub struct RenderTripleBalanceStream(triple_balance_stream::Stream);
+/// Triple Balance file streaming: immutable control metadata and worker-owned DSP state.
+/// Only the worker may access `stream`; control queries borrow `source` independently.
+pub struct RenderTripleBalanceStream {
+    source: triple_balance_stream::Source,
+    stream: triple_balance_stream::Stream,
+}
 
 unsafe fn tb_stream<'a>(
     handle: *mut RenderTripleBalanceStream,
 ) -> offline::Result<&'a mut triple_balance_stream::Stream> {
-    unsafe { handle.as_mut() }
-        .map(|h| &mut h.0)
-        .ok_or_else(|| driver_error("无效 Triple Balance 流句柄"))
+    if handle.is_null() {
+        return Err(driver_error("无效 Triple Balance 流句柄"));
+    }
+    // SAFETY: Mutating calls are serialized on the worker. Borrow only its field:
+    // an enclosing &mut handle would alias the control thread's immutable source.
+    Ok(unsafe { &mut (*handle).stream })
+}
+
+unsafe fn tb_stream_source<'a>(
+    handle: *const RenderTripleBalanceStream,
+) -> offline::Result<&'a triple_balance_stream::Source> {
+    if handle.is_null() {
+        return Err(driver_error("无效 Triple Balance 流句柄"));
+    }
+    // SAFETY: Source is immutable for the handle's lifetime. Do not borrow the enclosing
+    // handle, which also contains the stream the worker may currently be mutating.
+    Ok(unsafe { &(*handle).source })
 }
 
 unsafe fn tb_overrides<'a>(
@@ -1318,11 +1336,11 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_open(
         };
         let s = triple_balance_stream::Stream::open(
             path,
-            source,
+            source.clone(),
             default_interp_ms,
             triple_balance_stream::DEFAULT_CHECKPOINT_BUDGET,
         )?;
-        *out = Box::into_raw(Box::new(RenderTripleBalanceStream(s)));
+        *out = Box::into_raw(Box::new(RenderTripleBalanceStream { source, stream: s }));
         Ok(())
     })
 }
@@ -1409,11 +1427,10 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_validate(
     context_len: *mut usize,
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
-        let s = unsafe { handle.as_ref() }
-            .map(|h| &h.0)
-            .ok_or_else(|| bad("无效 Triple Balance 流句柄"))?;
+        let source = unsafe { tb_stream_source(handle) }.map_err(|e| bad(&e.message))?;
         let o = unsafe { tb_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
-        s.validate_overrides(&o)
+        source
+            .validate_overrides(&o)
             .map_err(|(code, message, context)| Error {
                 code,
                 message: message.into_bytes(),
@@ -1439,7 +1456,7 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_overrides(
 pub unsafe extern "C" fn mradm_render_triple_balance_stream_requires_preroll(
     handle: *const RenderTripleBalanceStream,
 ) -> u32 {
-    unsafe { handle.as_ref() }.map_or(0, |h| u32::from(h.0.requires_preroll()))
+    unsafe { tb_stream_source(handle) }.map_or(0, |s| u32::from(s.requires_preroll()))
 }
 
 #[unsafe(no_mangle)]
@@ -1942,6 +1959,10 @@ pub unsafe extern "C" fn mradm_render_live_vbap_render(
         Ok(())
     })
 }
+
+#[cfg(test)]
+#[path = "render_stream_test.rs"]
+mod stream_tests;
 
 #[cfg(test)]
 mod tests {

@@ -38,7 +38,8 @@ pub struct LiveOverride<'a> {
     pub divergence_scale: f32,
 }
 
-/// The standard-mode preparation the stream renders.
+/// The immutable standard-mode preparation the stream renders and validates.
+#[derive(Clone)]
 pub struct Source {
     pub mix: Arc<pcm_mix::Plan>,
     pub session: Arc<session::Plan>,
@@ -57,6 +58,69 @@ impl Source {
             TbPlan::Standard { mix, session, .. } => Some((Arc::clone(mix), Arc::clone(session))),
             TbPlan::D { .. } => None,
         }
+    }
+
+    /// A size track needs state rendered from the file start.
+    pub fn requires_preroll(&self) -> bool {
+        !self.size_tracks.is_empty()
+    }
+
+    /// Rejects edits beyond gain, mute and linked isotropic size, as the C++ stream did.
+    pub fn validate_overrides(
+        &self,
+        overrides: &[LiveOverride],
+    ) -> std::result::Result<(), (i32, String, Vec<u8>)> {
+        for item in overrides {
+            let o = &item.base;
+            let width = item.extent_scale * item.extent_width_scale;
+            let height = item.extent_scale * item.extent_height_scale;
+            let depth = item.extent_scale * item.extent_depth_scale;
+            let reject =
+                |code: i32, message: &str| Err((code, message.to_owned(), o.object_id.to_vec()));
+            if !o.gain_db.is_finite()
+                || !live_gain(o.gain_db).is_finite()
+                || !width.is_finite()
+                || !height.is_finite()
+                || !depth.is_finite()
+                || item.extent_scale < 0.
+                || item.extent_width_scale < 0.
+                || item.extent_height_scale < 0.
+                || item.extent_depth_scale < 0.
+            {
+                return reject(1, "Triple Balance requires finite nonnegative size scales");
+            }
+            if width != height
+                || width != depth
+                || item.diffuse_scale != 1.
+                || item.divergence_scale != 1.
+                || o.head_locked.unwrap_or(false)
+            {
+                return reject(
+                    2,
+                    "Triple Balance live editing supports gain, mute and linked isotropic size only",
+                );
+            }
+            let bed = self
+                .bindings
+                .iter()
+                .any(|b| b.object_id == o.object_id && !b.label_key.is_empty());
+            if width != 1. && (bed || !o.speaker_label.is_empty()) {
+                return reject(2, "Triple Balance size editing applies to Objects only");
+            }
+            if self.spread_none && width != 1. {
+                return reject(2, "Triple Balance size editing requires spread=auto");
+            }
+            let pure_diffuse_point = self.size_tracks.iter().any(|t| {
+                t.object_id == o.object_id && t.has_diffuse && t.minimum_diffuse_size * width == 0.
+            });
+            if pure_diffuse_point {
+                return reject(
+                    2,
+                    "Triple Balance does not support a pure diffuse point source",
+                );
+            }
+        }
+        Ok(())
     }
 }
 
@@ -168,7 +232,7 @@ impl Stream {
 
     /// A size track's state reaches the target only by rendering from the file start.
     pub fn requires_preroll(&self) -> bool {
-        !self.source.size_tracks.is_empty()
+        self.source.requires_preroll()
     }
 
     /// The bytes one checkpoint counts against the budget.
@@ -199,63 +263,12 @@ impl Stream {
         Ok(produced)
     }
 
-    /// Rejects edits beyond gain, mute and linked isotropic size, as the C++ stream did.
+    /// Validates against immutable preparation metadata.
     pub fn validate_overrides(
         &self,
         overrides: &[LiveOverride],
     ) -> std::result::Result<(), (i32, String, Vec<u8>)> {
-        for item in overrides {
-            let o = &item.base;
-            let width = item.extent_scale * item.extent_width_scale;
-            let height = item.extent_scale * item.extent_height_scale;
-            let depth = item.extent_scale * item.extent_depth_scale;
-            let reject =
-                |code: i32, message: &str| Err((code, message.to_owned(), o.object_id.to_vec()));
-            if !o.gain_db.is_finite()
-                || !live_gain(o.gain_db).is_finite()
-                || !width.is_finite()
-                || !height.is_finite()
-                || !depth.is_finite()
-                || item.extent_scale < 0.
-                || item.extent_width_scale < 0.
-                || item.extent_height_scale < 0.
-                || item.extent_depth_scale < 0.
-            {
-                return reject(1, "Triple Balance requires finite nonnegative size scales");
-            }
-            if width != height
-                || width != depth
-                || item.diffuse_scale != 1.
-                || item.divergence_scale != 1.
-                || o.head_locked.unwrap_or(false)
-            {
-                return reject(
-                    2,
-                    "Triple Balance live editing supports gain, mute and linked isotropic size only",
-                );
-            }
-            let bed = self
-                .source
-                .bindings
-                .iter()
-                .any(|b| b.object_id == o.object_id && !b.label_key.is_empty());
-            if width != 1. && (bed || !o.speaker_label.is_empty()) {
-                return reject(2, "Triple Balance size editing applies to Objects only");
-            }
-            if self.source.spread_none && width != 1. {
-                return reject(2, "Triple Balance size editing requires spread=auto");
-            }
-            let pure_diffuse_point = self.source.size_tracks.iter().any(|t| {
-                t.object_id == o.object_id && t.has_diffuse && t.minimum_diffuse_size * width == 0.
-            });
-            if pure_diffuse_point {
-                return reject(
-                    2,
-                    "Triple Balance does not support a pure diffuse point source",
-                );
-            }
-        }
-        Ok(())
+        self.source.validate_overrides(overrides)
     }
 
     /// Ignores an update that `validate_overrides` rejects.
