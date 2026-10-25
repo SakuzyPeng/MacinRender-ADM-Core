@@ -64,6 +64,8 @@ impl Renderer {
                     ptr::null_mut(),
                     ptr::null_mut(),
                     ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
                 )
             },
             0

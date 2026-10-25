@@ -86,19 +86,11 @@ fn positions(scene: &Scene) -> Vec<[u32; 3]> {
     };
     let mut prepared = Preparation(ptr::null_mut());
     let mut view = MaybeUninit::uninit();
-    let mut room = MaybeUninit::<RenderRoomView>::uninit();
-    let code = unsafe {
-        mradm_render_room_prepare(
-            scene.0,
-            &request,
-            &mut prepared.0,
-            view.as_mut_ptr(),
-            room.as_mut_ptr(),
-        )
-    };
+    let code =
+        unsafe { mradm_render_room_prepare(scene.0, &request, &mut prepared.0, view.as_mut_ptr()) };
     assert_eq!(code, 0);
-    let room = unsafe { room.assume_init() };
-    unsafe { slice::from_raw_parts(room.events, room.events_len) }
+    let room = unsafe { &*prepared.0 }.room.clone().unwrap();
+    room.events
         .iter()
         .filter(|e| e.priority == 2)
         .map(|e| e.command.state.position.map(f32::to_bits))

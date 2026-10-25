@@ -4,21 +4,41 @@ use crate::checked::*;
 use mradm_dsp::{
     Error, Result,
     room::{
-        control::{RoomCommand, RoomDescription, RoomOverride},
-        geometry::Position,
         loading::{self, Package},
         quality::Quality,
         screen::{Mapping, RoomScreens},
-        session::{Instance, PreparedSet, RoomInfo, Session},
+        session::PreparedSet,
     },
 };
-use std::{ffi::CString, ptr, sync::Arc};
+use mradm_render::room_runtime::{Config, Fault, Resources};
+use std::{
+    ffi::CString,
+    panic::{AssertUnwindSafe, catch_unwind},
+    ptr,
+    sync::Arc,
+};
 
 fn boundary(message: *mut u8, capacity: usize, call: impl FnOnce() -> Result<()>) -> i32 {
     #[cfg(windows)]
     mradm_dsp::room::set_worker_start_hook(crate::room_environment::start_worker);
     let _environment = crate::room_environment::Environment::enter();
     crate::boundary(message, capacity, call)
+}
+
+/// The room boundary of one call the Rust room runtime makes (formerly one C++ FFI call): the
+/// room floating-point environment, and panics as `(6, "Rust DSP panic")`.
+pub(crate) fn scope(call: &mut dyn FnMut() -> Result<()>) -> std::result::Result<(), Fault> {
+    #[cfg(windows)]
+    mradm_dsp::room::set_worker_start_hook(crate::room_environment::start_worker);
+    let _environment = crate::room_environment::Environment::enter();
+    match catch_unwind(AssertUnwindSafe(call)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(Error::InvalidArgument(s))) => Err((1, s)),
+        Ok(Err(Error::Unsupported(s))) => Err((2, s)),
+        Ok(Err(Error::Io(s))) => Err((3, s)),
+        Ok(Err(Error::RenderFailed(s))) => Err((4, s)),
+        Err(_) => Err((6, "Rust DSP panic")),
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -36,36 +56,8 @@ pub unsafe extern "C" fn mradm_room_validate_screens(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_validate_overrides(
-    values: *const RoomOverride,
-    count: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        for value in input(values, count)? {
-            value.state()?;
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_overrides(
-    handle: *mut Session,
-    values: *const RoomOverride,
-    count: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(handle, 1, values, count)?;
-        (*handle).set_overrides(input(values, count)?)
-    })
-}
-
 pub struct RoomProfileHandle {
-    package: Package,
+    package: Arc<Package>,
     json: CString,
 }
 pub struct RoomPreparedHandle {
@@ -74,23 +66,15 @@ pub struct RoomPreparedHandle {
     cuda: bool,
 }
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub struct RoomPlane {
-    samples: *const f32,
-    length: usize,
-    has_signal: u32,
-    reserved: u32,
-}
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct RoomSourceInfo {
-    id: u64,
-    position: [f64; 3],
-    direction: [f64; 3],
-    distance: f64,
-    constrained: u32,
-    present: u32,
+    pub(crate) id: u64,
+    pub(crate) position: [f64; 3],
+    pub(crate) direction: [f64; 3],
+    pub(crate) distance: f64,
+    pub(crate) constrained: u32,
+    pub(crate) present: u32,
 }
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
@@ -170,7 +154,7 @@ pub unsafe extern "C" fn mradm_room_profile_load(
     boundary(message, capacity, || unsafe {
         separate(name, length, out, 1)?;
         *out = ptr::null_mut();
-        let package = loading::load_package(input(name, length)?)?;
+        let package = Arc::new(loading::load_package(input(name, length)?)?);
         let json = CString::new(package.manifest.clone()).map_err(|_| invalid())?;
         *out = Box::into_raw(Box::new(RoomProfileHandle { package, json }));
         Ok(())
@@ -244,36 +228,17 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
         separate(hrir_name, hrir_length, out, 1)?;
         separate(sofa_name, sofa_length, out, 1)?;
         *out = ptr::null_mut();
-        let quality = Quality::try_from(quality)?;
-        if !mradm_dsp::room::geometry::valid_scale(metres) {
-            return Err(Error::InvalidArgument("Invalid room distance scale"));
-        }
-        let profile = &*profile;
         if !reuse.is_null() {
             separate(reuse, 1, out, 1)?;
         }
-        let cuda = crate::room_cuda_selection::selected(
-            quality,
-            (!reuse.is_null()).then(|| (&*reuse).cuda),
-        )?;
-        if !reuse.is_null() {
-            separate(reuse, 1, out, 1)?;
-        }
-        let prepared = loading::prepare(
-            &profile.package,
+        let (prepared, cuda, metadata) = prepare_set(
+            &(*profile).package,
             input(hrir_name, hrir_length)?,
             input(sofa_name, sofa_length)?,
-            (!reuse.is_null()).then(|| &*(&*reuse).prepared),
+            (!reuse.is_null()).then(|| (&*(&*reuse).prepared, (&*reuse).cuda)),
             quality,
+            metres,
         )?;
-        let metadata = None;
-        #[cfg(all(windows, feature = "room-cuda"))]
-        let (prepared, metadata) = if cuda {
-            let (value, metadata) = mradm_room_cuda::bind_realtime(prepared, None)?;
-            (value, Some(metadata))
-        } else {
-            (prepared, metadata)
-        };
         let json = description(&prepared, metres, metadata)?;
         *out = Box::into_raw(Box::new(RoomPreparedHandle {
             prepared,
@@ -283,6 +248,69 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
         Ok(())
     })
 }
+/// `mradm_room_prepare_quality` after argument checks: the quality and scale, the CUDA selection,
+/// the room set and its CUDA binding. A room switch prepares through the same path.
+fn prepare_set(
+    package: &Package,
+    hrir: &[u8],
+    sofa: &[u8],
+    reuse: Option<(&PreparedSet, bool)>,
+    quality: u32,
+    metres: f64,
+) -> Result<(Arc<PreparedSet>, bool, Option<serde_json::Value>)> {
+    let quality = Quality::try_from(quality)?;
+    if !mradm_dsp::room::geometry::valid_scale(metres) {
+        return Err(Error::InvalidArgument("Invalid room distance scale"));
+    }
+    let cuda = crate::room_cuda_selection::selected(quality, reuse.map(|r| r.1))?;
+    let prepared = loading::prepare(package, hrir, sofa, reuse.map(|r| r.0), quality)?;
+    let metadata = None;
+    #[cfg(all(windows, feature = "room-cuda"))]
+    let (prepared, metadata) = if cuda {
+        let (value, metadata) = mradm_room_cuda::bind_realtime(prepared, None)?;
+        (value, Some(metadata))
+    } else {
+        (prepared, metadata)
+    };
+    Ok((prepared, cuda, metadata))
+}
+
+/// A room switch's candidate (`room_internal::prepare` with the pinned HRIR and no SOFA).
+pub(crate) fn prepare_switch(
+    config: &Config,
+    reuse: &Resources,
+) -> std::result::Result<Resources, Fault> {
+    let mut out = None;
+    scope(&mut || {
+        let (set, cuda, _) = prepare_set(
+            &config.package,
+            config.hrir.as_bytes(),
+            b"",
+            Some((&reuse.set, reuse.cuda)),
+            config.quality as u32,
+            config.metres,
+        )?;
+        out = Some(Resources { set, cuda });
+        Ok(())
+    })?;
+    Ok(out.expect("prepared in scope"))
+}
+
+/// The prepared set behind a handle, shared with a runtime.
+pub(crate) unsafe fn resources(handle: *const RoomPreparedHandle) -> Option<Arc<Resources>> {
+    unsafe { handle.as_ref() }.map(|h| {
+        Arc::new(Resources {
+            set: Arc::clone(&h.prepared),
+            cuda: h.cuda,
+        })
+    })
+}
+
+/// The package behind a profile handle.
+pub(crate) unsafe fn package(handle: *const RoomProfileHandle) -> Option<Arc<Package>> {
+    unsafe { handle.as_ref() }.map(|h| Arc::clone(&h.package))
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_room_prepared_destroy(handle: *mut RoomPreparedHandle) {
     if !handle.is_null() {
@@ -319,300 +347,6 @@ pub unsafe extern "C" fn mradm_room_prepared_info(
                 .reflection_frames_at(p.room.profile.sample_rate)
                 as u32,
         };
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_create(
-    prepared: *const RoomPreparedHandle,
-    metres: f64,
-    scene: u32,
-    spread: u32,
-    out: *mut *mut Session,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(prepared, 1, out, 1)?;
-        *out = ptr::null_mut();
-        let session = Session::new(
-            (*prepared).prepared.clone(),
-            metres,
-            flag(scene)?,
-            flag(spread)?,
-        )?;
-        *out = Box::into_raw(Box::new(session));
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_destroy(handle: *mut Session) {
-    if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_configure(
-    handle: *mut Session,
-    descriptions: *const RoomDescription,
-    count: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(handle, 1, descriptions, count)?;
-        (*handle).configure(input(descriptions, count)?)
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_reset(
-    handle: *mut Session,
-    sample: u64,
-    clear: u32,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        range(handle, 1)?;
-        let clear = flag(clear)?;
-        (*handle).reset(sample)?;
-        if clear {
-            (*handle).clear_generation();
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_prime(
-    handle: *mut Session,
-    command: *const RoomCommand,
-    sample: u64,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(handle, 1, command, 1)?;
-        (*handle).prime(&*command, sample)
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_pose(
-    handle: *mut Session,
-    pose: *const f32,
-    length: usize,
-) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        separate(handle, 1, pose, length)?;
-        if length != 3 {
-            return Err(invalid());
-        }
-        let pose = input(pose, length)?;
-        (*handle).set_pose([pose[0], pose[1], pose[2]])
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_end(handle: *mut Session) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        range(handle, 1)?;
-        (*handle).end_input();
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_info(
-    handle: *const Session,
-    out: *mut RoomInfo,
-) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        separate(handle, 1, out, 1)?;
-        *out = (*handle).info();
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_source(
-    handle: *const Session,
-    id: u64,
-    out: *mut RoomSourceInfo,
-) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        separate(handle, 1, out, 1)?;
-        *out = RoomSourceInfo {
-            id,
-            ..RoomSourceInfo::default()
-        };
-        if let Some(Position {
-            point,
-            direction,
-            distance,
-            constrained,
-        }) = (*handle).source_position(id)
-        {
-            *out = RoomSourceInfo {
-                id,
-                position: point,
-                direction,
-                distance,
-                constrained: u32::from(constrained),
-                present: 1,
-            };
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_process(
-    handle: *mut Session,
-    frames: usize,
-    planes: *const RoomPlane,
-    count: usize,
-    initial: *const RoomCommand,
-    initial_count: usize,
-    events: *const RoomCommand,
-    event_count: usize,
-    pcm: *mut f32,
-    pcm_length: usize,
-    info: *mut RoomInfo,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(handle, 1, planes, count)?;
-        separate(handle, 1, initial, initial_count)?;
-        separate(handle, 1, events, event_count)?;
-        separate(handle, 1, pcm, pcm_length)?;
-        separate(handle, 1, info, 1)?;
-        separate(pcm, pcm_length, planes, count)?;
-        separate(pcm, pcm_length, initial, initial_count)?;
-        separate(pcm, pcm_length, events, event_count)?;
-        separate(pcm, pcm_length, info, 1)?;
-        separate(info, 1, planes, count)?;
-        separate(info, 1, initial, initial_count)?;
-        separate(info, 1, events, event_count)?;
-        let planes = input(planes, count)?;
-        for plane in planes {
-            flag(plane.has_signal)?;
-            if plane.reserved != 0 {
-                return Err(invalid());
-            }
-            if plane.has_signal != 0 {
-                separate(plane.samples, plane.length, handle, 1)?;
-                separate(plane.samples, plane.length, pcm, pcm_length)?;
-                separate(plane.samples, plane.length, info, 1)?;
-            }
-        }
-        let views = planes.iter().map(|p| {
-            if p.has_signal == 0 {
-                None
-            } else {
-                Some(if p.length == 0 {
-                    &[][..]
-                } else {
-                    std::slice::from_raw_parts(p.samples, p.length)
-                })
-            }
-        });
-        *info = (*handle).process(
-            frames,
-            views,
-            input(initial, initial_count)?,
-            input(events, event_count)?,
-            output(pcm, pcm_length)?,
-        )?;
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_instance_create(
-    prepared: *const RoomPreparedHandle,
-    source_capacity: usize,
-    out: *mut *mut Instance,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(prepared, 1, out, 1)?;
-        *out = ptr::null_mut();
-        *out = Box::into_raw(Box::new(Instance::new(
-            (*prepared).prepared.clone(),
-            source_capacity,
-        )?));
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_instance_destroy(handle: *mut Instance) {
-    if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_instance_reserve(
-    handle: *mut Instance,
-    source_capacity: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        range(handle, 1)?;
-        (*handle).reserve(source_capacity)
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_request(handle: *mut Session, request: u64) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        range(handle, 1)?;
-        (*handle).note_room_request(request)
-    })
-}
-/// Consumes `next` after argument validation, including when queueing fails.
-/// Returns up to two displaced instances; caller destroys them off the worker.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_queue(
-    handle: *mut Session,
-    next: *mut Instance,
-    request: u64,
-    displaced: *mut *mut Instance,
-    count: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(handle, 1, next, 1)?;
-        separate(handle, 1, displaced, count)?;
-        separate(next, 1, displaced, count)?;
-        if count != 2 {
-            return Err(invalid());
-        }
-        let out = output(displaced, count)?;
-        out.fill(ptr::null_mut());
-        if let Err(error) = (*handle).validate_room(&*next, request) {
-            out[0] = next; // return ownership for disposal off the render worker
-            return Err(error);
-        }
-        let result = (*handle).queue_room(Box::from_raw(next), request)?;
-        for (out, item) in out.iter_mut().zip(result) {
-            *out = item.map_or(ptr::null_mut(), Box::into_raw);
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_session_retired(
-    handle: *mut Session,
-    out: *mut *mut Instance,
-) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        separate(handle, 1, out, 1)?;
-        *out = (*handle)
-            .take_retired()
-            .map_or(ptr::null_mut(), Box::into_raw);
         Ok(())
     })
 }
