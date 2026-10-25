@@ -1,0 +1,3247 @@
+{
+  "revision": "72c188b1cfb733dc383014d6af2a7fe2d1b3801a",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "machine": "AMD64",
+  "catalog_sha256": "cfa052e16b9e8cb6a6ee8d4e28b3b0b863e2c0379815ad0296c7790a414221c9",
+  "binaries": {
+    "mradm": "a2329108859690eb2354166df9cd9aae978037b831feb2af784e68353a88a233",
+    "mr_adm_make_fixture": "0d0c029f272855202c7063cd7b352eca592f43c93691f8dce9218b6426591e3b",
+    "mr_adm_phase2_stream": "803900cfe4b93715654f6f4cfeb127c965a8b8a3a3a1fbd0182791f0dffb1806",
+    "mr_adm_phase2_render": "b6a88f915b52bf081ea3649742a67db68008572ddee360803706fd8cf8773525",
+    "mr_adm_phase2_scene": "c6a2cc0e9eafc5ed88ff29ff0d71e329fa5a86a04807a89a11da0502bd61f75d",
+    "mr_adm_pcm_bits": "b1738064b3f585ed8663cc41d3d00e03af17289b731a4a270ecd873ccc6e0e3c",
+    "mradm_review_room_fenv": "1270e534068b1a5d30bbd873ee6b5070232001a41d151ac1f4de9ce3cc2f8b64"
+  },
+  "fixtures": {
+    "directspeakers.wav": "c1c9dd8c5ad87f2c15494ff762328701663c1c61bcb1ede3cbf27a4c556949cc",
+    "directspeakers-lfe.wav": "acf73be1cf1d53968585bf22c023f9c24f7048d735cc219b687ba045534287c0",
+    "objects-cartesian.wav": "681bac2db87cffd3143587c06ce910ff304150ce3de31429f1ec0144a0510c56",
+    "objects-extent-multi.wav": "a9c694d90e33864e00b762d6468f79623c1fb7856f0ba3b1658e752f5e24a59f",
+    "objects-point.wav": "0f6ef3d72a27b7ac3c0d6fdf4115f63b86c002048518f3c71483affb3a3cf58c",
+    "objects-room.wav": "bbe204610e44f63c2f7b6343dd3bab9108a05d21c8317777819101a9af3d0a01",
+    "params.wav": "8fddfc36de2ad7a4b46b47666703ef66f392a3dc6957ee4646c5a9df0394bcb9",
+    "policy-objects.wav": "0bbeeeaf2f5b1a66b4a68238407582d1e82ad2f978a20b99ba008194deee8f98",
+    "ds-matrix-51.json": "3f7ecda5fc037aa3f3184dde9c2faf38247f9df70b74aa0dcd86e8694206f5aa",
+    "policy-direct-speakers.json": "2b8e5408b974064cede6880d7365aa049a55fcf1b235de608912247f652d2a84",
+    "policy-identity.json": "1c1f24ef27f8cd2d518cd803023d95a3453206bb567317aee65771c8ac95271a",
+    "policy-lock.json": "006ffdbe71387c52af380267b0f50433c198cd94da5476d4924b248a5a18968d",
+    "policy-position.json": "94ff9cf27f652d2db1ca89d2166a5c5c7e49778ca9349f15eeabd0e7cedf3fdb",
+    "policy-triple-balance.json": "8c09af4ad0508093046bcc5192698ba7672ab93a33614c708cd5a2c21488c530",
+    "room/bands.f64": "65c5345153d2f48b057ce282be27f774447677c4afb9cde391a88c6bd1acdb29",
+    "room/delays.f64": "f5a9165f9a4852698b1b7bd7512f2f602da6b2688a9a4106be78a67455a7b044",
+    "room/directions.f64": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+    "room/eq.f64": "36d1f313e90cb0d038c0fad2f3775286629b047f0d32ca64a6d6e27a1472e5d1",
+    "room/faces.u32": "2b01153bd81c50c9bde2f118c9053419f74c889e72618efa5e27555c4168e1e5",
+    "room/hrir.f32": "ae6e48971ac2408354aa765e02909cb146432c9a1c71d5cce0bb01578463b1ca",
+    "room/hrir.json": "b920747e2e6b704207e74e7ede3ebf1c7f16955f8852817ebb16fbe2b6f9b4cf",
+    "room/late-directions.f64": "919bad9bc21c53f36119acf78720fa4ab632ae16de52faf914bf12fb3b9ad1e8",
+    "room/late.f32": "1ddeebc4b02202fd13ff29514d72fac33da349c241eb5aa4076d02d3412bfc97",
+    "room/phases.f32": "741062476d4f6cb9394484bf0b281a39ed8e2df9712d5ea6ff24f803a4d8322d",
+    "room/room.json": "8a21e8afcb6b6d00c7b196889ed2d00c9ee67afc85048dc5081887ee03974696",
+    "screen-config.json": "daaaebf4ccb0263ac15d54787e3d3f1830ed888724f97b02201c806fd5801ddd",
+    "simple.sofa": "03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d"
+  },
+  "offline": {
+    "room-exact": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "2cddee9c980652b828723f190504d237ed4e7fdca8863ec3d645baf37e56b580"
+    },
+    "room-exact-sofa": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "b2c2eac8d600b7f4661775795f8a119f0824b1817530098bcf70f8b5fa012bc5"
+    },
+    "room-exact-screen": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "31e502ef677c4bc8c96aa8f1b0fd70e4a52dfe5fa8a1640ed4ddb03d5f844d1a"
+    },
+    "room-point": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "74dd1d17d2b85488b66a4b24cad287ea24cf86f0c1268c1d4c2582d0c56697f3"
+    },
+    "room-ds": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "39d00ea14432eca74acceeabfa7eb369419269513396375d2a2a550e7466f339"
+    },
+    "room-lfe": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "bb65d333fec17db8e145f91bf35ec3fe208b61808f2bddd67587923a62eb7c69"
+    },
+    "room-params": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "a167975a0cd5b1bcc55353f7f81284030d05882b7834ec7cfee151b99e602350"
+    },
+    "room-window-gain": {
+      "shape": [
+        2,
+        48000,
+        16800
+      ],
+      "sha256": "24c84eee76903c5cd4b3c4cb9b9d33923c82d2ca5a60b0ee2db93dc94ae349d1"
+    },
+    "room-i24": {
+      "shape": [
+        2,
+        48000,
+        52441
+      ],
+      "sha256": "4de55085d06de05d9d679edb14ffffe06e21d53b8f147764bdafc2beb0ab23c3"
+    }
+  },
+  "stream": {
+    "stream-room-objects-extent-multi-cloud-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "7e6a226b09c9d121f1642fce7c256ed4ea5d58904a58ec7965547b705c51342a"
+    },
+    "stream-room-objects-extent-multi-cloud-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "7e6a226b09c9d121f1642fce7c256ed4ea5d58904a58ec7965547b705c51342a"
+    },
+    "stream-room-objects-extent-multi-none-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "244a9ffd052881ae4dd4228e219b1821124433dbdf6e893707eeedfca43b4624"
+    },
+    "stream-room-objects-extent-multi-none-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "244a9ffd052881ae4dd4228e219b1821124433dbdf6e893707eeedfca43b4624"
+    },
+    "stream-room-objects-cartesian-cloud-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "5ee38ca873762305dd0f89ee5cf4eaa6e41270282135dd0e9cf1fd7dc61b10e2"
+    },
+    "stream-room-objects-cartesian-cloud-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "5ee38ca873762305dd0f89ee5cf4eaa6e41270282135dd0e9cf1fd7dc61b10e2"
+    },
+    "stream-room-objects-cartesian-none-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "ac05d84a62e693c7ff1e2b7b4c8952c64eb3e7df0d39d16808826d272eacf925"
+    },
+    "stream-room-objects-cartesian-none-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "ac05d84a62e693c7ff1e2b7b4c8952c64eb3e7df0d39d16808826d272eacf925"
+    },
+    "stream-room-objects-point-cloud-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "bbbb6e5e4fe9c6fcf59c96a105fe19639bbcfdc1cbcd060d2fb6686d86bcccbd"
+    },
+    "stream-room-objects-point-cloud-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "bbbb6e5e4fe9c6fcf59c96a105fe19639bbcfdc1cbcd060d2fb6686d86bcccbd"
+    },
+    "stream-room-objects-point-none-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "bbbb6e5e4fe9c6fcf59c96a105fe19639bbcfdc1cbcd060d2fb6686d86bcccbd"
+    },
+    "stream-room-objects-point-none-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "bbbb6e5e4fe9c6fcf59c96a105fe19639bbcfdc1cbcd060d2fb6686d86bcccbd"
+    },
+    "stream-room-directspeakers-cloud-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "5c03ce71d1bb3aa3eb38e886b3229b17e930617bc6e135b42d78c29b1e38e86d"
+    },
+    "stream-room-directspeakers-cloud-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "5c03ce71d1bb3aa3eb38e886b3229b17e930617bc6e135b42d78c29b1e38e86d"
+    },
+    "stream-room-directspeakers-none-fixed": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "5c03ce71d1bb3aa3eb38e886b3229b17e930617bc6e135b42d78c29b1e38e86d"
+    },
+    "stream-room-directspeakers-none-fragmented": {
+      "shape": [
+        2,
+        48000,
+        78641
+      ],
+      "sha256": "5c03ce71d1bb3aa3eb38e886b3229b17e930617bc6e135b42d78c29b1e38e86d"
+    }
+  },
+  "scene": {
+    "scene-vbap-0+2+0-cloud0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "a8a3a429e8c1e5f9e8feb602e5f4f5a74ff538ed8df5abd298641486f1b215ee"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "84fb7db8e1a55f3fa650cdf600933c911042dd76ac9924c1330e744ce2b64cae"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "28644cbaa327102901f28969a40acb5c6c468b5425d411b27b696f35de5b60cc"
+    },
+    "scene-vbap-0+2+0-cloud0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "1731adf4d870177e91bcde8d624d114e00b59aed8fde222797eb778130c80789"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "84fb7db8e1a55f3fa650cdf600933c911042dd76ac9924c1330e744ce2b64cae"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "540fc4e778bf35e2adf1cd2b70109ff5fca135d7c7bb6ccd52a540c619e84014"
+    },
+    "scene-vbap-0+2+0-cloud0-48000-44100-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            44100,
+            11291
+          ],
+          "sha256": "2471c088152398c38bbb29d2082e762e33d7e98094b69c99575fa7eba0b61f16"
+        },
+        "2": {
+          "shape": [
+            2,
+            44100,
+            31
+          ],
+          "sha256": "65564b3ff9aa931398e1fc2972bf63f6a8c887eb06f8774fc0e8c01af8a014a0"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "7b61a7a2527bf4d56aacb4d540aa84fe74a6eaaa3af3a85aaccb9f03e771543a"
+    },
+    "scene-vbap-0+2+0-cloud0-48000-44100-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            44100,
+            11291
+          ],
+          "sha256": "5a94514883099e93f479b7a259c44b25793ceabe8d07d655a303995691804504"
+        },
+        "2": {
+          "shape": [
+            2,
+            44100,
+            31
+          ],
+          "sha256": "65564b3ff9aa931398e1fc2972bf63f6a8c887eb06f8774fc0e8c01af8a014a0"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "9531f8161c6f970be06b0d2fc4155b5dba93f3fa5d0f1f4f4c378dd0c5cc9197"
+    },
+    "scene-vbap-0+2+0-cloud0-44100-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "b23c11103ceeda0b2986aa36076578c9797a1d3b97103aef9ffaa506c485ff0f"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "6c1240236320337eb5650aa709b05318ec5f7d0520c12e249fdeaa2f068996e4"
+        }
+      },
+      "input": "46e2d2ec9f7eff6280a6bef9e6d254038a15f366aab452b11c4e37bf22747924",
+      "events": "150a2c3a4d2f2bb7d378d4901f76ae3a20ea7885ae8e7d48aad68e1b350aac77"
+    },
+    "scene-vbap-0+2+0-cloud0-44100-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "e431eff60dc266bd7a984d3c79450da68379cc3caef1b89d132be86ce9238f24"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "6c1240236320337eb5650aa709b05318ec5f7d0520c12e249fdeaa2f068996e4"
+        }
+      },
+      "input": "46e2d2ec9f7eff6280a6bef9e6d254038a15f366aab452b11c4e37bf22747924",
+      "events": "7bda9de840fbdfa73817a8149db0859a35afd68b2373706c3ad778245d3a948a"
+    },
+    "scene-vbap-0+2+0-cloud0-96000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            12289
+          ],
+          "sha256": "7a5a1b088f6e554b33016aef137049bc03aa253e52e5d4fbd016e53eda5845de"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            33
+          ],
+          "sha256": "2a146bd86b4d3fd30d49d3e5ef85922a2e0a34507bf08080e3c76c3edba99381"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "a71b1142faf338efe8f63fa6084ed2d56a6a75ff77779120318d3eda92a68ae7"
+    },
+    "scene-vbap-0+2+0-cloud0-96000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            12289
+          ],
+          "sha256": "b9c565e938612e1fd3d9d07d8ba74f4da823bc19c4b28a303befed67f9776626"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            33
+          ],
+          "sha256": "2a146bd86b4d3fd30d49d3e5ef85922a2e0a34507bf08080e3c76c3edba99381"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "388efdb346536488a2e174b43836ae8b18c3b14bf5f1f2c105f377aa239cf9ae"
+    },
+    "scene-vbap-0+2+0-cloud0-48000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 24578
+          },
+          {
+            "epoch": 2,
+            "frames": 66
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            24578
+          ],
+          "sha256": "7a313bf6c4a8e5c5a6e0d43e8aeae74101f6a6e42446c2dc44145ee2bdd513ef"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            66
+          ],
+          "sha256": "deac29ac262c2475f1da5509563a87cd5e736500cd84e5bf2838f3a73e27bd74"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "4d9ebcdce181743179f922220ebc683c2c38834c8ac658b3e1c2b127a8ca71dc"
+    },
+    "scene-vbap-0+2+0-cloud0-48000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 24578
+          },
+          {
+            "epoch": 2,
+            "frames": 66
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            24578
+          ],
+          "sha256": "ae63a048543886edfb34507bed87ed3add3d6d379083b9ea6fd9a53c21d204cd"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            66
+          ],
+          "sha256": "deac29ac262c2475f1da5509563a87cd5e736500cd84e5bf2838f3a73e27bd74"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "003d3ec2e3b594712774c9e39645e9b51b630311883d814d6ef8f3a8a5ddc7c2"
+    },
+    "scene-vbap-0+2+0-cloud0-96000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 6145
+          },
+          {
+            "epoch": 2,
+            "frames": 17
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            6145
+          ],
+          "sha256": "c569f6b512288468108cf83de6c7f33dcbcc022fff2fde374b3394cc6774c54d"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            17
+          ],
+          "sha256": "34c9a9497b43388474938ce22cea087cdd7b385139cd24e308c1675fb3197c99"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "2b415ce63c384930f9f01c34b508978b1202f3ef0163801d11f0886415ee5e10"
+    },
+    "scene-vbap-0+2+0-cloud0-96000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 6145
+          },
+          {
+            "epoch": 2,
+            "frames": 17
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            6145
+          ],
+          "sha256": "2f4fba829c088b2b85624ab3f28a1c064498885e7112a11baa72360c73c46b07"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            17
+          ],
+          "sha256": "34c9a9497b43388474938ce22cea087cdd7b385139cd24e308c1675fb3197c99"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "482b3ce6647b49aa1e9b635db1594b6fc51db903be5d3db3af1360c5945850f9"
+    },
+    "scene-vbap-4+7+0-cloud0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "ff676aecbb28828c33541777dcc4dd382980ad1d215e063c13e9b785ae1d818d"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "2974aff112d27108dc5b30f6b2092294d2b7159ab41a84af65d10b2a908f5b88"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "a871436752d94b6d4effd27c7da3187613729be6d8555524882c34194d35bb41"
+    },
+    "scene-vbap-4+7+0-cloud0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "ff676aecbb28828c33541777dcc4dd382980ad1d215e063c13e9b785ae1d818d"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "2974aff112d27108dc5b30f6b2092294d2b7159ab41a84af65d10b2a908f5b88"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "96a0c290a4609c6c0c7e43346f8623a649a0415f9d39a2d34835738de6950717"
+    },
+    "scene-vbap-4+7+0-cloud0-96000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            96000,
+            12289
+          ],
+          "sha256": "c241a80ae968e12f1535187ee30be18c9f17516c32e5d71f98319bf4d1b36485"
+        },
+        "2": {
+          "shape": [
+            12,
+            96000,
+            33
+          ],
+          "sha256": "febc04b90b653456ee38aa2a444f5525380b19a584192119200fe8d59beb7d9f"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "9c615cf345875833807f98e5b5e72f200e5d7e54a08a2d2f26d9c8f2697fc400"
+    },
+    "scene-vbap-4+7+0-cloud0-96000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            96000,
+            12289
+          ],
+          "sha256": "c241a80ae968e12f1535187ee30be18c9f17516c32e5d71f98319bf4d1b36485"
+        },
+        "2": {
+          "shape": [
+            12,
+            96000,
+            33
+          ],
+          "sha256": "febc04b90b653456ee38aa2a444f5525380b19a584192119200fe8d59beb7d9f"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "4c16549af1bea05bd8b92563050b16be2741fdcd47f57271379740251d58ead9"
+    },
+    "scene-binaural-binaural-cloud0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "3f869343f4d9869689c8e03389f76ad58f97053c17ff15c8a148295f951186d1"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "e5c164c865905d0df03f5277b7d9687b488a938bfdc11d15ce0acdde7dd33202"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "3ef6e4f806075496a88bdfcf618dec749540b05bc02624a2c72e8c2c9d8727cf"
+    },
+    "scene-binaural-binaural-cloud0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "9aee79dff25f6907b67e21686bd8502dc2d85865669d9f020588306ce550c39b"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "e5c164c865905d0df03f5277b7d9687b488a938bfdc11d15ce0acdde7dd33202"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "2d6788b9baaa533e343830fd2f9f607525ee8816147bae93995c18626f1cb55d"
+    },
+    "scene-binaural-binaural-cloud0-48000-44100-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            44100,
+            11291
+          ],
+          "sha256": "01c6aad1731a281f540d21ad5bbc17ef2449c8d7907b50ed8dbe84458db9d414"
+        },
+        "2": {
+          "shape": [
+            2,
+            44100,
+            31
+          ],
+          "sha256": "ac317d3ae31b3b94fa07107e480741d2726b26814e81025254f9e048c22ff75e"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "9131eaded8b3d446d3b06c6a4a446cb06455412c3a8944d200994baa03be5705"
+    },
+    "scene-binaural-binaural-cloud0-48000-44100-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            44100,
+            11291
+          ],
+          "sha256": "7a342267aa572fd57dd47fbb7e5e44d4124a82679ae32fc86e02bacb1aa63d53"
+        },
+        "2": {
+          "shape": [
+            2,
+            44100,
+            31
+          ],
+          "sha256": "842eda77d79092ebd17f2c003533adbcfbd50c2df93e646b3ab5df7a63379193"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "ce05200e70d4a5c2f0dffeff097f7ee4e0ea62553fe8acfe85732ce57e0b4427"
+    },
+    "scene-binaural-binaural-cloud0-44100-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "eee2fc9f638bcd90105e06aed4f0934efff560496cecf18812554373df40fe2e"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "7047b2a99f9a17ca0816c8e8f4343e5abd6d18428bbdade10e19f21175c3c3e4"
+        }
+      },
+      "input": "46e2d2ec9f7eff6280a6bef9e6d254038a15f366aab452b11c4e37bf22747924",
+      "events": "429fe6516220bae2c54c2a327cf50bcc8142523fa66e57b5060dd46ed0c634b0"
+    },
+    "scene-binaural-binaural-cloud0-44100-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "82ae1228e96caef8a577f6fbd98c07ba9186b97cba1be6de40314e229bba7237"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "acb1d4f6a85932b18f87aaf0080c4ae57e0002c5a69dd779dd3d9f2b7687895e"
+        }
+      },
+      "input": "46e2d2ec9f7eff6280a6bef9e6d254038a15f366aab452b11c4e37bf22747924",
+      "events": "2b47ad1f5b8a9a13a5c310a96ba3e53bb7c7d3c17c3c4fe68474b08b903fafd9"
+    },
+    "scene-binaural-binaural-cloud0-96000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            12289
+          ],
+          "sha256": "0baea21c51a2a00cd427eef5e241bed95945c1d106577ec313cc17f98a472f6a"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            33
+          ],
+          "sha256": "b345205cad3505bffce37afd9099228bb51e4a965bded1c8f9bfcebc0903e1e1"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "b7c9931542b5dc62f251e68fe1271d64bd2488e28cb0772b80713790d96e6f28"
+    },
+    "scene-binaural-binaural-cloud0-96000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            12289
+          ],
+          "sha256": "b745acad29db086848957acab61fe4c2c40b8f5cd8ad4cd7a9c66249d1d4af34"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            33
+          ],
+          "sha256": "b345205cad3505bffce37afd9099228bb51e4a965bded1c8f9bfcebc0903e1e1"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "f5a295d68924d2f1e52777c694d5528515eaed21ca6d6e693da61d7b8809768b"
+    },
+    "scene-binaural-binaural-cloud0-48000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 24578
+          },
+          {
+            "epoch": 2,
+            "frames": 66
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            24578
+          ],
+          "sha256": "55a2a547153729f0ad50cf40b257209e4d2f1a2a69696bb941718c9607995cbc"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            66
+          ],
+          "sha256": "736ba70dd5aa3586bf61ccd748e7c0f5c00339895a2bf19398b9d225eeda83ab"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "daf624af9240b9e1ceb5e6971a21ed201b3eb9290978b8858b81c636b90990ca"
+    },
+    "scene-binaural-binaural-cloud0-48000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 24578
+          },
+          {
+            "epoch": 2,
+            "frames": 66
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            24578
+          ],
+          "sha256": "55bcf690bcd96d5e247a7113be7a2e4d6343d27d2ad978e7f2cee466cec4c2b0"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            66
+          ],
+          "sha256": "5c3c4b1ba254ce446ca9d5663b636d8da4273664ed418226ec51d5e50a290515"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "ff7542a86dbdfc51fc4da4d432d64726d097f7aa2de4097e6dff15bccd068810"
+    },
+    "scene-binaural-binaural-cloud0-96000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 6145
+          },
+          {
+            "epoch": 2,
+            "frames": 17
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            6145
+          ],
+          "sha256": "1e09b9ed8986b97a913942df26c822b24909fa85d67b986a77538352ec0c54ae"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            17
+          ],
+          "sha256": "16be302a0f96bd0e2224ea2883c362b450d41467cde544e30942de8cf92ce11b"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "5e4b90a4a7545ec01e886c03507d50a0d17c148ca8879ef98e2cfc8b3364283c"
+    },
+    "scene-binaural-binaural-cloud0-96000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 6145
+          },
+          {
+            "epoch": 2,
+            "frames": 17
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            6145
+          ],
+          "sha256": "6ece50ece4897abb0dcff6d8d270d797dadfc05e1b8100b9b5bf83329f9cb498"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            17
+          ],
+          "sha256": "405819240d02640413235c1f0887c7407b699de9fd008b71b74f8e4ec7b1ca69"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "6e1106b4bfcb19dad3863df7e951d8aec48b2a496037bf1d1632798cbb4a1911"
+    },
+    "scene-binaural-binaural-cloud1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "e45eea6c2e1a705ef9177f650299f42433e208d9b7c6eb1aea1719080b0ec2c6"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "376281114c3985a6964572fe2bec944808c16c63298a5c68481761c6b331d1c9"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "915e57e5c97ae563d3280a3c3952b606037af07cddc60b752b8aa3bf25b76127"
+    },
+    "scene-binaural-binaural-cloud1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "307da9421fe60fb47e3a7313305a406b017ba51550e2969da1ccca3ea0b28d1d"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "376281114c3985a6964572fe2bec944808c16c63298a5c68481761c6b331d1c9"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "a4d05f8173ff335c42c63427a296fcefb413a2d7b3ab6f8f6aa953d4d057c948"
+    },
+    "scene-binaural-binaural-cloud1-48000-44100-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            44100,
+            11291
+          ],
+          "sha256": "5744109e8aadd99d226cd202f5171fa05f0c70c534de52443d383b26334ef737"
+        },
+        "2": {
+          "shape": [
+            2,
+            44100,
+            31
+          ],
+          "sha256": "2a237ea551808f3fd94cf94ce7d2931ce953881b56024b06a715ead2236f8bcd"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "11237e5dce91075f5c9b205e02e5cc6a2ac9f0b3a0cc913969c1699f14169941"
+    },
+    "scene-binaural-binaural-cloud1-48000-44100-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            44100,
+            11291
+          ],
+          "sha256": "b5c7d9165fa555bb9c5fd5da5dcc2b317a37e687deb5e12a7b1bebb53fb232b2"
+        },
+        "2": {
+          "shape": [
+            2,
+            44100,
+            31
+          ],
+          "sha256": "7012c75fa2dcc04766c34ca507acd88cb340ac859f7c1932ea9ec3b0f85232a9"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "ba52ccf6450e3301ef6b6d88ee7047a85d5fee918befc0a312605ed4c22d4ec2"
+    },
+    "scene-binaural-binaural-cloud1-44100-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "8be9b5f535e2f9ec2ca2db0a5e1b015b73a71b06e776d87a4961e2feaab65fca"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "8248b0436d247ed1381c5952b3e083aaa8e05fea768a8b29ca110a4bea16e83a"
+        }
+      },
+      "input": "46e2d2ec9f7eff6280a6bef9e6d254038a15f366aab452b11c4e37bf22747924",
+      "events": "538f5430ca94ee6b4949d8302153e7546a76d13063721ae97e56734aa1b6e172"
+    },
+    "scene-binaural-binaural-cloud1-44100-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "455184ff3c30eeb13b4175f3168dbbba6d92fcd94f61d47abc21f46302ccf594"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "a46a438652f00db3912bbc6d388e72bb592e36f30f369b4abcd795729fc8bb0d"
+        }
+      },
+      "input": "46e2d2ec9f7eff6280a6bef9e6d254038a15f366aab452b11c4e37bf22747924",
+      "events": "5e080ccf54ece7f419e5163d97ee00061e8021077474d40f29a50eb729b901a0"
+    },
+    "scene-binaural-binaural-cloud1-96000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            12289
+          ],
+          "sha256": "c4fbc3bdb6feb45c9b09e24cb04ca3ab9fe7d13cd9c778ffab6bf6fa893d649b"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            33
+          ],
+          "sha256": "af3b2a1a2a94c492ecc076a9dcdc59b65ad6fd3d082f2afcc2d3ff29ebd8c958"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "b3f0495910ae8a38323ebebb2f602c23b0d3448cf18083c3f7c54f32eaee0653"
+    },
+    "scene-binaural-binaural-cloud1-96000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            12289
+          ],
+          "sha256": "52f805148e596ead759ee74a433251cd4a877a03b89cc4dd29bc904518ae7c55"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            33
+          ],
+          "sha256": "af3b2a1a2a94c492ecc076a9dcdc59b65ad6fd3d082f2afcc2d3ff29ebd8c958"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "3e56f880e62a5f08c2d1f29d9757465b8211042e2006261726af4c4f33f335a1"
+    },
+    "scene-binaural-binaural-cloud1-48000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 24578
+          },
+          {
+            "epoch": 2,
+            "frames": 66
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            24578
+          ],
+          "sha256": "d8e7b18e38ebf9b3080fe73ac1e492ee7d28a8d9681527420b580a18fd41b782"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            66
+          ],
+          "sha256": "16af34cb0860c759dff80e4d6af582bd721d400c5026107ac3336fb1a018f31b"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "377fbb16aef86cc417e51a256c51c45d834ea732e0788eb42fc1c34d77906d19"
+    },
+    "scene-binaural-binaural-cloud1-48000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 24578
+          },
+          {
+            "epoch": 2,
+            "frames": 66
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            96000,
+            24578
+          ],
+          "sha256": "83d1f73840d8171973d4e81afca717b6ac640801ea2559307500113fffd364ff"
+        },
+        "2": {
+          "shape": [
+            2,
+            96000,
+            66
+          ],
+          "sha256": "2f11b61c92c0b4921ad43f393fa91d63d72354d7cf68c32441d9d5d4872b894e"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "f97691997ae43f08b251def903e2eeae465c35a9c479a1fc818494fd61bf0b6c"
+    },
+    "scene-binaural-binaural-cloud1-96000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 6145
+          },
+          {
+            "epoch": 2,
+            "frames": 17
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            6145
+          ],
+          "sha256": "065b745b68babf3b6f7e7e220e48820a8e4336a838a310e4bf7747388a975b76"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            17
+          ],
+          "sha256": "34f8f1471c1a1b62a048d46d4aba2a8a76e8dddb5037cb9b3d69d256cfaf4ad4"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "97a0966546e2861a1cb808a1bc18b09495ca662165be12e0c38bd198da8f1c88"
+    },
+    "scene-binaural-binaural-cloud1-96000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 6145
+          },
+          {
+            "epoch": 2,
+            "frames": 17
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            6145
+          ],
+          "sha256": "6287e1add59b8e2027d674cca17f24260bcfb47ab00ada9f90df15f669127c2a"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            17
+          ],
+          "sha256": "3fd2a9c534eb2b070f8751c336eff9244734ee8dd8a3193f800625613045ada2"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "f91b80f60e1c10b370a754369b0a3ace8f7ad1d3b1f9993103836e4c9c667265"
+    },
+    "scene-device-dsp-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "cf0aa32d6248a7194ccc85be5f25b148ee190ebab1447491d881c533f16dff84"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "c3c3ecdd4058cc11eeea832a5717c4e44a7382f4254f0774299b2aee09703d12"
+        }
+      },
+      "input": "640b9b5ad056f68ebd0030bfb89789ba18fcb0c0014c9644cb5181c7c6104ddd",
+      "events": "8e749e14e356df1dfb597caa176b480af27d18a2028270d7e5ef5876c242cc92"
+    },
+    "scene-device-dsp-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "295f63f496e6e828bbdc4298a223557d97c7c89d7c39950bb81fd9d4dabda695"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "c3c3ecdd4058cc11eeea832a5717c4e44a7382f4254f0774299b2aee09703d12"
+        }
+      },
+      "input": "640b9b5ad056f68ebd0030bfb89789ba18fcb0c0014c9644cb5181c7c6104ddd",
+      "events": "075aced45ae44c168601f8b9082ddf5e212beccbb48c36f5894579fb000946a6"
+    },
+    "scene-triple-balance-7.1.4-size0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "35cd31b13e8e3a77e276046b563e1d9a50c4bbdf72e0275f1bc4c3913ef16ec3"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "1eddd76c4fabc2734a36f4564a69c554d032a959c2e29eed86d73f4a85ae8c8e"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "088efaa20da1aebbb688b7ac243c4324beda3d8b06f99e27f0529034919d2e13"
+    },
+    "scene-triple-balance-7.1.4-size0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "35cd31b13e8e3a77e276046b563e1d9a50c4bbdf72e0275f1bc4c3913ef16ec3"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "1eddd76c4fabc2734a36f4564a69c554d032a959c2e29eed86d73f4a85ae8c8e"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "25a0be586d5c12cff51cea092dec2e7460a165f05011632ae05ca8073695e0ef"
+    },
+    "scene-triple-balance-7.1.4-size1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "640a5d410866f92c87cc11165c4e4e9affc2b9e2bc6db8835b5f9ae36498f6ae"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "19f2bdec7738075fdedcb15c86e3b98193db48c0537743fc318be8c5e83d8ef4"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "17ccbab523669a8015c3096082c0f62f64cef91fb2201300c8490fb24c336886"
+    },
+    "scene-triple-balance-7.1.4-size1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "640a5d410866f92c87cc11165c4e4e9affc2b9e2bc6db8835b5f9ae36498f6ae"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "19f2bdec7738075fdedcb15c86e3b98193db48c0537743fc318be8c5e83d8ef4"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "92798087cf3d2702c9c865c2677678d1e4026d8400cbd7a911283a8db56b6dc6"
+    },
+    "scene-triple-balance-9.1.6-size0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            16,
+            48000,
+            12289
+          ],
+          "sha256": "54d8760259ed772b6f78811a996c8d87235527e89c89d1675b5f098903191cf4"
+        },
+        "2": {
+          "shape": [
+            16,
+            48000,
+            33
+          ],
+          "sha256": "95a2eb20a3c69a2bab6db3dc1e75cff40245ed20bede790d5b025646e7e2b015"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "03c2c8564a0b7d4ab637a11406ae428cba025799ac1258e2fa043fab0688470b"
+    },
+    "scene-triple-balance-9.1.6-size0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            16,
+            48000,
+            12289
+          ],
+          "sha256": "54d8760259ed772b6f78811a996c8d87235527e89c89d1675b5f098903191cf4"
+        },
+        "2": {
+          "shape": [
+            16,
+            48000,
+            33
+          ],
+          "sha256": "95a2eb20a3c69a2bab6db3dc1e75cff40245ed20bede790d5b025646e7e2b015"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "e900a744b1ba3a1f12c5d22a963d80165292b2325f76f88a62a6ebba741ba155"
+    },
+    "scene-triple-balance-9.1.6-size1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            16,
+            48000,
+            12289
+          ],
+          "sha256": "3d02f850f9e46c6451a4a678e11f17fabf7df40b7e9aa0cc7056f51e008961a0"
+        },
+        "2": {
+          "shape": [
+            16,
+            48000,
+            33
+          ],
+          "sha256": "bcde8eb9fe28feb4a5ed5350f24a82c388fcc186551b36a142cd4987427de5d1"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "72c659e18cc40372e585de4a5c2517366a61900740c8920d831c959599a248dd"
+    },
+    "scene-triple-balance-9.1.6-size1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            16,
+            48000,
+            12289
+          ],
+          "sha256": "3d02f850f9e46c6451a4a678e11f17fabf7df40b7e9aa0cc7056f51e008961a0"
+        },
+        "2": {
+          "shape": [
+            16,
+            48000,
+            33
+          ],
+          "sha256": "bcde8eb9fe28feb4a5ed5350f24a82c388fcc186551b36a142cd4987427de5d1"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "b505d853340e6f7be24023995493c2b5e8d5e9751c0aa384c7bc54ff550518b8"
+    },
+    "scene-triple-balance-22.2-size0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            48000,
+            12289
+          ],
+          "sha256": "bac4ee3ee44a8f09dc371f7d326b547fe8b048e55e4744e9d1260d265c4529d2"
+        },
+        "2": {
+          "shape": [
+            24,
+            48000,
+            33
+          ],
+          "sha256": "d2239973eb0baddd1342f26ba5daaf17fd4716e9be0e2a60c9dbbc3a63fc36ed"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "8af631af4a5675905ae042056fb558cae4491486ca11516442e3307e5cf5c78f"
+    },
+    "scene-triple-balance-22.2-size0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            48000,
+            12289
+          ],
+          "sha256": "bac4ee3ee44a8f09dc371f7d326b547fe8b048e55e4744e9d1260d265c4529d2"
+        },
+        "2": {
+          "shape": [
+            24,
+            48000,
+            33
+          ],
+          "sha256": "d2239973eb0baddd1342f26ba5daaf17fd4716e9be0e2a60c9dbbc3a63fc36ed"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "f4af8fe2f4db89648c3af69d67b88b90b6b22be267f6f5735898840c16317f88"
+    },
+    "scene-triple-balance-22.2-size1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            48000,
+            12289
+          ],
+          "sha256": "58076d9bbcb201b8a390ffaaace4c5f34444e6e8f3482eb2947bb33cefa4658a"
+        },
+        "2": {
+          "shape": [
+            24,
+            48000,
+            33
+          ],
+          "sha256": "af016b0b0065ed47cc624579f3bd236ff3584917271f0660bed367cb0c679f4d"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "3f85d6d0bf4169c64d22c738e77ac245e449cfa9c49f761737bc3f2f42b922e7"
+    },
+    "scene-triple-balance-22.2-size1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            48000,
+            12289
+          ],
+          "sha256": "58076d9bbcb201b8a390ffaaace4c5f34444e6e8f3482eb2947bb33cefa4658a"
+        },
+        "2": {
+          "shape": [
+            24,
+            48000,
+            33
+          ],
+          "sha256": "af016b0b0065ed47cc624579f3bd236ff3584917271f0660bed367cb0c679f4d"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "199bc244169b412a9ba85c1c720e9d017135e610297e6a3904089c31dcf56a36"
+    },
+    "scene-triple-balance-7.1.4-size0-96000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            96000,
+            12289
+          ],
+          "sha256": "09596463758344dbd6683c84bea695e468995cad23ffc9233123c358b62457a6"
+        },
+        "2": {
+          "shape": [
+            12,
+            96000,
+            33
+          ],
+          "sha256": "91af0a2a4cd68a50bca746e1f2636cbd704cfe1d8c54be97a8ed7df2b6b65b3d"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "f394e720bc6c5811ef605674bb6d3ec8664d02495e66e2c60ffd096eff35309f"
+    },
+    "scene-triple-balance-7.1.4-size0-96000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            96000,
+            12289
+          ],
+          "sha256": "09596463758344dbd6683c84bea695e468995cad23ffc9233123c358b62457a6"
+        },
+        "2": {
+          "shape": [
+            12,
+            96000,
+            33
+          ],
+          "sha256": "91af0a2a4cd68a50bca746e1f2636cbd704cfe1d8c54be97a8ed7df2b6b65b3d"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "c934bef074d0a6353329fa3e3453eae0ba4745480a7138b1e56f461b5fd92bd8"
+    },
+    "scene-triple-balance-9.1.6-size1-48000-44100-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            16,
+            44100,
+            11291
+          ],
+          "sha256": "de6b265fca25c6b154b0d3cea5f7f3c738b6a24dda918188a9fb3ad0e244c71c"
+        },
+        "2": {
+          "shape": [
+            16,
+            44100,
+            31
+          ],
+          "sha256": "d0618c57adc32ded508b9a5cd7b2df38be711f4f4fedc79cd08c0d51adbfd370"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "e04cf64c7c0ddd19a6c7110a88ee855a520aa81d99ce50670169bd3643bd58a6"
+    },
+    "scene-triple-balance-9.1.6-size1-48000-44100-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 11291
+          },
+          {
+            "epoch": 2,
+            "frames": 31
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            16,
+            44100,
+            11291
+          ],
+          "sha256": "161353d5cc6d57ed0fa0cf2f8f677b8ef439903aac5e270314852fe96f14b3d6"
+        },
+        "2": {
+          "shape": [
+            16,
+            44100,
+            31
+          ],
+          "sha256": "d0618c57adc32ded508b9a5cd7b2df38be711f4f4fedc79cd08c0d51adbfd370"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "146ae5b3cf22b5a5578dd3508a23b62d3c06bc94ab32e16be03085fc47f3d2a4"
+    },
+    "scene-device-dsp-vbap-44100-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "048f49faaf78f37d909cb17e21e35f2fc3703a642ddeef6f1f72ef55bdfdcd7e"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "b3d8d34db1fd0b80bcd5cfc142a49da25273651dd215321ae346787c515928bb"
+        }
+      },
+      "input": "df8220620393c2243e549f297da64dacc0785a5047407c7f4eefa5e9dfbf4d9b",
+      "events": "76f5cb38199e8a30b9026e33ac76c2a88beb69a38fb1eee52651a371a0e225af"
+    },
+    "scene-device-dsp-vbap-44100-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 13376
+          },
+          {
+            "epoch": 2,
+            "frames": 36
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            13376
+          ],
+          "sha256": "27ee306c6fa7929a088c444306f662ffc593d6a35d67488cca3ae3c444a16cd6"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            36
+          ],
+          "sha256": "b3d8d34db1fd0b80bcd5cfc142a49da25273651dd215321ae346787c515928bb"
+        }
+      },
+      "input": "df8220620393c2243e549f297da64dacc0785a5047407c7f4eefa5e9dfbf4d9b",
+      "events": "e2a9cc3fb136e5c98a606ad441036940da58e8ecd4d7b62fbd4457da5ca5cb5b"
+    },
+    "scene-vbap-9+10+3-cloud0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            48000,
+            12289
+          ],
+          "sha256": "f12523849600d1d2be04eb1b0562a6ff2a257e1ae4dd80391d7ebcaa15b71efc"
+        },
+        "2": {
+          "shape": [
+            24,
+            48000,
+            33
+          ],
+          "sha256": "5653e9ca6aea1b7f3590f5fc4c11be463099ffbafad1f10be00cbd359a09da92"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "8e4924350c00b2a4ab702d3cc0d0e5c042adca868da0ebf5d26f058c792bf72b"
+    },
+    "scene-vbap-9+10+3-cloud0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            48000,
+            12289
+          ],
+          "sha256": "f12523849600d1d2be04eb1b0562a6ff2a257e1ae4dd80391d7ebcaa15b71efc"
+        },
+        "2": {
+          "shape": [
+            24,
+            48000,
+            33
+          ],
+          "sha256": "5653e9ca6aea1b7f3590f5fc4c11be463099ffbafad1f10be00cbd359a09da92"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "a31a738009ef221facbc3e2c7c7c3d3251a17cd713b0a6799aa6f3616d9f304c"
+    },
+    "scene-vbap-9+10+3-cloud0-96000-96000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            96000,
+            12289
+          ],
+          "sha256": "90b6a81df73143ec76c850ec396d92d875a1eca37f5b8fb396a08032c0e40187"
+        },
+        "2": {
+          "shape": [
+            24,
+            96000,
+            33
+          ],
+          "sha256": "27cd8a44bfc50a472bbc6f05357fd02a246c5f15e4657808e96ce20ae54bb3f0"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "5216ff73216de91f237248455c4ba29951d6c999d40c98b3da1db83c7c6439c3"
+    },
+    "scene-vbap-9+10+3-cloud0-96000-96000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            24,
+            96000,
+            12289
+          ],
+          "sha256": "90b6a81df73143ec76c850ec396d92d875a1eca37f5b8fb396a08032c0e40187"
+        },
+        "2": {
+          "shape": [
+            24,
+            96000,
+            33
+          ],
+          "sha256": "27cd8a44bfc50a472bbc6f05357fd02a246c5f15e4657808e96ce20ae54bb3f0"
+        }
+      },
+      "input": "dbae07b91c2c66d9bed688fd738d4dcc8fd1e64408dec5264d90c25ac1d4b784",
+      "events": "50adc0dda9f60c4cebd5d15e4b4ddd521690eace3630ef26d0a04becfdd5d33c"
+    },
+    "scene-policy-vbap-4+7+0-cloud0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "5b785e43ae0865351af126810a9416bda7d03cbf9f1d5145d7ab7e002af601f2"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "2974aff112d27108dc5b30f6b2092294d2b7159ab41a84af65d10b2a908f5b88"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "2212d84fc5919a52826b2efc598eb422f92ac50f0fe00d54a0f2b3e8d7a438aa"
+    },
+    "scene-policy-vbap-4+7+0-cloud0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "5b785e43ae0865351af126810a9416bda7d03cbf9f1d5145d7ab7e002af601f2"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "2974aff112d27108dc5b30f6b2092294d2b7159ab41a84af65d10b2a908f5b88"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "5f201396e5b9d2d6cb1688b7e18cba6048459daf06f58143857267c6a2899787"
+    },
+    "scene-policy-binaural-binaural-cloud1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "2b503e0a65a875d4d9f716d193a4c06feab0634caae5c600656aaeccc9a416c8"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "376281114c3985a6964572fe2bec944808c16c63298a5c68481761c6b331d1c9"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "2fd66df79da8ee2eea9c359f6aabd6c0d87d40fa50b70dc439148f345d3cf325"
+    },
+    "scene-policy-binaural-binaural-cloud1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            12289
+          ],
+          "sha256": "9b760ae552148df7eef79ae0937a5c8abff8937c3398291f962b111149d2d623"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            33
+          ],
+          "sha256": "376281114c3985a6964572fe2bec944808c16c63298a5c68481761c6b331d1c9"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "20f6d8c463188228bd74d5fb9865d002566c36332d81d6d10d2f13f8b820fdd5"
+    },
+    "scene-policy-triple-balance-7.1.4-size1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "3b58ca1a592d44ac0791061e017c8184aa5a0446818d7da15ecf68d4757192a1"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "19f2bdec7738075fdedcb15c86e3b98193db48c0537743fc318be8c5e83d8ef4"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "74b61a12ebe1731c06e1add0d36848614cccb78a78338980957ab9dea4b8ee18"
+    },
+    "scene-policy-triple-balance-7.1.4-size1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 12289
+          },
+          {
+            "epoch": 2,
+            "frames": 33
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            12,
+            48000,
+            12289
+          ],
+          "sha256": "3b58ca1a592d44ac0791061e017c8184aa5a0446818d7da15ecf68d4757192a1"
+        },
+        "2": {
+          "shape": [
+            12,
+            48000,
+            33
+          ],
+          "sha256": "19f2bdec7738075fdedcb15c86e3b98193db48c0537743fc318be8c5e83d8ef4"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "2f26570c03297f79befb54eef85f670d10185767c01ea4d28e2e8dff66035ad7"
+    },
+    "scene-room-binaural-cloud0-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 16730
+          },
+          {
+            "epoch": 2,
+            "frames": 4474
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            16730
+          ],
+          "sha256": "a5adcd87e6bbc8bb9fa774ff560dafc43f049f562f0a41b5c918e6fdd4110097"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            4474
+          ],
+          "sha256": "27e5d3642632e4bfbdb9e9124bb305d0287002674f3c0b25d07218b99f2fbcfa"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "479f8a51a48214b119d8c55a767ee586cbddb1844fd4a5fdad3faf14da2a2957"
+    },
+    "scene-room-binaural-cloud0-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 16730
+          },
+          {
+            "epoch": 2,
+            "frames": 4474
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            16730
+          ],
+          "sha256": "a5adcd87e6bbc8bb9fa774ff560dafc43f049f562f0a41b5c918e6fdd4110097"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            4474
+          ],
+          "sha256": "27e5d3642632e4bfbdb9e9124bb305d0287002674f3c0b25d07218b99f2fbcfa"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "96ad5cbf672ef97094d0a9327f0a4383b880eb8579e78a60e526a5fa5adf8f2b"
+    },
+    "scene-room-binaural-cloud1-48000-48000-fixed": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 16730
+          },
+          {
+            "epoch": 2,
+            "frames": 4474
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            16730
+          ],
+          "sha256": "9e192d7be0d1b53b945e904c5bf124bd4e2f10b434f6c1456f2d02053663ae18"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            4474
+          ],
+          "sha256": "0d3a08867d93894fa6c351031c2d812f5b60d4e94047a7705134feac18ad3736"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "dccabaf588d9f171bc5284d5abdde815bb34209270e38cbafd9433346c515899"
+    },
+    "scene-room-binaural-cloud1-48000-48000-fragmented": {
+      "status": {
+        "epochs": [
+          {
+            "epoch": 1,
+            "frames": 16730
+          },
+          {
+            "epoch": 2,
+            "frames": 4474
+          }
+        ],
+        "status": "passed",
+        "underruns": 0
+      },
+      "epochs": {
+        "1": {
+          "shape": [
+            2,
+            48000,
+            16730
+          ],
+          "sha256": "9e192d7be0d1b53b945e904c5bf124bd4e2f10b434f6c1456f2d02053663ae18"
+        },
+        "2": {
+          "shape": [
+            2,
+            48000,
+            4474
+          ],
+          "sha256": "0d3a08867d93894fa6c351031c2d812f5b60d4e94047a7705134feac18ad3736"
+        }
+      },
+      "input": "20dd67caa05ffd38948c90038a440c36f54e94de13f8ab39aa6490a6d8ddec85",
+      "events": "1d56288620bf613265cfe63b119457b5c63e7ac6c5b0b5c6e993a59ef01742e8"
+    }
+  },
+  "fenv": {
+    "objects-point": {
+      "status": [
+        {
+          "rounding": 0,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 0,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 1,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 1,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 2,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 2,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 3,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 3,
+          "flush": 1,
+          "restored": true
+        }
+      ],
+      "pcm": {
+        "round-0-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-0-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-1-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-1-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-2-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-2-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-3-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        },
+        "round-3-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "8fcd36a35c1f3b24d64d4000afbc211306571cdbeec1d6949dbbe4d5b619179e"
+        }
+      }
+    },
+    "directspeakers": {
+      "status": [
+        {
+          "rounding": 0,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 0,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 1,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 1,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 2,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 2,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 3,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 3,
+          "flush": 1,
+          "restored": true
+        }
+      ],
+      "pcm": {
+        "round-0-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-0-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-1-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-1-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-2-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-2-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-3-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        },
+        "round-3-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "5da1fbbc6c9543e370ea071ad6bf5b347bc4802ed5d3ad8515ea87730d997668"
+        }
+      }
+    },
+    "params": {
+      "status": [
+        {
+          "rounding": 0,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 0,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 1,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 1,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 2,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 2,
+          "flush": 1,
+          "restored": true
+        },
+        {
+          "rounding": 3,
+          "flush": 0,
+          "restored": true
+        },
+        {
+          "rounding": 3,
+          "flush": 1,
+          "restored": true
+        }
+      ],
+      "pcm": {
+        "round-0-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-0-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-1-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-1-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-2-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-2-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-3-flush-0": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        },
+        "round-3-flush-1": {
+          "shape": [
+            2,
+            48000,
+            4096
+          ],
+          "sha256": "3984e7a6bde3c8922ce5e8045e05b4661669a6e77a1acd329361be1188fe70eb"
+        }
+      }
+    }
+  },
+  "complete": true
+}

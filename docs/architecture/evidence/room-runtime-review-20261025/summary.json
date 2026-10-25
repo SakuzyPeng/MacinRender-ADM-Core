@@ -1,0 +1,143 @@
+{
+  "schema": "mradm.room-runtime-review.v1",
+  "date": "2026-10-25",
+  "reference_commit": "72c188b1cfb733dc383014d6af2a7fe2d1b3801a",
+  "reviewed_commit": "8510d15f8407fe8e69a6fc09ed3a4a9984ad07c6",
+  "fixed_commit": "158fc3e5ac98be3cbf0a87a5b2d8ad4156c39abf",
+  "scope": "Correctness and Release PCM consistency; no performance or zero-deadline acceptance claim.",
+  "comparisons": {
+    "macos": {
+      "passed": true,
+      "checks": {
+        "catalog_sha256": true,
+        "fixtures": true,
+        "offline": true,
+        "stream": true,
+        "scene": true,
+        "fenv": true
+      }
+    },
+    "windows": {
+      "passed": true,
+      "checks": {
+        "catalog_sha256": true,
+        "fixtures": true,
+        "offline": true,
+        "stream": true,
+        "scene": true,
+        "fenv": true
+      }
+    },
+    "cross_platform_candidate": {
+      "passed": true,
+      "checks": {
+        "catalog_sha256": true,
+        "fixtures": true,
+        "offline": true,
+        "stream": true,
+        "scene": true,
+        "fenv": true
+      }
+    }
+  },
+  "coverage_per_platform": {
+    "offline_cli_cases": 9,
+    "file_stream_cases": 16,
+    "scene_cases": 74,
+    "scene_epochs": 148,
+    "fenv_cases": 24,
+    "final_pcm_outputs": 197,
+    "repeat_passes": 2,
+    "generic_sofa_scene_cases_excluded": 14
+  },
+  "checks": {
+    "macos": {
+      "ffi_unit_tests": 49,
+      "render_library_tests": 6,
+      "room_runtime_tests": 6,
+      "room_runtime_allocation_tests": 1,
+      "debug_integration_tests": 4,
+      "release_room_integration_tests": 1
+    },
+    "windows": {
+      "ffi_unit_tests": 49,
+      "render_library_tests": 6,
+      "room_event_table_tests": 8,
+      "room_runtime_tests": 6,
+      "room_runtime_allocation_tests": 1,
+      "canonical_release_room_integration_tests": 1
+    },
+    "local_quality": {
+      "rust_fmt": true,
+      "clippy_render_and_ffi_all_targets_deny_warnings": true,
+      "changed_cpp_quality": true,
+      "ffi_headers": {
+        "functions": 331,
+        "structs": 135
+      },
+      "language_surface_ratchet": true
+    }
+  },
+  "disposal_regression": {
+    "scenario": "Three same-room requests; zero-source zero-frame process pumps; count only render-thread allocations inside process.",
+    "reviewed_allocations": 3,
+    "fixed_allocations": 0
+  },
+  "build": {
+    "macos": {
+      "configuration": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+        "MR_ADM_ENABLE_IAMF": "OFF",
+        "MR_ADM_ENABLE_ROOM_CUDA": "OFF",
+        "MR_ADM_ENABLE_SOFA": "ON",
+        "MR_ADM_FLAC_PROVIDER": "VENDORED",
+        "MR_ADM_OPUS_PROVIDER": "VENDORED",
+        "MR_ADM_STRICT_FP": "OFF"
+      },
+      "checkout_and_build_restored": true
+    },
+    "windows": {
+      "configuration": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+        "MR_ADM_ENABLE_IAMF": "OFF",
+        "MR_ADM_ENABLE_ROOM_CUDA": "OFF",
+        "MR_ADM_ENABLE_SOFA": "OFF",
+        "MR_ADM_FLAC_PROVIDER": "VENDORED",
+        "MR_ADM_OPUS_PROVIDER": "VENDORED",
+        "MR_ADM_STRICT_FP": "OFF"
+      },
+      "checkout_and_build_restored": true
+    }
+  },
+  "scripts_sha256": {
+    "catalog.json": "cfa052e16b9e8cb6a6ee8d4e28b3b0b863e2c0379815ad0296c7790a414221c9",
+    "collect.py": "008b8e0c3741165e119bfe1f59846e684893f0549a53c5e04e3ef8c4ca8bc67b",
+    "room_fenv.cpp": "18ec060345632937a47e68d8ce20d67e7acdd118f0a2fc89a8444413954040f6",
+    "build_pair.py": "24da95acfa3b7d4f148e6e2d1f2952cc5950ba7ebaeccfa3fd80290d0dd7af89",
+    "make_suite.py": "b6f0192073ef8512d6ac3176311eca31d29e78dc4c94fa72b47d5dc03d7c3d3a"
+  },
+  "collector": "docs/architecture/evidence/room-preparation-review-20261025/collect.py",
+  "fenv_driver": "docs/architecture/evidence/room-preparation-review-20261025/room_fenv.cpp",
+  "fixed_files_sha256": {
+    "rust/crates/mradm-ffi/src/render.rs": "7222cab6a78659f63d5f23c6a97de2f5de4c633dc32fe571180fe5a20f273c16",
+    "rust/crates/mradm-ffi/src/render_room.rs": "20d6722632bba99d8952af5f518b1e0fa2ee492c8f47a23d79001951f54f50f6",
+    "rust/crates/mradm-ffi/src/render_room_control_test.rs": "49f186e2a4fb863b43be4836922da1879a1460016a5c4080ceb96c41a80ba9e9",
+    "rust/crates/mradm-ffi/src/render_stream_test.rs": "1285b2dc39d1f18c9fb809ff570985cc3aa68a7d211e7375e67898bf3f609e93",
+    "rust/crates/mradm-render/src/room_runtime.rs": "f23301ca5683cce3be94d2995d00358fb700bcb3db7d68d7080d715cc5ca1483",
+    "rust/crates/mradm-render/src/room_stream.rs": "e1b88d3a17531cb9d2781095c319b0d7ff5d62e41078f654d6460c28a249f67d",
+    "rust/crates/mradm-render/tests/room_runtime_allocations.rs": "24b33ea3559d0f0dca9f915392784f13a26ea143543f83cac4ad20152919ec2b",
+    "scripts/quality/language-surface-baseline.json": "bf655ef59870ec9ed0fd0e8494926e650685c81d1dae95608c6d357d062a3fd4",
+    "src/adm_render_common/routing_ffi.h": "f13d59ee57cadda9033ffe8bcf2d6047f732c339cc9002d070ba33a0d0c2718e",
+    "src/adm_render_room/room_renderer.cpp": "5f2d63b898f0b81ba0df69feee758f1b7b8131023ac227d83e37654ee062654d"
+  },
+  "records_sha256": {
+    "catalog.json": "cfa052e16b9e8cb6a6ee8d4e28b3b0b863e2c0379815ad0296c7790a414221c9",
+    "macos-baseline.json": "a3fe38443ba69560dcc77be0b016afe8f9f91fcba5fc1efaed7790eaae86be95",
+    "macos-candidate.json": "6a7c082fb23544a65c62dc55a806839556975d8a3f970e75a589893cc938cd96",
+    "windows-baseline.json": "e4b54cd48b70173cf190a5a0244145ccccf50096ff18fb48d4856b6244dab659",
+    "windows-candidate.json": "8a27b61723039161bbee385180576ef8156a313e6da7a9e06e1576d338b676db"
+  },
+  "raw_windows_archive_sha256": "3fda8dac44907ac9f954c6d22ae0f2e3a3cae16c53b12e48418b9f8ba4cf7ad4"
+}
