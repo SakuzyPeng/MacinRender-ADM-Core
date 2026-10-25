@@ -29,6 +29,8 @@ pub enum Location {
     Meter,
     HoaDsp,
     TripleBalanceDsp,
+    /// The room runtime (`room-binaural`).
+    Room,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -10,6 +10,8 @@ pub mod live_triple_balance;
 pub mod live_vbap;
 pub mod offline;
 pub mod room;
+pub mod room_runtime;
+pub mod room_stream;
 pub mod routing;
 pub mod scene;
 pub mod stream;

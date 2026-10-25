@@ -25,6 +25,8 @@ tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_
         context = "HOA DSP";
     } else if (location_ == 5U) {
         context = "Triple Balance DSP";
+    } else if (location_ == 6U) {
+        context = "room-binaural";
     }
     return make_error(static_cast<ErrorCode>(code),
                       std::string{reinterpret_cast<const char*>(message_.data()), message_len_},
