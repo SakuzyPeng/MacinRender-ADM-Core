@@ -3,10 +3,10 @@
 //! the panner and scene math it is built from.
 use mradm_dsp::scene_math::{self as math, CloudPoint, Speaker as SceneSpeaker};
 use mradm_dsp::vbap::{Panner, PannerSource};
-use mradm_render::live_vbap::{
-    self, Config, Diagnostic, Element, Entry, Frame, Plane, Renderer, Role, State, Update, code,
-    field,
+use mradm_render::live::{
+    Diagnostic, Element, Entry, Frame, Plane, Role, State, Update, code, field,
 };
+use mradm_render::live_vbap::{self, Config, Renderer};
 use mradm_render::routing::LFE_SPLIT_POWER_GAIN;
 use mradm_scene::layouts::{self, Geometry};
 
@@ -29,6 +29,7 @@ fn element(id: u64, role: Role, label: &'static str) -> Element<'static> {
         id,
         role: Some(role),
         speaker_label: label.as_bytes(),
+        object_id: b"",
         has_position: false,
         position: [0., 1., 0.],
     }

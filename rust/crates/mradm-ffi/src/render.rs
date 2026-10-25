@@ -7,7 +7,8 @@ use crate::adm::Text;
 use crate::scene::SceneHandle;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
 use mradm_render::{
-    ear, hoa, live_vbap, offline, stream, triple_balance, triple_balance_stream, vbap,
+    ear, hoa, live, live_triple_balance, live_vbap, offline, stream, triple_balance,
+    triple_balance_stream, vbap,
 };
 use std::ffi::c_void;
 use std::{
@@ -1621,12 +1622,14 @@ pub struct RenderLiveVbapRequest {
     smoothing_frames: u32,
 }
 
-/// `live_scene::ElementDescriptor`; role 0 object, 1 DirectSpeakers, 2 LFE.
+/// `live_scene::ElementDescriptor`; role 0 object, 1 DirectSpeakers, 2 LFE. `object_id` is the
+/// semantic identity's AudioObject id, empty without one.
 #[repr(C)]
 pub struct RenderLiveElement {
     element_id: u64,
     role: u32,
     speaker_label: Text,
+    object_id: Text,
     has_position: u32,
     position: [f32; 3],
 }
@@ -1703,15 +1706,86 @@ pub struct RenderLiveDiagnostic {
     message: Text,
 }
 
-pub struct RenderLiveVbap {
-    renderer: live_vbap::Renderer,
-    initial: Vec<live_vbap::Entry>,
-    updates: Vec<live_vbap::Update>,
+/// The Scene stream Triple Balance renderer's configuration (`live_scene::RendererConfig`).
+#[repr(C)]
+pub struct RenderLiveTripleBalanceRequest {
+    layout_id: Text,
+    /// 0 for the standard speaker geometry.
+    geometry: u32,
+    /// `speaker_spread_mode`: 0 automatic, 1 none, 2 MDAP.
+    spread: u32,
+    has_sofa: u32,
+    sample_rate: u32,
+    split_power: u32,
+    smoothing_frames: u32,
+}
+
+enum LiveRenderer {
+    Vbap(Box<live_vbap::Renderer>),
+    TripleBalance(Box<live_triple_balance::Renderer>),
+}
+
+impl LiveRenderer {
+    /// The name in boundary texts and the mixer context of rejected buffers.
+    fn names(&self) -> (&'static str, &'static [u8]) {
+        match self {
+            Self::Vbap(_) => ("Live VBAP", b"Live VBAP DSP"),
+            Self::TripleBalance(_) => ("Live Triple Balance", b"Live Triple Balance DSP"),
+        }
+    }
+    fn output_channels(&self) -> u32 {
+        match self {
+            Self::Vbap(r) => r.output_channels(),
+            Self::TripleBalance(r) => r.output_channels(),
+        }
+    }
+    fn configure(&mut self, generation: u64, elements: &[live::Element]) -> Result<(), Error> {
+        match self {
+            Self::Vbap(r) => r.configure(generation, elements),
+            Self::TripleBalance(r) => r.configure(generation, elements),
+        }
+    }
+    fn reset(&mut self) {
+        match self {
+            Self::Vbap(r) => r.reset(),
+            Self::TripleBalance(r) => r.reset(),
+        }
+    }
+    fn render(&mut self, frame: &live::Frame, output: &mut [f32]) -> Result<(), Error> {
+        match self {
+            Self::Vbap(r) => r.render(frame, output),
+            Self::TripleBalance(r) => r.render(frame, output),
+        }
+    }
+    fn diagnostics(&self) -> &[live::Diagnostic] {
+        match self {
+            Self::Vbap(r) => r.diagnostics(),
+            Self::TripleBalance(r) => r.diagnostics(),
+        }
+    }
+}
+
+/// A Scene stream speaker renderer (`live_scene::ILiveSceneRenderer`).
+pub struct RenderLive {
+    renderer: LiveRenderer,
+    initial: Vec<live::Entry>,
+    updates: Vec<live::Update>,
     diagnostics: Vec<RenderLiveDiagnostic>,
 }
 
-fn live_state(s: &RenderLiveState) -> live_vbap::State {
-    live_vbap::State {
+impl RenderLive {
+    fn new(renderer: LiveRenderer) -> Self {
+        Self {
+            renderer,
+            initial: Vec::new(),
+            updates: Vec::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+}
+
+fn live_state(s: &RenderLiveState) -> live::State {
+    live::State {
         valid_fields: s.valid_fields,
         active: s.active != 0,
         linear_gain: s.linear_gain,
@@ -1730,14 +1804,14 @@ fn live_state(s: &RenderLiveState) -> live_vbap::State {
     }
 }
 
-unsafe fn live_vbap<'a>(handle: *mut RenderLiveVbap) -> Result<&'a mut RenderLiveVbap, Error> {
-    unsafe { handle.as_mut() }.ok_or_else(|| bad("无效 Live VBAP 句柄"))
+unsafe fn live_renderer<'a>(handle: *mut RenderLive) -> Result<&'a mut RenderLive, Error> {
+    unsafe { handle.as_mut() }.ok_or_else(|| bad("无效 Scene 流式渲染句柄"))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_vbap_create(
     request: *const RenderLiveVbapRequest,
-    output: *mut *mut RenderLiveVbap,
+    output: *mut *mut RenderLive,
     message: *mut u8,
     message_len: *mut usize,
 ) -> i32 {
@@ -1763,19 +1837,55 @@ pub unsafe extern "C" fn mradm_render_live_vbap_create(
                 split_power: r.split_power != 0,
                 smoothing_frames: r.smoothing_frames,
             })?;
-            *out = Box::into_raw(Box::new(RenderLiveVbap {
+            *out = Box::into_raw(Box::new(RenderLive::new(LiveRenderer::Vbap(Box::new(
                 renderer,
-                initial: Vec::new(),
-                updates: Vec::new(),
-                diagnostics: Vec::new(),
-            }));
+            )))));
             Ok(())
         },
     )
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_vbap_destroy(handle: *mut RenderLiveVbap) {
+pub unsafe extern "C" fn mradm_render_live_triple_balance_create(
+    request: *const RenderLiveTripleBalanceRequest,
+    output: *mut *mut RenderLive,
+    message: *mut u8,
+    message_len: *mut usize,
+) -> i32 {
+    boundary(
+        message,
+        message_len,
+        ptr::null_mut(),
+        ptr::null_mut(),
+        || {
+            let (Some(out), Some(r)) = (unsafe { output.as_mut() }, unsafe { request.as_ref() })
+            else {
+                return Err(bad("无效 Live Triple Balance 参数"));
+            };
+            *out = ptr::null_mut();
+            let renderer = live_triple_balance::Renderer::new(&live_triple_balance::Config {
+                layout_id: unsafe { bytes(&r.layout_id)? },
+                standard_geometry: r.geometry == 0,
+                spread: match r.spread {
+                    0 => live_triple_balance::Spread::Automatic,
+                    1 => live_triple_balance::Spread::None,
+                    _ => live_triple_balance::Spread::Mdap,
+                },
+                has_sofa: r.has_sofa != 0,
+                sample_rate: r.sample_rate,
+                split_power: r.split_power != 0,
+                smoothing_frames: r.smoothing_frames,
+            })?;
+            *out = Box::into_raw(Box::new(RenderLive::new(LiveRenderer::TripleBalance(
+                Box::new(renderer),
+            ))));
+            Ok(())
+        },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_destroy(handle: *mut RenderLive) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
     }
@@ -1783,14 +1893,14 @@ pub unsafe extern "C" fn mradm_render_live_vbap_destroy(handle: *mut RenderLiveV
 
 /// The output channels; 0 for a null handle.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_vbap_channels(handle: *const RenderLiveVbap) -> u32 {
+pub unsafe extern "C" fn mradm_render_live_channels(handle: *const RenderLive) -> u32 {
     unsafe { handle.as_ref() }.map_or(0, |h| h.renderer.output_channels())
 }
 
 /// Replaces the element generation; a failure keeps the previous one.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_vbap_configure(
-    handle: *mut RenderLiveVbap,
+pub unsafe extern "C" fn mradm_render_live_configure(
+    handle: *mut RenderLive,
     generation: u64,
     elements: *const RenderLiveElement,
     elements_len: usize,
@@ -1800,19 +1910,20 @@ pub unsafe extern "C" fn mradm_render_live_vbap_configure(
     context_len: *mut usize,
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
-        let h = unsafe { live_vbap(handle)? };
+        let h = unsafe { live_renderer(handle)? };
         let elements = unsafe { input(elements, elements_len)? }
             .iter()
             .map(|e| {
-                Ok(live_vbap::Element {
+                Ok(live::Element {
                     id: e.element_id,
                     role: match e.role {
-                        0 => Some(live_vbap::Role::Object),
-                        1 => Some(live_vbap::Role::DirectSpeaker),
-                        2 => Some(live_vbap::Role::Lfe),
+                        0 => Some(live::Role::Object),
+                        1 => Some(live::Role::DirectSpeaker),
+                        2 => Some(live::Role::Lfe),
                         _ => None,
                     },
                     speaker_label: unsafe { bytes(&e.speaker_label)? },
+                    object_id: unsafe { bytes(&e.object_id)? },
                     has_position: e.has_position != 0,
                     position: e.position,
                 })
@@ -1823,7 +1934,7 @@ pub unsafe extern "C" fn mradm_render_live_vbap_configure(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_vbap_reset(handle: *mut RenderLiveVbap) {
+pub unsafe extern "C" fn mradm_render_live_reset(handle: *mut RenderLive) {
     if let Some(h) = unsafe { handle.as_mut() } {
         h.renderer.reset();
     }
@@ -1832,8 +1943,8 @@ pub unsafe extern "C" fn mradm_render_live_vbap_reset(handle: *mut RenderLiveVba
 /// Renders the frame into the start of `output`. On success `*diagnostics` lists the frame's
 /// warnings until the next call on the handle; on failure the output is unchanged.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_vbap_render(
-    handle: *mut RenderLiveVbap,
+pub unsafe extern "C" fn mradm_render_live_render(
+    handle: *mut RenderLive,
     frame: *const RenderLiveFrame,
     output: *mut f32,
     output_len: usize,
@@ -1845,10 +1956,15 @@ pub unsafe extern "C" fn mradm_render_live_vbap_render(
     context_len: *mut usize,
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
+        if handle.is_null() {
+            return Err(bad("无效 Scene 流式渲染句柄"));
+        }
+        // The handle is not borrowed yet: only its renderer kind is read.
+        let (name, dsp) = unsafe { (*handle).renderer.names() };
         let (Some(list), Some(count)) = (unsafe { diagnostics.as_mut() }, unsafe {
             diagnostics_len.as_mut()
         }) else {
-            return Err(bad("无效 Live VBAP 参数"));
+            return Err(bad(&format!("无效 {name} 参数")));
         };
         *list = ptr::null();
         *count = 0;
@@ -1856,19 +1972,16 @@ pub unsafe extern "C" fn mradm_render_live_vbap_render(
         // ranges before borrowing the handle, samples or mutable output.
         let invalid_buffers = |_| Error {
             code: 1,
-            message: b"Invalid Live VBAP FFI arguments".to_vec(),
-            context: b"Live VBAP DSP".to_vec(),
+            message: format!("Invalid {name} FFI arguments").into_bytes(),
+            context: dsp.to_vec(),
         };
-        if handle.is_null() {
-            return Err(bad("无效 Live VBAP 句柄"));
-        }
         if frame.is_null() {
-            return Err(bad("无效 Live VBAP 参数"));
+            return Err(bad(&format!("无效 {name} 参数")));
         }
         crate::checked::separate(handle, 1, frame, 1).map_err(invalid_buffers)?;
         crate::checked::separate(handle, 1, output, output_len).map_err(invalid_buffers)?;
         crate::checked::separate(frame, 1, output, output_len).map_err(invalid_buffers)?;
-        let f = unsafe { frame.as_ref() }.ok_or_else(|| bad("无效 Live VBAP 参数"))?;
+        let f = unsafe { frame.as_ref() }.ok_or_else(|| bad(&format!("无效 {name} 参数")))?;
         crate::checked::separate(handle, 1, f.planes, f.planes_len).map_err(invalid_buffers)?;
         crate::checked::separate(handle, 1, f.initial, f.initial_len).map_err(invalid_buffers)?;
         crate::checked::separate(handle, 1, f.updates, f.updates_len).map_err(invalid_buffers)?;
@@ -1888,11 +2001,11 @@ pub unsafe extern "C" fn mradm_render_live_vbap_render(
             crate::checked::separate(output, output_len, p.samples, p.samples_len)
                 .map_err(invalid_buffers)?;
         }
-        let h = unsafe { live_vbap(handle)? };
+        let h = unsafe { live_renderer(handle)? };
         let planes = records
             .iter()
             .map(|p| {
-                Ok(live_vbap::Plane {
+                Ok(live::Plane {
                     element_id: p.element_id,
                     has_signal: p.has_signal != 0,
                     samples: if p.has_signal != 0 {
@@ -1904,32 +2017,33 @@ pub unsafe extern "C" fn mradm_render_live_vbap_render(
             })
             .collect::<Result<Vec<_>, Error>>()?;
         h.initial.clear();
-        h.initial
-            .extend(
-                unsafe { input(f.initial, f.initial_len)? }
-                    .iter()
-                    .map(|e| live_vbap::Entry {
-                        element_id: e.element_id,
-                        state: live_state(&e.state),
-                    }),
-            );
+        h.initial.extend(
+            unsafe { input(f.initial, f.initial_len)? }
+                .iter()
+                .map(|e| live::Entry {
+                    element_id: e.element_id,
+                    state: live_state(&e.state),
+                }),
+        );
         h.updates.clear();
         h.updates
-            .extend(unsafe { input(f.updates, f.updates_len)? }.iter().map(|u| {
-                live_vbap::Update {
-                    element_id: u.element_id,
-                    offset: u.offset,
-                    ramp: u.ramp,
-                    jump: u.jump != 0,
-                    changed: u.changed,
-                    cleared: u.cleared,
-                    state: live_state(&u.state),
-                }
-            }));
+            .extend(
+                unsafe { input(f.updates, f.updates_len)? }
+                    .iter()
+                    .map(|u| live::Update {
+                        element_id: u.element_id,
+                        offset: u.offset,
+                        ramp: u.ramp,
+                        jump: u.jump != 0,
+                        changed: u.changed,
+                        cleared: u.cleared,
+                        state: live_state(&u.state),
+                    }),
+            );
         let output = unsafe { checked_output(output, output_len) }
-            .ok_or_else(|| bad("无效 Live VBAP 输出"))?;
+            .ok_or_else(|| bad(&format!("无效 {name} 输出")))?;
         h.renderer.render(
-            &live_vbap::Frame {
+            &live::Frame {
                 generation: f.generation,
                 duration: f.duration,
                 planes: &planes,

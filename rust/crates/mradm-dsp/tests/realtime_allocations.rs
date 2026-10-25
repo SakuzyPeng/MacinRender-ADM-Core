@@ -863,3 +863,54 @@ fn prepared_live_vbap_events_first_call_reset_and_rejections_do_not_allocate() {
     }
     assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
 }
+
+/// Moved from the retired `mradm_dsp_live_tb_*` boundary (PCM consistency 4.6 C).
+#[test]
+fn live_triple_balance_first_process_reset_and_rejection_do_not_allocate() {
+    use mradm_dsp::triple_balance::live::{Mixer, TbLiveCommand, TbLiveElement};
+    use mradm_dsp::triple_balance::{Layout, Position};
+    let mut mixer = Mixer::new(Layout::Nine, 48000, &[TbLiveElement::default()]).unwrap();
+    let samples = [0.1; 17];
+    let initial = TbLiveCommand {
+        fields: 7,
+        position: Position {
+            x: 0.3,
+            y: 0.4,
+            z: 0.5,
+        },
+        size: 0.3,
+        level: 1.,
+        ..Default::default()
+    };
+    let event = TbLiveCommand {
+        offset: 3,
+        duration: 7,
+        fields: 2,
+        size: 0.7,
+        ..initial
+    };
+    let mut out = [19.; 17 * 16];
+    COUNT.with(|c| c.set(Some(0)));
+    let planes = || [Some(&samples[..])].into_iter();
+    mixer
+        .process(17, planes(), &[initial], &[event], &mut out)
+        .unwrap();
+    mixer.reset();
+    let expected = out;
+    out.fill(19.);
+    let stray = TbLiveCommand {
+        element: 10,
+        ..event
+    };
+    assert!(
+        mixer
+            .process(17, planes(), &[initial], &[stray], &mut out)
+            .is_err()
+    );
+    assert_eq!(out, [19.; 17 * 16], "a rejection leaves the output");
+    mixer
+        .process(17, planes(), &[initial], &[event], &mut out)
+        .unwrap();
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+    assert_eq!(out, expected, "a rejection leaves the state");
+}

@@ -18,7 +18,6 @@ mod hoa;
 mod hptf;
 mod hrtf;
 mod live_binaural;
-mod live_triple_balance;
 mod live_vbap;
 mod meter;
 mod monitor;
