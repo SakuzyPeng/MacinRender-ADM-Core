@@ -28,6 +28,7 @@ struct Prepared {
 [[nodiscard]] Result<std::shared_ptr<const Prepared>>
 prepare(const RoomConfig& config, const std::filesystem::path& sofa = {}, const Prepared* reuse = nullptr);
 [[nodiscard]] Result<std::array<float, 3>> polar(float azimuth, float elevation, float distance);
+[[nodiscard]] MradmRoomScreenGeometry geometry(const ScreenGeometry& screen);
 [[nodiscard]] MradmRoomScreens screens(const ScreenConfig& config, const ScreenGeometry& reference);
 
 // A render-worker session plus a separate preparation/disposal thread. Neither

@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 176,
-      "lines": 37683
+      "lines": 37520
     },
     "islands": {
       "files": 5,
@@ -15,15 +15,15 @@
     },
     "tests": {
       "files": 124,
-      "lines": 48448
+      "lines": 48260
     },
     "reference": {
       "files": 38,
       "lines": 12042
     },
     "rust": {
-      "files": 249,
-      "lines": 85303
+      "files": 252,
+      "lines": 86515
     },
     "rust-vendor": {
       "files": 175,
@@ -31,15 +31,15 @@
     }
   },
   "modules": {
-    "include/adm": 4392,
+    "include/adm": 4389,
     "rust/crates/mradm-adm": 2676,
-    "rust/crates/mradm-dsp": 39347,
+    "rust/crates/mradm-dsp": 39791,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 17351,
+    "rust/crates/mradm-ffi": 17109,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
-    "rust/crates/mradm-render": 11274,
+    "rust/crates/mradm-render": 12284,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5679,
     "rust/crates/mradm-wav": 2413,
@@ -53,7 +53,7 @@
     "src/adm_audio": 4909,
     "src/adm_c_api": 3613,
     "src/adm_cli": 1642,
-    "src/adm_core": 412,
+    "src/adm_core": 356,
     "src/adm_dsp": 2482,
     "src/adm_engine": 4098,
     "src/adm_io": 429,
@@ -62,10 +62,10 @@
     "src/adm_peak": 143,
     "src/adm_realtime": 5436,
     "src/adm_render_binaural": 3488,
-    "src/adm_render_common": 3141,
+    "src/adm_render_common": 3180,
     "src/adm_render_ear": 115,
     "src/adm_render_hoa": 111,
-    "src/adm_render_room": 1343,
+    "src/adm_render_room": 1200,
     "src/adm_render_room/cuda": 512,
     "src/adm_render_triple_balance": 355,
     "src/adm_render_vbap": 257,
@@ -95,6 +95,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 1868,
     "tests/tools": 2823,
-    "tests/unit": 41352
+    "tests/unit": 41164
   }
 }

@@ -4,6 +4,7 @@
 // handle's next call or destroy. Error buffers: capacity in *len, bytes written out,
 // NUL-terminated. Status values follow adm::ErrorCode.
 #pragma once
+#include "../adm_dsp/room_ffi.h"
 #include "../adm_metadata/scene_ffi.h"
 #ifdef __cplusplus
 extern "C" {
@@ -279,6 +280,38 @@ typedef struct MradmRenderLiveDiagnostic {
     uint64_t field;
     MradmAdmText message;
 } MradmRenderLiveDiagnostic;
+// Room renderer preparation (PCM consistency 4.6 D): spread 0 automatic, 1 none, 2 cloud, 3 SAF
+// spreader; routing 0 automatic, 1 label, 2 position, 3 matrix. The room view borrows the handle.
+typedef struct MradmRenderRoomRequest {
+    MradmAdmText layout_id;
+    uint32_t sample_rate;
+    uint32_t spread;
+    uint32_t routing;
+    uint32_t has_matrix;
+    uint32_t default_interp_ms;
+    uint32_t has_reference;
+    MradmRoomScreenGeometry reference;
+    uint32_t has_reproduction;
+    MradmRoomScreenGeometry reproduction;
+} MradmRenderRoomRequest;
+typedef struct MradmRenderRoomEvent {
+    uint64_t sample;
+    uint32_t priority;
+    uint32_t reserved;
+    MradmRoomCommand command;
+} MradmRenderRoomEvent;
+typedef struct MradmRenderRoomView {
+    const MradmRoomDescription* descriptions;
+    const uint16_t* channels;
+    const MradmAdmText* objects;
+    const MradmAdmText* labels;
+    size_t sources;
+    const MradmRenderRoomEvent* events;
+    size_t events_len;
+    uint64_t frames;
+    uint16_t input_channels;
+    uint32_t spread;
+} MradmRenderRoomView;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -445,6 +478,12 @@ int32_t mradm_render_stream_seek(
     MradmRenderStream* handle, uint64_t frame, uint32_t* location, uint8_t* message, size_t* message_len);
 int32_t mradm_render_stream_overrides(MradmRenderStream* handle, const MradmRenderOverride* values, size_t values_len);
 void mradm_render_stream_destroy(MradmRenderStream* handle);
+
+int32_t mradm_render_room_prepare(const MradmSceneHandle* scene,
+                                  const MradmRenderRoomRequest* request,
+                                  MradmRenderPrepared** output,
+                                  MradmRenderPreparedView* view,
+                                  MradmRenderRoomView* room);
 
 int32_t mradm_render_live_vbap_create(const MradmRenderLiveVbapRequest* request,
                                       MradmRenderLive** output,

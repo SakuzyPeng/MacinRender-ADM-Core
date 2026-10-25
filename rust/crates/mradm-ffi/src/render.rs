@@ -5,9 +5,11 @@
 //! context buffers (capacity in, length written out, NUL-terminated) with the C++ bytes.
 use crate::adm::Text;
 use crate::scene::SceneHandle;
+use mradm_dsp::room::control::{RoomCommand, RoomDescription};
+use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
 use mradm_render::{
-    ear, hoa, live, live_triple_balance, live_vbap, offline, stream, triple_balance,
+    ear, hoa, live, live_triple_balance, live_vbap, offline, room, stream, triple_balance,
     triple_balance_stream, vbap,
 };
 use std::ffi::c_void;
@@ -831,12 +833,13 @@ pub struct RenderPrepared {
     bindings: Arc<[vbap::Binding]>,
     settings: (usize, usize, u64, u32),
     triple_balance: Option<Box<TripleBalanceData>>,
+    room: Option<Box<RoomData>>,
 }
 
 /// Boxes a preparation's logs and result, fills `view` and returns the status.
 fn prepared(
     logs: Vec<(routing::Level, Vec<u8>)>,
-    result: Result<(offline::Kernel, Vec<vbap::Binding>), Error>,
+    result: Result<Option<(offline::Kernel, Vec<vbap::Binding>)>, Error>,
     settings: (usize, usize, u64, u32),
     output: &mut *mut RenderPrepared,
     view: &mut RenderPreparedView,
@@ -853,6 +856,7 @@ fn prepared(
         bindings: Arc::from([]),
         settings,
         triple_balance: None,
+        room: None,
     });
     for (level, text) in logs {
         handle.lines.push(RenderLogLine {
@@ -865,12 +869,13 @@ fn prepared(
         handle.texts.push(text);
     }
     let (code, tracks) = match result {
-        Ok((kernel, bindings)) => {
+        Ok(Some((kernel, bindings))) => {
             handle.kernel = Some(kernel);
             let tracks = bindings.len();
             handle.bindings = Arc::from(bindings);
             (0, tracks)
         }
+        Ok(None) => (0, 0),
         Err(e) => {
             let code = e.code;
             handle.error = e;
@@ -899,6 +904,154 @@ fn prepared(
             context: Vec::new(),
         })
     }
+}
+
+/// The room renderer's configuration (`RenderPlan`): spread 0 automatic, 1 none, 2 cloud, 3 SAF
+/// spreader; routing 0 automatic, 1 label, 2 position, 3 matrix.
+#[repr(C)]
+pub struct RenderRoomRequest {
+    layout_id: Text,
+    /// The prepared room's sample rate.
+    sample_rate: u32,
+    spread: u32,
+    routing: u32,
+    has_matrix: u32,
+    default_interp_ms: u32,
+    has_reference: u32,
+    reference: RoomScreenGeometry,
+    has_reproduction: u32,
+    reproduction: RoomScreenGeometry,
+}
+
+/// One room command at an input sample (PCM consistency 4.6 D; the file stream reads it until
+/// it moves to Rust).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RenderRoomEvent {
+    sample: u64,
+    priority: u32,
+    reserved: u32,
+    command: RoomCommand,
+}
+
+/// The sources and event table of a room preparation, borrowed from its handle.
+#[repr(C)]
+pub struct RenderRoomView {
+    descriptions: *const RoomDescription,
+    channels: *const u16,
+    objects: *const Text,
+    labels: *const Text,
+    sources: usize,
+    events: *const RenderRoomEvent,
+    events_len: usize,
+    frames: u64,
+    input_channels: u16,
+    spread: u32,
+}
+
+pub struct RoomData {
+    prepared: room::Prepared,
+    objects: Vec<Text>,
+    labels: Vec<Text>,
+    events: Vec<RenderRoomEvent>,
+}
+
+/// `screens` holds the validated screen configuration; on success `room` borrows the handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_room_prepare(
+    scene: *const SceneHandle,
+    request: *const RenderRoomRequest,
+    output: *mut *mut RenderPrepared,
+    view: *mut RenderPreparedView,
+    room_view: *mut RenderRoomView,
+) -> i32 {
+    boundary(
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        ptr::null_mut(),
+        || {
+            let (Some(out), Some(view), Some(room_view), Some(scene), Some(r)) = (
+                unsafe { output.as_mut() },
+                unsafe { view.as_mut() },
+                unsafe { room_view.as_mut() },
+                unsafe { scene.as_ref() },
+                unsafe { request.as_ref() },
+            ) else {
+                return Err(bad("无效房间准备参数"));
+            };
+            *out = ptr::null_mut();
+            let scene = scene.scene();
+            let request = room::Request {
+                scene,
+                sample_rate: r.sample_rate,
+                layout_id: unsafe { bytes(&r.layout_id)? },
+                spread: match r.spread {
+                    1 => room::Spread::None,
+                    3 => room::Spread::SafSpreader,
+                    _ => room::Spread::Automatic,
+                },
+                routing: match r.routing {
+                    1 => room::Routing::Label,
+                    2 => room::Routing::Position,
+                    3 => room::Routing::Matrix,
+                    _ => room::Routing::Automatic,
+                },
+                has_matrix: r.has_matrix != 0,
+                default_interp_ms: r.default_interp_ms,
+                screens: room::Screens {
+                    reference: (r.has_reference != 0).then_some(r.reference),
+                    reproduction: (r.has_reproduction != 0).then_some(r.reproduction),
+                },
+            };
+            let mut logs = Vec::new();
+            let result = room::prepare(&request, &mut |level, text| logs.push((level, text)));
+            let settings = (
+                usize::from(scene.info.channels),
+                2,
+                scene.info.frames,
+                scene.info.sample_rate,
+            );
+            let (result, data) = match result {
+                Ok(p) => (Ok(None), Some(p)),
+                Err(e) => (Err(e), None),
+            };
+            let status = prepared(logs, result, settings, out, view);
+            if let Some(p) = data {
+                let room = Box::new(RoomData {
+                    objects: p.objects.iter().map(|o| Text::bytes(o)).collect(),
+                    labels: p.labels.iter().map(|l| Text::bytes(l)).collect(),
+                    events: p
+                        .events
+                        .iter()
+                        .map(|e| RenderRoomEvent {
+                            sample: e.sample,
+                            priority: e.priority,
+                            reserved: 0,
+                            command: e.command,
+                        })
+                        .collect(),
+                    prepared: p,
+                });
+                let p = &room.prepared;
+                *room_view = RenderRoomView {
+                    descriptions: p.descriptions.as_ptr(),
+                    channels: p.channels.as_ptr(),
+                    objects: room.objects.as_ptr(),
+                    labels: room.labels.as_ptr(),
+                    sources: p.descriptions.len(),
+                    events: room.events.as_ptr(),
+                    events_len: room.events.len(),
+                    frames: p.frames,
+                    input_channels: p.input_channels,
+                    spread: u32::from(p.spread),
+                };
+                // `prepared` boxed the handle; the vectors keep their buffers in the box.
+                unsafe { &mut **out }.room = Some(room);
+            }
+            status
+        },
+    )
 }
 
 /// A borrowed DirectSpeakers matrix.
@@ -983,7 +1136,7 @@ pub unsafe extern "C" fn mradm_render_vbap_prepare(
                 scene.info.sample_rate,
             );
             let result = result.map(|p| (offline::Kernel::Mix(p.plan), p.bindings));
-            prepared(logs, result, settings, out, view)
+            prepared(logs, result.map(Some), settings, out, view)
         },
     )
 }
@@ -1033,7 +1186,7 @@ pub unsafe extern "C" fn mradm_render_hoa_prepare(
                 scene.info.sample_rate,
             );
             let result = result.map(|p| (offline::Kernel::Hoa(p.plan), p.bindings));
-            prepared(logs, result, settings, out, view)
+            prepared(logs, result.map(Some), settings, out, view)
         },
     )
 }
@@ -1109,7 +1262,7 @@ pub unsafe extern "C" fn mradm_render_ear_prepare(
                 };
                 (offline::Kernel::Ear(Arc::new(plan)), p.bindings)
             });
-            prepared(logs, result, settings, out, view)
+            prepared(logs, result.map(Some), settings, out, view)
         },
     )
 }
@@ -1216,7 +1369,7 @@ pub unsafe extern "C" fn mradm_render_triple_balance_prepare(
                 data.sizes = Arc::from(p.size_tracks);
                 (offline::Kernel::TripleBalance(p.plan), p.bindings)
             });
-            let status = prepared(logs, result, settings, out, view);
+            let status = prepared(logs, result.map(Some), settings, out, view);
             // `prepared` boxed the handle.
             let handle = unsafe { &mut **out };
             let data = handle.triple_balance.insert(Box::new(data));
