@@ -78,6 +78,30 @@ pub struct SourcePosition {
 const DISPOSE: usize = 8;
 const DEFAULT_TEXT: &str = "房间 DSP 操作失败";
 
+/// Moving the queue to the preparer leaves another fixed-capacity queue on the worker.
+#[derive(Default)]
+struct Disposal {
+    instances: [Option<Box<Instance>>; DISPOSE],
+    count: usize,
+}
+
+impl Disposal {
+    fn len(&self) -> usize {
+        self.count
+    }
+
+    fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    fn push(&mut self, instance: Box<Instance>) {
+        let slot = &mut self.instances[self.count];
+        debug_assert!(slot.is_none());
+        *slot = Some(instance);
+        self.count += 1;
+    }
+}
+
 struct Request {
     config: Config,
     revision: u64,
@@ -97,8 +121,7 @@ struct State {
     request: Option<Request>,
     candidate: Option<Candidate>,
     /// Boxes as the session hands them over: parking moves a pointer, never an instance.
-    #[allow(clippy::vec_box)]
-    dispose: Vec<Box<Instance>>,
+    dispose: Disposal,
     capacity: usize,
     epoch: u64,
     latest: u64,
@@ -289,7 +312,7 @@ impl Runtime {
                 status,
                 request: None,
                 candidate: None,
-                dispose: Vec::with_capacity(DISPOSE),
+                dispose: Disposal::default(),
                 capacity: 0,
                 epoch: 0,
                 latest: 0,
@@ -483,7 +506,9 @@ impl Runtime {
                 }
                 Ok(()) => s.preroll = s.preroll.max(candidate.preroll),
             }
-            s.dispose.extend(displaced.into_iter().flatten());
+            for instance in displaced.into_iter().flatten() {
+                s.dispose.push(instance);
+            }
             s.preparing = 0;
         }
         self.shared.cv.notify_all();

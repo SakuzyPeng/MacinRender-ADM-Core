@@ -8,7 +8,7 @@ use crate::room::{
 use mradm_dsp::room::quality::Quality;
 use mradm_dsp::room::screen::RoomScreens;
 use mradm_render::room_runtime::{Config, Control, Prepare};
-use mradm_render::room_stream::{FileStream, Live};
+use mradm_render::room_stream::{FileStream, Live, validate_overrides};
 
 /// `RoomConfig`: a profile handle, the UTF-8 personal HRIR path (empty for none), the scale and
 /// the quality (0 exact, 1 realtime).
@@ -73,6 +73,14 @@ fn control_handle(control: Control) -> *mut RenderRoomControl {
     }))
 }
 
+unsafe fn room_control<'a>(handle: *const RenderRoomControl) -> Option<&'a Control> {
+    if handle.is_null() {
+        return None;
+    }
+    // Only borrow the shared control field: status may mutate the separate message buffer.
+    Some(unsafe { &(*handle).control })
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_room_control_request(
     handle: *const RenderRoomControl,
@@ -84,11 +92,12 @@ pub unsafe extern "C" fn mradm_room_control_request(
     context_len: *mut usize,
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
-        let (Some(h), Some(out)) = (unsafe { handle.as_ref() }, unsafe { revision.as_mut() })
-        else {
+        let (Some(control), Some(out)) = (unsafe { room_control(handle) }, unsafe {
+            revision.as_mut()
+        }) else {
             return Err(bad("无效房间控制参数"));
         };
-        *out = h.control.request(&unsafe { room_config(config)? })?;
+        *out = control.request(&unsafe { room_config(config)? })?;
         Ok(())
     })
 }
@@ -98,11 +107,15 @@ pub unsafe extern "C" fn mradm_room_control_status(
     handle: *mut RenderRoomControl,
     out: *mut RenderRoomStatus,
 ) {
-    let (Some(h), Some(out)) = (unsafe { handle.as_mut() }, unsafe { out.as_mut() }) else {
+    let (Some(control), Some(out)) = (unsafe { room_control(handle) }, unsafe { out.as_mut() })
+    else {
         return;
     };
-    let s = h.control.status();
-    h.message = s.message.into_bytes();
+    let s = control.status();
+    // The caller serializes status calls and copying the returned message. Other queries
+    // borrow only `control`, so they remain independent of this exclusive field borrow.
+    let message = unsafe { &mut (*handle).message };
+    *message = s.message.into_bytes();
     *out = RenderRoomStatus {
         state: s.state,
         constrained_sources: s.constrained_sources,
@@ -115,7 +128,7 @@ pub unsafe extern "C" fn mradm_room_control_status(
         material_filter_guard_frames: s.material_filter_guard_frames,
         quality: s.quality as u32,
         reflection_update_frames: s.reflection_update_frames,
-        message: Text::bytes(&h.message),
+        message: Text::bytes(message),
     };
 }
 
@@ -125,10 +138,11 @@ pub unsafe extern "C" fn mradm_room_control_source(
     id: u64,
     out: *mut RoomSourceInfo,
 ) {
-    let (Some(h), Some(out)) = (unsafe { handle.as_ref() }, unsafe { out.as_mut() }) else {
+    let (Some(control), Some(out)) = (unsafe { room_control(handle) }, unsafe { out.as_mut() })
+    else {
         return;
     };
-    let p = h.control.source_position(id);
+    let p = control.source_position(id);
     *out = RoomSourceInfo {
         id: p.element_id,
         position: p.position,
@@ -146,7 +160,8 @@ pub unsafe extern "C" fn mradm_room_control_destroy(handle: *mut RenderRoomContr
     }
 }
 
-/// The room file stream (`IRenderStream`). Serialize calls; destroy after all calls return.
+/// The room file stream (`IRenderStream`). Validation may overlap worker calls; serialize all
+/// other calls and destroy after every call returns.
 pub struct RenderRoomStream(FileStream);
 
 unsafe fn room_stream<'a>(handle: *mut RenderRoomStream) -> offline::Result<&'a mut FileStream> {
@@ -262,8 +277,7 @@ pub unsafe extern "C" fn mradm_render_room_stream_seek_step(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_validate(
-    handle: *mut RenderRoomStream,
+pub unsafe extern "C" fn mradm_render_room_validate_overrides(
     values: *const RenderTripleBalanceOverride,
     values_len: usize,
     message: *mut u8,
@@ -275,9 +289,9 @@ pub unsafe extern "C" fn mradm_render_room_stream_validate(
         ptr::null_mut(),
         ptr::null_mut(),
         || {
-            let s = unsafe { room_stream(handle) }.map_err(|e| bad(&e.message))?;
+            // Validation depends only on the edits and the room boundary; no stream is borrowed.
             let o = unsafe { tb_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
-            s.validate_overrides(&o).map_err(|(code, message)| Error {
+            validate_overrides(&o, scope).map_err(|(code, message)| Error {
                 code,
                 message: message.into_bytes(),
                 context: Vec::new(),
@@ -383,3 +397,7 @@ pub unsafe extern "C" fn mradm_render_live_room_control(
         _ => ptr::null_mut(),
     }
 }
+
+#[cfg(test)]
+#[path = "render_room_control_test.rs"]
+mod tests;

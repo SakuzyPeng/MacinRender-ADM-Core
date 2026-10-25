@@ -122,8 +122,8 @@ class RoomStream final : public IRenderStream {
         const auto records = override_records(overrides);
         std::array<std::uint8_t, 512> message{};
         auto message_len = message.size();
-        if (const auto code = mradm_render_room_stream_validate(
-                handle_.get(), records.data(), records.size(), message.data(), &message_len);
+        if (const auto code =
+                mradm_render_room_validate_overrides(records.data(), records.size(), message.data(), &message_len);
             code != 0) {
             return make_error(static_cast<ErrorCode>(code),
                               std::string{reinterpret_cast<const char*>(message.data()), message_len});
