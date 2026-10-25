@@ -6,8 +6,8 @@
 //! it renders a nonempty slice. New warnings of one frame follow the generation's element order
 //! (the C++ renderer walked an unordered set).
 use crate::live::{
-    Diagnostic, Element, Frame, Role, State, code, copy_state_fields, default_state, field,
-    level_for, valid_state,
+    Diagnostic, Element, FrameView, PlaneSource, Role, State, code, copy_state_fields,
+    default_state, field, level_for, valid_state,
 };
 use crate::routing::{self, Error};
 use crate::triple_balance::tb_layout;
@@ -256,7 +256,11 @@ impl Renderer {
 
     /// Renders `frame.duration` interleaved frames into the start of `output`. On failure the
     /// output, the element states and the warnings are unchanged; an empty slice commits nothing.
-    pub fn render(&mut self, frame: &Frame, output: &mut [f32]) -> Result<(), Error> {
+    pub fn render<P: PlaneSource + ?Sized>(
+        &mut self,
+        frame: &FrameView<'_, P>,
+        output: &mut [f32],
+    ) -> Result<(), Error> {
         self.diagnostics.clear();
         let channels = self.layout.channels();
         let duration = frame.duration as usize;
@@ -280,7 +284,9 @@ impl Renderer {
             .expect("checked above")
             .process(
                 frame.duration,
-                planes.iter().map(|p| p.map(|j| frame.planes[j].samples)),
+                planes
+                    .iter()
+                    .map(|p| p.map(|j| frame.planes.plane(j).samples)),
                 &self.initial,
                 &self.events,
                 &mut output[..duration * channels],
@@ -308,7 +314,7 @@ impl Renderer {
     }
 
     /// Validates the frame and builds the mixer commands.
-    fn stage(&mut self, frame: &Frame) -> Result<(), Error> {
+    fn stage<P: PlaneSource + ?Sized>(&mut self, frame: &FrameView<'_, P>) -> Result<(), Error> {
         let n = self.elements.len();
         self.staged.clear();
         self.staged.extend(self.elements.iter().map(|e| Staged {

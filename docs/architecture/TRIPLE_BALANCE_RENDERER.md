@@ -137,8 +137,10 @@ ramp。多次更新可以位于同一控制块甚至同一采样点，按提交�
 
 Scene 的三角函数与衰减幂函数使用已有 libm crate 的可移植实现，文件路径保持原算术。
 固定积分格点约 64 KiB，在创建时准备并由会话共享，避免尺寸 ramp 逐样本重复积分。
-Rust session 仅持有各元素的控制／滤波状态，不保留历史事件或整轨 PCM；私有 FFI 每个
-worker slice 调用一次，处理和 reset 不分配。C++ 的场景复制和控制编排不属于此零分配承诺。
+Rust 数值 session 仅持有各元素的控制／滤波状态，不保留历史事件或整轨 PCM；每个
+worker slice 调用一次数值 Mixer，处理和 reset 不分配。generation 建立和帧控制暂存属于
+允许分配的控制编排；编排迁入 Rust 后仍按此范围区分。共享 Scene FFI 直接借用本次调用的
+PCM 记录，不再逐块分配临时视图数组，也不把样本引用保留到后续调用。
 `mr_adm_live_triple_balance_tests`、Scene C API/设备测试及 Rust `live_triple_balance`
 测试覆盖固定路由、拒绝原子性、独立 ramp、静音恢复、任意分块和现有静态尺寸内核对照。
 跨平台矩阵新增 `scene-triple-balance-*` 用例，涵盖三布局、尺寸过零、重采样、generation、
@@ -155,6 +157,18 @@ RTF 单独计量 10 秒等价 live renderer 输入的处理时间。macOS（M4 P
 RSS 在预热后未持续增长。此合成基准不替代物理设备或更高对象数素材的实测。
 可复现命令为 `mr_adm_triple_balance_scene_benchmark [9.1.6|22.2] 60`，必须使用 Release。
 来源哈希、PCM 哈希和详细结果见 [验证记录](evidence/live-triple-balance/validation.json)。
+
+### Scene PCM 视图修正验证（2026-10-24）
+
+4.6 C 的共享 FFI 原先为每块 PCM 创建 `Vec`；计数回归在预热后的 16 次调用中测得 16 次分配。
+改为借用输入记录后，Triple Balance 与 VBAP 的三种多声道布局均在相同检查及 reset 中保持零分配。
+FFI 回归另覆盖空帧、静音 plane、空指针、未对齐／溢出长度、重叠缓冲区和失败后的状态恢复。
+
+macOS arm64 的 72 项 Rust 测试、两个 C++ 定向回归、clippy、FFI 头校验和规模棘轮通过。
+无诊断插桩 Release 对照主线 `a072146c`：全部 88 个 Scene 重放的 704 个文件逐字节相同，
+其中 352 份为 PCM；另通过 352 项同进程重复性检查和 26 项适用的固定／碎片分块检查。
+候选复用主线未改动的原生库，以相同 Release 参数重编三个 Scene 适配源并链接修正后的 Rust 库。
+未执行 Windows、诊断矩阵或性能计时。详见[逐例哈希与验证范围](evidence/scene-pcm-views/macos-comparison.json)。
 
 ## 模块边界
 

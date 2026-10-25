@@ -5,8 +5,8 @@
 //! `live_vbap_renderer` with the same checks, order, arithmetic and texts; the ramps are the
 //! `mradm-dsp` `live_vbap::Mixer`. A frame is staged in full and committed only when it renders.
 use crate::live::{
-    Diagnostic, Element, Frame, Role, State, code, copy_state_fields, default_state, field,
-    level_for, valid_state,
+    Diagnostic, Element, FrameView, PlaneSource, Role, State, code, copy_state_fields,
+    default_state, field, level_for, valid_state,
 };
 use crate::routing::{self, Error, Target};
 use mradm_dsp::diagnostics::{ENABLED, Words, process};
@@ -273,7 +273,11 @@ impl Renderer {
 
     /// Renders `frame.duration` interleaved frames into the start of `output`. On failure neither
     /// the output nor any state changes, and no warning is published.
-    pub fn render(&mut self, frame: &Frame, output: &mut [f32]) -> Result<(), Error> {
+    pub fn render<P: PlaneSource + ?Sized>(
+        &mut self,
+        frame: &FrameView<'_, P>,
+        output: &mut [f32],
+    ) -> Result<(), Error> {
         self.diagnostics.clear();
         let channels = self.layout.speakers.len();
         let duration = frame.duration as usize;
@@ -294,7 +298,9 @@ impl Renderer {
         let planes = &self.planes;
         let rendered = self.mixer.as_mut().expect("checked above").process(
             frame.duration,
-            planes.iter().map(|p| p.map(|j| frame.planes[j].samples)),
+            planes
+                .iter()
+                .map(|p| p.map(|j| frame.planes.plane(j).samples)),
             &self.initial,
             &self.events,
             &self.coefficients,
@@ -313,7 +319,7 @@ impl Renderer {
     }
 
     /// Validates the frame and builds the mixer commands and coefficients.
-    fn stage(&mut self, frame: &Frame) -> Result<(), Error> {
+    fn stage<P: PlaneSource + ?Sized>(&mut self, frame: &FrameView<'_, P>) -> Result<(), Error> {
         let n = self.elements.len();
         self.staged.clear();
         self.staged.extend(self.elements.iter().map(|e| Staged {
