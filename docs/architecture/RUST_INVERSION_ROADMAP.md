@@ -49,13 +49,13 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust | 五期 |
 | `src/adm_c_api` | 3,614 | Rust 实现同一 `c_api.h` | 六期 |
 | `src/adm_render_binaural` | 3,486 | Rust（4.7），只留适配壳 | 四期 |
-| `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除（4.5 把只剩测试使用的 HOA、EAR、Live VBAP 头移到 `tests/unit`，剩 2,844 行） | 四期～六期 |
-| `src/adm_render_common` | 2,777 | Rust（4.5 已完成路由、对象预处理与扬声器离线驱动；扬声器布局表提前到 4.3）。现为 2,979 行：新增 384 行私有 FFI 头 `routing_ffi.h`，给 Apple 岛、Triple Balance、room 与双耳的薄包装随 4.6、4.7 删除，适配壳到五期删除 | 四期 |
+| `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除（4.5 把只剩测试使用的 HOA、EAR、Live VBAP 头移到 `tests/unit`，4.6 把 Triple Balance 头移到 `tests/support` 并删去 Live TB 与 room session 的声明，剩 2,399 行） | 四期～六期 |
+| `src/adm_render_common` | 2,777 | Rust（4.5 已完成路由、对象预处理与扬声器离线驱动；扬声器布局表提前到 4.3）。现为 3,306 行：私有 FFI 头 `routing_ffi.h`（609 行，4.6 增加 Triple Balance 与 room 的声明）和两个 Scene 扬声器渲染器共用的适配 `live_rust_renderer`（4.6 C 由 `src/adm_render_vbap` 移入）；给 Apple 岛与双耳的薄包装随 4.7 删除，适配壳到五期删除 | 四期 |
 | `src/adm_core` | 2,225 | 语义策略、DS 矩阵、屏幕 → Rust（4.4 已完成，剩 412 行）；领域模型视图到五期删除 | 四期、五期 |
-| `src/adm_render_triple_balance` | 2,055 | Rust（4.6） | 四期 |
+| `src/adm_render_triple_balance` | 2,055 | Rust `mradm-render`（4.6 已完成，剩 355 行的适配壳与能力表；只剩测试使用的 C++ 移到 `tests/support/triple_balance`） | 四期 |
 | `src/adm_cli` | 1,655 | Rust CLI，行为不变 | 六期 |
-| `src/adm_render_room` | 1,344 | Rust（4.6） | 四期 |
-| `src/adm_render_vbap` / `ear` / `hoa` | 1,236 / 1,039 / 770 | Rust `mradm-render`（4.5 已完成，含 Scene 流式 VBAP；剩 421 / 115 / 111 行的适配壳与能力表） | 四期 |
+| `src/adm_render_room` | 1,344 | Rust `mradm-render` 与 `mradm-dsp` `room::loading`（4.6 已完成，剩 568 行：适配壳、`render_window` 循环、`RoomProfile` 与 `IRoomControl` 薄壳） | 四期 |
+| `src/adm_render_vbap` / `ear` / `hoa` | 1,236 / 1,039 / 770 | Rust `mradm-render`（4.5 已完成，含 Scene 流式 VBAP；剩 257 / 115 / 111 行的适配壳与能力表，Scene VBAP 的适配 4.6 C 移入 `render_common`） | 四期 |
 | `src/adm_metadata`、`src/adm_io` | 788、590 | Rust 渲染场景 `mradm-scene`（4.3）；导出回写随语义策略迁入（4.4 已完成，剩 765、444 行的场景视图与文件编排） | 四期 |
 | `src/adm_renderer_factory` | 387 | 五期随编排迁入 Rust | 五期 |
 | `src/adm_loudness`、`src/adm_peak` | 165、143 | Rust（4.8） | 四期 |
@@ -108,6 +108,8 @@ Triple Balance 的 `panner.h` / `size_panner.h` / `size_processor.h` 与 `adm/sc
 4. 冻结副本计入 `reference` 区域，不计入生产 C/C++ 棘轮；参考退役时随单元一起删除。
 
 不为此安排正式发布；退役仍按原有三条条件另行审查。
+
+4.6：Triple Balance 的 `panner` / `size_panner` / `size_processor` 早有冻结副本（`tests/reference/triple_balance/`），参考包含的是同目录的副本，它用到的 `speaker_pcm.h` 由 `tests/support/legacy_speaker_pcm` 的垫片提供（4.6 B）；生产中的这几份只剩测试使用，连同 `layout_222`、`bed` 移到 `tests/support/triple_balance/`，不计入生产棘轮。
 
 ## 与 PCM 一致性审计的关系
 
