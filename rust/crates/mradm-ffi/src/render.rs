@@ -2295,6 +2295,10 @@ pub unsafe extern "C" fn mradm_render_live_render(
 mod room_ffi;
 
 #[cfg(test)]
+#[path = "../../mradm-render/tests/common/mod.rs"]
+mod test_common;
+
+#[cfg(test)]
 #[path = "render_stream_test.rs"]
 mod stream_tests;
 

@@ -69,6 +69,24 @@ fn live_value(value: Option<&LiveOverride>) -> RoomOverride {
     result
 }
 
+/// Control-thread validation; independent of the worker-owned file stream.
+pub fn validate_overrides(overrides: &[LiveOverride], scope: Scope) -> Result<(), (i32, String)> {
+    for item in overrides {
+        let scales = [
+            item.extent_scale,
+            item.extent_width_scale,
+            item.extent_height_scale,
+            item.extent_depth_scale,
+        ];
+        if scales.iter().any(|s| !s.is_finite() || *s < 0.) {
+            return Err((1, "房间 extent 比例必须有限且非负".to_owned()));
+        }
+        let value = live_value(Some(item));
+        scope(&mut || value.state().map(|_| ())).map_err(|(code, text)| (code, text.to_owned()))?;
+    }
+    Ok(())
+}
+
 pub struct FileStream {
     table: Arc<Prepared>,
     reader: Reader<BufReader<File>>,
@@ -259,27 +277,9 @@ impl FileStream {
         Ok(self.position < target)
     }
 
-    pub fn validate_overrides(&self, overrides: &[LiveOverride]) -> Result<(), (i32, String)> {
-        for item in overrides {
-            let scales = [
-                item.extent_scale,
-                item.extent_width_scale,
-                item.extent_height_scale,
-                item.extent_depth_scale,
-            ];
-            if scales.iter().any(|s| !s.is_finite() || *s < 0.) {
-                return Err((1, "房间 extent 比例必须有限且非负".to_owned()));
-            }
-            let value = live_value(Some(item));
-            (self.scope)(&mut || value.state().map(|_| ()))
-                .map_err(|(code, text)| (code, text.to_owned()))?;
-        }
-        Ok(())
-    }
-
     /// Latches an invalid update, as the C++ stream did, for the next `process`.
     pub fn set_overrides(&mut self, overrides: &[LiveOverride]) {
-        if let Err((code, message)) = self.validate_overrides(overrides) {
+        if let Err((code, message)) = validate_overrides(overrides, self.scope) {
             self.error = Some(error(code, &message));
             return;
         }

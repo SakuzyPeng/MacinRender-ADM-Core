@@ -317,9 +317,9 @@ typedef struct MradmRenderRoomStatus {
     uint32_t reflection_update_frames;
     MradmAdmText message;
 } MradmRenderRoomStatus;
-// IRoomControl, independent of the stream or Scene renderer that issued it.
+// IRoomControl: concurrent requests/queries; serialize status calls through copying their message.
 typedef struct MradmRenderRoomControl MradmRenderRoomControl;
-// The room file stream (PCM consistency 4.6 E). Serialize calls; destroy after all calls return.
+// Room file stream (4.6 E): validation may overlap worker calls; serialize others and destroy after all calls return.
 typedef struct MradmRenderRoomStream MradmRenderRoomStream;
 // cppcheck-suppress-end unusedStructMember
 
@@ -532,11 +532,10 @@ int32_t mradm_render_room_stream_seek_begin(MradmRenderRoomStream* handle,
                                             size_t* message_len);
 int32_t mradm_render_room_stream_seek_step(
     MradmRenderRoomStream* handle, uint32_t* pending, uint32_t* location, uint8_t* message, size_t* message_len);
-int32_t mradm_render_room_stream_validate(MradmRenderRoomStream* handle,
-                                          const MradmRenderTripleBalanceOverride* values,
-                                          size_t values_len,
-                                          uint8_t* message,
-                                          size_t* message_len);
+int32_t mradm_render_room_validate_overrides(const MradmRenderTripleBalanceOverride* values,
+                                             size_t values_len,
+                                             uint8_t* message,
+                                             size_t* message_len);
 // Latches a rejected update or orientation for the next process.
 int32_t mradm_render_room_stream_overrides(MradmRenderRoomStream* handle,
                                            const MradmRenderTripleBalanceOverride* values,
