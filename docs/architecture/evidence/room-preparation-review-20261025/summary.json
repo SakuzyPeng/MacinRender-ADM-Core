@@ -1,0 +1,120 @@
+{
+  "schema": "mradm.room-preparation-review.v1",
+  "baseline": "305159fc2956026b292db83f86552845ed820fa0",
+  "reviewed": "4899f9c129bcf4050622c61541bc47ca4df9942c",
+  "fixed": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+  "platform_comparisons": {
+    "macos": {
+      "passed": true,
+      "baseline": "305159fc2956026b292db83f86552845ed820fa0",
+      "candidate": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+      "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+      "checks": {
+        "catalog_sha256": true,
+        "fixtures": true,
+        "offline": true,
+        "stream": true,
+        "scene": true,
+        "fenv": true
+      },
+      "offline_cli_cases": 9,
+      "stream_cases": 16,
+      "scene_cases": 4,
+      "scene_pcm_epochs": 8,
+      "fenv_cases": 24,
+      "repeat_passes": 2
+    },
+    "windows": {
+      "passed": true,
+      "baseline": "305159fc2956026b292db83f86552845ed820fa0",
+      "candidate": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+      "platform": "Windows-10-10.0.26200-SP0",
+      "checks": {
+        "catalog_sha256": true,
+        "fixtures": true,
+        "offline": true,
+        "stream": true,
+        "scene": true,
+        "fenv": true
+      },
+      "offline_cli_cases": 9,
+      "stream_cases": 16,
+      "scene_cases": 4,
+      "scene_pcm_epochs": 8,
+      "fenv_cases": 24,
+      "repeat_passes": 2
+    }
+  },
+  "cross_platform": {
+    "catalog_sha256": true,
+    "fixtures": true,
+    "offline": true,
+    "stream": true,
+    "scene": true,
+    "fenv": true
+  },
+  "passed": true,
+  "configuration": {
+    "build_type": "Release",
+    "diagnostics": false,
+    "sample_rate": 48000,
+    "quality": "exact",
+    "room_cuda": false,
+    "sofa_feature": {
+      "macos": true,
+      "windows": false
+    },
+    "rust": "1.98.0 (88d9e12ae)",
+    "cpp": {
+      "macos": "Apple clang 21.0.0",
+      "windows": "MSVC 19.51.36257.0"
+    }
+  },
+  "regression": {
+    "profile": "dev",
+    "unfixed": "4899f9c129bcf4050622c61541bc47ca4df9942c",
+    "failed_on_macos": true,
+    "upward_y_expected": "3f5db3d7",
+    "upward_y_actual": "3f5db3d8",
+    "fixed_ffi_test": {
+      "macos": "passed",
+      "windows": "passed"
+    },
+    "rounding_modes": 4,
+    "flush_modes": 2,
+    "subnormal_and_error_restore": "passed"
+  },
+  "restoration": {
+    "macos": {
+      "checkout": true,
+      "clean": true,
+      "configuration": true,
+      "build": true
+    },
+    "windows": {
+      "checkout": true,
+      "clean": true,
+      "configuration": true,
+      "build": true
+    }
+  },
+  "tests": {
+    "macos": {
+      "ffi": 47,
+      "room_render": 8,
+      "room_cpp_debug": "passed",
+      "room_cpp_release": "passed",
+      "clippy": "passed",
+      "fmt": "passed",
+      "ffi_headers": {
+        "functions": 330,
+        "structs": 140
+      }
+    },
+    "windows": {
+      "room_ffi": 3,
+      "room_render": 8,
+      "room_cpp_release": "passed"
+    }
+  }
+}
