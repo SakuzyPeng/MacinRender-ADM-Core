@@ -6,6 +6,7 @@ pub mod geometry;
 #[cfg(feature = "room-gpu-experiment")]
 pub mod gpu_experiment;
 pub mod hrir;
+pub mod loading;
 pub mod partition;
 pub mod prepared;
 pub mod profile;
