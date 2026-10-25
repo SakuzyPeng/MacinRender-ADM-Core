@@ -956,6 +956,13 @@ pub struct RoomData {
     events: Vec<RenderRoomEvent>,
 }
 
+fn room_polar(azimuth: f32, elevation: f32, distance: f32) -> mradm_dsp::Result<[f32; 3]> {
+    // The former C++ preparation used mradm_room_polar: only this conversion enters the
+    // ROOM environment. Preserve that scope for the Rust event table's gain/offset arithmetic.
+    let _environment = crate::room_environment::Environment::enter();
+    mradm_dsp::room::loading::polar(azimuth, elevation, distance)
+}
+
 /// `screens` holds the validated screen configuration; on success `room` borrows the handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_room_prepare(
@@ -1005,7 +1012,11 @@ pub unsafe extern "C" fn mradm_render_room_prepare(
                 },
             };
             let mut logs = Vec::new();
-            let result = room::prepare(&request, &mut |level, text| logs.push((level, text)));
+            let result = room::prepare(
+                &request,
+                &mut |level, text| logs.push((level, text)),
+                room_polar,
+            );
             let settings = (
                 usize::from(scene.info.channels),
                 2,
@@ -2258,6 +2269,10 @@ mod stream_tests;
 #[cfg(test)]
 #[path = "render_live_test.rs"]
 mod live_tests;
+
+#[cfg(all(test, any(target_arch = "x86_64", target_arch = "aarch64")))]
+#[path = "render_room_test.rs"]
+mod room_tests;
 
 #[cfg(test)]
 mod tests {
