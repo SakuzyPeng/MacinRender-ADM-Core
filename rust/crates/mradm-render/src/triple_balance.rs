@@ -111,7 +111,7 @@ fn is_room_222(layout: &[u8]) -> bool {
     layout == b"9+10+3" || layout == b"22.2"
 }
 
-fn tb_layout(layout: &[u8]) -> Option<Layout> {
+pub(crate) fn tb_layout(layout: &[u8]) -> Option<Layout> {
     match layout {
         b"7.1.4" | b"4+7+0" => Some(Layout::Seven),
         b"9.1.6" => Some(Layout::Nine),

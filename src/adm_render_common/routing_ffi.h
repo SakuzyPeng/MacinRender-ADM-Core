@@ -196,9 +196,10 @@ typedef struct MradmRenderPreparedView {
     size_t tracks;
     size_t outputs;
 } MradmRenderPreparedView;
-// Scene stream VBAP renderer (live_scene::ILiveSceneRenderer). Roles: 0 object, 1 DirectSpeakers,
-// 2 LFE. A plane's samples are read only with a signal; `trace` is the checkpoint prefix.
-typedef struct MradmRenderLiveVbap MradmRenderLiveVbap;
+// Scene stream VBAP and Triple Balance renderers (live_scene::ILiveSceneRenderer). Roles: 0 object,
+// 1 DirectSpeakers, 2 LFE; object_id is the semantic identity's AudioObject id, empty without one. A
+// plane's samples are read only with a signal; `trace` is the checkpoint prefix.
+typedef struct MradmRenderLive MradmRenderLive;
 typedef struct MradmRenderLiveVbapRequest {
     MradmAdmText layout_id;
     uint32_t geometry;
@@ -206,10 +207,21 @@ typedef struct MradmRenderLiveVbapRequest {
     uint32_t split_power;
     uint32_t smoothing_frames;
 } MradmRenderLiveVbapRequest;
+// geometry 0 standard; spread 0 automatic, 1 none, 2 MDAP.
+typedef struct MradmRenderLiveTripleBalanceRequest {
+    MradmAdmText layout_id;
+    uint32_t geometry;
+    uint32_t spread;
+    uint32_t has_sofa;
+    uint32_t sample_rate;
+    uint32_t split_power;
+    uint32_t smoothing_frames;
+} MradmRenderLiveTripleBalanceRequest;
 typedef struct MradmRenderLiveElement {
     uint64_t element_id;
     uint32_t role;
     MradmAdmText speaker_label;
+    MradmAdmText object_id;
     uint32_t has_position;
     float position[3];
 } MradmRenderLiveElement;
@@ -435,31 +447,35 @@ int32_t mradm_render_stream_overrides(MradmRenderStream* handle, const MradmRend
 void mradm_render_stream_destroy(MradmRenderStream* handle);
 
 int32_t mradm_render_live_vbap_create(const MradmRenderLiveVbapRequest* request,
-                                      MradmRenderLiveVbap** output,
+                                      MradmRenderLive** output,
                                       uint8_t* message,
                                       size_t* message_len);
-void mradm_render_live_vbap_destroy(MradmRenderLiveVbap* handle);
-uint32_t mradm_render_live_vbap_channels(const MradmRenderLiveVbap* handle);
-int32_t mradm_render_live_vbap_configure(MradmRenderLiveVbap* handle,
-                                         uint64_t generation,
-                                         const MradmRenderLiveElement* elements,
-                                         size_t elements_len,
-                                         uint8_t* message,
-                                         size_t* message_len,
-                                         uint8_t* context,
-                                         size_t* context_len);
-void mradm_render_live_vbap_reset(MradmRenderLiveVbap* handle);
+int32_t mradm_render_live_triple_balance_create(const MradmRenderLiveTripleBalanceRequest* request,
+                                                MradmRenderLive** output,
+                                                uint8_t* message,
+                                                size_t* message_len);
+void mradm_render_live_destroy(MradmRenderLive* handle);
+uint32_t mradm_render_live_channels(const MradmRenderLive* handle);
+int32_t mradm_render_live_configure(MradmRenderLive* handle,
+                                    uint64_t generation,
+                                    const MradmRenderLiveElement* elements,
+                                    size_t elements_len,
+                                    uint8_t* message,
+                                    size_t* message_len,
+                                    uint8_t* context,
+                                    size_t* context_len);
+void mradm_render_live_reset(MradmRenderLive* handle);
 // On success *diagnostics lists the frame's warnings until the next call on the handle.
-int32_t mradm_render_live_vbap_render(MradmRenderLiveVbap* handle,
-                                      const MradmRenderLiveFrame* frame,
-                                      float* output,
-                                      size_t output_len,
-                                      const MradmRenderLiveDiagnostic** diagnostics,
-                                      size_t* diagnostics_len,
-                                      uint8_t* message,
-                                      size_t* message_len,
-                                      uint8_t* context,
-                                      size_t* context_len);
+int32_t mradm_render_live_render(MradmRenderLive* handle,
+                                 const MradmRenderLiveFrame* frame,
+                                 float* output,
+                                 size_t output_len,
+                                 const MradmRenderLiveDiagnostic** diagnostics,
+                                 size_t* diagnostics_len,
+                                 uint8_t* message,
+                                 size_t* message_len,
+                                 uint8_t* context,
+                                 size_t* context_len);
 
 #ifdef __cplusplus
 }

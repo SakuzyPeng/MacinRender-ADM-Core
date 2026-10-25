@@ -227,6 +227,7 @@ target_sources(
     mr_adm_render_common
     PRIVATE
         src/adm_render_common/hptf_eq.cpp
+        src/adm_render_common/live_rust_renderer.cpp
         src/adm_render_common/live_scene_trace.cpp
         src/adm_render_common/render_common.cpp
         src/adm_render_common/speaker_layouts.cpp
@@ -298,7 +299,6 @@ target_sources(mr_adm_render_triple_balance
         src/adm_render_triple_balance/live_triple_balance_renderer.cpp
         src/adm_render_triple_balance/triple_balance_renderer.cpp
         src/adm_render_triple_balance/triple_balance_stream.cpp
-        src/adm_render_triple_balance/bed.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
 )
 target_link_libraries(mr_adm_render_triple_balance
@@ -1314,6 +1314,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Test-only C++ adapters over the Triple Balance numeric FFI (out of production, PCM consistency 4.6).
     add_library(mr_adm_triple_balance_test_support STATIC
+        tests/support/triple_balance/bed.cpp
         tests/support/triple_balance/panner.cpp tests/support/triple_balance/layout_222.cpp
         tests/support/triple_balance/size_panner.cpp tests/support/triple_balance/size_processor.cpp
         tests/support/triple_balance/size_mixer.cpp)
@@ -1336,7 +1337,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_triple_balance_rust_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
-    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderCommon
+        mr_adm_triple_balance_test_support)
     target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_triple_balance)
     mr_adm_core_apply_warnings(mr_adm_live_triple_balance_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_triple_balance_tests)
