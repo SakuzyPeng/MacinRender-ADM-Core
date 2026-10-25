@@ -128,4 +128,4 @@ room 没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新
 | [40122405263](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40122405263) | `a072146` | B | 同上 |
 | [40166924313](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40166924313) | `305159f` | C | 同上 |
 | [40176869018](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40176869018) | `72c188b` | D | 同上 |
-| [40186174718](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40186174718) | `ea07aa9` | E | 写本记录时仍在运行，结果待回填 |
+| [40186174718](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40186174718) | `ea07aa9` | E | 同上 |
