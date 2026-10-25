@@ -1,6 +1,5 @@
 //! Control queries must remain independent of an exclusive worker borrow, including under Miri.
-#[path = "../../mradm-render/tests/common/mod.rs"]
-mod common;
+use super::test_common as common;
 
 use super::*;
 use std::sync::{

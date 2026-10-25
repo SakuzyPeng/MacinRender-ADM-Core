@@ -281,7 +281,7 @@ typedef struct MradmRenderLiveDiagnostic {
     MradmAdmText message;
 } MradmRenderLiveDiagnostic;
 // Room renderer preparation (PCM consistency 4.6 D): spread 0 automatic, 1 none, 2 cloud, 3 SAF
-// spreader; routing 0 automatic, 1 label, 2 position, 3 matrix. The room view borrows the handle.
+// spreader; routing 0 automatic, 1 label, 2 position, 3 matrix.
 typedef struct MradmRenderRoomRequest {
     MradmAdmText layout_id;
     uint32_t sample_rate;
@@ -294,24 +294,33 @@ typedef struct MradmRenderRoomRequest {
     uint32_t has_reproduction;
     MradmRoomScreenGeometry reproduction;
 } MradmRenderRoomRequest;
-typedef struct MradmRenderRoomEvent {
-    uint64_t sample;
-    uint32_t priority;
-    uint32_t reserved;
-    MradmRoomCommand command;
-} MradmRenderRoomEvent;
-typedef struct MradmRenderRoomView {
-    const MradmRoomDescription* descriptions;
-    const uint16_t* channels;
-    const MradmAdmText* objects;
-    const MradmAdmText* labels;
-    size_t sources;
-    const MradmRenderRoomEvent* events;
-    size_t events_len;
-    uint64_t frames;
-    uint16_t input_channels;
-    uint32_t spread;
-} MradmRenderRoomView;
+// A RoomConfig: a room profile handle, the UTF-8 personal HRIR path (empty for none), the scale
+// and the quality (0 exact, 1 realtime).
+typedef struct MradmRenderRoomConfig {
+    const void* profile;
+    MradmAdmText hrir;
+    double metres;
+    uint32_t quality;
+} MradmRenderRoomConfig;
+// A RoomStatus; message lives until the next status call on the control handle.
+typedef struct MradmRenderRoomStatus {
+    uint32_t state;
+    uint32_t constrained_sources;
+    uint64_t requested_revision;
+    uint64_t applied_revision;
+    uint64_t transition_sample;
+    uint64_t material_frames;
+    uint64_t tail_frames;
+    uint64_t buffer_frames;
+    uint64_t material_filter_guard_frames;
+    uint32_t quality;
+    uint32_t reflection_update_frames;
+    MradmAdmText message;
+} MradmRenderRoomStatus;
+// IRoomControl: concurrent requests/queries; serialize status calls through copying their message.
+typedef struct MradmRenderRoomControl MradmRenderRoomControl;
+// Room file stream (4.6 E): validation may overlap worker calls; serialize others and destroy after all calls return.
+typedef struct MradmRenderRoomStream MradmRenderRoomStream;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -364,7 +373,7 @@ int32_t mradm_render_lfe_routing(uint32_t split_power,
 float mradm_render_lfe_gain(const MradmRenderLfeRouting* routing, uint32_t input_target, uint32_t output_target);
 
 // Driver errors set *location: 0 none, 1 path=<input>, 2 input=<input>, 3 meter, 4 HOA DSP,
-// 5 Triple Balance DSP.
+// 5 Triple Balance DSP, 6 room-binaural.
 int32_t mradm_render_offline_open(const uint8_t* path,
                                   size_t path_len,
                                   const void* plan,
@@ -482,8 +491,60 @@ void mradm_render_stream_destroy(MradmRenderStream* handle);
 int32_t mradm_render_room_prepare(const MradmSceneHandle* scene,
                                   const MradmRenderRoomRequest* request,
                                   MradmRenderPrepared** output,
-                                  MradmRenderPreparedView* view,
-                                  MradmRenderRoomView* room);
+                                  MradmRenderPreparedView* view);
+
+int32_t mradm_room_control_request(const MradmRenderRoomControl* handle,
+                                   const MradmRenderRoomConfig* config,
+                                   uint64_t* revision,
+                                   uint8_t* message,
+                                   size_t* message_len,
+                                   uint8_t* context,
+                                   size_t* context_len);
+void mradm_room_control_status(MradmRenderRoomControl* handle, MradmRenderRoomStatus* out);
+void mradm_room_control_source(const MradmRenderRoomControl* handle, uint64_t id, MradmRoomSourceInfo* out);
+void mradm_room_control_destroy(MradmRenderRoomControl* handle);
+
+// Opens the stream of a room preparation and its room set, seeked to 0; pose is yaw, pitch, roll.
+int32_t mradm_render_room_stream_open(const MradmRenderPrepared* prepared,
+                                      const void* room,
+                                      const uint8_t* path,
+                                      size_t path_len,
+                                      const MradmRenderRoomConfig* config,
+                                      const float* pose,
+                                      MradmRenderRoomStream** output,
+                                      uint32_t* location,
+                                      uint8_t* message,
+                                      size_t* message_len);
+int32_t mradm_render_room_stream_process(MradmRenderRoomStream* handle,
+                                         float* output,
+                                         size_t output_len,
+                                         size_t frames,
+                                         size_t* produced,
+                                         uint32_t* location,
+                                         uint8_t* message,
+                                         size_t* message_len);
+// *pending (set unless the call fails) is whether a history block remains to be stepped.
+int32_t mradm_render_room_stream_seek_begin(MradmRenderRoomStream* handle,
+                                            uint64_t frame,
+                                            uint32_t* pending,
+                                            uint32_t* location,
+                                            uint8_t* message,
+                                            size_t* message_len);
+int32_t mradm_render_room_stream_seek_step(
+    MradmRenderRoomStream* handle, uint32_t* pending, uint32_t* location, uint8_t* message, size_t* message_len);
+int32_t mradm_render_room_validate_overrides(const MradmRenderTripleBalanceOverride* values,
+                                             size_t values_len,
+                                             uint8_t* message,
+                                             size_t* message_len);
+// Latches a rejected update or orientation for the next process.
+int32_t mradm_render_room_stream_overrides(MradmRenderRoomStream* handle,
+                                           const MradmRenderTripleBalanceOverride* values,
+                                           size_t values_len);
+void mradm_render_room_stream_pose(MradmRenderRoomStream* handle, float yaw, float pitch, float roll);
+uint64_t mradm_render_room_stream_tail(const MradmRenderRoomStream* handle);
+// A new control handle; null for a null stream.
+MradmRenderRoomControl* mradm_render_room_stream_control(const MradmRenderRoomStream* handle);
+void mradm_render_room_stream_destroy(MradmRenderRoomStream* handle);
 
 int32_t mradm_render_live_vbap_create(const MradmRenderLiveVbapRequest* request,
                                       MradmRenderLive** output,
@@ -493,18 +554,45 @@ int32_t mradm_render_live_triple_balance_create(const MradmRenderLiveTripleBalan
                                                 MradmRenderLive** output,
                                                 uint8_t* message,
                                                 size_t* message_len);
+// The Scene stream room renderer over a room set: spread is binaural_spread_mode != none, sink
+// whether the caller publishes diagnostics.
+int32_t mradm_render_live_room_create(const void* room,
+                                      const MradmRenderRoomConfig* config,
+                                      uint32_t spread,
+                                      const MradmRoomScreens* screens,
+                                      uint32_t sink,
+                                      MradmRenderLive** output,
+                                      uint8_t* message,
+                                      size_t* message_len,
+                                      uint8_t* context,
+                                      size_t* context_len);
+// The room control of a Scene stream room renderer; null for another renderer.
+MradmRenderRoomControl* mradm_render_live_room_control(const MradmRenderLive* handle);
 void mradm_render_live_destroy(MradmRenderLive* handle);
 uint32_t mradm_render_live_channels(const MradmRenderLive* handle);
 int32_t mradm_render_live_configure(MradmRenderLive* handle,
                                     uint64_t generation,
                                     const MradmRenderLiveElement* elements,
                                     size_t elements_len,
+                                    const MradmRenderLiveDiagnostic** diagnostics,
+                                    size_t* diagnostics_len,
                                     uint8_t* message,
                                     size_t* message_len,
                                     uint8_t* context,
                                     size_t* context_len);
 void mradm_render_live_reset(MradmRenderLive* handle);
-// On success *diagnostics lists the frame's warnings until the next call on the handle.
+// Latches a rejected orientation (room) for the next render.
+void mradm_render_live_pose(MradmRenderLive* handle, float yaw, float pitch, float roll);
+// Ends the input; *tail is the frames the renderer appends (0 without a room).
+int32_t mradm_render_live_end_input(MradmRenderLive* handle,
+                                    uint64_t* tail,
+                                    uint8_t* message,
+                                    size_t* message_len,
+                                    uint8_t* context,
+                                    size_t* context_len);
+uint64_t mradm_render_live_tail(const MradmRenderLive* handle);
+// *diagnostics lists the frame's warnings until the next call on the handle, also after a failure:
+// room publishes those raised before it, VBAP and Triple Balance none, and leave the output unchanged.
 int32_t mradm_render_live_render(MradmRenderLive* handle,
                                  const MradmRenderLiveFrame* frame,
                                  float* output,

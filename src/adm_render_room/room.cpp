@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <mutex>
 #include <utility>
 
 #include "room_internal.h"
@@ -95,364 +96,78 @@ prepare(const RoomConfig& config, const std::filesystem::path& sofa, const Prepa
     return std::shared_ptr<const Prepared>{std::move(result)};
 }
 
-Result<std::array<float, 3>> polar(float azimuth, float elevation, float distance) {
-    std::array<float, 3> result{};
-    auto status = checked(mradm_room_polar(azimuth, elevation, distance, result.data()));
-    if (!status) {
-        return tl::unexpected{status.error()};
-    }
-    return result;
+ConfigRecord::ConfigRecord(const RoomConfig& config) : hrir(utf8_path(config.hrir_manifest)) {
+    record.profile = config.profile ? Access::get(*config.profile) : nullptr;
+    record.hrir = {reinterpret_cast<const std::uint8_t*>(hrir.data()), hrir.size()};
+    record.metres = config.metres_per_unit;
+    record.quality = static_cast<std::uint32_t>(config.quality);
 }
 
-Runtime::Runtime(std::shared_ptr<const Prepared> prepared, RoomConfig config, void* handle)
-    : prepared_(std::move(prepared)), config_(std::move(config)), session_(handle, mradm_room_session_destroy),
-      preroll_(prepared_->info.preroll_frames) {
-    status_.quality = config_.quality;
-    status_.reflection_update_frames = prepared_->info.reflection_update_frames;
-    status_.tail_frames = prepared_->info.tail_frames;
-    status_.material_filter_guard_frames = prepared_->info.material_guard_frames;
-    preparer_ = std::jthread([this](const std::stop_token& stop) { prepare_loop(stop); });
-}
-Runtime::~Runtime() {
-    preparer_.request_stop();
-    cv_.notify_all();
-    preparer_.join();
-    std::for_each_n(dispose_.begin(), dispose_count_, mradm_room_instance_destroy);
-}
-Result<std::shared_ptr<Runtime>>
-Runtime::create(std::shared_ptr<const Prepared> prepared, const RoomConfig& config, bool scene, bool spread) {
-    std::array<char, 512> message{};
-    void* raw = nullptr;
-    auto result = checked(mradm_room_session_create(prepared->handle.get(),
-                                                    config.metres_per_unit,
-                                                    scene ? 1U : 0U,
-                                                    spread ? 1U : 0U,
-                                                    &raw,
-                                                    message.data(),
-                                                    message.size()),
-                          message.data());
-    if (!result) {
-        return tl::unexpected{result.error()};
-    }
-    std::unique_ptr<void, decltype(&mradm_room_session_destroy)> owned{raw, mradm_room_session_destroy};
-    return std::shared_ptr<Runtime>{new Runtime(std::move(prepared), config, owned.release())};
-}
-Result<void> Runtime::configure(std::span<const MradmRoomDescription> descriptions) {
-    std::array<char, 512> message{};
-    auto result = checked(mradm_room_session_configure(
-                              session_.get(), descriptions.data(), descriptions.size(), message.data(), message.size()),
-                          message.data());
-    if (!result) {
-        return result;
-    }
-    MradmRoomInfo info{};
-    auto query = checked(mradm_room_session_info(session_.get(), &info));
-    if (!query) {
-        return query;
-    }
-    {
-        const std::lock_guard lock(mutex_);
-        positions_.clear();
-        positions_.reserve(descriptions.size());
-        for (const auto& description : descriptions) {
-            RoomSourcePosition position;
-            position.element_id = description.id;
-            positions_.push_back(position);
+namespace {
+// Switch requests, the preparation thread and the status snapshots are Rust mradm-render
+// `room_runtime` (PCM consistency 4.6 E); this shell converts the records.
+class RoomControl final : public IRoomControl {
+  public:
+    explicit RoomControl(MradmRenderRoomControl* raw) : handle_(raw, &mradm_room_control_destroy) {}
+    [[nodiscard]] Result<std::uint64_t> request(const RoomConfig& config) override {
+        const ConfigRecord record(config);
+        std::array<std::uint8_t, 512> message{};
+        std::array<std::uint8_t, 512> context{};
+        auto message_len = message.size();
+        auto context_len = context.size();
+        std::uint64_t revision = 0;
+        if (const auto code = mradm_room_control_request(
+                handle_.get(), &record.record, &revision, message.data(), &message_len, context.data(), &context_len);
+            code != 0) {
+            return make_error(static_cast<ErrorCode>(code),
+                              std::string{reinterpret_cast<const char*>(message.data()), message_len},
+                              std::string{reinterpret_cast<const char*>(context.data()), context_len});
         }
+        return revision;
     }
-    publish(info);
-    return {};
-}
-Result<void> Runtime::reset(std::uint64_t sample, bool clear) {
-    std::array<char, 512> message{};
-    auto result =
-        checked(mradm_room_session_reset(session_.get(), sample, clear ? 1U : 0U, message.data(), message.size()),
-                message.data());
-    if (!result) {
+    [[nodiscard]] RoomStatus status() const override {
+        const std::lock_guard lock(mutex_); // the record's message lives until the next status call
+        MradmRenderRoomStatus record{};
+        mradm_room_control_status(handle_.get(), &record);
+        RoomStatus result;
+        result.state = static_cast<RoomSwitchState>(record.state);
+        result.requested_revision = record.requested_revision;
+        result.applied_revision = record.applied_revision;
+        result.transition_sample = record.transition_sample;
+        result.material_frames = record.material_frames;
+        result.tail_frames = record.tail_frames;
+        result.buffer_frames = record.buffer_frames;
+        result.material_filter_guard_frames = record.material_filter_guard_frames;
+        result.constrained_sources = record.constrained_sources;
+        result.message.assign(reinterpret_cast<const char*>(record.message.data), record.message.len);
+        result.quality = static_cast<RoomQuality>(record.quality);
+        result.reflection_update_frames = record.reflection_update_frames;
         return result;
     }
-    {
-        const std::lock_guard lock(mutex_);
-        ++epoch_;
-        request_.reset();
-        preparing_ = 0;
-        failed_ = 0;
-        ended_ = false;
-        status_.message.clear();
-    }
-    MradmRoomInfo info{};
-    auto query = checked(mradm_room_session_info(session_.get(), &info));
-    if (!query) {
-        return query;
-    }
-    publish(info);
-    cv_.notify_all();
-    return {};
-}
-Result<void> Runtime::prime(const MradmRoomCommand& command, std::uint64_t sample) {
-    std::array<char, 512> message{};
-    return checked(mradm_room_session_prime(session_.get(), &command, sample, message.data(), message.size()),
-                   message.data());
-}
-Result<void> Runtime::pose(const ListenerOrientation& orientation) {
-    const std::array<float, 3> pose{orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg};
-    return checked(mradm_room_session_pose(session_.get(), pose.data(), pose.size()));
-}
-Result<void> Runtime::overrides(std::span<const MradmRoomOverride> values) {
-    std::array<char, 512> message{};
-    return checked(
-        mradm_room_session_overrides(session_.get(), values.data(), values.size(), message.data(), message.size()),
-        message.data());
-}
-Result<std::uint64_t> Runtime::end_input() {
-    auto result = checked(mradm_room_session_end(session_.get()));
-    if (!result) {
-        return tl::unexpected{result.error()};
-    }
-    {
-        const std::lock_guard lock(mutex_);
-        ended_ = true;
-        ++epoch_;
-        request_.reset();
-        preparing_ = 0;
-    }
-    MradmRoomInfo info{};
-    auto query = checked(mradm_room_session_info(session_.get(), &info));
-    if (!query) {
-        return tl::unexpected{query.error()};
-    }
-    publish(info);
-    cv_.notify_all();
-    return info.tail_frames;
-}
-Result<void> Runtime::process(std::size_t frames,
-                              std::span<const MradmRoomPlane> planes,
-                              std::span<const MradmRoomCommand> initial,
-                              std::span<const MradmRoomCommand> events,
-                              std::span<float> out) {
-    auto pending = pump();
-    if (!pending) {
-        return pending;
-    }
-    std::array<char, 512> message{};
-    MradmRoomInfo info{};
-    auto result = checked(mradm_room_session_process(session_.get(),
-                                                     frames,
-                                                     planes.data(),
-                                                     planes.size(),
-                                                     initial.data(),
-                                                     initial.size(),
-                                                     events.data(),
-                                                     events.size(),
-                                                     out.data(),
-                                                     out.size(),
-                                                     &info,
-                                                     message.data(),
-                                                     message.size()),
-                          message.data());
-    if (!result) {
-        return result;
-    }
-    publish(info);
-    return {};
-}
-void Runtime::publish(const MradmRoomInfo& info) {
-    const std::lock_guard lock(mutex_);
-    if (info.source_capacity > capacity_) {
-        cv_.notify_all();
-    }
-    capacity_ = info.source_capacity;
-    status_.material_frames = info.input_frames;
-    status_.buffer_frames = info.latency_frames;
-    status_.tail_frames = info.tail_frames;
-    status_.material_filter_guard_frames = info.material_guard_frames;
-    status_.applied_revision = info.applied_request;
-    status_.transition_sample = info.transition_sample;
-    status_.constrained_sources = info.constrained_sources;
-    switch (info.phase) {
-    case 1:
-        status_.state = RoomSwitchState::preparing;
-        break;
-    case 2:
-        status_.state = RoomSwitchState::transitioning;
-        break;
-    case 3:
-        status_.state = RoomSwitchState::draining;
-        break;
-    default:
-        status_.state = RoomSwitchState::applied;
-        break;
-    }
-    if (preparing_ == latest_ && preparing_ != 0) {
-        status_.state = RoomSwitchState::preparing;
-    }
-    if (failed_ == latest_ && failed_ != 0) {
-        status_.state = RoomSwitchState::failed;
-    }
-    for (auto& position : positions_) {
+    [[nodiscard]] RoomSourcePosition source_position(std::uint64_t id) const override {
         MradmRoomSourceInfo source{};
-        if (mradm_room_session_source(session_.get(), position.element_id, &source) == 0) {
-            std::ranges::copy(source.position, position.position_metres.begin());
-            std::ranges::copy(source.direction, position.direction.begin());
-            position.distance_metres = source.distance;
-            position.present = source.present != 0;
-            position.constrained = source.constrained != 0;
-        }
+        mradm_room_control_source(handle_.get(), id, &source);
+        RoomSourcePosition result;
+        result.element_id = source.id;
+        std::ranges::copy(source.position, result.position_metres.begin());
+        std::ranges::copy(source.direction, result.direction.begin());
+        result.distance_metres = source.distance;
+        result.constrained = source.constrained != 0;
+        result.present = source.present != 0;
+        return result;
     }
-}
-Result<std::uint64_t> Runtime::request(const RoomConfig& config) {
-    if (!config.profile || config.quality != config_.quality || config.metres_per_unit != config_.metres_per_unit ||
-        (!config.hrir_manifest.empty() && config.hrir_manifest != config_.hrir_manifest)) {
-        return make_error(ErrorCode::invalid_argument, "房间切换必须保持当前档位、HRIR 和坐标比例");
+
+  private:
+    std::unique_ptr<MradmRenderRoomControl, decltype(&mradm_room_control_destroy)> handle_;
+    mutable std::mutex mutex_;
+};
+} // namespace
+
+std::shared_ptr<IRoomControl> control(MradmRenderRoomControl* raw) {
+    if (raw == nullptr) {
+        return nullptr;
     }
-    const std::lock_guard lock(mutex_);
-    if (ended_) {
-        return make_error(ErrorCode::invalid_argument, "节目已结束，不能再切换房间");
-    }
-    auto selected = config;
-    selected.hrir_manifest.clear(); // pin the active listener bank, independent of package default
-    request_ = Request{std::move(selected), ++latest_, epoch_};
-    preparing_ = latest_;
-    status_.requested_revision = latest_;
-    status_.state = RoomSwitchState::preparing;
-    status_.message.clear();
-    cv_.notify_all();
-    return latest_;
-}
-RoomStatus Runtime::status() const {
-    const std::lock_guard lock(mutex_);
-    return status_;
-}
-RoomSourcePosition Runtime::source_position(std::uint64_t id) const {
-    const std::lock_guard lock(mutex_);
-    const auto found = std::ranges::find(positions_, id, &RoomSourcePosition::element_id);
-    return found == positions_.end() ? RoomSourcePosition{id} : *found;
-}
-std::uint64_t Runtime::preroll_frames() const {
-    const std::lock_guard lock(mutex_);
-    return preroll_;
-}
-std::uint64_t Runtime::tail_frames() const {
-    const std::lock_guard lock(mutex_);
-    return status_.tail_frames;
-}
-Result<void> Runtime::pump() {
-    const std::lock_guard lock(mutex_);
-    if (latest_ != 0) {
-        auto notified = checked(mradm_room_session_request(session_.get(), latest_));
-        if (!notified) {
-            return notified;
-        }
-    }
-    // A stalled preparer must never force a destructor onto the render worker.
-    // Request invalidation above still prevents an obsolete pending room starting.
-    if (dispose_count_ + 3 > dispose_.size()) {
-        return {};
-    }
-    void* retired = nullptr;
-    if (mradm_room_session_retired(session_.get(), &retired) == 0 && retired != nullptr) {
-        dispose_.at(dispose_count_++) = retired;
-    }
-    if (candidate_ && candidate_->epoch == epoch_ && candidate_->revision == latest_ &&
-        candidate_->capacity >= capacity_ && !ended_) {
-        std::array<void*, 2> displaced{};
-        std::array<char, 512> message{};
-        const auto code = mradm_room_session_queue(session_.get(),
-                                                   candidate_->instance.release(),
-                                                   candidate_->revision,
-                                                   displaced.data(),
-                                                   displaced.size(),
-                                                   message.data(),
-                                                   message.size());
-        if (code != 0) {
-            failed_ = latest_;
-            status_.message = message.data();
-        } else {
-            preroll_ = std::max(preroll_, candidate_->preroll);
-        }
-        for (auto* item : displaced) {
-            if (item != nullptr) {
-                dispose_.at(dispose_count_++) = item;
-            }
-        }
-        preparing_ = 0;
-        candidate_.reset();
-    }
-    cv_.notify_all();
-    return {};
-}
-void Runtime::prepare_loop(const std::stop_token& stop) {
-    while (!stop.stop_requested()) {
-        std::optional<Request> queued;
-        std::optional<Candidate> growing;
-        bool resize_candidate = false;
-        std::size_t capacity = 0;
-        std::array<void*, 8> dispose{};
-        std::size_t count = 0;
-        {
-            std::unique_lock lock(mutex_);
-            cv_.wait(lock, stop, [&] {
-                return request_.has_value() || dispose_count_ != 0 ||
-                       (candidate_ && (candidate_->epoch != epoch_ || candidate_->revision != latest_ ||
-                                       candidate_->capacity < capacity_));
-            });
-            if (stop.stop_requested()) {
-                return;
-            }
-            queued = std::exchange(request_, std::nullopt);
-            capacity = capacity_;
-            count = std::exchange(dispose_count_, 0);
-            std::copy_n(dispose_.begin(), count, dispose.begin());
-            if (candidate_ &&
-                (candidate_->epoch != epoch_ || candidate_->revision != latest_ || candidate_->capacity < capacity)) {
-                resize_candidate = candidate_->epoch == epoch_ && candidate_->revision == latest_;
-                growing = std::exchange(candidate_, std::nullopt);
-            }
-        }
-        for (std::size_t i = 0; i < count; ++i) {
-            mradm_room_instance_destroy(dispose.at(i));
-        }
-        if (!queued && !resize_candidate) {
-            continue;
-        }
-        Candidate candidate;
-        std::array<char, 512> message{};
-        Result<void> result;
-        if (queued) {
-            growing.reset(); // stale candidate disposal stays outside the worker's mutex
-            auto prepared = prepare(queued->config, {}, prepared_.get());
-            void* raw = nullptr;
-            result = prepared ? checked(mradm_room_instance_create(
-                                            (*prepared)->handle.get(), capacity, &raw, message.data(), message.size()),
-                                        message.data())
-                              : Result<void>{tl::unexpected{prepared.error()}};
-            candidate = Candidate{InstanceHandle{raw, mradm_room_instance_destroy},
-                                  queued->revision,
-                                  queued->epoch,
-                                  prepared ? (*prepared)->info.preroll_frames : 0,
-                                  capacity};
-        } else if (growing) {
-            candidate = std::move(*growing);
-            result =
-                checked(mradm_room_instance_reserve(candidate.instance.get(), capacity, message.data(), message.size()),
-                        message.data());
-            candidate.capacity = capacity;
-        } else {
-            continue;
-        }
-        const std::lock_guard lock(mutex_);
-        if (candidate.epoch != epoch_ || candidate.revision != latest_) {
-            continue;
-        }
-        if (!result) {
-            failed_ = latest_;
-            preparing_ = 0;
-            status_.state = RoomSwitchState::failed;
-            status_.message = result.error().message;
-        } else {
-            candidate_ = std::move(candidate);
-        }
-    }
+    return std::make_shared<RoomControl>(raw);
 }
 } // namespace room_internal
 } // namespace mradm

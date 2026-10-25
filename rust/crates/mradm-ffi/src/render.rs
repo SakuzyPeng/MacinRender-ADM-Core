@@ -5,7 +5,6 @@
 //! context buffers (capacity in, length written out, NUL-terminated) with the C++ bytes.
 use crate::adm::Text;
 use crate::scene::SceneHandle;
-use mradm_dsp::room::control::{RoomCommand, RoomDescription};
 use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
 use mradm_render::{
@@ -585,8 +584,8 @@ pub struct RenderOfflineMetrics {
 pub struct RenderOffline(Option<offline::Driver>);
 
 /// Like `boundary` for the driver: the locator kind (0 none, 1 `path=<input>`, 2 `input=<input>`,
-/// 3 `meter`, 4 `HOA DSP`, 5 `Triple Balance DSP`) and the message, cut at a character boundary
-/// as the WAVE reader did.
+/// 3 `meter`, 4 `HOA DSP`, 5 `Triple Balance DSP`, 6 `room-binaural`) and the message, cut at a
+/// character boundary as the WAVE reader did.
 fn driver_boundary(
     location: *mut u32,
     message: *mut u8,
@@ -610,6 +609,7 @@ fn driver_boundary(
             Some(offline::Location::Meter) => 3,
             Some(offline::Location::HoaDsp) => 4,
             Some(offline::Location::TripleBalanceDsp) => 5,
+            Some(offline::Location::Room) => 6,
         };
     }
     let detail = error.as_ref().map_or("", |e| e.message.as_str());
@@ -833,7 +833,7 @@ pub struct RenderPrepared {
     bindings: Arc<[vbap::Binding]>,
     settings: (usize, usize, u64, u32),
     triple_balance: Option<Box<TripleBalanceData>>,
-    room: Option<Box<RoomData>>,
+    room: Option<Arc<room::Prepared>>,
 }
 
 /// Boxes a preparation's logs and result, fills `view` and returns the status.
@@ -923,39 +923,6 @@ pub struct RenderRoomRequest {
     reproduction: RoomScreenGeometry,
 }
 
-/// One room command at an input sample (PCM consistency 4.6 D; the file stream reads it until
-/// it moves to Rust).
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RenderRoomEvent {
-    sample: u64,
-    priority: u32,
-    reserved: u32,
-    command: RoomCommand,
-}
-
-/// The sources and event table of a room preparation, borrowed from its handle.
-#[repr(C)]
-pub struct RenderRoomView {
-    descriptions: *const RoomDescription,
-    channels: *const u16,
-    objects: *const Text,
-    labels: *const Text,
-    sources: usize,
-    events: *const RenderRoomEvent,
-    events_len: usize,
-    frames: u64,
-    input_channels: u16,
-    spread: u32,
-}
-
-pub struct RoomData {
-    prepared: room::Prepared,
-    objects: Vec<Text>,
-    labels: Vec<Text>,
-    events: Vec<RenderRoomEvent>,
-}
-
 fn room_polar(azimuth: f32, elevation: f32, distance: f32) -> mradm_dsp::Result<[f32; 3]> {
     // The former C++ preparation used mradm_room_polar: only this conversion enters the
     // ROOM environment. Preserve that scope for the Rust event table's gain/offset arithmetic.
@@ -963,14 +930,14 @@ fn room_polar(azimuth: f32, elevation: f32, distance: f32) -> mradm_dsp::Result<
     mradm_dsp::room::loading::polar(azimuth, elevation, distance)
 }
 
-/// `screens` holds the validated screen configuration; on success `room` borrows the handle.
+/// `screens` holds the validated screen configuration; the handle keeps the sources and events
+/// for the file stream.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_room_prepare(
     scene: *const SceneHandle,
     request: *const RenderRoomRequest,
     output: *mut *mut RenderPrepared,
     view: *mut RenderPreparedView,
-    room_view: *mut RenderRoomView,
 ) -> i32 {
     boundary(
         ptr::null_mut(),
@@ -978,10 +945,9 @@ pub unsafe extern "C" fn mradm_render_room_prepare(
         ptr::null_mut(),
         ptr::null_mut(),
         || {
-            let (Some(out), Some(view), Some(room_view), Some(scene), Some(r)) = (
+            let (Some(out), Some(view), Some(scene), Some(r)) = (
                 unsafe { output.as_mut() },
                 unsafe { view.as_mut() },
-                unsafe { room_view.as_mut() },
                 unsafe { scene.as_ref() },
                 unsafe { request.as_ref() },
             ) else {
@@ -1029,36 +995,8 @@ pub unsafe extern "C" fn mradm_render_room_prepare(
             };
             let status = prepared(logs, result, settings, out, view);
             if let Some(p) = data {
-                let room = Box::new(RoomData {
-                    objects: p.objects.iter().map(|o| Text::bytes(o)).collect(),
-                    labels: p.labels.iter().map(|l| Text::bytes(l)).collect(),
-                    events: p
-                        .events
-                        .iter()
-                        .map(|e| RenderRoomEvent {
-                            sample: e.sample,
-                            priority: e.priority,
-                            reserved: 0,
-                            command: e.command,
-                        })
-                        .collect(),
-                    prepared: p,
-                });
-                let p = &room.prepared;
-                *room_view = RenderRoomView {
-                    descriptions: p.descriptions.as_ptr(),
-                    channels: p.channels.as_ptr(),
-                    objects: room.objects.as_ptr(),
-                    labels: room.labels.as_ptr(),
-                    sources: p.descriptions.len(),
-                    events: room.events.as_ptr(),
-                    events_len: room.events.len(),
-                    frames: p.frames,
-                    input_channels: p.input_channels,
-                    spread: u32::from(p.spread),
-                };
-                // `prepared` boxed the handle; the vectors keep their buffers in the box.
-                unsafe { &mut **out }.room = Some(room);
+                // `prepared` boxed the handle.
+                unsafe { &mut **out }.room = Some(Arc::new(p));
             }
             status
         },
@@ -1919,6 +1857,7 @@ pub struct RenderLiveTripleBalanceRequest {
 enum LiveRenderer {
     Vbap(Box<live_vbap::Renderer>),
     TripleBalance(Box<live_triple_balance::Renderer>),
+    Room(Box<mradm_render::room_stream::Live>),
 }
 
 impl LiveRenderer {
@@ -1927,24 +1866,28 @@ impl LiveRenderer {
         match self {
             Self::Vbap(_) => ("Live VBAP", b"Live VBAP DSP"),
             Self::TripleBalance(_) => ("Live Triple Balance", b"Live Triple Balance DSP"),
+            Self::Room(_) => ("room-binaural", b"room-binaural"),
         }
     }
     fn output_channels(&self) -> u32 {
         match self {
             Self::Vbap(r) => r.output_channels(),
             Self::TripleBalance(r) => r.output_channels(),
+            Self::Room(_) => 2,
         }
     }
     fn configure(&mut self, generation: u64, elements: &[live::Element]) -> Result<(), Error> {
         match self {
             Self::Vbap(r) => r.configure(generation, elements),
             Self::TripleBalance(r) => r.configure(generation, elements),
+            Self::Room(r) => r.configure(generation, elements),
         }
     }
     fn reset(&mut self) {
         match self {
             Self::Vbap(r) => r.reset(),
             Self::TripleBalance(r) => r.reset(),
+            Self::Room(r) => r.reset(),
         }
     }
     fn render<P: live::PlaneSource + ?Sized>(
@@ -1955,12 +1898,38 @@ impl LiveRenderer {
         match self {
             Self::Vbap(r) => r.render(frame, output),
             Self::TripleBalance(r) => r.render(frame, output),
+            Self::Room(r) => r.render(frame, output),
         }
     }
     fn diagnostics(&self) -> &[live::Diagnostic] {
         match self {
             Self::Vbap(r) => r.diagnostics(),
             Self::TripleBalance(r) => r.diagnostics(),
+            Self::Room(r) => r.diagnostics(),
+        }
+    }
+    /// The warnings of the last configure: only room raises any.
+    fn configured(&self) -> &[live::Diagnostic] {
+        match self {
+            Self::Room(r) => r.diagnostics(),
+            _ => &[],
+        }
+    }
+    fn end_input(&mut self) -> Result<u64, Error> {
+        match self {
+            Self::Room(r) => r.end_input(),
+            _ => Ok(0),
+        }
+    }
+    fn tail(&self) -> u64 {
+        match self {
+            Self::Room(r) => r.tail_frames(),
+            _ => 0,
+        }
+    }
+    fn pose(&mut self, pose: [f32; 3]) {
+        if let Self::Room(r) = self {
+            r.set_pose(pose);
         }
     }
 }
@@ -1974,6 +1943,34 @@ pub struct RenderLive {
 }
 
 impl RenderLive {
+    /// Publishes the renderer's warnings of the last frame (or, `configured`, configure) as the
+    /// handle's diagnostic records.
+    fn publish(
+        &mut self,
+        configured: bool,
+        list: &mut *const RenderLiveDiagnostic,
+        count: &mut usize,
+    ) {
+        let warnings = if configured {
+            self.renderer.configured()
+        } else {
+            self.renderer.diagnostics()
+        };
+        self.diagnostics.clear();
+        self.diagnostics
+            .extend(warnings.iter().map(|d| RenderLiveDiagnostic {
+                code: d.code,
+                element_id: d.element_id,
+                field: d.field,
+                message: Text {
+                    data: d.message.as_ptr(),
+                    len: d.message.len(),
+                },
+            }));
+        *list = self.diagnostics.as_ptr();
+        *count = self.diagnostics.len();
+    }
+
     fn new(renderer: LiveRenderer) -> Self {
         Self {
             renderer,
@@ -2104,6 +2101,8 @@ pub unsafe extern "C" fn mradm_render_live_configure(
     generation: u64,
     elements: *const RenderLiveElement,
     elements_len: usize,
+    diagnostics: *mut *const RenderLiveDiagnostic,
+    diagnostics_len: *mut usize,
     message: *mut u8,
     message_len: *mut usize,
     context: *mut u8,
@@ -2129,8 +2128,52 @@ pub unsafe extern "C" fn mradm_render_live_configure(
                 })
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        h.renderer.configure(generation, &elements)
+        let result = h.renderer.configure(generation, &elements);
+        if let (Some(list), Some(count)) = (unsafe { diagnostics.as_mut() }, unsafe {
+            diagnostics_len.as_mut()
+        }) {
+            h.publish(true, list, count);
+        }
+        result
     })
+}
+
+/// Latches a rejected orientation (room) for the next render.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_pose(
+    handle: *mut RenderLive,
+    yaw: f32,
+    pitch: f32,
+    roll: f32,
+) {
+    if let Some(h) = unsafe { handle.as_mut() } {
+        h.renderer.pose([yaw, pitch, roll]);
+    }
+}
+
+/// Ends the input; `*tail` is the frames the renderer appends (0 without a room).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_end_input(
+    handle: *mut RenderLive,
+    tail: *mut u64,
+    message: *mut u8,
+    message_len: *mut usize,
+    context: *mut u8,
+    context_len: *mut usize,
+) -> i32 {
+    boundary(message, message_len, context, context_len, || {
+        let (Some(h), Some(out)) = (unsafe { handle.as_mut() }, unsafe { tail.as_mut() }) else {
+            return Err(bad("无效 Scene 流式渲染句柄"));
+        };
+        *out = h.renderer.end_input()?;
+        Ok(())
+    })
+}
+
+/// The input frames the renderer still appends after the end (room tail).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_render_live_tail(handle: *const RenderLive) -> u64 {
+    unsafe { handle.as_ref() }.map_or(0, |h| h.renderer.tail())
 }
 
 #[unsafe(no_mangle)]
@@ -2140,8 +2183,9 @@ pub unsafe extern "C" fn mradm_render_live_reset(handle: *mut RenderLive) {
     }
 }
 
-/// Renders the frame into the start of `output`. On success `*diagnostics` lists the frame's
-/// warnings until the next call on the handle; on failure the output is unchanged.
+/// Renders the frame into the start of `output`. `*diagnostics` lists the frame's warnings until
+/// the next call on the handle, also after a failure: room publishes those raised before it, VBAP
+/// and Triple Balance none, and leave the output unchanged.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_render(
     handle: *mut RenderLive,
@@ -2230,7 +2274,7 @@ pub unsafe extern "C" fn mradm_render_live_render(
             );
         let output = unsafe { checked_output(output, output_len) }
             .ok_or_else(|| bad(&format!("无效 {name} 输出")))?;
-        h.renderer.render(
+        let result = h.renderer.render(
             &live::FrameView {
                 generation: f.generation,
                 duration: f.duration,
@@ -2240,27 +2284,19 @@ pub unsafe extern "C" fn mradm_render_live_render(
                 trace: unsafe { bytes(&f.trace)? },
             },
             output,
-        )?;
-        h.diagnostics.clear();
-        h.diagnostics.extend(
-            h.renderer
-                .diagnostics()
-                .iter()
-                .map(|d| RenderLiveDiagnostic {
-                    code: d.code,
-                    element_id: d.element_id,
-                    field: d.field,
-                    message: Text {
-                        data: d.message.as_ptr(),
-                        len: d.message.len(),
-                    },
-                }),
         );
-        *list = h.diagnostics.as_ptr();
-        *count = h.diagnostics.len();
-        Ok(())
+        // A room renderer publishes its warnings as they arise, also before a failure.
+        h.publish(false, list, count);
+        result
     })
 }
+
+#[path = "render_room.rs"]
+mod room_ffi;
+
+#[cfg(test)]
+#[path = "../../mradm-render/tests/common/mod.rs"]
+mod test_common;
 
 #[cfg(test)]
 #[path = "render_stream_test.rs"]

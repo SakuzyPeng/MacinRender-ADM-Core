@@ -33,13 +33,17 @@ using render_common::text;
 }
 
 // Generations, frame staging, panning, warnings and the `.30-*` checkpoints are Rust
-// mradm-render `live_vbap` / `live_triple_balance` (PCM consistency 4.5, 4.6); this shell converts
-// the frame records.
+// mradm-render `live_vbap` / `live_triple_balance` / `room_stream` (PCM consistency 4.5, 4.6); this
+// shell converts the frame records.
 class LiveRustRenderer final : public ILiveSceneRenderer {
   public:
-    LiveRustRenderer(MradmRenderLive* handle, uint32_t sample_rate, DiagnosticSink diagnostics, std::string suffix)
+    LiveRustRenderer(MradmRenderLive* handle,
+                     uint32_t sample_rate,
+                     DiagnosticSink diagnostics,
+                     std::string suffix,
+                     std::shared_ptr<IRoomControl> room)
         : handle_(handle, &mradm_render_live_destroy), sample_rate_(sample_rate), diagnostics_(std::move(diagnostics)),
-          suffix_(std::move(suffix)) {}
+          suffix_(std::move(suffix)), room_(std::move(room)) {}
 
     [[nodiscard]] Result<void> configure_generation(std::uint64_t generation_id,
                                                     std::span<const ElementDescriptor> elements) override {
@@ -58,14 +62,19 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
             labels += e.speaker_label.size();
         }
         RustError error(labels);
+        const MradmRenderLiveDiagnostic* list = nullptr;
+        std::size_t count = 0;
         const auto code = mradm_render_live_configure(handle_.get(),
                                                       generation_id,
                                                       records.data(),
                                                       records.size(),
+                                                      &list,
+                                                      &count,
                                                       error.message(),
                                                       error.message_len(),
                                                       error.context(),
                                                       error.context_len());
+        publish(std::span{list, count}, 0, generation_id);
         if (code != 0) {
             return error.error(code);
         }
@@ -117,30 +126,52 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
                                                    error_.message_len(),
                                                    error_.context(),
                                                    error_.context_len());
+        publish(std::span{list, count}, frame.epoch_id, frame.generation_id);
         if (code != 0) {
             return error_.error(code);
         }
-        if (diagnostics_) {
-            for (const auto& d : std::span{list, count}) {
-                diagnostics_({LogLevel::warning,
-                              static_cast<DiagnosticCode>(d.code),
-                              frame.epoch_id,
-                              frame.generation_id,
-                              d.element_id,
-                              d.field,
-                              std::string{reinterpret_cast<const char*>(d.message.data), d.message.len}});
-            }
-        }
         return {};
+    }
+
+    void set_listener_orientation(const ListenerOrientation& orientation) override {
+        mradm_render_live_pose(handle_.get(), orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg);
+    }
+    [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const override { return room_; }
+    [[nodiscard]] Result<std::uint64_t> end_input() override {
+        RustError error;
+        std::uint64_t tail = 0;
+        if (const auto code = mradm_render_live_end_input(
+                handle_.get(), &tail, error.message(), error.message_len(), error.context(), error.context_len());
+            code != 0) {
+            return error.error(code);
+        }
+        return tail;
     }
 
     [[nodiscard]] std::uint32_t output_channels() const noexcept override {
         return mradm_render_live_channels(handle_.get());
     }
     [[nodiscard]] std::uint32_t sample_rate() const noexcept override { return sample_rate_; }
-    [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override { return 0U; }
+    [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override {
+        return static_cast<std::uint32_t>(mradm_render_live_tail(handle_.get()));
+    }
 
   private:
+    void publish(std::span<const MradmRenderLiveDiagnostic> list, std::uint64_t epoch, std::uint64_t generation) {
+        if (!diagnostics_) {
+            return;
+        }
+        for (const auto& d : list) {
+            diagnostics_({LogLevel::warning,
+                          static_cast<DiagnosticCode>(d.code),
+                          epoch,
+                          generation,
+                          d.element_id,
+                          d.field,
+                          std::string{reinterpret_cast<const char*>(d.message.data), d.message.len}});
+        }
+    }
+
     std::unique_ptr<MradmRenderLive, decltype(&mradm_render_live_destroy)> handle_;
     uint32_t sample_rate_;
     DiagnosticSink diagnostics_;
@@ -150,6 +181,7 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
     std::vector<MradmRenderLiveUpdate> updates_;
     std::string trace_;
     RustError error_;
+    std::shared_ptr<IRoomControl> room_;
 };
 
 } // namespace
@@ -157,8 +189,10 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
 std::unique_ptr<ILiveSceneRenderer> adopt_live_renderer(MradmRenderLive* handle,
                                                         uint32_t sample_rate,
                                                         DiagnosticSink diagnostics,
-                                                        std::string trace_suffix) {
-    return std::make_unique<LiveRustRenderer>(handle, sample_rate, std::move(diagnostics), std::move(trace_suffix));
+                                                        std::string trace_suffix,
+                                                        std::shared_ptr<IRoomControl> room) {
+    return std::make_unique<LiveRustRenderer>(
+        handle, sample_rate, std::move(diagnostics), std::move(trace_suffix), std::move(room));
 }
 
 } // namespace mradm::live_scene
