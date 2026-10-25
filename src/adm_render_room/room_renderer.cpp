@@ -1,8 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <limits>
-#include <tuple>
+#include <span>
 
 #include "adm/audio_io.h"
 #include "adm/render_room.h"
@@ -11,16 +10,12 @@
 #include "post_gain.h"
 #include "render_common.h"
 #include "room_internal.h"
+#include "scene_handle.h"
+#include "speaker_pcm.h"
 
 namespace mradm {
 namespace {
 constexpr std::size_t k_read_frames = 2048;
-constexpr std::uint64_t k_fields = (1U << 11U) - 1U;
-struct Event {
-    std::uint64_t sample{0};
-    unsigned priority{0};
-    MradmRoomCommand command{};
-};
 struct FileData {
     std::shared_ptr<const room_internal::Prepared> room;
     RoomConfig config;
@@ -28,7 +23,8 @@ struct FileData {
     std::vector<std::uint16_t> channels;
     std::vector<std::string> objects;
     std::vector<std::string> labels;
-    std::vector<Event> events;
+    // The Rust event table (mradm-render `room`), sorted by sample, priority and source.
+    std::vector<MradmRenderRoomEvent> events;
     std::uint64_t frames{0};
     std::uint16_t input_channels{0};
     bool spread{true};
@@ -36,15 +32,6 @@ struct FileData {
 struct FilePrepared final : IPreparedRender {
     std::shared_ptr<const FileData> data;
 };
-MradmLiveBinauralState default_state() {
-    MradmLiveBinauralState state{};
-    state.valid = k_fields;
-    state.active = 1;
-    state.gain = 1;
-    state.position[1] = 1;
-    state.divergence_range[0] = 45;
-    return state;
-}
 MradmRoomOverride live_value(const LiveObjectOverride* value) {
     MradmRoomOverride result{0, 0, {1, 1, 1}, 1, 1, 0, 0, 0};
     if (value != nullptr) {
@@ -60,39 +47,6 @@ MradmRoomOverride live_value(const LiveObjectOverride* value) {
     }
     return result;
 }
-Result<std::array<float, 3>> position(SceneBlockPosition point, const SceneObject& object) {
-    if (object.position_offset) {
-        point = apply_position_offset(point, *object.position_offset);
-    }
-    if (point.cartesian) {
-        return std::array<float, 3>{point.x, point.y, point.z};
-    }
-    return room_internal::polar(point.azimuth, point.elevation, point.distance);
-}
-void add_block(FileData& data,
-               std::uint32_t source,
-               std::uint64_t start,
-               std::uint64_t end,
-               std::uint64_t duration,
-               const MradmLiveBinauralState& state) {
-    if (end <= start || start >= data.frames) {
-        return;
-    }
-    MradmRoomCommand command{};
-    command.element = source;
-    command.changed = 1;
-    command.state = state;
-    data.events.push_back({start, 1, command}); // activity never waits for a positional ramp
-    command.changed = k_fields & ~std::uint64_t{1};
-    command.duration = static_cast<std::uint32_t>(
-        std::min({duration, end - start, std::uint64_t{std::numeric_limits<std::uint32_t>::max()}}));
-    data.events.push_back({start, 2, command});
-    command.duration = 0;
-    command.changed = 1;
-    command.state.active = 0;
-    data.events.push_back({end, 0, command}); // an adjacent block's activation wins at the same sample
-}
-
 class RoomStream final : public IRenderStream {
   public:
     static Result<std::unique_ptr<IRenderStream>> create(std::shared_ptr<const FileData> data, const RenderPlan& plan) {
@@ -392,7 +346,8 @@ class RoomRenderer final : public IRenderer {
     }
 };
 
-// NOLINTNEXTLINE(readability-function-size): validate and publish one immutable metadata/resource transaction.
+// Sources and events are Rust mradm-render `room` (PCM consistency 4.6); this shell validates the
+// screens, prepares the room resources and keeps the table for the file stream.
 Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
     auto screen_valid = validate_screen_config(plan.screens);
     if (!screen_valid) {
@@ -402,142 +357,43 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
     if (!room) {
         return tl::unexpected{room.error()};
     }
-    if (plan.scene.info.sample_rate != (*room)->info.sample_rate || plan.output_layout != "binaural" ||
-        !plan.scene.hoa_tracks.empty()) {
-        return make_error(ErrorCode::unsupported, "room-binaural 需要同采样率双耳 Objects/DirectSpeakers");
+    if (plan.scene_handle == nullptr) {
+        return make_error(ErrorCode::internal_error, "room-binaural requires the Rust render scene");
     }
-    if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader || plan.direct_speakers_matrix ||
-        (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic &&
-         plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::position)) {
-        return make_error(ErrorCode::unsupported, "room-binaural 使用连续位置渲染，不支持此 spreader/扬声器路由模式");
+    const auto& screens = plan.screens;
+    const MradmRenderRoomRequest request{render_common::text(plan.output_layout),
+                                         (*room)->info.sample_rate,
+                                         static_cast<std::uint32_t>(plan.binaural_spread_mode),
+                                         static_cast<std::uint32_t>(plan.direct_speakers_routing_mode),
+                                         plan.direct_speakers_matrix ? 1U : 0U,
+                                         plan.default_interp_ms,
+                                         screens.reference ? 1U : 0U,
+                                         room_internal::geometry(screens.reference.value_or(ScreenGeometry{})),
+                                         screens.reproduction ? 1U : 0U,
+                                         room_internal::geometry(screens.reproduction.value_or(ScreenGeometry{}))};
+    MradmRenderPrepared* raw = nullptr;
+    MradmRenderPreparedView view{};
+    MradmRenderRoomView table{};
+    const auto code = mradm_render_room_prepare(plan.scene_handle->raw, &request, &raw, &view, &table);
+    auto rust =
+        render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::speaker, logs, "room-binaural");
+    if (!rust) {
+        return tl::unexpected{rust.error()};
     }
+    const auto string_of = [](MradmAdmText t) { return std::string{reinterpret_cast<const char*>(t.data), t.len}; };
     auto data = std::make_shared<FileData>();
     data->room = *room;
     data->config = plan.room;
-    data->frames = plan.scene.info.num_frames;
-    data->input_channels = plan.scene.info.num_channels;
-    data->spread = plan.binaural_spread_mode != BinauralSpreadMode::none;
-    bool screen_warned = false;
-    for (const auto& object : plan.scene.objects) {
-        const bool screen_ref = std::ranges::any_of(object.tracks, [](const auto& track) {
-            return std::ranges::any_of(render_common::last_blocks_at_each_start(track.blocks),
-                                       [](const auto* block) { return block->screen_ref; });
-        });
-        auto reference = screen_ref ? resolve_reference_screen(plan.scene, object.id, plan.screens)
-                                    : Result<ScreenGeometry>{ScreenGeometry{}};
-        if (!reference) {
-            return tl::unexpected{reference.error()};
-        }
-        for (const auto& track : object.tracks) {
-            if (track.blocks.empty() && track.ds_blocks.empty()) {
-                continue;
-            }
-            if (!track.channel_index || *track.channel_index >= data->input_channels ||
-                data->descriptions.size() >= 512 || (!track.blocks.empty() && !track.ds_blocks.empty())) {
-                return make_error(ErrorCode::unsupported, "room-binaural 声源轨道无效或超过 512 路");
-            }
-            const auto source = static_cast<std::uint32_t>(data->descriptions.size());
-            MradmRoomDescription description{};
-            description.id = std::uint64_t{source} + 1;
-            description.screens = room_internal::screens(plan.screens, *reference);
-            description.position[1] = 1;
-            // Only the last block at each start is in effect (S08): an overwritten block leaves no role,
-            // live label, ramp origin or activity behind.
-            const auto object_blocks = render_common::last_blocks_at_each_start(track.blocks);
-            const auto direct_blocks = render_common::last_blocks_at_each_start(track.ds_blocks);
-            if (!direct_blocks.empty()) {
-                description.role = render_common::direct_speakers_block_is_lfe(*direct_blocks.front()) ? 2U : 1U;
-            }
-            data->descriptions.push_back(description);
-            data->channels.push_back(*track.channel_index);
-            data->objects.push_back(object.id);
-            data->labels.push_back(
-                !direct_blocks.empty() && !direct_blocks.front()->speaker_labels.empty()
-                    ? render_common::canonicalise_speaker_label(direct_blocks.front()->speaker_labels.front())
-                    : std::string{});
-            MradmRoomCommand inactive{};
-            inactive.element = source;
-            inactive.changed = k_fields;
-            inactive.state = default_state();
-            inactive.state.active = 0;
-            data->events.push_back({0, 0, inactive});
-            for (std::size_t i = 0; i < object_blocks.size(); ++i) {
-                const auto& block = *object_blocks[i];
-                auto p = position(block.position, object);
-                if (!p) {
-                    return tl::unexpected{p.error()};
-                }
-                auto state = default_state();
-                state.gain = object.mute ? 0 : object.gain * block.gain;
-                std::ranges::copy(*p, std::begin(state.position));
-                state.extent[0] = block.width;
-                state.extent[1] = block.height;
-                state.extent[2] = block.depth;
-                state.diffuse = block.diffuse;
-                state.divergence = block.divergence;
-                state.divergence_range[0] = block.divergence_azimuth_range;
-                state.divergence_range[1] = block.position.cartesian ? block.divergence_position_range : 0;
-                state.channel_lock = block.channel_lock ? 1U : 0U;
-                state.has_max_distance = block.channel_lock_max_distance.has_value() ? 1U : 0U;
-                state.max_distance = block.channel_lock_max_distance.value_or(0);
-                state.screen_reference = block.screen_ref ? 1U : 0U;
-                state.head_locked = block.head_locked ? 1U : 0U;
-                if (block.screen_ref && !plan.screens.reproduction && !screen_warned) {
-                    logs.log(LogLevel::warning, "room-binaural", "未配置重放屏幕，screenRef 保留原方向");
-                    screen_warned = true;
-                }
-                const auto next = i + 1 < object_blocks.size() ? object_blocks[i + 1]->start_sample : data->frames;
-                const auto end = std::min({block.end_sample, object.end_sample, next, data->frames});
-                const auto ramp =
-                    i == 0 || block.jump_position
-                        ? 0
-                        : block.interp_length_samples.value_or(static_cast<std::uint64_t>(plan.default_interp_ms) * 48);
-                add_block(*data, source, block.start_sample, end, ramp, state);
-            }
-            for (std::size_t i = 0; i < direct_blocks.size(); ++i) {
-                const auto& block = *direct_blocks[i];
-                if ((description.role == 2) != render_common::direct_speakers_block_is_lfe(block)) {
-                    return make_error(ErrorCode::unsupported, "同一房间声源不能在全频与 LFE 角色间切换");
-                }
-                auto state = default_state();
-                state.gain = object.mute ? 0 : object.gain * block.gain;
-                state.head_locked = block.head_locked ? 1U : 0U;
-                if (description.role != 2) {
-                    auto nominal = render_common::direct_speaker_position_or_front(block, logs, "room-binaural");
-                    if (!block.has_position) {
-                        if (auto label = render_common::direct_speaker_position_for_labels(block.speaker_labels)) {
-                            nominal = *label;
-                        }
-                    }
-                    SceneBlockPosition point;
-                    point.azimuth = nominal.azimuth;
-                    point.elevation = nominal.elevation;
-                    point.distance = block.has_position ? block.distance : 1;
-                    if (block.source_position && block.source_position->cartesian && !block.user_position_override) {
-                        point = *block.source_position;
-                    }
-                    auto p = position(point, object);
-                    if (!p) {
-                        return tl::unexpected{p.error()};
-                    }
-                    std::ranges::copy(*p, std::begin(state.position));
-                }
-                const auto next = i + 1 < direct_blocks.size() ? direct_blocks[i + 1]->start_sample : data->frames;
-                add_block(*data,
-                          source,
-                          block.start_sample,
-                          std::min({block.end_sample, object.end_sample, next, data->frames}),
-                          0,
-                          state);
-            }
-        }
-    }
-    std::stable_sort(data->events.begin(), data->events.end(), [](const Event& a, const Event& b) {
-        return std::tie(a.sample, a.priority, a.command.element) < std::tie(b.sample, b.priority, b.command.element);
-    });
+    data->frames = table.frames;
+    data->input_channels = table.input_channels;
+    data->spread = table.spread != 0;
+    data->descriptions.assign(table.descriptions, table.descriptions + table.sources);
+    data->channels.assign(table.channels, table.channels + table.sources);
+    std::ranges::transform(std::span{table.objects, table.sources}, std::back_inserter(data->objects), string_of);
+    std::ranges::transform(std::span{table.labels, table.sources}, std::back_inserter(data->labels), string_of);
+    data->events.assign(table.events, table.events + table.events_len);
     auto result = std::make_shared<FilePrepared>();
     result->data = std::move(data);
-    logs.log(LogLevel::info, "room-binaural", "已准备连续位置房间渲染；FIFO 为 256 帧，完整节目追加有限尾声");
     return std::shared_ptr<IPreparedRender>{std::move(result)};
 }
 } // namespace
