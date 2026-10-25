@@ -3,11 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
-#include <set>
 #include <string>
 #include <vector>
-
-#include "adm/scene.h"
 
 #include "config_ffi.h"
 
@@ -26,29 +23,6 @@ ScreenGeometry convert(const MradmRoomScreenGeometry& screen) {
             screen.aspect_ratio,
             {screen.centre[0], screen.centre[1], screen.centre[2]},
             screen.width};
-}
-bool contains_object(const AdmScene& scene, std::vector<std::string> pending, std::string_view wanted) {
-    std::set<std::string> visited;
-    while (!pending.empty()) {
-        auto id = std::move(pending.back());
-        pending.pop_back();
-        if (id == wanted) {
-            return true;
-        }
-        if (!visited.insert(id).second) {
-            continue;
-        }
-        const auto object = std::ranges::find(scene.objects, id, &SceneObject::id);
-        if (object == scene.objects.end()) {
-            continue;
-        }
-        const auto& source = object->adm_source;
-        if (source) {
-            const auto& children = source->child_objects;
-            pending.insert(pending.end(), children.begin(), children.end());
-        }
-    }
-    return false;
 }
 } // namespace
 
@@ -108,34 +82,4 @@ Result<ScreenConfig> load_screen_config(const std::filesystem::path& path) {
     return parse_screen_config_json(text);
 }
 
-Result<ScreenGeometry>
-resolve_reference_screen(const AdmScene& scene, std::string_view object_id, const ScreenConfig& config) {
-    if (config.reference) {
-        return *config.reference;
-    }
-    if (!config.reproduction) {
-        return ScreenGeometry{};
-    }
-    std::optional<ScreenGeometry> selected;
-    for (const auto& programme : scene.programmes) {
-        bool member = false;
-        for (const auto& id : programme.content_ids) {
-            const auto content = std::ranges::find(scene.contents, id, &SceneContent::id);
-            if (content != scene.contents.end() && contains_object(scene, content->object_ids, object_id)) {
-                member = true;
-                break;
-            }
-        }
-        if (!member) {
-            continue;
-        }
-        const auto screen = programme.reference_screen.value_or(ScreenGeometry{});
-        if (selected && *selected != screen) {
-            return make_error(ErrorCode::invalid_argument,
-                              "对象属于制作屏幕不同的 Programme；请在屏幕配置中显式覆盖 reference");
-        }
-        selected = screen;
-    }
-    return selected.value_or(ScreenGeometry{});
-}
 } // namespace mradm

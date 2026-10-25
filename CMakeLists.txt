@@ -1080,8 +1080,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(Python3_Interpreter_FOUND)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
         target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
-            MacinRender::ADMCAPI MacinRender::ADMRenderCommon nlohmann_json::nlohmann_json)
-        target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room)
+            MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json)
+        target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room tests/support)
         mr_adm_core_apply_warnings(mr_adm_room_tests)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")

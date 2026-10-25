@@ -1,0 +1,2008 @@
+{
+  "baseline": "305159fc2956026b292db83f86552845ed820fa0",
+  "candidate": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+  "offline": [
+    {
+      "id": "room-exact",
+      "fixture": "objects-extent-multi",
+      "slice": "4.2",
+      "files": {
+        "--room": "room/room.json"
+      },
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ]
+    },
+    {
+      "id": "room-exact-sofa",
+      "fixture": "objects-room",
+      "slice": "4.2",
+      "sofa": "simple.sofa",
+      "files": {
+        "--room": "room/room.json"
+      },
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ]
+    },
+    {
+      "id": "room-exact-screen",
+      "fixture": "policy-objects",
+      "slice": "4.2",
+      "files": {
+        "--room": "room/room.json",
+        "--screen-config": "screen-config.json"
+      },
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ]
+    },
+    {
+      "id": "room-point",
+      "fixture": "objects-point",
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ],
+      "files": {
+        "--room": "room/room.json"
+      }
+    },
+    {
+      "id": "room-ds",
+      "fixture": "directspeakers",
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ],
+      "files": {
+        "--room": "room/room.json"
+      }
+    },
+    {
+      "id": "room-lfe",
+      "fixture": "directspeakers-lfe",
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ],
+      "files": {
+        "--room": "room/room.json"
+      }
+    },
+    {
+      "id": "room-params",
+      "fixture": "params",
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact"
+      ],
+      "files": {
+        "--room": "room/room.json"
+      }
+    },
+    {
+      "id": "room-window-gain",
+      "fixture": "objects-cartesian",
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact",
+        "--start",
+        "0.1",
+        "--end",
+        "0.45",
+        "--final-gain-db",
+        "-3.25"
+      ],
+      "files": {
+        "--room": "room/room.json"
+      }
+    },
+    {
+      "id": "room-i24",
+      "fixture": "objects-point",
+      "args": [
+        "--no-peak-limit",
+        "--renderer",
+        "room-binaural",
+        "--output-layout",
+        "binaural",
+        "--room-quality",
+        "exact",
+        "--output-bit-depth",
+        "i24"
+      ],
+      "files": {
+        "--room": "room/room.json"
+      }
+    }
+  ],
+  "stream": [
+    {
+      "case": {
+        "id": "stream-room-objects-extent-multi-cloud-fixed",
+        "version": 4,
+        "fixture": "objects-extent-multi",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-extent-multi-cloud-fragmented",
+        "version": 4,
+        "fixture": "objects-extent-multi",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-extent-multi-none-fixed",
+        "version": 4,
+        "fixture": "objects-extent-multi",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-extent-multi-none-fragmented",
+        "version": 4,
+        "fixture": "objects-extent-multi",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-cartesian-cloud-fixed",
+        "version": 4,
+        "fixture": "objects-cartesian",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-cartesian-cloud-fragmented",
+        "version": 4,
+        "fixture": "objects-cartesian",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-cartesian-none-fixed",
+        "version": 4,
+        "fixture": "objects-cartesian",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-cartesian-none-fragmented",
+        "version": 4,
+        "fixture": "objects-cartesian",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-point-cloud-fixed",
+        "version": 4,
+        "fixture": "objects-point",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-point-cloud-fragmented",
+        "version": 4,
+        "fixture": "objects-point",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-point-none-fixed",
+        "version": 4,
+        "fixture": "objects-point",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-objects-point-none-fragmented",
+        "version": 4,
+        "fixture": "objects-point",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-directspeakers-cloud-fixed",
+        "version": 4,
+        "fixture": "directspeakers",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-directspeakers-cloud-fragmented",
+        "version": 4,
+        "fixture": "directspeakers",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-directspeakers-none-fixed",
+        "version": 4,
+        "fixture": "directspeakers",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    },
+    {
+      "case": {
+        "id": "stream-room-directspeakers-none-fragmented",
+        "version": 4,
+        "fixture": "directspeakers",
+        "renderer": "room-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "room": "room/room.json",
+        "tail_frames": 4441,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "expected_shape": [
+        2,
+        48000,
+        78641
+      ]
+    }
+  ],
+  "scene": [
+    {
+      "id": "scene-room-binaural-cloud0-48000-48000-fixed",
+      "version": 6,
+      "clock": "epoch*2s + input_sample/input_rate; +1s at sample 10240",
+      "backend": "room-binaural",
+      "layout": "binaural",
+      "cloud": false,
+      "input_rate": 48000,
+      "output_rate": 48000,
+      "partition": [
+        512
+      ],
+      "device_dsp": false,
+      "metadata": [
+        {
+          "sample": 37,
+          "field": "gain",
+          "value": 0.625,
+          "ramp": 127
+        },
+        {
+          "sample": 509,
+          "field": "position",
+          "value": [
+            -0.25,
+            0.75,
+            0.125
+          ],
+          "ramp": 1024
+        },
+        {
+          "sample": 1001,
+          "field": "gain",
+          "value": 0.875,
+          "ramp": 511
+        },
+        {
+          "sample": 3073,
+          "field": "head_locked",
+          "value": true,
+          "ramp": 0
+        },
+        {
+          "sample": 5003,
+          "field": "head_locked",
+          "value": false,
+          "ramp": 0
+        }
+      ],
+      "state_complete_on_every_frame": true,
+      "controls": {
+        "2048": "pose(37,23,-19)",
+        "4096": "generation=2",
+        "6144": "semantic gain scale=0.5",
+        "8192": "no backend switch",
+        "10240": "advance virtual clock by 1s; expire tracking"
+      },
+      "epochs": [
+        {
+          "epoch": 1,
+          "target": 0,
+          "end": 12289
+        },
+        {
+          "epoch": 2,
+          "target": 257,
+          "end": 290
+        }
+      ],
+      "signal": {
+        "generator": "lcg32-v1",
+        "seed": 305419896,
+        "scale": 0.125
+      },
+      "room": "room/room.json",
+      "tail_frames": 4441
+    },
+    {
+      "id": "scene-room-binaural-cloud0-48000-48000-fragmented",
+      "version": 6,
+      "clock": "epoch*2s + input_sample/input_rate; +1s at sample 10240",
+      "backend": "room-binaural",
+      "layout": "binaural",
+      "cloud": false,
+      "input_rate": 48000,
+      "output_rate": 48000,
+      "partition": [
+        1,
+        7,
+        127,
+        511,
+        1024
+      ],
+      "device_dsp": false,
+      "metadata": [
+        {
+          "sample": 37,
+          "field": "gain",
+          "value": 0.625,
+          "ramp": 127
+        },
+        {
+          "sample": 509,
+          "field": "position",
+          "value": [
+            -0.25,
+            0.75,
+            0.125
+          ],
+          "ramp": 1024
+        },
+        {
+          "sample": 1001,
+          "field": "gain",
+          "value": 0.875,
+          "ramp": 511
+        },
+        {
+          "sample": 3073,
+          "field": "head_locked",
+          "value": true,
+          "ramp": 0
+        },
+        {
+          "sample": 5003,
+          "field": "head_locked",
+          "value": false,
+          "ramp": 0
+        }
+      ],
+      "state_complete_on_every_frame": true,
+      "controls": {
+        "2048": "pose(37,23,-19)",
+        "4096": "generation=2",
+        "6144": "semantic gain scale=0.5",
+        "8192": "no backend switch",
+        "10240": "advance virtual clock by 1s; expire tracking"
+      },
+      "epochs": [
+        {
+          "epoch": 1,
+          "target": 0,
+          "end": 12289
+        },
+        {
+          "epoch": 2,
+          "target": 257,
+          "end": 290
+        }
+      ],
+      "signal": {
+        "generator": "lcg32-v1",
+        "seed": 305419896,
+        "scale": 0.125
+      },
+      "room": "room/room.json",
+      "tail_frames": 4441
+    },
+    {
+      "id": "scene-room-binaural-cloud1-48000-48000-fixed",
+      "version": 6,
+      "clock": "epoch*2s + input_sample/input_rate; +1s at sample 10240",
+      "backend": "room-binaural",
+      "layout": "binaural",
+      "cloud": true,
+      "input_rate": 48000,
+      "output_rate": 48000,
+      "partition": [
+        512
+      ],
+      "device_dsp": false,
+      "metadata": [
+        {
+          "sample": 37,
+          "field": "gain",
+          "value": 0.625,
+          "ramp": 127
+        },
+        {
+          "sample": 509,
+          "field": "position",
+          "value": [
+            -0.25,
+            0.75,
+            0.125
+          ],
+          "ramp": 1024
+        },
+        {
+          "sample": 1001,
+          "field": "gain",
+          "value": 0.875,
+          "ramp": 511
+        },
+        {
+          "sample": 3073,
+          "field": "head_locked",
+          "value": true,
+          "ramp": 0
+        },
+        {
+          "sample": 5003,
+          "field": "head_locked",
+          "value": false,
+          "ramp": 0
+        }
+      ],
+      "state_complete_on_every_frame": true,
+      "controls": {
+        "2048": "pose(37,23,-19)",
+        "4096": "generation=2",
+        "6144": "semantic gain scale=0.5",
+        "8192": "no backend switch",
+        "10240": "advance virtual clock by 1s; expire tracking"
+      },
+      "epochs": [
+        {
+          "epoch": 1,
+          "target": 0,
+          "end": 12289
+        },
+        {
+          "epoch": 2,
+          "target": 257,
+          "end": 290
+        }
+      ],
+      "signal": {
+        "generator": "lcg32-v1",
+        "seed": 305419896,
+        "scale": 0.125
+      },
+      "room": "room/room.json",
+      "tail_frames": 4441
+    },
+    {
+      "id": "scene-room-binaural-cloud1-48000-48000-fragmented",
+      "version": 6,
+      "clock": "epoch*2s + input_sample/input_rate; +1s at sample 10240",
+      "backend": "room-binaural",
+      "layout": "binaural",
+      "cloud": true,
+      "input_rate": 48000,
+      "output_rate": 48000,
+      "partition": [
+        1,
+        7,
+        127,
+        511,
+        1024
+      ],
+      "device_dsp": false,
+      "metadata": [
+        {
+          "sample": 37,
+          "field": "gain",
+          "value": 0.625,
+          "ramp": 127
+        },
+        {
+          "sample": 509,
+          "field": "position",
+          "value": [
+            -0.25,
+            0.75,
+            0.125
+          ],
+          "ramp": 1024
+        },
+        {
+          "sample": 1001,
+          "field": "gain",
+          "value": 0.875,
+          "ramp": 511
+        },
+        {
+          "sample": 3073,
+          "field": "head_locked",
+          "value": true,
+          "ramp": 0
+        },
+        {
+          "sample": 5003,
+          "field": "head_locked",
+          "value": false,
+          "ramp": 0
+        }
+      ],
+      "state_complete_on_every_frame": true,
+      "controls": {
+        "2048": "pose(37,23,-19)",
+        "4096": "generation=2",
+        "6144": "semantic gain scale=0.5",
+        "8192": "no backend switch",
+        "10240": "advance virtual clock by 1s; expire tracking"
+      },
+      "epochs": [
+        {
+          "epoch": 1,
+          "target": 0,
+          "end": 12289
+        },
+        {
+          "epoch": 2,
+          "target": 257,
+          "end": 290
+        }
+      ],
+      "signal": {
+        "generator": "lcg32-v1",
+        "seed": 305419896,
+        "scale": 0.125
+      },
+      "room": "room/room.json",
+      "tail_frames": 4441
+    }
+  ],
+  "fenv": [
+    "objects-point",
+    "directspeakers",
+    "params"
+  ]
+}

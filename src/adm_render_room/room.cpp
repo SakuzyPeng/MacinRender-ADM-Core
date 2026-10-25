@@ -45,19 +45,19 @@ Result<std::string> inspect_room(const RoomConfig& config) {
 }
 
 namespace room_internal {
+MradmRoomScreenGeometry geometry(const ScreenGeometry& screen) {
+    MradmRoomScreenGeometry out{};
+    out.cartesian = screen.cartesian ? 1U : 0U;
+    out.aspect_ratio = screen.aspect_ratio;
+    std::ranges::copy(screen.centre, std::begin(out.centre));
+    out.width = screen.width;
+    return out;
+}
 MradmRoomScreens screens(const ScreenConfig& config, const ScreenGeometry& reference) {
-    const auto convert = [](const ScreenGeometry& screen) {
-        MradmRoomScreenGeometry out{};
-        out.cartesian = screen.cartesian ? 1U : 0U;
-        out.aspect_ratio = screen.aspect_ratio;
-        std::ranges::copy(screen.centre, std::begin(out.centre));
-        out.width = screen.width;
-        return out;
-    };
     MradmRoomScreens result{};
     result.enabled = config.reproduction.has_value() ? 1U : 0U;
-    result.reference = convert(reference);
-    result.reproduction = convert(config.reproduction.value_or(reference));
+    result.reference = geometry(reference);
+    result.reproduction = geometry(config.reproduction.value_or(reference));
     return result;
 }
 Result<std::shared_ptr<const Prepared>>
