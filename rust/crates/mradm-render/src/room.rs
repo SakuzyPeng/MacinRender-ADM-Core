@@ -8,7 +8,6 @@ use crate::routing::{self, Error, Level};
 use crate::scene::{self, Log, in_effect, labels, span};
 use mradm_adm::records::{AdmPosition, AdmScreen, Object};
 use mradm_dsp::room::control::{RoomCommand, RoomDescription, State};
-use mradm_dsp::room::loading;
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
 use mradm_scene::{RenderScene, SourceKind};
 
@@ -89,22 +88,26 @@ fn unsupported(message: &str) -> Error {
     error(2, message)
 }
 
-/// `room_internal::polar`: a failed conversion keeps the C++ wrapper's text and context.
-fn polar(azimuth: f32, elevation: f32, distance: f32) -> Result<[f32; 3], Error> {
-    loading::polar(azimuth, elevation, distance).map_err(|e| Error {
-        code: crate::offline::dsp_code(&e),
-        message: "房间 DSP 操作失败".as_bytes().to_vec(),
-        context: b"room-binaural".to_vec(),
-    })
-}
+/// The caller supplies the polar conversion's floating-point environment boundary. Register
+/// access stays in the private FFI, while gain and offset arithmetic keeps the caller's environment.
+pub type PolarConversion = fn(f32, f32, f32) -> mradm_dsp::Result<[f32; 3]>;
 
 /// The offset block position in the room's Cartesian coordinates.
-fn position(point: AdmPosition, object: &Object) -> Result<[f32; 3], Error> {
+fn position(
+    point: AdmPosition,
+    object: &Object,
+    polar: PolarConversion,
+) -> Result<[f32; 3], Error> {
     let p = scene::offset(point, object);
     if p.cartesian != 0 {
         Ok([p.x, p.y, p.z])
     } else {
-        polar(p.azimuth, p.elevation, p.distance)
+        // Keep room_internal::polar's error text and context.
+        polar(p.azimuth, p.elevation, p.distance).map_err(|e| Error {
+            code: crate::offline::dsp_code(&e),
+            message: "房间 DSP 操作失败".as_bytes().to_vec(),
+            context: b"room-binaural".to_vec(),
+        })
     }
 }
 
@@ -248,7 +251,7 @@ fn add_block(p: &mut Prepared, source: u32, start: u64, end: u64, duration: u64,
 }
 
 /// Prepares the sources and events; `log` receives the `room-binaural` lines in order.
-pub fn prepare(r: &Request, log: &mut Log) -> Result<Prepared, Error> {
+pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Prepared, Error> {
     let scene = r.scene;
     let s = &scene.snapshot;
     if scene.info.sample_rate != r.sample_rate || r.layout_id != b"binaural" || !s.hoa.is_empty() {
@@ -348,7 +351,7 @@ pub fn prepare(r: &Request, log: &mut Log) -> Result<Prepared, Error> {
             });
             for (i, &b) in object_blocks.iter().enumerate() {
                 let block = &blocks[b];
-                let point = position(block.position, object)?;
+                let point = position(block.position, object, polar)?;
                 let state = State {
                     gain: if mute { 0. } else { object.gain * block.gain },
                     position: point,
@@ -432,7 +435,7 @@ pub fn prepare(r: &Request, log: &mut Log) -> Result<Prepared, Error> {
                     {
                         point = block.position;
                     }
-                    state.position = position(point, object)?;
+                    state.position = position(point, object, polar)?;
                 }
                 let next = direct_blocks
                     .get(i + 1)

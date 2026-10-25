@@ -31,9 +31,13 @@ type Logs = Vec<(Level, String)>;
 
 fn prepare(r: &Request) -> (Result<Prepared, (i32, String)>, Logs) {
     let mut logs = Vec::new();
-    let result = room::prepare(r, &mut |level, text| {
-        logs.push((level, String::from_utf8(text).unwrap()));
-    })
+    let result = room::prepare(
+        r,
+        &mut |level, text| {
+            logs.push((level, String::from_utf8(text).unwrap()));
+        },
+        loading::polar,
+    )
     .map_err(|e| (e.code, String::from_utf8(e.message).unwrap()));
     (result, logs)
 }
