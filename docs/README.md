@@ -22,6 +22,7 @@
 - [Rust 主导逆转路线](architecture/RUST_INVERSION_ROADMAP.md) — ADR 0021 的终态、模块去向、期次与 C/C++ 规模棘轮
 - [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)（历史规划，已被 ADR 0021 取代）
 - [PCM 一致性审计与 Rust 迁移路线](architecture/PCM_CONSISTENCY_AUDIT.md) — 剩余数值运算与各期切片的统一入口，一期为 Scene 流式渲染及其实际共享依赖，四期为 PCM 写出为止的数据链路迁入 Rust
+- [ROOM 准备迁移审查与对照](architecture/RUST_ROOM_PREPARATION_REVIEW.md) — 4.6 D 浮点环境修复与 macOS / Windows Release 对照
 - [ADM 特性覆盖审计](architecture/ADM_FEATURE_COVERAGE.md)
 - [adm_apple 后端实现说明（AUSpatialMixer）](architecture/ADM_APPLE_BACKEND.md)
 - [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)
