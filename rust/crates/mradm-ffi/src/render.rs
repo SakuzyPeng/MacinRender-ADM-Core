@@ -1665,6 +1665,38 @@ pub struct RenderLivePlane {
     samples_len: usize,
 }
 
+/// A call-scoped projection of already validated transport records.
+struct LivePlanes<'a> {
+    records: &'a [RenderLivePlane],
+}
+
+impl<'a> LivePlanes<'a> {
+    /// All signalled sample ranges must be valid for `'a` and disjoint from mutable output/state.
+    unsafe fn new(records: &'a [RenderLivePlane]) -> Self {
+        Self { records }
+    }
+}
+
+impl live::PlaneSource for LivePlanes<'_> {
+    fn plane(&self, index: usize) -> live::Plane<'_> {
+        let p = &self.records[index];
+        live::Plane {
+            element_id: p.element_id,
+            has_signal: p.has_signal != 0,
+            samples: if p.has_signal != 0 && p.samples_len != 0 {
+                // The constructor's ranges remain borrowed only for this render call.
+                unsafe { slice::from_raw_parts(p.samples, p.samples_len) }
+            } else {
+                &[]
+            },
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = live::Plane<'_>> + Clone {
+        (0..self.records.len()).map(|i| self.plane(i))
+    }
+}
+
 #[repr(C)]
 pub struct RenderLiveEntry {
     element_id: u64,
@@ -1751,7 +1783,11 @@ impl LiveRenderer {
             Self::TripleBalance(r) => r.reset(),
         }
     }
-    fn render(&mut self, frame: &live::Frame, output: &mut [f32]) -> Result<(), Error> {
+    fn render<P: live::PlaneSource + ?Sized>(
+        &mut self,
+        frame: &live::FrameView<'_, P>,
+        output: &mut [f32],
+    ) -> Result<(), Error> {
         match self {
             Self::Vbap(r) => r.render(frame, output),
             Self::TripleBalance(r) => r.render(frame, output),
@@ -2001,21 +2037,9 @@ pub unsafe extern "C" fn mradm_render_live_render(
             crate::checked::separate(output, output_len, p.samples, p.samples_len)
                 .map_err(invalid_buffers)?;
         }
+        // Raw sample ranges and overlap were checked above; no view outlives this call.
+        let planes = unsafe { LivePlanes::new(records) };
         let h = unsafe { live_renderer(handle)? };
-        let planes = records
-            .iter()
-            .map(|p| {
-                Ok(live::Plane {
-                    element_id: p.element_id,
-                    has_signal: p.has_signal != 0,
-                    samples: if p.has_signal != 0 {
-                        unsafe { input(p.samples, p.samples_len)? }
-                    } else {
-                        &[]
-                    },
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
         h.initial.clear();
         h.initial.extend(
             unsafe { input(f.initial, f.initial_len)? }
@@ -2043,7 +2067,7 @@ pub unsafe extern "C" fn mradm_render_live_render(
         let output = unsafe { checked_output(output, output_len) }
             .ok_or_else(|| bad(&format!("无效 {name} 输出")))?;
         h.renderer.render(
-            &live::Frame {
+            &live::FrameView {
                 generation: f.generation,
                 duration: f.duration,
                 planes: &planes,
@@ -2077,6 +2101,10 @@ pub unsafe extern "C" fn mradm_render_live_render(
 #[cfg(test)]
 #[path = "render_stream_test.rs"]
 mod stream_tests;
+
+#[cfg(test)]
+#[path = "render_live_test.rs"]
+mod live_tests;
 
 #[cfg(test)]
 mod tests {

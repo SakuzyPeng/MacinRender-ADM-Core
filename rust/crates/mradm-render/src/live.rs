@@ -85,6 +85,23 @@ pub struct Plane<'a> {
     pub samples: &'a [f32],
 }
 
+/// Indexed PCM views borrowed for one render call. Transport records can project each view
+/// directly without allocating an intermediate array or retaining the caller's samples.
+pub trait PlaneSource {
+    fn plane(&self, index: usize) -> Plane<'_>;
+    fn iter(&self) -> impl Iterator<Item = Plane<'_>> + Clone;
+}
+
+impl PlaneSource for [Plane<'_>] {
+    fn plane(&self, index: usize) -> Plane<'_> {
+        self[index]
+    }
+
+    fn iter(&self) -> impl Iterator<Item = Plane<'_>> + Clone {
+        self.iter().copied()
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Entry {
     pub element_id: u64,
@@ -104,15 +121,26 @@ pub struct Update {
 
 /// One rendered slice. `trace` is the checkpoint prefix (`<scene renderer key>.30-vbap<N>` or
 /// `.30-triple`); empty writes none.
-#[derive(Clone, Copy, Debug)]
-pub struct Frame<'a> {
+#[derive(Debug)]
+pub struct FrameView<'a, P: ?Sized> {
     pub generation: u64,
     pub duration: u32,
-    pub planes: &'a [Plane<'a>],
+    pub planes: &'a P,
     pub initial: &'a [Entry],
     pub updates: &'a [Update],
     pub trace: &'a [u8],
 }
+
+impl<P: ?Sized> Copy for FrameView<'_, P> {}
+
+impl<P: ?Sized> Clone for FrameView<'_, P> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+/// A render slice backed by an array of already borrowed PCM views.
+pub type Frame<'a> = FrameView<'a, [Plane<'a>]>;
 
 /// `live_scene::DiagnosticCode`.
 pub mod code {
