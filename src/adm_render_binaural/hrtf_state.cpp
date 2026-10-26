@@ -14,18 +14,18 @@ MradmAdmText text(const std::string& value) {
     return {reinterpret_cast<const std::uint8_t*>(value.data()), value.size()};
 }
 struct Request {
-    std::uint32_t sofa;
-    MradmAdmText path;
-    MradmAdmText display;
-    MradmAdmText file_name;
-    MradmBinauralHrtfHandle** output;
-    MradmRenderBinauralHrtfView* view;
+    std::uint32_t sofa{0U};
+    MradmAdmText path{};
+    MradmAdmText display{};
+    MradmAdmText file_name{};
+    MradmBinauralHrtfHandle** output{nullptr};
+    MradmRenderBinauralHrtfView* view{nullptr};
 };
 template <typename Call>
 Result<std::shared_ptr<const HrtfState>> adopt(const std::filesystem::path* sofa, const Call& call) {
     const auto path = sofa != nullptr ? utf8(*sofa) : std::string{};
-    const auto display = sofa != nullptr ? sofa->string() : std::string{};
-    const auto file_name = sofa != nullptr ? sofa->filename().string() : std::string{};
+    const auto& display = path;
+    const auto file_name = sofa != nullptr ? utf8(sofa->filename()) : std::string{};
     MradmBinauralHrtfHandle* raw = nullptr;
     MradmRenderBinauralHrtfView view{};
     live_scene::RustError error(0, display.size());
