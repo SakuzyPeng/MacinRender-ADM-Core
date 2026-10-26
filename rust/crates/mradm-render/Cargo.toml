@@ -13,3 +13,6 @@ mradm-ear = { path = "../mradm-ear" }
 mradm-json = { path = "../mradm-json" }
 mradm-scene = { path = "../mradm-scene" }
 mradm-wav = { path = "../mradm-wav" }
+
+[features]
+sofa = ["mradm-dsp/sofa"]

@@ -26,5 +26,5 @@ mradm-math = { path = "../mradm-math" }
 [features]
 diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
 default = ["sofa"]
-sofa = ["mradm-dsp/sofa"]
+sofa = ["mradm-dsp/sofa", "mradm-render/sofa"]
 room-cuda = ["dep:mradm-room-cuda"]

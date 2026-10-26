@@ -358,7 +358,7 @@ target_sources(
     mr_adm_render_binaural
     PRIVATE
         src/adm_render_binaural/binaural_renderer.cpp
-        src/adm_render_binaural/hrtf_grid.cpp
+        src/adm_render_binaural/hrtf_state.cpp
         src/adm_render_binaural/binaural_spreader.cpp
         src/adm_render_binaural/live_binaural_renderer.cpp
     PUBLIC
@@ -936,8 +936,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_scene_callback_alloc_tests COMMAND mr_adm_scene_callback_alloc_tests)
     set_tests_properties(mr_adm_scene_callback_alloc_tests PROPERTIES TIMEOUT 60)
 
+    # Test-only copy of the C++ HRTF state before PCM consistency 4.7 A, for the frozen live binaural
+    # reference and the HRTF interpolation tests; production prepares it in Rust.
+    add_library(mr_adm_binaural_test_support STATIC tests/support/binaural/legacy_state.cpp)
+    target_include_directories(mr_adm_binaural_test_support PUBLIC tests/support/binaural)
+    target_link_libraries(mr_adm_binaural_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp
+        PRIVATE fmt::fmt)
+    target_compile_definitions(mr_adm_binaural_test_support PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
+    mr_adm_core_apply_warnings(mr_adm_binaural_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_binaural_test_support)
+
     add_executable(mr_adm_live_binaural_rust_tests tests/unit/live_binaural_rust_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp
+        mr_adm_binaural_test_support)
     target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural)
     mr_adm_core_apply_warnings(mr_adm_live_binaural_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_live_binaural_rust_tests)
@@ -1576,29 +1587,25 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_hoa_decode_fixture_tests COMMAND mr_adm_hoa_decode_fixture_tests)
 
     # Fixture test: Rust KEMAR HRTF binaural renderer timing and fixed stereo output layout.
-    # The interpolation invariant probe is its own test-only translation unit (binaural_test_probe.cpp),
-    # compiled here and NOT into the production ADMRenderBinaural library.
+    # The interpolation invariant probe is test support over the legacy HRTF state.
     add_executable(mr_adm_binaural_fixture_tests
         tests/unit/binaural_render_fixture_test.cpp
-        src/adm_render_binaural/binaural_test_probe.cpp)
+        tests/support/binaural/binaural_test_probe.cpp)
     target_link_libraries(mr_adm_binaural_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderBinaural
             MacinRender::ADMIo
             MacinRender::ADMAudio
-     MacinRender::ADMDsp)
-    # Test-only access to the non-installed binaural internal/probe headers.
-
-    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_io")
+            MacinRender::ADMDsp
+            mr_adm_binaural_test_support)
+    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_io")
     mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
 
     add_executable(mr_adm_sofa_fixture_tests tests/unit/sofa_fixture_test.cpp)
-    target_link_libraries(mr_adm_sofa_fixture_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_sofa_fixture_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     target_include_directories(mr_adm_sofa_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
     target_compile_definitions(mr_adm_sofa_fixture_tests PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
     mr_adm_core_apply_warnings(mr_adm_sofa_fixture_tests)
@@ -1625,23 +1632,22 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_room_trace_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
     add_executable(mr_adm_hrtf_grid_tests tests/unit/hrtf_grid_test.cpp)
-    target_link_libraries(mr_adm_hrtf_grid_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
-    target_include_directories(mr_adm_hrtf_grid_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
+    target_link_libraries(mr_adm_hrtf_grid_tests PRIVATE mr_adm_binaural_test_support)
 
     mr_adm_core_apply_warnings(mr_adm_hrtf_grid_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hrtf_grid_tests)
     add_test(NAME mr_adm_hrtf_grid_tests COMMAND mr_adm_hrtf_grid_tests)
 
     add_executable(mr_adm_hrtf_interpolation_tests tests/unit/hrtf_interpolation_test.cpp)
-    target_link_libraries(mr_adm_hrtf_interpolation_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
-    target_include_directories(mr_adm_hrtf_interpolation_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
+    target_link_libraries(mr_adm_hrtf_interpolation_tests PRIVATE mr_adm_binaural_test_support)
     mr_adm_core_apply_warnings(mr_adm_hrtf_interpolation_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hrtf_interpolation_tests)
     add_test(NAME mr_adm_hrtf_interpolation_tests COMMAND mr_adm_hrtf_interpolation_tests)
     set_tests_properties(mr_adm_hrtf_interpolation_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp
+        mr_adm_binaural_test_support)
     target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")

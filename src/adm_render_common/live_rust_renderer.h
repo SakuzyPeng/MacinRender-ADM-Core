@@ -11,10 +11,12 @@
 
 namespace mradm::live_scene {
 
-// Rust error text: fixed wording plus the input bytes, so `extra` (their size) always fits.
+// Rust error text: fixed wording plus the input bytes, so `extra` (their size) always fits; the
+// context likewise with `context_extra`.
 class RustError {
   public:
-    explicit RustError(std::size_t extra = 0) : message_(extra + 512), context_(512) {}
+    explicit RustError(std::size_t extra = 0, std::size_t context_extra = 0)
+        : message_(extra + 512), context_(context_extra + 512) {}
     uint8_t* message() noexcept { return message_.data(); }
     uint8_t* context() noexcept { return context_.data(); }
     std::size_t* message_len() noexcept { return &(message_len_ = message_.size()); }

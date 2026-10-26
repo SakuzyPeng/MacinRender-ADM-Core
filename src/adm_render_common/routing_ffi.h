@@ -321,6 +321,22 @@ typedef struct MradmRenderRoomStatus {
 typedef struct MradmRenderRoomControl MradmRenderRoomControl;
 // Room file stream (4.6 E): validation may overlap worker calls; serialize others and destroy after all calls return.
 typedef struct MradmRenderRoomStream MradmRenderRoomStream;
+// The binaural HRTF state (4.7): a view of name, rates and sizes, an owned filter-bank handle
+// (mradm_dsp_hrtf_filters_destroy) and the HRIRs and directions, valid while the handle lives.
+typedef struct MradmBinauralHrtfHandle MradmBinauralHrtfHandle;
+typedef struct MradmRenderBinauralHrtfView {
+    MradmAdmText name;
+    uint32_t sample_rate;
+    size_t num_dirs;
+    size_t hrir_len;
+    size_t fft_size;
+    size_t overlap;
+    void* filters;
+    const float* hrirs;
+    size_t hrirs_len;
+    const float* directions;
+    size_t directions_len;
+} MradmRenderBinauralHrtfView;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -603,6 +619,33 @@ int32_t mradm_render_live_render(MradmRenderLive* handle,
                                  size_t* message_len,
                                  uint8_t* context,
                                  size_t* context_len);
+
+// sofa 0 selects the built-in set; path is UTF-8, display and file_name the caller's text of it.
+int32_t mradm_render_binaural_hrtf_prepare(uint32_t sofa,
+                                           MradmAdmText path,
+                                           MradmAdmText display,
+                                           MradmAdmText file_name,
+                                           uint32_t input_rate,
+                                           uint64_t block,
+                                           MradmBinauralHrtfHandle** output,
+                                           MradmRenderBinauralHrtfView* view,
+                                           uint8_t* message,
+                                           size_t* message_len,
+                                           uint8_t* context,
+                                           size_t* context_len);
+// The Scene stream renderer's cached state at sample_rate, without HRIRs and directions.
+int32_t mradm_render_binaural_hrtf_live(uint32_t sofa,
+                                        MradmAdmText path,
+                                        MradmAdmText display,
+                                        MradmAdmText file_name,
+                                        uint32_t sample_rate,
+                                        MradmBinauralHrtfHandle** output,
+                                        MradmRenderBinauralHrtfView* view,
+                                        uint8_t* message,
+                                        size_t* message_len,
+                                        uint8_t* context,
+                                        size_t* context_len);
+void mradm_render_binaural_hrtf_destroy(MradmBinauralHrtfHandle* handle);
 
 #ifdef __cplusplus
 }

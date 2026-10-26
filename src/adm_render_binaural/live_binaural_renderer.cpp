@@ -8,7 +8,6 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <numbers>
 #include <numeric>
 #include <optional>
@@ -34,20 +33,16 @@
 
 #include "adm/scene.h"
 
-#include "binaural_internal.h"
 #include "dsp.h"
 #include "head_rotation.h"
+#include "hrtf_state.h"
 #include "live_binaural_convolver.h"
-#include "resampler.h"
 
 namespace mradm::live_scene {
 
 namespace {
 
-using binaural_internal::BinauralState;
-using binaural_internal::HrtfDataset;
-using binaural_internal::k_n_ears;
-constexpr std::uint32_t k_convolution_block = 1024U;
+using binaural_internal::HrtfState;
 
 
 // These private renderer-local aggregate workspaces intentionally expose their storage to the
@@ -89,184 +84,6 @@ struct StagedControl {
     return found->second;
 }
 
-[[nodiscard]] Result<HrtfDataset> resample_dataset(HrtfDataset dataset, std::uint32_t sample_rate) {
-    if (std::cmp_equal(dataset.sample_rate, sample_rate)) {
-        return dataset;
-    }
-    if (dataset.sample_rate <= 0 || dataset.hrir_len <= 0 || sample_rate == 0U) {
-        return make_error(ErrorCode::render_failed, "live binaural HRTF dataset has an invalid sample rate");
-    }
-
-    const auto input_length = static_cast<std::size_t>(dataset.hrir_len);
-    const auto numerator = static_cast<std::uint64_t>(dataset.hrir_len) * sample_rate;
-    const auto output_frames = (numerator + static_cast<std::uint64_t>(dataset.sample_rate) - 1U) /
-                               static_cast<std::uint64_t>(dataset.sample_rate);
-    const auto filters = static_cast<std::size_t>(dataset.num_dirs) * k_n_ears;
-    if (output_frames > static_cast<std::uint64_t>(std::numeric_limits<int>::max()) || filters == 0U ||
-        output_frames > std::numeric_limits<std::size_t>::max() / filters) {
-        return make_error(ErrorCode::unsupported, "resampled HRTF dataset is too large");
-    }
-    const auto output_length = static_cast<std::size_t>(output_frames);
-    auto resampler = dsp::Resampler::create(1U, static_cast<std::uint32_t>(dataset.sample_rate), sample_rate);
-    if (!resampler) {
-        return tl::unexpected{resampler.error()};
-    }
-    std::vector<float> output(filters * output_length);
-    for (std::size_t filter = 0U; filter < filters; ++filter) {
-        auto reset = resampler->reset();
-        if (!reset) {
-            return tl::unexpected{reset.error()};
-        }
-        const auto source = std::span{dataset.hrirs}.subspan(filter * input_length, input_length);
-        const auto destination = std::span{output}.subspan(filter * output_length, output_length);
-        std::size_t consumed = 0U;
-        std::size_t written = 0U;
-        while (consumed < input_length) {
-            auto progress = resampler->process(source.subspan(consumed), destination.subspan(written));
-            if (!progress) {
-                return tl::unexpected{progress.error()};
-            }
-            consumed += progress->input_frames;
-            written += progress->output_frames;
-            if (progress->input_frames == 0U && progress->output_frames == 0U) {
-                return make_error(ErrorCode::render_failed, "HRTF resampler made no progress");
-            }
-        }
-        while (written < output_length) {
-            auto generated = resampler->finish(destination.subspan(written));
-            if (!generated) {
-                return tl::unexpected{generated.error()};
-            }
-            if (*generated == 0U) {
-                return make_error(ErrorCode::render_failed, "HRTF resampler returned a short filter");
-            }
-            written += *generated;
-        }
-    }
-    dataset.sample_rate = static_cast<int>(sample_rate);
-    dataset.hrir_len = static_cast<int>(output_length);
-    dataset.hrirs = std::move(output);
-    return dataset;
-}
-
-// Cache only immutable interpolation data. FFT workspaces and convolution tails
-// remain private to each renderer, so preparing another output cannot alter it.
-class HrtfStateCache {
-  public:
-    class Key {
-      public:
-        bool operator==(const Key&) const = default;
-
-      private:
-        friend class HrtfStateCache;
-        std::filesystem::path path;
-        std::filesystem::file_time_type modified;
-        std::uintmax_t size{0U};
-        std::uint32_t sample_rate{0U};
-    };
-
-    [[nodiscard]] static std::optional<Key> make_key(const RendererConfig& config) {
-        Key result;
-        result.sample_rate = config.sample_rate;
-        if (!config.sofa_path.empty()) {
-            std::error_code error;
-            result.path = std::filesystem::canonical(config.sofa_path, error);
-            if (error) {
-                return std::nullopt;
-            }
-            result.modified = std::filesystem::last_write_time(result.path, error);
-            if (error) {
-                return std::nullopt;
-            }
-            result.size = std::filesystem::file_size(result.path, error);
-            if (error) {
-                return std::nullopt;
-            }
-        }
-        return result;
-    }
-
-    [[nodiscard]] std::shared_ptr<const BinauralState> find(const Key& key) {
-        const std::lock_guard<std::mutex> lock(mutex_);
-        const auto found = std::ranges::find(entries_, key, &Entry::key);
-        if (found == entries_.end()) {
-            return {};
-        }
-        auto entry = std::move(*found);
-        entries_.erase(found);
-        auto state = entry.state;
-        entries_.push_back(std::move(entry));
-        return state;
-    }
-
-    void insert(Key key, std::shared_ptr<const BinauralState> state) {
-        const auto bytes = sizeof(BinauralState) + state->dataset_name.capacity() + state->filters.bytes() +
-                           ((state->hrtf_td.capacity() + state->grid_dirs_deg.capacity()) * sizeof(float)) +
-                           sizeof(binaural_internal::HrtfGrid);
-        constexpr std::size_t k_byte_budget = std::size_t{64U} * 1024U * 1024U;
-        if (bytes > k_byte_budget) {
-            return;
-        }
-        const std::lock_guard<std::mutex> lock(mutex_);
-        if (std::ranges::find(entries_, key, &Entry::key) != entries_.end()) {
-            return;
-        }
-        while (!entries_.empty() && (entries_.size() >= 4U || bytes_ + bytes > k_byte_budget)) {
-            bytes_ -= entries_.front().bytes;
-            entries_.erase(entries_.begin());
-        }
-        entries_.push_back({std::move(key), std::move(state), bytes});
-        bytes_ += bytes;
-    }
-
-  private:
-    struct Entry {
-        Key key;
-        std::shared_ptr<const BinauralState> state;
-        std::size_t bytes{0U};
-    };
-    std::mutex mutex_;
-    std::vector<Entry> entries_;
-    std::size_t bytes_{0U};
-};
-
-[[nodiscard]] Result<std::shared_ptr<const BinauralState>> prepare_hrtf_state(const RendererConfig& config) {
-    static HrtfStateCache cache;
-    const auto key = HrtfStateCache::make_key(config);
-    if (key) {
-        if (auto cached = cache.find(*key)) {
-            return cached;
-        }
-    }
-    // File IO, resampling and table construction never hold the cache mutex.
-    Result<HrtfDataset> dataset = config.sofa_path.empty()
-                                      ? Result<HrtfDataset>{binaural_internal::built_in_kemar_dataset()}
-                                      : binaural_internal::load_sofa_dataset(config.sofa_path, 0U);
-    if (!dataset) {
-        return tl::unexpected{dataset.error()};
-    }
-    auto resampled = resample_dataset(std::move(*dataset), config.sample_rate);
-    if (!resampled) {
-        return tl::unexpected{resampled.error()};
-    }
-    auto prepared = binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block, true);
-    if (!prepared) {
-        return tl::unexpected{prepared.error()};
-    }
-    auto state_owner = std::move(*prepared);
-    // Live convolution and extent rendering use only the frequency-domain HRTFs
-    // and compressed interpolation grid. The original HRIRs and measurement
-    // directions are needed during preparation (and by the offline SAF spreader),
-    // but retaining them in this live-only cache wastes a full dataset per entry.
-    std::vector<float>{}.swap(state_owner->hrtf_td);
-    std::vector<float>{}.swap(state_owner->grid_dirs_deg);
-    std::shared_ptr<const BinauralState> state = std::move(state_owner);
-    if (key && key == HrtfStateCache::make_key(config)) {
-        cache.insert(*key, state);
-    }
-    return state;
-}
-
 [[nodiscard]] MradmLiveBinauralState numerical_state(const ObjectState& s) {
     return {s.valid_fields,
             s.active ? 1U : 0U,
@@ -284,7 +101,7 @@ class HrtfStateCache {
 }
 class LiveBinauralRenderer final : public ILiveSceneRenderer {
   public:
-    LiveBinauralRenderer(RendererConfig config, std::shared_ptr<const BinauralState> state, DiagnosticSink diagnostics)
+    LiveBinauralRenderer(RendererConfig config, std::shared_ptr<const HrtfState> state, DiagnosticSink diagnostics)
         : config_(std::move(config)), state_(std::move(state)), diagnostics_(std::move(diagnostics)) {
         auto prepared =
             dsp::LiveBinauralSession::create(state_->filters.get(), {}, config_.sample_rate, numerical_spread());
@@ -580,7 +397,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                       message});
     }
     RendererConfig config_;
-    std::shared_ptr<const BinauralState> state_;
+    std::shared_ptr<const HrtfState> state_;
     DiagnosticSink diagnostics_;
     dsp::LiveBinauralSession session_;
     uint64_t generation_id_{0};
@@ -597,7 +414,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
 
 Result<std::unique_ptr<ILiveSceneRenderer>> create_live_binaural_renderer(const RendererConfig& config,
                                                                           DiagnosticSink diagnostics) {
-    auto state = prepare_hrtf_state(config);
+    auto state = HrtfState::prepare_live(config.sofa_path, config.sample_rate);
     if (!state) {
         return tl::unexpected{state.error()};
     }
