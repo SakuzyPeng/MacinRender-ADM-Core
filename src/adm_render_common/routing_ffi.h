@@ -337,6 +337,50 @@ typedef struct MradmRenderBinauralHrtfView {
     const float* directions;
     size_t directions_len;
 } MradmRenderBinauralHrtfView;
+// A binaural plan (4.7 B): spread 0 cloud, 1 none, 2 SAF spreader.
+typedef struct MradmRenderBinauralRequest {
+    uint32_t spread;
+    uint32_t smoothing_frames;
+} MradmRenderBinauralRequest;
+typedef struct MradmRenderBinauralInfo {
+    size_t sources;
+    size_t groups;
+    uint64_t block;
+} MradmRenderBinauralInfo;
+typedef struct MradmRenderBinauralOffline MradmRenderBinauralOffline;
+typedef struct MradmRenderBinauralOfflineSettings {
+    size_t inputs;
+    uint64_t frames;
+    uint32_t sample_rate;
+    uint32_t has_window;
+    uint64_t window_start;
+    uint64_t window_count;
+    uint32_t smoothing_frames;
+    uint32_t has_pose;
+    float pose[3];
+} MradmRenderBinauralOfflineSettings;
+// pending 1 an input block, 2 a spreader tail block; emit interleaved frames at output.
+typedef struct MradmRenderBinauralStep {
+    uint32_t pending;
+    size_t emit;
+    const float* output;
+    uint32_t has_progress;
+    MradmRenderOfflineProgress progress;
+} MradmRenderBinauralStep;
+// The C++ file stream's transitional source bank (removed with 4.7 C).
+typedef struct MradmBinauralBank MradmBinauralBank;
+typedef struct MradmRenderBinauralScales {
+    MradmAdmText object_id;
+    float scales[5];
+} MradmRenderBinauralScales;
+typedef struct MradmRenderBinauralSourceKey {
+    MradmAdmText object_id;
+    MradmAdmText label_key;
+} MradmRenderBinauralSourceKey;
+typedef struct MradmRenderBinauralSourceOutput {
+    const float* left;
+    const float* right;
+} MradmRenderBinauralSourceOutput;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -646,6 +690,64 @@ int32_t mradm_render_binaural_hrtf_live(uint32_t sofa,
                                         uint8_t* context,
                                         size_t* context_len);
 void mradm_render_binaural_hrtf_destroy(MradmBinauralHrtfHandle* handle);
+
+// The sources (and SAF spreader groups) over a prepared HRTF state; the view carries the plan's
+// log lines and error.
+int32_t mradm_render_binaural_prepare(const MradmSceneHandle* scene,
+                                      const MradmBinauralHrtfHandle* hrtf,
+                                      const MradmRenderBinauralRequest* request,
+                                      MradmRenderPrepared** output,
+                                      MradmRenderPreparedView* view,
+                                      MradmRenderBinauralInfo* info);
+// Driver errors set *location like the offline driver's; pools is the diagnostic build's worker
+// log line (empty otherwise).
+int32_t mradm_render_binaural_offline_open(const MradmRenderPrepared* prepared,
+                                           const uint8_t* path,
+                                           size_t path_len,
+                                           const MradmRenderBinauralOfflineSettings* settings,
+                                           MradmRenderBinauralOffline** output,
+                                           MradmAdmText* pools,
+                                           uint32_t* location,
+                                           uint8_t* message,
+                                           size_t* message_len);
+// 0 finished, 1 an input block next (check cancellation first), 2 a spreader tail block next.
+uint32_t mradm_render_binaural_offline_pending(const MradmRenderBinauralOffline* handle);
+int32_t mradm_render_binaural_offline_next(MradmRenderBinauralOffline* handle,
+                                           MradmRenderBinauralStep* step,
+                                           uint32_t* location,
+                                           uint8_t* message,
+                                           size_t* message_len);
+int32_t mradm_render_binaural_offline_finish(MradmRenderBinauralOffline* handle,
+                                             uint64_t* written,
+                                             MradmRenderOfflineMetrics* metrics);
+void mradm_render_binaural_offline_destroy(MradmRenderBinauralOffline* handle);
+int32_t mradm_render_binaural_bank_create(const MradmRenderPrepared* prepared,
+                                          const MradmRenderBinauralScales* scales,
+                                          size_t scales_len,
+                                          MradmBinauralBank** output,
+                                          const MradmRenderBinauralSourceKey** keys,
+                                          size_t* keys_len,
+                                          uint32_t* location,
+                                          uint8_t* message,
+                                          size_t* message_len);
+void mradm_render_binaural_bank_reset(MradmBinauralBank* handle);
+// head_locked: per source -1 (none), 0 or 1; pose is yaw, pitch, roll when has_pose.
+int32_t mradm_render_binaural_bank_render(MradmBinauralBank* handle,
+                                          const float* input,
+                                          size_t input_len,
+                                          size_t channels,
+                                          uint64_t start,
+                                          size_t frames,
+                                          uint32_t smoothing_frames,
+                                          uint32_t has_pose,
+                                          const float* pose,
+                                          const int32_t* head_locked,
+                                          size_t head_locked_len,
+                                          const MradmRenderBinauralSourceOutput** outputs,
+                                          uint32_t* location,
+                                          uint8_t* message,
+                                          size_t* message_len);
+void mradm_render_binaural_bank_destroy(MradmBinauralBank* handle);
 
 #ifdef __cplusplus
 }
