@@ -1,8 +1,10 @@
 //! Rendering on top of the render scene (PCM consistency 4.5): the shared DirectSpeakers, label
 //! and LFE routing rules, the offline driver, file streaming, the loudspeaker and HOA backends and
-//! the Scene stream VBAP renderer; the Triple Balance room backend (4.6).
+//! the Scene stream VBAP renderer; the Triple Balance and room backends (4.6); the binaural HRTF
+//! state (4.7).
 #![forbid(unsafe_code)]
 
+pub mod binaural_hrtf;
 pub mod ear;
 pub mod hoa;
 pub mod live;

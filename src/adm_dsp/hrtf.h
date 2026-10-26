@@ -97,6 +97,17 @@ class HrtfFilters final {
         }
         return result;
     }
+    // Takes ownership of a filter-bank handle another Rust preparation returned.
+    [[nodiscard]] static Result<HrtfFilters> adopt(void* handle) {
+        HrtfFilters result;
+        result.handle_.reset(handle);
+        std::array<char, 256> message{};
+        const auto status = mradm_dsp_hrtf_filters_info(handle, &result.info_, message.data(), message.size());
+        if (status != 0) {
+            return make_error(static_cast<ErrorCode>(status), message.data(), "HRTF filters");
+        }
+        return result;
+    }
     [[nodiscard]] const void* get() const noexcept { return handle_.get(); }
     [[nodiscard]] std::size_t output_size() const noexcept { return info_.output_length / 2U; }
     [[nodiscard]] std::size_t bytes() const noexcept { return info_.storage_bytes; }
