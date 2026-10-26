@@ -8,7 +8,6 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -34,11 +33,11 @@
 #include "adm/render_binaural.h"
 
 #include "binaural_dsp.h"
-#include "binaural_internal.h"
 #include "binaural_spreader.h"
 #include "consistency_trace.h"
 #include "dsp.h"
 #include "head_rotation.h"
+#include "hrtf_state.h"
 #include "meter.h"
 #include "post_gain.h"
 #include "render_common.h"
@@ -46,15 +45,12 @@
 
 namespace mradm {
 
-// The module-private HRTF state and interpolation entry points live in binaural_internal so the
-// test-only probe (binaural_test_probe.cpp) can share them without compiling test code into the
-// production library. Bring them into scope for the renderer code below.
 using namespace binaural_internal;
 
-// This block reopens binaural_internal (declared in binaural_internal.h): the renderer's private
-// helpers, HRTF state and interpolation routines all live here so the test probe can reuse the
-// declared subset without test code entering the production library.
+// The renderer's private helpers. The HRTF state is prepared by Rust (hrtf_state.h, PCM
+// consistency 4.7 A).
 namespace binaural_internal {
+namespace {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -197,13 +193,15 @@ std::pair<float, float> label_to_polar(const std::string& label) {
 }
 
 
-// Grid index into the pre-computed VBAP table (az_res=1°, el_res=1°).
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+// Grid index into the pre-computed VBAP table (az_res=1°, el_res=1°), for checkpoint names.
 int vbap_grid_idx(float az_deg, float el_deg) {
     std::size_t index = 0U;
     std::array<char, 256> message{};
     dsp::check(mradm_dsp_hrtf_grid_index(az_deg, el_deg, &index, message.data(), message.size()), message.data());
     return static_cast<int>(index);
 }
+#endif
 
 
 // ── Listener head rotation (head tracking / free-look) ──────────────────────────
@@ -219,152 +217,9 @@ int vbap_grid_idx(float az_deg, float el_deg) {
 // the listener's right when they turn their head left.
 using render_common::HeadRotation;
 
-// Both built-in and user HRTFs enter through the Rust-owned dataset boundary.
-Result<HrtfDataset> read_rust_dataset(std::span<const std::uint8_t> bytes, bool builtin) {
-    void* raw = nullptr;
-    std::array<char, 256> error{};
-    auto status =
-        mradm_dsp_dataset_create(bytes.data(), bytes.size(), builtin ? 1 : 0, &raw, error.data(), error.size());
-    if (status != 0) {
-        return make_error(static_cast<ErrorCode>(status), error.data());
-    }
-    const std::unique_ptr<void, decltype(&mradm_dsp_dataset_destroy)> owner(raw, mradm_dsp_dataset_destroy);
-    MradmDspDatasetInfo info{};
-    status = mradm_dsp_dataset_info(raw, &info, error.data(), error.size());
-    if (status != 0) {
-        return make_error(static_cast<ErrorCode>(status), error.data());
-    }
-    if (info.num_dirs > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
-        info.ir_len > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-        return make_error(ErrorCode::unsupported, "HRTF dataset exceeds renderer dimensions");
-    }
-    HrtfDataset result;
-    result.sample_rate = static_cast<int>(info.sample_rate);
-    result.num_dirs = static_cast<int>(info.num_dirs);
-    result.hrir_len = static_cast<int>(info.ir_len);
-    result.dirs_deg.resize(info.num_dirs * 2U);
-    result.hrirs.resize(info.num_dirs * 2U * info.ir_len);
-    std::array<char, 256> name{};
-    status = mradm_dsp_dataset_copy(raw,
-                                    result.dirs_deg.data(),
-                                    result.dirs_deg.size(),
-                                    result.hrirs.data(),
-                                    result.hrirs.size(),
-                                    name.data(),
-                                    name.size(),
-                                    error.data(),
-                                    error.size());
-    if (status != 0) {
-        return make_error(static_cast<ErrorCode>(status), error.data());
-    }
-    result.name = name.data();
-    return result;
-}
-
-HrtfDataset built_in_kemar_dataset() {
-    auto result = read_rust_dataset({}, true);
-    if (!result) {
-        throw std::runtime_error(result.error().message);
-    }
-    return std::move(*result);
-}
-
-Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, std::uint32_t input_sample_rate) {
-#if MR_ADM_ENABLE_SOFA
-    std::ifstream input(path, std::ios::binary | std::ios::ate);
-    if (!input) {
-        return make_error(ErrorCode::io_error, "SOFA file could not be opened", "path=" + path.string());
-    }
-    const std::streamoff length = input.tellg();
-    if (length <= 0) {
-        return make_error(ErrorCode::io_error, "SOFA file is empty or unreadable");
-    }
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(length));
-    input.seekg(0);
-    if (!input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(length))) {
-        return make_error(ErrorCode::io_error, "SOFA file could not be read completely");
-    }
-    auto result = read_rust_dataset(bytes, false);
-    if (!result) {
-        return result;
-    }
-    if (input_sample_rate != 0U && !std::cmp_equal(input_sample_rate, result->sample_rate)) {
-        return make_error(
-            ErrorCode::unsupported,
-            fmt::format("SOFA: sample rate {} Hz does not match input {} Hz", result->sample_rate, input_sample_rate),
-            "path=" + path.string());
-    }
-    result->name = fmt::format("SOFA {}", result->name.empty() ? path.filename().string() : result->name);
-    return result;
-#else
-    (void) input_sample_rate;
-    return make_error(ErrorCode::unsupported,
-                      "SOFA loading is disabled in this build (MR_ADM_ENABLE_SOFA=OFF)",
-                      "path=" + path.string());
-#endif
-}
-
-Result<HrtfDataset> load_hrtf_dataset(const RenderPlan& plan) {
-    if (plan.sofa_path.has_value()) {
-        return load_sofa_dataset(*plan.sofa_path, plan.scene.info.sample_rate);
-    }
-    return built_in_kemar_dataset();
-}
-
-// Preparation publishes only fully validated, immutable Rust interpolation data.
-Result<std::unique_ptr<BinauralState>>
-build_binaural_state(HrtfDataset dataset, uint64_t block_size, bool cache_magnitudes) {
-    constexpr std::size_t k_max_fft = std::size_t{1U} << 24U;
-    if (dataset.num_dirs <= 0 || dataset.hrir_len <= 0 || block_size == 0U || block_size > k_max_fft ||
-        static_cast<std::size_t>(dataset.hrir_len) > k_max_fft - block_size + 1U ||
-        dataset.dirs_deg.size() != static_cast<std::size_t>(dataset.num_dirs) * 2U) {
-        return make_error(ErrorCode::invalid_argument, "invalid HRTF preparation dimensions");
-    }
-    auto bs = std::make_unique<BinauralState>();
-    bs->num_dirs = dataset.num_dirs;
-    bs->hrir_len = dataset.hrir_len;
-    bs->fft_size = static_cast<int>(
-        std::bit_ceil(static_cast<std::size_t>(block_size) + static_cast<std::size_t>(dataset.hrir_len) - 1U));
-    bs->n_bands = (bs->fft_size / 2) + 1;
-    bs->overlap_len = dataset.hrir_len - 1;
-    bs->dataset_name = std::move(dataset.name);
-    bs->hrtf_td = std::move(dataset.hrirs);
-    bs->grid_dirs_deg = std::move(dataset.dirs_deg);
-    bs->sample_rate = dataset.sample_rate;
-    bs->grid = prepare_hrtf_grid(bs->grid_dirs_deg);
-    if (!bs->grid) {
-        return make_error(ErrorCode::render_failed, "HRTF direction triangulation failed");
-    }
-    auto filters = dsp::HrtfFilters::create(*bs->grid,
-                                            bs->hrtf_td,
-                                            static_cast<std::size_t>(bs->hrir_len),
-                                            static_cast<std::size_t>(bs->fft_size),
-                                            cache_magnitudes);
-    if (!filters) {
-        return tl::unexpected{filters.error()};
-    }
-    bs->filters = std::move(*filters);
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    const auto spectrum = bs->filters.spectrum_snapshot();
-    const auto grid = bs->grid->snapshot();
-    if (!spectrum) {
-        return tl::unexpected{spectrum.error()};
-    }
-    if (!grid) {
-        return tl::unexpected{grid.error()};
-    }
-    consistency::dump("binaural.01-hrir.f32", bs->hrtf_td);
-    consistency::dump("binaural.02-grid.f32", bs->grid_dirs_deg);
-    consistency::dump("binaural.03-hrtf.c32", *spectrum);
-    consistency::dump("binaural.04-vbap-gains.f32", grid->gains);
-    consistency::dump("binaural.05-vbap-dirs.i32", grid->directions);
-#endif
-    return bs;
-}
-
 // Private renderer adapters reuse caller buffers; interpolation and all
 // frequency-domain state are owned by Rust. Diagnostics use that same kernel.
-void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
+void compute_hrtf_into(const HrtfState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
     out.resize(bs.filters.output_size());
     const MradmDspHrtfTrace* trace = nullptr;
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
@@ -392,15 +247,8 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
 #endif
 }
 
-void compute_continuous_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
-    out.resize(bs.filters.output_size());
-    const auto result = bs.filters.query(az_deg, el_deg, dsp::HrtfLookup::continuous, out);
-    if (!result) {
-        throw std::runtime_error(result.error().message);
-    }
-}
 
-std::vector<dsp::Complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
+std::vector<dsp::Complex> hrtf_for_dir(const HrtfState& bs, float az_deg, float el_deg) {
     std::vector<dsp::Complex> out;
     compute_hrtf_into(bs, az_deg, el_deg, out);
     return out;
@@ -421,7 +269,7 @@ struct HeadSmoothState {
     bool valid{false};
 };
 
-const std::vector<dsp::Complex>& get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
+const std::vector<dsp::Complex>& get_cached_hrtf(const HrtfState& bs, float az, float el, HrtfCache& cache) {
     if (cache.hrtf.empty() || az != cache.cached_az || el != cache.cached_el) {
         compute_hrtf_into(bs, az, el, cache.hrtf);
         cache.cached_az = az;
@@ -969,7 +817,7 @@ void copy_windowed_object_input(const BinauralSource& src,
 // implementation and cannot drift (bit-exactness contract).
 // NOLINTNEXTLINE(readability-function-size)
 void render_source_ola_block(const BinauralSource& src,
-                             const BinauralState& bs,
+                             const HrtfState& bs,
                              PerSourceConvState& cs,
                              dsp::DiffuseDelay& diffuse,
                              HrtfCache& hrtf_cache,
@@ -1135,7 +983,7 @@ void render_source_ola_block(const BinauralSource& src,
 // render_window() calls (PreviewSession scrubbing). The per-output stateful pieces
 // (primed spreader adapters, OLA / diffuse-delay state, scratch) are rebuilt per call.
 struct BinauralPrepared final : IPreparedRender {
-    std::unique_ptr<BinauralState> bs;
+    std::shared_ptr<const HrtfState> bs;
     std::vector<BinauralSource> sources;
     std::vector<SpreaderTrack> spreader_tracks;
     std::vector<SpreaderGroup> spreader_groups;
@@ -1626,12 +1474,8 @@ Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderP
 
     const uint64_t render_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
 
-    // One-time setup: load HRIR dataset, then build HRTF table + VBAP grid.
-    auto dataset_res = load_hrtf_dataset(plan);
-    if (!dataset_res) {
-        return tl::unexpected{dataset_res.error()};
-    }
-    auto state_result = build_binaural_state(std::move(*dataset_res), render_block_size);
+    // One-time setup: load the HRIR dataset, then build the HRTF table and interpolation grid.
+    auto state_result = HrtfState::prepare(plan.sofa_path, info.sample_rate, render_block_size);
     if (!state_result) {
         return tl::unexpected{state_result.error()};
     }
@@ -2128,6 +1972,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     return metrics;
 }
 
+} // namespace
 } // namespace binaural_internal
 
 CapabilityReport binaural_capabilities() {

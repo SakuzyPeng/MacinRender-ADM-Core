@@ -1,13 +1,9 @@
 #pragma once
 
-// Internal, NON-installed header shared between the binaural renderer implementation and the
-// test-only interpolation probe. It exposes the module-private HRTF state and the core
-// interpolation entry points so that binaural_test_probe.cpp can be compiled as a separate,
-// test-only translation unit — keeping probe_hrtf_interpolation() out of the production library
-// and the shipped mradm binary entirely (no macro gating, no per-platform release tweaks needed).
-//
-// Complex samples and owned FFT handles use the private project DSP boundary.
-// This header is not installed and no Rust/third-party type enters the public ABI.
+// Test-only: the C++ HRTF state the binaural renderers used before PCM consistency 4.7 A, kept for
+// the frozen live binaural reference (tests/reference/scene_numeric/live_binaural.h) and the HRTF
+// interpolation tests. Production prepares the state in Rust (src/adm_render_binaural/hrtf_state.h).
+// The kernels are the production Rust DSP; only this C++ preparation is a copy.
 
 #include <cstdint>
 #include <filesystem>
@@ -18,9 +14,11 @@
 #include "adm/errors.h"
 
 #include "dsp.h"
-#include "hrtf_grid.h"
+#include "hrtf.h"
 
 namespace mradm::binaural_internal {
+
+using HrtfGrid = dsp::HrtfGrid;
 
 inline constexpr int k_n_ears = 2;
 
