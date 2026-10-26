@@ -1,6 +1,9 @@
+#include <chrono>
 #include <cmath>
+#include <exception>
 #include <filesystem>
 #include <iostream>
+#include <string>
 #include <string_view>
 
 #include "hrtf_state.h"
@@ -11,6 +14,58 @@ bool check(bool value, std::string_view message) {
         std::cerr << "FAIL: " << message << '\n';
     }
     return value;
+}
+
+bool check_unicode_paths(const std::filesystem::path& root) {
+    using mradm::binaural_internal::HrtfState;
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("mradm-sofa-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto nested = directory / std::filesystem::path{u8"\u6d4b\u8bd5-\U0001f3a7"};
+    const auto path = nested / std::filesystem::path{u8"hrtf-\U0001f3a7.sofa"};
+    bool ok = true;
+    try {
+        std::filesystem::create_directories(nested);
+        std::filesystem::copy_file(root / "simple.sofa", path);
+        const auto prepared = HrtfState::prepare(path, 48000U, 512U);
+        const auto live = HrtfState::prepare_live(path, 44100U);
+#if MR_ADM_ENABLE_SOFA
+        ok &= check(prepared.has_value() && live.has_value(), "Unicode SOFA paths load in both HRTF preparation flows");
+        if (prepared && live) {
+            const auto reference = HrtfState::prepare(root / "simple.sofa", 48000U, 512U);
+            const auto reference_live = HrtfState::prepare_live(root / "simple.sofa", 44100U);
+            if (!check(reference.has_value() && reference_live.has_value(), "reference SOFA preparation")) {
+                ok = false;
+            } else {
+                const auto spectra = (*prepared)->filters.spectrum_snapshot();
+                const auto expected = (*reference)->filters.spectrum_snapshot();
+                const auto live_spectra = (*live)->filters.spectrum_snapshot();
+                const auto expected_live = (*reference_live)->filters.spectrum_snapshot();
+                ok &= check(spectra && expected && *spectra == *expected, "Unicode path preserves file HRTF spectra");
+                ok &= check(live_spectra && expected_live && *live_spectra == *expected_live,
+                            "Unicode path preserves resampled Scene HRTF spectra");
+                ok &= check((*prepared)->dataset_name == (*reference)->dataset_name &&
+                                (*live)->dataset_name == (*reference_live)->dataset_name,
+                            "Unicode path preserves the SOFA listener name");
+            }
+        }
+#else
+        ok &= check(!prepared && prepared.error().code == mradm::ErrorCode::unsupported && !live &&
+                        live.error().code == mradm::ErrorCode::unsupported,
+                    "Unicode SOFA paths retain the SOFA-off error");
+#endif
+        const auto missing_path = nested / std::filesystem::path{u8"missing-\U0001f3a7.sofa"};
+        const auto missing = HrtfState::prepare(missing_path, 48000U, 512U);
+        const auto missing_utf8 = missing_path.u8string();
+        ok &= check(!missing &&
+                        missing.error().context == "path=" + std::string{missing_utf8.begin(), missing_utf8.end()},
+                    "Unicode SOFA error context retains UTF-8 path bytes");
+    } catch (const std::exception& error) {
+        std::cerr << "FAIL: Unicode SOFA preparation threw: " << error.what() << '\n';
+        ok = false;
+    }
+    std::filesystem::remove_all(directory);
+    return ok;
 }
 } // namespace
 
@@ -54,5 +109,6 @@ int main(int argc, char** argv) {
     auto disabled = load_sofa_dataset(root / "simple.sofa", 0);
     ok &= check(!disabled && disabled.error().code == mradm::ErrorCode::unsupported, "SOFA-off capability");
 #endif
+    ok &= check_unicode_paths(root);
     return ok ? 0 : 1;
 }

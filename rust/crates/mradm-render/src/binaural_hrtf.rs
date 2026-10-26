@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-/// A user SOFA file: the UTF-8 path, and its text and file name as the C++ caller printed them
-/// (`path.string()`, `path.filename().string()`) for messages and the dataset name.
+/// A user SOFA file: the UTF-8 path, display text and file name supplied by the C++ caller.
+/// Unix paths retain their native bytes; Windows paths never pass through the ANSI code page.
 #[derive(Clone, Copy, Debug)]
 pub struct Sofa<'a> {
     pub path: &'a Path,
