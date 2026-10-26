@@ -34,7 +34,6 @@ unusedStructMember:*/tests/support/triple_balance/size_processor.h
 unusedStructMember:*/src/adm_render_common/hptf_eq.h
 unusedStructMember:*/src/adm_cli/commands.h
 unusedStructMember:*src/adm_audio/audio_io_internal.h
-unusedStructMember:*/src/adm_render_binaural/binaural_spreader.h
 # ResolvedRenderer is built in renderer_factory.cpp and read in render_service.cpp.
 unusedStructMember:*/src/adm_renderer_factory/renderer_factory.h
 # MonitorStatus/MonitorLevels + engine members are written/read across monitor_engine.cpp

@@ -1,0 +1,54 @@
+{"frames": 48000, "pcm": "5f1237cce6f15fd5", "pose": null, "scene": "bin-motion", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "5f1237cce6f15fd5", "pose": null, "scene": "bin-motion", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "5f1237cce6f15fd5", "pose": null, "scene": "bin-motion", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "1c6668cef93d1764", "pose": [30, 10, -5], "scene": "bin-motion", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "d74bde17ceeb5935", "pose": [-45, 0, 0], "scene": "bin-motion", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "005e469ebad2a84d", "pose": null, "scene": "bin-motion", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "48f0b996081060db", "pose": null, "scene": "bin-diffuse", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "13d4641e6d6bb291", "pose": null, "scene": "bin-diffuse", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "a63193c9cac11db6", "pose": null, "scene": "bin-diffuse", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "fcab75000bdc0c50", "pose": [30, 10, -5], "scene": "bin-diffuse", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "77cc9feedecc897f", "pose": [-45, 0, 0], "scene": "bin-diffuse", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "3a0888e38989bc03", "pose": null, "scene": "bin-diffuse", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "a604e680e4039560", "pose": null, "scene": "bin-divergence", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "d37ac6aac18b2870", "pose": null, "scene": "bin-divergence", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "31f2e703e7ce94c0", "pose": null, "scene": "bin-divergence", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "e2b847cc29924a49", "pose": [30, 10, -5], "scene": "bin-divergence", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "7bb290c67d7c20b0", "pose": [-45, 0, 0], "scene": "bin-divergence", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "ab1016727bbc99b5", "pose": null, "scene": "bin-divergence", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "8dd943ef36847395", "pose": null, "scene": "bin-extent-threshold", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "038625cf32787aa0", "pose": null, "scene": "bin-extent-threshold", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "efe4211f32e51a3f", "pose": null, "scene": "bin-extent-threshold", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "bf62d606fa2e6f5d", "pose": [30, 10, -5], "scene": "bin-extent-threshold", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "be9589bab08ffd42", "pose": [-45, 0, 0], "scene": "bin-extent-threshold", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "ae3b662872d741ca", "pose": null, "scene": "bin-extent-threshold", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "1d453f032e29645a", "pose": null, "scene": "bin-direct-speakers", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "1d453f032e29645a", "pose": null, "scene": "bin-direct-speakers", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "1d453f032e29645a", "pose": null, "scene": "bin-direct-speakers", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "e6fa062bcf4565b6", "pose": [30, 10, -5], "scene": "bin-direct-speakers", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "bbe170593cdd00d4", "pose": [-45, 0, 0], "scene": "bin-direct-speakers", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "35a2f7c6a6b05568", "pose": null, "scene": "bin-direct-speakers", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "b71a1cc79a404f3a", "pose": null, "scene": "bin-head-locked", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "b71a1cc79a404f3a", "pose": null, "scene": "bin-head-locked", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "b71a1cc79a404f3a", "pose": null, "scene": "bin-head-locked", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "d9e3bdf8e76ace70", "pose": [30, 10, -5], "scene": "bin-head-locked", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "1e8698c615d21090", "pose": [-45, 0, 0], "scene": "bin-head-locked", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "8f12fba8e0d0199d", "pose": null, "scene": "bin-head-locked", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "d94bc29e0dd421a1", "pose": null, "scene": "bin-channel-lock", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "d94bc29e0dd421a1", "pose": null, "scene": "bin-channel-lock", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "d94bc29e0dd421a1", "pose": null, "scene": "bin-channel-lock", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "41fc9f75be723255", "pose": [30, 10, -5], "scene": "bin-channel-lock", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "e64a6dcd58909088", "pose": [-45, 0, 0], "scene": "bin-channel-lock", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "e1a9c14f27d1af38", "pose": null, "scene": "bin-channel-lock", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "c80df8c25ccebcda", "pose": null, "scene": "objects-extent-multi", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "50e80e1d03e2c35b", "pose": null, "scene": "objects-extent-multi", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "54da0e90c06a4cc2", "pose": null, "scene": "objects-extent-multi", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "2c08d5a550898a50", "pose": [30, 10, -5], "scene": "objects-extent-multi", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "55d0445d075c0633", "pose": [-45, 0, 0], "scene": "objects-extent-multi", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "74055c352ffc7e2a", "pose": null, "scene": "objects-extent-multi", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
+{"frames": 48000, "pcm": "95f693066f033770", "pose": null, "scene": "directspeakers-lfe", "smoothing": 0, "spread": "cloud", "window": null}
+{"frames": 48000, "pcm": "95f693066f033770", "pose": null, "scene": "directspeakers-lfe", "smoothing": 0, "spread": "none", "window": null}
+{"frames": 48000, "pcm": "95f693066f033770", "pose": null, "scene": "directspeakers-lfe", "smoothing": 0, "spread": "saf-spreader", "window": null}
+{"frames": 21600, "pcm": "eda51d2235fc72fe", "pose": [30, 10, -5], "scene": "directspeakers-lfe", "smoothing": 1024, "spread": "cloud", "window": [7200, 21600]}
+{"frames": 9600, "pcm": "0ff29a0da9aa5c9e", "pose": [-45, 0, 0], "scene": "directspeakers-lfe", "smoothing": 480, "spread": "saf-spreader", "window": [2400, 9600]}
+{"frames": 24000, "pcm": "ad53f5710953f489", "pose": null, "scene": "directspeakers-lfe", "smoothing": 1500, "spread": "none", "window": [24000, 48000]}
