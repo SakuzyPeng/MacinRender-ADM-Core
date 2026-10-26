@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string_view>
 
-#include "binaural_internal.h"
+#include "hrtf_state.h"
 
 namespace {
 bool check(bool value, std::string_view message) {
@@ -18,7 +18,10 @@ int main(int argc, char** argv) {
     if (argc != 2) {
         return 2;
     }
-    using mradm::binaural_internal::load_sofa_dataset;
+    // The file renderer's preparation (Rust, PCM consistency 4.7 A); input rate 0 accepts any rate.
+    const auto load_sofa_dataset = [](const std::filesystem::path& path, std::uint32_t rate) {
+        return mradm::binaural_internal::HrtfState::prepare(path, rate, 512U);
+    };
     const std::filesystem::path root{argv[1]};
     bool ok = true;
 #if MR_ADM_ENABLE_SOFA
@@ -27,18 +30,18 @@ int main(int argc, char** argv) {
         if (!check(data.has_value(), filename)) {
             return 1;
         }
-        ok &= check(data->num_dirs == 6 && data->hrir_len == 16, "SOFA dimensions");
+        const auto& state = **data;
+        ok &= check(state.num_dirs == 6 && state.hrir_len == 16, "SOFA dimensions");
         const int rate = std::string_view{filename} == "simple.sofa" ? 48000 : 44100;
-        ok &= check(data->sample_rate == rate, "native sample rate is retained");
-        ok &= check(data->name == "SOFA MacinRender synthetic", "SOFA listener name");
+        ok &= check(state.sample_rate == rate, "native sample rate is retained");
+        ok &= check(state.dataset_name == "SOFA MacinRender synthetic", "SOFA listener name");
         for (std::size_t dir = 0; dir < 6U; ++dir) {
-            ok &= check(data->hrirs[((dir * 2U) * 16U) + 2U] == static_cast<float>(dir + 1U) / 8.0F,
+            ok &= check(state.hrtf_td[((dir * 2U) * 16U) + 2U] == static_cast<float>(dir + 1U) / 8.0F,
                         "left HRIR is not normalized");
-            ok &= check(data->hrirs[(((dir * 2U) + 1U) * 16U) + 4U] == static_cast<float>(6U - dir) / 8.0F,
+            ok &= check(state.hrtf_td[(((dir * 2U) + 1U) * 16U) + 4U] == static_cast<float>(6U - dir) / 8.0F,
                         "right HRIR is not normalized");
         }
-        auto state = mradm::binaural_internal::build_binaural_state(std::move(*data), 512);
-        ok &= check(state.has_value(), "SOFA data reaches HRTF preparation");
+        ok &= check(state.fft_size == 1024 && state.overlap_len == 15, "SOFA data reaches HRTF preparation");
         auto mismatch = load_sofa_dataset(root / filename, 96000);
         ok &= check(!mismatch && mismatch.error().code == mradm::ErrorCode::unsupported,
                     "offline sample-rate mismatch stays unsupported");

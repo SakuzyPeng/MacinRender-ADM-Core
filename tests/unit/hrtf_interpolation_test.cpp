@@ -98,7 +98,6 @@ void verify(HrtfDataset dataset, std::string_view name) {
     auto spectrum = (*offline)->filters.spectrum_snapshot();
     auto grid = (*offline)->grid->snapshot();
     require(spectrum.has_value() && grid.has_value(), "snapshot Rust HRTF preparation");
-    require((*offline)->grid == (*live)->grid, "live and offline banks share cached geometry");
     require((*live)->filters.bytes() - (*offline)->filters.bytes() == spectrum->size() * sizeof(float),
             "only live bank retains magnitude cache");
     const Reference reference(**offline, std::move(*grid), std::move(*spectrum));

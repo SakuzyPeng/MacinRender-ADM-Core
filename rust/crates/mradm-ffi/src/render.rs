@@ -2294,6 +2294,9 @@ pub unsafe extern "C" fn mradm_render_live_render(
 #[path = "render_room.rs"]
 mod room_ffi;
 
+#[path = "render_binaural.rs"]
+mod binaural_ffi;
+
 #[cfg(test)]
 #[path = "../../mradm-render/tests/common/mod.rs"]
 mod test_common;
