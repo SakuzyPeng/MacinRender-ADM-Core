@@ -1,0 +1,299 @@
+{
+  "baseline_commit": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "candidate_commit": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "comparison": "Release, diagnostics OFF; native standard build and shared caches on each host.",
+  "correctness": {
+    "macos": {
+      "offline": 19,
+      "goldens": 54,
+      "file_streaming": 10,
+      "all_bit_identical": true,
+      "total": 83
+    },
+    "windows": {
+      "offline": 13,
+      "goldens": 54,
+      "file_streaming": 10,
+      "all_bit_identical": true,
+      "total": 77
+    },
+    "cross_platform_candidate": {
+      "shared_cases": 77,
+      "identical": 77,
+      "different": []
+    }
+  },
+  "performance": {
+    "windows-short": {
+      "context": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "machine": "AMD64",
+        "logical_cores": 16,
+        "utc": "2026-10-27T09:48:01Z",
+        "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+        "power": {
+          "ac": 1,
+          "battery_flags": 1,
+          "battery_percent": 100,
+          "reserved": 0,
+          "remaining_seconds": 4294967295,
+          "full_seconds": 4294967295
+        },
+        "cpu_busy_percent_sample": 15.073529411764708
+      },
+      "context_after": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "machine": "AMD64",
+        "logical_cores": 16,
+        "utc": "2026-10-27T09:48:12Z",
+        "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+        "power": {
+          "ac": 1,
+          "battery_flags": 1,
+          "battery_percent": 100,
+          "reserved": 0,
+          "remaining_seconds": 4294967295,
+          "full_seconds": 4294967295
+        },
+        "cpu_busy_percent_sample": 10.384615384615381
+      },
+      "repeats": 5,
+      "cases": [
+        {
+          "id": "point",
+          "median": {
+            "baseline": {
+              "seconds": 0.13170979999999988,
+              "rss_bytes": 32944128
+            },
+            "candidate": {
+              "seconds": 0.11968050000000008,
+              "rss_bytes": 32911360
+            }
+          },
+          "time_ratio": 0.9086681477004763,
+          "rss_ratio": 0.9990053462638319,
+          "identical": true,
+          "investigate": false
+        },
+        {
+          "id": "cloud",
+          "median": {
+            "baseline": {
+              "seconds": 0.13253699999999968,
+              "rss_bytes": 37728256
+            },
+            "candidate": {
+              "seconds": 0.14904110000000026,
+              "rss_bytes": 37711872
+            }
+          },
+          "time_ratio": 1.1245244724114822,
+          "rss_ratio": 0.9995657366192596,
+          "identical": true,
+          "investigate": true
+        },
+        {
+          "id": "spreader",
+          "median": {
+            "baseline": {
+              "seconds": 0.22079380000000004,
+              "rss_bytes": 40964096
+            },
+            "candidate": {
+              "seconds": 0.2256860999999999,
+              "rss_bytes": 40919040
+            }
+          },
+          "time_ratio": 1.022157777981084,
+          "rss_ratio": 0.9989001099890011,
+          "identical": true,
+          "investigate": false
+        },
+        {
+          "id": "stream-controls",
+          "median": {
+            "baseline": {
+              "seconds": 0.28697580000000045,
+              "rss_bytes": 45223936
+            },
+            "candidate": {
+              "seconds": 0.2931027999999998,
+              "rss_bytes": 54771712
+            }
+          },
+          "time_ratio": 1.0213502323192385,
+          "rss_ratio": 1.2111221809618693,
+          "identical": true,
+          "investigate": true
+        }
+      ]
+    },
+    "windows-recheck": {
+      "context": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "machine": "AMD64",
+        "logical_cores": 16,
+        "utc": "2026-10-27T09:48:46Z",
+        "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+        "power": {
+          "ac": 1,
+          "battery_flags": 1,
+          "battery_percent": 100,
+          "reserved": 0,
+          "remaining_seconds": 4294967295,
+          "full_seconds": 4294967295
+        },
+        "cpu_busy_percent_sample": 20.95588235294118
+      },
+      "context_after": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "machine": "AMD64",
+        "logical_cores": 16,
+        "utc": "2026-10-27T09:48:56Z",
+        "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+        "power": {
+          "ac": 1,
+          "battery_flags": 1,
+          "battery_percent": 100,
+          "reserved": 0,
+          "remaining_seconds": 4294967295,
+          "full_seconds": 4294967295
+        },
+        "cpu_busy_percent_sample": 18.75
+      },
+      "repeats": 9,
+      "cases": [
+        {
+          "id": "cloud",
+          "median": {
+            "baseline": {
+              "seconds": 0.1350808,
+              "rss_bytes": 37564416
+            },
+            "candidate": {
+              "seconds": 0.1486171999999999,
+              "rss_bytes": 37654528
+            }
+          },
+          "time_ratio": 1.1002096522969949,
+          "rss_ratio": 1.0023988659906227,
+          "identical": true,
+          "investigate": true
+        },
+        {
+          "id": "stream-controls",
+          "median": {
+            "baseline": {
+              "seconds": 0.2979968000000017,
+              "rss_bytes": 45203456
+            },
+            "candidate": {
+              "seconds": 0.2944917,
+              "rss_bytes": 54714368
+            }
+          },
+          "time_ratio": 0.9882377931575048,
+          "rss_ratio": 1.2104023196810438,
+          "identical": true,
+          "investigate": true
+        }
+      ]
+    },
+    "windows-stream-isolation": {
+      "context": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "machine": "AMD64",
+        "logical_cores": 16,
+        "utc": "2026-10-27T09:49:32Z",
+        "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+        "power": {
+          "ac": 1,
+          "battery_flags": 1,
+          "battery_percent": 100,
+          "reserved": 0,
+          "remaining_seconds": 4294967295,
+          "full_seconds": 4294967295
+        },
+        "cpu_busy_percent_sample": 9.652509652509655
+      },
+      "context_after": {
+        "platform": "Windows-10-10.0.26200-SP0",
+        "machine": "AMD64",
+        "logical_cores": 16,
+        "utc": "2026-10-27T09:49:40Z",
+        "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+        "power": {
+          "ac": 1,
+          "battery_flags": 1,
+          "battery_percent": 100,
+          "reserved": 0,
+          "remaining_seconds": 4294967295,
+          "full_seconds": 4294967295
+        },
+        "cpu_busy_percent_sample": 24.264705882352942
+      },
+      "repeats": 7,
+      "cases": [
+        {
+          "id": "stream-static",
+          "median": {
+            "baseline": {
+              "seconds": 0.18919370000000013,
+              "rss_bytes": 45064192
+            },
+            "candidate": {
+              "seconds": 0.1908276,
+              "rss_bytes": 44511232
+            }
+          },
+          "time_ratio": 1.008636122661589,
+          "rss_ratio": 0.9877295037265952,
+          "identical": true,
+          "investigate": false
+        },
+        {
+          "id": "stream-gain-head-seek",
+          "median": {
+            "baseline": {
+              "seconds": 0.22708629999999985,
+              "rss_bytes": 45109248
+            },
+            "candidate": {
+              "seconds": 0.24529909999999955,
+              "rss_bytes": 45244416
+            }
+          },
+          "time_ratio": 1.080202108185301,
+          "rss_ratio": 1.002996458730591,
+          "identical": true,
+          "investigate": true
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "macOS performance not run because Windows short-test regressions remained after recheck.",
+    "Windows SOFA disabled in canonical configuration; six SOFA cases additionally checked on macOS.",
+    "Performance cases use deterministic 1-second input; measured time includes process startup, preparation, rendering, metering and output. File streaming replay includes two in-process passes.",
+    "Completed PCM rows were resumed after adding a missing DirectSpeakers fixture; no completed numerical rows were rerun."
+  ],
+  "findings": [
+    {
+      "priority": 2,
+      "issue": "Windows cloud end-to-end render time regression",
+      "measured_recheck_ratio": 1.1002096522969949,
+      "investigation_threshold": 1.05
+    },
+    {
+      "priority": 2,
+      "issue": "Windows file-streaming peak RSS regression with topology changes",
+      "measured_recheck_ratio": 1.2104023196810438,
+      "investigation_threshold": 1.1,
+      "isolation": "Peak RSS stays near baseline in static and gain/head/seek replays; the growth is associated with topology rebuilds."
+    }
+  ],
+  "windows_short_accepted": false,
+  "schema": "mradm.phase47b.ab.v1",
+  "gate_note": "The 1.05 time and 1.10 RSS ratios are repository investigation thresholds, not shared-CI hard gates. Regressions remain unresolved; macOS performance deferred per Windows-first validation order."
+}

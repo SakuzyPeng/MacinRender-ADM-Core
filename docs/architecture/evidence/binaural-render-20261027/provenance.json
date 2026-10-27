@@ -1,0 +1,77 @@
+{
+  "baseline": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "candidate": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "suite_sha256": "20aa80016336949caa1226a0dee316370fd4a79b4867e809b4253e87e2386d81",
+  "runner_sha256": "177beb2aa0abd687e09bb2f0b72f4d287ec1c238f869c73fb65c82d635021232",
+  "fixture_sha256": {
+    "cases.json": "20aa80016336949caa1226a0dee316370fd4a79b4867e809b4253e87e2386d81",
+    "fixtures/general-compressed.sofa": "ccfe5aac2be59406a462d41056024ac14068645b62e2eed1d4e7e39a833c6a82",
+    "fixtures/simple.sofa": "03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d",
+    "fixtures/directspeakers.wav": "c1c9dd8c5ad87f2c15494ff762328701663c1c61bcb1ede3cbf27a4c556949cc",
+    "fixtures/policy-position.json": "94ff9cf27f652d2db1ca89d2166a5c5c7e49778ca9349f15eeabd0e7cedf3fdb",
+    "fixtures/off-axis-compressed.sofa": "482486e39774d1f64a0ca8121f839c0afb78e2784174a59616f4b52e14335b58",
+    "fixtures/params.wav": "8fddfc36de2ad7a4b46b47666703ef66f392a3dc6957ee4646c5a9df0394bcb9",
+    "fixtures/policy-identity.json": "1c1f24ef27f8cd2d518cd803023d95a3453206bb567317aee65771c8ac95271a",
+    "fixtures/screen-config.json": "daaaebf4ccb0263ac15d54787e3d3f1830ed888724f97b02201c806fd5801ddd",
+    "fixtures/objects-room.wav": "bbe204610e44f63c2f7b6343dd3bab9108a05d21c8317777819101a9af3d0a01",
+    "fixtures/policy-direct-speakers.json": "2b8e5408b974064cede6880d7365aa049a55fcf1b235de608912247f652d2a84",
+    "fixtures/objects-cartesian.wav": "681bac2db87cffd3143587c06ce910ff304150ce3de31429f1ec0144a0510c56",
+    "fixtures/objects-extent-multi.wav": "a9c694d90e33864e00b762d6468f79623c1fb7856f0ba3b1658e752f5e24a59f",
+    "fixtures/ds-matrix-51.json": "3f7ecda5fc037aa3f3184dde9c2faf38247f9df70b74aa0dcd86e8694206f5aa",
+    "fixtures/policy-lock.json": "006ffdbe71387c52af380267b0f50433c198cd94da5476d4924b248a5a18968d",
+    "fixtures/objects-extent.wav": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+    "fixtures/policy-objects.wav": "0bbeeeaf2f5b1a66b4a68238407582d1e82ad2f978a20b99ba008194deee8f98",
+    "fixtures/objects-point.wav": "0f6ef3d72a27b7ac3c0d6fdf4115f63b86c002048518f3c71483affb3a3cf58c",
+    "fixtures/policy-triple-balance.json": "8c09af4ad0508093046bcc5192698ba7672ab93a33614c708cd5a2c21488c530",
+    "fixtures/golden/bin-head-locked.wav": "e4c604cb5143699d5f8104a2630c95359e92490497454589c9eef25d35500bbd",
+    "fixtures/golden/bin-motion.wav": "c4fed86be4d6d09a64bd0a80bdf3707e8721dacf7c55178c48a86984f05ea4d1",
+    "fixtures/golden/bin-extent-threshold.wav": "86353e7b6bf49686b608e25ef0bbee5b320e1aa46300763848d95b5be9ea44cd",
+    "fixtures/golden/bin-divergence.wav": "a92cdd62e482265a544d4368ac616ba9ebcd47c6b2da199b5376e56f6938470e",
+    "fixtures/golden/directspeakers-lfe.wav": "be855914ef54667a46f3089472cd830700cdbb9d315c226f5aad6c83a9121e0a",
+    "fixtures/golden/bin-direct-speakers.wav": "20b1f87df4564274dce59b8dc5d6b88363205b4569bfe4e5cbc13792e64770dd",
+    "fixtures/golden/bin-diffuse.wav": "774d3cbf25909f17e5031e27a547599504c95799e66ebbf28d391930d958925a",
+    "fixtures/golden/bin-channel-lock.wav": "42696126a76ce695d75b1c56f9b362a0443a25d289c0d6a9433bfcfaaaa1a0c3",
+    "fixtures/golden/objects-extent-multi.wav": "50199c9eea9cdc87fadbb251494718a9fb970bc100d44979099a69afbcffa160"
+  },
+  "macos": {
+    "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+    "cpu": "Apple M4 Pro",
+    "baseline_configuration": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+      "MR_ADM_ENABLE_ROOM_CUDA": "OFF",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "MR_ADM_FLAC_PROVIDER": "VENDORED",
+      "MR_ADM_OPUS_PROVIDER": "VENDORED",
+      "MR_ADM_STRICT_FP": "OFF"
+    },
+    "candidate_configuration": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+      "MR_ADM_ENABLE_ROOM_CUDA": "OFF",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "MR_ADM_FLAC_PROVIDER": "VENDORED",
+      "MR_ADM_OPUS_PROVIDER": "VENDORED",
+      "MR_ADM_STRICT_FP": "OFF"
+    },
+    "cxx_compiler": {
+      "id": "AppleClang",
+      "version": "21.0.0.21000334"
+    }
+  },
+  "final_runner_sha256": "668461e981c913971081294ff302145e59c741d610b99f60ad03308fba9387ff",
+  "windows": {
+    "configuration": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+      "MR_ADM_ENABLE_ROOM_CUDA": "OFF",
+      "MR_ADM_ENABLE_SOFA": "OFF",
+      "MR_ADM_FLAC_PROVIDER": "VENDORED",
+      "MR_ADM_OPUS_PROVIDER": "VENDORED",
+      "MR_ADM_STRICT_FP": "OFF"
+    },
+    "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-pc-windows-msvc\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "msvc": "Microsoft C/C++ Optimizing Compiler Version 19.51.36260 for x64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz\n"
+  }
+}

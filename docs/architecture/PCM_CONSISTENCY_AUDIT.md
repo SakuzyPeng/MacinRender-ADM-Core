@@ -472,6 +472,8 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **4.6 状态**：Triple Balance 后端（场景规范化、床、报告、离线 TB 内核、文件流式与 Scene 流式渲染器）和 room 后端（资源与 HRIR 加载、事件表、准备线程状态机、文件流式与 Scene 流式渲染器）迁入 `mradm-render` 与 `mradm-dsp` `room::loading`。C++ 只剩适配壳、能力表、`render_window` 的写出 / 计量 / 取消，以及 `IRoomControl` 薄壳；只剩测试使用的 Triple Balance C++ 移到 `tests/support/triple_balance`。`.30-triple-*` 检查点改由 Rust 写出，room 原有的浮点环境边界由 FFI 作用域保留。Triple Balance 报告以删除前 C++ 生成的 1,300 例黄金数据验收；各批新旧对照（Triple Balance 离线 992 例、文件流式 650 例，room CLI 1,014 例，88 个 Scene 重放的普通与诊断构建）全部逐字节相同。行为差别只有 Scene Triple Balance 警告的顺序；room 离线默认 ramp 的 `×48` 照原样迁移，记为已知问题。生产 C/C++ 由 39,747 行降到 36,931 行。三平台 Consistency 40099269643（`6940df9`）、40122405263（`a072146`）、40166924313（`305159f`）、40176869018（`72c188b`）与 40186174718（`ea07aa9`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
 
+**4.7 B 本机对照（2026-10-27）**：`c967d840` 与 `1c52d999` 在无诊断插桩 Release 下，macOS arm64 的 83 例、Windows x64 的 77 例全部与基线逐位相同，77 个共用候选输出跨平台也相同。Windows 复测仍有 cloud 离线端到端耗时 +10.02%、带拓扑编辑的文件流式渲染峰值内存 +21.04% 两项开放回退。维护者要求记录问题后合并；性能验收尚未完成，本轮未继续 macOS 性能矩阵或长测。范围、隔离观察和原始轮次见 [4.7 B 记录](RUST_INVERSION_BINAURAL.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

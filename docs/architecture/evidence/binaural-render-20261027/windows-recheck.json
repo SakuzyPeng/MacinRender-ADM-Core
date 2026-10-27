@@ -1,0 +1,373 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-27T09:48:46Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 20.95588235294118
+  },
+  "baseline_commit": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "candidate_commit": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "mode": "perf",
+  "repeats": 9,
+  "diagnostics": false,
+  "timing_scope": "End-to-end process including preparation, rendering, metering and file output; stream replay includes two in-process passes.",
+  "rss_collector": "GetProcessMemoryInfo peak working set, sampled every 2 ms",
+  "binaries": {
+    "baseline": {
+      "mradm": "6b6723a6ca4d12d12625658b5a2972651d09afb536f79a206415aa50b74cc5f2",
+      "mr_adm_pcm_bits": "bca15bd260961a0105be04908bbf8cf3f3c016c5273bcfa84edff7fecfdf303a",
+      "mr_adm_phase2_stream": "afa37c5d36b5f7ee56a5c2ac18f242486f6be3a4f0c3abfa998d53686f3719fc"
+    },
+    "candidate": {
+      "mradm": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+      "mr_adm_pcm_bits": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+      "mr_adm_phase2_stream": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+    }
+  },
+  "offline": [],
+  "goldens": [],
+  "streams": [],
+  "performance": [
+    {
+      "id": "cloud",
+      "request": {
+        "fixture": "objects-extent",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "cloud",
+          "--no-peak-limit"
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.1350808,
+            "rss_bytes": 37580800
+          },
+          {
+            "seconds": 0.1501709,
+            "rss_bytes": 37564416
+          },
+          {
+            "seconds": 0.133054,
+            "rss_bytes": 37548032
+          },
+          {
+            "seconds": 0.13055400000000006,
+            "rss_bytes": 37703680
+          },
+          {
+            "seconds": 0.15066060000000014,
+            "rss_bytes": 37720064
+          },
+          {
+            "seconds": 0.15038639999999992,
+            "rss_bytes": 37556224
+          },
+          {
+            "seconds": 0.15148919999999988,
+            "rss_bytes": 37535744
+          },
+          {
+            "seconds": 0.12989749999999978,
+            "rss_bytes": 37548032
+          },
+          {
+            "seconds": 0.12938479999999997,
+            "rss_bytes": 37568512
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.133907,
+            "rss_bytes": 37666816
+          },
+          {
+            "seconds": 0.15244440000000004,
+            "rss_bytes": 37625856
+          },
+          {
+            "seconds": 0.13433230000000007,
+            "rss_bytes": 37625856
+          },
+          {
+            "seconds": 0.1486171999999999,
+            "rss_bytes": 37789696
+          },
+          {
+            "seconds": 0.15115849999999975,
+            "rss_bytes": 37605376
+          },
+          {
+            "seconds": 0.15140449999999994,
+            "rss_bytes": 37654528
+          },
+          {
+            "seconds": 0.15043909999999983,
+            "rss_bytes": 37625856
+          },
+          {
+            "seconds": 0.13479770000000002,
+            "rss_bytes": 37679104
+          },
+          {
+            "seconds": 0.13465250000000006,
+            "rss_bytes": 37744640
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.1350808,
+          "rss_bytes": 37564416
+        },
+        "candidate": {
+          "seconds": 0.1486171999999999,
+          "rss_bytes": 37654528
+        }
+      },
+      "time_ratio": 1.1002096522969949,
+      "rss_ratio": 1.0023988659906227,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      "identical": true,
+      "investigate": true
+    },
+    {
+      "id": "stream-controls",
+      "request": {
+        "id": "stream-binaural-cloud-fixed",
+        "version": 3,
+        "fixture": "objects-extent-multi",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.30800300000000025,
+            "rss_bytes": 45236224
+          },
+          {
+            "seconds": 0.2859908999999998,
+            "rss_bytes": 45203456
+          },
+          {
+            "seconds": 0.30217019999999994,
+            "rss_bytes": 45146112
+          },
+          {
+            "seconds": 0.3028291000000003,
+            "rss_bytes": 45211648
+          },
+          {
+            "seconds": 0.2764989999999994,
+            "rss_bytes": 45080576
+          },
+          {
+            "seconds": 0.2721911000000006,
+            "rss_bytes": 45195264
+          },
+          {
+            "seconds": 0.30760390000000015,
+            "rss_bytes": 45273088
+          },
+          {
+            "seconds": 0.2979968000000017,
+            "rss_bytes": 45277184
+          },
+          {
+            "seconds": 0.2759786999999996,
+            "rss_bytes": 45174784
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.2944917,
+            "rss_bytes": 54841344
+          },
+          {
+            "seconds": 0.2880578000000007,
+            "rss_bytes": 54812672
+          },
+          {
+            "seconds": 0.2951518000000002,
+            "rss_bytes": 54624256
+          },
+          {
+            "seconds": 0.2946143999999995,
+            "rss_bytes": 54579200
+          },
+          {
+            "seconds": 0.2937995999999998,
+            "rss_bytes": 54734848
+          },
+          {
+            "seconds": 0.2798614000000006,
+            "rss_bytes": 54902784
+          },
+          {
+            "seconds": 0.29317410000000166,
+            "rss_bytes": 54714368
+          },
+          {
+            "seconds": 0.30743030000000005,
+            "rss_bytes": 54472704
+          },
+          {
+            "seconds": 0.30631580000000014,
+            "rss_bytes": 54689792
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.2979968000000017,
+          "rss_bytes": 45203456
+        },
+        "candidate": {
+          "seconds": 0.2944917,
+          "rss_bytes": 54714368
+        }
+      },
+      "time_ratio": 0.9882377931575048,
+      "rss_ratio": 1.2104023196810438,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      "identical": true,
+      "investigate": true
+    }
+  ],
+  "passed_pcm": true,
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-27T09:48:56Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 18.75
+  }
+}

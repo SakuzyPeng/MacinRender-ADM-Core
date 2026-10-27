@@ -84,6 +84,7 @@
 - [语义策略与参数 JSON 迁入 Rust（四期 4.4）](architecture/RUST_INVERSION_POLICY.md)
 - [扬声器后端与公共渲染层迁入 Rust（四期 4.5）](architecture/RUST_INVERSION_SPEAKERS.md)
 - [Triple Balance 与 room 迁入 Rust（四期 4.6）](architecture/RUST_INVERSION_TRIPLE_ROOM.md)
+- [双耳渲染迁入 Rust 与开放性能问题（四期 4.7 B）](architecture/RUST_INVERSION_BINAURAL.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
