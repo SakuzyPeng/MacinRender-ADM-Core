@@ -1,0 +1,485 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-27T09:48:01Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 15.073529411764708
+  },
+  "baseline_commit": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "candidate_commit": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "mode": "short",
+  "repeats": 5,
+  "diagnostics": false,
+  "timing_scope": "End-to-end process including preparation, rendering, metering and file output; stream replay includes two in-process passes.",
+  "rss_collector": "GetProcessMemoryInfo peak working set, sampled every 2 ms",
+  "binaries": {
+    "baseline": {
+      "mradm": "6b6723a6ca4d12d12625658b5a2972651d09afb536f79a206415aa50b74cc5f2",
+      "mr_adm_pcm_bits": "bca15bd260961a0105be04908bbf8cf3f3c016c5273bcfa84edff7fecfdf303a",
+      "mr_adm_phase2_stream": "afa37c5d36b5f7ee56a5c2ac18f242486f6be3a4f0c3abfa998d53686f3719fc"
+    },
+    "candidate": {
+      "mradm": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+      "mr_adm_pcm_bits": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+      "mr_adm_phase2_stream": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+    }
+  },
+  "offline": [],
+  "goldens": [],
+  "streams": [],
+  "performance": [
+    {
+      "id": "point",
+      "request": {
+        "fixture": "objects-point",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--no-peak-limit"
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.1324337,
+            "rss_bytes": 32931840
+          },
+          {
+            "seconds": 0.11794679999999991,
+            "rss_bytes": 32944128
+          },
+          {
+            "seconds": 0.13117939999999995,
+            "rss_bytes": 32964608
+          },
+          {
+            "seconds": 0.1319748999999999,
+            "rss_bytes": 32911360
+          },
+          {
+            "seconds": 0.13170979999999988,
+            "rss_bytes": 32944128
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.12611019999999995,
+            "rss_bytes": 32874496
+          },
+          {
+            "seconds": 0.11968050000000008,
+            "rss_bytes": 32874496
+          },
+          {
+            "seconds": 0.11595580000000005,
+            "rss_bytes": 32911360
+          },
+          {
+            "seconds": 0.11883519999999992,
+            "rss_bytes": 32923648
+          },
+          {
+            "seconds": 0.13420690000000013,
+            "rss_bytes": 32919552
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.13170979999999988,
+          "rss_bytes": 32944128
+        },
+        "candidate": {
+          "seconds": 0.11968050000000008,
+          "rss_bytes": 32911360
+        }
+      },
+      "time_ratio": 0.9086681477004763,
+      "rss_ratio": 0.9990053462638319,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "fa0ee7d8e04677cfc2854f07778d2db9608fc209d0959d3eda58339ed05fbd52"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "fa0ee7d8e04677cfc2854f07778d2db9608fc209d0959d3eda58339ed05fbd52"
+        }
+      },
+      "identical": true,
+      "investigate": false
+    },
+    {
+      "id": "cloud",
+      "request": {
+        "fixture": "objects-extent",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "cloud",
+          "--no-peak-limit"
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.13253699999999968,
+            "rss_bytes": 37593088
+          },
+          {
+            "seconds": 0.12057300000000026,
+            "rss_bytes": 37748736
+          },
+          {
+            "seconds": 0.1333974999999996,
+            "rss_bytes": 37761024
+          },
+          {
+            "seconds": 0.15991920000000004,
+            "rss_bytes": 37728256
+          },
+          {
+            "seconds": 0.12293630000000011,
+            "rss_bytes": 37728256
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.15220119999999993,
+            "rss_bytes": 37711872
+          },
+          {
+            "seconds": 0.14904110000000026,
+            "rss_bytes": 37613568
+          },
+          {
+            "seconds": 0.15119019999999983,
+            "rss_bytes": 37818368
+          },
+          {
+            "seconds": 0.13239840000000047,
+            "rss_bytes": 37666816
+          },
+          {
+            "seconds": 0.13277260000000002,
+            "rss_bytes": 37785600
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.13253699999999968,
+          "rss_bytes": 37728256
+        },
+        "candidate": {
+          "seconds": 0.14904110000000026,
+          "rss_bytes": 37711872
+        }
+      },
+      "time_ratio": 1.1245244724114822,
+      "rss_ratio": 0.9995657366192596,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      "identical": true,
+      "investigate": true
+    },
+    {
+      "id": "spreader",
+      "request": {
+        "fixture": "objects-extent-multi",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "saf-spreader",
+          "--no-peak-limit"
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.22537299999999938,
+            "rss_bytes": 41062400
+          },
+          {
+            "seconds": 0.21932940000000034,
+            "rss_bytes": 40951808
+          },
+          {
+            "seconds": 0.21417530000000085,
+            "rss_bytes": 41074688
+          },
+          {
+            "seconds": 0.22761150000000008,
+            "rss_bytes": 40955904
+          },
+          {
+            "seconds": 0.22079380000000004,
+            "rss_bytes": 40964096
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.2256860999999999,
+            "rss_bytes": 40919040
+          },
+          {
+            "seconds": 0.22586610000000018,
+            "rss_bytes": 40886272
+          },
+          {
+            "seconds": 0.2266471000000001,
+            "rss_bytes": 40841216
+          },
+          {
+            "seconds": 0.19721339999999987,
+            "rss_bytes": 40923136
+          },
+          {
+            "seconds": 0.22507449999999984,
+            "rss_bytes": 41058304
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.22079380000000004,
+          "rss_bytes": 40964096
+        },
+        "candidate": {
+          "seconds": 0.2256860999999999,
+          "rss_bytes": 40919040
+        }
+      },
+      "time_ratio": 1.022157777981084,
+      "rss_ratio": 0.9989001099890011,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "d404729d7066accb54923f0108c53cf3ea59d425f2765fb9be9309e66d8b9bf7"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "d404729d7066accb54923f0108c53cf3ea59d425f2765fb9be9309e66d8b9bf7"
+        }
+      },
+      "identical": true,
+      "investigate": false
+    },
+    {
+      "id": "stream-controls",
+      "request": {
+        "id": "stream-binaural-cloud-fixed",
+        "version": 3,
+        "fixture": "objects-extent-multi",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.27776850000000053,
+            "rss_bytes": 45223936
+          },
+          {
+            "seconds": 0.29354569999999924,
+            "rss_bytes": 45187072
+          },
+          {
+            "seconds": 0.26666830000000097,
+            "rss_bytes": 45072384
+          },
+          {
+            "seconds": 0.28697580000000045,
+            "rss_bytes": 45318144
+          },
+          {
+            "seconds": 0.2873056999999992,
+            "rss_bytes": 45338624
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.2876542999999998,
+            "rss_bytes": 54771712
+          },
+          {
+            "seconds": 0.2931027999999998,
+            "rss_bytes": 54788096
+          },
+          {
+            "seconds": 0.2750319000000001,
+            "rss_bytes": 54710272
+          },
+          {
+            "seconds": 0.3243028999999993,
+            "rss_bytes": 54915072
+          },
+          {
+            "seconds": 0.299751800000001,
+            "rss_bytes": 54620160
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.28697580000000045,
+          "rss_bytes": 45223936
+        },
+        "candidate": {
+          "seconds": 0.2931027999999998,
+          "rss_bytes": 54771712
+        }
+      },
+      "time_ratio": 1.0213502323192385,
+      "rss_ratio": 1.2111221809618693,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      "identical": true,
+      "investigate": true
+    }
+  ],
+  "passed_pcm": true,
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-27T09:48:12Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 10.384615384615381
+  }
+}

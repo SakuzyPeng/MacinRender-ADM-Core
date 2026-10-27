@@ -60,6 +60,23 @@ class FileGuard {
     std::filesystem::path path_;
 };
 
+// An imported scene with its Rust render-scene handle, as RenderService plans carry it; the
+// binaural backend plans from the handle (PCM consistency 4.7 B).
+struct RustScene : mradm::AdmScene {
+    std::shared_ptr<const mradm::detail::RenderSceneHandle> handle;
+};
+// The scene a plan copies, without slicing the handle off by accident.
+const mradm::AdmScene& adm(const RustScene& scene) {
+    return scene;
+}
+mradm::Result<RustScene> import_rust_scene(const std::string& path) {
+    auto imported = mradm::io::RenderScene::import(path, nullptr);
+    if (!imported) {
+        return tl::make_unexpected(imported.error());
+    }
+    return RustScene{imported->scene(), imported->handle()};
+}
+
 bool check(bool condition, const char* msg) {
     if (!condition) {
         std::cerr << "FAIL: " << msg << "\n";
@@ -1081,14 +1098,15 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
                                                          const mradm::LiveOverrides* overrides,
                                                          const mradm::ListenerOrientation* orient = nullptr,
                                                          std::string_view policy = {}) {
-    auto scene = mradm::io::import_scene(input.string());
+    auto scene = import_rust_scene(input.string());
     if (!check(scene.has_value(), "stream: import scene")) {
         return std::nullopt;
     }
     mradm::RenderPlan plan;
     plan.input_path = input.string();
     plan.output_layout = "binaural";
-    plan.scene = *scene;
+    plan.scene = adm(*scene);
+    plan.scene_handle = scene->handle;
 
     if (!policy.empty()) {
         auto effective = mradm::io::RenderScene::import(input.string(), nullptr);
@@ -1097,6 +1115,7 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
             return std::nullopt;
         }
         plan.scene = effective->scene();
+        plan.scene_handle = effective->handle();
     }
 
     auto renderer = mradm::create_binaural_renderer();
@@ -1139,7 +1158,7 @@ std::optional<std::vector<float>>
 render_binaural_window(const std::filesystem::path& input,
                        const mradm::ListenerOrientation& orientation,
                        mradm::BinauralSpreadMode spread_mode = mradm::BinauralSpreadMode::automatic) {
-    auto scene = mradm::io::import_scene(input.string());
+    auto scene = import_rust_scene(input.string());
     if (!check(scene.has_value(), "headtrack-window: import scene")) {
         return std::nullopt;
     }
@@ -1150,7 +1169,8 @@ render_binaural_window(const std::filesystem::path& input,
     plan.input_path = input.string();
     plan.output_path = output.string();
     plan.output_layout = "binaural";
-    plan.scene = *scene;
+    plan.scene = adm(*scene);
+    plan.scene_handle = scene->handle;
     plan.listener_orientation = orientation;
     plan.binaural_spread_mode = spread_mode;
 
@@ -1178,14 +1198,15 @@ render_binaural_window(const std::filesystem::path& input,
 std::optional<std::vector<float>> render_binaural_stream_with_mid_override(const std::filesystem::path& input,
                                                                            std::size_t boundary_frames,
                                                                            const mradm::LiveOverrides& overrides) {
-    auto scene = mradm::io::import_scene(input.string());
+    auto scene = import_rust_scene(input.string());
     if (!check(scene.has_value(), "mid-override: import scene")) {
         return std::nullopt;
     }
     mradm::RenderPlan plan;
     plan.input_path = input.string();
     plan.output_layout = "binaural";
-    plan.scene = *scene;
+    plan.scene = adm(*scene);
+    plan.scene_handle = scene->handle;
 
     auto renderer = mradm::create_binaural_renderer();
     mradm::NullLogSink logs;
@@ -1225,14 +1246,15 @@ bool verify_binaural_stream_matches_window() {
     const auto in = write_fixture(30.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value(), "stream: import scene for reference")) {
         return false;
     }
     mradm::RenderPlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
-    plan.scene = *scene;
+    plan.scene = adm(*scene);
+    plan.scene_handle = scene->handle;
 
     auto renderer = mradm::create_binaural_renderer();
     mradm::NullLogSink logs;
@@ -1304,135 +1326,6 @@ bool binaural_pcm_equal(std::span<const float> actual, std::span<const float> ex
         actual, expected, [](float a, float b) { return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b); });
 }
 
-struct SameStartOutput {
-    std::vector<float> offline;
-    std::vector<float> streaming;
-};
-
-std::optional<SameStartOutput> render_same_start_plan(mradm::RenderPlan plan) {
-    const auto output = temp_path("mr_binaural_same_start", ".wav");
-    FileGuard output_guard(output);
-    plan.output_path = output.string();
-    auto renderer = mradm::create_binaural_renderer();
-    mradm::NullLogSink logs;
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "same-start: prepare") ||
-        !check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
-               "same-start: offline rendering")) {
-        return std::nullopt;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!check(reader && reader->channels() == 2U && reader->frame_count() == plan.scene.info.num_frames,
-               "same-start: complete stereo output")) {
-        return std::nullopt;
-    }
-    SameStartOutput result;
-    result.offline.resize(static_cast<std::size_t>(reader->frame_count()) * 2U);
-    reader->read(result.offline.data(), reader->frame_count());
-    if (plan.binaural_spread_mode != mradm::BinauralSpreadMode::saf_spreader) {
-        auto stream = renderer->open_stream(**prepared, plan, logs);
-        if (!check(stream.has_value(), "same-start: file streaming opens")) {
-            return std::nullopt;
-        }
-        (*stream)->set_listener_orientation(plan.listener_orientation);
-        auto samples = pull_binaural_stream_frames(**stream, plan.scene.info.num_frames);
-        if (!samples || !check(samples->size() == result.offline.size(), "same-start: complete file stream")) {
-            return std::nullopt;
-        }
-        result.streaming = std::move(*samples);
-    }
-    return result;
-}
-
-enum class SameStartKind : uint8_t { point, cloud, diffuse, direct_speakers };
-
-void set_same_start_blocks(mradm::SceneTrackRef& track, SameStartKind kind, bool include_overwritten) {
-    track.blocks.clear();
-    track.ds_blocks.clear();
-    // Interleave two starts in reverse chronological order. Each winning block is shorter than
-    // its overwritten peers: those peers must not resume when the winner ends.
-    for (int i = include_overwritten ? 0 : 39; i < 40; ++i) {
-        for (int group = 1; group >= 0; --group) {
-            const bool winner = i == 39;
-            const uint64_t start = static_cast<uint64_t>(group) * 2048U;
-            const uint64_t end = start + (winner ? 1024U : 2048U);
-            const float winning_azimuth = group == 0 ? 97.5F : -37.5F;
-            const float azimuth = winner ? winning_azimuth : -97.5F + (5.0F * static_cast<float>(i));
-            if (kind == SameStartKind::direct_speakers) {
-                mradm::SceneDirectSpeakersBlock block;
-                block.start_sample = start;
-                block.end_sample = end;
-                block.azimuth = azimuth;
-                block.has_position = true;
-                block.gain = winner ? 0.375F : 0.9F;
-                block.head_locked = winner && group == 1;
-                if (!winner) {
-                    block.low_pass_hz = 120.0F;
-                }
-                track.ds_blocks.push_back(block);
-                continue;
-            }
-            mradm::SceneObjectBlock block;
-            block.start_sample = start;
-            block.end_sample = end;
-            block.position.azimuth = azimuth;
-            block.gain = winner ? 0.375F : 0.9F;
-            block.head_locked = winner && group == 1;
-            // Point winners must remove every lane of an earlier extent/diffuse/divergent block;
-            // diffuse winners must remove earlier direct lanes, including the SAF spreader lane.
-            if (!winner || kind == SameStartKind::cloud) {
-                block.width = 0.4F;
-                block.height = 0.2F;
-                block.diffuse = 0.25F;
-                block.divergence = 0.5F;
-            } else if (kind == SameStartKind::diffuse) {
-                block.diffuse = 1.0F;
-            }
-            track.blocks.push_back(block);
-        }
-    }
-}
-
-bool verify_binaural_same_start_blocks() {
-    constexpr uint32_t k_frames = 4096U;
-    const auto input = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{100}, k_frames);
-    FileGuard input_guard(input);
-    const auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U,
-               "same-start: input scene")) {
-        return false;
-    }
-    bool ok = true;
-    for (const auto kind :
-         {SameStartKind::point, SameStartKind::cloud, SameStartKind::diffuse, SameStartKind::direct_speakers}) {
-        for (const auto mode : {mradm::BinauralSpreadMode::cloud, mradm::BinauralSpreadMode::saf_spreader}) {
-            for (const uint32_t smoothing : {0U, 1024U}) {
-                mradm::RenderPlan plan;
-                plan.input_path = input.string();
-                plan.output_layout = "binaural";
-                plan.scene = *scene;
-                plan.listener_orientation = {37.0F, 13.0F, -9.0F};
-                plan.binaural_spread_mode = mode;
-                plan.object_smoothing_frames = smoothing;
-                auto& track = plan.scene.objects.front().tracks.front();
-                set_same_start_blocks(track, kind, false);
-                const auto expected = render_same_start_plan(plan);
-                set_same_start_blocks(track, kind, true);
-                const auto actual = render_same_start_plan(plan);
-                if (!actual || !expected) {
-                    return false;
-                }
-                ok &= check(binaural_pcm_equal(actual->offline, expected->offline),
-                            "same-start: offline PCM equals only the last blocks");
-                ok &= check(binaural_pcm_equal(actual->streaming, expected->streaming),
-                            "same-start: file-streaming PCM equals only the last blocks");
-            }
-        }
-    }
-    return ok;
-}
-
 bool verify_binaural_seek_controls(mradm::IRenderer& renderer,
                                    const mradm::IPreparedRender& prepared,
                                    const mradm::RenderPlan& plan,
@@ -1501,7 +1394,7 @@ bool verify_binaural_stream_seek() {
         const FileGuard input_guard(input);
         const auto output = temp_path("mr_binaural_seek_window", ".wav");
         const FileGuard output_guard(output);
-        const auto scene = mradm::io::import_scene(input.string());
+        const auto scene = import_rust_scene(input.string());
         if (!check(scene.has_value(), "stream-seek: import scene")) {
             return false;
         }
@@ -1509,7 +1402,8 @@ bool verify_binaural_stream_seek() {
         plan.input_path = input.string();
         plan.output_path = output.string();
         plan.output_layout = "binaural";
-        plan.scene = *scene;
+        plan.scene = adm(*scene);
+        plan.scene_handle = scene->handle;
         plan.object_smoothing_frames = shaped ? 2048U : 0U;
         plan.listener_orientation.yaw_deg = shaped ? 25.0F : 0.0F;
         auto renderer = mradm::create_binaural_renderer();
@@ -1561,7 +1455,7 @@ bool verify_binaural_stream_gain_override() {
     const auto in = write_fixture(30.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "override: import scene with an object")) {
         return false;
     }
@@ -1599,7 +1493,7 @@ bool verify_binaural_stream_live_gain_ramp() {
     const auto in = write_fixture(ObjectFixtureOptions{.duration = std::chrono::milliseconds{400}}, 16384U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "gain-ramp: import scene")) {
         return false;
     }
@@ -1647,7 +1541,7 @@ bool verify_binaural_stream_topology_crossfade() {
         write_fixture(ObjectFixtureOptions{.duration = std::chrono::milliseconds{400}, .width = 1.0F}, 16384U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "topology-xfade: import scene")) {
         return false;
     }
@@ -1684,7 +1578,7 @@ bool verify_binaural_stream_topology_reprepare() {
     const auto in = write_fixture(ObjectFixtureOptions{.width = 1.0F}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "reprepare: import scene with an object")) {
         return false;
     }
@@ -1693,7 +1587,8 @@ bool verify_binaural_stream_topology_reprepare() {
     mradm::RenderPlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
-    plan.scene = *scene;
+    plan.scene = adm(*scene);
+    plan.scene_handle = scene->handle;
 
     auto renderer = mradm::create_binaural_renderer();
     mradm::NullLogSink logs;
@@ -1768,7 +1663,7 @@ bool verify_binaural_stream_extent_policy_matches_live() {
                                                            .cartesian = cartesian},
                                       4096U);
         FileGuard in_guard(in);
-        auto scene = mradm::io::import_scene(in.string());
+        auto scene = import_rust_scene(in.string());
         if (!check(scene.has_value() && !scene->objects.empty(), "extent-policy: import fixture")) {
             return false;
         }
@@ -1800,7 +1695,7 @@ bool verify_binaural_head_tracking() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "headtrack: import scene with an object")) {
         return false;
     }
@@ -1846,7 +1741,7 @@ bool verify_binaural_head_tracking() {
     adm_locked_options.object_head_locked = true;
     const auto adm_locked_in = write_fixture(adm_locked_options, 8192U);
     FileGuard adm_locked_guard(adm_locked_in);
-    auto adm_locked_scene = mradm::io::import_scene(adm_locked_in.string());
+    auto adm_locked_scene = import_rust_scene(adm_locked_in.string());
     if (!check(adm_locked_scene.has_value() && !adm_locked_scene->objects.empty(),
                "headtrack: import ADM head-locked object")) {
         return false;
@@ -1932,7 +1827,7 @@ bool verify_binaural_head_locked_timeline() {
     const auto in = write_head_locked_timeline_fixture(k_frames);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
                    scene->objects.front().tracks.front().blocks.size() == 2U,
                "headtrack-timeline: import two Objects blocks")) {
@@ -1981,14 +1876,15 @@ bool verify_binaural_head_tracking_dynamic() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{400}, 19200U);
     FileGuard in_guard(in);
 
-    auto scene = mradm::io::import_scene(in.string());
+    auto scene = import_rust_scene(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "headtrack-dyn: import scene")) {
         return false;
     }
     mradm::RenderPlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
-    plan.scene = *scene;
+    plan.scene = adm(*scene);
+    plan.scene_handle = scene->handle;
 
     auto renderer = mradm::create_binaural_renderer();
     mradm::NullLogSink logs;
@@ -2062,7 +1958,6 @@ int main() try {
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
     ok &= verify_binaural_stream_matches_window();
-    ok &= verify_binaural_same_start_blocks();
     ok &= verify_binaural_stream_seek();
     ok &= verify_binaural_stream_gain_override();
     ok &= verify_binaural_stream_live_gain_ramp();

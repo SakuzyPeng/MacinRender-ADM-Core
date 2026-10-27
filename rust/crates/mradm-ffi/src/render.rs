@@ -834,6 +834,7 @@ pub struct RenderPrepared {
     settings: (usize, usize, u64, u32),
     triple_balance: Option<Box<TripleBalanceData>>,
     room: Option<Arc<room::Prepared>>,
+    binaural: Option<Arc<mradm_render::binaural_render::Prepared>>,
 }
 
 /// Boxes a preparation's logs and result, fills `view` and returns the status.
@@ -857,6 +858,7 @@ fn prepared(
         settings,
         triple_balance: None,
         room: None,
+        binaural: None,
     });
     for (level, text) in logs {
         handle.lines.push(RenderLogLine {
