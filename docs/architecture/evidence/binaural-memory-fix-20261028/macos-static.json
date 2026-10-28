@@ -1,0 +1,283 @@
+{
+  "context": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:05:41Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      6.326171875,
+      6.826171875,
+      6.8701171875
+    ]
+  },
+  "case": "stream-static",
+  "request": {
+    "id": "stream-binaural-cloud-fixed",
+    "version": 3,
+    "fixture": "objects-extent-multi",
+    "renderer": "saf-binaural",
+    "output_layout": "binaural",
+    "channels": 2,
+    "spread": "cloud",
+    "partition": [
+      512
+    ],
+    "input_frames": 48000,
+    "sample_rate": 48000,
+    "frames": 48000,
+    "events": []
+  },
+  "schedule": "",
+  "collector": "darwin-time-l-native-wait",
+  "runs": {
+    "macos-cpp": [
+      {
+        "seconds": 0.07402045901108067,
+        "rss_bytes": 47890432,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07383633399149403,
+        "rss_bytes": 49922048,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07282237500476185,
+        "rss_bytes": 49545216,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07129845798772294,
+        "rss_bytes": 47972352,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07266274999710731,
+        "rss_bytes": 49315840,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07318841699452605,
+        "rss_bytes": 48414720,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07205400000384543,
+        "rss_bytes": 49954816,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.0738972920080414,
+        "rss_bytes": 49840128,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07294633300625719,
+        "rss_bytes": 49856512,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      }
+    ],
+    "release": [
+      {
+        "seconds": 0.09814533300232142,
+        "rss_bytes": 50429952,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.08244191600533668,
+        "rss_bytes": 49266688,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07479116700415034,
+        "rss_bytes": 48791552,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07736695800849702,
+        "rss_bytes": 50610176,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07666641699324828,
+        "rss_bytes": 48742400,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07533070899080485,
+        "rss_bytes": 48955392,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07889449999493081,
+        "rss_bytes": 50102272,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07447820800007321,
+        "rss_bytes": 48939008,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      {
+        "seconds": 0.07673091600008775,
+        "rss_bytes": 48807936,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      }
+    ]
+  },
+  "instrumented": false,
+  "pcm_all_identical": true,
+  "binaries": {
+    "macos-cpp": {
+      "mradm": "a25891a7aebd32a8b0c702c177f699b64fa90df57975cc641ff0f9aa5e1eba3d",
+      "mr_adm_pcm_bits": "883dd9f4dde7b56dab9783ab2000fd80d20e2c8bbbc70bc45c0677bba0fe08db",
+      "mr_adm_phase2_stream": "3f2ffaf062e52bc3be88b7c634bce04e8fbc44b1139e8126bef17c52f6c68746"
+    },
+    "release": {
+      "mradm": "2f7259bbae75c1dab5985ae3ba77f697e8e2e3fb67a14cf6526324d7d7543af7",
+      "mr_adm_pcm_bits": "41a296d5301ce38a058c945d943236d9b802f4db8ec626bfa6d475c5d9dfb4e1",
+      "mr_adm_phase2_stream": "87633f52b5e3394f3476507c741f6b2c559c3f78b48aa52c0e333e216a12c3cb"
+    }
+  },
+  "context_after": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:05:43Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      6.326171875,
+      6.826171875,
+      6.8701171875
+    ]
+  }
+}

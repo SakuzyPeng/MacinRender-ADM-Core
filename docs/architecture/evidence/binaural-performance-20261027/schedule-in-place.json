@@ -1,0 +1,494 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T06:14:38Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 2.734375
+  },
+  "case": "cloud",
+  "threads": null,
+  "schedule": "in_place",
+  "instrumented": true,
+  "runs": {
+    "baseline-probe": [
+      {
+        "seconds": 0.1204944,
+        "rss_bytes": 37834752,
+        "cpu": {
+          "kernel_ms": 62.5,
+          "user_ms": 109.375,
+          "process_seconds": 0.10415
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.768900000",
+          "BINPROBE source_init_ms 2.088400000 sources 32",
+          "BINPROBE pool_create_ms 0.000100000",
+          "BINPROBE pool_create_ms 0.423000000",
+          "BINPROBE pool_work_ms 7.718300000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.271000000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003100000",
+          "BINPROBE render_window_ms 17.808900000",
+          "BINPROBE service_total_ms 58.097400000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.12042050000000004,
+        "rss_bytes": 37756928,
+        "cpu": {
+          "kernel_ms": 15.625,
+          "user_ms": 62.5,
+          "process_seconds": 0.1035139
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.708700000",
+          "BINPROBE source_init_ms 2.137000000 sources 32",
+          "BINPROBE pool_create_ms 0.000000000",
+          "BINPROBE pool_create_ms 0.276600000",
+          "BINPROBE pool_work_ms 7.321000000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.266700000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003400000",
+          "BINPROBE render_window_ms 17.216200000",
+          "BINPROBE service_total_ms 57.496100000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.11929390000000017,
+        "rss_bytes": 37711872,
+        "cpu": {
+          "kernel_ms": 93.75,
+          "user_ms": 78.125,
+          "process_seconds": 0.1035071
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.873800000",
+          "BINPROBE source_init_ms 2.044100000 sources 32",
+          "BINPROBE pool_create_ms 0.000100000",
+          "BINPROBE pool_create_ms 0.276800000",
+          "BINPROBE pool_work_ms 7.351700000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.292800000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003100000",
+          "BINPROBE render_window_ms 17.358600000",
+          "BINPROBE service_total_ms 58.418500000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.1342409,
+        "rss_bytes": 37699584,
+        "cpu": {
+          "kernel_ms": 46.875,
+          "user_ms": 15.625,
+          "process_seconds": 0.1176449
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.913100000",
+          "BINPROBE source_init_ms 2.552900000 sources 32",
+          "BINPROBE pool_create_ms 0.000000000",
+          "BINPROBE pool_create_ms 0.373800000",
+          "BINPROBE pool_work_ms 7.841500000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.290900000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.012000000",
+          "BINPROBE render_window_ms 18.689600000",
+          "BINPROBE service_total_ms 60.959200000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.1189319000000002,
+        "rss_bytes": 37859328,
+        "cpu": {
+          "kernel_ms": 46.875,
+          "user_ms": 31.25,
+          "process_seconds": 0.1025201
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.527900000",
+          "BINPROBE source_init_ms 2.073100000 sources 32",
+          "BINPROBE pool_create_ms 0.000000000",
+          "BINPROBE pool_create_ms 0.393000000",
+          "BINPROBE pool_work_ms 7.537500000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.285300000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003100000",
+          "BINPROBE render_window_ms 17.623600000",
+          "BINPROBE service_total_ms 57.977900000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.11964269999999999,
+        "rss_bytes": 37679104,
+        "cpu": {
+          "kernel_ms": 46.875,
+          "user_ms": 31.25,
+          "process_seconds": 0.1032037
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.222600000",
+          "BINPROBE source_init_ms 2.120000000 sources 32",
+          "BINPROBE pool_create_ms 0.000100000",
+          "BINPROBE pool_create_ms 0.348000000",
+          "BINPROBE pool_work_ms 7.633200000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.285900000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003200000",
+          "BINPROBE render_window_ms 17.660000000",
+          "BINPROBE service_total_ms 58.888800000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.12170140000000007,
+        "rss_bytes": 37679104,
+        "cpu": {
+          "kernel_ms": 15.625,
+          "user_ms": 62.5,
+          "process_seconds": 0.1052421
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.570400000",
+          "BINPROBE source_init_ms 2.122000000 sources 32",
+          "BINPROBE pool_create_ms 0.000000000",
+          "BINPROBE pool_create_ms 0.362200000",
+          "BINPROBE pool_work_ms 8.083500000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.301700000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003400000",
+          "BINPROBE render_window_ms 18.374500000",
+          "BINPROBE service_total_ms 58.923700000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.13750530000000039,
+        "rss_bytes": 37752832,
+        "cpu": {
+          "kernel_ms": 15.625,
+          "user_ms": 46.875,
+          "process_seconds": 0.1201888
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.116600000",
+          "BINPROBE source_init_ms 2.050300000 sources 32",
+          "BINPROBE pool_create_ms 0.000100000",
+          "BINPROBE pool_create_ms 0.323800000",
+          "BINPROBE pool_work_ms 6.967100000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.289600000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003200000",
+          "BINPROBE render_window_ms 16.874800000",
+          "BINPROBE service_total_ms 58.265800000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.14892579999999978,
+        "rss_bytes": 37654528,
+        "cpu": {
+          "kernel_ms": 46.875,
+          "user_ms": 78.125,
+          "process_seconds": 0.1319737
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.689500000",
+          "BINPROBE source_init_ms 2.064100000 sources 32",
+          "BINPROBE pool_create_ms 0.000000000",
+          "BINPROBE pool_create_ms 0.308800000",
+          "BINPROBE pool_work_ms 7.787300000 calls 47 threads 16",
+          "BINPROBE pool_drop_ms 0.290600000",
+          "BINPROBE pool_work_ms 0.000000000 calls 0 threads 0",
+          "BINPROBE pool_drop_ms 0.003200000",
+          "BINPROBE render_window_ms 17.747200000",
+          "BINPROBE service_total_ms 58.300000000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      }
+    ],
+    "candidate-probe": [
+      {
+        "seconds": 0.12279050000000002,
+        "rss_bytes": 37851136,
+        "cpu": {
+          "kernel_ms": 171.875,
+          "user_ms": 93.75,
+          "process_seconds": 0.1060373
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.553800000",
+          "BINPROBE source_init_ms 2.069200000 sources 32",
+          "BINPROBE pool_create_ms 0.354300000 threads 16",
+          "BINPROBE pool_work_ms 8.279600000 calls 47 sources 32 task_sum_ms 66.034400000 task_max_sum_ms 3.122200000",
+          "BINPROBE render_window_ms 19.708900000",
+          "BINPROBE service_total_ms 60.124100000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.12230399999999997,
+        "rss_bytes": 37879808,
+        "cpu": {
+          "kernel_ms": 15.625,
+          "user_ms": 218.75,
+          "process_seconds": 0.105489
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.134100000",
+          "BINPROBE source_init_ms 2.068000000 sources 32",
+          "BINPROBE pool_create_ms 0.351600000 threads 16",
+          "BINPROBE pool_work_ms 7.694500000 calls 47 sources 32 task_sum_ms 63.984900000 task_max_sum_ms 3.085700000",
+          "BINPROBE render_window_ms 18.716400000",
+          "BINPROBE service_total_ms 60.219800000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.14828740000000007,
+        "rss_bytes": 37863424,
+        "cpu": {
+          "kernel_ms": 46.875,
+          "user_ms": 15.625,
+          "process_seconds": 0.1323989
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.969400000",
+          "BINPROBE source_init_ms 2.060200000 sources 32",
+          "BINPROBE pool_create_ms 0.454800000 threads 16",
+          "BINPROBE pool_work_ms 7.940300000 calls 47 sources 32 task_sum_ms 66.025800000 task_max_sum_ms 3.071000000",
+          "BINPROBE render_window_ms 19.528200000",
+          "BINPROBE service_total_ms 60.580200000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.15030680000000007,
+        "rss_bytes": 37830656,
+        "cpu": {
+          "kernel_ms": 62.5,
+          "user_ms": 0.0,
+          "process_seconds": 0.1337454
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.876300000",
+          "BINPROBE source_init_ms 2.037800000 sources 32",
+          "BINPROBE pool_create_ms 0.397100000 threads 16",
+          "BINPROBE pool_work_ms 7.823900000 calls 47 sources 32 task_sum_ms 65.844100000 task_max_sum_ms 2.937900000",
+          "BINPROBE render_window_ms 19.304400000",
+          "BINPROBE service_total_ms 61.352000000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.12237669999999978,
+        "rss_bytes": 37974016,
+        "cpu": {
+          "kernel_ms": 31.25,
+          "user_ms": 62.5,
+          "process_seconds": 0.1056588
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.310600000",
+          "BINPROBE source_init_ms 2.092600000 sources 32",
+          "BINPROBE pool_create_ms 0.409300000 threads 16",
+          "BINPROBE pool_work_ms 7.075400000 calls 47 sources 32 task_sum_ms 64.469200000 task_max_sum_ms 2.698900000",
+          "BINPROBE render_window_ms 18.055300000",
+          "BINPROBE service_total_ms 58.258200000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.1524161000000004,
+        "rss_bytes": 37949440,
+        "cpu": {
+          "kernel_ms": 62.5,
+          "user_ms": 31.25,
+          "process_seconds": 0.1351082
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.962200000",
+          "BINPROBE source_init_ms 2.149700000 sources 32",
+          "BINPROBE pool_create_ms 0.482400000 threads 16",
+          "BINPROBE pool_work_ms 7.677900000 calls 47 sources 32 task_sum_ms 64.619800000 task_max_sum_ms 2.863800000",
+          "BINPROBE render_window_ms 18.966200000",
+          "BINPROBE service_total_ms 60.083200000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.15063629999999995,
+        "rss_bytes": 37933056,
+        "cpu": {
+          "kernel_ms": 0.0,
+          "user_ms": 62.5,
+          "process_seconds": 0.1339121
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.163500000",
+          "BINPROBE source_init_ms 2.083200000 sources 32",
+          "BINPROBE pool_create_ms 0.456200000 threads 16",
+          "BINPROBE pool_work_ms 7.869900000 calls 47 sources 32 task_sum_ms 63.210100000 task_max_sum_ms 2.939000000",
+          "BINPROBE render_window_ms 19.447300000",
+          "BINPROBE service_total_ms 61.114800000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.12128940000000021,
+        "rss_bytes": 37773312,
+        "cpu": {
+          "kernel_ms": 31.25,
+          "user_ms": 31.25,
+          "process_seconds": 0.1043436
+        },
+        "probe": [
+          "BINPROBE prepare_ms 30.112600000",
+          "BINPROBE source_init_ms 2.313700000 sources 32",
+          "BINPROBE pool_create_ms 0.375900000 threads 16",
+          "BINPROBE pool_work_ms 7.558200000 calls 47 sources 32 task_sum_ms 65.697500000 task_max_sum_ms 3.186400000",
+          "BINPROBE render_window_ms 18.851200000",
+          "BINPROBE service_total_ms 60.026100000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      {
+        "seconds": 0.1324118999999997,
+        "rss_bytes": 38035456,
+        "cpu": {
+          "kernel_ms": 15.625,
+          "user_ms": 62.5,
+          "process_seconds": 0.1164623
+        },
+        "probe": [
+          "BINPROBE prepare_ms 29.761700000",
+          "BINPROBE source_init_ms 2.052200000 sources 32",
+          "BINPROBE pool_create_ms 0.352200000 threads 16",
+          "BINPROBE pool_work_ms 7.920400000 calls 47 sources 32 task_sum_ms 65.963200000 task_max_sum_ms 2.987300000",
+          "BINPROBE render_window_ms 19.707600000",
+          "BINPROBE service_total_ms 60.801000000"
+        ],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      }
+    ]
+  },
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T06:14:42Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 9.926470588235292
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "schema": "mradm.binaural-performance-investigation.v1",
+  "baseline": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "candidate": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "investigation_only": true,
+  "production_changes": false,
+  "raw_archive_sha256": "a8a661768ca6c0231f76685cfa036debc3ae4baa7cd635c5b3f3f54595588c2e",
+  "pcm_checks": [
+    {
+      "report": "cloud-native-wait",
+      "variant": "baseline",
+      "runs": 21,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "cloud-native-wait",
+      "variant": "candidate",
+      "runs": 21,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "cloud-native-wait-recheck",
+      "variant": "baseline",
+      "runs": 21,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "cloud-native-wait-recheck",
+      "variant": "candidate",
+      "runs": 21,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "stage-native-wait",
+      "variant": "baseline-probe",
+      "runs": 15,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "stage-native-wait",
+      "variant": "candidate-probe",
+      "runs": 15,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "reduction-profile",
+      "variant": "baseline-probe",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "reduction-profile",
+      "variant": "candidate-stage2",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "schedule-in-place",
+      "variant": "baseline-probe",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "schedule-in-place",
+      "variant": "candidate-probe",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "stream-work-profile",
+      "variant": "baseline-probe",
+      "runs": 5,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "stream-work-profile",
+      "variant": "candidate-probe",
+      "runs": 5,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "stream-schedule-profile",
+      "variant": "candidate-probe",
+      "runs": 5,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "lifetime-native-wait",
+      "variant": "baseline",
+      "runs": 15,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "lifetime-native-wait",
+      "variant": "candidate",
+      "runs": 15,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "lifetime-native-wait",
+      "variant": "release-before-rebuild",
+      "runs": 15,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "reduction-iteration-profile",
+      "variant": "candidate-stage2",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "reduction-iteration-profile",
+      "variant": "candidate-stage2-iter",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "reduction-dispatch-profile",
+      "variant": "candidate-stage2",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "reduction-dispatch-profile",
+      "variant": "candidate-stage2-iter",
+      "runs": 9,
+      "pcm_matches_c967d840": true
+    },
+    {
+      "report": "stage-memory",
+      "variant": "candidate-probe",
+      "runs": 3,
+      "pcm_matches_c967d840": true
+    }
+  ],
+  "unprofiled_comparisons": {
+    "cloud-native-wait": {
+      "baseline": {
+        "count": 21,
+        "seconds_median": 0.11757780000000029,
+        "peak_working_set_bytes_median": 37646336
+      },
+      "candidate": {
+        "count": 21,
+        "seconds_median": 0.12135449999999981,
+        "peak_working_set_bytes_median": 37691392
+      }
+    },
+    "cloud-native-wait-recheck": {
+      "baseline": {
+        "count": 21,
+        "seconds_median": 0.11947249999999987,
+        "peak_working_set_bytes_median": 37601280
+      },
+      "candidate": {
+        "count": 21,
+        "seconds_median": 0.12113379999999996,
+        "peak_working_set_bytes_median": 37761024
+      }
+    },
+    "lifetime-native-wait": {
+      "baseline": {
+        "count": 15,
+        "seconds_median": 0.27672589999999886,
+        "peak_working_set_bytes_median": 45248512
+      },
+      "candidate": {
+        "count": 15,
+        "seconds_median": 0.2918757000000003,
+        "peak_working_set_bytes_median": 54640640
+      },
+      "release-before-rebuild": {
+        "count": 15,
+        "seconds_median": 0.289342,
+        "peak_working_set_bytes_median": 45379584
+      }
+    }
+  },
+  "validation": {
+    "report_links": true,
+    "evidence_json": true,
+    "patches_reproduce_recorded_sources": true,
+    "windows_original_source_restored": true,
+    "windows_canonical_rebuilt": true,
+    "windows_backends_smoke": true,
+    "windows_binaural_ctest": "3/3 passed",
+    "collector_windows_smoke": [
+      "cloud",
+      "stream-controls"
+    ]
+  },
+  "collector_sha256": "c28e92b7b2ab83a3a8e3f720ae82f28491a090453ceb3be4ab536517205f023b"
+}

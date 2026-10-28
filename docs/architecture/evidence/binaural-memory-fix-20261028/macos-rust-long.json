@@ -1,0 +1,868 @@
+{
+  "context": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:10:16Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      7.15869140625,
+      6.68359375,
+      6.78125
+    ]
+  },
+  "case": "stream-long",
+  "request": {
+    "id": "stream-binaural-cloud-fixed",
+    "version": 3,
+    "fixture": "objects-extent-multi",
+    "renderer": "saf-binaural",
+    "output_layout": "binaural",
+    "channels": 2,
+    "spread": "cloud",
+    "partition": [
+      512
+    ],
+    "input_frames": 48000,
+    "sample_rate": 48000,
+    "frames": 480000,
+    "events": [
+      {
+        "frame": 0,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 7001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 12345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 20000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 26000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 31000,
+        "seek": 4800
+      },
+      {
+        "frame": 40000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 44000,
+        "objects": []
+      },
+      {
+        "frame": 48000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 55001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 60345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 68000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 74000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 79000,
+        "seek": 4800
+      },
+      {
+        "frame": 88000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 92000,
+        "objects": []
+      },
+      {
+        "frame": 96000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 103001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 108345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 116000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 122000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 127000,
+        "seek": 4800
+      },
+      {
+        "frame": 136000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 140000,
+        "objects": []
+      },
+      {
+        "frame": 144000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 151001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 156345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 164000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 170000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 175000,
+        "seek": 4800
+      },
+      {
+        "frame": 184000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 188000,
+        "objects": []
+      },
+      {
+        "frame": 192000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 199001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 204345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 212000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 218000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 223000,
+        "seek": 4800
+      },
+      {
+        "frame": 232000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 236000,
+        "objects": []
+      },
+      {
+        "frame": 240000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 247001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 252345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 260000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 266000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 271000,
+        "seek": 4800
+      },
+      {
+        "frame": 280000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 284000,
+        "objects": []
+      },
+      {
+        "frame": 288000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 295001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 300345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 308000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 314000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 319000,
+        "seek": 4800
+      },
+      {
+        "frame": 328000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 332000,
+        "objects": []
+      },
+      {
+        "frame": 336000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 343001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 348345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 356000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 362000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 367000,
+        "seek": 4800
+      },
+      {
+        "frame": 376000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 380000,
+        "objects": []
+      },
+      {
+        "frame": 384000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 391001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 396345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 404000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 410000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 415000,
+        "seek": 4800
+      },
+      {
+        "frame": 424000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 428000,
+        "objects": []
+      },
+      {
+        "frame": 432000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 439001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 444345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 452000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 458000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 463000,
+        "seek": 4800
+      },
+      {
+        "frame": 472000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 476000,
+        "objects": []
+      }
+    ]
+  },
+  "schedule": "",
+  "collector": "darwin-time-l-native-wait",
+  "runs": {
+    "macos-before": [
+      {
+        "seconds": 0.883632499986561,
+        "rss_bytes": 69730304,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 1.0125112079986138,
+        "rss_bytes": 69304320,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.8325794160045916,
+        "rss_bytes": 66895872,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 1.0119976669957396,
+        "rss_bytes": 70287360,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.638498582993634,
+        "rss_bytes": 69533696,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      }
+    ],
+    "release": [
+      {
+        "seconds": 0.7994400830066297,
+        "rss_bytes": 59850752,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.8580711249960586,
+        "rss_bytes": 58408960,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.9929156669968506,
+        "rss_bytes": 59113472,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.8157046670094132,
+        "rss_bytes": 56950784,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.6015840000036405,
+        "rss_bytes": 59473920,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      }
+    ]
+  },
+  "instrumented": false,
+  "pcm_all_identical": true,
+  "binaries": {
+    "macos-before": {
+      "mradm": "07b5b89eafdbf387bdaa57d7b7a5cb4ea7cb5febd3546a46eab138b489ca9fbf",
+      "mr_adm_pcm_bits": "883dd9f4dde7b56dab9783ab2000fd80d20e2c8bbbc70bc45c0677bba0fe08db",
+      "mr_adm_phase2_stream": "f009de0474b8326365f0216a27fc0e2875733ccec4b66a553aa08aff3d3290e7"
+    },
+    "release": {
+      "mradm": "2f7259bbae75c1dab5985ae3ba77f697e8e2e3fb67a14cf6526324d7d7543af7",
+      "mr_adm_pcm_bits": "41a296d5301ce38a058c945d943236d9b802f4db8ec626bfa6d475c5d9dfb4e1",
+      "mr_adm_phase2_stream": "87633f52b5e3394f3476507c741f6b2c559c3f78b48aa52c0e333e216a12c3cb"
+    }
+  },
+  "context_after": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:10:27Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      8.8056640625,
+      7.0546875,
+      6.91162109375
+    ]
+  }
+}

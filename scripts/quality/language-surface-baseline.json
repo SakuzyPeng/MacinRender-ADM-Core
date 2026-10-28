@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 171,
-      "lines": 34958
+      "lines": 34953
     },
     "islands": {
       "files": 5,
@@ -22,8 +22,8 @@
       "lines": 12042
     },
     "rust": {
-      "files": 264,
-      "lines": 93205
+      "files": 265,
+      "lines": 93465
     },
     "rust-vendor": {
       "files": 175,
@@ -35,11 +35,11 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 39857,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 18355,
+    "rust/crates/mradm-ffi": 18528,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
-    "rust/crates/mradm-render": 17662,
+    "rust/crates/mradm-render": 17749,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5679,
     "rust/crates/mradm-wav": 2413,
@@ -61,8 +61,8 @@
     "src/adm_metadata": 765,
     "src/adm_peak": 143,
     "src/adm_realtime": 5436,
-    "src/adm_render_binaural": 1357,
-    "src/adm_render_common": 3453,
+    "src/adm_render_binaural": 1350,
+    "src/adm_render_common": 3455,
     "src/adm_render_ear": 115,
     "src/adm_render_hoa": 111,
     "src/adm_render_room": 568,

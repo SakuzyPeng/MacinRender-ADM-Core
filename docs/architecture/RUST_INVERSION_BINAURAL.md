@@ -3,6 +3,13 @@
 2026-10-27 对照基线 `c967d840` 与 Claude 候选 `1c52d999`。两平台已测 PCM 全部逐位相同，
 Windows 性能回退仍开放。维护者要求记录问题后合并、推送；本次合并不表示性能验收完成。
 
+同日后续[性能调查](RUST_BINAURAL_PERFORMANCE_REVIEW.md)确认拓扑重建时新旧卷积 bank 重叠是内存回退的原因，
+并修订了 cloud 的计时依据：旧采集器的 2 ms 休眠实际约 15.55 ms，改用直接等待进程退出后，两轮无插桩
+Release 对照为 +3.21% / +1.39%。内部调度与输出归约仍有额外成本；归因实验未作为正式修复，两项仍开放。
+
+2026-10-28：BINAURAL-002 已通过持久 bank / 工作池与卷积工作区复用修复，两平台 Release 内存和 PCM
+对照通过；BINAURAL-001 继续开放。范围、源码身份和数据见[内存修复](RUST_BINAURAL_MEMORY_FIX.md)。
+
 ## 迁移范围
 
 `mradm-render::binaural` 持有声源规划、divergence × extent 槽、DirectSpeakers 标签与 LFE 旁路、
@@ -45,7 +52,9 @@ Windows 为 i7-11800H、16 个逻辑核心、交流供电。素材长 1 秒；�
 - PCM 在所有轮次保持一致。回退根因尚未确认；后续需区分准备、工作池调度和渲染成本，
   在 Windows 修复并复测后再继续适用的 macOS 性能矩阵。
 
-### BINAURAL-002：Windows 文件流式拓扑编辑峰值内存回退（P2，开放）
+### BINAURAL-002：Windows 文件流式拓扑编辑峰值内存回退（P2，已修复）
+
+当前状态：2026-10-28 已修复并通过两平台验证，以下为合并时的历史失败记录。
 
 - 条件：`objects-extent-multi`，cloud、512 帧拉取，重放包含增益、extent／diffuse／divergence
   比例、头追和 seek 的 `stream-binaural-cloud-fixed` 事件。

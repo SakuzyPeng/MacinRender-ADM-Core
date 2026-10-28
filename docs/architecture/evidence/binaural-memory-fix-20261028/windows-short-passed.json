@@ -1,0 +1,17 @@
+{
+  "medians": {
+    "candidate": {
+      "seconds": 0.28260939999999923,
+      "rss_bytes": 54853632
+    },
+    "fixed": {
+      "seconds": 0.23651409999999906,
+      "rss_bytes": 45113344
+    }
+  },
+  "ratios": {
+    "seconds": 0.83689396035659,
+    "rss_bytes": 0.8224313022700119
+  },
+  "passed": true
+}

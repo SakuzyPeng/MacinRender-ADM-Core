@@ -1,0 +1,114 @@
+{
+  "cases.json": {
+    "bytes": 35376,
+    "sha256": "20aa80016336949caa1226a0dee316370fd4a79b4867e809b4253e87e2386d81"
+  },
+  "fixtures/general-compressed.sofa": {
+    "bytes": 17276,
+    "sha256": "ccfe5aac2be59406a462d41056024ac14068645b62e2eed1d4e7e39a833c6a82"
+  },
+  "fixtures/simple.sofa": {
+    "bytes": 14110,
+    "sha256": "03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d"
+  },
+  "fixtures/directspeakers.wav": {
+    "bytes": 871694,
+    "sha256": "c1c9dd8c5ad87f2c15494ff762328701663c1c61bcb1ede3cbf27a4c556949cc"
+  },
+  "fixtures/policy-position.json": {
+    "bytes": 685,
+    "sha256": "94ff9cf27f652d2db1ca89d2166a5c5c7e49778ca9349f15eeabd0e7cedf3fdb"
+  },
+  "fixtures/off-axis-compressed.sofa": {
+    "bytes": 30126,
+    "sha256": "482486e39774d1f64a0ca8121f839c0afb78e2784174a59616f4b52e14335b58"
+  },
+  "fixtures/params.wav": {
+    "bytes": 303062,
+    "sha256": "8fddfc36de2ad7a4b46b47666703ef66f392a3dc6957ee4646c5a9df0394bcb9"
+  },
+  "fixtures/policy-identity.json": {
+    "bytes": 1023,
+    "sha256": "1c1f24ef27f8cd2d518cd803023d95a3453206bb567317aee65771c8ac95271a"
+  },
+  "fixtures/screen-config.json": {
+    "bytes": 339,
+    "sha256": "daaaebf4ccb0263ac15d54787e3d3f1830ed888724f97b02201c806fd5801ddd"
+  },
+  "fixtures/objects-room.wav": {
+    "bytes": 146988,
+    "sha256": "bbe204610e44f63c2f7b6343dd3bab9108a05d21c8317777819101a9af3d0a01"
+  },
+  "fixtures/policy-direct-speakers.json": {
+    "bytes": 695,
+    "sha256": "2b8e5408b974064cede6880d7365aa049a55fcf1b235de608912247f652d2a84"
+  },
+  "fixtures/objects-cartesian.wav": {
+    "bytes": 145956,
+    "sha256": "681bac2db87cffd3143587c06ce910ff304150ce3de31429f1ec0144a0510c56"
+  },
+  "fixtures/objects-extent-multi.wav": {
+    "bytes": 436522,
+    "sha256": "a9c694d90e33864e00b762d6468f79623c1fb7856f0ba3b1658e752f5e24a59f"
+  },
+  "fixtures/ds-matrix-51.json": {
+    "bytes": 934,
+    "sha256": "3f7ecda5fc037aa3f3184dde9c2faf38247f9df70b74aa0dcd86e8694206f5aa"
+  },
+  "fixtures/policy-lock.json": {
+    "bytes": 738,
+    "sha256": "006ffdbe71387c52af380267b0f50433c198cd94da5476d4924b248a5a18968d"
+  },
+  "fixtures/objects-extent.wav": {
+    "bytes": 145896,
+    "sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe"
+  },
+  "fixtures/policy-objects.wav": {
+    "bytes": 584166,
+    "sha256": "0bbeeeaf2f5b1a66b4a68238407582d1e82ad2f978a20b99ba008194deee8f98"
+  },
+  "fixtures/objects-point.wav": {
+    "bytes": 145836,
+    "sha256": "0f6ef3d72a27b7ac3c0d6fdf4115f63b86c002048518f3c71483affb3a3cf58c"
+  },
+  "fixtures/policy-triple-balance.json": {
+    "bytes": 268,
+    "sha256": "8c09af4ad0508093046bcc5192698ba7672ab93a33614c708cd5a2c21488c530"
+  },
+  "fixtures/golden/bin-head-locked.wav": {
+    "bytes": 291524,
+    "sha256": "e4c604cb5143699d5f8104a2630c95359e92490497454589c9eef25d35500bbd"
+  },
+  "fixtures/golden/bin-motion.wav": {
+    "bytes": 292734,
+    "sha256": "c4fed86be4d6d09a64bd0a80bdf3707e8721dacf7c55178c48a86984f05ea4d1"
+  },
+  "fixtures/golden/bin-extent-threshold.wav": {
+    "bytes": 872758,
+    "sha256": "86353e7b6bf49686b608e25ef0bbee5b320e1aa46300763848d95b5be9ea44cd"
+  },
+  "fixtures/golden/bin-divergence.wav": {
+    "bytes": 292008,
+    "sha256": "a92cdd62e482265a544d4368ac616ba9ebcd47c6b2da199b5376e56f6938470e"
+  },
+  "fixtures/golden/directspeakers-lfe.wav": {
+    "bytes": 871754,
+    "sha256": "be855914ef54667a46f3089472cd830700cdbb9d315c226f5aad6c83a9121e0a"
+  },
+  "fixtures/golden/bin-direct-speakers.wav": {
+    "bytes": 1018238,
+    "sha256": "20b1f87df4564274dce59b8dc5d6b88363205b4569bfe4e5cbc13792e64770dd"
+  },
+  "fixtures/golden/bin-diffuse.wav": {
+    "bytes": 872730,
+    "sha256": "774d3cbf25909f17e5031e27a547599504c95799e66ebbf28d391930d958925a"
+  },
+  "fixtures/golden/bin-channel-lock.wav": {
+    "bytes": 581970,
+    "sha256": "42696126a76ce695d75b1c56f9b362a0443a25d289c0d6a9433bfcfaaaa1a0c3"
+  },
+  "fixtures/golden/objects-extent-multi.wav": {
+    "bytes": 436522,
+    "sha256": "50199c9eea9cdc87fadbb251494718a9fb970bc100d44979099a69afbcffa160"
+  }
+}

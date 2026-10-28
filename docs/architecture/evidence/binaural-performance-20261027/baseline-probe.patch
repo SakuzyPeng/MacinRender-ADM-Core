@@ -1,0 +1,64 @@
+--- a/src/adm_engine/render_service.cpp
++++ b/src/adm_engine/render_service.cpp
+@@ -0,0 +1,16 @@
++
++#include <chrono>
++#include <cstdio>
++namespace {
++struct BinProbe {
++    const char* name;
++    double* sum;
++    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
++    explicit BinProbe(const char* n, double* s = nullptr) : name(n), sum(s) {}
++    ~BinProbe() {
++        const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
++        if (sum) *sum += ms;
++        else std::fprintf(stderr, "BINPROBE %s %.9f\n", name, ms);
++    }
++};
++}
+@@ -406,0 +423 @@
++    BinProbe bin_total("service_total_ms");
+@@ -861 +878 @@
+-        auto prep_res = renderer->prepare(plan, logs);
++        auto prep_res = [&] { BinProbe p("prepare_ms"); return renderer->prepare(plan, logs); }();
+@@ -882 +899 @@
+-    auto render_res = renderer->render_window(*prepared_slot, plan, render_progress, logs);
++    auto render_res = [&] { BinProbe p("render_window_ms"); return renderer->render_window(*prepared_slot, plan, render_progress, logs); }();
+--- a/src/adm_render_binaural/binaural_renderer.cpp
++++ b/src/adm_render_binaural/binaural_renderer.cpp
+@@ -0,0 +1,16 @@
++
++#include <chrono>
++#include <cstdio>
++namespace {
++struct BinProbe {
++    const char* name;
++    double* sum;
++    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
++    explicit BinProbe(const char* n, double* s = nullptr) : name(n), sum(s) {}
++    ~BinProbe() {
++        const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
++        if (sum) *sum += ms;
++        else std::fprintf(stderr, "BINPROBE %s %.9f\n", name, ms);
++    }
++};
++}
+@@ -75,0 +92 @@
++        BinProbe p("pool_create_ms");
+@@ -87,0 +105,2 @@
++        BinProbe p("pool_drop_ms");
++        std::fprintf(stderr, "BINPROBE pool_work_ms %.9f calls %zu threads %zu\n", probe_ms_, probe_calls_, workers_.size());
+@@ -100,0 +120,2 @@
++        BinProbe p("pool_work_ms", &probe_ms_);
++        ++probe_calls_;
+@@ -162,0 +184,2 @@
++    double probe_ms_{0};
++    std::size_t probe_calls_{0};
+@@ -1592,0 +1616 @@
++    double source_init_ms = 0;
+@@ -1593,0 +1618 @@
++    { BinProbe p("source_init_ms", &source_init_ms);
+@@ -1602,0 +1628,2 @@
++    }
++    std::fprintf(stderr, "BINPROBE source_init_ms %.9f sources %zu\n", source_init_ms, sources.size());

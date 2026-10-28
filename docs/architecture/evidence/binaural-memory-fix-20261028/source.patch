@@ -1,0 +1,444 @@
+--- a/rust/crates/mradm-render/src/binaural_render.rs
++++ b/rust/crates/mradm-render/src/binaural_render.rs
+@@ -292,0 +293,7 @@
++#[derive(Clone, Copy)]
++struct BankShape {
++    fft_size: usize,
++    overlap: usize,
++    block: usize,
++}
++
+@@ -309 +316,2 @@
+-    fn new(state: &State, block: usize) -> Result<Self> {
++    fn new(shape: BankShape) -> Result<Self> {
++        let block = shape.block;
+@@ -311 +319 @@
+-            convolver: OlaConvolver::new(state.fft_size, state.overlap, block)
++            convolver: OlaConvolver::new(shape.fft_size, shape.overlap, block)
+@@ -647,0 +656 @@
++    shape: BankShape,
+@@ -651,0 +661,5 @@
++        let shape = BankShape {
++            fft_size: state.fft_size,
++            overlap: state.overlap,
++            block,
++        };
+@@ -654 +668 @@
+-                .map(|_| SourceState::new(state, block))
++                .map(|_| SourceState::new(shape))
+@@ -656,0 +671 @@
++            shape,
+@@ -657,0 +673,21 @@
++    }
++
++    /// Reuses this stream's workers and convolution storage for a new source graph. Prepare
++    /// any additional sources before resetting history, so a preparation error leaves the old
++    /// graph's state intact. Removed sources release their convolution storage immediately.
++    pub fn rebuild(&mut self, sources: usize) -> Result<()> {
++        let additional = sources.saturating_sub(self.states.len());
++        let added = (0..additional)
++            .map(|_| SourceState::new(self.shape))
++            .collect::<Result<Vec<_>>>()?;
++        self.states.reserve(additional);
++        self.states.truncate(sources);
++        self.states.extend(added);
++        for state in &mut self.states {
++            state.reset();
++            state.left.fill(0.);
++            state.right.fill(0.);
++            state.end_hrtf.clear();
++            state.error = None;
++        }
++        Ok(())
+--- a/rust/crates/mradm-render/tests/binaural.rs
++++ b/rust/crates/mradm-render/tests/binaural.rs
+@@ -753,0 +754,51 @@
++}
++
++#[test]
++fn rebuilt_banks_reuse_storage_and_match_fresh_history() {
++    let hrtf = Arc::new(binaural_hrtf::build(Dataset::kemar(), 1024, false).unwrap());
++    let plan = binaural_render::prepare(
++        &moving_scene(12000),
++        Arc::clone(&hrtf),
++        Spread::Cloud,
++        0,
++        &mut |_, _| {},
++    )
++    .unwrap();
++    let samples = sine(2048, 0.5);
++    let rotation = mradm_dsp::scene_math::Rotation::new([20., 5., 0.]).unwrap();
++    for threads in [0, 3] {
++        let mut reused = Bank::new(&hrtf, 3, 1024, threads).unwrap();
++        for count in [3usize, 2, 5, 1, 0, 4] {
++            let kept: Vec<_> = reused.states[..count.min(reused.states.len())]
++                .iter()
++                .map(|state| (state.left.as_ptr(), state.right.as_ptr()))
++                .collect();
++            reused.rebuild(count).unwrap();
++            assert_eq!(reused.states.len(), count);
++            for (state, pointers) in reused.states.iter().zip(kept) {
++                assert_eq!((state.left.as_ptr(), state.right.as_ptr()), pointers);
++                assert!(state.left.iter().chain(&state.right).all(|v| *v == 0.));
++            }
++            let mut fresh = Bank::new(&hrtf, count, 1024, threads).unwrap();
++            for start in [0, 1024] {
++                for bank in [&mut reused, &mut fresh] {
++                    bank.render(
++                        &plan.sources[..count],
++                        &hrtf.filters,
++                        &samples[start..start + 1024],
++                        1,
++                        start as u64,
++                        1024,
++                        1500,
++                        Some(&rotation),
++                        &|i| (i % 2 == 0).then_some(false),
++                    )
++                    .unwrap();
++                }
++                for (actual, expected) in reused.states.iter().zip(&fresh.states) {
++                    assert_eq!(words(&actual.left), words(&expected.left));
++                    assert_eq!(words(&actual.right), words(&expected.right));
++                }
++            }
++        }
++    }
+--- a/rust/crates/mradm-ffi/src/render_binaural.rs
++++ b/rust/crates/mradm-ffi/src/render_binaural.rs
+@@ -447 +447 @@
+-/// A rebuilt source list with its OLA state.
++/// A file stream's source list, reusable OLA state and persistent worker pool.
+@@ -455,0 +456,23 @@
++impl BinauralBank {
++    fn bind_sources(&mut self, sources: Vec<mradm_render::binaural::Source>) {
++        self.sources = sources;
++        self.keys = self
++            .sources
++            .iter()
++            .map(|s| RenderBinauralSourceKey {
++                object_id: Text::bytes(&s.object_id),
++                label_key: Text::bytes(&s.label_key),
++            })
++            .collect();
++        self.outputs = self
++            .bank
++            .states
++            .iter()
++            .map(|s| RenderBinauralSourceOutput {
++                left: s.left.as_ptr(),
++                right: s.right.as_ptr(),
++            })
++            .collect();
++    }
++}
++
+@@ -458 +481,3 @@
+-/// and several cores). Keys stay valid while the bank lives.
++/// and several cores). `*output` must be null to create a stream, or its existing bank to rebuild
++/// it in place. A failed rebuild preserves its state and views; successful rebuilds invalidate
++/// the previous keys/outputs. The preparation and worker pool stay fixed for the stream.
+@@ -480 +505,7 @@
+-        *out = ptr::null_mut();
++        let existing = unsafe { (*out).as_mut() };
++        if existing
++            .as_ref()
++            .is_some_and(|h| !Arc::ptr_eq(&h.prepared, plan))
++        {
++            return Err(offline_error("无效双耳源参数"));
++        }
+@@ -498,3 +529,5 @@
+-        let hardware = std::thread::available_parallelism().map_or(1, usize::from);
+-        let threads = if !plan.sources.is_empty() && hardware > 1 {
+-            hardware
++        if let Some(handle) = existing {
++            handle.bank.rebuild(sources.len())?;
++            handle.bind_sources(sources);
++            *keys = handle.keys.as_ptr();
++            *keys_len = handle.keys.len();
+@@ -502,31 +535,19 @@
+-            0
+-        };
+-        let bank = Bank::new(&plan.hrtf, sources.len(), plan.block as usize, threads)?;
+-        let mut handle = Box::new(BinauralBank {
+-            prepared: Arc::clone(plan),
+-            keys: Vec::with_capacity(sources.len()),
+-            outputs: Vec::new(),
+-            sources,
+-            bank,
+-        });
+-        let keys_list = handle
+-            .sources
+-            .iter()
+-            .map(|s| RenderBinauralSourceKey {
+-                object_id: Text::bytes(&s.object_id),
+-                label_key: Text::bytes(&s.label_key),
+-            })
+-            .collect();
+-        handle.keys = keys_list;
+-        handle.outputs = handle
+-            .bank
+-            .states
+-            .iter()
+-            .map(|s| RenderBinauralSourceOutput {
+-                left: s.left.as_ptr(),
+-                right: s.right.as_ptr(),
+-            })
+-            .collect();
+-        *keys = handle.keys.as_ptr();
+-        *keys_len = handle.keys.len();
+-        *out = Box::into_raw(handle);
++            let hardware = std::thread::available_parallelism().map_or(1, usize::from);
++            let threads = if !plan.sources.is_empty() && hardware > 1 {
++                hardware
++            } else {
++                0
++            };
++            let bank = Bank::new(&plan.hrtf, sources.len(), plan.block as usize, threads)?;
++            let mut handle = Box::new(BinauralBank {
++                prepared: Arc::clone(plan),
++                sources: Vec::new(),
++                keys: Vec::new(),
++                outputs: Vec::new(),
++                bank,
++            });
++            handle.bind_sources(sources);
++            *keys = handle.keys.as_ptr();
++            *keys_len = handle.keys.len();
++            *out = Box::into_raw(handle);
++        }
+@@ -621,0 +643,4 @@
++
++#[cfg(test)]
++#[path = "render_binaural_test.rs"]
++mod tests;
+--- /dev/null
++++ b/rust/crates/mradm-ffi/src/render_binaural_test.rs
+@@ -0,0 +1,148 @@
++//! File-stream graph replacement must reuse convolution storage and preserve state on errors.
++use super::*;
++use crate::render::test_common::{ObjectSpec, TrackSpec, object_block, scene, sine};
++use crate::test_alloc::COUNT;
++use mradm_dsp::dataset::Dataset;
++
++fn plan() -> RenderPrepared {
++    let mut block = object_block(0, 4096, 30.);
++    block.width = 60.;
++    block.diffuse = 0.3;
++    let scene = scene(
++        vec![ObjectSpec {
++            id: "object",
++            gain: 1.,
++            end: 4096,
++            tracks: vec![TrackSpec {
++                blocks: vec![block],
++                direct: Vec::new(),
++            }],
++        }],
++        4096,
++    );
++    let hrtf = Arc::new(binaural_hrtf::build(Dataset::kemar(), 1024, false).unwrap());
++    RenderPrepared {
++        texts: Vec::new(),
++        lines: Vec::new(),
++        error: bad(""),
++        kernel: None,
++        bindings: Arc::from([]),
++        settings: (1, 2, 4096, 48000),
++        triple_balance: None,
++        room: None,
++        binaural: Some(Arc::new(
++            binaural::prepare(&scene, hrtf, Spread::Cloud, 0, &mut |_, _| {}).unwrap(),
++        )),
++    }
++}
++
++struct Handle {
++    bank: *mut BinauralBank,
++    keys: *const RenderBinauralSourceKey,
++    len: usize,
++}
++
++impl Handle {
++    fn new(plan: &RenderPrepared) -> Self {
++        let mut handle = Self {
++            bank: ptr::null_mut(),
++            keys: ptr::null(),
++            len: 0,
++        };
++        assert_eq!(handle.rebuild(plan, ptr::null(), 0), 0);
++        handle
++    }
++
++    fn rebuild(
++        &mut self,
++        plan: &RenderPrepared,
++        scales: *const RenderBinauralScales,
++        len: usize,
++    ) -> i32 {
++        unsafe {
++            mradm_render_binaural_bank_create(
++                plan,
++                scales,
++                len,
++                &mut self.bank,
++                &mut self.keys,
++                &mut self.len,
++                ptr::null_mut(),
++                ptr::null_mut(),
++                ptr::null_mut(),
++            )
++        }
++    }
++
++    fn render(&mut self, start: u64) -> Vec<u32> {
++        let h = unsafe { &mut *self.bank };
++        let samples = sine(1024, 0.5);
++        h.bank
++            .render(
++                &h.sources,
++                &h.prepared.hrtf.filters,
++                &samples,
++                1,
++                start,
++                1024,
++                0,
++                None,
++                &|_| None,
++            )
++            .unwrap();
++        h.bank
++            .states
++            .iter()
++            .flat_map(|s| s.left.iter().chain(&s.right).map(|v| v.to_bits()))
++            .collect()
++    }
++}
++
++impl Drop for Handle {
++    fn drop(&mut self) {
++        unsafe { mradm_render_binaural_bank_destroy(self.bank) };
++    }
++}
++
++#[test]
++fn failed_binaural_rebuild_preserves_views_and_audio_history() {
++    let plan = plan();
++    let mut actual = Handle::new(&plan);
++    let mut reference = Handle::new(&plan);
++    assert_eq!(actual.render(0), reference.render(0));
++    let before = (actual.bank, actual.keys, actual.len);
++    assert_ne!(actual.rebuild(&plan, ptr::null(), 1), 0);
++    assert_eq!((actual.bank, actual.keys, actual.len), before);
++    let invalid = RenderBinauralScales {
++        object_id: Text {
++            data: ptr::null(),
++            len: 1,
++        },
++        scales: [1.; 5],
++    };
++    assert_ne!(actual.rebuild(&plan, &invalid, 1), 0);
++    assert_eq!((actual.bank, actual.keys, actual.len), before);
++    assert_eq!(actual.render(1024), reference.render(1024));
++
++    let old = unsafe { &*actual.bank }.bank.states[0].left.as_ptr();
++    assert_eq!(actual.rebuild(&plan, ptr::null(), 0), 0);
++    assert_eq!(actual.bank, before.0);
++    assert_eq!(unsafe { &*actual.bank }.bank.states[0].left.as_ptr(), old);
++    let mut fresh = Handle::new(&plan);
++    assert_eq!(actual.render(0), fresh.render(0));
++}
++
++#[test]
++fn equal_or_smaller_binaural_graphs_do_not_allocate_workspaces() {
++    let plan = plan();
++    let p = plan.binaural.as_ref().unwrap();
++    let mut bank = Bank::new(&p.hrtf, 4, 1024, 2).unwrap();
++    for count in [4, 3, 1, 0] {
++        COUNT.with(|counter| counter.set(Some(0)));
++        let result = bank.rebuild(count);
++        let allocations = COUNT.with(|counter| counter.replace(None).unwrap());
++        result.unwrap();
++        assert_eq!(allocations, 0, "rebuilding {count} convolution workspaces");
++        assert_eq!(bank.states.len(), count);
++    }
++}
+--- a/src/adm_render_binaural/binaural_renderer.cpp
++++ b/src/adm_render_binaural/binaural_renderer.cpp
+@@ -79,3 +79,3 @@
+-    [[nodiscard]] static Result<SourceBank> create(const BinauralPrepared& prepared,
+-                                                   const std::unordered_map<std::string, LiveTopologyScales>& topo,
+-                                                   const std::string& input_path) {
++    [[nodiscard]] Result<void> rebuild(const BinauralPrepared& prepared,
++                                       const std::unordered_map<std::string, LiveTopologyScales>& topo,
++                                       const std::string& input_path) {
+@@ -87,2 +87 @@
+-        SourceBank bank;
+-        MradmBinauralBank* raw = nullptr;
++        MradmBinauralBank* raw = handle_.get();
+@@ -104,3 +103,5 @@
+-        bank.handle_.reset(raw);
+-        bank.keys_ = {keys, keys_len};
+-        return bank;
++        if (!handle_) {
++            handle_.reset(raw);
++        }
++        keys_ = {keys, keys_len};
++        return {};
+@@ -152,3 +153,3 @@
+-        auto bank = SourceBank::create(prepared, {}, plan.input_path);
+-        if (!bank) {
+-            return tl::unexpected{bank.error()};
++        SourceBank bank;
++        if (auto result = bank.rebuild(prepared, {}, plan.input_path); !result) {
++            return tl::unexpected{result.error()};
+@@ -159 +160 @@
+-                                                                  std::move(*bank),
++                                                                  std::move(bank),
+@@ -306 +307 @@
+-        init_per_source_state();
++        assign_live_gain_slots();
+@@ -366,6 +366,0 @@
+-    // Reset the Rust signal history of a new or rebuilt source list and bind its gain slots.
+-    void init_per_source_state() {
+-        bank_.reset();
+-        assign_live_gain_slots();
+-    }
+-
+@@ -377,6 +372,4 @@
+-        auto bank = SourceBank::create(prepared_, topo, input_path_);
+-        if (!bank) {
+-            return tl::unexpected{bank.error()};
+-        }
+-        bank_ = std::move(*bank);
+-        init_per_source_state();
++        if (auto result = bank_.rebuild(prepared_, topo, input_path_); !result) {
++            return result;
++        }
++        assign_live_gain_slots();
+--- a/src/adm_render_common/routing_ffi.h
++++ b/src/adm_render_common/routing_ffi.h
+@@ -723,0 +724,2 @@
++// *output: null creates a stream bank; an existing bank reuses its workers/storage.
++// Rebuild errors preserve the previous bank and views; success replaces the keys/outputs.
+--- a/scripts/quality/language-surface-baseline.json
++++ b/scripts/quality/language-surface-baseline.json
+@@ -6 +6 @@
+-      "lines": 34958
++      "lines": 34953
+@@ -25,2 +25,2 @@
+-      "files": 264,
+-      "lines": 93205
++      "files": 265,
++      "lines": 93465
+@@ -38 +38 @@
+-    "rust/crates/mradm-ffi": 18355,
++    "rust/crates/mradm-ffi": 18528,
+@@ -42 +42 @@
+-    "rust/crates/mradm-render": 17662,
++    "rust/crates/mradm-render": 17749,
+@@ -64,2 +64,2 @@
+-    "src/adm_render_binaural": 1357,
+-    "src/adm_render_common": 3453,
++    "src/adm_render_binaural": 1350,
++    "src/adm_render_common": 3455,

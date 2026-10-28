@@ -76,16 +76,15 @@ struct BinauralPrepared final : IPreparedRender {
 // A source list of the preparation (rebuilt with live topology scales) with its Rust OLA state.
 class SourceBank {
   public:
-    [[nodiscard]] static Result<SourceBank> create(const BinauralPrepared& prepared,
-                                                   const std::unordered_map<std::string, LiveTopologyScales>& topo,
-                                                   const std::string& input_path) {
+    [[nodiscard]] Result<void> rebuild(const BinauralPrepared& prepared,
+                                       const std::unordered_map<std::string, LiveTopologyScales>& topo,
+                                       const std::string& input_path) {
         std::vector<MradmRenderBinauralScales> scales;
         scales.reserve(topo.size());
         for (const auto& [object_id, value] : topo) {
             scales.push_back({render_common::text(object_id), {value[0], value[1], value[2], value[3], value[4]}});
         }
-        SourceBank bank;
-        MradmBinauralBank* raw = nullptr;
+        MradmBinauralBank* raw = handle_.get();
         const MradmRenderBinauralSourceKey* keys = nullptr;
         std::size_t keys_len = 0;
         render_common::DriverError error;
@@ -101,9 +100,11 @@ class SourceBank {
             code != 0) {
             return error.error(code, input_path);
         }
-        bank.handle_.reset(raw);
-        bank.keys_ = {keys, keys_len};
-        return bank;
+        if (!handle_) {
+            handle_.reset(raw);
+        }
+        keys_ = {keys, keys_len};
+        return {};
     }
 
     [[nodiscard]] std::size_t size() const noexcept { return keys_.size(); }
@@ -149,14 +150,14 @@ class BinauralStream final : public IRenderStream {
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
-        auto bank = SourceBank::create(prepared, {}, plan.input_path);
-        if (!bank) {
-            return tl::unexpected{bank.error()};
+        SourceBank bank;
+        if (auto result = bank.rebuild(prepared, {}, plan.input_path); !result) {
+            return tl::unexpected{result.error()};
         }
         (void) logs;
         return std::unique_ptr<BinauralStream>{new BinauralStream(prepared,
                                                                   std::move(*reader),
-                                                                  std::move(*bank),
+                                                                  std::move(bank),
                                                                   plan.input_path,
                                                                   info.num_channels,
                                                                   info.num_frames,
@@ -303,7 +304,7 @@ class BinauralStream final : public IRenderStream {
           in_block_(static_cast<std::size_t>(num_in_ch) * prepared.render_block_size, 0.0F),
           topology_update_interval_frames_(
               std::max<uint64_t>(1U, (static_cast<uint64_t>(sample_rate) * k_live_topology_min_interval_ms) / 1000U)) {
-        init_per_source_state();
+        assign_live_gain_slots();
     }
 
     class LiveGainSlot {
@@ -363,23 +364,15 @@ class BinauralStream final : public IRenderStream {
         }
     }
 
-    // Reset the Rust signal history of a new or rebuilt source list and bind its gain slots.
-    void init_per_source_state() {
-        bank_.reset();
-        assign_live_gain_slots();
-    }
-
     // Cheap re-prepare: the sources of the scene with each overridden object's block diffuse /
     // extent (width,height,depth) / divergence multiplied by its scale (clamped to the same ADM
     // ranges as a semantic policy without max), with fresh per-source state. Empty `topo` rebuilds
     // the unscaled scene bit-for-bit.
     Result<void> rebuild_sources(const std::unordered_map<std::string, LiveTopologyScales>& topo) {
-        auto bank = SourceBank::create(prepared_, topo, input_path_);
-        if (!bank) {
-            return tl::unexpected{bank.error()};
+        if (auto result = bank_.rebuild(prepared_, topo, input_path_); !result) {
+            return result;
         }
-        bank_ = std::move(*bank);
-        init_per_source_state();
+        assign_live_gain_slots();
         return {};
     }
 

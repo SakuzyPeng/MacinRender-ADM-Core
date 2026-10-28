@@ -1,0 +1,74 @@
+{
+  "baseline-probe": {
+    "ref": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+    "overlays": {
+      "src/adm_engine/render_service.cpp": "3410de90de382cf727f4356be8032488863fdd667a02d06d482332d0705f4833",
+      "src/adm_render_binaural/binaural_renderer.cpp": "d5b516e319dfb49458fd33cfbb0f012363b63fe03d7bf482f49ff7fe6441974e"
+    },
+    "binaries": {
+      "mradm.exe": "4d605f3ecdbd1f0010186146015830bf1f44f7f4e1123196090b1237633c599a",
+      "mr_adm_phase2_stream.exe": "3fc23979a0fade64c9c10d95740267f9e3851cf311e8495bbbdc25400e3e4584",
+      "mr_adm_pcm_bits.exe": "060809b624df13edf4220311a200bbcddf8a2a769c29f730ad4dbd8a66c617b2"
+    }
+  },
+  "candidate-probe": {
+    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "overlays": {
+      "rust/crates/mradm-ffi/src/render_binaural.rs": "a07dd3990228017456e86b7913047c1242f898e73afe4248fc7c2559971d5b45",
+      "rust/crates/mradm-render/src/binaural_render.rs": "06721e6771dd3a022c277c07b1dfca469954ae9b47c30363e1c60b7e3b254684",
+      "src/adm_engine/render_service.cpp": "3410de90de382cf727f4356be8032488863fdd667a02d06d482332d0705f4833"
+    },
+    "binaries": {
+      "mradm.exe": "e1f72b237d972373d57f40fe6b2d8368bfd89f018f6871a28fd7007e570f7e44",
+      "mr_adm_phase2_stream.exe": "ceca2a3c4c8ee31e3d4e7a6bf5851f861292f1110a9ed23a5ca5c954c76ac206",
+      "mr_adm_pcm_bits.exe": "b59d619302de43c2266d3e7aa34396b27730043605aa33f53ffc70f8a2ad2a01"
+    }
+  },
+  "candidate-stage2": {
+    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "overlays": {
+      "rust/crates/mradm-ffi/src/render_binaural.rs": "a07dd3990228017456e86b7913047c1242f898e73afe4248fc7c2559971d5b45",
+      "rust/crates/mradm-render/src/binaural_render.rs": "69ecf303a936f8d34ab63d2955dad23f3f84f1f09c008b679d16c03dbf86a811",
+      "src/adm_engine/render_service.cpp": "3410de90de382cf727f4356be8032488863fdd667a02d06d482332d0705f4833"
+    },
+    "binaries": {
+      "mradm.exe": "c046b539b5250e7196c89f6b9097a400910452e7426a7fa1be60774bfe1c6d6d",
+      "mr_adm_phase2_stream.exe": "9cbdba9deb9ef3a2394a313145ebbf1b45a96f6ab8b3cad0b954a093bd2fa046",
+      "mr_adm_pcm_bits.exe": "deae4a6cb1718b016ec583639f80668f6a4026b66fc931e78ebc36488fe7268d"
+    }
+  },
+  "candidate-stage2-iter": {
+    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "overlays": {
+      "rust/crates/mradm-ffi/src/render_binaural.rs": "a07dd3990228017456e86b7913047c1242f898e73afe4248fc7c2559971d5b45",
+      "rust/crates/mradm-render/src/binaural_render.rs": "9bcb9ebc3571a1fc2ce3628a3146ce3327154ad624bc30a127f7be6923ec6c1c",
+      "src/adm_engine/render_service.cpp": "3410de90de382cf727f4356be8032488863fdd667a02d06d482332d0705f4833"
+    },
+    "binaries": {
+      "mradm.exe": "0ccc9f7fa44c31dd00c49d6e7cb5ba33e5c8c3f16f0da5f754da5c9fa48a8d87",
+      "mr_adm_phase2_stream.exe": "9b0b6d24fd53a9015945f7799161d40e391f2c4ee047501fb70718c42a4da443",
+      "mr_adm_pcm_bits.exe": "b31b2c10f65477951857c407b62b63d47202e727b944123457a471bc85a0ce47"
+    }
+  },
+  "release-before-rebuild": {
+    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "overlays": {
+      "src/adm_render_binaural/binaural_renderer.cpp": "11006df1056df0acedc863d7913eed8876af0bb73cfdef32a2d844c8a10b8027"
+    },
+    "binaries": {
+      "mradm.exe": "2c1281230565a8d55570ff1e8914cc7a7b08a8326a15ce70c83efcd808227c4a",
+      "mr_adm_phase2_stream.exe": "c1c7d0622048fa327b90bb5dacc321f6b2388c3fccfd28c53ed475057ab51d63",
+      "mr_adm_pcm_bits.exe": "9603949d265e838e4cbca1e3d057e6d0126204058d11228deaf6c656fc1b481a"
+    }
+  },
+  "baseline": {
+    "mradm": "6b6723a6ca4d12d12625658b5a2972651d09afb536f79a206415aa50b74cc5f2",
+    "mr_adm_pcm_bits": "bca15bd260961a0105be04908bbf8cf3f3c016c5273bcfa84edff7fecfdf303a",
+    "mr_adm_phase2_stream": "afa37c5d36b5f7ee56a5c2ac18f242486f6be3a4f0c3abfa998d53686f3719fc"
+  },
+  "candidate": {
+    "mradm": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+    "mr_adm_pcm_bits": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+    "mr_adm_phase2_stream": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+  }
+}

@@ -1,0 +1,376 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T06:06:10Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 34.55882352941176
+  },
+  "baseline_commit": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "candidate_commit": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "runner_sha256": "668461e981c913971081294ff302145e59c741d610b99f60ad03308fba9387ff",
+  "suite_sha256": "20aa80016336949caa1226a0dee316370fd4a79b4867e809b4253e87e2386d81",
+  "mode": "perf",
+  "repeats": 9,
+  "diagnostics": false,
+  "timing_scope": "End-to-end process including preparation, rendering, metering and file output; stream replay includes two in-process passes.",
+  "rss_collector": "GetProcessMemoryInfo peak working set, sampled every 2 ms",
+  "binaries": {
+    "baseline": {
+      "mradm": "6b6723a6ca4d12d12625658b5a2972651d09afb536f79a206415aa50b74cc5f2",
+      "mr_adm_pcm_bits": "bca15bd260961a0105be04908bbf8cf3f3c016c5273bcfa84edff7fecfdf303a",
+      "mr_adm_phase2_stream": "afa37c5d36b5f7ee56a5c2ac18f242486f6be3a4f0c3abfa998d53686f3719fc"
+    },
+    "candidate": {
+      "mradm": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+      "mr_adm_pcm_bits": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+      "mr_adm_phase2_stream": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+    }
+  },
+  "offline": [],
+  "goldens": [],
+  "streams": [],
+  "performance": [
+    {
+      "id": "cloud",
+      "request": {
+        "fixture": "objects-extent",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "cloud",
+          "--no-peak-limit"
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.15280300000000002,
+            "rss_bytes": 37687296
+          },
+          {
+            "seconds": 0.15118110000000007,
+            "rss_bytes": 37675008
+          },
+          {
+            "seconds": 0.1531857999999997,
+            "rss_bytes": 37752832
+          },
+          {
+            "seconds": 0.13004419999999994,
+            "rss_bytes": 37740544
+          },
+          {
+            "seconds": 0.13437359999999998,
+            "rss_bytes": 37785600
+          },
+          {
+            "seconds": 0.1316639000000004,
+            "rss_bytes": 37728256
+          },
+          {
+            "seconds": 0.1352082000000001,
+            "rss_bytes": 37818368
+          },
+          {
+            "seconds": 0.12062750000000033,
+            "rss_bytes": 37662720
+          },
+          {
+            "seconds": 0.13354730000000004,
+            "rss_bytes": 37531648
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.15458499999999997,
+            "rss_bytes": 37703680
+          },
+          {
+            "seconds": 0.1475120000000003,
+            "rss_bytes": 37707776
+          },
+          {
+            "seconds": 0.12082789999999966,
+            "rss_bytes": 37785600
+          },
+          {
+            "seconds": 0.15067179999999958,
+            "rss_bytes": 37736448
+          },
+          {
+            "seconds": 0.15202019999999994,
+            "rss_bytes": 37818368
+          },
+          {
+            "seconds": 0.13154550000000054,
+            "rss_bytes": 37687296
+          },
+          {
+            "seconds": 0.1596687999999995,
+            "rss_bytes": 37711872
+          },
+          {
+            "seconds": 0.15019150000000003,
+            "rss_bytes": 37728256
+          },
+          {
+            "seconds": 0.13289930000000005,
+            "rss_bytes": 37675008
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.13437359999999998,
+          "rss_bytes": 37728256
+        },
+        "candidate": {
+          "seconds": 0.15019150000000003,
+          "rss_bytes": 37711872
+        }
+      },
+      "time_ratio": 1.1177158310858684,
+      "rss_ratio": 0.9995657366192596,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      "identical": true,
+      "investigate": true
+    },
+    {
+      "id": "stream-controls",
+      "request": {
+        "id": "stream-binaural-cloud-fixed",
+        "version": 3,
+        "fixture": "objects-extent-multi",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "runs": {
+        "baseline": [
+          {
+            "seconds": 0.28866190000000014,
+            "rss_bytes": 45154304
+          },
+          {
+            "seconds": 0.27821050000000014,
+            "rss_bytes": 45199360
+          },
+          {
+            "seconds": 0.27875300000000003,
+            "rss_bytes": 45199360
+          },
+          {
+            "seconds": 0.29219119999999954,
+            "rss_bytes": 45252608
+          },
+          {
+            "seconds": 0.2782330000000002,
+            "rss_bytes": 45273088
+          },
+          {
+            "seconds": 0.30900250000000007,
+            "rss_bytes": 45305856
+          },
+          {
+            "seconds": 0.26919439999999994,
+            "rss_bytes": 45494272
+          },
+          {
+            "seconds": 0.30589469999999963,
+            "rss_bytes": 45289472
+          },
+          {
+            "seconds": 0.30773019999999995,
+            "rss_bytes": 45195264
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.30407980000000023,
+            "rss_bytes": 54738944
+          },
+          {
+            "seconds": 0.2783213999999994,
+            "rss_bytes": 54796288
+          },
+          {
+            "seconds": 0.2936848999999988,
+            "rss_bytes": 54718464
+          },
+          {
+            "seconds": 0.2943195000000003,
+            "rss_bytes": 54599680
+          },
+          {
+            "seconds": 0.2984228999999985,
+            "rss_bytes": 54894592
+          },
+          {
+            "seconds": 0.3198352999999994,
+            "rss_bytes": 55291904
+          },
+          {
+            "seconds": 0.3143872999999999,
+            "rss_bytes": 54448128
+          },
+          {
+            "seconds": 0.27724869999999946,
+            "rss_bytes": 54530048
+          },
+          {
+            "seconds": 0.29531440000000053,
+            "rss_bytes": 54693888
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "seconds": 0.28866190000000014,
+          "rss_bytes": 45252608
+        },
+        "candidate": {
+          "seconds": 0.29531440000000053,
+          "rss_bytes": 54718464
+        }
+      },
+      "time_ratio": 1.0230459925608484,
+      "rss_ratio": 1.209178131788559,
+      "pcm": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      "identical": true,
+      "investigate": true
+    }
+  ],
+  "passed_pcm": true,
+  "complete": true,
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T06:06:22Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 14.84375
+  }
+}

@@ -1,0 +1,118 @@
+--- a/rust/crates/mradm-ffi/src/render_binaural.rs
++++ b/rust/crates/mradm-ffi/src/render_binaural.rs
+@@ -503,0 +504 @@
++        bin_memory("before_bank", sources.len());
+@@ -504,0 +506 @@
++        bin_memory("after_bank", sources.len());
+@@ -618,0 +621 @@
++        bin_memory("before_drop", unsafe { (*handle).sources.len() });
+@@ -619,0 +623 @@
++        bin_memory("after_drop", 0);
+@@ -621,0 +626,14 @@
++
++#[cfg(windows)]
++fn bin_memory(label: &str, sources: usize) {
++    #[repr(C)] struct Counters { cb: u32, faults: u32, values: [usize; 9] }
++    #[link(name = "kernel32")]
++    unsafe extern "system" { fn K32GetProcessMemoryInfo(process: *mut core::ffi::c_void, counters: *mut Counters, size: u32) -> i32; }
++    #[link(name = "kernel32")]
++    unsafe extern "system" { fn GetCurrentProcess() -> *mut core::ffi::c_void; }
++    let mut v = Counters { cb: std::mem::size_of::<Counters>() as u32, faults: 0, values: [0; 9] };
++    unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut v, std::mem::size_of::<Counters>() as u32); }
++    eprintln!("BINMEM {} sources {} peak {} working {} private {}", label, sources, v.values[0], v.values[1], v.values[8]);
++}
++#[cfg(not(windows))]
++fn bin_memory(_: &str, _: usize) {}
+--- a/rust/crates/mradm-render/src/binaural_render.rs
++++ b/rust/crates/mradm-render/src/binaural_render.rs
+@@ -305,0 +306 @@
++    probe_ns: u64,
+@@ -321,0 +323 @@
++            probe_ns: 0,
+@@ -608,0 +611,2 @@
++    let threads = std::env::var("MR_ADM_BIN_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(threads);
++    let began = std::time::Instant::now();
+@@ -612 +616 @@
+-    rayon::ThreadPoolBuilder::new()
++    let result = rayon::ThreadPoolBuilder::new()
+@@ -621 +625,3 @@
+-        })
++        });
++    eprintln!("BINPROBE pool_create_ms {:.9} threads {}", began.elapsed().as_secs_f64() * 1000., threads);
++    result
+@@ -629,0 +636,13 @@
++    static MODE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
++    let mode = MODE.get_or_init(|| std::env::var("MR_ADM_BIN_SCHEDULE").unwrap_or_default());
++    if let Some(p) = pool {
++        if mode == "in_place" {
++            p.in_place_scope(|scope| {
++                for (i, item) in items.iter_mut().enumerate() {
++                    let f = &f;
++                    scope.spawn(move |_| f(i, item));
++                }
++            });
++            return;
++        }
++    }
+@@ -647,0 +667 @@
++    probe: [u64; 4],
+@@ -652,6 +672,4 @@
+-        Ok(Self {
+-            states: (0..sources)
+-                .map(|_| SourceState::new(state, block))
+-                .collect::<Result<_>>()?,
+-            pool: pool(threads)?,
+-        })
++        let started = std::time::Instant::now();
++        let states = (0..sources).map(|_| SourceState::new(state, block)).collect::<Result<_>>()?;
++        eprintln!("BINPROBE source_init_ms {:.9} sources {}", started.elapsed().as_secs_f64() * 1000., sources);
++        Ok(Self { states, pool: pool(threads)?, probe: [0; 4] })
+@@ -677,0 +696 @@
++        let dispatch = std::time::Instant::now();
+@@ -678,0 +698 @@
++            let task = std::time::Instant::now();
+@@ -691,0 +712 @@
++            st.probe_ns = task.elapsed().as_nanos() as u64;
+@@ -692,0 +714,4 @@
++        self.probe[0] += 1;
++        self.probe[1] += dispatch.elapsed().as_nanos() as u64;
++        self.probe[2] += self.states.iter().map(|s| s.probe_ns).sum::<u64>();
++        self.probe[3] += self.states.iter().map(|s| s.probe_ns).max().unwrap_or(0);
+@@ -734,0 +760 @@
++    probe_ns: u64,
+@@ -815,0 +842 @@
++            probe_ns: 0,
+@@ -1207,0 +1235,6 @@
++
++impl Drop for Bank {
++    fn drop(&mut self) {
++        eprintln!("BINPROBE pool_work_ms {:.9} calls {} sources {} task_sum_ms {:.9} task_max_sum_ms {:.9}", self.probe[1] as f64 / 1e6, self.probe[0], self.states.len(), self.probe[2] as f64 / 1e6, self.probe[3] as f64 / 1e6);
++    }
++}
+--- a/src/adm_engine/render_service.cpp
++++ b/src/adm_engine/render_service.cpp
+@@ -0,0 +1,16 @@
++
++#include <chrono>
++#include <cstdio>
++namespace {
++struct BinProbe {
++    const char* name;
++    double* sum;
++    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
++    explicit BinProbe(const char* n, double* s = nullptr) : name(n), sum(s) {}
++    ~BinProbe() {
++        const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
++        if (sum) *sum += ms;
++        else std::fprintf(stderr, "BINPROBE %s %.9f\n", name, ms);
++    }
++};
++}
+@@ -406,0 +423 @@
++    BinProbe bin_total("service_total_ms");
+@@ -861 +878 @@
+-        auto prep_res = renderer->prepare(plan, logs);
++        auto prep_res = [&] { BinProbe p("prepare_ms"); return renderer->prepare(plan, logs); }();
+@@ -882 +899 @@
+-    auto render_res = renderer->render_window(*prepared_slot, plan, render_progress, logs);
++    auto render_res = [&] { BinProbe p("render_window_ms"); return renderer->render_window(*prepared_slot, plan, render_progress, logs); }();

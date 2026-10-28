@@ -754,6 +754,57 @@ fn worker_threads_do_not_change_the_sources() {
 }
 
 #[test]
+fn rebuilt_banks_reuse_storage_and_match_fresh_history() {
+    let hrtf = Arc::new(binaural_hrtf::build(Dataset::kemar(), 1024, false).unwrap());
+    let plan = binaural_render::prepare(
+        &moving_scene(12000),
+        Arc::clone(&hrtf),
+        Spread::Cloud,
+        0,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    let samples = sine(2048, 0.5);
+    let rotation = mradm_dsp::scene_math::Rotation::new([20., 5., 0.]).unwrap();
+    for threads in [0, 3] {
+        let mut reused = Bank::new(&hrtf, 3, 1024, threads).unwrap();
+        for count in [3usize, 2, 5, 1, 0, 4] {
+            let kept: Vec<_> = reused.states[..count.min(reused.states.len())]
+                .iter()
+                .map(|state| (state.left.as_ptr(), state.right.as_ptr()))
+                .collect();
+            reused.rebuild(count).unwrap();
+            assert_eq!(reused.states.len(), count);
+            for (state, pointers) in reused.states.iter().zip(kept) {
+                assert_eq!((state.left.as_ptr(), state.right.as_ptr()), pointers);
+                assert!(state.left.iter().chain(&state.right).all(|v| *v == 0.));
+            }
+            let mut fresh = Bank::new(&hrtf, count, 1024, threads).unwrap();
+            for start in [0, 1024] {
+                for bank in [&mut reused, &mut fresh] {
+                    bank.render(
+                        &plan.sources[..count],
+                        &hrtf.filters,
+                        &samples[start..start + 1024],
+                        1,
+                        start as u64,
+                        1024,
+                        1500,
+                        Some(&rotation),
+                        &|i| (i % 2 == 0).then_some(false),
+                    )
+                    .unwrap();
+                }
+                for (actual, expected) in reused.states.iter().zip(&fresh.states) {
+                    assert_eq!(words(&actual.left), words(&expected.left));
+                    assert_eq!(words(&actual.right), words(&expected.right));
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn a_nonfinite_direction_is_an_error() {
     let mut b = object_block(0, 4096, f32::NAN);
     b.width = 0.;

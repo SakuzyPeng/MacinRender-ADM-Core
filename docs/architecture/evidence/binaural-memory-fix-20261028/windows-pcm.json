@@ -1,0 +1,3218 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T06:55:43Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 10.384615384615381
+  },
+  "baseline_source": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "candidate_source": "949e14e4fa46d10d6393894cf4626b5780488c28 + memory-fix source.json",
+  "runner_sha256": "d58a4df3d6451116b3a519923fe4886f96bfe2bf97778e290c1dcb9b0f36c0f9",
+  "suite_sha256": "20aa80016336949caa1226a0dee316370fd4a79b4867e809b4253e87e2386d81",
+  "mode": "pcm",
+  "repeats": 5,
+  "diagnostics": false,
+  "timing_scope": "End-to-end process including preparation, rendering, metering and file output; stream replay includes two in-process passes.",
+  "rss_collector": "GetProcessMemoryInfo peak working set, sampled every 2 ms",
+  "binaries": {
+    "baseline": {
+      "mradm": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+      "mr_adm_pcm_bits": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+      "mr_adm_phase2_stream": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+    },
+    "candidate": {
+      "mradm": "8d72b802ddf5e283a6f95bb481f1b97906e55fd0525c15f734f55099b5c5b3ba",
+      "mr_adm_pcm_bits": "9dea865e0408f0ef72dd970f670a19df1347b734695318f9d0d7be34127ba29b",
+      "mr_adm_phase2_stream": "268c0663d636ef17942801c63f08a361a0e92feca8181108a64703df378d1568"
+    }
+  },
+  "offline": [
+    {
+      "id": "binaural-point",
+      "fixture_sha256": "0f6ef3d72a27b7ac3c0d6fdf4115f63b86c002048518f3c71483affb3a3cf58c",
+      "request": {
+        "id": "binaural-point",
+        "fixture": "objects-point",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--no-peak-limit"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "fa0ee7d8e04677cfc2854f07778d2db9608fc209d0959d3eda58339ed05fbd52"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "fa0ee7d8e04677cfc2854f07778d2db9608fc209d0959d3eda58339ed05fbd52"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "binaural-extent-cloud",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "request": {
+        "id": "binaural-extent-cloud",
+        "fixture": "objects-extent",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--no-peak-limit",
+          "--binaural-spread-mode",
+          "cloud"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ad95eabdc16322eb1126b409e47dbe2ace26110ab2a142b550b1cb03551abd"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "binaural-extent-spreader",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "request": {
+        "id": "binaural-extent-spreader",
+        "fixture": "objects-extent",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--no-peak-limit",
+          "--binaural-spread-mode",
+          "saf-spreader"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "021428ab5278328a548d8163cca944d0b9332264d802b602ee3d3f3714208451"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "021428ab5278328a548d8163cca944d0b9332264d802b602ee3d3f3714208451"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "binaural-extent-spreader-multi",
+      "fixture_sha256": "a9c694d90e33864e00b762d6468f79623c1fb7856f0ba3b1658e752f5e24a59f",
+      "request": {
+        "id": "binaural-extent-spreader-multi",
+        "fixture": "objects-extent-multi",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--no-peak-limit",
+          "--binaural-spread-mode",
+          "saf-spreader"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "d404729d7066accb54923f0108c53cf3ea59d425f2765fb9be9309e66d8b9bf7"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "d404729d7066accb54923f0108c53cf3ea59d425f2765fb9be9309e66d8b9bf7"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "binaural-cartesian-cloud",
+      "fixture_sha256": "681bac2db87cffd3143587c06ce910ff304150ce3de31429f1ec0144a0510c56",
+      "request": {
+        "id": "binaural-cartesian-cloud",
+        "fixture": "objects-cartesian",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--no-peak-limit",
+          "--binaural-spread-mode",
+          "cloud"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "9ccfe5771a18bbad24ffabd45a14132b0d7e1299a55e8db1c06233b1b5277cf7"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "9ccfe5771a18bbad24ffabd45a14132b0d7e1299a55e8db1c06233b1b5277cf7"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "scene-binaural-cloud",
+      "fixture_sha256": "a9c694d90e33864e00b762d6468f79623c1fb7856f0ba3b1658e752f5e24a59f",
+      "request": {
+        "id": "scene-binaural-cloud",
+        "fixture": "objects-extent-multi",
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "cloud"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "a60c3669f73ee9ee64d11244f30bbfec372e93439c2f67c38a00a09b6125eadb"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "scene-binaural-rotated",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "request": {
+        "id": "scene-binaural-rotated",
+        "fixture": "objects-extent",
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "cloud",
+          "--listener-yaw",
+          "37",
+          "--listener-pitch",
+          "23",
+          "--listener-roll",
+          "-19"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "e1ab17ac8046e02115887ee67d5f43cb9036c737f85ea3409efbbf09c2474b64"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "e1ab17ac8046e02115887ee67d5f43cb9036c737f85ea3409efbbf09c2474b64"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "params-binaural",
+      "fixture_sha256": "8fddfc36de2ad7a4b46b47666703ef66f392a3dc6957ee4646c5a9df0394bcb9",
+      "request": {
+        "id": "params-binaural",
+        "fixture": "params",
+        "slice": "3.5",
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "509f24b7395b591072e6d00f59fa4e0735f899d094dc9952ce7b6fcd02be028b"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "509f24b7395b591072e6d00f59fa4e0735f899d094dc9952ce7b6fcd02be028b"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "params-binaural-rotated",
+      "fixture_sha256": "8fddfc36de2ad7a4b46b47666703ef66f392a3dc6957ee4646c5a9df0394bcb9",
+      "request": {
+        "id": "params-binaural-rotated",
+        "fixture": "params",
+        "slice": "3.5",
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--listener-yaw",
+          "37.000001",
+          "--listener-pitch",
+          "1.25e1",
+          "--listener-roll",
+          "-9.9999999"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "b2749ad631c92adac22b9f166dea96d184de4163d0b07dfa6ba4f51575216b4c"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "b2749ad631c92adac22b9f166dea96d184de4163d0b07dfa6ba4f51575216b4c"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "final-binaural-i16-trim-gain",
+      "fixture_sha256": "fa9e3665be737d6a4d3a712fbe5a56ff85858db24588f4156c205d37199b79fe",
+      "request": {
+        "id": "final-binaural-i16-trim-gain",
+        "fixture": "objects-extent",
+        "slice": "3.6",
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--binaural-spread-mode",
+          "cloud",
+          "--start",
+          "0.1",
+          "--end",
+          "0.65",
+          "--final-gain-db",
+          "-3.25",
+          "--output-bit-depth",
+          "i16"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 26400,
+          "sha256": "0d206b97c0b921875beeebec581a0ba15c7ff3e67526749d221b14b46c9ce40f"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 26400,
+          "sha256": "0d206b97c0b921875beeebec581a0ba15c7ff3e67526749d221b14b46c9ce40f"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "final-caf-binaural-postproc",
+      "fixture_sha256": "0f6ef3d72a27b7ac3c0d6fdf4115f63b86c002048518f3c71483affb3a3cf58c",
+      "request": {
+        "id": "final-caf-binaural-postproc",
+        "fixture": "objects-point",
+        "slice": "3.6",
+        "container": "caf",
+        "args": [
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "b965fe6c1c8cf64a1a086c0785f94ed2aae875f26ea43980316da6c0d17e3c67"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "b965fe6c1c8cf64a1a086c0785f94ed2aae875f26ea43980316da6c0d17e3c67"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "smoothing-binaural",
+      "fixture_sha256": "bbe204610e44f63c2f7b6343dd3bab9108a05d21c8317777819101a9af3d0a01",
+      "request": {
+        "id": "smoothing-binaural",
+        "fixture": "objects-room",
+        "slice": "4.2",
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural",
+          "--object-smoothing-frames",
+          "2048"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "c54a79373b2b69146e1d92a7207bd92d2e2a30237ee6fbbb4a3b67647b5b747e"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "c54a79373b2b69146e1d92a7207bd92d2e2a30237ee6fbbb4a3b67647b5b747e"
+        }
+      },
+      "identical": true
+    },
+    {
+      "id": "policy-position-binaural",
+      "fixture_sha256": "0bbeeeaf2f5b1a66b4a68238407582d1e82ad2f978a20b99ba008194deee8f98",
+      "request": {
+        "id": "policy-position-binaural",
+        "fixture": "policy-objects",
+        "slice": "4.2",
+        "files": {
+          "--semantic-policy": "policy-position.json"
+        },
+        "args": [
+          "--no-peak-limit",
+          "--renderer",
+          "saf-binaural",
+          "--output-layout",
+          "binaural"
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "4ae0f7e1ffefcf2b746adfed9a6eb1c7669d899babef0801178bd0a7ebcc475d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "4ae0f7e1ffefcf2b746adfed9a6eb1c7669d899babef0801178bd0a7ebcc475d"
+        }
+      },
+      "identical": true
+    }
+  ],
+  "goldens": [
+    {
+      "index": 0,
+      "request": {
+        "frames": 48000,
+        "pcm": "5f1237cce6f15fd5",
+        "pose": null,
+        "scene": "bin-motion",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "8f2a1238502e1f93db841bfe666c06414b9571e60d2c3f4821cab0e7785b126a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "8f2a1238502e1f93db841bfe666c06414b9571e60d2c3f4821cab0e7785b126a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 1,
+      "request": {
+        "frames": 48000,
+        "pcm": "5f1237cce6f15fd5",
+        "pose": null,
+        "scene": "bin-motion",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "8f2a1238502e1f93db841bfe666c06414b9571e60d2c3f4821cab0e7785b126a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "8f2a1238502e1f93db841bfe666c06414b9571e60d2c3f4821cab0e7785b126a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 2,
+      "request": {
+        "frames": 48000,
+        "pcm": "5f1237cce6f15fd5",
+        "pose": null,
+        "scene": "bin-motion",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "8f2a1238502e1f93db841bfe666c06414b9571e60d2c3f4821cab0e7785b126a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "8f2a1238502e1f93db841bfe666c06414b9571e60d2c3f4821cab0e7785b126a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 3,
+      "request": {
+        "frames": 21600,
+        "pcm": "1c6668cef93d1764",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-motion",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "8ef7b9be1714a33e3d4da724a2b0e15d2c649e3fa7b1688e86e387945dd240dd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "8ef7b9be1714a33e3d4da724a2b0e15d2c649e3fa7b1688e86e387945dd240dd"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 4,
+      "request": {
+        "frames": 9600,
+        "pcm": "d74bde17ceeb5935",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-motion",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "c64f60c9b3c11aac1197bbcc624bddaaf5a7963e156a69d91ea18817e4dad7a8"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "c64f60c9b3c11aac1197bbcc624bddaaf5a7963e156a69d91ea18817e4dad7a8"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 5,
+      "request": {
+        "frames": 24000,
+        "pcm": "005e469ebad2a84d",
+        "pose": null,
+        "scene": "bin-motion",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "9a578625063ac5588e4c50c7e3c9eaef699a8f402792a085cd3f1d5c4105bb19"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "9a578625063ac5588e4c50c7e3c9eaef699a8f402792a085cd3f1d5c4105bb19"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 6,
+      "request": {
+        "frames": 48000,
+        "pcm": "48f0b996081060db",
+        "pose": null,
+        "scene": "bin-diffuse",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "cda48b867dbd4d9326284ecdc0b696eb2a8bbeb3ae0dc6a27dac28a782496a27"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "cda48b867dbd4d9326284ecdc0b696eb2a8bbeb3ae0dc6a27dac28a782496a27"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 7,
+      "request": {
+        "frames": 48000,
+        "pcm": "13d4641e6d6bb291",
+        "pose": null,
+        "scene": "bin-diffuse",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "0ce2ef7f272c67841be985d30135548cdf0d80848d6681fba934c9ef3bc9c64f"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "0ce2ef7f272c67841be985d30135548cdf0d80848d6681fba934c9ef3bc9c64f"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 8,
+      "request": {
+        "frames": 48000,
+        "pcm": "a63193c9cac11db6",
+        "pose": null,
+        "scene": "bin-diffuse",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "61b5c36e7ab7bba3feb2bbdb06fbdc0244cc68459ff96a32d27cf14a96432540"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "61b5c36e7ab7bba3feb2bbdb06fbdc0244cc68459ff96a32d27cf14a96432540"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 9,
+      "request": {
+        "frames": 21600,
+        "pcm": "fcab75000bdc0c50",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-diffuse",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "1896fee9af37fe34f0b8f88485da51ed75a8db8dc90195fc257719cf55fd924a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "1896fee9af37fe34f0b8f88485da51ed75a8db8dc90195fc257719cf55fd924a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 10,
+      "request": {
+        "frames": 9600,
+        "pcm": "77cc9feedecc897f",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-diffuse",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "62b88813911a2b0f82e4ff7f35dbfa1a459e3f470da0d43742aef17e2f4d66ef"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "62b88813911a2b0f82e4ff7f35dbfa1a459e3f470da0d43742aef17e2f4d66ef"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 11,
+      "request": {
+        "frames": 24000,
+        "pcm": "3a0888e38989bc03",
+        "pose": null,
+        "scene": "bin-diffuse",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "65dd3305fc196b7469b1ad4d5b398c6fbb2233e3fcc9c78f92a4f467d3bcd821"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "65dd3305fc196b7469b1ad4d5b398c6fbb2233e3fcc9c78f92a4f467d3bcd821"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 12,
+      "request": {
+        "frames": 48000,
+        "pcm": "a604e680e4039560",
+        "pose": null,
+        "scene": "bin-divergence",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "c6f0036c3eace64660148dd127aad4e9f5569bb07eb8d65ce020baeccc85c096"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "c6f0036c3eace64660148dd127aad4e9f5569bb07eb8d65ce020baeccc85c096"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 13,
+      "request": {
+        "frames": 48000,
+        "pcm": "d37ac6aac18b2870",
+        "pose": null,
+        "scene": "bin-divergence",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ac832cc1ca45700046631d83259ecdffdc5803cb9d7c4ad703c930c7cbb05473"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ac832cc1ca45700046631d83259ecdffdc5803cb9d7c4ad703c930c7cbb05473"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 14,
+      "request": {
+        "frames": 48000,
+        "pcm": "31f2e703e7ce94c0",
+        "pose": null,
+        "scene": "bin-divergence",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6e3da091fbafb112ae1b9f9b381f1b58c7cf00a932cf34006b370eb3d33133c8"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6e3da091fbafb112ae1b9f9b381f1b58c7cf00a932cf34006b370eb3d33133c8"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 15,
+      "request": {
+        "frames": 21600,
+        "pcm": "e2b847cc29924a49",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-divergence",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "285ba85fa05ceb5677d22d54bc3b925f79f20bcff34a611264f98c83e41d5a7a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "285ba85fa05ceb5677d22d54bc3b925f79f20bcff34a611264f98c83e41d5a7a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 16,
+      "request": {
+        "frames": 9600,
+        "pcm": "7bb290c67d7c20b0",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-divergence",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "f236c9984fd3a7aba3b76a1145d07f36bc1aea894e5a23a490700ae379561e4c"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "f236c9984fd3a7aba3b76a1145d07f36bc1aea894e5a23a490700ae379561e4c"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 17,
+      "request": {
+        "frames": 24000,
+        "pcm": "ab1016727bbc99b5",
+        "pose": null,
+        "scene": "bin-divergence",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "12fa9a5682bbc3eaeefd8a845704c7f876a16cb1c6fd4f881647f7860f282b30"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "12fa9a5682bbc3eaeefd8a845704c7f876a16cb1c6fd4f881647f7860f282b30"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 18,
+      "request": {
+        "frames": 48000,
+        "pcm": "8dd943ef36847395",
+        "pose": null,
+        "scene": "bin-extent-threshold",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "76034133e0a6581c2610abc9015a49f7f234182b1769e3e78105ceb221b71b4d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "76034133e0a6581c2610abc9015a49f7f234182b1769e3e78105ceb221b71b4d"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 19,
+      "request": {
+        "frames": 48000,
+        "pcm": "038625cf32787aa0",
+        "pose": null,
+        "scene": "bin-extent-threshold",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "10c7b10afcfd30d83e545921291163d8df33fd3793c873bb6acb89f8cbf0253d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "10c7b10afcfd30d83e545921291163d8df33fd3793c873bb6acb89f8cbf0253d"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 20,
+      "request": {
+        "frames": 48000,
+        "pcm": "efe4211f32e51a3f",
+        "pose": null,
+        "scene": "bin-extent-threshold",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "21c553455c09dfc78a84e45f03c8911060c00b35654e59f132530a88215ee4df"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "21c553455c09dfc78a84e45f03c8911060c00b35654e59f132530a88215ee4df"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 21,
+      "request": {
+        "frames": 21600,
+        "pcm": "bf62d606fa2e6f5d",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-extent-threshold",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "73a8fd5c8df2d83ef8114407dafd8cd450a9ee084b880c2243ccbd7d703210b5"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "73a8fd5c8df2d83ef8114407dafd8cd450a9ee084b880c2243ccbd7d703210b5"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 22,
+      "request": {
+        "frames": 9600,
+        "pcm": "be9589bab08ffd42",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-extent-threshold",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "2e0f35651c0d390533509613831584c80a11e2a68dc4969347062abee5ab8921"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "2e0f35651c0d390533509613831584c80a11e2a68dc4969347062abee5ab8921"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 23,
+      "request": {
+        "frames": 24000,
+        "pcm": "ae3b662872d741ca",
+        "pose": null,
+        "scene": "bin-extent-threshold",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "af2ded0573c1621d4b961df3788b5dc8acf38f26a7a0921723e3612a4d28d4cd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "af2ded0573c1621d4b961df3788b5dc8acf38f26a7a0921723e3612a4d28d4cd"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 24,
+      "request": {
+        "frames": 48000,
+        "pcm": "1d453f032e29645a",
+        "pose": null,
+        "scene": "bin-direct-speakers",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6c14077323383ca6306e004e92d62b0e2d49a5ff6efdb479dd9079a543661a66"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6c14077323383ca6306e004e92d62b0e2d49a5ff6efdb479dd9079a543661a66"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 25,
+      "request": {
+        "frames": 48000,
+        "pcm": "1d453f032e29645a",
+        "pose": null,
+        "scene": "bin-direct-speakers",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6c14077323383ca6306e004e92d62b0e2d49a5ff6efdb479dd9079a543661a66"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6c14077323383ca6306e004e92d62b0e2d49a5ff6efdb479dd9079a543661a66"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 26,
+      "request": {
+        "frames": 48000,
+        "pcm": "1d453f032e29645a",
+        "pose": null,
+        "scene": "bin-direct-speakers",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6c14077323383ca6306e004e92d62b0e2d49a5ff6efdb479dd9079a543661a66"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "6c14077323383ca6306e004e92d62b0e2d49a5ff6efdb479dd9079a543661a66"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 27,
+      "request": {
+        "frames": 21600,
+        "pcm": "e6fa062bcf4565b6",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-direct-speakers",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "835fa874299daeca4c6f85cfea08e03246f884a5c47c49143043f1b2d04ce965"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "835fa874299daeca4c6f85cfea08e03246f884a5c47c49143043f1b2d04ce965"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 28,
+      "request": {
+        "frames": 9600,
+        "pcm": "bbe170593cdd00d4",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-direct-speakers",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "cea078020c275504a38939491fc48fb5545cbef2c83ef523832d317f8048a5f6"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "cea078020c275504a38939491fc48fb5545cbef2c83ef523832d317f8048a5f6"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 29,
+      "request": {
+        "frames": 24000,
+        "pcm": "35a2f7c6a6b05568",
+        "pose": null,
+        "scene": "bin-direct-speakers",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "cba2bece8b76a5de4e49bf58edb48deac11994c6b66d63311def007f43dc6456"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "cba2bece8b76a5de4e49bf58edb48deac11994c6b66d63311def007f43dc6456"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 30,
+      "request": {
+        "frames": 48000,
+        "pcm": "b71a1cc79a404f3a",
+        "pose": null,
+        "scene": "bin-head-locked",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "5e0a99b64ce6bd698126da5ea0ccc555ab6791a3b980631b9b09e9d22453280a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "5e0a99b64ce6bd698126da5ea0ccc555ab6791a3b980631b9b09e9d22453280a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 31,
+      "request": {
+        "frames": 48000,
+        "pcm": "b71a1cc79a404f3a",
+        "pose": null,
+        "scene": "bin-head-locked",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "5e0a99b64ce6bd698126da5ea0ccc555ab6791a3b980631b9b09e9d22453280a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "5e0a99b64ce6bd698126da5ea0ccc555ab6791a3b980631b9b09e9d22453280a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 32,
+      "request": {
+        "frames": 48000,
+        "pcm": "b71a1cc79a404f3a",
+        "pose": null,
+        "scene": "bin-head-locked",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "5e0a99b64ce6bd698126da5ea0ccc555ab6791a3b980631b9b09e9d22453280a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "5e0a99b64ce6bd698126da5ea0ccc555ab6791a3b980631b9b09e9d22453280a"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 33,
+      "request": {
+        "frames": 21600,
+        "pcm": "d9e3bdf8e76ace70",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-head-locked",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "26ae0d5bbe269596da5ccb56512370479ac6589437ce26d8d9a2dbc91a0c4425"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "26ae0d5bbe269596da5ccb56512370479ac6589437ce26d8d9a2dbc91a0c4425"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 34,
+      "request": {
+        "frames": 9600,
+        "pcm": "1e8698c615d21090",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-head-locked",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "5c216b4a35cb130ef68c5185b0757e3e9063f017c0bcffcd639349c2c687b300"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "5c216b4a35cb130ef68c5185b0757e3e9063f017c0bcffcd639349c2c687b300"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 35,
+      "request": {
+        "frames": 24000,
+        "pcm": "8f12fba8e0d0199d",
+        "pose": null,
+        "scene": "bin-head-locked",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "41546feed7f7ef189ad912cf534211620acd06eb7173aa45a995b329d8fdeb87"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "41546feed7f7ef189ad912cf534211620acd06eb7173aa45a995b329d8fdeb87"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 36,
+      "request": {
+        "frames": 48000,
+        "pcm": "d94bc29e0dd421a1",
+        "pose": null,
+        "scene": "bin-channel-lock",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ea091a1fbeb98df31a2744be8cfc7cc75df591e4372317d3b2e160fb874617fd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ea091a1fbeb98df31a2744be8cfc7cc75df591e4372317d3b2e160fb874617fd"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 37,
+      "request": {
+        "frames": 48000,
+        "pcm": "d94bc29e0dd421a1",
+        "pose": null,
+        "scene": "bin-channel-lock",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ea091a1fbeb98df31a2744be8cfc7cc75df591e4372317d3b2e160fb874617fd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ea091a1fbeb98df31a2744be8cfc7cc75df591e4372317d3b2e160fb874617fd"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 38,
+      "request": {
+        "frames": 48000,
+        "pcm": "d94bc29e0dd421a1",
+        "pose": null,
+        "scene": "bin-channel-lock",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ea091a1fbeb98df31a2744be8cfc7cc75df591e4372317d3b2e160fb874617fd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ea091a1fbeb98df31a2744be8cfc7cc75df591e4372317d3b2e160fb874617fd"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 39,
+      "request": {
+        "frames": 21600,
+        "pcm": "41fc9f75be723255",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "bin-channel-lock",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "7eda02e5276fa9017bba9ec2ab389d32ad25e008f410f7555596132d152d4c56"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "7eda02e5276fa9017bba9ec2ab389d32ad25e008f410f7555596132d152d4c56"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 40,
+      "request": {
+        "frames": 9600,
+        "pcm": "e64a6dcd58909088",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "bin-channel-lock",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "05783c4d5fe0c0af6636923f9e5ad26fa6597c18695edafec7ff8a6515760fcb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "05783c4d5fe0c0af6636923f9e5ad26fa6597c18695edafec7ff8a6515760fcb"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 41,
+      "request": {
+        "frames": 24000,
+        "pcm": "e1a9c14f27d1af38",
+        "pose": null,
+        "scene": "bin-channel-lock",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "9e40744732ec6d2e0466bd166634319d8354c77cc9b763a79c823f30d521ecdd"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "9e40744732ec6d2e0466bd166634319d8354c77cc9b763a79c823f30d521ecdd"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 42,
+      "request": {
+        "frames": 48000,
+        "pcm": "c80df8c25ccebcda",
+        "pose": null,
+        "scene": "objects-extent-multi",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "1a1d1fc06e24d63b57834dcf7c41d702398c56f1397d56ce6f29c0a603966feb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "1a1d1fc06e24d63b57834dcf7c41d702398c56f1397d56ce6f29c0a603966feb"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 43,
+      "request": {
+        "frames": 48000,
+        "pcm": "50e80e1d03e2c35b",
+        "pose": null,
+        "scene": "objects-extent-multi",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "1948ea5fdb00725abeb33ad59a307685aab522695de47c30e04d603fdc8c97fe"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "1948ea5fdb00725abeb33ad59a307685aab522695de47c30e04d603fdc8c97fe"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 44,
+      "request": {
+        "frames": 48000,
+        "pcm": "54da0e90c06a4cc2",
+        "pose": null,
+        "scene": "objects-extent-multi",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "706e56c638365dd976a028759f7f48769ac04557da2e4788523f013677bdf1b7"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "706e56c638365dd976a028759f7f48769ac04557da2e4788523f013677bdf1b7"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 45,
+      "request": {
+        "frames": 21600,
+        "pcm": "2c08d5a550898a50",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "objects-extent-multi",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "8fe1363f722e4e0664a952716c418a8573baae0b0e9dded4e4db18ac6482d3c0"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "8fe1363f722e4e0664a952716c418a8573baae0b0e9dded4e4db18ac6482d3c0"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 46,
+      "request": {
+        "frames": 9600,
+        "pcm": "55d0445d075c0633",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "objects-extent-multi",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "1225405143705e68036b982c2c1204b64991727bb93749fc25789f0c69ac439e"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "1225405143705e68036b982c2c1204b64991727bb93749fc25789f0c69ac439e"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 47,
+      "request": {
+        "frames": 24000,
+        "pcm": "74055c352ffc7e2a",
+        "pose": null,
+        "scene": "objects-extent-multi",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "ddb55d1382bad0c5fded650105769300f7d1cf732bc2b7447c2f68542a289fe7"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "ddb55d1382bad0c5fded650105769300f7d1cf732bc2b7447c2f68542a289fe7"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 48,
+      "request": {
+        "frames": 48000,
+        "pcm": "95f693066f033770",
+        "pose": null,
+        "scene": "directspeakers-lfe",
+        "smoothing": 0,
+        "spread": "cloud",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ffadf9c1445df8cfceba5eb12c1e1baa392c351adc954268dce08f06185e0d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ffadf9c1445df8cfceba5eb12c1e1baa392c351adc954268dce08f06185e0d"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 49,
+      "request": {
+        "frames": 48000,
+        "pcm": "95f693066f033770",
+        "pose": null,
+        "scene": "directspeakers-lfe",
+        "smoothing": 0,
+        "spread": "none",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ffadf9c1445df8cfceba5eb12c1e1baa392c351adc954268dce08f06185e0d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ffadf9c1445df8cfceba5eb12c1e1baa392c351adc954268dce08f06185e0d"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 50,
+      "request": {
+        "frames": 48000,
+        "pcm": "95f693066f033770",
+        "pose": null,
+        "scene": "directspeakers-lfe",
+        "smoothing": 0,
+        "spread": "saf-spreader",
+        "window": null
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ffadf9c1445df8cfceba5eb12c1e1baa392c351adc954268dce08f06185e0d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "06ffadf9c1445df8cfceba5eb12c1e1baa392c351adc954268dce08f06185e0d"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 51,
+      "request": {
+        "frames": 21600,
+        "pcm": "eda51d2235fc72fe",
+        "pose": [
+          30,
+          10,
+          -5
+        ],
+        "scene": "directspeakers-lfe",
+        "smoothing": 1024,
+        "spread": "cloud",
+        "window": [
+          7200,
+          21600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "367b182f023de5c78df241446d7ceb68a1cce09c0bc382cac0edd30848f3677d"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 21600,
+          "sha256": "367b182f023de5c78df241446d7ceb68a1cce09c0bc382cac0edd30848f3677d"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 52,
+      "request": {
+        "frames": 9600,
+        "pcm": "0ff29a0da9aa5c9e",
+        "pose": [
+          -45,
+          0,
+          0
+        ],
+        "scene": "directspeakers-lfe",
+        "smoothing": 480,
+        "spread": "saf-spreader",
+        "window": [
+          2400,
+          9600
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "06e2d45b27cec83cbd4f7ea7b2e98d8f5864a74a670e37987b40209b053ede6e"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 9600,
+          "sha256": "06e2d45b27cec83cbd4f7ea7b2e98d8f5864a74a670e37987b40209b053ede6e"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    },
+    {
+      "index": 53,
+      "request": {
+        "frames": 24000,
+        "pcm": "ad53f5710953f489",
+        "pose": null,
+        "scene": "directspeakers-lfe",
+        "smoothing": 1500,
+        "spread": "none",
+        "window": [
+          24000,
+          48000
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "071cd54823249e3d137a9266d2ebf7ca047d4f5f184f66b27c4b9464f5b57d76"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 24000,
+          "sha256": "071cd54823249e3d137a9266d2ebf7ca047d4f5f184f66b27c4b9464f5b57d76"
+        }
+      },
+      "identical": true,
+      "baseline_matches_frozen_golden": true
+    }
+  ],
+  "streams": [
+    {
+      "id": "stream-binaural-cloud-fixed",
+      "request": {
+        "id": "stream-binaural-cloud-fixed",
+        "version": 3,
+        "fixture": "objects-extent-multi",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-cloud-fragmented",
+      "request": {
+        "id": "stream-binaural-cloud-fragmented",
+        "version": 3,
+        "fixture": "objects-extent-multi",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-cartesian-fixed",
+      "request": {
+        "id": "stream-binaural-cartesian-fixed",
+        "version": 3,
+        "fixture": "objects-cartesian",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "475c47d41a7ad2dbdd77160cbd96a47813fed12789b5066af2ec88971d1dd454"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "475c47d41a7ad2dbdd77160cbd96a47813fed12789b5066af2ec88971d1dd454"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-cartesian-fragmented",
+      "request": {
+        "id": "stream-binaural-cartesian-fragmented",
+        "version": 3,
+        "fixture": "objects-cartesian",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "cloud",
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "475c47d41a7ad2dbdd77160cbd96a47813fed12789b5066af2ec88971d1dd454"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "475c47d41a7ad2dbdd77160cbd96a47813fed12789b5066af2ec88971d1dd454"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-point-fixed",
+      "request": {
+        "id": "stream-binaural-point-fixed",
+        "version": 3,
+        "fixture": "objects-point",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "eaa38fa63a5001e10873513da1fea7e949fbe4ddb878b66b2b6a47e8b41d76f3"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "eaa38fa63a5001e10873513da1fea7e949fbe4ddb878b66b2b6a47e8b41d76f3"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-point-fragmented",
+      "request": {
+        "id": "stream-binaural-point-fragmented",
+        "version": 3,
+        "fixture": "objects-point",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "eaa38fa63a5001e10873513da1fea7e949fbe4ddb878b66b2b6a47e8b41d76f3"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "eaa38fa63a5001e10873513da1fea7e949fbe4ddb878b66b2b6a47e8b41d76f3"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-bed-fixed",
+      "request": {
+        "id": "stream-binaural-bed-fixed",
+        "version": 3,
+        "fixture": "directspeakers",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -1.5
+              },
+              {
+                "index": 0,
+                "speaker_label": "M+030",
+                "gain_db": -12.0
+              },
+              {
+                "index": 0,
+                "speaker_label": "M-110",
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "speaker_label": "M+000",
+                "gain_db": -20.0
+              }
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              },
+              {
+                "index": 0,
+                "speaker_label": "M-030",
+                "gain_db": -6.0
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ],
+        "spread": "cloud"
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "adc28c7367f046d71c0fed98ecb959dad9efabc26bf8f940480965d8988229bc"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "adc28c7367f046d71c0fed98ecb959dad9efabc26bf8f940480965d8988229bc"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-bed-fragmented",
+      "request": {
+        "id": "stream-binaural-bed-fragmented",
+        "version": 3,
+        "fixture": "directspeakers",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -1.5
+              },
+              {
+                "index": 0,
+                "speaker_label": "M+030",
+                "gain_db": -12.0
+              },
+              {
+                "index": 0,
+                "speaker_label": "M-110",
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "speaker_label": "M+000",
+                "gain_db": -20.0
+              }
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              },
+              {
+                "index": 0,
+                "speaker_label": "M-030",
+                "gain_db": -6.0
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ],
+        "spread": "cloud"
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "adc28c7367f046d71c0fed98ecb959dad9efabc26bf8f940480965d8988229bc"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "adc28c7367f046d71c0fed98ecb959dad9efabc26bf8f940480965d8988229bc"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-params-fixed",
+      "request": {
+        "id": "stream-binaural-params-fixed",
+        "version": 3,
+        "fixture": "params",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "partition": [
+          512
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "0b733f60926727d1c0866655d71e6a16f3c3e0157bdacdc877a00ef8e016d26a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "0b733f60926727d1c0866655d71e6a16f3c3e0157bdacdc877a00ef8e016d26a"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    },
+    {
+      "id": "stream-binaural-params-fragmented",
+      "request": {
+        "id": "stream-binaural-params-fragmented",
+        "version": 3,
+        "fixture": "params",
+        "renderer": "saf-binaural",
+        "output_layout": "binaural",
+        "channels": 2,
+        "spread": "none",
+        "partition": [
+          1,
+          7,
+          127,
+          511,
+          1024
+        ],
+        "input_frames": 48000,
+        "sample_rate": 48000,
+        "frames": 96000,
+        "events": [
+          {
+            "frame": 0,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -3.0
+              }
+            ]
+          },
+          {
+            "frame": 7001,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -14.5
+              }
+            ]
+          },
+          {
+            "frame": 12345,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": 2.25,
+                "extent_scale": 0.5,
+                "diffuse_scale": 1.5
+              }
+            ]
+          },
+          {
+            "frame": 20000,
+            "orientation": [
+              37.0,
+              12.0,
+              -9.0
+            ]
+          },
+          {
+            "frame": 26000,
+            "objects": [
+              {
+                "index": 0,
+                "gain_db": -6.0,
+                "width_scale": 1.75,
+                "height_scale": 0.25,
+                "depth_scale": 2.0,
+                "divergence_scale": 0.5
+              }
+            ]
+          },
+          {
+            "frame": 31000,
+            "seek": 4800
+          },
+          {
+            "frame": 40000,
+            "objects": [
+              {
+                "index": 0,
+                "mute": true
+              }
+            ]
+          },
+          {
+            "frame": 44000,
+            "objects": []
+          }
+        ]
+      },
+      "outputs": {
+        "baseline": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "0b733f60926727d1c0866655d71e6a16f3c3e0157bdacdc877a00ef8e016d26a"
+        },
+        "candidate": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "0b733f60926727d1c0866655d71e6a16f3c3e0157bdacdc877a00ef8e016d26a"
+        }
+      },
+      "identical": true,
+      "in_process_repeat_identical": true
+    }
+  ],
+  "performance": [],
+  "passed_pcm": true,
+  "complete": true,
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T06:56:10Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 4.029304029304026
+  }
+}
