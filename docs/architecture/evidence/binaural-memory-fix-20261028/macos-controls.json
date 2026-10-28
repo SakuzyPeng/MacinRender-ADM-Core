@@ -1,0 +1,495 @@
+{
+  "context": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:05:37Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      5.22314453125,
+      6.62109375,
+      6.798828125
+    ]
+  },
+  "case": "stream-controls",
+  "request": {
+    "id": "stream-binaural-cloud-fixed",
+    "version": 3,
+    "fixture": "objects-extent-multi",
+    "renderer": "saf-binaural",
+    "output_layout": "binaural",
+    "channels": 2,
+    "spread": "cloud",
+    "partition": [
+      512
+    ],
+    "input_frames": 48000,
+    "sample_rate": 48000,
+    "frames": 96000,
+    "events": [
+      {
+        "frame": 0,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ]
+      },
+      {
+        "frame": 7001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 12345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 20000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 26000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 31000,
+        "seek": 4800
+      },
+      {
+        "frame": 40000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 44000,
+        "objects": []
+      }
+    ]
+  },
+  "schedule": "",
+  "collector": "darwin-time-l-native-wait",
+  "runs": {
+    "macos-cpp": [
+      {
+        "seconds": 0.1144106669962639,
+        "rss_bytes": 48693248,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11365254200063646,
+        "rss_bytes": 50003968,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11525541599257849,
+        "rss_bytes": 51265536,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11554829099623021,
+        "rss_bytes": 50675712,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11347574999672361,
+        "rss_bytes": 50118656,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11268545800703578,
+        "rss_bytes": 50429952,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11449725000420585,
+        "rss_bytes": 50200576,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11420208300114609,
+        "rss_bytes": 49053696,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11054341698763892,
+        "rss_bytes": 51789824,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11209125000459608,
+        "rss_bytes": 49266688,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.1132947919977596,
+        "rss_bytes": 50642944,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11338508299377281,
+        "rss_bytes": 50413568,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11220204200071748,
+        "rss_bytes": 50626560,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11236054099572357,
+        "rss_bytes": 49053696,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.11282249999931082,
+        "rss_bytes": 50708480,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      }
+    ],
+    "release": [
+      {
+        "seconds": 0.10400204100005794,
+        "rss_bytes": 49807360,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10808670900587458,
+        "rss_bytes": 51265536,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10583141700772103,
+        "rss_bytes": 51445760,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10410425000009127,
+        "rss_bytes": 50757632,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10330141600570641,
+        "rss_bytes": 51527680,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10629029100527987,
+        "rss_bytes": 51560448,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10328108299290761,
+        "rss_bytes": 49954816,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.1081688749982277,
+        "rss_bytes": 52166656,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.1051843749883119,
+        "rss_bytes": 49545216,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10334529200918041,
+        "rss_bytes": 51527680,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10377916699508205,
+        "rss_bytes": 51200000,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10525658300321084,
+        "rss_bytes": 51511296,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10349975001008715,
+        "rss_bytes": 49774592,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10310216700599995,
+        "rss_bytes": 51347456,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.10222262500610668,
+        "rss_bytes": 50790400,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      }
+    ]
+  },
+  "instrumented": false,
+  "pcm_all_identical": true,
+  "binaries": {
+    "macos-cpp": {
+      "mradm": "a25891a7aebd32a8b0c702c177f699b64fa90df57975cc641ff0f9aa5e1eba3d",
+      "mr_adm_pcm_bits": "883dd9f4dde7b56dab9783ab2000fd80d20e2c8bbbc70bc45c0677bba0fe08db",
+      "mr_adm_phase2_stream": "3f2ffaf062e52bc3be88b7c634bce04e8fbc44b1139e8126bef17c52f6c68746"
+    },
+    "release": {
+      "mradm": "2f7259bbae75c1dab5985ae3ba77f697e8e2e3fb67a14cf6526324d7d7543af7",
+      "mr_adm_pcm_bits": "41a296d5301ce38a058c945d943236d9b802f4db8ec626bfa6d475c5d9dfb4e1",
+      "mr_adm_phase2_stream": "87633f52b5e3394f3476507c741f6b2c559c3f78b48aa52c0e333e216a12c3cb"
+    }
+  },
+  "context_after": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:05:41Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      6.326171875,
+      6.826171875,
+      6.8701171875
+    ]
+  }
+}

@@ -1,0 +1,914 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T07:03:06Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 8.4942084942085
+  },
+  "case": "stream-long",
+  "request": {
+    "id": "stream-binaural-cloud-fixed",
+    "version": 3,
+    "fixture": "objects-extent-multi",
+    "renderer": "saf-binaural",
+    "output_layout": "binaural",
+    "channels": 2,
+    "spread": "cloud",
+    "partition": [
+      512
+    ],
+    "input_frames": 48000,
+    "sample_rate": 48000,
+    "frames": 480000,
+    "events": [
+      {
+        "frame": 0,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 7001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 12345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 20000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 26000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 31000,
+        "seek": 4800
+      },
+      {
+        "frame": 40000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 44000,
+        "objects": []
+      },
+      {
+        "frame": 48000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 55001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 60345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 68000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 74000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 79000,
+        "seek": 4800
+      },
+      {
+        "frame": 88000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 92000,
+        "objects": []
+      },
+      {
+        "frame": 96000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 103001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 108345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 116000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 122000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 127000,
+        "seek": 4800
+      },
+      {
+        "frame": 136000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 140000,
+        "objects": []
+      },
+      {
+        "frame": 144000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 151001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 156345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 164000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 170000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 175000,
+        "seek": 4800
+      },
+      {
+        "frame": 184000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 188000,
+        "objects": []
+      },
+      {
+        "frame": 192000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 199001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 204345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 212000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 218000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 223000,
+        "seek": 4800
+      },
+      {
+        "frame": 232000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 236000,
+        "objects": []
+      },
+      {
+        "frame": 240000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 247001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 252345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 260000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 266000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 271000,
+        "seek": 4800
+      },
+      {
+        "frame": 280000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 284000,
+        "objects": []
+      },
+      {
+        "frame": 288000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 295001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 300345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 308000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 314000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 319000,
+        "seek": 4800
+      },
+      {
+        "frame": 328000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 332000,
+        "objects": []
+      },
+      {
+        "frame": 336000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 343001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 348345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 356000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 362000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 367000,
+        "seek": 4800
+      },
+      {
+        "frame": 376000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 380000,
+        "objects": []
+      },
+      {
+        "frame": 384000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 391001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 396345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 404000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 410000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 415000,
+        "seek": 4800
+      },
+      {
+        "frame": 424000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 428000,
+        "objects": []
+      },
+      {
+        "frame": 432000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ],
+        "seek": 0
+      },
+      {
+        "frame": 439001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 444345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 452000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 458000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 463000,
+        "seek": 4800
+      },
+      {
+        "frame": 472000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 476000,
+        "objects": []
+      }
+    ]
+  },
+  "schedule": "",
+  "collector": "native-wait-with-sampler",
+  "runs": {
+    "candidate": [
+      {
+        "seconds": 1.3589055000000005,
+        "rss_bytes": 60452864,
+        "cpu": {
+          "kernel_ms": 4453.125,
+          "user_ms": 4281.25,
+          "process_seconds": 1.3555552
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 1.3724540000000003,
+        "rss_bytes": 59129856,
+        "cpu": {
+          "kernel_ms": 3531.25,
+          "user_ms": 4109.375,
+          "process_seconds": 1.3691502
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 1.3512921000000002,
+        "rss_bytes": 59383808,
+        "cpu": {
+          "kernel_ms": 3906.25,
+          "user_ms": 3531.25,
+          "process_seconds": 1.3479861
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 1.3857578999999998,
+        "rss_bytes": 59142144,
+        "cpu": {
+          "kernel_ms": 4156.25,
+          "user_ms": 3406.25,
+          "process_seconds": 1.3821502
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 1.3594653999999995,
+        "rss_bytes": 58724352,
+        "cpu": {
+          "kernel_ms": 3531.25,
+          "user_ms": 3828.125,
+          "process_seconds": 1.3558077
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      }
+    ],
+    "fixed": [
+      {
+        "seconds": 1.0286690000000003,
+        "rss_bytes": 51351552,
+        "cpu": {
+          "kernel_ms": 2187.5,
+          "user_ms": 5171.875,
+          "process_seconds": 1.025084
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.8938819000000002,
+        "rss_bytes": 51347456,
+        "cpu": {
+          "kernel_ms": 3250.0,
+          "user_ms": 4296.875,
+          "process_seconds": 0.8908404
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.9933911999999996,
+        "rss_bytes": 50995200,
+        "cpu": {
+          "kernel_ms": 2421.875,
+          "user_ms": 4062.5,
+          "process_seconds": 0.9900374
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.9587555999999999,
+        "rss_bytes": 51302400,
+        "cpu": {
+          "kernel_ms": 2656.25,
+          "user_ms": 4000.0,
+          "process_seconds": 0.9552554
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      },
+      {
+        "seconds": 0.9542193000000001,
+        "rss_bytes": 51339264,
+        "cpu": {
+          "kernel_ms": 2703.125,
+          "user_ms": 4687.5,
+          "process_seconds": 0.949863
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 480000,
+          "sha256": "69b397424894c1ae0ad90e6255aeb3e9b45b64a47e96a02a06c03e8d7e58c992"
+        }
+      }
+    ]
+  },
+  "instrumented": false,
+  "pcm_all_identical": true,
+  "binaries": {
+    "candidate": {
+      "mradm.exe": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+      "mr_adm_pcm_bits.exe": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+      "mr_adm_phase2_stream.exe": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+    },
+    "fixed": {
+      "mradm.exe": "8d72b802ddf5e283a6f95bb481f1b97906e55fd0525c15f734f55099b5c5b3ba",
+      "mr_adm_pcm_bits.exe": "9dea865e0408f0ef72dd970f670a19df1347b734695318f9d0d7be34127ba29b",
+      "mr_adm_phase2_stream.exe": "268c0663d636ef17942801c63f08a361a0e92feca8181108a64703df378d1568"
+    }
+  },
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T07:03:22Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 18.867924528301884
+  }
+}

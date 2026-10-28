@@ -1,0 +1,40 @@
+{
+  "source": {
+    "base": "949e14e4fa46d10d6393894cf4626b5780488c28",
+    "files": {
+      "rust/crates/mradm-render/src/binaural_render.rs": {
+        "sha256": "740cf508d3eebaad05d3dd8952127391feec4ee19d0a2b851eba5a72b9975ddd",
+        "base_sha256": "abbec6c5e554df81fe8d380104d05a1973ea50c9e29ad98745d91468c8dc49a0"
+      },
+      "rust/crates/mradm-render/tests/binaural.rs": {
+        "sha256": "3c283075f944d66bf03d8a122dd0a10f0fc780ed350b679587c2a80cb4c1839f",
+        "base_sha256": "f48d32e4d21a541d9d20b45310210539ca50ee2620e3828dff7df7c275d35929"
+      },
+      "rust/crates/mradm-ffi/src/render_binaural.rs": {
+        "sha256": "67c1e3b9b3b797ee6aa428316f56714e5f660df045b52704481422cdbad2d8fc",
+        "base_sha256": "5e51a93933c036e1701649e0fec926b5c91c24984cec1bbfe1ebd6793db4073b"
+      },
+      "rust/crates/mradm-ffi/src/render_binaural_test.rs": {
+        "sha256": "a55ea28d8bd115fa56007aa2810329fea97f303c41b8e485ef8a309e9250b8cf",
+        "base_sha256": null
+      },
+      "src/adm_render_binaural/binaural_renderer.cpp": {
+        "sha256": "902babb16684ef9c64c94eb21808f62d38859d2e9043e6c49d03eac1f973e824",
+        "base_sha256": "058d5cecbc9d134008f013a406f7bb305ec1e66477781db2c48c8417ab1a72eb"
+      },
+      "src/adm_render_common/routing_ffi.h": {
+        "sha256": "3cd75b83668cce2c7d1d4e5c81c87a5e2e0252189979551648ce891bcccdeab0",
+        "base_sha256": "766574ed4160b6673f5ec8834040f78d7bec63e48577fe1921b5c50a4c18d15d"
+      },
+      "scripts/quality/language-surface-baseline.json": {
+        "sha256": "417e2c11c4f7ffe93e640cbfe5bc4d8219cc1ab2ee7df697716e16ae30e532b4",
+        "base_sha256": "3324256359e4aff4b9401ed31bdf2d426fe5058bd871499f56119b0b2c7c66b3"
+      }
+    }
+  },
+  "binaries": {
+    "mradm": "2f7259bbae75c1dab5985ae3ba77f697e8e2e3fb67a14cf6526324d7d7543af7",
+    "mr_adm_phase2_stream": "87633f52b5e3394f3476507c741f6b2c559c3f78b48aa52c0e333e216a12c3cb",
+    "mr_adm_pcm_bits": "41a296d5301ce38a058c945d943236d9b802f4db8ec626bfa6d475c5d9dfb4e1"
+  }
+}

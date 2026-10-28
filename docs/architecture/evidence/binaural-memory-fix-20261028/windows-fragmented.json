@@ -1,0 +1,434 @@
+{
+  "context": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T07:00:41Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 14.0625
+  },
+  "case": "stream-fragmented",
+  "request": {
+    "id": "stream-binaural-cloud-fixed",
+    "version": 3,
+    "fixture": "objects-extent-multi",
+    "renderer": "saf-binaural",
+    "output_layout": "binaural",
+    "channels": 2,
+    "spread": "cloud",
+    "partition": [
+      17,
+      511,
+      5,
+      2048,
+      73,
+      1023
+    ],
+    "input_frames": 48000,
+    "sample_rate": 48000,
+    "frames": 96000,
+    "events": [
+      {
+        "frame": 0,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -3.0
+          }
+        ]
+      },
+      {
+        "frame": 7001,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -14.5
+          }
+        ]
+      },
+      {
+        "frame": 12345,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": 2.25,
+            "extent_scale": 0.5,
+            "diffuse_scale": 1.5
+          }
+        ]
+      },
+      {
+        "frame": 20000,
+        "orientation": [
+          37.0,
+          12.0,
+          -9.0
+        ]
+      },
+      {
+        "frame": 26000,
+        "objects": [
+          {
+            "index": 0,
+            "gain_db": -6.0,
+            "width_scale": 1.75,
+            "height_scale": 0.25,
+            "depth_scale": 2.0,
+            "divergence_scale": 0.5
+          }
+        ]
+      },
+      {
+        "frame": 31000,
+        "seek": 4800
+      },
+      {
+        "frame": 40000,
+        "objects": [
+          {
+            "index": 0,
+            "mute": true
+          }
+        ]
+      },
+      {
+        "frame": 44000,
+        "objects": []
+      }
+    ]
+  },
+  "schedule": "",
+  "collector": "native-wait-with-sampler",
+  "runs": {
+    "candidate": [
+      {
+        "seconds": 0.2920345,
+        "rss_bytes": 54759424,
+        "cpu": {
+          "kernel_ms": 578.125,
+          "user_ms": 937.5,
+          "process_seconds": 0.2882088
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.29280700000000004,
+        "rss_bytes": 54489088,
+        "cpu": {
+          "kernel_ms": 859.375,
+          "user_ms": 828.125,
+          "process_seconds": 0.2894898
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.2792205000000001,
+        "rss_bytes": 54849536,
+        "cpu": {
+          "kernel_ms": 531.25,
+          "user_ms": 828.125,
+          "process_seconds": 0.2759162
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.28684449999999995,
+        "rss_bytes": 55115776,
+        "cpu": {
+          "kernel_ms": 859.375,
+          "user_ms": 781.25,
+          "process_seconds": 0.2834915
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.3064713000000001,
+        "rss_bytes": 54734848,
+        "cpu": {
+          "kernel_ms": 703.125,
+          "user_ms": 781.25,
+          "process_seconds": 0.3024026
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.29781970000000024,
+        "rss_bytes": 54775808,
+        "cpu": {
+          "kernel_ms": 593.75,
+          "user_ms": 734.375,
+          "process_seconds": 0.2942091
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.29929640000000024,
+        "rss_bytes": 54669312,
+        "cpu": {
+          "kernel_ms": 625.0,
+          "user_ms": 828.125,
+          "process_seconds": 0.2956053
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.29599639999999994,
+        "rss_bytes": 54632448,
+        "cpu": {
+          "kernel_ms": 500.0,
+          "user_ms": 656.25,
+          "process_seconds": 0.2924695
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.2927572999999999,
+        "rss_bytes": 55463936,
+        "cpu": {
+          "kernel_ms": 406.25,
+          "user_ms": 687.5,
+          "process_seconds": 0.2894087
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      }
+    ],
+    "fixed": [
+      {
+        "seconds": 0.24756350000000005,
+        "rss_bytes": 45498368,
+        "cpu": {
+          "kernel_ms": 296.875,
+          "user_ms": 453.125,
+          "process_seconds": 0.2441849
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.2400551000000002,
+        "rss_bytes": 45330432,
+        "cpu": {
+          "kernel_ms": 453.125,
+          "user_ms": 437.5,
+          "process_seconds": 0.2363818
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.23879190000000028,
+        "rss_bytes": 45420544,
+        "cpu": {
+          "kernel_ms": 437.5,
+          "user_ms": 890.625,
+          "process_seconds": 0.2354273
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.23400180000000015,
+        "rss_bytes": 45469696,
+        "cpu": {
+          "kernel_ms": 296.875,
+          "user_ms": 296.875,
+          "process_seconds": 0.2305535
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.23740450000000024,
+        "rss_bytes": 45375488,
+        "cpu": {
+          "kernel_ms": 453.125,
+          "user_ms": 546.875,
+          "process_seconds": 0.2340582
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.2393964999999998,
+        "rss_bytes": 45371392,
+        "cpu": {
+          "kernel_ms": 468.75,
+          "user_ms": 562.5,
+          "process_seconds": 0.2357061
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.24459699999999973,
+        "rss_bytes": 45395968,
+        "cpu": {
+          "kernel_ms": 343.75,
+          "user_ms": 546.875,
+          "process_seconds": 0.2411444
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.24460499999999996,
+        "rss_bytes": 45563904,
+        "cpu": {
+          "kernel_ms": 515.625,
+          "user_ms": 609.375,
+          "process_seconds": 0.2412408
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      },
+      {
+        "seconds": 0.24077569999999948,
+        "rss_bytes": 45408256,
+        "cpu": {
+          "kernel_ms": 609.375,
+          "user_ms": 515.625,
+          "process_seconds": 0.2371441
+        },
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 74200,
+          "sha256": "043aa203f3ba6e1914f73503041362d1037f2110b3965a79a1636daef5cde4eb"
+        }
+      }
+    ]
+  },
+  "instrumented": false,
+  "pcm_all_identical": true,
+  "binaries": {
+    "candidate": {
+      "mradm.exe": "925a3424ea62b4b33aa1803ee8386438a73001bb7ea21ebcb9b32cf0bd16fff2",
+      "mr_adm_pcm_bits.exe": "9af88101ec927f9f4b769b2977a57823da88575e780b99676ced474b2cd02ada",
+      "mr_adm_phase2_stream.exe": "cfb9b9e7e77416fd1356caa8ea6d014eb34f3c6b922e461283d7ba9819c0258a"
+    },
+    "fixed": {
+      "mradm.exe": "8d72b802ddf5e283a6f95bb481f1b97906e55fd0525c15f734f55099b5c5b3ba",
+      "mr_adm_pcm_bits.exe": "9dea865e0408f0ef72dd970f670a19df1347b734695318f9d0d7be34127ba29b",
+      "mr_adm_phase2_stream.exe": "268c0663d636ef17942801c63f08a361a0e92feca8181108a64703df378d1568"
+    }
+  },
+  "context_after": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "logical_cores": 16,
+    "utc": "2026-10-28T07:00:47Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": {
+      "ac": 1,
+      "battery_flags": 1,
+      "battery_percent": 100,
+      "reserved": 0,
+      "remaining_seconds": 4294967295,
+      "full_seconds": 4294967295
+    },
+    "cpu_busy_percent_sample": 19.485294117647058
+  }
+}

@@ -444,7 +444,7 @@ pub struct RenderBinauralSourceOutput {
     right: *const f32,
 }
 
-/// A rebuilt source list with its OLA state.
+/// A file stream's source list, reusable OLA state and persistent worker pool.
 pub struct BinauralBank {
     prepared: Arc<binaural::Prepared>,
     sources: Vec<mradm_render::binaural::Source>,
@@ -453,9 +453,34 @@ pub struct BinauralBank {
     bank: Bank,
 }
 
+impl BinauralBank {
+    fn bind_sources(&mut self, sources: Vec<mradm_render::binaural::Source>) {
+        self.sources = sources;
+        self.keys = self
+            .sources
+            .iter()
+            .map(|s| RenderBinauralSourceKey {
+                object_id: Text::bytes(&s.object_id),
+                label_key: Text::bytes(&s.label_key),
+            })
+            .collect();
+        self.outputs = self
+            .bank
+            .states
+            .iter()
+            .map(|s| RenderBinauralSourceOutput {
+                left: s.left.as_ptr(),
+                right: s.right.as_ptr(),
+            })
+            .collect();
+    }
+}
+
 /// The sources of the preparation's scene with each listed object's blocks scaled (none: the
 /// prepared list), with worker threads for the file stream (one per core when there are sources
-/// and several cores). Keys stay valid while the bank lives.
+/// and several cores). `*output` must be null to create a stream, or its existing bank to rebuild
+/// it in place. A failed rebuild preserves its state and views; successful rebuilds invalidate
+/// the previous keys/outputs. The preparation and worker pool stay fixed for the stream.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_binaural_bank_create(
     prepared: *const RenderPrepared,
@@ -477,7 +502,13 @@ pub unsafe extern "C" fn mradm_render_binaural_bank_create(
         ) else {
             return Err(offline_error("无效双耳源参数"));
         };
-        *out = ptr::null_mut();
+        let existing = unsafe { (*out).as_mut() };
+        if existing
+            .as_ref()
+            .is_some_and(|h| !Arc::ptr_eq(&h.prepared, plan))
+        {
+            return Err(offline_error("无效双耳源参数"));
+        }
         let list = if scales_len == 0 {
             &[][..]
         } else if scales.is_null() {
@@ -495,41 +526,31 @@ pub unsafe extern "C" fn mradm_render_binaural_bank_create(
         } else {
             mradm_render::binaural::sources(&plan.input, plan.spread, &map, &mut |_, _| {})
         };
-        let hardware = std::thread::available_parallelism().map_or(1, usize::from);
-        let threads = if !plan.sources.is_empty() && hardware > 1 {
-            hardware
+        if let Some(handle) = existing {
+            handle.bank.rebuild(sources.len())?;
+            handle.bind_sources(sources);
+            *keys = handle.keys.as_ptr();
+            *keys_len = handle.keys.len();
         } else {
-            0
-        };
-        let bank = Bank::new(&plan.hrtf, sources.len(), plan.block as usize, threads)?;
-        let mut handle = Box::new(BinauralBank {
-            prepared: Arc::clone(plan),
-            keys: Vec::with_capacity(sources.len()),
-            outputs: Vec::new(),
-            sources,
-            bank,
-        });
-        let keys_list = handle
-            .sources
-            .iter()
-            .map(|s| RenderBinauralSourceKey {
-                object_id: Text::bytes(&s.object_id),
-                label_key: Text::bytes(&s.label_key),
-            })
-            .collect();
-        handle.keys = keys_list;
-        handle.outputs = handle
-            .bank
-            .states
-            .iter()
-            .map(|s| RenderBinauralSourceOutput {
-                left: s.left.as_ptr(),
-                right: s.right.as_ptr(),
-            })
-            .collect();
-        *keys = handle.keys.as_ptr();
-        *keys_len = handle.keys.len();
-        *out = Box::into_raw(handle);
+            let hardware = std::thread::available_parallelism().map_or(1, usize::from);
+            let threads = if !plan.sources.is_empty() && hardware > 1 {
+                hardware
+            } else {
+                0
+            };
+            let bank = Bank::new(&plan.hrtf, sources.len(), plan.block as usize, threads)?;
+            let mut handle = Box::new(BinauralBank {
+                prepared: Arc::clone(plan),
+                sources: Vec::new(),
+                keys: Vec::new(),
+                outputs: Vec::new(),
+                bank,
+            });
+            handle.bind_sources(sources);
+            *keys = handle.keys.as_ptr();
+            *keys_len = handle.keys.len();
+            *out = Box::into_raw(handle);
+        }
         Ok(())
     })
 }
@@ -619,3 +640,7 @@ pub unsafe extern "C" fn mradm_render_binaural_bank_destroy(handle: *mut Binaura
         drop(unsafe { Box::from_raw(handle) });
     }
 }
+
+#[cfg(test)]
+#[path = "render_binaural_test.rs"]
+mod tests;

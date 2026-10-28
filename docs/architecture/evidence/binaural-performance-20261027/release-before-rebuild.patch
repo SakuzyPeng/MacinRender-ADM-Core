@@ -1,0 +1,4 @@
+--- a/src/adm_render_binaural/binaural_renderer.cpp
++++ b/src/adm_render_binaural/binaural_renderer.cpp
+@@ -376,0 +377 @@
++        bank_ = SourceBank{}; // Investigation only: release old bank before allocating replacement.

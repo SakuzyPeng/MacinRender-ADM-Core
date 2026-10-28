@@ -1,0 +1,344 @@
+{
+  "context": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:05:48Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      5.8994140625,
+      6.72900390625,
+      6.83544921875
+    ]
+  },
+  "case": "stream-topology-cycle",
+  "request": {
+    "id": "stream-binaural-cloud-fixed",
+    "version": 3,
+    "fixture": "objects-extent-multi",
+    "renderer": "saf-binaural",
+    "output_layout": "binaural",
+    "channels": 2,
+    "spread": "cloud",
+    "partition": [
+      512
+    ],
+    "input_frames": 48000,
+    "sample_rate": 48000,
+    "frames": 48000,
+    "events": [
+      {
+        "frame": 0,
+        "objects": [
+          {
+            "index": 0,
+            "extent_scale": 0.0,
+            "diffuse_scale": 0.0,
+            "divergence_scale": 0.0
+          }
+        ]
+      },
+      {
+        "frame": 6144,
+        "objects": []
+      },
+      {
+        "frame": 12288,
+        "objects": [
+          {
+            "index": 0,
+            "extent_scale": 0.0,
+            "diffuse_scale": 0.0,
+            "divergence_scale": 0.0
+          }
+        ]
+      },
+      {
+        "frame": 18432,
+        "objects": []
+      },
+      {
+        "frame": 24576,
+        "objects": [
+          {
+            "index": 0,
+            "extent_scale": 0.0,
+            "diffuse_scale": 0.0,
+            "divergence_scale": 0.0
+          }
+        ]
+      },
+      {
+        "frame": 30720,
+        "objects": []
+      },
+      {
+        "frame": 36864,
+        "objects": [
+          {
+            "index": 0,
+            "extent_scale": 0.0,
+            "diffuse_scale": 0.0,
+            "divergence_scale": 0.0
+          }
+        ]
+      },
+      {
+        "frame": 43008,
+        "objects": []
+      }
+    ]
+  },
+  "schedule": "",
+  "collector": "darwin-time-l-native-wait",
+  "runs": {
+    "macos-cpp": [
+      {
+        "seconds": 0.08884720900095999,
+        "rss_bytes": 49774592,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.0871435000008205,
+        "rss_bytes": 47792128,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.08809225000732113,
+        "rss_bytes": 48267264,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.08775462499761488,
+        "rss_bytes": 48250880,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.08886745800555218,
+        "rss_bytes": 47661056,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.08827145799295977,
+        "rss_bytes": 48168960,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.08818579200305976,
+        "rss_bytes": 48218112,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.087384332990041,
+        "rss_bytes": 48185344,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.0865071669977624,
+        "rss_bytes": 48234496,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      }
+    ],
+    "release": [
+      {
+        "seconds": 0.09021345801011194,
+        "rss_bytes": 50348032,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.0955560830043396,
+        "rss_bytes": 49135616,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.09337991700158454,
+        "rss_bytes": 50659328,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.09007120798924007,
+        "rss_bytes": 50462720,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.09194154200667981,
+        "rss_bytes": 50692096,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.09504779100825544,
+        "rss_bytes": 49102848,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.09209433299838565,
+        "rss_bytes": 50626560,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.09122962500259746,
+        "rss_bytes": 49168384,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      },
+      {
+        "seconds": 0.08934408299683128,
+        "rss_bytes": 49053696,
+        "cpu": {},
+        "probe": [],
+        "pcm": {
+          "channels": 2,
+          "sample_rate": 48000,
+          "frames": 48000,
+          "sha256": "ba9e798123076d6491c22ee29cb94e70d51f457a1b19f9c882ddcd852c966164"
+        }
+      }
+    ]
+  },
+  "instrumented": false,
+  "pcm_all_identical": true,
+  "binaries": {
+    "macos-cpp": {
+      "mradm": "a25891a7aebd32a8b0c702c177f699b64fa90df57975cc641ff0f9aa5e1eba3d",
+      "mr_adm_pcm_bits": "883dd9f4dde7b56dab9783ab2000fd80d20e2c8bbbc70bc45c0677bba0fe08db",
+      "mr_adm_phase2_stream": "3f2ffaf062e52bc3be88b7c634bce04e8fbc44b1139e8126bef17c52f6c68746"
+    },
+    "release": {
+      "mradm": "2f7259bbae75c1dab5985ae3ba77f697e8e2e3fb67a14cf6526324d7d7543af7",
+      "mr_adm_pcm_bits": "41a296d5301ce38a058c945d943236d9b802f4db8ec626bfa6d475c5d9dfb4e1",
+      "mr_adm_phase2_stream": "87633f52b5e3394f3476507c741f6b2c559c3f78b48aa52c0e333e216a12c3cb"
+    }
+  },
+  "context_after": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "logical_cores": 12,
+    "utc": "2026-10-28T07:05:50Z",
+    "background_policy": "Normal desktop applications/services retained; no affinity or power changes.",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=38338659)\t80%; AC attached; not charging present: true",
+    "load_average": [
+      6.4677734375,
+      6.8330078125,
+      6.87109375
+    ]
+  }
+}

@@ -290,6 +290,13 @@ fn query(filters: &Filters, az: f32, el: f32, out: &mut Vec<f32>) -> Result<()> 
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+struct BankShape {
+    fft_size: usize,
+    overlap: usize,
+    block: usize,
+}
+
 /// One source's convolution history and buffers.
 pub struct SourceState {
     convolver: OlaConvolver,
@@ -306,9 +313,10 @@ pub struct SourceState {
 }
 
 impl SourceState {
-    fn new(state: &State, block: usize) -> Result<Self> {
+    fn new(shape: BankShape) -> Result<Self> {
+        let block = shape.block;
         Ok(Self {
-            convolver: OlaConvolver::new(state.fft_size, state.overlap, block)
+            convolver: OlaConvolver::new(shape.fft_size, shape.overlap, block)
                 .map_err(|e| dsp(&e))?,
             diffuse: DiffuseDelay::default(),
             cache: (f32::NAN, f32::NAN, Vec::new()),
@@ -645,16 +653,44 @@ fn each<T: Send>(
 pub struct Bank {
     pub states: Vec<SourceState>,
     pool: Option<rayon::ThreadPool>,
+    shape: BankShape,
 }
 
 impl Bank {
     pub fn new(state: &State, sources: usize, block: usize, threads: usize) -> Result<Self> {
+        let shape = BankShape {
+            fft_size: state.fft_size,
+            overlap: state.overlap,
+            block,
+        };
         Ok(Self {
             states: (0..sources)
-                .map(|_| SourceState::new(state, block))
+                .map(|_| SourceState::new(shape))
                 .collect::<Result<_>>()?,
             pool: pool(threads)?,
+            shape,
         })
+    }
+
+    /// Reuses this stream's workers and convolution storage for a new source graph. Prepare
+    /// any additional sources before resetting history, so a preparation error leaves the old
+    /// graph's state intact. Removed sources release their convolution storage immediately.
+    pub fn rebuild(&mut self, sources: usize) -> Result<()> {
+        let additional = sources.saturating_sub(self.states.len());
+        let added = (0..additional)
+            .map(|_| SourceState::new(self.shape))
+            .collect::<Result<Vec<_>>>()?;
+        self.states.reserve(additional);
+        self.states.truncate(sources);
+        self.states.extend(added);
+        for state in &mut self.states {
+            state.reset();
+            state.left.fill(0.);
+            state.right.fill(0.);
+            state.end_hrtf.clear();
+            state.error = None;
+        }
+        Ok(())
     }
 
     pub fn reset(&mut self) {

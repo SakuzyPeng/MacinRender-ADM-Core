@@ -1,0 +1,334 @@
+{
+  "schema": "mradm.binaural-memory-fix.v1",
+  "date": "2026-10-28",
+  "base_commit": "949e14e4fa46d10d6393894cf4626b5780488c28",
+  "candidate_source_manifest_sha256": "22eaf45eb02cd42604ee551ef5817631d61f6909b81dfe61edc55f219b931d18",
+  "public_c_abi_changed": false,
+  "cpp_production_lines": {
+    "before": 34958,
+    "after": 34953
+  },
+  "pcm": {
+    "windows": {
+      "offline": 13,
+      "goldens": 54,
+      "streams": 10,
+      "passed": true
+    },
+    "macos": {
+      "offline": 19,
+      "goldens": 54,
+      "streams": 10,
+      "passed": true
+    },
+    "shared_candidate_outputs_identical": 77
+  },
+  "performance": {
+    "macos-controls": {
+      "medians": {
+        "macos-cpp": {
+          "seconds": 0.11338508299377281,
+          "rss_bytes": 50413568,
+          "runs": 15
+        },
+        "release": {
+          "seconds": 0.10400204100005794,
+          "rss_bytes": 51265536,
+          "runs": 15
+        }
+      },
+      "time_ratio": 0.9172462395760632,
+      "rss_ratio": 1.0168995775105623,
+      "reference": "macos-cpp"
+    },
+    "macos-fragmented": {
+      "medians": {
+        "macos-cpp": {
+          "seconds": 0.11375862501154188,
+          "rss_bytes": 48922624,
+          "runs": 9
+        },
+        "release": {
+          "seconds": 0.10447912500239909,
+          "rss_bytes": 49643520,
+          "runs": 9
+        }
+      },
+      "time_ratio": 0.9184281630671846,
+      "rss_ratio": 1.014735432016075,
+      "reference": "macos-cpp"
+    },
+    "macos-gain-head-seek": {
+      "medians": {
+        "macos-cpp": {
+          "seconds": 0.09267120898584835,
+          "rss_bytes": 49496064,
+          "runs": 9
+        },
+        "release": {
+          "seconds": 0.09590191699680872,
+          "rss_bytes": 49905664,
+          "runs": 9
+        }
+      },
+      "time_ratio": 1.0348620466519836,
+      "rss_ratio": 1.0082754054948693,
+      "reference": "macos-cpp"
+    },
+    "macos-long": {
+      "medians": {
+        "macos-cpp": {
+          "seconds": 0.5873225419927621,
+          "rss_bytes": 57950208,
+          "runs": 5
+        },
+        "release": {
+          "seconds": 0.4797048330074176,
+          "rss_bytes": 58032128,
+          "runs": 5
+        }
+      },
+      "time_ratio": 0.8167655737847183,
+      "rss_ratio": 1.0014136273678258,
+      "reference": "macos-cpp"
+    },
+    "macos-rust-controls": {
+      "medians": {
+        "macos-before": {
+          "seconds": 0.15632383299816865,
+          "rss_bytes": 61128704,
+          "runs": 15
+        },
+        "release": {
+          "seconds": 0.14001579199975822,
+          "rss_bytes": 50806784,
+          "runs": 15
+        }
+      },
+      "time_ratio": 0.8956778330876682,
+      "rss_ratio": 0.8311444652908068,
+      "reference": "macos-before"
+    },
+    "macos-rust-long": {
+      "medians": {
+        "macos-before": {
+          "seconds": 0.883632499986561,
+          "rss_bytes": 69533696,
+          "runs": 5
+        },
+        "release": {
+          "seconds": 0.8157046670094132,
+          "rss_bytes": 59113472,
+          "runs": 5
+        }
+      },
+      "time_ratio": 0.9231266018642582,
+      "rss_ratio": 0.8501413760603205,
+      "reference": "macos-before"
+    },
+    "macos-rust-static": {
+      "medians": {
+        "macos-before": {
+          "seconds": 0.0761484999966342,
+          "rss_bytes": 49184768,
+          "runs": 21
+        },
+        "release": {
+          "seconds": 0.07609145900642034,
+          "rss_bytes": 49299456,
+          "runs": 21
+        }
+      },
+      "time_ratio": 0.9992509243095218,
+      "rss_ratio": 1.002331778814124,
+      "reference": "macos-before"
+    },
+    "macos-static": {
+      "medians": {
+        "macos-cpp": {
+          "seconds": 0.07294633300625719,
+          "rss_bytes": 49545216,
+          "runs": 9
+        },
+        "release": {
+          "seconds": 0.07673091600008775,
+          "rss_bytes": 48955392,
+          "runs": 9
+        }
+      },
+      "time_ratio": 1.051881744261304,
+      "rss_ratio": 0.9880952380952381,
+      "reference": "macos-cpp"
+    },
+    "macos-topology-cycle": {
+      "medians": {
+        "macos-cpp": {
+          "seconds": 0.08809225000732113,
+          "rss_bytes": 48218112,
+          "runs": 9
+        },
+        "release": {
+          "seconds": 0.09194154200667981,
+          "rss_bytes": 50348032,
+          "runs": 9
+        }
+      },
+      "time_ratio": 1.043696148061138,
+      "rss_ratio": 1.0441726129799525,
+      "reference": "macos-cpp"
+    },
+    "windows-cpp-reference": {
+      "medians": {
+        "baseline": {
+          "seconds": 0.27411290000000044,
+          "rss_bytes": 45215744,
+          "runs": 9
+        },
+        "fixed": {
+          "seconds": 0.23066969999999998,
+          "rss_bytes": 45060096,
+          "runs": 9
+        }
+      },
+      "time_ratio": 0.8415134785703249,
+      "rss_ratio": 0.9965576592082617,
+      "reference": "baseline"
+    },
+    "windows-fragmented": {
+      "medians": {
+        "candidate": {
+          "seconds": 0.29280700000000004,
+          "rss_bytes": 54759424,
+          "runs": 9
+        },
+        "fixed": {
+          "seconds": 0.2400551000000002,
+          "rss_bytes": 45408256,
+          "runs": 9
+        }
+      },
+      "time_ratio": 0.8198407141905766,
+      "rss_ratio": 0.8292318049218341,
+      "reference": "candidate"
+    },
+    "windows-gain-head-seek": {
+      "medians": {
+        "candidate": {
+          "seconds": 0.2221221,
+          "rss_bytes": 45170688,
+          "runs": 9
+        },
+        "fixed": {
+          "seconds": 0.22334580000000015,
+          "rss_bytes": 45146112,
+          "runs": 9
+        }
+      },
+      "time_ratio": 1.0055091321394862,
+      "rss_ratio": 0.999455930359086,
+      "reference": "candidate"
+    },
+    "windows-long": {
+      "medians": {
+        "candidate": {
+          "seconds": 1.3594653999999995,
+          "rss_bytes": 59142144,
+          "runs": 5
+        },
+        "fixed": {
+          "seconds": 0.9587555999999999,
+          "rss_bytes": 51339264,
+          "runs": 5
+        }
+      },
+      "time_ratio": 0.7052445762871201,
+      "rss_ratio": 0.86806565551631,
+      "reference": "candidate"
+    },
+    "windows-short": {
+      "medians": {
+        "candidate": {
+          "seconds": 0.28260939999999923,
+          "rss_bytes": 54853632,
+          "runs": 15
+        },
+        "fixed": {
+          "seconds": 0.23651409999999906,
+          "rss_bytes": 45113344,
+          "runs": 15
+        }
+      },
+      "time_ratio": 0.83689396035659,
+      "rss_ratio": 0.8224313022700119,
+      "reference": "candidate"
+    },
+    "windows-static": {
+      "medians": {
+        "candidate": {
+          "seconds": 0.18035089999999965,
+          "rss_bytes": 44666880,
+          "runs": 9
+        },
+        "fixed": {
+          "seconds": 0.18027179999999998,
+          "rss_bytes": 44777472,
+          "runs": 9
+        }
+      },
+      "time_ratio": 0.9995614105613021,
+      "rss_ratio": 1.0024759284731775,
+      "reference": "candidate"
+    },
+    "windows-topology-cycle": {
+      "medians": {
+        "candidate": {
+          "seconds": 0.2468558999999999,
+          "rss_bytes": 45158400,
+          "runs": 9
+        },
+        "fixed": {
+          "seconds": 0.2396320000000003,
+          "rss_bytes": 44298240,
+          "runs": 9
+        }
+      },
+      "time_ratio": 0.9707363688694512,
+      "rss_ratio": 0.9809523809523809,
+      "reference": "candidate"
+    }
+  },
+  "validation": {
+    "rust_tests_per_platform": {
+      "binaural": 13,
+      "ffi": 2
+    },
+    "macos_debug_binaural_ctest": "3/3",
+    "macos_release_binaural_ctest": "3/3",
+    "windows_release_binaural_ctest": "3/3",
+    "ffi_headers": {
+      "functions": 344,
+      "structs": 143,
+      "passed": true
+    },
+    "clippy": "-D warnings passed",
+    "cpp_quality": "format/cppcheck passed; clang-tidy exited 0 with a third-party fmt diagnostic",
+    "source_patch_reproduces_manifest": true,
+    "windows_restoration": {
+      "source_restored": true,
+      "clean": true,
+      "canonical_build": 0,
+      "binaural_smoke": "3/3 passed"
+    }
+  },
+  "windows_private_archive_sha256": "bd67d173a9f198b4bc029db1ec7090179eb3a2a84eef75766c76b62bcdec0b0b",
+  "collector_sha256": {
+    "collect-windows.py": "89e5fa1e8a83e22225f0617210622c69c7b4de43daaace2e1ca7b760e06f3dd8",
+    "collect-macos.py": "c4255d4cebdb49d17b77c0835ce1e3f1ae89a38f0aab289c9fb7206daa685bd8"
+  },
+  "private_archive_sha256": "a3d26d773a94664f03e398b44e61a6a202dea57afb66681d149b3084a3723ce6",
+  "fixture_manifest_sha256": "fe6283582b2a88915bfdff9d54effc6f9f0fde9a20db8c00378fb1b907af91a8",
+  "cleanup": {
+    "local_owned_temporary_bytes_reclaimed": 107036379,
+    "shared_build_caches_preserved": true
+  }
+}

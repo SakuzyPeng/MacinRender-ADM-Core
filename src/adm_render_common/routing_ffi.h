@@ -721,6 +721,8 @@ int32_t mradm_render_binaural_offline_finish(MradmRenderBinauralOffline* handle,
                                              uint64_t* written,
                                              MradmRenderOfflineMetrics* metrics);
 void mradm_render_binaural_offline_destroy(MradmRenderBinauralOffline* handle);
+// *output: null creates a stream bank; an existing bank reuses its workers/storage.
+// Rebuild errors preserve the previous bank and views; success replaces the keys/outputs.
 int32_t mradm_render_binaural_bank_create(const MradmRenderPrepared* prepared,
                                           const MradmRenderBinauralScales* scales,
                                           size_t scales_len,

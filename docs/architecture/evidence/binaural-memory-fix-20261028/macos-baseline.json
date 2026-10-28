@@ -1,0 +1,9 @@
+{
+  "cli_and_stream_source": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+  "pcm_extractor_source": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+  "binaries": {
+    "mradm": "a25891a7aebd32a8b0c702c177f699b64fa90df57975cc641ff0f9aa5e1eba3d",
+    "mr_adm_phase2_stream": "3f2ffaf062e52bc3be88b7c634bce04e8fbc44b1139e8126bef17c52f6c68746",
+    "mr_adm_pcm_bits": "883dd9f4dde7b56dab9783ab2000fd80d20e2c8bbbc70bc45c0677bba0fe08db"
+  }
+}
