@@ -81,8 +81,8 @@ class SourceBank {
                                        const std::string& input_path) {
         std::vector<MradmRenderBinauralScales> scales;
         scales.reserve(topo.size());
-        for (const auto& [object_id, value] : topo) {
-            scales.push_back({render_common::text(object_id), {value[0], value[1], value[2], value[3], value[4]}});
+        for (const auto& [object_key, value] : topo) {
+            scales.push_back({render_common::text(object_key), {value[0], value[1], value[2], value[3], value[4]}});
         }
         MradmBinauralBank* raw = handle_.get();
         const MradmRenderBinauralSourceKey* keys = nullptr;
