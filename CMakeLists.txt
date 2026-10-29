@@ -868,7 +868,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
     target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI MacinRender::ADMRealtime)
-    target_include_directories(mr_adm_osc_head_tracking_tests PRIVATE src/adm_render_common)
+    target_include_directories(mr_adm_osc_head_tracking_tests PRIVATE src/adm_render_common tests/support)
     target_include_directories(mr_adm_osc_head_tracking_tests SYSTEM PRIVATE
         "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
     )
@@ -956,6 +956,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_scene_numeric_rust_tests tests/unit/scene_numeric_rust_test.cpp)
     target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_include_directories(mr_adm_scene_numeric_rust_tests PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_scene_numeric_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_scene_numeric_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_rust_tests)

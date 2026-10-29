@@ -337,6 +337,12 @@ typedef struct MradmRenderBinauralHrtfView {
     const float* directions;
     size_t directions_len;
 } MradmRenderBinauralHrtfView;
+// The Scene stream binaural renderer (4.7 D); spread as in MradmRenderBinauralRequest.
+typedef struct MradmRenderLiveBinauralRequest {
+    uint32_t sample_rate;
+    uint32_t spread;
+    uint32_t smoothing_frames;
+} MradmRenderLiveBinauralRequest;
 // A binaural plan (4.7 B): spread 0 cloud, 1 none, 2 SAF spreader.
 typedef struct MradmRenderBinauralRequest {
     uint32_t spread;
@@ -680,6 +686,12 @@ int32_t mradm_render_binaural_hrtf_live(uint32_t sofa,
                                         uint8_t* context,
                                         size_t* context_len);
 void mradm_render_binaural_hrtf_destroy(MradmBinauralHrtfHandle* handle);
+// A Scene stream binaural renderer over a live HRTF state; the handle keeps the state alive.
+int32_t mradm_render_live_binaural_create(const MradmBinauralHrtfHandle* hrtf,
+                                          const MradmRenderLiveBinauralRequest* request,
+                                          MradmRenderLive** output,
+                                          uint8_t* message,
+                                          size_t* message_len);
 
 // The sources (and SAF spreader groups) over a prepared HRTF state; the view carries the plan's
 // log lines and error.

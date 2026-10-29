@@ -8,8 +8,8 @@ use crate::scene::SceneHandle;
 use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
 use mradm_render::{
-    ear, hoa, live, live_triple_balance, live_vbap, offline, room, stream, triple_balance,
-    triple_balance_stream, vbap,
+    ear, hoa, live, live_binaural, live_triple_balance, live_vbap, offline, room, stream,
+    triple_balance, triple_balance_stream, vbap,
 };
 use std::ffi::c_void;
 use std::{
@@ -1860,6 +1860,7 @@ enum LiveRenderer {
     Vbap(Box<live_vbap::Renderer>),
     TripleBalance(Box<live_triple_balance::Renderer>),
     Room(Box<mradm_render::room_stream::Live>),
+    Binaural(Box<live_binaural::Renderer>),
 }
 
 impl LiveRenderer {
@@ -1869,6 +1870,7 @@ impl LiveRenderer {
             Self::Vbap(_) => ("Live VBAP", b"Live VBAP DSP"),
             Self::TripleBalance(_) => ("Live Triple Balance", b"Live Triple Balance DSP"),
             Self::Room(_) => ("room-binaural", b"room-binaural"),
+            Self::Binaural(_) => ("Live binaural", b"Live binaural DSP"),
         }
     }
     fn output_channels(&self) -> u32 {
@@ -1876,6 +1878,7 @@ impl LiveRenderer {
             Self::Vbap(r) => r.output_channels(),
             Self::TripleBalance(r) => r.output_channels(),
             Self::Room(_) => 2,
+            Self::Binaural(r) => r.output_channels(),
         }
     }
     fn configure(&mut self, generation: u64, elements: &[live::Element]) -> Result<(), Error> {
@@ -1883,6 +1886,7 @@ impl LiveRenderer {
             Self::Vbap(r) => r.configure(generation, elements),
             Self::TripleBalance(r) => r.configure(generation, elements),
             Self::Room(r) => r.configure(generation, elements),
+            Self::Binaural(r) => r.configure(generation, elements),
         }
     }
     fn reset(&mut self) {
@@ -1890,6 +1894,7 @@ impl LiveRenderer {
             Self::Vbap(r) => r.reset(),
             Self::TripleBalance(r) => r.reset(),
             Self::Room(r) => r.reset(),
+            Self::Binaural(r) => r.reset(),
         }
     }
     fn render<P: live::PlaneSource + ?Sized>(
@@ -1901,6 +1906,7 @@ impl LiveRenderer {
             Self::Vbap(r) => r.render(frame, output),
             Self::TripleBalance(r) => r.render(frame, output),
             Self::Room(r) => r.render(frame, output),
+            Self::Binaural(r) => r.render(frame, output),
         }
     }
     fn diagnostics(&self) -> &[live::Diagnostic] {
@@ -1908,6 +1914,7 @@ impl LiveRenderer {
             Self::Vbap(r) => r.diagnostics(),
             Self::TripleBalance(r) => r.diagnostics(),
             Self::Room(r) => r.diagnostics(),
+            Self::Binaural(r) => r.diagnostics(),
         }
     }
     /// The warnings of the last configure: only room raises any.
@@ -1926,12 +1933,15 @@ impl LiveRenderer {
     fn tail(&self) -> u64 {
         match self {
             Self::Room(r) => r.tail_frames(),
+            Self::Binaural(r) => r.tail_frames(),
             _ => 0,
         }
     }
     fn pose(&mut self, pose: [f32; 3]) {
-        if let Self::Room(r) = self {
-            r.set_pose(pose);
+        match self {
+            Self::Room(r) => r.set_pose(pose),
+            Self::Binaural(r) => r.set_pose(pose),
+            _ => {}
         }
     }
 }
@@ -2140,7 +2150,7 @@ pub unsafe extern "C" fn mradm_render_live_configure(
     })
 }
 
-/// Latches a rejected orientation (room) for the next render.
+/// The listener orientation of the next render (room latches a rejected one; binaural rotates).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_pose(
     handle: *mut RenderLive,
@@ -2172,7 +2182,7 @@ pub unsafe extern "C" fn mradm_render_live_end_input(
     })
 }
 
-/// The input frames the renderer still appends after the end (room tail).
+/// The input frames the renderer still appends after the end (room tail, binaural convolution).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_tail(handle: *const RenderLive) -> u64 {
     unsafe { handle.as_ref() }.map_or(0, |h| h.renderer.tail())
