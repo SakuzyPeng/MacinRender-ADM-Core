@@ -83,6 +83,8 @@ class SceneOutputSession {
                                                    std::uint64_t revision = 0);
 
     [[nodiscard]] HptfInfo hptf_info() const;
+    [[nodiscard]] HptfStereoInfo hptf_stereo_info() const;
+    [[nodiscard]] Result<void> set_hptf_prepared(const render_common::HptfSettings& settings);
     [[nodiscard]] bool hptf_supported() const { return peak_guard_ != nullptr; }
     [[nodiscard]] std::uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }
     [[nodiscard]] render_common::HptfCoefficients hptf_active_coefficients() const {

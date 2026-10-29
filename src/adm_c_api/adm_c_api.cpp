@@ -13,6 +13,7 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -386,7 +387,7 @@ mradm::Result<mradm::RoomConfig> to_room_config(const adm_room_config_t* config)
     }
     return result;
 }
-void owned_room_string(const std::string& text, char** out) {
+void owned_string(const std::string& text, char** out) {
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): C ABI transfers a char buffer.
     auto owned = std::make_unique<char[]>(text.size() + 1);
     std::memcpy(owned.get(), text.c_str(), text.size() + 1);
@@ -1920,64 +1921,6 @@ adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_re
 }
 
 namespace {
-// struct_size-tolerant read of adm_hptf_config_t, following adm_monitor_set_overrides. A caller
-// whose struct predates preamp_mode gets WARN_ONLY; one that predates revision gets 0.
-struct HptfRequest {
-    std::string path;
-    mradm::HptfPreampMode mode{mradm::HptfPreampMode::warn_only};
-    uint64_t revision{0};
-};
-
-struct HptfParameterRequest {
-    mradm::HptfProfile profile;
-    mradm::HptfPreampMode mode{mradm::HptfPreampMode::warn_only};
-    uint64_t revision{0};
-};
-
-static_assert(static_cast<int>(mradm::HptfBandType::peaking) == ADM_HPTF_BAND_PEAKING);
-static_assert(static_cast<int>(mradm::HptfBandType::low_shelf) == ADM_HPTF_BAND_LOW_SHELF);
-static_assert(static_cast<int>(mradm::HptfBandType::high_shelf) == ADM_HPTF_BAND_HIGH_SHELF);
-static_assert(static_cast<int>(mradm::HptfBandType::low_pass) == ADM_HPTF_BAND_LOW_PASS);
-static_assert(static_cast<int>(mradm::HptfBandType::high_pass) == ADM_HPTF_BAND_HIGH_PASS);
-static_assert(static_cast<int>(mradm::HptfBandType::band_pass) == ADM_HPTF_BAND_BAND_PASS);
-static_assert(static_cast<int>(mradm::HptfBandType::notch) == ADM_HPTF_BAND_NOTCH);
-
-[[nodiscard]] mradm::Result<HptfParameterRequest> read_hptf_parameters(const adm_hptf_parameters_t* parameters) {
-    constexpr auto k_min_parameters = offsetof(adm_hptf_parameters_t, revision) + sizeof(uint64_t);
-    constexpr auto k_min_band = offsetof(adm_hptf_band_t, q) + sizeof(double);
-    if (parameters == nullptr || parameters->struct_size < k_min_parameters) {
-        return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:参数结构大小无效");
-    }
-    adm_hptf_parameters_t source{};
-    std::memcpy(&source, parameters, std::min<std::size_t>(parameters->struct_size, sizeof(source)));
-    if (source.reserved_v1_38 != 0 ||
-        (source.preamp_mode != ADM_HPTF_PREAMP_WARN_ONLY && source.preamp_mode != ADM_HPTF_PREAMP_AUTO_TRIM)) {
-        return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:前级策略或保留字段无效");
-    }
-    std::vector<adm_hptf_band_t> bands;
-    if (!load_sized_array(source.bands, source.band_count, k_min_band, bands)) {
-        return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:滤波器数组指针或 stride 无效");
-    }
-    HptfParameterRequest result;
-    result.profile.preamp_db = source.preamp_db;
-    result.mode = source.preamp_mode == ADM_HPTF_PREAMP_AUTO_TRIM ? mradm::HptfPreampMode::auto_trim
-                                                                  : mradm::HptfPreampMode::warn_only;
-    result.revision = source.revision;
-    result.profile.bands.reserve(bands.size());
-    for (const auto& band : bands) {
-        if (band.type < ADM_HPTF_BAND_PEAKING || band.type > ADM_HPTF_BAND_NOTCH ||
-            (band.enabled != 0 && band.enabled != 1) || band.reserved_v1_38 != 0) {
-            return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:滤波器类型、启用状态或保留字段无效");
-        }
-        result.profile.bands.push_back(
-            {static_cast<mradm::HptfBandType>(band.type), band.enabled != 0, band.fc_hz, band.gain_db, band.q});
-    }
-    if (auto valid = mradm::render_common::validate_hptf_profile(result.profile); !valid) {
-        return tl::unexpected{valid.error()};
-    }
-    return result;
-}
-
 [[nodiscard]] bool hptf_output_stride(const adm_hptf_band_t* output, uint32_t count, uint32_t& stride) {
     if (count == 0U) {
         return true;
@@ -2001,43 +1944,66 @@ static_assert(static_cast<int>(mradm::HptfBandType::notch) == ADM_HPTF_BAND_NOTC
     return true;
 }
 
-[[nodiscard]] bool read_hptf_config(const adm_hptf_config_t* config, HptfRequest& out) {
-    if (config == nullptr) {
-        return false;
-    }
-    const std::size_t stride = config->struct_size;
-    constexpr std::size_t k_min = offsetof(adm_hptf_config_t, profile_path) + sizeof(const char*);
-    if (stride < k_min) {
-        return false;
-    }
-    adm_hptf_config_t src{};
-    std::memcpy(&src, config, std::min(stride, sizeof(src)));
-    const auto has_field = [stride](std::size_t offset, std::size_t size) { return stride >= offset + size; };
-
-    out.path = (src.profile_path != nullptr) ? std::string{src.profile_path} : std::string{};
-    out.mode = mradm::HptfPreampMode::warn_only;
-    if (has_field(offsetof(adm_hptf_config_t, preamp_mode), sizeof(int32_t))) {
-        if (src.preamp_mode != ADM_HPTF_PREAMP_WARN_ONLY && src.preamp_mode != ADM_HPTF_PREAMP_AUTO_TRIM) {
-            return false;
-        }
-        out.mode = src.preamp_mode == ADM_HPTF_PREAMP_AUTO_TRIM ? mradm::HptfPreampMode::auto_trim
-                                                                : mradm::HptfPreampMode::warn_only;
-    }
-    out.revision = has_field(offsetof(adm_hptf_config_t, revision), sizeof(uint64_t)) ? src.revision : 0U;
-    return true;
-}
-
 [[nodiscard]] adm_hptf_info_t to_hptf_info(const mradm::HptfInfo& info) {
-    adm_hptf_info_t value{};
-    value.struct_size = sizeof(adm_hptf_info_t);
-    value.enabled = info.enabled ? 1 : 0;
-    value.band_count = info.band_count;
-    value.sample_rate = info.sample_rate;
-    value.preamp_db = info.preamp_db;
-    value.auto_trim_db = info.auto_trim_db;
-    value.max_response_db = info.max_response_db;
-    value.applied_revision = info.applied_revision;
-    return value;
+    return {sizeof(adm_hptf_info_t),
+            info.enabled ? 1 : 0,
+            info.band_count,
+            info.sample_rate,
+            info.preamp_db,
+            info.auto_trim_db,
+            info.max_response_db,
+            0,
+            info.applied_revision};
+}
+template <typename T> mradm::Result<void> write_hptf_info(T* out, const mradm::HptfStereoInfo& info) {
+    if constexpr (std::is_same_v<T, adm_hptf_info_t>) {
+        if (!info.symmetric) {
+            return mradm::make_error(mradm::ErrorCode::unsupported, "左右 HpTF 不同,请使用双耳状态查询");
+        }
+        write_sized_output(out, to_hptf_info(info.left));
+    } else {
+        write_sized_output(out,
+                           adm_hptf_stereo_info_t{
+                               sizeof(adm_hptf_stereo_info_t), 0, to_hptf_info(info.left), to_hptf_info(info.right)});
+    }
+    return {};
+}
+// All four wire forms are validated and copied into an owned Rust parameter snapshot.
+template <typename Session>
+mradm::Result<void> apply_hptf_request(Session& session, const void* config, uint32_t kind) {
+    auto settings = mradm::render_common::prepare_hptf(config, kind);
+    return settings ? session.set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+}
+adm_error_code_t monitor_hptf(adm_monitor_t* monitor, const void* config, uint32_t kind) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(monitor);
+        auto result = apply_hptf_request(*monitor->session, config, kind);
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+template <typename T> adm_error_code_t monitor_hptf_info(adm_monitor_t* monitor, T* out) noexcept {
+    if (monitor == nullptr || !monitor->session || !output_struct_valid(out)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        auto result = write_hptf_info(out, monitor->session->hptf_stereo_info());
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 } // namespace
 
@@ -2103,59 +2069,23 @@ adm_error_code_t adm_hptf_parse_parametric_eq(adm_context_t* context,
 
 adm_error_code_t adm_monitor_set_hptf_parameters(adm_monitor_t* monitor,
                                                  const adm_hptf_parameters_t* parameters) noexcept {
-    if (monitor == nullptr || !monitor->session) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        clear_last_error(monitor);
-        auto request = read_hptf_parameters(parameters);
-        if (!request) {
-            store_last_error(monitor, request.error());
-            return map_error(request.error().code);
-        }
-        auto result = monitor->session->set_hptf_parameters(request->profile, request->mode, request->revision);
-        if (!result) {
-            store_last_error(monitor, result.error());
-            return map_error(result.error().code);
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
+    return monitor_hptf(monitor, parameters, 1);
 }
-
 adm_error_code_t adm_monitor_set_hptf(adm_monitor_t* monitor, const adm_hptf_config_t* config) noexcept {
-    if (monitor == nullptr || !monitor->session) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        clear_last_error(monitor);
-        HptfRequest request;
-        if (!read_hptf_config(config, request)) {
-            return ADM_ERROR_INVALID_ARGUMENT;
-        }
-        auto result = monitor->session->set_hptf(request.path, request.mode, request.revision);
-        if (!result) {
-            store_last_error(monitor, result.error());
-            return map_error(result.error().code);
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        monitor->last_error_message = "unexpected exception while setting headphone compensation";
-        return ADM_ERROR_INTERNAL;
-    }
+    return monitor_hptf(monitor, config, 0);
 }
-
+adm_error_code_t adm_monitor_set_hptf_stereo(adm_monitor_t* monitor, const adm_hptf_stereo_config_t* config) noexcept {
+    return monitor_hptf(monitor, config, 2);
+}
+adm_error_code_t adm_monitor_set_hptf_stereo_parameters(adm_monitor_t* monitor,
+                                                        const adm_hptf_stereo_parameters_t* parameters) noexcept {
+    return monitor_hptf(monitor, parameters, 3);
+}
 adm_error_code_t adm_monitor_get_hptf_info(adm_monitor_t* monitor, adm_hptf_info_t* out) noexcept {
-    if (monitor == nullptr || !monitor->session || !output_struct_valid(out)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        write_sized_output(out, to_hptf_info(monitor->session->hptf_info()));
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
+    return monitor_hptf_info(monitor, out);
+}
+adm_error_code_t adm_monitor_get_hptf_stereo_info(adm_monitor_t* monitor, adm_hptf_stereo_info_t* out) noexcept {
+    return monitor_hptf_info(monitor, out);
 }
 
 adm_error_code_t adm_monitor_set_output_device(adm_monitor_t* monitor, const char* device_id) noexcept {
@@ -3242,19 +3172,12 @@ adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float g
     return scene_output_call(output, [=](auto& session) { return session.set_volume(gain); });
 }
 
-adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output, const adm_hptf_config_t* config) noexcept {
-    return scene_output_call(output, [config](auto& session) -> mradm::Result<void> {
-        HptfRequest request;
-        if (!read_hptf_config(config, request)) {
-            return mradm::make_error(mradm::ErrorCode::invalid_argument, "Invalid headphone compensation config");
-        }
-        return session.set_hptf_profile(request.path, request.mode, request.revision);
-    });
+namespace {
+adm_error_code_t scene_hptf(adm_scene_output_t* output, const void* config, uint32_t kind) noexcept {
+    return scene_output_call(output, [=](auto& session) { return apply_hptf_request(session, config, kind); });
 }
-
-adm_error_code_t adm_scene_output_set_hptf_ex(const adm_scene_output_t* output,
-                                              const adm_hptf_config_t* config,
-                                              char** out_error) noexcept {
+adm_error_code_t
+scene_hptf_ex(const adm_scene_output_t* output, const void* config, uint32_t kind, char** out_error) noexcept {
     if (out_error == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
@@ -3263,45 +3186,53 @@ adm_error_code_t adm_scene_output_set_hptf_ex(const adm_scene_output_t* output,
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
-        HptfRequest request;
-        if (!read_hptf_config(config, request)) {
-            return ADM_ERROR_INVALID_ARGUMENT;
-        }
-        // The session owns its brief publication lock; I/O and coefficient design need
-        // neither the output error mutex nor the stream's producer/control locks.
-        auto result = output->session->set_hptf_profile(request.path, request.mode, request.revision);
+        auto result = apply_hptf_request(*output->session, config, kind);
         if (result) {
             return ADM_ERROR_OK;
         }
-        const auto& message = result.error().message;
-        auto owned = std::make_unique<char[]>(message.size() + 1U);
-        std::memcpy(owned.get(), message.c_str(), message.size() + 1U);
-        *out_error = owned.release();
+        owned_string(result.error().message, out_error);
         return map_error(result.error().code);
     } catch (...) {
         return ADM_ERROR_INTERNAL;
     }
 }
-
-adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) noexcept {
+template <typename T> adm_error_code_t scene_hptf_info(adm_scene_output_t* output, T* out) noexcept {
     if (!output_struct_valid(out)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
-    return scene_output_call(output, [out](auto& session) -> mradm::Result<void> {
-        write_sized_output(out, to_hptf_info(session.hptf_info()));
-        return {};
-    });
+    return scene_output_call(output, [out](auto& session) { return write_hptf_info(out, session.hptf_stereo_info()); });
 }
-
+} // namespace
+adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output, const adm_hptf_config_t* config) noexcept {
+    return scene_hptf(output, config, 0);
+}
+adm_error_code_t
+adm_scene_output_set_hptf_ex(const adm_scene_output_t* output, const adm_hptf_config_t* config, char** error) noexcept {
+    return scene_hptf_ex(output, config, 0, error);
+}
 adm_error_code_t adm_scene_output_set_hptf_parameters(adm_scene_output_t* output,
                                                       const adm_hptf_parameters_t* parameters) noexcept {
-    return scene_output_call(output, [parameters](auto& session) -> mradm::Result<void> {
-        auto request = read_hptf_parameters(parameters);
-        if (!request) {
-            return tl::unexpected{request.error()};
-        }
-        return session.set_hptf_parameters(request->profile, request->mode, request->revision);
-    });
+    return scene_hptf(output, parameters, 1);
+}
+adm_error_code_t adm_scene_output_set_hptf_stereo(adm_scene_output_t* output,
+                                                  const adm_hptf_stereo_config_t* config) noexcept {
+    return scene_hptf(output, config, 2);
+}
+adm_error_code_t adm_scene_output_set_hptf_stereo_ex(const adm_scene_output_t* output,
+                                                     const adm_hptf_stereo_config_t* config,
+                                                     char** error) noexcept {
+    return scene_hptf_ex(output, config, 2, error);
+}
+adm_error_code_t adm_scene_output_set_hptf_stereo_parameters(adm_scene_output_t* output,
+                                                             const adm_hptf_stereo_parameters_t* parameters) noexcept {
+    return scene_hptf(output, parameters, 3);
+}
+adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) noexcept {
+    return scene_hptf_info(output, out);
+}
+adm_error_code_t adm_scene_output_get_hptf_stereo_info(adm_scene_output_t* output,
+                                                       adm_hptf_stereo_info_t* out) noexcept {
+    return scene_hptf_info(output, out);
 }
 
 namespace {
@@ -3319,13 +3250,13 @@ adm_error_code_t room_switch(const std::shared_ptr<mradm::IRoomControl>& control
     }
     auto converted = to_room_config(config);
     if (!converted) {
-        owned_room_string(converted.error().message, error);
+        owned_string(converted.error().message, error);
         return map_error(converted.error().code);
     }
     converted->quality = control->status().quality;
     auto result = control->request(*converted);
     if (!result) {
-        owned_room_string(result.error().message, error);
+        owned_string(result.error().message, error);
         return map_error(result.error().code);
     }
     *revision = *result;
@@ -3355,7 +3286,7 @@ adm_error_code_t room_status_json(const std::shared_ptr<mradm::IRoomControl>& co
                         {"material_filter_guard_frames", status.material_filter_guard_frames},
                         {"constrained_sources", status.constrained_sources},
                         {"message", status.message}};
-    owned_room_string(json.dump(), out);
+    owned_string(json.dump(), out);
     return ADM_ERROR_OK;
 }
 adm_error_code_t room_source_json(const std::shared_ptr<mradm::IRoomControl>& control, uint64_t id, char** out) {
@@ -3375,7 +3306,7 @@ adm_error_code_t room_source_json(const std::shared_ptr<mradm::IRoomControl>& co
                         {"distance_metres", source.distance_metres},
                         {"constrained", source.constrained},
                         {"present", source.present}};
-    owned_room_string(json.dump(), out);
+    owned_string(json.dump(), out);
     return ADM_ERROR_OK;
 }
 } // namespace
@@ -3437,7 +3368,7 @@ adm_error_code_t adm_room_inspect_with_quality(adm_context_t* context,
             store_last_error(context, inspected.error());
             return map_error(inspected.error().code);
         }
-        owned_room_string(*inspected, out_json);
+        owned_string(*inspected, out_json);
         return ADM_ERROR_OK;
     } catch (...) {
         return ADM_ERROR_INTERNAL;

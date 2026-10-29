@@ -1448,6 +1448,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_parameters_tests)
     add_test(NAME mr_adm_hptf_parameters_tests COMMAND mr_adm_hptf_parameters_tests)
 
+    if(Python3_Interpreter_FOUND AND TARGET mradm_capi_bundle)
+        add_test(NAME mr_adm_hptf_stereo_c_api_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/hptf_stereo_test.py"
+                    "$<TARGET_FILE:mradm_capi_bundle>")
+        set_tests_properties(mr_adm_hptf_stereo_c_api_tests PROPERTIES TIMEOUT 60)
+    endif()
+
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
     target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)

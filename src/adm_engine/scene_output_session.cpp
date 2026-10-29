@@ -165,46 +165,32 @@ Result<void> SceneOutputSession::set_hptf(const std::optional<render_common::Hpt
 }
 
 Result<void>
-SceneOutputSession::set_hptf_profile(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision) {
-    if (peak_guard_ == nullptr) {
-        return make_error(ErrorCode::unsupported,
-                          "耳机补偿(HpTF)只适用于立体声耳机输出;系统空间音频与多声道输出不支持");
-    }
-    if (profile_path.empty()) {
-        return set_hptf_parameters({}, mode, revision);
-    }
-    // Parse + design on this thread: a bad file must surface as an error, never as an audio glitch.
-    auto profile = render_common::load_parametric_eq_file(std::filesystem::path{profile_path});
-    if (!profile) {
-        return tl::unexpected{profile.error()};
-    }
-    return set_hptf_parameters(*profile, mode, revision);
+SceneOutputSession::set_hptf_profile(const std::string& path, HptfPreampMode mode, std::uint64_t revision) {
+    auto settings = render_common::prepare_hptf(path, mode, revision);
+    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
 }
-
 Result<void>
 SceneOutputSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
-    if (peak_guard_ == nullptr) {
+    auto settings = render_common::prepare_hptf(profile, mode, revision);
+    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+}
+Result<void> SceneOutputSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
+    if (!hptf_supported()) {
         return make_error(ErrorCode::unsupported, "耳机补偿(HpTF)只适用于立体声耳机输出");
     }
-    auto coeffs = render_common::design_cascade(profile, stream_->output_format().sample_rate, mode);
-    if (!coeffs) {
-        return tl::unexpected{coeffs.error()};
+    auto snapshot = settings.design(stream_->output_format().sample_rate);
+    if (!snapshot) {
+        return tl::unexpected{snapshot.error()};
     }
-    return set_hptf(*coeffs, revision);
+    const std::lock_guard lock(control_);
+    hptf_.publish(*snapshot);
+    return {};
 }
-
+HptfStereoInfo SceneOutputSession::hptf_stereo_info() const {
+    return render_common::hptf_snapshot_info(hptf_.active_snapshot());
+}
 HptfInfo SceneOutputSession::hptf_info() const {
-    const auto snapshot = hptf_.active_snapshot();
-    const auto& coeffs = snapshot.coefficients;
-    HptfInfo info;
-    info.enabled = !coeffs.is_bypass();
-    info.band_count = coeffs.band_count;
-    info.sample_rate = coeffs.sample_rate;
-    info.preamp_db = coeffs.preamp_db;
-    info.auto_trim_db = coeffs.auto_trim_db;
-    info.max_response_db = coeffs.max_response_db;
-    info.applied_revision = snapshot.revision;
-    return info;
+    return hptf_stereo_info().left;
 }
 
 std::size_t SceneOutputSession::pull(std::span<float> output, std::size_t frames) noexcept {

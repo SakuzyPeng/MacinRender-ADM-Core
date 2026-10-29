@@ -9,14 +9,12 @@
 //
 // C++ 负责参数导入与发布；设计和处理走私有 Rust DSP 边界。
 //
-// 位精确性:HpTF 只走实时监听、永不进入离线母版,因此**不要求跨平台位精确**,
-// 一致性工具无需为它建立检查点(参见 docs/architecture/CONSISTENCY_LOCALIZATION.md)。
+// 数值与检查点遵循 ADR 0018；旧共享路径维持既有逐位结果。
 
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -27,6 +25,7 @@
 
 #include "adm/errors.h"
 #include "adm/hptf.h"
+#include "adm/monitor.h"
 #include "adm/options.h" // HptfPreampMode(公共选项枚举,GUI / C ABI 共用)
 
 namespace mradm::render_common {
@@ -55,6 +54,7 @@ struct HptfBiquad {
     float b2{0.0F};
     float a1{0.0F};
     float a2{0.0F};
+    bool operator==(const HptfBiquad&) const = default;
 };
 
 // 设计结果。**定长 POD**:不含 vector/string,所以可以整体字节拷贝发布给音频回调,
@@ -68,12 +68,15 @@ struct HptfCoefficients {
     float auto_trim_db{0.0F};    // warn_only 下恒为 0
     float preamp_db{0.0F};       // 文件里的前级值,随同一 revision 发布
 
+    bool operator==(const HptfCoefficients&) const = default;
     [[nodiscard]] bool is_bypass() const noexcept { return band_count == 0 && preamp_gain == 1.0F; }
 };
 
 struct HptfSnapshot {
     HptfCoefficients coefficients;
     std::uint64_t revision{0};
+    HptfCoefficients right{};
+    bool independent{false};
 };
 
 // Single producer / single consumer, with private read/write slots and one exchanged slot.
@@ -103,11 +106,16 @@ class HptfMailbox {
 // 非 C locale 下 "105.5" 会被解析成 105。
 [[nodiscard]] Result<HptfProfile> parse_parametric_eq(std::string_view text);
 
-// Shared validation for imported and structured profiles, including disabled bands.
-[[nodiscard]] Result<void> validate_hptf_profile(const HptfProfile& profile);
-
-// 读文件后调用上面那个;错误的 context 带上路径(ADR 0005)。
-[[nodiscard]] Result<HptfProfile> load_parametric_eq_file(const std::filesystem::path& path);
+// Rust owns both parameter copies, including the legacy shared configuration.
+struct HptfSettings {
+    std::shared_ptr<void> handle;
+    [[nodiscard]] Result<HptfSnapshot> design(std::uint32_t rate) const;
+};
+[[nodiscard]] Result<HptfSettings> prepare_hptf(const void* config, std::uint32_t source_kind);
+[[nodiscard]] Result<HptfSettings>
+prepare_hptf(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision);
+[[nodiscard]] Result<HptfSettings> prepare_hptf(const std::string& path, HptfPreampMode mode, std::uint64_t revision);
+[[nodiscard]] HptfStereoInfo hptf_snapshot_info(const HptfSnapshot& snapshot);
 
 // ── 设计 ──────────────────────────────────────────────────────────────────────
 
@@ -179,6 +187,7 @@ class HptfProcessor {
 
     // 控制线程:写私有槽后交换所有权。互斥锁只串行化控制调用,回调从不获取它。
     void publish(const HptfCoefficients& coeffs, std::uint64_t revision);
+    void publish(const HptfSnapshot& snapshot);
 
     // 控制线程:发布单位增益的零段 bypass。启用 / 关闭 / 换 profile 因此是同一条
     // 代码路径、同一次混合,没有"关掉时"的特例爆音。

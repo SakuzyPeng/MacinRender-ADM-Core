@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.49）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-19 的 v1.49）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.50）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-29 的 v1.50）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 > 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 保留本 ADR 的全部兼容规则；实现语言不属于承诺，`adm_c_api.cpp`、`noexcept` 与 CMake `SOVERSION` 等实现条款在 C ABI 迁移期改写。
 
@@ -92,6 +92,17 @@ C ABI 走 **两阶段稳定** 模型：
 - 修改 callback `adm_progress_cb` 形参或调用约定。
 - 修改宏 `ADM_API_VERSION_*` 的含义。
 - 删除导出函数（必须走 deprecation 流程，见下）。
+
+### v1.50（additive，左右独立 HpTF）
+
+- 新增 `adm_hptf_stereo_config_t`、`adm_hptf_stereo_parameters_t`、`adm_hptf_stereo_info_t`，
+  Monitor 与 Scene 输出的双耳文件/内存 setter、双耳状态 getter，以及 Scene 文件 `_ex` setter。
+- 左右 PEQ、前级及历史独立；两耳共享安全衰减目标、发布快照、淡化时钟和 revision。
+  空配置耳仍接受共同衰减。任一耳失败不发布任何一耳；参数由核心复制持有。
+- 旧 setter 保留双耳共用及数值行为；旧 getter 在生效配置非对称时返回 `UNSUPPORTED`，
+  不写输出。新 getter 同次返回左右 `adm_hptf_info_t`，只需初始化外层 `struct_size`。
+- 既有公开结构大小、布局、符号和签名不变，`SOVERSION` 保持 1；既有 `hptf` 能力标记不变。
+  具体旁路、热更新、线程及错误约定见 [HpTF](../architecture/hptf-eq.md#independent-ears-c-abi-v150)。
 
 ### v1.49（additive，房间自动坐标映射）
 

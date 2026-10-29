@@ -6,7 +6,7 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 49
+#if ADM_API_VERSION_MINOR != 50
 #error "unexpected C ABI minor version"
 #endif
 
@@ -42,6 +42,11 @@ _Static_assert(sizeof(adm_hptf_config_t) == sizeof(hptf_v1_37_config_layout), "v
 _Static_assert(offsetof(adm_hptf_config_t, revision) == offsetof(hptf_v1_37_config_layout, revision),
                "v1.37 revision offset is frozen");
 _Static_assert(sizeof(adm_hptf_info_t) == 40, "v1.37 info size is frozen");
+_Static_assert(sizeof(adm_hptf_stereo_config_t) == 32, "v1.50 stereo file layout");
+_Static_assert(sizeof(adm_hptf_stereo_parameters_t) == 56, "v1.50 stereo parameter layout");
+_Static_assert(offsetof(adm_hptf_stereo_parameters_t, revision) == 48, "v1.50 stereo revision offset");
+_Static_assert(sizeof(adm_hptf_stereo_info_t) == 88, "v1.50 stereo status layout");
+_Static_assert(offsetof(adm_hptf_stereo_info_t, right) == 48, "v1.50 right status offset");
 _Static_assert(sizeof(adm_hptf_band_type_t) == sizeof(int), "HpTF band enum must remain int-sized");
 _Static_assert(offsetof(adm_hptf_band_t, struct_size) == 0, "HpTF band must start with struct_size");
 _Static_assert(offsetof(adm_hptf_parameters_t, struct_size) == 0, "HpTF parameters must start with struct_size");

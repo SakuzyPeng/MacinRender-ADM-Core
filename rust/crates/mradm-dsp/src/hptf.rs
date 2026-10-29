@@ -3,7 +3,7 @@
 mod design;
 mod parametric_eq;
 use crate::{Error, Result};
-pub use design::design;
+pub use design::{design, design_stereo};
 pub use parametric_eq::{ParseError, ParseErrorKind, Profile, parse as parse_parametric_eq};
 
 pub const MAX_BANDS: usize = 32;
@@ -153,6 +153,8 @@ impl Coefficients {
 #[derive(Clone)]
 pub struct Cascade {
     coefficients: Coefficients,
+    right: Option<Coefficients>,
+    right_position: usize,
     channels: usize,
     state: Vec<f64>,
     // Frames since the last cleanup point; cleanup runs every CHUNK_FRAMES after reset.
@@ -166,6 +168,8 @@ impl Cascade {
             .ok_or(Error::InvalidArgument("HpTF: channel count overflow"))?;
         Ok(Self {
             coefficients: Coefficients::default(),
+            right: None,
+            right_position: 0,
             channels,
             state: vec![0.0; count],
             position: 0,
@@ -180,11 +184,13 @@ impl Cascade {
     pub fn set_coefficients(&mut self, coefficients: Coefficients) -> Result<()> {
         coefficients.validate()?;
         self.coefficients = coefficients;
+        self.right = None;
         Ok(())
     }
     pub fn reset(&mut self) {
         self.state.fill(0.0);
         self.position = 0;
+        self.right_position = 0;
     }
     fn validate_buffer(&self, length: usize) -> Result<()> {
         if (self.channels == 0 && length != 0)
@@ -207,6 +213,18 @@ impl Cascade {
         if self.channels == 0 {
             return;
         }
+        if let Some(right) = self.right {
+            let (left_state, right_state) = self.state.split_at_mut(MAX_BANDS * 2);
+            Self::process_ear(
+                samples,
+                0,
+                &self.coefficients,
+                left_state,
+                &mut self.position,
+            );
+            Self::process_ear(samples, 1, &right, right_state, &mut self.right_position);
+            return;
+        }
         while !samples.is_empty() {
             let frames = (CHUNK_FRAMES - self.position).min(samples.len() / self.channels);
             let (head, tail) = samples.split_at_mut(frames * self.channels);
@@ -221,32 +239,69 @@ impl Cascade {
             samples = tail;
         }
     }
-    fn filter(&mut self, samples: &mut [f32]) {
-        let channels = self.channels;
-        let preamp = self.coefficients.preamp_gain as f64;
-        let sections = &self.coefficients.sections[..self.coefficients.band_count];
-        let states = self.state.as_chunks_mut::<{ MAX_BANDS * 2 }>().0;
-        for (channel, state) in states.iter_mut().enumerate() {
-            let state = state.as_chunks_mut::<2>().0;
-            for sample in samples.iter_mut().skip(channel).step_by(channels) {
-                let mut x = *sample as f64 * preamp;
-                for (s, z) in sections.iter().zip(state.iter_mut()) {
-                    let y = (s.b0 as f64 * x) + z[0];
-                    z[0] = ((s.b1 as f64 * x) - (s.a1 as f64 * y)) + z[1];
-                    z[1] = (s.b2 as f64 * x) - (s.a2 as f64 * y);
-                    x = y;
-                }
-                *sample = x as f32;
+    fn filter_channel(
+        samples: impl Iterator<Item = impl std::ops::DerefMut<Target = f32>>,
+        coefficients: &Coefficients,
+        state: &mut [f64],
+    ) {
+        let preamp = coefficients.preamp_gain as f64;
+        let sections = &coefficients.sections[..coefficients.band_count];
+        let state = state.as_chunks_mut::<2>().0;
+        for mut sample in samples {
+            let mut x = *sample as f64 * preamp;
+            for (s, z) in sections.iter().zip(state.iter_mut()) {
+                let y = (s.b0 as f64 * x) + z[0];
+                z[0] = ((s.b1 as f64 * x) - (s.a1 as f64 * y)) + z[1];
+                z[1] = (s.b2 as f64 * x) - (s.a2 as f64 * y);
+                x = y;
             }
+            *sample = x as f32;
         }
     }
-    /// Recovery/denormal policy: nonfinite input may affect output up to the
-    /// next cleanup point, but cannot poison later blocks.
-    fn cleanup(&mut self) {
-        if self.state.iter().any(|x| !x.is_finite()) || self.state.iter().all(|x| x.abs() <= 1e-20)
+    fn filter(&mut self, samples: &mut [f32]) {
+        for (channel, state) in self
+            .state
+            .as_chunks_mut::<{ MAX_BANDS * 2 }>()
+            .0
+            .iter_mut()
+            .enumerate()
         {
-            self.state.fill(0.0);
+            Self::filter_channel(
+                samples.iter_mut().skip(channel).step_by(self.channels),
+                &self.coefficients,
+                state,
+            );
         }
+    }
+    fn process_ear(
+        mut samples: &mut [f32],
+        ear: usize,
+        coefficients: &Coefficients,
+        state: &mut [f64],
+        position: &mut usize,
+    ) {
+        while !samples.is_empty() {
+            let frames = (CHUNK_FRAMES - *position).min(samples.len() / 2);
+            let (head, tail) = samples.split_at_mut(frames * 2);
+            if !coefficients.is_bypass() {
+                Self::filter_channel(head.iter_mut().skip(ear).step_by(2), coefficients, state);
+            }
+            *position += frames;
+            if *position == CHUNK_FRAMES {
+                *position = 0;
+                Self::cleanup_state(state);
+            }
+            samples = tail;
+        }
+    }
+    fn cleanup_state(state: &mut [f64]) {
+        if state.iter().any(|x| !x.is_finite()) || state.iter().all(|x| x.abs() <= 1e-20) {
+            state.fill(0.0);
+        }
+    }
+    /// Legacy shared cascades retain their original cleanup scope and arithmetic.
+    fn cleanup(&mut self) {
+        Self::cleanup_state(&mut self.state);
     }
 }
 
@@ -262,6 +317,29 @@ pub struct Update {
     pub applied: bool,
 }
 
+/// A complete publication. `independent=false` is the legacy shared numerical path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StereoSnapshot {
+    pub coefficients: [Coefficients; 2],
+    pub revision: u64,
+    pub independent: bool,
+}
+impl From<Snapshot> for StereoSnapshot {
+    fn from(value: Snapshot) -> Self {
+        Self {
+            coefficients: [value.coefficients; 2],
+            revision: value.revision,
+            independent: false,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StereoUpdate {
+    pub snapshot: StereoSnapshot,
+    pub blending: bool,
+    pub applied: bool,
+}
+
 pub struct Processor {
     front: Cascade,
     back: Cascade,
@@ -272,7 +350,8 @@ pub struct Processor {
     blend_pos: usize,
     /// Latest target received during a transition; it starts at the exact
     /// frame where that transition ends.
-    queued: Option<Snapshot>,
+    queued: Option<StereoSnapshot>,
+    preserve: [bool; 2],
     scratch: Vec<f32>,
 }
 impl Processor {
@@ -293,6 +372,7 @@ impl Processor {
             blending: false,
             blend_pos: 0,
             queued: None,
+            preserve: [false; 2],
             scratch: vec![0.0; length],
         };
         result.front.coefficients.sample_rate = sample_rate;
@@ -311,9 +391,32 @@ impl Processor {
             applied,
         }
     }
-    fn validate_target(&self, target: &Snapshot) -> Result<()> {
-        target.coefficients.validate()?;
-        if target.coefficients.sample_rate != self.sample_rate {
+    pub fn stereo_update(&self, applied: bool) -> StereoUpdate {
+        StereoUpdate {
+            snapshot: StereoSnapshot {
+                coefficients: [
+                    self.front.coefficients,
+                    self.front.right.unwrap_or(self.front.coefficients),
+                ],
+                revision: self.front_revision,
+                independent: self.front.right.is_some(),
+            },
+            blending: self.blending,
+            applied,
+        }
+    }
+    fn validate_target(&self, target: &StereoSnapshot) -> Result<()> {
+        for c in target.coefficients {
+            c.validate()?;
+        }
+        if target.independent && self.channels() != 2 {
+            return Err(Error::InvalidArgument("HpTF:独立双耳配置只适用于双声道"));
+        }
+        if target
+            .coefficients
+            .iter()
+            .any(|c| c.sample_rate != self.sample_rate)
+        {
             return Err(Error::InvalidArgument("HpTF: target sample rate mismatch"));
         }
         Ok(())
@@ -321,11 +424,16 @@ impl Processor {
     /// Clear both histories. The newest target wins: an explicit target, then a
     /// queued one, then the transition target.
     pub fn reset(&mut self, target: Option<Snapshot>) -> Result<Update> {
+        self.reset_stereo(target.map(Into::into))?;
+        Ok(self.update(true))
+    }
+    pub fn reset_stereo(&mut self, target: Option<StereoSnapshot>) -> Result<StereoUpdate> {
         if let Some(target) = &target {
             self.validate_target(target)?;
         }
         if let Some(target) = target.or(self.queued.take()) {
-            self.front.coefficients = target.coefficients;
+            self.front.coefficients = target.coefficients[0];
+            self.front.right = target.independent.then_some(target.coefficients[1]);
             self.front_revision = target.revision;
         } else if self.blending {
             std::mem::swap(&mut self.front, &mut self.back);
@@ -336,11 +444,37 @@ impl Processor {
         self.blending = false;
         self.blend_pos = 0;
         self.queued = None;
-        Ok(self.update(true))
+        Ok(self.stereo_update(true))
     }
-    fn start(&mut self, target: Snapshot) {
-        self.back.coefficients = target.coefficients;
+    fn start(&mut self, target: StereoSnapshot) {
+        self.back.coefficients = target.coefficients[0];
+        self.back.right = target.independent.then_some(target.coefficients[1]);
         self.back.reset();
+        self.preserve = [false; 2];
+        if target.independent {
+            if self.front.right.is_none() {
+                self.front.right = Some(self.front.coefficients);
+                self.front.right_position = self.front.position;
+            }
+            for (ear, old) in [self.front.coefficients, self.front.right.unwrap()]
+                .into_iter()
+                .enumerate()
+            {
+                let new = &target.coefficients[ear];
+                self.preserve[ear] = old.preamp_gain == new.preamp_gain
+                    && old.band_count == new.band_count
+                    && old.sections[..old.band_count] == new.sections[..new.band_count];
+                if self.preserve[ear] {
+                    let range = ear * MAX_BANDS * 2..(ear + 1) * MAX_BANDS * 2;
+                    self.back.state[range.clone()].copy_from_slice(&self.front.state[range]);
+                    if ear == 0 {
+                        self.back.position = self.front.position;
+                    } else {
+                        self.back.right_position = self.front.right_position;
+                    }
+                }
+            }
+        }
         self.blend_revision = target.revision;
         self.blend_pos = 0;
         self.blending = true;
@@ -348,12 +482,20 @@ impl Processor {
     /// A target starts a transition at the first frame of this call, or, while
     /// one is active, replaces any queued target and starts where it ends.
     pub fn process(&mut self, samples: &mut [f32], target: Option<Snapshot>) -> Result<Update> {
+        let result = self.process_stereo(samples, target.map(Into::into))?;
+        Ok(self.update(result.applied))
+    }
+    pub fn process_stereo(
+        &mut self,
+        samples: &mut [f32],
+        target: Option<StereoSnapshot>,
+    ) -> Result<StereoUpdate> {
         self.front.validate_buffer(samples.len())?;
         if let Some(target) = &target {
             self.validate_target(target)?;
         }
         if samples.is_empty() || self.channels() == 0 {
-            return Ok(self.update(false));
+            return Ok(self.stereo_update(false));
         }
         if let Some(target) = target {
             if self.blending {
@@ -388,7 +530,10 @@ impl Processor {
                 .enumerate()
             {
                 let t = ((self.blend_pos + frame) as f64 / BLEND_FRAMES as f64).min(1.0) as f32;
-                for (old, &new) in old.iter_mut().zip(new) {
+                for (ear, (old, &new)) in old.iter_mut().zip(new).enumerate() {
+                    if self.preserve.get(ear).copied().unwrap_or(false) {
+                        continue;
+                    }
                     *old = (*old * (1.0 - t)) + (new * t);
                 }
             }
@@ -404,6 +549,6 @@ impl Processor {
                 }
             }
         }
-        Ok(self.update(applied))
+        Ok(self.stereo_update(applied))
     }
 }

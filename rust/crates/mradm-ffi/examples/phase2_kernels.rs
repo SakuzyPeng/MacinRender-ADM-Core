@@ -16,6 +16,8 @@ mod ear_gains;
 mod final_pcm;
 #[path = "phase2/hoa.rs"]
 mod hoa;
+#[path = "phase2/hptf_stereo.rs"]
+mod hptf_stereo;
 #[path = "phase2/meter.rs"]
 mod meter;
 #[path = "phase2/meter_acceptance.rs"]
@@ -277,6 +279,38 @@ fn run(out: &Path, fixtures: &Path) {
             &pcm,
         );
     }
+    hptf_shared(out);
+    hptf_stereo::run(out);
+    let mut capabilities = vec![format!("arch={}", std::env::consts::ARCH)];
+    #[cfg(target_arch = "x86_64")]
+    capabilities.extend([
+        format!("avx={}", std::is_x86_feature_detected!("avx")),
+        format!("avx2={}", std::is_x86_feature_detected!("avx2")),
+        format!("fma={}", std::is_x86_feature_detected!("fma")),
+        format!("sse4.1={}", std::is_x86_feature_detected!("sse4.1")),
+    ]);
+    #[cfg(target_arch = "aarch64")]
+    capabilities.push(format!(
+        "neon={}",
+        std::arch::is_aarch64_feature_detected!("neon")
+    ));
+    capabilities.push(format!("diagnostics={}", cfg!(feature = "diagnostics")));
+    capabilities.push("fft_dispatch=scalar (RustFFT SIMD features disabled)".into());
+    fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
+    sofa::run(out, fixtures);
+    room::run(out, fixtures);
+    meter::run(out);
+    meter_acceptance::run(out);
+    post_gain::run(out);
+    stream_dsp::run(out);
+    ear_gains::run(out);
+    hoa::run(out);
+    triple_balance::run(out);
+    params::run(out);
+    final_pcm::run(out);
+}
+
+fn hptf_shared(out: &Path) {
     for rate in [44100, 48000] {
         let band = hptf::Band {
             kind: hptf::BandKind::Peaking,
@@ -307,36 +341,17 @@ fn run(out: &Path, fixtures: &Path) {
             ],
         );
     }
-    let mut capabilities = vec![format!("arch={}", std::env::consts::ARCH)];
-    #[cfg(target_arch = "x86_64")]
-    capabilities.extend([
-        format!("avx={}", std::is_x86_feature_detected!("avx")),
-        format!("avx2={}", std::is_x86_feature_detected!("avx2")),
-        format!("fma={}", std::is_x86_feature_detected!("fma")),
-        format!("sse4.1={}", std::is_x86_feature_detected!("sse4.1")),
-    ]);
-    #[cfg(target_arch = "aarch64")]
-    capabilities.push(format!(
-        "neon={}",
-        std::arch::is_aarch64_feature_detected!("neon")
-    ));
-    capabilities.push(format!("diagnostics={}", cfg!(feature = "diagnostics")));
-    capabilities.push("fft_dispatch=scalar (RustFFT SIMD features disabled)".into());
-    fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
-    sofa::run(out, fixtures);
-    room::run(out, fixtures);
-    meter::run(out);
-    meter_acceptance::run(out);
-    post_gain::run(out);
-    stream_dsp::run(out);
-    ear_gains::run(out);
-    hoa::run(out);
-    triple_balance::run(out);
-    params::run(out);
-    final_pcm::run(out);
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--hptf-only") {
+        let directory = std::env::args_os().nth(2).expect("output directory");
+        let directory = Path::new(&directory);
+        fs::create_dir_all(directory).unwrap();
+        hptf_shared(directory);
+        hptf_stereo::run(directory);
+        return;
+    }
     let out = std::env::args_os().nth(1).expect("output directory");
     let fixtures = std::env::args_os()
         .nth(2)

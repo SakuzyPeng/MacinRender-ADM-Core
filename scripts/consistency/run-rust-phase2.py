@@ -264,7 +264,7 @@ def require_scene_checkpoints(root, row):
         incoming = 'binaural' if row['backend'] == 'vbap' or 'sofa' in row else 'vbap'
         patterns += ['scene/e1-*-incoming' + suffix for suffix in backend_patterns[incoming]]
     if row['device_dsp']:
-        patterns += ['hptf/*.10-coefficients.f32', 'hptf/*.10-coefficients-shape.i32']
+        patterns += ['hptf/*.10-*coefficients.f32', 'hptf/*.10-*coefficients-shape.i32']
     for pattern in patterns:
         if not any(path.is_file() for path in root.glob(pattern)):
             raise ValueError(f'missing Scene checkpoint {pattern}: {row["id"]}')
@@ -305,7 +305,7 @@ def require_scene_checkpoints(root, row):
         stem = path.as_posix().removesuffix('-coefficients.f32')
         if not Path(stem + '-commands.i32').is_file():
             raise ValueError(f'missing Scene checkpoint commands: {path.name}')
-    for shape_path in root.glob('hptf/*.10-coefficients-shape.i32'):
+    for shape_path in root.glob('hptf/*.10-*coefficients-shape.i32'):
         coefficients_path = shape_path.with_name(shape_path.name.replace('-shape.i32', '.f32'))
         if not coefficients_path.is_file():
             raise ValueError(f'missing Scene checkpoint coefficients: {shape_path.name}')
@@ -313,9 +313,22 @@ def require_scene_checkpoints(root, row):
         values = common.validate_words(coefficients_path.read_bytes(), '.f32')
         if len(shape) != 2 or shape[0] <= 0 or not 0 <= shape[1] <= 32 or len(values) != 4 + 5 * shape[1]:
             raise ValueError(f'inconsistent Scene checkpoint HpTF shape: {shape_path.name}')
-    for path in root.glob('hptf/*.10-coefficients.f32'):
+    for path in root.glob('hptf/*.10-*coefficients.f32'):
         if not path.with_name(path.stem + '-shape.i32').is_file():
             raise ValueError(f'missing Scene checkpoint shape: {path.name}')
+
+        for side, other in [('left', 'right'), ('right', 'left')]:
+            if f'.10-{side}-' in path.name:
+                sibling = path.with_name(path.name.replace(f'.10-{side}-', f'.10-{other}-'))
+                if not sibling.is_file():
+                    raise ValueError(f'missing HpTF stereo sibling: {path.name}')
+                a = common.validate_words(path.with_name(path.stem + '-shape.i32').read_bytes(), '.i32')
+                sibling_shape = sibling.with_name(sibling.stem + '-shape.i32')
+                if not sibling_shape.is_file():
+                    raise ValueError(f'missing Scene checkpoint shape: {sibling.name}')
+                b = common.validate_words(sibling_shape.read_bytes(), '.i32')
+                if a[0] != b[0]:
+                    raise ValueError(f'inconsistent HpTF stereo rates: {path.name}')
 
 
 def worker_experiments(tools, out, work, manifest):

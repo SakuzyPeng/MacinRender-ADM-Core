@@ -10,9 +10,64 @@ The core supports **editable PEQ parameter snapshots**, with optional AutoEq
 `ParametricEQ.txt` / in-memory text import, on the **two realtime paths**.
 Offline rendering, FIR and the GUI are deliberately out of scope.
 
-The design, cascade and transition kernels now run in Rust. C++ retains import,
-control publication and applied-state queries. See the [Rust HpTF migration](RUST_HPTF_MIGRATION.md)
+The design, cascade and transition kernels now run in Rust. Rust also owns file/parameter preparation; C++ retains
+session wiring, control publication and applied-state queries. See the [Rust HpTF migration](RUST_HPTF_MIGRATION.md)
 for ownership, numerical comparisons and validation.
+
+## Independent ears (C ABI v1.50)
+
+`adm_monitor_set_hptf_stereo` and `adm_scene_output_set_hptf_stereo` accept
+`adm_hptf_stereo_config_t`: separate UTF-8 `left_profile_path` and
+`right_profile_path`, one `preamp_mode`, and one `revision`. An empty path means
+no PEQ for that ear; it never copies the other ear. The memory equivalents,
+`*_set_hptf_stereo_parameters`, accept separate band arrays/counts and preamps.
+Each ear permits 32 **enabled** bands; disabled entries are retained and validated.
+The existing single-ear text parser can import either array without opening a device.
+
+Both ears are copied, validated and designed before one complete snapshot is
+published. Failure identifies the offending ear and preserves the previous accepted
+pair. Rust owns the sample-rate-independent parameter copies; Monitor redesigns
+both ears after a device/rate rebuild. A newly created Scene output needs a new
+submission. The Scene file `_ex` variant prepares outside output control/error locks
+and returns its own error string, released with `adm_free_string`.
+
+`WARN_ONLY` remains the default. `AUTO_TRIM` uses the larger of the two untrimmed
+audible-band response bounds as one attenuation target for **both** ears, including
+an ear with no PEQ. Each final float gain rounds conservatively; the reported actual
+attenuations can differ by float rounding. Thus a bypassed PEQ ear may still have
+`enabled=1` because it receives common attenuation. Two empty 0 dB profiles have
+no attenuation and remain exact passthrough. A zero-band nonzero preamp remains a
+gain stage. This is frequency-response protection, with the existing peak guard
+still responsible for sample/transient peaks.
+
+One clock and one revision govern the 2048-frame linear transition. Rapid edits
+replace the queued **pair**. An ear whose effective coefficients and gain did not
+change retains its history and bypasses the mixing arithmetic; editing the other
+ear alone therefore leaves its PCM unchanged. A common trim change affects both
+ears and fades both. Epoch/seek reset adopts the newest complete pending pair,
+then clears histories; pause preserves continuity.
+
+`*_get_hptf_stereo_info` fills `adm_hptf_stereo_info_t` atomically from one applied
+snapshot. Set only the outer `struct_size`; embedded `left` and `right` are existing
+`adm_hptf_info_t` values with the same `applied_revision`. Successful setters accept
+a target; the revision confirms its completed fade (or adoption during reset).
+Old setters restore one shared profile on both ears and retain their prior numeric
+path. Old getters return `UNSUPPORTED` without writing their output when the applied
+ear configurations differ. All existing public structures and signatures are unchanged;
+use ABI minor >= 50 to detect stereo support, alongside the existing `hptf` feature.
+
+The optional diagnostics preserve shared `hptf/rN.10-coefficients.*` names. Stereo
+publications use paired `hptf/rN.10-left-coefficients.*` and
+`hptf/rN.10-right-coefficients.*` payloads, each with its own band-count shape.
+The `hptf-stereo-*` kernel probes cover both coefficient sets, queued transitions
+and fixed/fragmented PCM at 44.1, 48 and 96 kHz. They use the existing HpTF bitwise
+consistency gate. New native verification targets are macOS arm64 and Windows x64.
+
+The [v1.50 validation record](evidence/hptf-stereo/validation.json) records 12 CTest
+checks and 20 focused Rust tests on each host, including real-device Monitor rebuilds,
+headless Scene ownership/error paths, and zero-allocation processing. All 22 shared/stereo
+Release kernel payloads match bit for bit across the two hosts; the 84 legacy shared
+design/partition captures also match the pre-change Debug reference on the same host.
 
 ## Scope: HpTF is device-bound
 

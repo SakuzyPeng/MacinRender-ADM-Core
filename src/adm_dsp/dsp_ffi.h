@@ -175,6 +175,8 @@ typedef struct MradmDspHptfCoefficients {
 typedef struct MradmDspHptfSnapshot {
     MradmDspHptfCoefficients coefficients;
     uint64_t revision;
+    MradmDspHptfCoefficients right;
+    uint32_t independent;
 } MradmDspHptfSnapshot;
 typedef struct MradmDspHptfUpdate {
     MradmDspHptfSnapshot snapshot;
@@ -218,8 +220,7 @@ int32_t mradm_dsp_hptf_cascade_reset(void* handle, char* message, size_t capacit
 int32_t mradm_dsp_hptf_cascade_process(void* handle, float* samples, size_t length, char* message, size_t capacity);
 int32_t mradm_dsp_hptf_processor_create(size_t channels, uint32_t rate, void** output, char* message, size_t capacity);
 void mradm_dsp_hptf_processor_destroy(void* handle);
-// A process target is accepted only when not blending. C++ retains/coalesces
-// pending publication during a fade; reset always accepts the newest target.
+// Targets during a fade replace the queued pair; reset accepts the newest whole pair.
 // Failure preserves audio, kernel state and the output update.
 int32_t mradm_dsp_hptf_processor_reset(
     void* handle, const MradmDspHptfSnapshot* target, MradmDspHptfUpdate* output, char* message, size_t capacity);
@@ -230,6 +231,16 @@ int32_t mradm_dsp_hptf_processor_process(void* handle,
                                          MradmDspHptfUpdate* output,
                                          char* message,
                                          size_t capacity);
+
+// Owned, sample-rate-independent profiles. source_kind matches the four public configs:
+// 0 shared file, 1 shared parameters, 2 stereo files, 3 stereo parameters.
+int32_t
+mradm_dsp_hptf_settings_create(const void* source, uint32_t source_kind, void** output, char* message, size_t capacity);
+void mradm_dsp_hptf_settings_destroy(void* settings);
+int32_t mradm_dsp_hptf_settings_design(
+    const void* settings, uint32_t rate, MradmDspHptfSnapshot* output, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_validate(
+    const MradmDspHptfBand* bands, size_t count, double preamp, size_t* invalid_band, char* message, size_t capacity);
 
 // Fixed-rate, interleaved resampling. Lengths count floats; progress counts
 // whole frames. end=1 requires empty input and drains to the rational duration.

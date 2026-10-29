@@ -200,12 +200,13 @@
  * v1.43：新增独立离线 ADM_RENDERER_TRIPLE_BALANCE（7）；既有枚举值和结构布局不变。
  * v1.44：Scene stream 支持 Triple Balance，采样精确更新；既有 enum/POD/函数布局不变。
  * v1.45：新增 Triple Balance 模式 setter；D mode 为 48 kHz / 9.1.6、22.2 离线相干尺寸模式。
+ * v1.50 新增：左右独立 HpTF 文件/内存配置与双耳状态；共同 auto_trim、完整快照和单一 revision。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 49
+#define ADM_API_VERSION_MINOR 50
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1365,6 +1366,46 @@ adm_error_code_t adm_hptf_parse_parametric_eq(adm_context_t* context,
 adm_error_code_t adm_monitor_set_hptf_parameters(adm_monitor_t* monitor,
                                                  const adm_hptf_parameters_t* parameters) ADM_API_NOEXCEPT;
 
+/* v1.50: independent left/right PEQ, published as one complete revision.
+ * Empty paths/zero bands with 0 dB preamp mean no PEQ on that ear, but BOTH ears
+ * receive the common AUTO_TRIM attenuation. Defaults remain WARN_ONLY.
+ * All input storage is copied before return; an error preserves the whole previous pair.
+ * Each ear permits at most 32 enabled bands; band stride follows adm_hptf_band_t. */
+typedef struct adm_hptf_stereo_config_t {
+    uint32_t struct_size;
+    int32_t preamp_mode;
+    const char* left_profile_path;
+    const char* right_profile_path;
+    uint64_t revision;
+} adm_hptf_stereo_config_t;
+typedef struct adm_hptf_stereo_parameters_t {
+    uint32_t struct_size;
+    int32_t preamp_mode;
+    uint32_t left_band_count;
+    uint32_t right_band_count;
+    const adm_hptf_band_t* left_bands;
+    const adm_hptf_band_t* right_bands;
+    double left_preamp_db;
+    double right_preamp_db;
+    uint64_t revision;
+} adm_hptf_stereo_parameters_t;
+/* Initialize the OUTER struct_size only. Both embedded values describe the same
+ * applied revision. enabled reflects the effective gain, including common trim.
+ * Old single-profile getters return UNSUPPORTED without modifying their output
+ * when the applied ear configurations differ; use this query in stereo clients. */
+typedef struct adm_hptf_stereo_info_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_50;
+    adm_hptf_info_t left;
+    adm_hptf_info_t right;
+} adm_hptf_stereo_info_t;
+adm_error_code_t adm_monitor_set_hptf_stereo(adm_monitor_t* monitor,
+                                             const adm_hptf_stereo_config_t* config) ADM_API_NOEXCEPT;
+adm_error_code_t
+adm_monitor_set_hptf_stereo_parameters(adm_monitor_t* monitor,
+                                       const adm_hptf_stereo_parameters_t* parameters) ADM_API_NOEXCEPT;
+adm_error_code_t adm_monitor_get_hptf_stereo_info(adm_monitor_t* monitor, adm_hptf_stereo_info_t* out) ADM_API_NOEXCEPT;
+
 /*
  * v1.21: switch the audio output device live. `device_id` is a token from
  * adm_monitor_output_devices_json; NULL / "" selects the system default. The playhead,
@@ -1847,6 +1888,19 @@ adm_error_code_t adm_scene_output_set_hptf_ex(const adm_scene_output_t* output,
  * device-bound stereo output only. Re-submit parameters when creating a NEW output session. */
 adm_error_code_t adm_scene_output_set_hptf_parameters(adm_scene_output_t* output,
                                                       const adm_hptf_parameters_t* parameters) ADM_API_NOEXCEPT;
+/* v1.50: same atomic pair and ownership contract as the Monitor stereo setters. */
+adm_error_code_t adm_scene_output_set_hptf_stereo(adm_scene_output_t* output,
+                                                  const adm_hptf_stereo_config_t* config) ADM_API_NOEXCEPT;
+adm_error_code_t
+adm_scene_output_set_hptf_stereo_parameters(adm_scene_output_t* output,
+                                            const adm_hptf_stereo_parameters_t* parameters) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_output_get_hptf_stereo_info(adm_scene_output_t* output,
+                                                       adm_hptf_stereo_info_t* out) ADM_API_NOEXCEPT;
+/* Preparation does not hold the output control/error mutex. out_error is required;
+ * free any returned message with adm_free_string. Keep output alive and serialize setters. */
+adm_error_code_t adm_scene_output_set_hptf_stereo_ex(const adm_scene_output_t* output,
+                                                     const adm_hptf_stereo_config_t* config,
+                                                     char** out_error) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output,
                                              adm_scene_output_status_t* out) ADM_API_NOEXCEPT;
 

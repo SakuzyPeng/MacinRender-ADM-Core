@@ -1,3 +1,4 @@
+mod settings;
 use crate::{boundary, ptr, slice};
 use mradm_dsp::{Error, Result, hptf as dsp};
 
@@ -34,6 +35,8 @@ pub struct Coefficients {
 pub struct Snapshot {
     coefficients: Coefficients,
     revision: u64,
+    right: Coefficients,
+    independent: u32,
 }
 #[repr(C)]
 pub struct Update {
@@ -80,24 +83,35 @@ impl From<Coefficients> for dsp::Coefficients {
         }
     }
 }
-impl From<dsp::Snapshot> for Snapshot {
-    fn from(s: dsp::Snapshot) -> Self {
+impl From<dsp::StereoSnapshot> for Snapshot {
+    fn from(s: dsp::StereoSnapshot) -> Self {
         Self {
-            coefficients: s.coefficients.into(),
+            coefficients: s.coefficients[0].into(),
+            right: s.coefficients[1].into(),
             revision: s.revision,
+            independent: u32::from(s.independent),
         }
     }
 }
-impl From<Snapshot> for dsp::Snapshot {
+impl From<Snapshot> for dsp::StereoSnapshot {
     fn from(s: Snapshot) -> Self {
         Self {
-            coefficients: s.coefficients.into(),
+            coefficients: [
+                s.coefficients.into(),
+                if s.independent != 0 {
+                    s.right
+                } else {
+                    s.coefficients
+                }
+                .into(),
+            ],
             revision: s.revision,
+            independent: s.independent != 0,
         }
     }
 }
-impl From<dsp::Update> for Update {
-    fn from(s: dsp::Update) -> Self {
+impl From<dsp::StereoUpdate> for Update {
+    fn from(s: dsp::StereoUpdate) -> Self {
         Self {
             snapshot: s.snapshot.into(),
             blending: u32::from(s.blending),
@@ -151,8 +165,12 @@ unsafe fn destroy<T>(value: *mut T) {
         }
     }
 }
-unsafe fn target(value: *const Snapshot) -> Option<dsp::Snapshot> {
-    unsafe { value.as_ref() }.copied().map(Into::into)
+unsafe fn target(value: *const Snapshot) -> Result<Option<dsp::StereoSnapshot>> {
+    let value = unsafe { value.as_ref() }.copied();
+    if value.is_some_and(|v| v.independent > 1) {
+        return Err(Error::InvalidArgument("HpTF:无效的双耳配置标志"));
+    }
+    Ok(value.map(Into::into))
 }
 
 #[unsafe(no_mangle)]
@@ -295,7 +313,7 @@ pub unsafe extern "C" fn mradm_dsp_hptf_processor_reset(
 ) -> i32 {
     boundary(message, capacity, || unsafe {
         let out = mutable(out)?;
-        let result = mutable(value)?.reset(target(latest))?;
+        let result = mutable(value)?.reset_stereo(target(latest)?)?;
         *out = result.into();
         Ok(())
     })
@@ -312,7 +330,7 @@ pub unsafe extern "C" fn mradm_dsp_hptf_processor_process(
 ) -> i32 {
     boundary(message, capacity, || unsafe {
         let out = mutable(out)?;
-        let result = mutable(value)?.process(output(samples, length)?, target(latest))?;
+        let result = mutable(value)?.process_stereo(output(samples, length)?, target(latest)?)?;
         *out = result.into();
         Ok(())
     })
@@ -399,6 +417,8 @@ mod tests {
             snapshot: Snapshot {
                 coefficients: coefficients(),
                 revision: 42,
+                right: coefficients(),
+                independent: 0,
             },
             blending: 42,
             applied: 42,
@@ -554,6 +574,8 @@ mod tests {
             let mut target = Snapshot {
                 coefficients: coefficients(),
                 revision: 1,
+                right: coefficients(),
+                independent: 0,
             };
             target.coefficients.preamp_gain = 0.5;
             let mut status = update();

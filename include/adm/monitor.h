@@ -33,6 +33,15 @@ struct HptfInfo {
     std::uint64_t applied_revision{0}; // revision the audio callback has taken up
 };
 
+struct HptfStereoInfo {
+    HptfInfo left;
+    HptfInfo right;
+    bool symmetric{true};
+};
+namespace render_common {
+struct HptfSettings;
+}
+
 // Polled status snapshot (no callbacks; see docs/architecture/REALTIME_MONITORING.md §11).
 struct MonitorStatusSnapshot {
     MonitorPlaybackState state{MonitorPlaybackState::stopped};
@@ -146,6 +155,8 @@ class MonitorSession {
                                                    std::uint64_t revision = 0);
 
     [[nodiscard]] HptfInfo hptf_info() const;
+    [[nodiscard]] HptfStereoInfo hptf_stereo_info() const;
+    [[nodiscard]] Result<void> set_hptf_prepared(const render_common::HptfSettings& settings);
 
     [[nodiscard]] MonitorStatusSnapshot status() const;
     [[nodiscard]] MonitorLevelsSnapshot levels() const;
