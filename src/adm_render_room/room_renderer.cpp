@@ -2,7 +2,6 @@
 #include <array>
 #include <cmath>
 #include <exception>
-#include <iterator>
 #include <span>
 #include <string>
 #include <vector>
@@ -22,7 +21,6 @@ namespace mradm {
 namespace {
 constexpr std::size_t k_read_frames = 2048;
 using render_common::DriverError;
-using render_common::text;
 
 struct FilePrepared final : IPreparedRender {
     std::shared_ptr<render_common::RustPrepared> rust;
@@ -31,25 +29,6 @@ struct FilePrepared final : IPreparedRender {
     std::uint64_t frames{0};
     std::uint16_t input_channels{0};
 };
-std::vector<MradmRenderTripleBalanceOverride> override_records(const LiveOverrides& overrides) {
-    std::vector<MradmRenderTripleBalanceOverride> result;
-    result.reserve(overrides.objects.size());
-    std::ranges::transform(overrides.objects, std::back_inserter(result), [](const LiveObjectOverride& o) {
-        return MradmRenderTripleBalanceOverride{{text(o.object_id),
-                                                 text(o.speaker_label),
-                                                 o.mute ? 1U : 0U,
-                                                 o.gain_db,
-                                                 o.head_locked.has_value() ? 1U : 0U,
-                                                 o.head_locked.value_or(false) ? 1U : 0U},
-                                                o.extent_scale,
-                                                o.extent_width_scale,
-                                                o.extent_height_scale,
-                                                o.extent_depth_scale,
-                                                o.diffuse_scale,
-                                                o.divergence_scale};
-    });
-    return result;
-}
 // Reading, the room runtime, events, the tail, seek steps and live edits are Rust mradm-render
 // `room_stream` (PCM consistency 4.6 E); this side owns cancellation.
 class RoomStream final : public IRenderStream {
@@ -119,7 +98,7 @@ class RoomStream final : public IRenderStream {
         return {};
     }
     [[nodiscard]] Result<void> validate_overrides(const LiveOverrides& overrides) const override {
-        const auto records = override_records(overrides);
+        const auto records = render_common::live_override_records(overrides);
         std::array<std::uint8_t, 512> message{};
         auto message_len = message.size();
         if (const auto code =
@@ -131,7 +110,7 @@ class RoomStream final : public IRenderStream {
         return {};
     }
     void set_overrides(const LiveOverrides& overrides) override {
-        const auto records = override_records(overrides);
+        const auto records = render_common::live_override_records(overrides);
         if (mradm_render_room_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
             std::terminate();
         }

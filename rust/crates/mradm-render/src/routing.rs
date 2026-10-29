@@ -451,6 +451,18 @@ pub struct Override<'a> {
     pub head_locked: Option<bool>,
 }
 
+/// One live edit (`LiveObjectOverride`) of a file stream: the override and its topology scales.
+#[derive(Clone, Copy, Debug)]
+pub struct LiveOverride<'a> {
+    pub base: Override<'a>,
+    pub extent_scale: f32,
+    pub extent_width_scale: f32,
+    pub extent_height_scale: f32,
+    pub extent_depth_scale: f32,
+    pub diffuse_scale: f32,
+    pub divergence_scale: f32,
+}
+
 /// Resolve borrowed records without allocating, including when the boundary validates them as
 /// it walks them. The last matching channel override wins over the last whole-object override;
 /// gain and head lock select independently. Unrequested fields are not evaluated.

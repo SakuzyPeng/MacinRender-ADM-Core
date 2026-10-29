@@ -7,6 +7,7 @@
 pub mod binaural;
 pub mod binaural_hrtf;
 pub mod binaural_render;
+pub mod binaural_stream;
 pub mod ear;
 pub mod hoa;
 pub mod live;

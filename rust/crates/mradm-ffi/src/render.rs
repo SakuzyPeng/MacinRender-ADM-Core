@@ -1332,9 +1332,9 @@ pub unsafe extern "C" fn mradm_render_triple_balance_prepare(
     )
 }
 
-/// A Triple Balance live edit: the common override and the topology scales it validates.
+/// A live edit (`LiveObjectOverride`): the common override and the topology scales.
 #[repr(C)]
-pub struct RenderTripleBalanceOverride {
+pub struct RenderLiveOverride {
     base: RenderOverride,
     extent_scale: f32,
     extent_width_scale: f32,
@@ -1373,8 +1373,8 @@ unsafe fn tb_stream_source<'a>(
     Ok(unsafe { &(*handle).source })
 }
 
-unsafe fn tb_overrides<'a>(
-    values: *const RenderTripleBalanceOverride,
+unsafe fn live_overrides<'a>(
+    values: *const RenderLiveOverride,
     values_len: usize,
 ) -> offline::Result<Vec<triple_balance_stream::LiveOverride<'a>>> {
     unsafe { input(values, values_len) }
@@ -1524,7 +1524,7 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_seek_finish(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_triple_balance_stream_validate(
     handle: *const RenderTripleBalanceStream,
-    values: *const RenderTripleBalanceOverride,
+    values: *const RenderLiveOverride,
     values_len: usize,
     message: *mut u8,
     message_len: *mut usize,
@@ -1533,7 +1533,7 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_validate(
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
         let source = unsafe { tb_stream_source(handle) }.map_err(|e| bad(&e.message))?;
-        let o = unsafe { tb_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
+        let o = unsafe { live_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
         source
             .validate_overrides(&o)
             .map_err(|(code, message, context)| Error {
@@ -1547,11 +1547,11 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_validate(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_triple_balance_stream_overrides(
     handle: *mut RenderTripleBalanceStream,
-    values: *const RenderTripleBalanceOverride,
+    values: *const RenderLiveOverride,
     values_len: usize,
 ) -> i32 {
     driver_boundary(ptr::null_mut(), ptr::null_mut(), ptr::null_mut(), || {
-        let o = unsafe { tb_overrides(values, values_len)? };
+        let o = unsafe { live_overrides(values, values_len)? };
         unsafe { tb_stream(handle)? }.set_overrides(&o)
     })
 }

@@ -5,6 +5,7 @@
 //! render block; and an LRU of size-state checkpoints that seeks restore before rendering forward
 //! to the target. The caller steps a seek block by block and owns its cancellation.
 use crate::offline::{Driver, Error, Location, Result, TbPlan};
+pub use crate::routing::LiveOverride;
 use crate::routing::{self, Override};
 use crate::triple_balance::SizeTrack;
 use crate::vbap::Binding;
@@ -25,18 +26,6 @@ pub const DEFAULT_CHECKPOINT_BUDGET: usize = 32 * 1024 * 1024;
 /// The bytes the C++ stream counted per checkpoint besides the size state: its `Checkpoint`
 /// (frame and handle with deleter) and the `std::list` node's two links.
 const CHECKPOINT_OVERHEAD: usize = size_of::<u64>() + 4 * size_of::<usize>();
-
-/// One live edit (`LiveObjectOverride`).
-#[derive(Clone, Copy, Debug)]
-pub struct LiveOverride<'a> {
-    pub base: Override<'a>,
-    pub extent_scale: f32,
-    pub extent_width_scale: f32,
-    pub extent_height_scale: f32,
-    pub extent_depth_scale: f32,
-    pub diffuse_scale: f32,
-    pub divergence_scale: f32,
-}
 
 /// The immutable standard-mode preparation the stream renders and validates.
 #[derive(Clone)]

@@ -174,8 +174,8 @@ typedef struct MradmRenderTripleBalanceView {
     MradmAdmText report;
 } MradmRenderTripleBalanceView;
 
-// A Triple Balance live edit: the common override and the topology scales it validates.
-typedef struct MradmRenderTripleBalanceOverride {
+// A live edit (`LiveObjectOverride`): the common override and the topology scales.
+typedef struct MradmRenderLiveOverride {
     MradmRenderOverride base;
     float extent_scale;
     float extent_width_scale;
@@ -183,7 +183,7 @@ typedef struct MradmRenderTripleBalanceOverride {
     float extent_depth_scale;
     float diffuse_scale;
     float divergence_scale;
-} MradmRenderTripleBalanceOverride;
+} MradmRenderLiveOverride;
 
 typedef struct MradmRenderTripleBalanceStream MradmRenderTripleBalanceStream;
 
@@ -342,11 +342,6 @@ typedef struct MradmRenderBinauralRequest {
     uint32_t spread;
     uint32_t smoothing_frames;
 } MradmRenderBinauralRequest;
-typedef struct MradmRenderBinauralInfo {
-    size_t sources;
-    size_t groups;
-    uint64_t block;
-} MradmRenderBinauralInfo;
 typedef struct MradmRenderBinauralOffline MradmRenderBinauralOffline;
 typedef struct MradmRenderBinauralOfflineSettings {
     size_t inputs;
@@ -367,20 +362,15 @@ typedef struct MradmRenderBinauralStep {
     uint32_t has_progress;
     MradmRenderOfflineProgress progress;
 } MradmRenderBinauralStep;
-// The C++ file stream's transitional source bank (removed with 4.7 C).
-typedef struct MradmBinauralBank MradmBinauralBank;
-typedef struct MradmRenderBinauralScales {
-    MradmAdmText object_id;
-    float scales[5];
-} MradmRenderBinauralScales;
-typedef struct MradmRenderBinauralSourceKey {
-    MradmAdmText object_id;
-    MradmAdmText label_key;
-} MradmRenderBinauralSourceKey;
-typedef struct MradmRenderBinauralSourceOutput {
-    const float* left;
-    const float* right;
-} MradmRenderBinauralSourceOutput;
+// A binaural file stream (4.7 C); spread as in MradmRenderBinauralRequest.
+typedef struct MradmRenderBinauralStream MradmRenderBinauralStream;
+typedef struct MradmRenderBinauralStreamSettings {
+    size_t inputs;
+    uint64_t frames;
+    uint32_t sample_rate;
+    uint32_t smoothing_frames;
+    uint32_t spread;
+} MradmRenderBinauralStreamSettings;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -508,14 +498,14 @@ int32_t mradm_render_triple_balance_stream_seek_finish(MradmRenderTripleBalanceS
                                                        uint8_t* message,
                                                        size_t* message_len);
 int32_t mradm_render_triple_balance_stream_validate(const MradmRenderTripleBalanceStream* handle,
-                                                    const MradmRenderTripleBalanceOverride* values,
+                                                    const MradmRenderLiveOverride* values,
                                                     size_t values_len,
                                                     uint8_t* message,
                                                     size_t* message_len,
                                                     uint8_t* context,
                                                     size_t* context_len);
 int32_t mradm_render_triple_balance_stream_overrides(MradmRenderTripleBalanceStream* handle,
-                                                     const MradmRenderTripleBalanceOverride* values,
+                                                     const MradmRenderLiveOverride* values,
                                                      size_t values_len);
 // 1 when size tracks make a seek render from an earlier block.
 uint32_t mradm_render_triple_balance_stream_requires_preroll(const MradmRenderTripleBalanceStream* handle);
@@ -592,13 +582,13 @@ int32_t mradm_render_room_stream_seek_begin(MradmRenderRoomStream* handle,
                                             size_t* message_len);
 int32_t mradm_render_room_stream_seek_step(
     MradmRenderRoomStream* handle, uint32_t* pending, uint32_t* location, uint8_t* message, size_t* message_len);
-int32_t mradm_render_room_validate_overrides(const MradmRenderTripleBalanceOverride* values,
+int32_t mradm_render_room_validate_overrides(const MradmRenderLiveOverride* values,
                                              size_t values_len,
                                              uint8_t* message,
                                              size_t* message_len);
 // Latches a rejected update or orientation for the next process.
 int32_t mradm_render_room_stream_overrides(MradmRenderRoomStream* handle,
-                                           const MradmRenderTripleBalanceOverride* values,
+                                           const MradmRenderLiveOverride* values,
                                            size_t values_len);
 void mradm_render_room_stream_pose(MradmRenderRoomStream* handle, float yaw, float pitch, float roll);
 uint64_t mradm_render_room_stream_tail(const MradmRenderRoomStream* handle);
@@ -697,8 +687,7 @@ int32_t mradm_render_binaural_prepare(const MradmSceneHandle* scene,
                                       const MradmBinauralHrtfHandle* hrtf,
                                       const MradmRenderBinauralRequest* request,
                                       MradmRenderPrepared** output,
-                                      MradmRenderPreparedView* view,
-                                      MradmRenderBinauralInfo* info);
+                                      MradmRenderPreparedView* view);
 // Driver errors set *location like the offline driver's; pools is the diagnostic build's worker
 // log line (empty otherwise).
 int32_t mradm_render_binaural_offline_open(const MradmRenderPrepared* prepared,
@@ -721,35 +710,37 @@ int32_t mradm_render_binaural_offline_finish(MradmRenderBinauralOffline* handle,
                                              uint64_t* written,
                                              MradmRenderOfflineMetrics* metrics);
 void mradm_render_binaural_offline_destroy(MradmRenderBinauralOffline* handle);
-// *output: null creates a stream bank; an existing bank reuses its workers/storage.
-// Rebuild errors preserve the previous bank and views; success replaces the keys/outputs.
-int32_t mradm_render_binaural_bank_create(const MradmRenderPrepared* prepared,
-                                          const MradmRenderBinauralScales* scales,
-                                          size_t scales_len,
-                                          MradmBinauralBank** output,
-                                          const MradmRenderBinauralSourceKey** keys,
-                                          size_t* keys_len,
+// Driver errors set *location like the offline driver's. Every call but destroy runs on the worker;
+// *pending is whether a pre-roll block remains before the seek target.
+int32_t mradm_render_binaural_stream_open(const MradmRenderPrepared* prepared,
+                                          const uint8_t* path,
+                                          size_t path_len,
+                                          const MradmRenderBinauralStreamSettings* settings,
+                                          MradmRenderBinauralStream** output,
                                           uint32_t* location,
                                           uint8_t* message,
                                           size_t* message_len);
-void mradm_render_binaural_bank_reset(MradmBinauralBank* handle);
-// head_locked: per source -1 (none), 0 or 1; pose is yaw, pitch, roll when has_pose.
-int32_t mradm_render_binaural_bank_render(MradmBinauralBank* handle,
-                                          const float* input,
-                                          size_t input_len,
-                                          size_t channels,
-                                          uint64_t start,
-                                          size_t frames,
-                                          uint32_t smoothing_frames,
-                                          uint32_t has_pose,
-                                          const float* pose,
-                                          const int32_t* head_locked,
-                                          size_t head_locked_len,
-                                          const MradmRenderBinauralSourceOutput** outputs,
-                                          uint32_t* location,
-                                          uint8_t* message,
-                                          size_t* message_len);
-void mradm_render_binaural_bank_destroy(MradmBinauralBank* handle);
+int32_t mradm_render_binaural_stream_process(MradmRenderBinauralStream* handle,
+                                             float* output,
+                                             size_t output_len,
+                                             size_t frames,
+                                             size_t* produced,
+                                             uint32_t* location,
+                                             uint8_t* message,
+                                             size_t* message_len);
+int32_t mradm_render_binaural_stream_seek_begin(MradmRenderBinauralStream* handle,
+                                                uint64_t frame,
+                                                uint32_t* pending,
+                                                uint32_t* location,
+                                                uint8_t* message,
+                                                size_t* message_len);
+int32_t mradm_render_binaural_stream_seek_step(
+    MradmRenderBinauralStream* handle, uint32_t* pending, uint32_t* location, uint8_t* message, size_t* message_len);
+int32_t mradm_render_binaural_stream_overrides(MradmRenderBinauralStream* handle,
+                                               const MradmRenderLiveOverride* values,
+                                               size_t values_len);
+void mradm_render_binaural_stream_pose(MradmRenderBinauralStream* handle, float yaw, float pitch, float roll);
+void mradm_render_binaural_stream_destroy(MradmRenderBinauralStream* handle);
 
 #ifdef __cplusplus
 }
