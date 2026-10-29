@@ -1,7 +1,8 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
-// POD fields cross the private Rust boundary.
+// The exports the FFI crate's allocation and atomicity tests drive (the Scene stream renderer
+// calls the session inside Rust since 4.7 D). POD fields cross the private Rust boundary.
 #ifdef __cplusplus
 extern "C" {
 #endif

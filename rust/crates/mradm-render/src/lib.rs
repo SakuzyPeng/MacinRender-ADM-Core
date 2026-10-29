@@ -11,6 +11,7 @@ pub mod binaural_stream;
 pub mod ear;
 pub mod hoa;
 pub mod live;
+pub mod live_binaural;
 pub mod live_triple_balance;
 pub mod live_vbap;
 pub mod offline;

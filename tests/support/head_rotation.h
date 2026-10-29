@@ -1,7 +1,7 @@
 #pragma once
 #include "adm/options.h"
 
-#include "../adm_dsp/scene_math.h"
+#include "../../src/adm_dsp/scene_math.h"
 namespace mradm::render_common {
 class HeadRotation {
   public:
