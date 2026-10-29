@@ -1,36 +1,15 @@
 #include <algorithm>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "../adm_audio/wav_backend.h"
+#include "render_common.h"
 #include "render_state.h"
 
 namespace mradm::triple_balance {
 namespace {
 using render_common::DriverError;
-using render_common::text;
-
-std::vector<MradmRenderTripleBalanceOverride> override_records(const LiveOverrides& overrides) {
-    std::vector<MradmRenderTripleBalanceOverride> result;
-    result.reserve(overrides.objects.size());
-    std::ranges::transform(overrides.objects, std::back_inserter(result), [](const LiveObjectOverride& o) {
-        return MradmRenderTripleBalanceOverride{{text(o.object_id),
-                                                 text(o.speaker_label),
-                                                 o.mute ? 1U : 0U,
-                                                 o.gain_db,
-                                                 o.head_locked.has_value() ? 1U : 0U,
-                                                 o.head_locked.value_or(false) ? 1U : 0U},
-                                                o.extent_scale,
-                                                o.extent_width_scale,
-                                                o.extent_height_scale,
-                                                o.extent_depth_scale,
-                                                o.diffuse_scale,
-                                                o.divergence_scale};
-    });
-    return result;
-}
 
 // Block rendering, live edits, checkpoints and the seek steps are Rust mradm-render
 // `triple_balance_stream` (PCM consistency 4.6); this side owns cancellation.
@@ -58,7 +37,7 @@ class TripleBalanceStream final : public IRenderStream {
     }
 
     [[nodiscard]] Result<void> validate_overrides(const LiveOverrides& overrides) const override {
-        const auto records = override_records(overrides);
+        const auto records = render_common::live_override_records(overrides);
         std::string message(512, '\0');
         std::string context(512, '\0');
         for (const auto& item : overrides.objects) {
@@ -82,7 +61,7 @@ class TripleBalanceStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        const auto records = override_records(overrides);
+        const auto records = render_common::live_override_records(overrides);
         if (mradm_render_triple_balance_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
             std::terminate();
         }

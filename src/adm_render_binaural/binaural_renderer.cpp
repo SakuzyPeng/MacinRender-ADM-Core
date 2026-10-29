@@ -1,15 +1,13 @@
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 #include <fmt/format.h>
 
@@ -22,28 +20,18 @@
 #include "render_common.h"
 #include "scene_handle.h"
 #include "speaker_pcm.h"
-#include "stream_dsp.h"
 
 namespace mradm {
 
 using namespace binaural_internal;
 
-// The renderer's adapters. The HRTF state (4.7 A), the source and spreader plan, the per-source
-// OLA convolution and the offline loop (4.7 B) are Rust mradm-render `binaural_hrtf`, `binaural`
-// and `binaural_render`.
+// OLA convolution and the offline loop (4.7 B), and the file stream (4.7 C) are Rust mradm-render
+// OLA convolution and the offline loop (4.7 B) and the file stream (4.7 C) are Rust mradm-render
+// `binaural_hrtf`, `binaural`, `binaural_render` and `binaural_stream`.
 namespace binaural_internal {
 namespace {
 
 constexpr uint64_t k_min_block_size = 1024U;
-constexpr uint64_t k_diffuse_delay_len = 32U;
-
-constexpr std::size_t k_topology_diffuse = 0U;
-constexpr std::size_t k_topology_width = 1U;
-constexpr std::size_t k_topology_height = 2U;
-constexpr std::size_t k_topology_depth = 3U;
-constexpr std::size_t k_topology_divergence = 4U;
-constexpr uint64_t k_live_topology_min_interval_ms = 100U;
-using LiveTopologyScales = std::array<float, 5>;
 
 [[nodiscard]] uint32_t numerical_spread(BinauralSpreadMode mode) noexcept {
     switch (mode) {
@@ -61,135 +49,52 @@ using LiveTopologyScales = std::array<float, 5>;
 struct BinauralPrepared final : IPreparedRender {
     std::shared_ptr<const HrtfState> bs;
     std::shared_ptr<render_common::RustPrepared> rust;
-    MradmRenderBinauralInfo info{};
-    uint64_t render_block_size{0};
 };
 
-// Offline windows and file-stream seeks must rebuild history on the same absolute block grid.
-[[nodiscard]] uint64_t ola_preroll_start(uint64_t target, uint64_t block_size, uint64_t overlap_len) {
-    const auto warmup_frames = std::max<uint64_t>({block_size, overlap_len, k_diffuse_delay_len});
-    const uint64_t warmup_blocks = (warmup_frames + block_size - 1U) / block_size;
-    const uint64_t target_block = target / block_size;
-    return target_block > warmup_blocks ? (target_block - warmup_blocks) * block_size : 0;
-}
-
-// A source list of the preparation (rebuilt with live topology scales) with its Rust OLA state.
-class SourceBank {
+// File streaming over the same prepared HRTF state and source list as render_window. The FIFO,
+// seek pre-roll, live gain ramps, coalesced topology crossfades and head tracking are Rust
+// mradm-render `binaural_stream` (PCM consistency 4.7 C); this side owns cancellation. The owning
+// factory keeps the prepared state alive for the stream's lifetime.
+class BinauralStream final : public IRenderStream {
   public:
-    [[nodiscard]] Result<void> rebuild(const BinauralPrepared& prepared,
-                                       const std::unordered_map<std::string, LiveTopologyScales>& topo,
-                                       const std::string& input_path) {
-        std::vector<MradmRenderBinauralScales> scales;
-        scales.reserve(topo.size());
-        for (const auto& [object_key, value] : topo) {
-            scales.push_back({render_common::text(object_key), {value[0], value[1], value[2], value[3], value[4]}});
-        }
-        MradmBinauralBank* raw = handle_.get();
-        const MradmRenderBinauralSourceKey* keys = nullptr;
-        std::size_t keys_len = 0;
+    [[nodiscard]] static Result<std::unique_ptr<IRenderStream>> create(const BinauralPrepared& prepared,
+                                                                       const RenderPlan& plan) {
+        const auto& info = plan.scene.info;
+        const MradmRenderBinauralStreamSettings settings{info.num_channels,
+                                                         info.num_frames,
+                                                         info.sample_rate,
+                                                         plan.object_smoothing_frames,
+                                                         numerical_spread(plan.binaural_spread_mode)};
+        const auto path = audio::wav_path_utf8(plan.input_path);
+        MradmRenderBinauralStream* raw = nullptr;
         render_common::DriverError error;
-        if (const auto code = mradm_render_binaural_bank_create(prepared.rust->handle.get(),
-                                                                scales.data(),
-                                                                scales.size(),
+        if (const auto code = mradm_render_binaural_stream_open(prepared.rust->handle.get(),
+                                                                reinterpret_cast<const uint8_t*>(path.data()),
+                                                                path.size(),
+                                                                &settings,
                                                                 &raw,
-                                                                &keys,
-                                                                &keys_len,
                                                                 error.location(),
                                                                 error.message(),
                                                                 error.message_len());
             code != 0) {
-            return error.error(code, input_path);
+            return error.error(code, plan.input_path);
         }
-        if (!handle_) {
-            handle_.reset(raw);
-        }
-        keys_ = {keys, keys_len};
-        return {};
+        return std::unique_ptr<IRenderStream>{new BinauralStream(raw, plan.input_path)};
     }
-
-    [[nodiscard]] std::size_t size() const noexcept { return keys_.size(); }
-    [[nodiscard]] std::string_view object_id(std::size_t i) const noexcept { return view(keys_[i].object_id); }
-    [[nodiscard]] std::string_view label_key(std::size_t i) const noexcept { return view(keys_[i].label_key); }
-    void reset() noexcept { mradm_render_binaural_bank_reset(handle_.get()); }
-    [[nodiscard]] MradmBinauralBank* get() const noexcept { return handle_.get(); }
-
-  private:
-    [[nodiscard]] static std::string_view view(MradmAdmText t) noexcept {
-        return {reinterpret_cast<const char*>(t.data), t.len};
-    }
-    std::unique_ptr<MradmBinauralBank, decltype(&mradm_render_binaural_bank_destroy)> handle_{
-        nullptr, &mradm_render_binaural_bank_destroy};
-    std::span<const MradmRenderBinauralSourceKey> keys_;
-};
-
-// File streaming binaural session over the same prepared HRTF tables + source list as
-// render_window. It renders render_block_size-aligned blocks on demand into a FIFO, from
-// which process() serves any requested frame count through the same Rust per-source OLA as
-// render_window, so a gap-free run from frame 0 is bit-identical to the offline render (the smoke
-// test asserts this). saf_spreader mode (STFT latency compensation) is not yet streamable and is
-// rejected at open. seek() rebuilds the per-source OLA / diffuse / HRTF-cache state with the
-// offline window's aligned pre-roll and current controls. set_overrides drives per-source sample
-// gain ramps and coalesced topology state crossfades. The expensive prepared state is borrowed by
-// reference; the owning factory keeps it alive for the stream's lifetime.
-class BinauralStream final : public IRenderStream {
-  public:
-    [[nodiscard]] static Result<std::unique_ptr<BinauralStream>>
-    create(const BinauralPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
-        if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader && prepared.info.groups != 0U) {
-            return make_error(ErrorCode::unsupported,
-                              "binaural realtime stream does not yet support saf_spreader mode (use cloud / none)",
-                              {});
-        }
-        const auto& info = plan.scene.info;
-        if (info.sample_rate != 48000U) {
-            return make_error(ErrorCode::invalid_argument,
-                              fmt::format("binaural renderer requires 48000 Hz input, got {}", info.sample_rate),
-                              "input=" + plan.input_path);
-        }
-        auto reader = audio::RenderInputReader::open(plan.input_path);
-        if (!reader) {
-            return tl::unexpected{reader.error()};
-        }
-        SourceBank bank;
-        if (auto result = bank.rebuild(prepared, {}, plan.input_path); !result) {
-            return tl::unexpected{result.error()};
-        }
-        (void) logs;
-        return std::unique_ptr<BinauralStream>{new BinauralStream(prepared,
-                                                                  std::move(*reader),
-                                                                  std::move(bank),
-                                                                  plan.input_path,
-                                                                  info.num_channels,
-                                                                  info.num_frames,
-                                                                  info.sample_rate,
-                                                                  plan.object_smoothing_frames)};
-    }
-
-    ~BinauralStream() override = default;
-    BinauralStream(const BinauralStream&) = delete;
-    BinauralStream& operator=(const BinauralStream&) = delete;
-    BinauralStream(BinauralStream&&) = delete;
-    BinauralStream& operator=(BinauralStream&&) = delete;
 
     [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        render_common::DriverError error;
         std::size_t produced = 0;
-        while (produced < frames) {
-            if (fifo_read_ >= fifo_.size()) {
-                if (frames_done_ >= total_frames_) {
-                    break; // end of material
-                }
-                if (auto result = render_block(); !result) {
-                    return tl::unexpected{result.error()};
-                }
-                if (fifo_read_ >= fifo_.size()) {
-                    break;
-                }
-            }
-            const std::size_t avail = (fifo_.size() - fifo_read_) / 2U;
-            const std::size_t take = std::min(frames - produced, avail);
-            std::copy_n(fifo_.data() + fifo_read_, take * 2U, out.data() + (produced * 2U));
-            fifo_read_ += take * 2U;
-            produced += take;
+        if (const auto code = mradm_render_binaural_stream_process(handle_.get(),
+                                                                   out.data(),
+                                                                   out.size(),
+                                                                   frames,
+                                                                   &produced,
+                                                                   error.location(),
+                                                                   error.message(),
+                                                                   error.message_len());
+            code != 0) {
+            return error.error(code, input_path_);
         }
         return produced;
     }
@@ -202,44 +107,22 @@ class BinauralStream final : public IRenderStream {
         if (cancel.stop_requested()) {
             return make_error(ErrorCode::cancelled, "双耳文件流式跳转已取消");
         }
-        const uint64_t target = std::min(frame, total_frames_);
-        const auto start =
-            ola_preroll_start(target, render_block_size_, static_cast<uint64_t>(prepared_.bs->overlap_len));
-        if (auto result = reader_->seek_frame(start); !result) {
-            return tl::unexpected{result.error()};
+        render_common::DriverError error;
+        uint32_t pending = 0;
+        if (const auto code = mradm_render_binaural_stream_seek_begin(
+                handle_.get(), frame, &pending, error.location(), error.message(), error.message_len());
+            code != 0) {
+            return error.error(code, input_path_);
         }
-        frames_done_ = start;
-        fifo_.clear();
-        old_fifo_.clear();
-        fifo_read_ = 0;
-
-        // A discontinuity has no outgoing graph to crossfade. Adopt the latest edits before pre-roll,
-        // including targets still waiting for the live topology update interval at the old position.
-        if (topology_pending_) {
-            if (auto rebuilt = rebuild_sources(pending_topology_); !rebuilt) {
-                return rebuilt;
-            }
-            applied_topology_ = pending_topology_;
-            topology_pending_ = false;
-        } else {
-            bank_.reset();
-        }
-        next_topology_update_frame_ = target;
-        for (auto& slot : live_gain_slots_) {
-            slot.gain_ramp().reset();
-        }
-        update_live_gain_targets();
-
-        while (frames_done_ < target) {
+        while (pending != 0U) {
             if (cancel.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "双耳文件流式跳转已取消");
             }
-            const uint64_t block_start = frames_done_;
-            if (auto result = render_block(); !result) {
-                return result;
+            if (const auto code = mradm_render_binaural_stream_seek_step(
+                    handle_.get(), &pending, error.location(), error.message(), error.message_len());
+                code != 0) {
+                return error.error(code, input_path_);
             }
-            // Keep the suffix of the containing block so arbitrary pulls never shift the DSP grid.
-            fifo_read_ = static_cast<std::size_t>(std::min(target - block_start, frames_done_ - block_start)) * 2U;
         }
         if (cancel.stop_requested()) {
             return make_error(ErrorCode::cancelled, "双耳文件流式跳转已取消");
@@ -247,260 +130,32 @@ class BinauralStream final : public IRenderStream {
         return {};
     }
 
+    // Gain targets per semantic source key; topology edits rebuild the source graph at most every
+    // 100 ms with a crossfade.
     void set_overrides(const LiveOverrides& overrides) override {
-        // Gain targets are resolved per semantic source key. The render block builds one shared
-        // sample-domain envelope per key, so every spatial component of an object follows the same
-        // de-zippered trajectory (including per-channel DirectSpeakers overrides).
-        live_overrides_ = overrides;
-        live_override_view_ = live_overrides_;
-        update_live_gain_targets();
-
-        // Topology changes need a new source graph and fresh convolution state. Queue the newest
-        // graph while dragging; render_block applies at most one every 100 ms and crossfades old
-        // and new states over the same source block. This preserves the old OLA/diffuse tail at the
-        // boundary and prevents a 60 Hz UI gesture from repeatedly destroying the DSP state.
-        std::unordered_map<std::string, LiveTopologyScales> topo;
-        for (const auto& ov : overrides.objects) {
-            const LiveTopologyScales scales{
-                ov.diffuse_scale,
-                ov.extent_scale * ov.extent_width_scale,
-                ov.extent_scale * ov.extent_height_scale,
-                ov.extent_scale * ov.extent_depth_scale,
-                ov.divergence_scale,
-            };
-            if (scales[k_topology_diffuse] != 1.0F || scales[k_topology_width] != 1.0F ||
-                scales[k_topology_height] != 1.0F || scales[k_topology_depth] != 1.0F ||
-                scales[k_topology_divergence] != 1.0F) {
-                topo[ov.object_id] = scales;
-            }
+        const auto records = render_common::live_override_records(overrides);
+        if (mradm_render_binaural_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
+            std::terminate();
         }
-        pending_topology_ = std::move(topo);
-        topology_pending_ = pending_topology_ != applied_topology_;
     }
 
-    // Live listener head orientation (head tracking / free-look). Applied at the worker render
-    // stage: world-locked sources are rotated into the head frame before the HRTF lookup (cheap —
-    // it only changes the per-source HRTF direction; no re-prepare). Head-locked sources ignore it.
+    // Live listener head orientation: world-locked sources rotate into the head frame before the
+    // HRTF lookup; head-locked sources ignore it.
     void set_listener_orientation(const ListenerOrientation& orientation) override {
-        listener_orientation_ = orientation;
+        mradm_render_binaural_stream_pose(
+            handle_.get(), orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg);
     }
 
     [[nodiscard]] uint32_t out_channels() const override { return 2U; }
-    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
     [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
 
   private:
-    BinauralStream(const BinauralPrepared& prepared,
-                   std::unique_ptr<audio::RenderInputReader> reader,
-                   SourceBank bank,
-                   std::string input_path,
-                   uint16_t num_in_ch,
-                   uint64_t total_frames,
-                   uint32_t sample_rate,
-                   uint32_t object_smoothing_frames)
-        : prepared_(prepared), reader_(std::move(reader)), bank_(std::move(bank)), input_path_(std::move(input_path)),
-          num_in_ch_(num_in_ch), total_frames_(total_frames), sample_rate_(sample_rate),
-          object_smoothing_frames_(object_smoothing_frames), render_block_size_(prepared.render_block_size),
-          in_block_(static_cast<std::size_t>(num_in_ch) * prepared.render_block_size, 0.0F),
-          topology_update_interval_frames_(
-              std::max<uint64_t>(1U, (static_cast<uint64_t>(sample_rate) * k_live_topology_min_interval_ms) / 1000U)) {
-        assign_live_gain_slots();
-    }
+    BinauralStream(MradmRenderBinauralStream* raw, std::string input_path)
+        : handle_(raw, &mradm_render_binaural_stream_destroy), input_path_(std::move(input_path)) {}
 
-    class LiveGainSlot {
-      public:
-        LiveGainSlot(std::string object, std::string speaker_label, uint32_t sample_rate, std::size_t block_frames)
-            : object_id(std::move(object)), speaker_label_key(std::move(speaker_label)), ramp(sample_rate),
-              envelope(block_frames, 1.0F) {}
-
-        [[nodiscard]] const std::string& object() const noexcept { return object_id; }
-        [[nodiscard]] const std::string& speaker_label() const noexcept { return speaker_label_key; }
-        [[nodiscard]] render_common::LiveGainRamp& gain_ramp() noexcept { return ramp; }
-        [[nodiscard]] std::vector<float>& gain_envelope() noexcept { return envelope; }
-        [[nodiscard]] const std::vector<float>& gain_envelope() const noexcept { return envelope; }
-
-      private:
-        std::string object_id;
-        std::string speaker_label_key;
-        render_common::LiveGainRamp ramp;
-        std::vector<float> envelope;
-    };
-
-    void assign_live_gain_slots() {
-        source_gain_slots_.clear();
-        source_gain_slots_.reserve(bank_.size());
-        for (std::size_t i = 0; i < bank_.size(); ++i) {
-            std::string key{bank_.object_id(i)};
-            key.push_back('\0');
-            key += bank_.label_key(i);
-            const auto found = gain_slot_by_key_.find(key);
-            if (found != gain_slot_by_key_.end()) {
-                source_gain_slots_.push_back(found->second);
-                continue;
-            }
-            const std::size_t slot = live_gain_slots_.size();
-            gain_slot_by_key_.emplace(key, slot);
-            live_gain_slots_.emplace_back(std::string{bank_.object_id(i)},
-                                          std::string{bank_.label_key(i)},
-                                          sample_rate_,
-                                          static_cast<std::size_t>(render_block_size_));
-            source_gain_slots_.push_back(slot);
-        }
-        update_live_gain_targets();
-    }
-
-    void update_live_gain_targets() {
-        for (auto& slot : live_gain_slots_) {
-            const float target =
-                render_common::resolve_live_channel_gain(live_override_view_, slot.object(), slot.speaker_label())
-                    .value_or(1.0F);
-            slot.gain_ramp().set_target(target);
-        }
-    }
-
-    void prepare_live_gain_envelopes(std::size_t frames) {
-        for (auto& slot : live_gain_slots_) {
-            slot.gain_ramp().fill(std::span{slot.gain_envelope()}.first(frames));
-        }
-    }
-
-    // Cheap re-prepare: the sources of the scene with each overridden object's block diffuse /
-    // extent (width,height,depth) / divergence multiplied by its scale (clamped to the same ADM
-    // ranges as a semantic policy without max), with fresh per-source state. Empty `topo` rebuilds
-    // the unscaled scene bit-for-bit.
-    Result<void> rebuild_sources(const std::unordered_map<std::string, LiveTopologyScales>& topo) {
-        if (auto result = bank_.rebuild(prepared_, topo, input_path_); !result) {
-            return result;
-        }
-        assign_live_gain_slots();
-        return {};
-    }
-
-    Result<void> render_current_sources(std::vector<float>& output, uint64_t frames_now) {
-        const auto fn = static_cast<std::size_t>(frames_now);
-        // Live head tracking: rotate world-locked sources into the head frame at render time (worker
-        // stage). Head-locked sources (per-object override) keep their raw direction. Identity pose
-        // ⇒ no rotation, output stays bit-identical to no-tracking.
-        const bool head_active = !listener_orientation_.is_identity();
-        const std::array pose{
-            listener_orientation_.yaw_deg, listener_orientation_.pitch_deg, listener_orientation_.roll_deg};
-        head_locked_.resize(bank_.size());
-        for (std::size_t si = 0; si < bank_.size(); ++si) {
-            const auto locked =
-                render_common::resolve_live_head_locked(live_override_view_, bank_.object_id(si), bank_.label_key(si));
-            head_locked_[si] = locked.has_value() ? static_cast<int32_t>(*locked) : -1;
-        }
-        const MradmRenderBinauralSourceOutput* outputs = nullptr;
-        render_common::DriverError error;
-        if (const auto code = mradm_render_binaural_bank_render(bank_.get(),
-                                                                in_block_.data(),
-                                                                in_block_.size(),
-                                                                num_in_ch_,
-                                                                frames_done_,
-                                                                fn,
-                                                                object_smoothing_frames_,
-                                                                head_active ? 1U : 0U,
-                                                                pose.data(),
-                                                                head_locked_.data(),
-                                                                head_locked_.size(),
-                                                                &outputs,
-                                                                error.location(),
-                                                                error.message(),
-                                                                error.message_len());
-            code != 0) {
-            return error.error(code, input_path_);
-        }
-
-        // Reduce per-source L/R into the interleaved FIFO, applying the live per-object
-        // gain. With no overrides every gain is 1.0 and the summation order matches
-        // render_window's reduce, so the output is bit-identical to the offline render.
-        output.assign(fn * 2U, 0.0F);
-        const auto block = static_cast<std::size_t>(render_block_size_);
-        const std::span sources{outputs, bank_.size()};
-        for (std::size_t si = 0; si < sources.size(); ++si) {
-            dsp::accumulate_stereo(output,
-                                   {sources[si].left, block},
-                                   {sources[si].right, block},
-                                   live_gain_slots_[source_gain_slots_[si]].gain_envelope(),
-                                   fn);
-        }
-        return {};
-    }
-
-    Result<void> render_block() {
-        const uint64_t frames_now = std::min<uint64_t>(render_block_size_, total_frames_ - frames_done_);
-        const auto fn = static_cast<std::size_t>(frames_now);
-        const auto read_result = reader_->read(in_block_.data(), frames_now);
-        if (!read_result) {
-            return tl::unexpected{read_result.error()};
-        }
-        if (*read_result != frames_now) {
-            return make_error(ErrorCode::io_error, "short render input read");
-        }
-        // Before the first sample there is no outgoing state to preserve. Apply the coalesced initial
-        // topology directly, then begin gain envelopes on the final source graph.
-        if (frames_done_ == 0U && topology_pending_) {
-            if (auto rebuilt = rebuild_sources(pending_topology_); !rebuilt) {
-                return rebuilt;
-            }
-            applied_topology_ = pending_topology_;
-            topology_pending_ = false;
-        }
-        prepare_live_gain_envelopes(fn);
-
-        const bool apply_topology = topology_pending_ && frames_done_ >= next_topology_update_frame_;
-        if (apply_topology) {
-            if (auto result = render_current_sources(old_fifo_, frames_now); !result) {
-                return result;
-            }
-            if (auto rebuilt = rebuild_sources(pending_topology_); !rebuilt) {
-                return rebuilt;
-            }
-            if (auto result = render_current_sources(fifo_, frames_now); !result) {
-                return result;
-            }
-            dsp::topology_crossfade(old_fifo_, fifo_, fn);
-            applied_topology_ = pending_topology_;
-            topology_pending_ = false;
-            next_topology_update_frame_ = frames_done_ + topology_update_interval_frames_;
-        } else if (auto result = render_current_sources(fifo_, frames_now); !result) {
-            return result;
-        }
-        fifo_read_ = 0;
-        frames_done_ += frames_now;
-        return {};
-    }
-
-    const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
-    std::unique_ptr<audio::RenderInputReader> reader_;
-    SourceBank bank_; // own (rebuildable) source list; starts as the prepared list
+    std::unique_ptr<MradmRenderBinauralStream, decltype(&mradm_render_binaural_stream_destroy)> handle_;
     std::string input_path_;
-    uint16_t num_in_ch_;
-    uint64_t total_frames_;
-    uint32_t sample_rate_;
-    uint32_t object_smoothing_frames_;
-    uint64_t render_block_size_;
-
-    std::vector<float> in_block_;
-    std::vector<int32_t> head_locked_;
-    LiveOverrides live_overrides_; // latest snapshot; gain targets are projected into live_gain_slots_
-    render_common::LiveOverrideView live_override_view_{live_overrides_}; // borrows the owned snapshot's labels
-    std::unordered_map<std::string, std::size_t> gain_slot_by_key_;
-    std::vector<LiveGainSlot> live_gain_slots_;
-    std::vector<std::size_t> source_gain_slots_; // source index → live_gain_slots_ index
-    ListenerOrientation listener_orientation_{}; // live head pose (worker-only; identity = no tracking)
-    // object_id → non-unity topology scales; only non-unity entries.
-    // The last applied topology, so set_overrides rebuilds only when it actually changes.
-    std::unordered_map<std::string, LiveTopologyScales> applied_topology_;
-    std::unordered_map<std::string, LiveTopologyScales> pending_topology_;
-    bool topology_pending_{false};
-    uint64_t topology_update_interval_frames_{1U};
-    uint64_t next_topology_update_frame_{0U};
-
-    std::vector<float> fifo_;     // interleaved L/R produced, not yet served
-    std::vector<float> old_fifo_; // one block of the outgoing topology during a state crossfade
-    std::size_t fifo_read_{0};
-    uint64_t frames_done_{0};
 };
 
 class BinauralRenderer final : public IRenderer {
@@ -519,11 +174,8 @@ class BinauralRenderer final : public IRenderer {
             return make_error(
                 ErrorCode::internal_error, "binaural: open_stream received an incompatible prepared state", {});
         }
-        auto stream = BinauralStream::create(*prepared, plan, logs);
-        if (!stream) {
-            return tl::unexpected{stream.error()};
-        }
-        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+        (void) logs;
+        return BinauralStream::create(*prepared, plan);
     }
 };
 
@@ -571,9 +223,7 @@ Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderP
     const MradmRenderBinauralRequest request{numerical_spread(plan.binaural_spread_mode), plan.object_smoothing_frames};
     MradmRenderPrepared* raw = nullptr;
     MradmRenderPreparedView view{};
-    MradmRenderBinauralInfo plan_info{};
-    const auto code =
-        mradm_render_binaural_prepare(plan.scene_handle->raw, bs->handle.get(), &request, &raw, &view, &plan_info);
+    const auto code = mradm_render_binaural_prepare(plan.scene_handle->raw, bs->handle.get(), &request, &raw, &view);
     auto rust = render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::speaker, logs, "binaural");
     if (!rust) {
         return tl::unexpected{rust.error()};
@@ -581,8 +231,6 @@ Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderP
     auto prepared = std::make_shared<BinauralPrepared>();
     prepared->bs = std::move(bs);
     prepared->rust = std::move(*rust);
-    prepared->info = plan_info;
-    prepared->render_block_size = render_block_size;
     return std::static_pointer_cast<IPreparedRender>(prepared);
 }
 

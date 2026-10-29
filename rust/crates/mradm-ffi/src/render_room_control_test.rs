@@ -103,7 +103,7 @@ impl Drop for Fixture {
 }
 
 fn validate() {
-    let mut edit = RenderTripleBalanceOverride {
+    let mut edit = RenderLiveOverride {
         base: RenderOverride {
             object_id: Text::bytes(b"AO_1001"),
             speaker_label: Text::bytes(b""),
