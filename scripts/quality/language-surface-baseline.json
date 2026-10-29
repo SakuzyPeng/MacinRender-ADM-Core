@@ -23,7 +23,7 @@
     },
     "rust": {
       "files": 272,
-      "lines": 96215
+      "lines": 96235
     },
     "rust-vendor": {
       "files": 175,
@@ -35,7 +35,7 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40297,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-ffi": 18978,
+    "rust/crates/mradm-ffi": 18998,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
