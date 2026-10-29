@@ -189,6 +189,20 @@ unsafe fn profile(bands: *const ApiBand, count: u32, preamp: f64) -> Result<dsp:
     }
     validate(result)
 }
+fn parse_error(text: &[u8], error: dsp::ParseError) -> Failure {
+    let message = match error.kind {
+        dsp::ParseErrorKind::Preamp => "Preamp 行数值无法解析",
+        dsp::ParseErrorKind::Frequency => "滤波器行缺少可解析的 Fc",
+        dsp::ParseErrorKind::GainOrQ => "Gain 或 Q 数值无法解析",
+        dsp::ParseErrorKind::Empty => "没有可用的 ParametricEQ 参数",
+    };
+    let line = String::from_utf8_lossy(&text[error.line]);
+    if line.is_empty() {
+        invalid(message)
+    } else {
+        invalid(&format!("{message}: {line}"))
+    }
+}
 unsafe fn file(path: *const u8) -> Result<dsp::Profile> {
     let path = if path.is_null() {
         ""
@@ -203,10 +217,16 @@ unsafe fn file(path: *const u8) -> Result<dsp::Profile> {
             preamp_db: 0.0,
         });
     }
-    let text = std::fs::read(path).map_err(|_| (3, "HpTF:无法读取 ParametricEQ 文件".into()))?;
-    let profile = dsp::parse_parametric_eq(&text)
-        .map_err(|e| invalid(&format!("ParametricEQ 解析失败: {:?}", e.kind)))?;
-    validate(profile)
+    // Identify the source without exposing parent directories in the FFI's error message (ADR 0005).
+    let name = std::path::Path::new(path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+    let with_file = |(code, message): Failure| (code, format!("{message} (path={name})"));
+    let text = std::fs::read(path)
+        .map_err(|_| with_file((3, "HpTF:无法读取 ParametricEQ 文件".into())))?;
+    let profile = dsp::parse_parametric_eq(&text).map_err(|e| with_file(parse_error(&text, e)))?;
+    validate(profile).map_err(with_file)
 }
 
 pub struct Settings {

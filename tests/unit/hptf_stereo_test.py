@@ -142,6 +142,38 @@ def request(revision=1):
     return Parameters(left_count=1, left=left, left_preamp=-3, right_preamp=-9, revision=revision)
 
 
+def file_diagnostics(api, handle, root, monitor=False):
+    path = root / '错误配置.txt'
+    prefix = 'adm_monitor' if monitor else 'adm_scene_output'
+    for text, reason, line in [
+        (b'Preamp: bad dB\n', 'Preamp 行数值无法解析', 'Preamp: bad dB'),
+        (b'Filter 1: ON PK Fc bad Hz\n', '滤波器行缺少可解析的 Fc', 'Filter 1: ON PK Fc bad Hz'),
+        (b'Preamp: -6 dB\nFilter 2: ON PK Fc 1000 Hz Gain 3 dB Q bad\n',
+         'Gain 或 Q 数值无法解析', 'Filter 2: ON PK Fc 1000 Hz Gain 3 dB Q bad'),
+        (b'Filter 3: ON PK Fc 1000 Hz Q \xff\n',
+         'Gain 或 Q 数值无法解析', 'Filter 3: ON PK Fc 1000 Hz Q \ufffd'),
+        (b'# no parameters\n', '没有可用的 ParametricEQ 参数', ''),
+    ]:
+        path.write_bytes(text)
+        legacy = Legacy(path=str(path).encode(), revision=999)
+        assert getattr(api.lib, prefix + '_set_hptf')(handle, C.byref(legacy)) == 1
+        message = getattr(api.lib, prefix + '_last_error_message')(handle).decode()
+        assert reason in message and line in message and path.name in message, message
+        assert str(path.parent) not in message, message
+        for side, ear in [('left', '左耳'), ('right', '右耳')]:
+            config = Files(**{side: str(path).encode()}, revision=999)
+            assert getattr(api.lib, prefix + '_set_hptf_stereo')(handle, C.byref(config)) == 1
+            message = getattr(api.lib, prefix + '_last_error_message')(handle).decode()
+            assert all(value in message for value in [ear, reason, line, path.name]), message
+            if not monitor:
+                error = PTR()
+                assert api.lib.adm_scene_output_set_hptf_stereo_ex(handle, C.byref(config), C.byref(error)) == 1
+                try:
+                    assert error and C.string_at(error).decode() == message
+                finally:
+                    api.lib.adm_free_string(error)
+
+
 def scene_contracts(api, root):
     scene = Scene(api)
     lib, handle = api.lib, scene.output
@@ -157,6 +189,8 @@ def scene_contracts(api, root):
         assert (info.left.revision, info.left.bands, info.right.bands) == (1, 1, 0)
         assert (info.left.preamp, info.right.preamp) == (-3, -9)
         original = bytes(info)
+        file_diagnostics(api, handle, root)
+        assert bytes(scene.activate()) == original
         old = Info()
         C.memset(C.byref(old), 0xA5, C.sizeof(old))
         old.struct_size = C.sizeof(old)
@@ -222,7 +256,7 @@ def scene_contracts(api, root):
         assert bytes(scene.activate()) == from_file
         config.right = str(root / 'missing.txt').encode()
         assert lib.adm_scene_output_set_hptf_stereo_ex(handle, C.byref(config), C.byref(error)) == 3
-        assert error and '右耳' in C.string_at(error).decode()
+        assert error and all(value in C.string_at(error).decode() for value in ['右耳', 'missing.txt'])
         lib.adm_free_string(error)
         assert bytes(scene.activate()) == from_file
         config.right = None
@@ -320,6 +354,8 @@ def monitor_contracts(api, root, require_device):
         api.ok(lib.adm_monitor_set_output_device(monitor, b'hptf-test-missing-device'))
         api.ok(lib.adm_monitor_play(monitor))
         assert bytes(wait_revision(api, monitor, 50, True)) == before
+        file_diagnostics(api, monitor, root, True)
+        assert bytes(api.info(monitor, True)) == before
         bad = request(51)
         bad.right_preamp = float('nan')
         assert lib.adm_monitor_set_hptf_stereo_parameters(monitor, C.byref(bad)) == 1
