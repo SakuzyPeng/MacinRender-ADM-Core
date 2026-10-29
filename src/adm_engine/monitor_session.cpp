@@ -11,8 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "adm/monitor.h"
 #include "adm/render.h"
 
@@ -256,14 +254,8 @@ struct MonitorSession::Impl {
 
     LiveOverrides current_overrides;           // last-applied overrides, re-applied after a device switch
     ListenerOrientation current_orientation{}; // last-applied head orientation, re-applied after a device switch
-    // HpTF: the PARSED PROFILE is kept, not the designed coefficients, because a rebuilt engine
-    // may resolve a different sample rate — re-running design_cascade() there is cheap and removes
-    // that failure mode entirely. Without this, set_output_device() would silently drop the user's
-    // headphone compensation at exactly the moment they plug in headphones.
-    std::optional<render_common::HptfProfile> current_hptf;
-    HptfPreampMode current_hptf_mode{HptfPreampMode::warn_only};
-    std::uint64_t current_hptf_revision{0};
-    std::string device_id; // current output device token ("" = default)
+    std::optional<render_common::HptfSettings> current_hptf; // Owned parameters survive rate/device rebuilds.
+    std::string device_id;                                   // current output device token ("" = default)
     uint32_t sample_rate{48000};
     uint64_t total_frames{0};
 
@@ -283,15 +275,15 @@ struct MonitorSession::Impl {
             return;
         }
         if (!current_hptf.has_value()) {
-            engine->set_hptf(std::nullopt, current_hptf_revision);
+            engine->set_hptf(std::nullopt, 0);
             return;
         }
-        auto coeffs = render_common::design_cascade(*current_hptf, engine->sample_rate(), current_hptf_mode);
+        auto coeffs = current_hptf->design(engine->sample_rate());
         if (!coeffs) {
             log_sink.log(LogLevel::warning, "monitor", "耳机补偿重建失败:" + coeffs.error().message);
             return;
         }
-        engine->set_hptf(*coeffs, current_hptf_revision);
+        engine->set_hptf(*coeffs);
     }
 };
 
@@ -397,74 +389,42 @@ void MonitorSession::set_listener_orientation(const ListenerOrientation& orienta
     impl_->engine->set_listener_orientation(impl_->effective_orientation());
 }
 
-Result<void> MonitorSession::set_hptf(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision) {
-    if (impl_->engine == nullptr) {
-        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
-    }
-    if (!impl_->engine->hptf_supported()) {
-        return make_error(ErrorCode::unsupported,
-                          "耳机补偿(HpTF)只适用于双声道耳机监听;多声道扬声器输出与系统空间音频不支持");
-    }
-
-    if (profile_path.empty()) {
-        return set_hptf_parameters({}, mode, revision);
-    }
-
-    // Parse + design synchronously here: a bad file must surface as an error, not disturb audio.
-    auto profile = render_common::load_parametric_eq_file(std::filesystem::path{profile_path});
-    if (!profile) {
-        return tl::unexpected{profile.error()};
-    }
-    return set_hptf_parameters(*profile, mode, revision);
+Result<void> MonitorSession::set_hptf(const std::string& path, HptfPreampMode mode, std::uint64_t revision) {
+    auto settings = render_common::prepare_hptf(path, mode, revision);
+    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
 }
-
 Result<void>
 MonitorSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
-    if (impl_->engine == nullptr) {
+    auto settings = render_common::prepare_hptf(profile, mode, revision);
+    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+}
+Result<void> MonitorSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
+    if (!impl_->engine) {
         return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
     }
     if (!impl_->engine->hptf_supported()) {
         return make_error(ErrorCode::unsupported, "耳机补偿(HpTF)只适用于双声道耳机监听");
     }
-    auto coeffs = render_common::design_cascade(profile, impl_->engine->sample_rate(), mode);
-    if (!coeffs) {
-        return tl::unexpected{coeffs.error()};
+    auto snapshot = settings.design(impl_->engine->sample_rate());
+    if (!snapshot) {
+        return tl::unexpected{snapshot.error()};
     }
-    if (coeffs->max_response_db > 0.0F) {
-        // warn_only leaves the user's gain alone; auto_trim has already folded the excess in, so
-        // this only ever fires under warn_only.
+    const auto info = render_common::hptf_snapshot_info(*snapshot);
+    if (std::max(info.left.max_response_db, info.right.max_response_db) > 0.0F) {
         impl_->log_sink.log(LogLevel::warning,
                             "monitor",
-                            fmt::format("耳机补偿曲线峰值 {:+.1f} dB,可能削波(Preamp {:+.1f} dB)",
-                                        static_cast<double>(coeffs->max_response_db),
-                                        profile.preamp_db));
+                            "耳机补偿曲线可能削波(左 " + std::to_string(info.left.max_response_db) + " dB,右 " +
+                                std::to_string(info.right.max_response_db) + " dB)");
     }
-
-    // Copy before changing session state: the caller can release its editor draft on return.
-    // Keep parameters, rather than coefficients, for device/rate-dependent engine rebuilds.
-    auto owned_profile = profile;
-    impl_->current_hptf = std::move(owned_profile);
-    impl_->current_hptf_mode = mode;
-    impl_->current_hptf_revision = revision;
-    impl_->engine->set_hptf(*coeffs, revision);
+    impl_->current_hptf = settings;
+    impl_->engine->set_hptf(*snapshot);
     return {};
 }
-
+HptfStereoInfo MonitorSession::hptf_stereo_info() const {
+    return impl_->engine ? render_common::hptf_snapshot_info(impl_->engine->hptf_active_snapshot()) : HptfStereoInfo{};
+}
 HptfInfo MonitorSession::hptf_info() const {
-    HptfInfo info;
-    if (impl_->engine == nullptr) {
-        return info;
-    }
-    const auto snapshot = impl_->engine->hptf_active_snapshot();
-    const auto& coeffs = snapshot.coefficients;
-    info.enabled = !coeffs.is_bypass();
-    info.band_count = coeffs.band_count;
-    info.sample_rate = coeffs.sample_rate;
-    info.preamp_db = coeffs.preamp_db;
-    info.auto_trim_db = coeffs.auto_trim_db;
-    info.max_response_db = coeffs.max_response_db;
-    info.applied_revision = snapshot.revision;
-    return info;
+    return hptf_stereo_info().left;
 }
 
 // NOLINTNEXTLINE(readability-function-size): keep backend rollback and keepalive lifetimes in one transaction.

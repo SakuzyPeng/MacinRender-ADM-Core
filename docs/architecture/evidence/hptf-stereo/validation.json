@@ -1,0 +1,235 @@
+{
+  "schema": "mradm.hptf-stereo.validation.v1",
+  "date": "2026-10-29",
+  "reference_commit": "31bb6dca4673af92f5f3f3d86cac239dc0a76af8",
+  "abi": {
+    "major": 1,
+    "minor": 50,
+    "patch": 0,
+    "soversion": 1,
+    "exported_functions": 164,
+    "legacy_layouts_preserved": true
+  },
+  "platforms": [
+    {
+      "platform": "macOS arm64",
+      "correctness_profile": "Debug",
+      "ctest_passed": 12,
+      "rust_hptf_tests_passed": 20,
+      "monitor_real_device": true,
+      "scene_headless": true,
+      "quality": [
+        "clang-format",
+        "clang-tidy",
+        "cppcheck",
+        "rustfmt",
+        "clippy",
+        "ffi-header-check",
+        "capi-export-check",
+        "language-surface"
+      ],
+      "ffi_functions_checked": 348,
+      "ffi_structures_checked": 141
+    },
+    {
+      "platform": "Windows x64",
+      "correctness_profile": "Release",
+      "build_tree": "build/win-canon",
+      "ctest_passed": 12,
+      "rust_hptf_tests_passed": 20,
+      "monitor_real_device": true,
+      "scene_headless": true,
+      "steps": [
+        {
+          "step": "build-final",
+          "exit_code": 0
+        },
+        {
+          "step": "ctest",
+          "exit_code": 0
+        },
+        {
+          "step": "stereo-abi",
+          "exit_code": 0
+        },
+        {
+          "step": "exports",
+          "exit_code": 0
+        },
+        {
+          "step": "kernels",
+          "exit_code": 0
+        },
+        {
+          "step": "rust-dsp",
+          "exit_code": 0
+        },
+        {
+          "step": "rust-alloc",
+          "exit_code": 0
+        },
+        {
+          "step": "rust-ffi",
+          "exit_code": 0
+        },
+        {
+          "step": "header-build",
+          "exit_code": 0
+        },
+        {
+          "step": "header-ctest",
+          "exit_code": 0
+        },
+        {
+          "step": "phase2-tools",
+          "exit_code": 0
+        },
+        {
+          "step": "language-surface",
+          "exit_code": 0
+        }
+      ]
+    }
+  ],
+  "legacy_shared_dsp": {
+    "reference_profile": "Debug",
+    "candidate_profile": "Debug",
+    "same_host": true,
+    "design_partition_cases": 84,
+    "capture_bit_identical": true,
+    "capture_sha256": "5f46e6bcbabd2e884e5b6188724b98f70d8bf50ad26db0e1ec9ece5c52b9a937"
+  },
+  "parse_reference": {
+    "texts_compared": 174158,
+    "passed": true
+  },
+  "portable_kernels": {
+    "platforms": [
+      "macOS arm64",
+      "Windows x64"
+    ],
+    "profile": "Release",
+    "bit_identical": true,
+    "files": [
+      {
+        "name": "hptf-44100.10-input.f64",
+        "bytes": 40,
+        "sha256": "e433d69e01e6945db398537b9275f6f79365429abe97523c62f24121c3382c60"
+      },
+      {
+        "name": "hptf-44100.20-coefficients.f32",
+        "bytes": 32,
+        "sha256": "7bb367b77091a3c26a661b2bf63e53c5310419eb6078887e180eb6da52f7c8ec"
+      },
+      {
+        "name": "hptf-48000.10-input.f64",
+        "bytes": 40,
+        "sha256": "8a82f80424e51f31f8ee435c025a27c4fedbb66f632138b704426d53ffdeebf6"
+      },
+      {
+        "name": "hptf-48000.20-coefficients.f32",
+        "bytes": 32,
+        "sha256": "ff04d40c3974fb7d7c233221cc040c774224ba8ed832198ca7a8cdbbe3a1de74"
+      },
+      {
+        "name": "hptf-stereo-44100.10-input.f32",
+        "bytes": 65536,
+        "sha256": "7c82c05c514bd17272dc118a9993f4def7a97ba33c2ba4eee02cc7ebd3a74ec7"
+      },
+      {
+        "name": "hptf-stereo-44100.20-left.f32",
+        "bytes": 36,
+        "sha256": "27546164531029d4e977202ef3bd8f4106cd538a5a9986b28107d64a18e30543"
+      },
+      {
+        "name": "hptf-stereo-44100.21-right.f32",
+        "bytes": 36,
+        "sha256": "6b373e7c638120a2c2f7eef981b68ecdd5ddc8f83b0cead3d43214a2de27b934"
+      },
+      {
+        "name": "hptf-stereo-44100.30-fixed.f32",
+        "bytes": 65536,
+        "sha256": "881e5a602c1919f8cb66619f1cbb6e3791813192cfccb936304a400d230fd27c"
+      },
+      {
+        "name": "hptf-stereo-44100.31-fragmented.f32",
+        "bytes": 65536,
+        "sha256": "881e5a602c1919f8cb66619f1cbb6e3791813192cfccb936304a400d230fd27c"
+      },
+      {
+        "name": "hptf-stereo-44100.40-revisions.i32",
+        "bytes": 8,
+        "sha256": "a23a868b85672de9418b12652e4c1663cb38054c1206157fbf5826bf10f80b2d"
+      },
+      {
+        "name": "hptf-stereo-48000.10-input.f32",
+        "bytes": 65536,
+        "sha256": "7c82c05c514bd17272dc118a9993f4def7a97ba33c2ba4eee02cc7ebd3a74ec7"
+      },
+      {
+        "name": "hptf-stereo-48000.20-left.f32",
+        "bytes": 36,
+        "sha256": "8b55a982c9cef820a552a47e48c5380392ca73b04217be0716f176b8809d56b7"
+      },
+      {
+        "name": "hptf-stereo-48000.21-right.f32",
+        "bytes": 36,
+        "sha256": "8d9d33f5bd7025bab14c1ed0382778564ae52a4fd068d69a804c53ae8875e767"
+      },
+      {
+        "name": "hptf-stereo-48000.30-fixed.f32",
+        "bytes": 65536,
+        "sha256": "3991b1d3fe8a7bd789f2df669b1aa8b5decc67ce3a73fc9979c73318befac5e8"
+      },
+      {
+        "name": "hptf-stereo-48000.31-fragmented.f32",
+        "bytes": 65536,
+        "sha256": "3991b1d3fe8a7bd789f2df669b1aa8b5decc67ce3a73fc9979c73318befac5e8"
+      },
+      {
+        "name": "hptf-stereo-48000.40-revisions.i32",
+        "bytes": 8,
+        "sha256": "a23a868b85672de9418b12652e4c1663cb38054c1206157fbf5826bf10f80b2d"
+      },
+      {
+        "name": "hptf-stereo-96000.10-input.f32",
+        "bytes": 65536,
+        "sha256": "7c82c05c514bd17272dc118a9993f4def7a97ba33c2ba4eee02cc7ebd3a74ec7"
+      },
+      {
+        "name": "hptf-stereo-96000.20-left.f32",
+        "bytes": 36,
+        "sha256": "cd912a65528543d98dc29b0231075fa5351efd7eabbecbc5d780ebc17af04e75"
+      },
+      {
+        "name": "hptf-stereo-96000.21-right.f32",
+        "bytes": 36,
+        "sha256": "9dd1d451cc8b97f699c89b220b7bff5186e41b3fb8d2a6c7721088095ca3cc40"
+      },
+      {
+        "name": "hptf-stereo-96000.30-fixed.f32",
+        "bytes": 65536,
+        "sha256": "479137e363a0b2d90564610396e44593cb225c91f7a989685a3d054cad8cd840"
+      },
+      {
+        "name": "hptf-stereo-96000.31-fragmented.f32",
+        "bytes": 65536,
+        "sha256": "479137e363a0b2d90564610396e44593cb225c91f7a989685a3d054cad8cd840"
+      },
+      {
+        "name": "hptf-stereo-96000.40-revisions.i32",
+        "bytes": 8,
+        "sha256": "a23a868b85672de9418b12652e4c1663cb38054c1206157fbf5826bf10f80b2d"
+      }
+    ]
+  },
+  "cpp_surface": {
+    "before_lines": 33732,
+    "after_lines": 33718
+  },
+  "notes": [
+    "Correctness PCM captures are synthetic test evidence, not listening or performance measurements.",
+    "The local Release probe built and ran successfully; rust-objcopy reported a missing libLLVM while stripping debug info. Numeric captures were unaffected."
+  ],
+  "windows_workspace_restored": true
+}

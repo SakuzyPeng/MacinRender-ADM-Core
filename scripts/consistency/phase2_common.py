@@ -653,6 +653,8 @@ def kernel_outputs():
                '40-quantized.c32', '41-magnitudes.f32', '42-complex-sum.c32',
                '43-scales.f32', '50-continuous.c32')]
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
+    names += [f'hptf-stereo-{rate}.{part}' for rate in (44100, 48000, 96000)
+              for part in ('10-input.f32', '20-left.f32', '21-right.f32', '30-fixed.f32', '31-fragmented.f32', '40-revisions.i32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     names += [f'meter-{rate}.05-k-weighting.f64' for rate in METER_RATES]
     names += [f'stream-dsp.{part}' for part in ('10-spread.f32', '20-fold.f32', '30-live-gain.f32', '40-mix.f32')]

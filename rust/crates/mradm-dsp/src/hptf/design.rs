@@ -251,12 +251,7 @@ fn peak_response(coefficients: &Coefficients, bands: &[Extrema]) -> f64 {
     }
 }
 
-pub fn design(
-    bands: &[Band],
-    preamp_db: f64,
-    sample_rate: u32,
-    mode: PreampMode,
-) -> Result<Coefficients> {
+fn untrimmed(bands: &[Band], preamp_db: f64, sample_rate: u32) -> Result<(Coefficients, f64)> {
     if sample_rate == 0 || !preamp_db.is_finite() {
         return Err(Error::InvalidArgument(
             "HpTF:采样率必须为正,前级增益必须是有限数",
@@ -297,12 +292,16 @@ pub fn design(
         out.band_count += 1;
         peaks.push(extrema(section, band.frequency, sample_rate as f64));
     }
-    let mut peak = peak_response(&out, &peaks);
+    let peak = peak_response(&out, &peaks);
     if !peak.is_finite() || peak > 20.0 * libm::log10(f32::MAX as f64) {
         return Err(Error::InvalidArgument("HpTF:级联响应超出可表示范围"));
     }
-    if matches!(mode, PreampMode::AutoTrim) && peak > 0.0 {
-        let trimmed = out.preamp_gain as f64 * libm::pow(10.0, -peak / 20.0);
+    Ok((out, peak))
+}
+
+fn trim(mut out: Coefficients, mut peak: f64, attenuation: f64) -> Result<Coefficients> {
+    if attenuation > 0.0 {
+        let trimmed = out.preamp_gain as f64 * libm::pow(10.0, -attenuation / 20.0);
         if !trimmed.is_finite() || trimmed < (f32::MIN_POSITIVE as f64) {
             return Err(Error::InvalidArgument(
                 "HpTF:自动衰减后的增益超出可表示范围",
@@ -316,4 +315,43 @@ pub fn design(
     }
     out.max_response_db = peak as f32;
     Ok(out)
+}
+
+pub fn design(
+    bands: &[Band],
+    preamp_db: f64,
+    sample_rate: u32,
+    mode: PreampMode,
+) -> Result<Coefficients> {
+    let (out, peak) = untrimmed(bands, preamp_db, sample_rate)?;
+    trim(
+        out,
+        peak,
+        if matches!(mode, PreampMode::AutoTrim) {
+            peak
+        } else {
+            0.0
+        },
+    )
+}
+
+/// One attenuation target for both ears, including an empty (unity) ear.
+/// Each final f32 gain rounds conservatively, as in the shared-profile designer.
+/// Errors include the ear index; no partially designed pair is returned.
+pub fn design_stereo(
+    profiles: [(&[Band], f64); 2],
+    sample_rate: u32,
+    mode: PreampMode,
+) -> std::result::Result<[Coefficients; 2], (usize, Error)> {
+    let left = untrimmed(profiles[0].0, profiles[0].1, sample_rate).map_err(|e| (0, e))?;
+    let right = untrimmed(profiles[1].0, profiles[1].1, sample_rate).map_err(|e| (1, e))?;
+    let attenuation = if matches!(mode, PreampMode::AutoTrim) {
+        left.1.max(right.1)
+    } else {
+        0.0
+    };
+    Ok([
+        trim(left.0, left.1, attenuation).map_err(|e| (0, e))?,
+        trim(right.0, right.1, attenuation).map_err(|e| (1, e))?,
+    ])
 }

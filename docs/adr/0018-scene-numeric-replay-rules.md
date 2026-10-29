@@ -104,7 +104,7 @@ realtime 内核，不扩展到 exact、其它后端或应用侧 DSP。数值门�
 | C++ 交给 Rust 的命令和系数 | `scene/e*-g*-s*-<role>.30-vbap<N>-*`、`.30-binaural-*`、`.30-triple-*` | 渲染器命令和系数；role 为 current/outgoing/incoming，同类型后端切换也分开记录。Triple Balance lane 系数在该 generation 首次渲染时记录，包含 epoch，避免下一 epoch 复用 generation id 时丢失记录。 |
 | 后端切换前 | `scene/*.35-outgoing.f32`、`.36-incoming.f32` | 混合前的两路输出 |
 | 渲染后 | `scene/*.40-render.f32`、`.50-resampled.f32`、`.60-transition.f32` | 渲染、重采样和过渡后的输出 |
-| 设备侧 | `hptf/r*.10-coefficients.f32`、`device/e*.70/80/90-*.f32` | HpTF 系数，以及 HpTF 前后和最终输出 |
+| 设备侧 | `hptf/r*.10-coefficients.f32`（共享）或成对的 `r*.10-left/right-coefficients.f32`（独立双耳）、`device/e*.70/80/90-*.f32` | HpTF 系数，以及 HpTF 前后和最终输出 |
 
 `run-rust-phase2.py` 按实际回放 epoch、后端和切换目标要求检查点，逐组检查 producer/effective 的字段流、
 命令与数值载荷、lane 系数及 HpTF shape 是否成对、行数是否匹配；VBAP panning 命令还必须有足够的系数。

@@ -2,15 +2,13 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstdint>
-#include <fstream>
-#include <ios>
 #include <iterator>
 #include <limits>
 #include <span>
-#include <sstream>
 #include <utility>
+
+#include "adm/c_api.h"
 
 #include "consistency_trace.h"
 #include "dsp.h"
@@ -61,10 +59,11 @@ std::optional<MradmDspHptfSnapshot> to_rust(const std::optional<HptfSnapshot>& v
     if (!value) {
         return std::nullopt;
     }
-    return MradmDspHptfSnapshot{to_rust(value->coefficients), value->revision};
+    return MradmDspHptfSnapshot{
+        to_rust(value->coefficients), value->revision, to_rust(value->right), value->independent ? 1U : 0U};
 }
 HptfSnapshot from_rust(const MradmDspHptfSnapshot& value) noexcept {
-    return {from_rust(value.coefficients), value.revision};
+    return {from_rust(value.coefficients), value.revision, from_rust(value.right), value.independent != 0U};
 }
 // Targets have already been designed on the control thread. An internal
 // contract failure during a noexcept callback is a programming error (ADR 0005).
@@ -83,27 +82,6 @@ std::size_t audio_length(std::size_t frames, std::uint32_t channels) noexcept {
 } // namespace
 
 // ── 解析 ──────────────────────────────────────────────────────────────────────
-
-Result<void> validate_hptf_profile(const HptfProfile& profile) {
-    if (!std::isfinite(profile.preamp_db)) {
-        return make_error(ErrorCode::invalid_argument, "HpTF:Preamp 必须是有限数");
-    }
-    std::size_t enabled_count = 0;
-    for (std::size_t index = 0; index < profile.bands.size(); ++index) {
-        const auto& band = profile.bands[index];
-        if (band.type > HptfBandType::notch || !std::isfinite(band.fc_hz) || band.fc_hz <= 0.0 ||
-            !std::isfinite(band.q) || band.q <= 0.0 || !std::isfinite(band.gain_db)) {
-            return make_error(ErrorCode::invalid_argument,
-                              "HpTF:滤波器类型必须有效,参数必须为有限数且 Fc/Q 为正",
-                              "band=" + std::to_string(index + 1));
-        }
-        if (band.enabled && ++enabled_count > k_hptf_max_bands) {
-            return make_error(ErrorCode::invalid_argument,
-                              "HpTF:启用的滤波器段数超过上限 " + std::to_string(k_hptf_max_bands));
-        }
-    }
-    return {};
-}
 
 // AutoEq text is user input; the grammar lives in Rust (mradm-dsp hptf::parametric_eq).
 // Error messages and line context stay here, unchanged.
@@ -158,31 +136,71 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
         band.q = b.q;
         profile.bands.push_back(band);
     }
-    if (auto valid = validate_hptf_profile(profile); !valid) {
-        return tl::unexpected{valid.error()};
+    std::array<char, 256> validation{};
+    std::size_t invalid_band = 0;
+    const auto status = mradm_dsp_hptf_validate(
+        bands.data(), result.band_count, result.preamp_db, &invalid_band, validation.data(), validation.size());
+    if (status != 0) {
+        return make_error(static_cast<ErrorCode>(status),
+                          validation.data(),
+                          invalid_band == 0 ? "" : "band=" + std::to_string(invalid_band));
     }
     return profile;
 }
 
-Result<HptfProfile> load_parametric_eq_file(const std::filesystem::path& path) {
-    std::ifstream in{path, std::ios::binary};
-    if (!in) {
-        return make_error(ErrorCode::io_error, "HpTF:无法打开 ParametricEQ 文件", "path=" + path.string());
+Result<HptfSettings> prepare_hptf(const void* config, std::uint32_t source_kind) {
+    void* raw = nullptr;
+    std::array<char, 512> message{};
+    const auto status = mradm_dsp_hptf_settings_create(config, source_kind, &raw, message.data(), message.size());
+    if (status != 0) {
+        return make_error(static_cast<ErrorCode>(status), message.data());
     }
-    std::ostringstream buf;
-    buf << in.rdbuf();
-    auto parsed = parse_parametric_eq(buf.str());
-    if (!parsed) {
-        auto err = parsed.error();
-        if (err.context.empty()) {
-            err.context = "path=" + path.string();
-        } else {
-            err.context += " path=" + path.string();
-        }
-        return tl::unexpected{std::move(err)};
+    return HptfSettings{std::shared_ptr<void>{raw, mradm_dsp_hptf_settings_destroy}};
+}
+Result<HptfSettings> prepare_hptf(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
+    if (profile.bands.size() > std::numeric_limits<uint32_t>::max()) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:滤波器数组过大");
     }
-    parsed->name = path.filename().string();
-    return parsed;
+    std::vector<adm_hptf_band_t> bands;
+    bands.reserve(profile.bands.size());
+    std::ranges::transform(profile.bands, std::back_inserter(bands), [](const HptfBand& b) {
+        return adm_hptf_band_t{
+            sizeof(adm_hptf_band_t), static_cast<int32_t>(b.type), b.enabled ? 1 : 0, 0, b.fc_hz, b.gain_db, b.q};
+    });
+    const adm_hptf_parameters_t parameters{sizeof(adm_hptf_parameters_t),
+                                           static_cast<uint32_t>(bands.size()),
+                                           bands.data(),
+                                           profile.preamp_db,
+                                           static_cast<int32_t>(mode),
+                                           0,
+                                           revision};
+    return prepare_hptf(&parameters, 1);
+}
+Result<HptfSettings> prepare_hptf(const std::string& path, HptfPreampMode mode, std::uint64_t revision) {
+    const adm_hptf_config_t config{sizeof(adm_hptf_config_t), path.c_str(), static_cast<int32_t>(mode), 0, revision};
+    return prepare_hptf(&config, 0);
+}
+Result<HptfSnapshot> HptfSettings::design(std::uint32_t rate) const {
+    MradmDspHptfSnapshot result{};
+    std::array<char, 512> message{};
+    const auto status = mradm_dsp_hptf_settings_design(handle.get(), rate, &result, message.data(), message.size());
+    if (status != 0) {
+        return make_error(static_cast<ErrorCode>(status), message.data());
+    }
+    return from_rust(result);
+}
+HptfStereoInfo hptf_snapshot_info(const HptfSnapshot& snapshot) {
+    const auto info = [&](const HptfCoefficients& c) -> HptfInfo {
+        return {!c.is_bypass(),
+                c.band_count,
+                c.sample_rate,
+                c.preamp_db,
+                c.auto_trim_db,
+                c.max_response_db,
+                snapshot.revision};
+    };
+    const auto& right = snapshot.independent ? snapshot.right : snapshot.coefficients;
+    return {info(snapshot.coefficients), info(right), right == snapshot.coefficients};
 }
 
 // ── 设计 ──────────────────────────────────────────────────────────────────────
@@ -199,9 +217,6 @@ double cascade_magnitude_db(const HptfCoefficients& coeffs, double hz) {
 Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_t sample_rate, HptfPreampMode mode) {
     if (sample_rate == 0U) {
         return make_error(ErrorCode::invalid_argument, "HpTF:采样率必须为正");
-    }
-    if (auto valid = validate_hptf_profile(profile); !valid) {
-        return tl::unexpected{valid.error()};
     }
     std::vector<MradmDspHptfBand> bands;
     bands.reserve(profile.bands.size());
@@ -320,21 +335,27 @@ void HptfProcessor::prepare(std::uint32_t channel_count, std::uint32_t rate) {
 }
 
 void HptfProcessor::publish(const HptfCoefficients& coeffs, std::uint64_t revision) {
+    publish(HptfSnapshot{coeffs, revision});
+}
+void HptfProcessor::publish(const HptfSnapshot& snapshot) {
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    {
+    const auto dump = [&](const HptfCoefficients& coeffs, const std::string& side) {
         std::vector<float> values{coeffs.preamp_gain, coeffs.max_response_db, coeffs.auto_trim_db, coeffs.preamp_db};
-        for (const auto& section :
-             std::span{coeffs.sections}.first(std::min<std::size_t>(coeffs.band_count, coeffs.sections.size()))) {
+        for (const auto& section : std::span{coeffs.sections}.first(coeffs.band_count)) {
             values.insert(values.end(), {section.b0, section.b1, section.b2, section.a1, section.a2});
         }
-        const auto key = "hptf/r" + std::to_string(revision) + ".10-coefficients";
+        const auto key = "hptf/r" + std::to_string(snapshot.revision) + ".10-" + side + "coefficients";
         consistency::dump(key + ".f32", values);
         consistency::dump(key + "-shape.i32",
                           {static_cast<int>(coeffs.sample_rate), static_cast<int>(coeffs.band_count)});
+    };
+    dump(snapshot.coefficients, snapshot.independent ? "left-" : "");
+    if (snapshot.independent) {
+        dump(snapshot.right, "right-");
     }
 #endif
     const std::lock_guard lock(publication_mutex_);
-    pending_.publish({coeffs, revision});
+    pending_.publish(snapshot);
 }
 
 void HptfProcessor::publish_bypass(std::uint64_t revision) {

@@ -121,6 +121,7 @@ class MonitorEngine {
     // is a short linear blend of the outgoing and incoming cascades, so it never clicks.
     // Only meaningful for a 2-channel (headphone) monitor feed — see hptf_supported().
     void set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs, uint64_t revision);
+    void set_hptf(const render_common::HptfSnapshot& snapshot) { hptf_.publish(snapshot); }
 
     // HpTF only applies to a real 2ch headphone feed. A multichannel speaker feed, and a
     // system-spatial bed handed to the OS for HRTF, are not headphone signals — the session

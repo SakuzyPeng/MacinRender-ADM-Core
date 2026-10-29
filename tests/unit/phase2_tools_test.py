@@ -471,7 +471,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 237)
+        self.assertEqual(len(names), 255)
         self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         # Every oversampling factor and both scanner kinds report true peak and loudness.
         for rate in common.METER_RATES:
@@ -682,6 +682,29 @@ class EvidenceTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'inconsistent Scene checkpoint'):
                         collector.require_scene_checkpoints(root, row)
                     (root / name).write_bytes(expected[name])
+
+    def test_stereo_hptf_checkpoints_require_both_ears_and_matching_rates(self):
+        row = {'id': 'case', 'backend': 'vbap', 'layout': '0+2+0', 'device_dsp': True,
+               'epochs': [{'epoch': 1}, {'epoch': 2}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.scene_checkpoint_fixture(root, row)
+            for path in list(root.glob('hptf/*')):
+                for side in ('left', 'right'):
+                    path.with_name(path.name.replace('.10-', f'.10-{side}-')).write_bytes(path.read_bytes())
+                path.unlink()
+            collector.require_scene_checkpoints(root, row)
+            right = root / 'hptf/r1.10-right-coefficients.f32'
+            shape = root / 'hptf/r1.10-right-coefficients-shape.i32'
+            original = right.read_bytes()
+            right.unlink()
+            shape.unlink()
+            with self.assertRaisesRegex(ValueError, 'missing HpTF stereo sibling'):
+                collector.require_scene_checkpoints(root, row)
+            right.write_bytes(original)
+            shape.write_bytes(struct.pack('<2i', 96000, 1))
+            with self.assertRaisesRegex(ValueError, 'inconsistent HpTF stereo rates'):
+                collector.require_scene_checkpoints(root, row)
 
     def test_scene_checkpoint_statistics_exclude_offline_name_prefixes(self):
         cases = {'scene-binaural-cloud': {'checkpoints': [{'identical': False}] * 240},

@@ -914,3 +914,33 @@ fn live_triple_balance_first_process_reset_and_rejection_do_not_allocate() {
     assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
     assert_eq!(out, expected, "a rejection leaves the state");
 }
+
+#[test]
+fn stereo_hptf_preserved_ears_queued_pairs_and_resets_do_not_allocate() {
+    use mradm_dsp::hptf::{Band, BandKind, PreampMode, Processor, StereoSnapshot, design_stereo};
+    let bands = [Band {
+        kind: BandKind::Peaking,
+        enabled: true,
+        frequency: 61.0,
+        gain_db: 9.0,
+        q: 7.0,
+    }];
+    let first = design_stereo([(&bands, -3.0), (&[], 0.0)], 48000, PreampMode::AutoTrim).unwrap();
+    let second = design_stereo([(&[], -2.0), (&[], 0.0)], 48000, PreampMode::WarnOnly).unwrap();
+    let mut p = Processor::new(2, 48000).unwrap();
+    let mut audio = [0.02; 274];
+    COUNT.with(|c| c.set(Some(0)));
+    for revision in 1..100 {
+        let target = StereoSnapshot {
+            coefficients: if revision % 2 == 0 { first } else { second },
+            revision,
+            independent: true,
+        };
+        p.process_stereo(&mut audio, Some(target)).unwrap();
+        if revision % 11 == 0 {
+            p.reset_stereo(None).unwrap();
+        }
+    }
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(count, 0);
+}
