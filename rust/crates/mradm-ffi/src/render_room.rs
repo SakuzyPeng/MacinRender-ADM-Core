@@ -278,7 +278,7 @@ pub unsafe extern "C" fn mradm_render_room_stream_seek_step(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_room_validate_overrides(
-    values: *const RenderTripleBalanceOverride,
+    values: *const RenderLiveOverride,
     values_len: usize,
     message: *mut u8,
     message_len: *mut usize,
@@ -290,7 +290,7 @@ pub unsafe extern "C" fn mradm_render_room_validate_overrides(
         ptr::null_mut(),
         || {
             // Validation depends only on the edits and the room boundary; no stream is borrowed.
-            let o = unsafe { tb_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
+            let o = unsafe { live_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
             validate_overrides(&o, scope).map_err(|(code, message)| Error {
                 code,
                 message: message.into_bytes(),
@@ -304,11 +304,11 @@ pub unsafe extern "C" fn mradm_render_room_validate_overrides(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_room_stream_overrides(
     handle: *mut RenderRoomStream,
-    values: *const RenderTripleBalanceOverride,
+    values: *const RenderLiveOverride,
     values_len: usize,
 ) -> i32 {
     driver_boundary(ptr::null_mut(), ptr::null_mut(), ptr::null_mut(), || {
-        let o = unsafe { tb_overrides(values, values_len)? };
+        let o = unsafe { live_overrides(values, values_len)? };
         unsafe { room_stream(handle)? }.set_overrides(&o);
         Ok(())
     })
