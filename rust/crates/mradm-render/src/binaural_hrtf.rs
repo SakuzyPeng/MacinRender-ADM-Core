@@ -625,6 +625,13 @@ mod tests {
             "size is part of the key"
         );
         std::fs::write(&file, b"abcd").unwrap();
+        // Rapid writes can share a filesystem timestamp, especially on Windows.
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(modified + std::time::Duration::from_secs(2))
+            .unwrap();
         assert!(
             first != key(Some(&sofa), 48000).unwrap(),
             "modification time is part of the key"
