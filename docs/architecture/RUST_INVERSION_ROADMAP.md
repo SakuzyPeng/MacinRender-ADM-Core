@@ -48,9 +48,9 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除（4.4 删除 `semantic_policy.h` 与 `io::write_scene`） | 四期～六期 |
 | `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust | 五期 |
 | `src/adm_c_api` | 3,614 | Rust 实现同一 `c_api.h` | 六期 |
-| `src/adm_render_binaural` | 3,486 | Rust（4.7），只留适配壳 | 四期 |
-| `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除（4.5 把只剩测试使用的 HOA、EAR、Live VBAP 头移到 `tests/unit`，4.6 把 Triple Balance 头移到 `tests/support` 并删去 Live TB 与 room session 的声明，剩 2,399 行） | 四期～六期 |
-| `src/adm_render_common` | 2,777 | Rust（4.5 已完成路由、对象预处理与扬声器离线驱动；扬声器布局表提前到 4.3）。现为 3,306 行：私有 FFI 头 `routing_ffi.h`（609 行，4.6 增加 Triple Balance 与 room 的声明）和两个 Scene 扬声器渲染器共用的适配 `live_rust_renderer`（4.6 C 由 `src/adm_render_vbap` 移入）；给 Apple 岛与双耳的薄包装随 4.7 删除，适配壳到五期删除 | 四期 |
+| `src/adm_render_binaural` | 3,486 | Rust `mradm-render`（4.7 已完成，剩 596 行的适配壳、能力表、`HrtfState` 视图与 Scene 双耳的创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural`） | 四期 |
+| `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除（4.5 把只剩测试使用的 HOA、EAR、Live VBAP 头移到 `tests/unit`，4.6 把 Triple Balance 头移到 `tests/support` 并删去 Live TB 与 room session 的声明，4.7 把只剩测试使用的双耳头移到 `tests/support/binaural` 并删去 `live_binaural.h`，剩 1,994 行） | 四期～六期 |
+| `src/adm_render_common` | 2,777 | Rust（4.5 已完成路由、对象预处理与扬声器离线驱动；扬声器布局表提前到 4.3）。现为 3,487 行：私有 FFI 头 `routing_ffi.h`（759 行，4.6 增加 Triple Balance 与 room 的声明，4.7 增加双耳）和 Scene 流式 VBAP、Triple Balance、room 与双耳共用的适配 `live_rust_renderer`（4.6 C 由 `src/adm_render_vbap` 移入）；4.7 之后双耳只用离线驱动的错误与文字风格、`resolve_lfe_routing` 与 `live_override_records`，其余薄包装只剩 Apple 岛在用，适配壳到五期删除 | 四期 |
 | `src/adm_core` | 2,225 | 语义策略、DS 矩阵、屏幕 → Rust（4.4 已完成，剩 412 行）；领域模型视图到五期删除 | 四期、五期 |
 | `src/adm_render_triple_balance` | 2,055 | Rust `mradm-render`（4.6 已完成，剩 355 行的适配壳与能力表；只剩测试使用的 C++ 移到 `tests/support/triple_balance`） | 四期 |
 | `src/adm_cli` | 1,655 | Rust CLI，行为不变 | 六期 |

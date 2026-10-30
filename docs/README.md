@@ -84,7 +84,7 @@
 - [语义策略与参数 JSON 迁入 Rust（四期 4.4）](architecture/RUST_INVERSION_POLICY.md)
 - [扬声器后端与公共渲染层迁入 Rust（四期 4.5）](architecture/RUST_INVERSION_SPEAKERS.md)
 - [Triple Balance 与 room 迁入 Rust（四期 4.6）](architecture/RUST_INVERSION_TRIPLE_ROOM.md)
-- [双耳渲染迁入 Rust 与开放性能问题（四期 4.7 B）](architecture/RUST_INVERSION_BINAURAL.md)
+- [双耳渲染迁入 Rust（四期 4.7，含 B 合并审查与开放性能问题）](architecture/RUST_INVERSION_BINAURAL.md)
 - [双耳性能调查：计时修正、拓扑重建内存与归约成本](architecture/RUST_BINAURAL_PERFORMANCE_REVIEW.md)
 - [双耳文件流式拓扑重建的内存修复](architecture/RUST_BINAURAL_MEMORY_FIX.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
