@@ -159,7 +159,7 @@ cmake --build --preset release
 mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
-          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
+          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio
 C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render
 所有模块 ──→ ADMCore（领域模型、错误、选项、能力）
 ```
@@ -170,7 +170,7 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 | `ADMMetadata` / `ADMIo` | 由 Rust 渲染场景生成 `AdmScene`，以及 ADM AXML 回写 |
 | `ADMRender*` | EAR、VBAP、Triple Balance、HOA、HRTF 双耳与 Apple AUSpatialMixer 后端 |
 | `ADMRendererFactory` | 离线渲染与实时监听共用的后端选择 |
-| `ADMAudio` / `ADMPeak` / `ADMLoudness` | 容器编码与元数据、响度与 True Peak |
+| `ADMAudio` | 容器编码与元数据 |
 | `ADMRealtime` | 实时监听：MonitorEngine、SceneStream、设备输出与头部追踪 |
 | `ADMEngine` / `ADMCAPI` | `RenderService` 编排与稳定 C ABI |
 | `rust/crates/mradm-dsp` | FFT、VBAP、HRTF/SOFA、卷积、OM spreader、重采样、计量、HOA、Monitor 等数值 DSP |

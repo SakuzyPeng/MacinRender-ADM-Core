@@ -13,7 +13,6 @@
 
 #include "adm/audio_io.h"
 #include "adm/logging.h"
-#include "adm/peak.h"
 #include "adm/render.h"
 
 #include "../support/adm_fixture.h"
@@ -41,25 +40,8 @@ bool check(bool condition, const char* msg) {
     return condition;
 }
 
-// Write a 1ch 48kHz WAV with a 440 Hz sine wave at the given amplitude.
+// Write a 1ch 48 kHz ADM Objects WAV (front centre) with a 440 Hz sine at the given amplitude.
 // 440 Hz is well below Nyquist, so True Peak ≈ sample peak (negligible inter-sample overshoot).
-void write_sine_wav(float amplitude, const std::filesystem::path& path) {
-    constexpr uint32_t k_sr = 48000U;
-    constexpr uint32_t k_frames = k_sr; // 1 second
-    constexpr float k_freq = 440.0F;
-
-    auto chna = std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{});
-    auto axml = std::make_shared<fixture::WaveAxml>("");
-    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
-
-    std::vector<float> samples(k_frames);
-    for (uint32_t n = 0; n < k_frames; ++n) {
-        samples[n] = amplitude * std::sin(2.0F * std::numbers::pi_v<float> * k_freq * static_cast<float>(n) /
-                                          static_cast<float>(k_sr));
-    }
-    writer->write(samples.data(), static_cast<uint64_t>(k_frames));
-}
-
 void write_objects_sine_wav(float amplitude, const std::filesystem::path& path) {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = k_sr; // 1 second
@@ -142,21 +124,39 @@ double max_abs_sample(const std::filesystem::path& path) {
     return max_val;
 }
 
+// Renders the front-centre sine object to 5.0 through RenderService with the True Peak limiter on.
+mradm::RenderResult render_limited(float amplitude,
+                                   float target_dbtp,
+                                   const std::filesystem::path& in_path,
+                                   const std::filesystem::path& out_path) {
+    write_objects_sine_wav(amplitude, in_path);
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.output_layout = "0+5+0";
+    req.options.peak_limit = true;
+    req.options.peak_limit_dbtp = target_dbtp;
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    return service.render(req, progress, logs);
+}
+
 // Over-limit: 440 Hz sine at 0.95 amplitude → True Peak > -1.0 dBTP → limiter applies.
 // After limiting the sample peak must be ≤ target and not have collapsed.
 bool verify_limiter_active() {
-    const auto path = std::filesystem::temp_directory_path() / "mr_peak_sine_high.wav";
-    FileGuard guard{path};
-    write_sine_wav(0.95F, path);
-
-    mradm::NullLogSink logs;
-    const auto res = mradm::apply_peak_limit(path.string(), -1.0F, logs);
-    if (!res) {
-        std::cerr << "FAIL [active]: " << res.error().message << "\n";
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_peak_sine_high_input.wav";
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_peak_sine_high.wav";
+    FileGuard in_guard{in_path};
+    FileGuard out_guard{out_path};
+    const auto res = render_limited(0.95F, -1.0F, in_path, out_path);
+    if (!res.success()) {
+        std::cerr << "FAIL [active]: " << res.error.message << "\n";
         return false;
     }
 
-    const double max_sample = max_abs_sample(path);
+    const double max_sample = max_abs_sample(out_path);
     const double target_linear = std::pow(10.0, -1.0 / 20.0); // ≈ 0.8913
 
     bool ok = true;
@@ -168,18 +168,17 @@ bool verify_limiter_active() {
 
 // No-op: 440 Hz sine at 0.10 amplitude → True Peak well below -1.0 dBTP → no change.
 bool verify_limiter_noop() {
-    const auto path = std::filesystem::temp_directory_path() / "mr_peak_sine_low.wav";
-    FileGuard guard{path};
-    write_sine_wav(0.10F, path);
-
-    mradm::NullLogSink logs;
-    const auto res = mradm::apply_peak_limit(path.string(), -1.0F, logs);
-    if (!res) {
-        std::cerr << "FAIL [noop]: " << res.error().message << "\n";
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_peak_sine_low_input.wav";
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_peak_sine_low.wav";
+    FileGuard in_guard{in_path};
+    FileGuard out_guard{out_path};
+    const auto res = render_limited(0.10F, -1.0F, in_path, out_path);
+    if (!res.success()) {
+        std::cerr << "FAIL [noop]: " << res.error.message << "\n";
         return false;
     }
 
-    const double max_sample = max_abs_sample(path);
+    const double max_sample = max_abs_sample(out_path);
     // No gain was applied; sample peak should remain near 0.10.
     return check(max_sample > 0.08 && max_sample < 0.12, "[noop] amplitude unchanged");
 }

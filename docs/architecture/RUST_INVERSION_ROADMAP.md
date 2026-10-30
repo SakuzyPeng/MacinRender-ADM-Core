@@ -58,7 +58,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | `src/adm_render_vbap` / `ear` / `hoa` | 1,236 / 1,039 / 770 | Rust `mradm-render`（4.5 已完成，含 Scene 流式 VBAP；剩 257 / 115 / 111 行的适配壳与能力表，Scene VBAP 的适配 4.6 C 移入 `render_common`） | 四期 |
 | `src/adm_metadata`、`src/adm_io` | 788、590 | Rust 渲染场景 `mradm-scene`（4.3）；导出回写随语义策略迁入（4.4 已完成，剩 765、444 行的场景视图与文件编排） | 四期 |
 | `src/adm_renderer_factory` | 387 | 五期随编排迁入 Rust | 五期 |
-| `src/adm_loudness`、`src/adm_peak` | 165、143 | Rust（4.8） | 四期 |
+| `src/adm_loudness`、`src/adm_peak` | 0（原 165、143） | 删除（4.8 A，无生产调用者） | 四期 |
 
 四期估计删除生产 C/C++ 1.6–1.8 万行（约 35%），以各切片实测为准。
 

@@ -202,7 +202,6 @@ ADMRenderWindows    Windows-only（if(WIN32)）PRIVATE: Ole32 + ADMRenderCommon�
 ADMAudio            PRIVATE: dr_flac, FLAC, Opus, mradm-ffi（mradm-wav：全部 WAVE 样本读写与容器元数据）
                     macOS: AudioToolbox + CoreFoundation（APAC / CAF metadata）
                     可选: IamfAomBridge（MR_ADM_ENABLE_IAMF）；IAMF 编码 + MP4 打包
-ADMPeak / ADMLoudness  PRIVATE: ADMDsp（Rust Meter）+ ADMAudio
 ADMRendererFactory  RenderService 与 MonitorEngine 共用的后端选择/构造（macOS 额外链 ADMRenderApple），
                     两条链路的后端选择不允许分叉
 ADMRealtime         实时监听核心：MonitorEngine + SceneStream + ring buffer + miniaudio 输出设备 + OSC 头追踪
