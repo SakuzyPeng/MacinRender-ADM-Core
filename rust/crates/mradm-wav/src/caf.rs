@@ -42,6 +42,13 @@ pub fn layout_tag(layout: &[u8], channels: u32) -> Result<u32> {
     Ok(*tag)
 }
 
+/// The layout id for a channel layout tag, if it is one of ours and matches the channel count.
+pub fn tag_layout(tag: u32, channels: u32) -> Option<&'static str> {
+    TAGS.iter()
+        .find(|(_, t, c)| *t == tag && *c == channels)
+        .map(|(id, ..)| *id)
+}
+
 /// Streaming float32 writer. Drop never finalizes: call `finish` to patch the data size.
 pub struct Writer<W> {
     sink: W,
@@ -141,6 +148,7 @@ pub struct Reader<R> {
     frames: u64,
     frames_read: u64,
     bytes: Vec<u8>,
+    tag: Option<u32>,
 }
 impl Reader<BufReader<File>> {
     pub fn open(path: &Path) -> Result<Self> {
@@ -179,6 +187,7 @@ impl<R: Read + Seek> Reader<R> {
         let mut desc = false;
         let mut data_start: Option<u64> = None;
         let mut data_bytes = 0u64;
+        let mut tag = None;
         while let Some(kind) = exact::<_, 4>(&mut source)? {
             let size = i64::from_be_bytes(
                 exact::<_, 8>(&mut source)?
@@ -229,6 +238,14 @@ impl<R: Read + Seek> Reader<R> {
                         skip(&mut source)?;
                     }
                 }
+                b"chan" if size >= 0 => {
+                    // The tag only; the position then follows the generic skip from the payload.
+                    if let Some(word) = exact::<_, 4>(&mut source)? {
+                        tag = Some(u32::from_be_bytes(word));
+                    }
+                    let _ = source.seek(SeekFrom::Start(payload));
+                    skip(&mut source)?;
+                }
                 _ if size >= 0 => skip(&mut source)?,
                 // An unneeded chunk of unknown size ends the scan.
                 _ => break,
@@ -245,6 +262,7 @@ impl<R: Read + Seek> Reader<R> {
             frames: data_bytes / (u64::from(channels) * 4),
             frames_read: 0,
             bytes: Vec::new(),
+            tag,
         })
     }
     pub fn channels(&self) -> u32 {
@@ -255,6 +273,10 @@ impl<R: Read + Seek> Reader<R> {
     }
     pub fn frame_count(&self) -> u64 {
         self.frames
+    }
+    /// The last `chan` chunk's channel layout tag.
+    pub fn layout_tag(&self) -> Option<u32> {
+        self.tag
     }
     /// Reads up to `out.len() / channels` frames; fewer only at the end of the file.
     pub fn read(&mut self, out: &mut [f32]) -> Result<u64> {
