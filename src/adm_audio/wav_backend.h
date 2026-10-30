@@ -233,6 +233,92 @@ class RustWavWriter {
     std::unique_ptr<MradmWavWriter, decltype(&mradm_wav_writer_destroy)> handle_{nullptr, mradm_wav_writer_destroy};
 };
 
+// Final float PCM output, RF64 WAVE or CAF (layout non-empty); numbers its writer/pass* checkpoints.
+class RustOutputWriter {
+  public:
+    static Result<std::unique_ptr<RustOutputWriter>>
+    create(const std::string& path, uint32_t channels, uint32_t rate, std::optional<std::string_view> caf_layout) {
+        auto writer = std::unique_ptr<RustOutputWriter>{new RustOutputWriter{path, channels}};
+        const auto utf8_path = wav_path_utf8(path);
+        const auto layout = caf_layout.value_or(std::string_view{});
+        std::array<uint8_t, 512> message{};
+        MradmOutputWriter* handle = nullptr;
+        const auto code = mradm_output_writer_create(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                                     utf8_path.size(),
+                                                     channels,
+                                                     rate,
+                                                     caf_layout.has_value() ? 1U : 0U,
+                                                     reinterpret_cast<const uint8_t*>(layout.data()),
+                                                     layout.size(),
+                                                     &handle,
+                                                     message.data(),
+                                                     message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path)};
+        }
+        writer->handle_.reset(handle);
+        return writer;
+    }
+    // Whole frames, all or nothing.
+    [[nodiscard]] bool write(const float* samples, uint64_t frames) {
+        return frames <= std::numeric_limits<std::size_t>::max() / channels_ &&
+               mradm_output_writer_write(
+                   handle_.get(), samples, static_cast<std::size_t>(frames) * channels_, nullptr, 0) == 0;
+    }
+    Result<void> finish() {
+        std::array<uint8_t, 512> message{};
+        const auto code = mradm_output_writer_finish(handle_.get(), message.data(), message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path_)};
+        }
+        return {};
+    }
+
+  private:
+    RustOutputWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
+    std::string path_;
+    uint32_t channels_;
+    std::unique_ptr<MradmOutputWriter, decltype(&mradm_output_writer_destroy)> handle_{nullptr,
+                                                                                       mradm_output_writer_destroy};
+};
+
+class RustCafReader {
+  public:
+    static Result<std::unique_ptr<RustCafReader>> open(const std::string& path) {
+        auto reader = std::unique_ptr<RustCafReader>{new RustCafReader{}};
+        const auto utf8_path = wav_path_utf8(path);
+        std::array<uint8_t, 512> message{};
+        MradmCafReader* handle = nullptr;
+        const auto code = mradm_caf_reader_open(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                                utf8_path.size(),
+                                                &handle,
+                                                &reader->info_,
+                                                message.data(),
+                                                message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path)};
+        }
+        reader->handle_.reset(handle);
+        return reader;
+    }
+    // Frames read; 0 at the end of the data or on a read error.
+    uint64_t read(float* output, uint64_t frames) {
+        uint64_t count = 0;
+        if (frames > std::numeric_limits<std::size_t>::max() / info_.channels ||
+            mradm_caf_reader_read(
+                handle_.get(), output, static_cast<std::size_t>(frames) * info_.channels, &count, nullptr, 0) != 0) {
+            return 0;
+        }
+        return count;
+    }
+    [[nodiscard]] const MradmWavInfo& info() const noexcept { return info_; }
+
+  private:
+    RustCafReader() = default;
+    MradmWavInfo info_{};
+    std::unique_ptr<MradmCafReader, decltype(&mradm_caf_reader_destroy)> handle_{nullptr, mradm_caf_reader_destroy};
+};
+
 // Integer PCM conversion output: exclusive create, installed by the caller only after finish().
 struct IntegerWavWriter {
     static Result<std::unique_ptr<RustWavWriter>>

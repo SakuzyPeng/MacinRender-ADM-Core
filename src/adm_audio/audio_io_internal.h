@@ -9,12 +9,6 @@
 
 namespace mradm::audio {
 
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-// Consistency diagnostics: one sequence for every final-PCM writer (WAVE and CAF), so their
-// `writer/passN-sM.80-pcm.f32` checkpoints never share a name within a process.
-uint64_t next_writer_trace_id();
-#endif
-
 std::string compact_metadata_comment(const MetadataFields& meta);
 
 Result<void> write_wav_metadata(const std::string& path, const MetadataFields& meta);

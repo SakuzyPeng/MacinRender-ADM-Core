@@ -302,6 +302,9 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
             status != 0) {
             return error.error(status, plan.input_path);
         }
+        if (auto finished = writer->finish(); !finished) {
+            return tl::unexpected{finished.error()};
+        }
 
         progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
         const uint64_t start = window ? std::min(window->start_frame, info.num_frames) : 0;

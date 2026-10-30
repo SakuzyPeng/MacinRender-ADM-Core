@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -17,7 +16,6 @@
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
-#include "../adm_render_common/consistency_trace.h"
 #include "audio_io_internal.h"
 #include "wav_backend.h"
 
@@ -68,71 +66,116 @@ void emit_wav_progress(ProgressSink* progress,
 
 } // namespace
 
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-uint64_t next_writer_trace_id() {
-    static std::atomic<uint64_t> next_id{0};
-    return next_id.fetch_add(1);
-}
-#endif
-
-// ── FloatWavWriter ────────────────────────────────────────────────────────────
+// ── FloatWavWriter / FloatCafWriter ───────────────────────────────────────────
+// Both wrap the Rust final-PCM writer, which also numbers and writes the writer/pass* checkpoints.
 
 struct FloatWavWriter::Impl {
-    std::unique_ptr<RustWavWriter> writer;
-    std::optional<Result<void>> finish_result;
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    uint64_t trace_id{0};
-    uint64_t trace_position{0};
-    uint32_t trace_channels{0};
-#endif
+    std::unique_ptr<RustOutputWriter> writer;
 };
 
 Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
-    auto writer = RustWavWriter::create(path, channels, sample_rate, 32U, true, false);
+    auto writer = RustOutputWriter::create(path, channels, sample_rate, std::nullopt);
     if (!writer) {
         return tl::unexpected{writer.error()};
     }
     FloatWavWriter w;
-    w.impl_ = std::make_unique<Impl>();
-    w.impl_->writer = std::move(*writer);
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    w.impl_->trace_id = next_writer_trace_id();
-    w.impl_->trace_channels = channels;
-#endif
+    w.impl_ = std::make_unique<Impl>(Impl{std::move(*writer)});
     return w;
 }
 
-FloatWavWriter::~FloatWavWriter() {
-    if (impl_ && !impl_->finish_result.has_value()) {
-        // Best effort for callers that rely on RAII; finish() reports the same failure explicitly.
-        static_cast<void>(impl_->writer->finish());
-    }
-}
-
+// Destroying the Rust writer finishes it on a best-effort basis; finish() reports the same failure.
+FloatWavWriter::~FloatWavWriter() = default;
 FloatWavWriter::FloatWavWriter(FloatWavWriter&&) noexcept = default;
 FloatWavWriter& FloatWavWriter::operator=(FloatWavWriter&&) noexcept = default;
 
 uint64_t FloatWavWriter::write(const float* samples, uint64_t frame_count) {
-    if (impl_->finish_result.has_value() || !impl_->writer->write(samples, frame_count)) {
-        return 0;
-    }
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    if (frame_count)
-        consistency::dump(
-            "writer/pass" + std::to_string(impl_->trace_id) + "-s" + std::to_string(impl_->trace_position) +
-                ".80-pcm.f32",
-            std::span<const float>{samples, static_cast<std::size_t>(frame_count) * impl_->trace_channels});
-    impl_->trace_position += frame_count;
-#endif
-    return frame_count;
+    return impl_->writer->write(samples, frame_count) ? frame_count : 0U;
 }
 
 Result<void> FloatWavWriter::finish() {
-    if (!impl_->finish_result.has_value()) {
-        // Rust consumes the writer even on failure; repeated calls must preserve that result.
-        impl_->finish_result.emplace(impl_->writer->finish());
+    return impl_->writer->finish();
+}
+
+struct FloatCafWriter::Impl {
+    std::unique_ptr<RustOutputWriter> writer;
+};
+
+Result<FloatCafWriter>
+FloatCafWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate, const std::string& layout_id) {
+    auto writer = RustOutputWriter::create(path, channels, sample_rate, layout_id);
+    if (!writer) {
+        return tl::unexpected{writer.error()};
     }
-    return *impl_->finish_result;
+    FloatCafWriter w;
+    w.impl_ = std::make_unique<Impl>(Impl{std::move(*writer)});
+    return w;
+}
+
+FloatCafWriter::~FloatCafWriter() = default;
+FloatCafWriter::FloatCafWriter(FloatCafWriter&&) noexcept = default;
+FloatCafWriter& FloatCafWriter::operator=(FloatCafWriter&&) noexcept = default;
+
+uint64_t FloatCafWriter::write(const float* samples, uint64_t frame_count) {
+    return impl_->writer->write(samples, frame_count) ? frame_count : 0U;
+}
+
+Result<void> FloatCafWriter::finish() {
+    return impl_->writer->finish();
+}
+
+// ── FloatCafReader ────────────────────────────────────────────────────────────
+
+struct FloatCafReader::Impl {
+    std::unique_ptr<RustCafReader> reader;
+};
+
+Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
+    auto reader = RustCafReader::open(path);
+    if (!reader) {
+        return tl::unexpected{reader.error()};
+    }
+    FloatCafReader r;
+    r.impl_ = std::make_unique<Impl>(Impl{std::move(*reader)});
+    return r;
+}
+
+FloatCafReader::~FloatCafReader() = default;
+FloatCafReader::FloatCafReader(FloatCafReader&&) noexcept = default;
+FloatCafReader& FloatCafReader::operator=(FloatCafReader&&) noexcept = default;
+
+uint32_t FloatCafReader::channels() const {
+    return impl_->reader->info().channels;
+}
+uint32_t FloatCafReader::sample_rate() const {
+    return impl_->reader->info().rate;
+}
+uint64_t FloatCafReader::frame_count() const {
+    return impl_->reader->info().frames;
+}
+uint64_t FloatCafReader::read(float* out, uint64_t frames) {
+    return impl_->reader->read(out, frames);
+}
+
+// Appends a CAF info chunk with encodingapplication / date / comments.
+Result<void> write_caf_metadata(const std::string& path, const MetadataFields& meta) {
+    const auto utf8_path = wav_path_utf8(path);
+    const auto comments = compact_metadata_comment(meta);
+    std::array<uint8_t, 512> message{};
+    const auto bytes = [](std::string_view text) { return reinterpret_cast<const uint8_t*>(text.data()); };
+    const auto code = mradm_caf_append_info(bytes(utf8_path),
+                                            utf8_path.size(),
+                                            bytes(meta.encoder),
+                                            meta.encoder.size(),
+                                            bytes(meta.date_utc),
+                                            meta.date_utc.size(),
+                                            bytes(comments),
+                                            comments.size(),
+                                            message.data(),
+                                            message.size());
+    if (code != 0) {
+        return tl::unexpected{wav_error(code, message, path)};
+    }
+    return {};
 }
 
 // ── FloatWavReader ────────────────────────────────────────────────────────────
