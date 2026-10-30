@@ -10,6 +10,8 @@ typedef struct MradmWavReader MradmWavReader;
 typedef struct MradmWavChunks MradmWavChunks;
 typedef struct MradmWavWriter MradmWavWriter;
 typedef struct MradmWavLayout MradmWavLayout;
+typedef struct MradmOutputWriter MradmOutputWriter;
+typedef struct MradmCafReader MradmCafReader;
 // Fields are shared with Rust, including queries performed by Rust FFI tests.
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmWavInfo {
@@ -31,6 +33,22 @@ int32_t mradm_wav_writer_create(
 void mradm_wav_writer_destroy(MradmWavWriter*);
 int32_t mradm_wav_writer_write(MradmWavWriter*, const float*, size_t, uint8_t*, size_t);
 int32_t mradm_wav_writer_finish(MradmWavWriter*, uint8_t*, size_t);
+// Final float PCM output: caf != 0 writes little-endian float32 CAF with the layout's channel layout
+// tag, otherwise float32 RF64 WAVE. All writers number their writer/pass* checkpoints from one
+// process-wide sequence. Destroy finishes an unfinished writer on a best-effort basis; repeated
+// finish calls return the first result.
+int32_t mradm_output_writer_create(
+    const uint8_t*, size_t, uint32_t, uint32_t, uint8_t, const uint8_t*, size_t, MradmOutputWriter**, uint8_t*, size_t);
+void mradm_output_writer_destroy(MradmOutputWriter*);
+int32_t mradm_output_writer_write(MradmOutputWriter*, const float*, size_t, uint8_t*, size_t);
+int32_t mradm_output_writer_finish(MradmOutputWriter*, uint8_t*, size_t);
+// float32 little-endian CAF; info reports frames, channels and rate (bits 32, format 3).
+int32_t mradm_caf_reader_open(const uint8_t*, size_t, MradmCafReader**, MradmWavInfo*, uint8_t*, size_t);
+void mradm_caf_reader_destroy(MradmCafReader*);
+int32_t mradm_caf_reader_read(MradmCafReader*, float*, size_t, uint64_t*, uint8_t*, size_t);
+// Appends an info chunk with the non-empty encoder, date and comments values.
+int32_t mradm_caf_append_info(
+    const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, uint8_t*, size_t);
 
 // Container-level edits. Byte strings are borrowed for one call; a null pointer is valid only with length 0.
 // cppcheck-suppress-begin unusedStructMember

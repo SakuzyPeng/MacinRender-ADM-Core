@@ -1,8 +1,7 @@
 //! Private file I/O boundary. Owners and their allocations never cross allocators.
 use mradm_wav::{
-    AMBI_HOA3, BextFields, Chna, ChnaTrack, ChunkReader, Container, Error, Format, LayoutOptions,
-    LayoutRewriter, Reader, Result, SampleFormat, Writer, WriterOptions, append_bext, bext_payload,
-    has_chunk, replace_chunk,
+    AMBI_HOA3, BextFields, Chna, ChnaTrack, ChunkReader, Error, LayoutOptions, LayoutRewriter,
+    Reader, Result, Writer, append_bext, bext_payload, has_chunk, replace_chunk,
 };
 use std::{
     fs::{File, OpenOptions},
@@ -197,45 +196,14 @@ pub unsafe extern "C" fn mradm_wav_writer_create(
             *output = ptr::null_mut();
         }
         let name = unsafe { path(name, length)? };
-        // Float output keeps the established always-RF64 layout: a streaming writer cannot know
-        // the final size, and readers then see one container regardless of length.
-        let (sample_format, container) = match (float_output != 0, bits) {
-            (true, 32) => (SampleFormat::Float32, Some(Container::Rf64)),
-            (true, _) => return Err(Error::unsupported("浮点 WAVE 位深必须为 32")),
-            (false, 16) => (SampleFormat::Pcm16, None),
-            (false, 24) => (SampleFormat::Pcm24, None),
-            (false, 32) => (SampleFormat::Pcm32, None),
-            (false, _) => return Err(Error::unsupported("整数 WAVE 位深必须为 16/24/32")),
-        };
-        let format = Format {
-            channels: u16::try_from(channels).map_err(|_| Error::invalid("WAVE 声道数过大"))?,
-            sample_rate: rate,
-            sample_format,
-            channel_mask: None,
-        };
-        format.block_align()?;
-        let mut options = OpenOptions::new();
-        options.write(true);
-        if exclusive != 0 {
-            options.create_new(true);
-        } else {
-            options.create(true).truncate(true);
-        }
-        let file = options.open(name)?;
-        let writer = match Writer::new(
-            file,
-            format,
-            WriterOptions {
-                container,
-                ..WriterOptions::default()
-            },
-        ) {
-            Ok(writer) => writer,
-            Err(error) => {
-                let _ = std::fs::remove_file(name);
-                return Err(error);
-            }
-        };
+        let writer = mradm_wav::create_file_writer(
+            name.as_ref(),
+            channels,
+            rate,
+            bits,
+            float_output != 0,
+            exclusive != 0,
+        )?;
         unsafe {
             *output = Box::into_raw(Box::new(WriteHandle {
                 writer: Some(writer),
@@ -721,6 +689,174 @@ pub unsafe extern "C" fn mradm_wav_has_chunk(
             *present = u8::from(found);
         }
         Ok(())
+    })
+}
+
+// ── Final float PCM writers and CAF (PCM consistency 4.8) ─────────────────────
+
+pub struct OutputHandle {
+    writer: mradm_render::output::Writer,
+}
+pub struct CafReadHandle {
+    reader: mradm_wav::caf::Reader<BufReader<File>>,
+}
+
+/// `caf != 0` writes CAF with the `layout` channel layout tag; otherwise RF64 WAVE.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_writer_create(
+    name: *const u8,
+    length: usize,
+    channels: u32,
+    rate: u32,
+    caf: u8,
+    layout: *const u8,
+    layout_len: usize,
+    output: *mut *mut OutputHandle,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(output, 1)?;
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let name = unsafe { path(name, length)? };
+        let layout = unsafe { borrowed(layout, layout_len)? };
+        let writer = mradm_render::output::Writer::create(
+            name.as_ref(),
+            channels,
+            rate,
+            (caf != 0).then_some(layout),
+        )?;
+        unsafe {
+            *output = Box::into_raw(Box::new(OutputHandle { writer }));
+        }
+        Ok(())
+    })
+}
+/// Destroying an unfinished writer finishes it on a best-effort basis.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_writer_destroy(handle: *mut OutputHandle) {
+    if !handle.is_null() {
+        let _ = catch_unwind(AssertUnwindSafe(|| unsafe { drop(Box::from_raw(handle)) }));
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_writer_write(
+    handle: *mut OutputHandle,
+    input: *const f32,
+    samples: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(handle, 1)?;
+        let input = unsafe { borrowed(input, samples)? };
+        unsafe { &mut *handle }.writer.write(input)?;
+        Ok(())
+    })
+}
+/// Repeated calls return the first result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_writer_finish(
+    handle: *mut OutputHandle,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(handle, 1)?;
+        unsafe { &mut *handle }.writer.finish()
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_caf_reader_open(
+    name: *const u8,
+    length: usize,
+    output: *mut *mut CafReadHandle,
+    info: *mut Info,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(output, 1)?;
+        valid(info, 1)?;
+        unsafe {
+            *output = ptr::null_mut();
+        }
+        let name = unsafe { path(name, length)? };
+        let reader = mradm_wav::caf::Reader::open(name.as_ref())?;
+        unsafe {
+            *info = Info {
+                frames: reader.frame_count(),
+                channels: reader.channels(),
+                rate: reader.sample_rate(),
+                channel_mask: 0,
+                bits: 32,
+                format: 3,
+            };
+            *output = Box::into_raw(Box::new(CafReadHandle { reader }));
+        }
+        Ok(())
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_caf_reader_destroy(handle: *mut CafReadHandle) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+/// Reads up to `samples / channels` frames into `output`; `frames` receives the count read.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_caf_reader_read(
+    handle: *mut CafReadHandle,
+    output: *mut f32,
+    samples: usize,
+    frames: *mut u64,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(handle, 1)?;
+        valid(frames, 1)?;
+        valid(output, samples)?;
+        let output = if samples == 0 {
+            &mut []
+        } else {
+            unsafe { slice::from_raw_parts_mut(output, samples) }
+        };
+        let read = unsafe { &mut *handle }.reader.read(output)?;
+        unsafe {
+            *frames = read;
+        }
+        Ok(())
+    })
+}
+/// Appends an `info` chunk with the non-empty encoder, date and comments values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_caf_append_info(
+    name: *const u8,
+    length: usize,
+    encoder: *const u8,
+    encoder_len: usize,
+    date: *const u8,
+    date_len: usize,
+    comments: *const u8,
+    comments_len: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        let name = unsafe { path(name, length)? };
+        let (encoder, date, comments) = unsafe {
+            (
+                borrowed(encoder, encoder_len)?,
+                borrowed(date, date_len)?,
+                borrowed(comments, comments_len)?,
+            )
+        };
+        mradm_wav::caf::append_info(name.as_ref(), encoder, date, comments)
     })
 }
 

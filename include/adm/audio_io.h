@@ -112,6 +112,7 @@ Result<bool> wav_has_chunk(const std::string& path, std::string_view id);
 //   "0+2+0", "binaural", "0+5+0", "wav71", "2+5+0", "5.1.4", "7.1.4", "9.1.6", "22.2"
 // PCM samples are stored as little-endian float32 with the matching layout tag so
 // that afinfo, QuickTime, and CoreAudio consumers can read the channel assignment.
+// finish() writes the data size and reports failure; the destructor finishes on a best-effort basis.
 class FloatCafWriter {
   public:
     static Result<FloatCafWriter>
@@ -122,7 +123,10 @@ class FloatCafWriter {
     FloatCafWriter(const FloatCafWriter&) = delete;
     FloatCafWriter& operator=(const FloatCafWriter&) = delete;
 
+    // Returns frame_count on success, 0 on failure.
     uint64_t write(const float* samples, uint64_t frame_count);
+    // Repeated calls return the first finish result, including any failure.
+    Result<void> finish();
 
   private:
     FloatCafWriter() = default;
@@ -241,7 +245,7 @@ class WriterHandle {
     WriterHandle& operator=(const WriterHandle&) = delete;
 
     uint64_t write(const float* samples, uint64_t frame_count);
-    // Finalizes WAV output and reports failure; CAF and FLAC still finalize on destruction.
+    // Finalizes WAV and CAF output and reports failure; FLAC still finalizes on destruction.
     Result<void> finish();
 
   private:

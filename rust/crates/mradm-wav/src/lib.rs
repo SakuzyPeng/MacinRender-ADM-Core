@@ -2,6 +2,7 @@
 //! outside this crate.
 #![forbid(unsafe_code)]
 
+pub mod caf;
 mod chna;
 mod edit;
 mod reader;
@@ -13,7 +14,7 @@ pub use edit::{
     bext_payload, has_chunk, replace_chunk,
 };
 pub use reader::{Chunk, ChunkReader, Reader};
-pub use writer::{Writer, WriterOptions};
+pub use writer::{Writer, WriterOptions, create_file_writer};
 
 use std::io::{Read, Write};
 
