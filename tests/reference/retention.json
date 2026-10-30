@@ -346,7 +346,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/ebur128_reference_test.cpp": "ddbfbdf5c373439656a9caf91be687226d9e823bd09230495013be5c9dcf61da"
+        "tests/reference/ebur128_reference_test.cpp": "54b085370114e8ef91877f89094d73c6502632f0d51b5e51a5f6f9d4efd4fac4"
       }
     },
     {

@@ -504,54 +504,6 @@ if(WIN32)
     mr_adm_core_apply_static_analysis(mr_adm_windows)
 endif()
 
-# ── adm_peak ──────────────────────────────────────────────────────────────────
-# True Peak measurement (ITU-R BS.1770-4) via Rust Meter + global gain rewrite.
-
-add_library(mr_adm_peak)
-add_library(MacinRender::ADMPeak ALIAS mr_adm_peak)
-
-target_sources(
-    mr_adm_peak
-    PRIVATE
-        src/adm_peak/peak_limiter.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/peak.h
-)
-
-target_link_libraries(mr_adm_peak
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio
-)
-mr_adm_core_apply_warnings(mr_adm_peak)
-mr_adm_core_apply_static_analysis(mr_adm_peak)
-
-# ── adm_loudness ──────────────────────────────────────────────────────────────
-# Integrated loudness normalisation (EBU R128 / ITU-R BS.1770-4).
-
-add_library(mr_adm_loudness)
-add_library(MacinRender::ADMLoudness ALIAS mr_adm_loudness)
-
-target_sources(
-    mr_adm_loudness
-    PRIVATE
-        src/adm_loudness/loudness_normalizer.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/loudness.h
-)
-
-target_link_libraries(mr_adm_loudness
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio
-)
-mr_adm_core_apply_warnings(mr_adm_loudness)
-mr_adm_core_apply_static_analysis(mr_adm_loudness)
-
 # ── adm_renderer_factory ──────────────────────────────────────────────────────
 # Internal backend-resolution helper shared by ADMEngine (offline RenderService) and
 # ADMRealtime (realtime MonitorEngine), so the two never diverge on backend selection.
@@ -596,7 +548,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio MacinRender::ADMMetadata MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMMetadata MacinRender::ADMDsp
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -1158,7 +1110,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_loudness mr_adm_peak mr_adm_render_triple_balance mr_adm_audio mr_adm_render_common)
+        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_render_triple_balance mr_adm_audio mr_adm_render_common)
             target_compile_definitions(${_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
         endforeach()
     endif()
@@ -1536,7 +1488,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_peak_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
-            MacinRender::ADMPeak
             MacinRender::ADMAudio
     )
     mr_adm_core_apply_warnings(mr_adm_peak_fixture_tests)
@@ -1682,8 +1633,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     if(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS)
         add_executable(mr_adm_ebur128_reference_tests tests/reference/ebur128_reference_test.cpp)
-        target_link_libraries(mr_adm_ebur128_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp
-            MacinRender::ADMAudio MacinRender::ADMLoudness MacinRender::ADMPeak ebur128)
+        target_link_libraries(mr_adm_ebur128_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp ebur128)
         target_include_directories(mr_adm_ebur128_reference_tests SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
         mr_adm_core_apply_warnings(mr_adm_ebur128_reference_tests)
         mr_adm_core_apply_static_analysis(mr_adm_ebur128_reference_tests)
@@ -1691,11 +1641,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
         set_tests_properties(mr_adm_ebur128_reference_tests PROPERTIES TIMEOUT 120)
     endif()
 
-    # Fixture test: integrated loudness normalization — loud sine wave → -23 LUFS target.
+    # Fixture test: integrated loudness normalization — RenderService renders a loud sine → -23 LUFS.
     add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)
     target_link_libraries(mr_adm_loudness_fixture_tests
         PRIVATE
-            MacinRender::ADMLoudness
+            MacinRender::ADMEngine
             MacinRender::ADMAudio
             MacinRender::ADMDsp
     )
@@ -1849,8 +1799,6 @@ install(
         mr_adm_render_hoa
         mr_adm_render_binaural
         mr_adm_render_room
-        mr_adm_peak
-        mr_adm_loudness
         mr_adm_engine
         mr_adm_audio
         mr_adm_realtime

@@ -169,7 +169,7 @@ APAC, and AirPods head tracking. See the [semantic editor design](docs/architect
 mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
-          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
+          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio
 C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render
 All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
@@ -180,7 +180,7 @@ All modules ──→ ADMCore (domain model, errors, options, capabilities)
 | `ADMMetadata` / `ADMIo` | `AdmScene` built from the Rust render scene, and ADM AXML write-back |
 | `ADMRender*` | EAR, VBAP, Triple Balance, HOA, HRTF binaural, and Apple AUSpatialMixer backends |
 | `ADMRendererFactory` | Backend selection shared by offline rendering and realtime monitoring |
-| `ADMAudio` / `ADMPeak` / `ADMLoudness` | Container encoding and metadata, loudness and True Peak |
+| `ADMAudio` | Container encoding and metadata |
 | `ADMRealtime` | Realtime monitoring: MonitorEngine, SceneStream, device output, and head tracking |
 | `ADMEngine` / `ADMCAPI` | `RenderService` orchestration and the stable C ABI |
 | `rust/crates/mradm-dsp` | Numerical DSP: FFT, VBAP, HRTF/SOFA, convolution, OM spreader, resampling, metering, HOA, Monitor, and more |

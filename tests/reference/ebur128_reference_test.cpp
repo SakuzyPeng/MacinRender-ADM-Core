@@ -1,22 +1,17 @@
 // Optional Release reference for the complete C++ -> private FFI -> Rust path.
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <ebur128.h>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <utility>
 #include <vector>
 
-#include "adm/audio_io.h"
-#include "adm/logging.h"
-#include "adm/loudness.h"
-#include "adm/peak.h"
-
 #include "meter.h"
+#include "post_gain.h"
 
 namespace {
 using mradm::dsp::Meter;
@@ -110,82 +105,67 @@ bool compare(uint32_t sample_rate, uint32_t channels, bool monitor, bool explici
     return true;
 }
 
-std::unique_ptr<ebur128_state, ReferenceFree> measure_file(const std::string& path) {
-    auto reader = mradm::audio::FloatWavReader::open(path);
-    if (!reader) {
-        return {};
-    }
+std::unique_ptr<ebur128_state, ReferenceFree> measure_block(const std::vector<float>& block, uint32_t channels) {
     std::unique_ptr<ebur128_state, ReferenceFree> reference{
-        ebur128_init(reader->channels(), reader->sample_rate(), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
-    if (!reference) {
+        ebur128_init(channels, 48000U, EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+    if (!reference ||
+        ebur128_add_frames_float(reference.get(), block.data(), block.size() / channels) != EBUR128_SUCCESS) {
         return {};
-    }
-    std::vector<float> block(4096U * reader->channels());
-    uint64_t remaining = reader->frame_count();
-    while (remaining != 0U) {
-        const auto frames = reader->read(block.data(), std::min<uint64_t>(remaining, 4096U));
-        if (frames == 0U || ebur128_add_frames_float(reference.get(), block.data(), frames) != EBUR128_SUCCESS) {
-            return {};
-        }
-        remaining -= frames;
     }
     return reference;
 }
 
-bool verify_file_postprocessing() {
-    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto path =
-        std::filesystem::temp_directory_path() / ("mradm_meter_reference_" + std::to_string(stamp) + ".wav");
-    struct Cleanup {
-        std::filesystem::path path;
-        ~Cleanup() {
-            std::error_code ignored;
-            std::filesystem::remove(path, ignored);
-        }
-    } cleanup{path};
-    {
-        auto writer = mradm::audio::FloatWavWriter::open(path.string(), 2U, 48000U);
-        if (!writer) {
-            return false;
-        }
-        std::vector<float> block(48000U * 2U);
-        for (std::size_t frame = 0; frame < 48000U; ++frame) {
-            const auto sample = static_cast<float>(
-                0.8 * std::sin(2.0 * std::numbers::pi * 997.0 * static_cast<double>(frame) / 48000.0));
-            block[frame * 2U] = sample;
-            block[(frame * 2U) + 1U] = sample;
-        }
-        for (int second = 0; second < 4; ++second) {
-            if (writer->write(block.data(), 48000U) != 48000U) {
-                return false;
-            }
-        }
-    }
-    mradm::NullLogSink logs;
-    if (!mradm::apply_loudness_norm(path.string(), -23.0F, logs)) {
+// Rust meter -> post_gain decision -> gain applied in place, the offline post-processing chain.
+bool apply_measured_gain(std::vector<float>& block, uint32_t channels, bool loudness, double target) {
+    auto meter = Meter::create(channels, 48000U, loudness ? MeterMode::integrated : MeterMode::true_peak);
+    if (!meter || !meter->add_frames(block.data(), block.size() / channels)) {
         return false;
     }
-    auto normalized = measure_file(path.string());
+    const auto measured = loudness ? meter->integrated() : meter->max_true_peak();
+    if (!measured) {
+        return false;
+    }
+    const auto gain =
+        loudness
+            ? mradm::dsp::loudness_gain(*measured, target).map([](auto g) { return std::pair{g.apply, g.gain}; })
+            : mradm::dsp::peak_limit_gain(*measured, target).map([](auto g) { return std::pair{g.apply, g.gain}; });
+    return gain && gain->first && mradm::dsp::apply_gain(block, gain->second);
+}
+
+// The offline post-processing gains checked against libebur128.
+bool verify_postprocessing_gain() {
+    constexpr uint32_t channels = 2U;
+    std::vector<float> block(48000U * 4U * channels);
+    for (std::size_t frame = 0; frame < block.size() / channels; ++frame) {
+        const auto sample =
+            static_cast<float>(0.8 * std::sin(2.0 * std::numbers::pi * 997.0 * static_cast<double>(frame) / 48000.0));
+        block[frame * channels] = sample;
+        block[(frame * channels) + 1U] = sample;
+    }
+    if (!apply_measured_gain(block, channels, true, -23.0)) {
+        return false;
+    }
+    auto normalized = measure_block(block, channels);
     double lufs = 0.0;
     if (!normalized || ebur128_loudness_global(normalized.get(), &lufs) != EBUR128_SUCCESS ||
         !near(lufs, -23.0, 0.01)) {
         return false;
     }
-    if (!mradm::apply_peak_limit(path.string(), -35.0F, logs)) {
+    if (!apply_measured_gain(block, channels, false, -35.0)) {
         return false;
     }
-    auto limited = measure_file(path.string());
+    auto limited = measure_block(block, channels);
     if (!limited) {
         return false;
     }
-    for (unsigned int channel = 0; channel < 2U; ++channel) {
-        double peak = 0.0;
-        if (ebur128_true_peak(limited.get(), channel, &peak) != EBUR128_SUCCESS ||
-            !near(20.0 * std::log10(peak), -35.0, 0.001)) {
+    for (unsigned int channel = 0; channel < channels; ++channel) {
+        double value = 0.0;
+        if (ebur128_true_peak(limited.get(), channel, &value) != EBUR128_SUCCESS ||
+            !near(20.0 * std::log10(value), -35.0, 0.001)) {
             return false;
         }
     }
-    std::cout << "File postprocessing matches C reference: " << lufs << " LUFS, -35 dBTP\n";
+    std::cout << "Post-processing gain matches C reference: " << lufs << " LUFS, -35 dBTP\n";
     return true;
 }
 } // namespace
@@ -203,5 +183,5 @@ int main() {
         }
     }
     std::cout << "48 C++/FFI/Rust meter comparisons passed\n";
-    return verify_file_postprocessing() ? EXIT_SUCCESS : EXIT_FAILURE;
+    return verify_postprocessing_gain() ? EXIT_SUCCESS : EXIT_FAILURE;
 }
