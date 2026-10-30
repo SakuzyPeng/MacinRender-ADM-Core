@@ -58,7 +58,7 @@ q 与 -q 等价；回正与插值使用短弧。软件向量测试不代替佩�
 - [IHeadTrackingSource](../../gui/MacinRender.Gui/Services/HeadTracking/IHeadTrackingSource.cs)
 - [HeadTrackingManager](../../gui/MacinRender.Gui/Services/HeadTracking/HeadTrackingManager.cs)
 - [ManualFreeLookSource](../../gui/MacinRender.Gui/Services/HeadTracking/ManualFreeLookSource.cs)
-- [HeadRotation](../../src/adm_render_common/head_rotation.h)
+- [scene_math::Rotation](../../rust/crates/mradm-dsp/src/scene_math.rs)（双耳文件流式与 Scene 流式的头部转动；原 C++ `HeadRotation` 4.7 起只剩测试使用，见 `tests/support/head_rotation.h`）
 
 ## 时效与验收
 
