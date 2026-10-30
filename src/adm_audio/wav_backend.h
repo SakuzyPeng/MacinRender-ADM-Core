@@ -1,11 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -20,6 +22,66 @@ namespace mradm::audio {
 inline Error wav_error(int32_t code, const std::array<uint8_t, 512>& message, const std::string& path) {
     const auto error = code >= 1 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
     return {error, reinterpret_cast<const char*>(message.data()), "path=" + path};
+}
+
+// A post-processing error: Rust supplies the location context.
+inline Error
+post_error(int32_t code, const std::array<uint8_t, 512>& message, const std::array<uint8_t, 1024>& context) {
+    const auto error = code >= 1 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
+    return {error, reinterpret_cast<const char*>(message.data()), reinterpret_cast<const char*>(context.data())};
+}
+
+// Drives a Rust post-processing pass (mradm_output_*_begin): cancellation before each step and,
+// when the pass asks, before installing; progress events as the pass reports them.
+template <typename Begin>
+Result<void> run_output_pass(const std::string& path,
+                             const std::stop_token& cancel_token,
+                             ProgressSink* progress,
+                             RenderOperation operation,
+                             Begin&& begin) {
+    std::array<uint8_t, 512> message{};
+    std::array<uint8_t, 1024> context{};
+    MradmOutputPostProgress report{};
+    const auto emit = [&] {
+        if (report.emit != 0U && progress != nullptr) {
+            const double f = std::clamp(report.fraction, 0.0, 1.0);
+            const std::string_view text{reinterpret_cast<const char*>(report.message), report.message_len};
+            progress->on_progress({RenderStage::post_processing, operation, f, f, report.done, report.total, text});
+        }
+    };
+    MradmOutputPost* raw = nullptr;
+    if (const auto code = begin(&raw, &report, message.data(), message.size(), context.data(), context.size());
+        code != 0) {
+        return tl::unexpected{post_error(code, message, context)};
+    }
+    emit();
+    if (raw == nullptr) {
+        return {};
+    }
+    const std::unique_ptr<MradmOutputPost, decltype(&mradm_output_post_destroy)> pass{raw, mradm_output_post_destroy};
+    const bool install_check = report.install_check != 0U;
+    const auto cancelled = [&] { return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path); };
+    while (report.complete == 0U) {
+        if (cancel_token.stop_requested()) {
+            return cancelled();
+        }
+        if (const auto code = mradm_output_post_step(
+                pass.get(), &report, message.data(), message.size(), context.data(), context.size());
+            code != 0) {
+            return tl::unexpected{post_error(code, message, context)};
+        }
+        emit();
+    }
+    if (install_check && cancel_token.stop_requested()) {
+        return cancelled();
+    }
+    if (const auto code = mradm_output_post_finish(
+            pass.get(), &report, message.data(), message.size(), context.data(), context.size());
+        code != 0) {
+        return tl::unexpected{post_error(code, message, context)};
+    }
+    emit();
+    return {};
 }
 
 inline std::string wav_path_utf8(const std::string& path) {

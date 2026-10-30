@@ -9,7 +9,7 @@ extern "C" {
 typedef struct MradmWavReader MradmWavReader;
 typedef struct MradmWavChunks MradmWavChunks;
 typedef struct MradmWavWriter MradmWavWriter;
-typedef struct MradmWavLayout MradmWavLayout;
+typedef struct MradmOutputPost MradmOutputPost;
 typedef struct MradmOutputWriter MradmOutputWriter;
 typedef struct MradmCafReader MradmCafReader;
 // Fields are shared with Rust, including queries performed by Rust FFI tests.
@@ -88,27 +88,74 @@ typedef struct MradmWavLayoutOptions {
     uint8_t prefer_riff;
     uint8_t include_pcm_fact;
 } MradmWavLayoutOptions;
+// One post-processing progress report; message is static text. emit asks for a progress event;
+// once complete the data is written and finish installs the output. install_check (begin only)
+// asks for one more cancellation check before finish.
+typedef struct MradmOutputPostProgress {
+    double fraction;
+    uint64_t done;
+    uint64_t total;
+    const uint8_t* message;
+    size_t message_len;
+    uint8_t emit;
+    uint8_t complete;
+    uint8_t install_check;
+} MradmOutputPostProgress;
 // cppcheck-suppress-end unusedStructMember
 // Appends bext (and the HOA3 ambi marker when requested) and updates the RIFF size or ds64.bw64Size.
 int32_t mradm_wav_append_bext(const uint8_t*, size_t, const MradmWavBext*, uint8_t*, size_t);
-// Layout rewrite into an exclusively created target: begin writes the header, step copies frames
-// (0 once done), finish writes trailing chunks. The caller owns removal and installation of the target.
-int32_t mradm_wav_layout_begin(const uint8_t*,
-                               size_t,
-                               const uint8_t*,
-                               size_t,
-                               const MradmWavLayoutOptions*,
-                               MradmWavLayout**,
-                               uint64_t*,
-                               uint8_t*,
-                               size_t);
-int32_t mradm_wav_layout_step(MradmWavLayout*, uint64_t, uint64_t*, uint8_t*, size_t);
-int32_t mradm_wav_layout_finish(MradmWavLayout*, uint8_t*, size_t);
-void mradm_wav_layout_destroy(MradmWavLayout*);
-// Copies source into an exclusively created target with the axml payload replaced; PCM bytes are copied verbatim.
-// Existing targets are untouched; newly created targets are removed on error. The caller installs the completed file.
-int32_t
-mradm_wav_replace_axml(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, uint8_t*, size_t);
+// Post-processing passes over a rendered file, each written to a sidecar and installed in place.
+// Errors fill message and context. Begin returns a null pass with the final event when the pass
+// is skipped. The caller checks cancellation before each step (and before finish when asked),
+// then steps until complete and finishes; destroying an unfinished pass removes its sidecar.
+int32_t mradm_output_gain_begin(const uint8_t*,
+                                size_t,
+                                float,
+                                const uint8_t*,
+                                size_t,
+                                uint8_t,
+                                MradmOutputPost**,
+                                MradmOutputPostProgress*,
+                                uint8_t*,
+                                size_t,
+                                uint8_t*,
+                                size_t);
+int32_t mradm_output_trim_begin(const uint8_t*,
+                                size_t,
+                                uint64_t,
+                                uint64_t,
+                                const uint8_t*,
+                                size_t,
+                                MradmOutputPost**,
+                                MradmOutputPostProgress*,
+                                uint8_t*,
+                                size_t,
+                                uint8_t*,
+                                size_t);
+int32_t mradm_output_bitdepth_begin(
+    const uint8_t*, size_t, uint16_t, MradmOutputPost**, MradmOutputPostProgress*, uint8_t*, size_t, uint8_t*, size_t);
+// With options the layout is explicit; otherwise it follows the layout id and profile
+// (0 ADM semantics, 1 speaker re-render) and the cancelled flag is checked after building it.
+int32_t mradm_output_finalize_begin(const uint8_t*,
+                                    size_t,
+                                    const uint8_t*,
+                                    size_t,
+                                    uint32_t,
+                                    const MradmWavLayoutOptions*,
+                                    uint8_t,
+                                    MradmOutputPost**,
+                                    MradmOutputPostProgress*,
+                                    uint8_t*,
+                                    size_t,
+                                    uint8_t*,
+                                    size_t);
+int32_t mradm_output_post_step(MradmOutputPost*, MradmOutputPostProgress*, uint8_t*, size_t, uint8_t*, size_t);
+int32_t mradm_output_post_finish(MradmOutputPost*, MradmOutputPostProgress*, uint8_t*, size_t, uint8_t*, size_t);
+void mradm_output_post_destroy(MradmOutputPost*);
+// Target becomes a copy of source with the axml payload replaced (PCM bytes verbatim), written to a
+// sidecar and installed; aliases of the source are safe. On failure the target is left unchanged.
+int32_t mradm_wav_replace_axml(
+    const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, uint8_t*, size_t, uint8_t*, size_t);
 // Metadata-only reader: strict chunk bounds, independent of sample encoding.
 int32_t mradm_wav_chunks_open(const uint8_t*, size_t, MradmWavChunks**, uint8_t*, size_t);
 void mradm_wav_chunks_destroy(MradmWavChunks*);

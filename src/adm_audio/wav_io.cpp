@@ -1,8 +1,6 @@
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <memory>
 #include <optional>
 #include <stop_token>
@@ -11,8 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
@@ -20,51 +16,6 @@
 #include "wav_backend.h"
 
 namespace mradm::audio {
-
-namespace {
-
-class TempPathGuard {
-  public:
-    explicit TempPathGuard(std::filesystem::path path, bool active = true) : path_(std::move(path)), active_(active) {}
-    TempPathGuard(const TempPathGuard&) = delete;
-    TempPathGuard& operator=(const TempPathGuard&) = delete;
-    TempPathGuard(TempPathGuard&&) = delete;
-    TempPathGuard& operator=(TempPathGuard&&) = delete;
-    ~TempPathGuard() {
-        if (active_) {
-            std::error_code ec;
-            std::filesystem::remove(path_, ec);
-        }
-    }
-
-    void dismiss() noexcept { active_ = false; }
-    void arm() noexcept { active_ = true; }
-
-  private:
-    std::filesystem::path path_;
-    bool active_{true};
-};
-
-[[nodiscard]] std::optional<std::filesystem::path> unique_wav_sidecar_path(const std::filesystem::path& original,
-                                                                           std::string_view purpose);
-[[nodiscard]] Result<void> replace_wav_with_rewrite(const std::filesystem::path& original,
-                                                    const std::filesystem::path& rewritten,
-                                                    TempPathGuard& rewritten_guard);
-
-void emit_wav_progress(ProgressSink* progress,
-                       RenderOperation operation,
-                       double fraction,
-                       uint64_t current_frame,
-                       uint64_t total_frames,
-                       std::string_view message) {
-    if (progress == nullptr) {
-        return;
-    }
-    const double f = std::clamp(fraction, 0.0, 1.0);
-    progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
-}
-
-} // namespace
 
 // ── FloatWavWriter / FloatCafWriter ───────────────────────────────────────────
 // Both wrap the Rust final-PCM writer, which also numbers and writes the writer/pass* checkpoints.
@@ -230,95 +181,8 @@ bool FloatWavReader::seek(uint64_t frame) {
     return impl_->reader->seek_frame(frame).has_value();
 }
 
-// ── downconvert_to_int ────────────────────────────────────────────────────────
-
-Result<void> downconvert_to_int(const std::string& path,
-                                uint16_t bit_depth,
-                                const std::stop_token& cancel_token,
-                                ProgressSink* progress,
-                                RenderOperation operation) {
-    try {
-        if (cancel_token.stop_requested()) {
-            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-        }
-        if (bit_depth != 16U && bit_depth != 24U && bit_depth != 32U) {
-            return make_error(ErrorCode::invalid_argument,
-                              fmt::format("integer PCM bit depth must be 16, 24, or 32; got {}", bit_depth),
-                              "path=" + path);
-        }
-
-        const auto tmp_path = unique_wav_sidecar_path(path, "bitdepth_tmp");
-        if (!tmp_path) {
-            return make_error(ErrorCode::io_error, "cannot allocate integer WAVE temporary path", "path=" + path);
-        }
-        TempPathGuard tmp_guard{*tmp_path, false};
-        uint64_t total_frames = 0;
-        {
-            // reader 与 writer 都置于此块内，块结束即关闭句柄；之后才能在 Windows 上
-            // rename 顶替原文件（POSIX 可 rename 顶替正打开的文件，Windows 会 Access denied）。
-            auto reader_res = FloatWavReader::open(path);
-            if (!reader_res) {
-                return tl::unexpected{reader_res.error()};
-            }
-            auto& reader = *reader_res;
-
-            const uint32_t channels = reader.channels();
-            const uint32_t sample_rate = reader.sample_rate();
-            total_frames = reader.frame_count();
-            emit_wav_progress(progress, operation, 0.0, 0, total_frames, "converting bit depth");
-
-            auto writer_res = IntegerWavWriter::create(tmp_path->string(), channels, sample_rate, bit_depth);
-            if (!writer_res) {
-                return tl::unexpected{writer_res.error()};
-            }
-            auto& writer = *writer_res;
-            tmp_guard.arm(); // create_new established ownership; never remove a competing file.
-
-            constexpr uint64_t k_block = 4096;
-            std::vector<float> buf(static_cast<std::size_t>(channels) * k_block);
-            uint64_t left = total_frames;
-            uint64_t done = 0;
-
-            while (left > 0) {
-                if (cancel_token.stop_requested()) {
-                    return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-                }
-                const uint64_t n = std::min(k_block, left);
-                const uint64_t got = reader.read(buf.data(), n);
-                if (got != n) {
-                    return make_error(ErrorCode::io_error, "short input read while converting PCM", "path=" + path);
-                }
-                if (auto result = writer->write(buf.data(), got); !result) {
-                    return result;
-                }
-                left -= got;
-                done += got;
-                emit_wav_progress(progress,
-                                  operation,
-                                  static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, total_frames)),
-                                  done,
-                                  total_frames,
-                                  "converting bit depth");
-            }
-            if (auto result = writer->finish(); !result) {
-                return result;
-            }
-        }
-
-        if (cancel_token.stop_requested()) {
-            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-        }
-        if (auto result = replace_wav_with_rewrite(path, *tmp_path, tmp_guard); !result) {
-            return result;
-        }
-        emit_wav_progress(progress, operation, 1.0, total_frames, total_frames, "bit depth converted");
-        return {};
-
-    } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error, std::string("bit depth conversion failed: ") + e.what(), "path=" + path);
-    }
-}
-
+// ── downconvert_to_int / finalize_wav_layout ─────────────────────────────────
+// Rust converts or rewrites into a sidecar and installs it with a backup (PCM consistency 4.8).
 
 namespace {
 
@@ -326,55 +190,21 @@ namespace {
     return reinterpret_cast<const uint8_t*>(text.data());
 }
 
-[[nodiscard]] std::optional<std::filesystem::path> unique_wav_sidecar_path(const std::filesystem::path& original,
-                                                                           std::string_view purpose) {
-    const auto parent = original.parent_path();
-    const auto stem = original.stem().string();
-    const auto extension = original.extension().string();
-    for (uint32_t index = 0; index < 1024U; ++index) {
-        auto candidate = parent / fmt::format("{}.{}.{:04}{}", stem, purpose, index, extension);
-        std::error_code ec;
-        if (!std::filesystem::exists(candidate, ec) && !ec) {
-            return candidate;
-        }
-    }
-    return std::nullopt;
-}
-
-[[nodiscard]] Result<void> replace_wav_with_rewrite(const std::filesystem::path& original,
-                                                    const std::filesystem::path& rewritten,
-                                                    TempPathGuard& rewritten_guard) {
-    const auto backup = unique_wav_sidecar_path(original, "layout_backup");
-    if (!backup.has_value()) {
-        return make_error(ErrorCode::io_error, "cannot allocate WAV layout backup path", "path=" + original.string());
-    }
-    TempPathGuard backup_guard{*backup};
-    std::error_code ec;
-    std::filesystem::rename(original, *backup, ec);
-    if (ec) {
-        return make_error(ErrorCode::io_error,
-                          "cannot move original WAV before layout replacement: " + ec.message(),
-                          "path=" + original.string());
-    }
-    std::filesystem::rename(rewritten, original, ec);
-    if (ec) {
-        std::error_code restore_ec;
-        std::filesystem::rename(*backup, original, restore_ec);
-        if (restore_ec) {
-            backup_guard.dismiss();
-            return make_error(ErrorCode::io_error,
-                              "cannot install layout-finalized WAV and could not restore original: " + ec.message() +
-                                  "; original preserved at " + backup->string(),
-                              "path=" + original.string());
-        }
-        return make_error(
-            ErrorCode::io_error, "cannot install layout-finalized WAV: " + ec.message(), "path=" + original.string());
-    }
-    rewritten_guard.dismiss();
-    return {};
-}
-
 } // namespace
+
+Result<void> downconvert_to_int(const std::string& path,
+                                uint16_t bit_depth,
+                                const std::stop_token& cancel_token,
+                                ProgressSink* progress,
+                                RenderOperation operation) {
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+    }
+    const auto utf8_path = wav_path_utf8(path);
+    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
+        return mradm_output_bitdepth_begin(wav_bytes(utf8_path), utf8_path.size(), bit_depth, out...);
+    });
+}
 
 Result<void> finalize_wav_layout(const std::string& path,
                                  const WavLayoutFinalization& layout,
@@ -384,12 +214,6 @@ Result<void> finalize_wav_layout(const std::string& path,
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
     }
-    const auto rewritten_path = unique_wav_sidecar_path(path, "layout_tmp");
-    if (!rewritten_path.has_value()) {
-        return make_error(ErrorCode::io_error, "cannot allocate WAV layout temporary path", "path=" + path);
-    }
-    TempPathGuard rewritten_guard{*rewritten_path};
-
     std::vector<MradmWavChnaTrack> chna(layout.chna.size());
     std::ranges::transform(layout.chna, chna.begin(), [](const WavChnaEntry& entry) {
         return MradmWavChnaTrack{wav_bytes(entry.track_uid),
@@ -410,60 +234,28 @@ Result<void> finalize_wav_layout(const std::string& path,
                                         static_cast<uint8_t>(layout.force_extensible ? 1U : 0U),
                                         static_cast<uint8_t>(layout.prefer_riff ? 1U : 0U),
                                         static_cast<uint8_t>(layout.include_pcm_fact ? 1U : 0U)};
-    const auto source = wav_path_utf8(path);
-    const auto target = wav_path_utf8(rewritten_path->string());
-    std::array<uint8_t, 512> message{};
-    MradmWavLayout* handle = nullptr;
-    uint64_t frames = 0;
-    auto code = mradm_wav_layout_begin(wav_bytes(source),
-                                       source.size(),
-                                       wav_bytes(target),
-                                       target.size(),
-                                       &options,
-                                       &handle,
-                                       &frames,
-                                       message.data(),
-                                       message.size());
-    if (code != 0) {
-        return tl::unexpected{wav_error(code, message, path)};
-    }
-    std::unique_ptr<MradmWavLayout, decltype(&mradm_wav_layout_destroy)> rewrite{handle, mradm_wav_layout_destroy};
+    const auto utf8_path = wav_path_utf8(path);
+    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
+        return mradm_output_finalize_begin(wav_bytes(utf8_path), utf8_path.size(), nullptr, 0, 0, &options, 0, out...);
+    });
+}
 
-    emit_wav_progress(progress, operation, 0.0, 0U, frames, "finalizing WAV channel layout");
-    constexpr uint64_t k_block_frames = 2048U;
-    uint64_t frames_done = 0U;
-    while (frames_done < frames) {
-        if (cancel_token.stop_requested()) {
-            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-        }
-        uint64_t copied = 0U;
-        code = mradm_wav_layout_step(rewrite.get(), k_block_frames, &copied, message.data(), message.size());
-        if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path)};
-        }
-        if (copied == 0U) {
-            return make_error(ErrorCode::io_error, "WAV layout rewrite stopped before the last frame", "path=" + path);
-        }
-        frames_done += copied;
-        emit_wav_progress(progress,
-                          operation,
-                          static_cast<double>(frames_done) / static_cast<double>(frames),
-                          frames_done,
-                          frames,
-                          "finalizing WAV channel layout");
-    }
-    code = mradm_wav_layout_finish(rewrite.get(), message.data(), message.size());
-    rewrite.reset();
-    if (code != 0) {
-        return tl::unexpected{wav_error(code, message, path)};
-    }
-
-    auto replace_res = replace_wav_with_rewrite(path, *rewritten_path, rewritten_guard);
-    if (!replace_res) {
-        return tl::unexpected{replace_res.error()};
-    }
-    emit_wav_progress(progress, operation, 1.0, frames, frames, "WAV channel layout finalized");
-    return {};
+Result<void> finalize_wav_output(const std::string& path,
+                                 const std::string& output_layout,
+                                 bool speaker_rerender,
+                                 const std::stop_token& cancel_token,
+                                 ProgressSink* progress) {
+    const auto utf8_path = wav_path_utf8(path);
+    return run_output_pass(path, cancel_token, progress, RenderOperation::write_metadata, [&](auto... out) {
+        return mradm_output_finalize_begin(wav_bytes(utf8_path),
+                                           utf8_path.size(),
+                                           wav_bytes(output_layout),
+                                           output_layout.size(),
+                                           speaker_rerender ? 1U : 0U,
+                                           nullptr,
+                                           cancel_token.stop_requested() ? 1U : 0U,
+                                           out...);
+    });
 }
 
 // Append a BWF v2 bext chunk (EBU Tech 3285, 602-byte payload) to an existing RIFF/RF64/BW64 WAVE file;
@@ -514,16 +306,10 @@ Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
 }
 
 Result<void> replace_wav_axml(const std::string& source, const std::string& target, std::string_view axml) {
-    const auto rewritten_path = unique_wav_sidecar_path(target, "axml_tmp");
-    if (!rewritten_path) {
-        return make_error(ErrorCode::io_error, "无法分配 WAVE AXML 临时路径", "path=" + target);
-    }
-    // Rust creates this file exclusively and removes it on failure. Arm the guard only once
-    // creation and writing have succeeded, so a name collision cannot delete another file.
-    TempPathGuard rewritten_guard{*rewritten_path, false};
     const auto utf8_source = wav_path_utf8(source);
-    const auto utf8_target = wav_path_utf8(rewritten_path->string());
+    const auto utf8_target = wav_path_utf8(target);
     std::array<uint8_t, 512> message{};
+    std::array<uint8_t, 1024> context{};
     const auto code = mradm_wav_replace_axml(wav_bytes(utf8_source),
                                              utf8_source.size(),
                                              wav_bytes(utf8_target),
@@ -531,26 +317,12 @@ Result<void> replace_wav_axml(const std::string& source, const std::string& targ
                                              wav_bytes(axml),
                                              axml.size(),
                                              message.data(),
-                                             message.size());
+                                             message.size(),
+                                             context.data(),
+                                             context.size());
     if (code != 0) {
-        return tl::unexpected{wav_error(code, message, source + " -> " + target)};
+        return tl::unexpected{post_error(code, message, context)};
     }
-    rewritten_guard.arm();
-
-    // The source and sink are closed here. Installing a separate completed file also makes
-    // source == target, symlinks and hard links safe without a racy path-identity check.
-    std::error_code ec;
-    std::filesystem::rename(*rewritten_path, target, ec);
-    if (ec) {
-        // Windows cannot rename onto an existing file; use the same recoverable replacement
-        // as layout finalization. Never move an existing directory out of the way.
-        std::error_code status_ec;
-        if (std::filesystem::is_regular_file(target, status_ec)) {
-            return replace_wav_with_rewrite(target, *rewritten_path, rewritten_guard);
-        }
-        return make_error(ErrorCode::io_error, "无法安装 AXML 重写后的 WAVE：" + ec.message(), "path=" + target);
-    }
-    rewritten_guard.dismiss();
     return {};
 }
 

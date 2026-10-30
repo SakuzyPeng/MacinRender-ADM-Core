@@ -118,7 +118,7 @@ bool verify_pre_cancel_audio_helpers() {
     ok &= check(!std::filesystem::exists(opus_path), "pre-cancel Opus leaves no output");
     ok &= check(!has_sidecar(path, "gain_tmp"), "pre-cancel gain leaves no sidecar");
     ok &= check(!has_sidecar(path, "trim_tmp"), "pre-cancel trim leaves no sidecar");
-    ok &= check(!std::filesystem::exists(path.string() + ".bitdepth_tmp"), "pre-cancel bitdepth leaves no sidecar");
+    ok &= check(!has_sidecar(path, "bitdepth_tmp"), "pre-cancel bitdepth leaves no sidecar");
     return ok;
 }
 
