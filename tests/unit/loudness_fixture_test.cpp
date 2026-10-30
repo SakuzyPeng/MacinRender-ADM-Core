@@ -1,16 +1,22 @@
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "adm/audio_io.h"
 #include "adm/logging.h"
-#include "adm/loudness.h"
+#include "adm/render.h"
 
+#include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 #include "meter.h"
 
 namespace {
@@ -30,30 +36,79 @@ int fail_exit(const std::string& msg) {
     return EXIT_FAILURE;
 }
 
-// Writes a mono 440 Hz sine WAV (float32).
-bool write_sine_wav(const std::string& path, float amplitude, double duration_s, uint32_t sample_rate = 48000) {
-    const auto num_frames = static_cast<uint64_t>(duration_s * sample_rate);
-    auto writer_res = mradm::audio::FloatWavWriter::open(path, 1, sample_rate);
-    if (!writer_res) {
-        return fail("FloatWavWriter::open failed: " + writer_res.error().message);
-    }
-    auto& writer = *writer_res;
+// Writes a mono 48 kHz ADM Objects WAV (front centre) with a 440 Hz sine.
+void write_objects_sine_wav(float amplitude, double duration_s, const std::filesystem::path& path) {
+    constexpr uint32_t k_sr = 48000U;
+    const auto k_frames = static_cast<uint32_t>(duration_s * k_sr);
+    constexpr float k_freq = 440.0F;
 
-    constexpr std::size_t k_block = 4096;
-    std::vector<float> buf(k_block);
-    uint64_t written = 0;
-    while (written < num_frames) {
-        const uint64_t n = std::min(static_cast<uint64_t>(k_block), num_frames - written);
-        for (uint64_t i = 0; i < n; ++i) {
-            const double t = static_cast<double>(written + i) / sample_rate;
-            buf[i] = amplitude * static_cast<float>(std::sin(2.0 * std::numbers::pi * 440.0 * t));
-        }
-        if (writer.write(buf.data(), n) != n) {
-            return fail("FloatWavWriter::write short write");
-        }
-        written += n;
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"LoudCF"},
+                                                  fixture::TypeDefinition::objects);
+    {
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        cf->add(block);
     }
-    return true;
+    doc->add(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"LoudPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
+    doc->add(pf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"LoudSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
+    doc->add(sf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"LoudTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
+    doc->add(tf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
+    doc->add(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"LoudObj"});
+    obj->add_reference(uid);
+    doc->add(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"LoudContent"});
+    content->add_reference(obj);
+    doc->add(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"LoudProgramme"});
+    programme->add_reference(content);
+    doc->add(programme);
+    fixture::reassign_ids(doc);
+
+    std::ostringstream xml_buf;
+    fixture::write_xml(xml_buf, doc);
+    const std::string uid_str = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
+
+    std::vector<float> samples(k_frames);
+    for (uint32_t n = 0; n < k_frames; ++n) {
+        samples[n] = amplitude * std::sin(2.0F * std::numbers::pi_v<float> * k_freq * static_cast<float>(n) /
+                                          static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), static_cast<uint64_t>(k_frames));
+}
+
+// Renders the input to 5.0 with loudness normalisation to -23 LUFS (True Peak limiter off).
+mradm::RenderResult render_normalised(const std::filesystem::path& in_path, const std::filesystem::path& out_path) {
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.output_layout = "0+5+0";
+    req.options.measure_loudness = true;
+    req.options.loudness_target_lufs = -23.0F;
+    req.options.peak_limit = false;
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    NullLog logs;
+    return service.render(req, progress, logs);
 }
 
 // Returns LUFS, or NaN on failure.
@@ -70,7 +125,7 @@ double measure_lufs(const std::string& path) {
     }
 
     constexpr std::size_t k_block = 4096;
-    std::vector<float> buf(k_block);
+    std::vector<float> buf(static_cast<std::size_t>(reader.channels()) * k_block);
     uint64_t left = reader.frame_count();
     while (left > 0) {
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), left);
@@ -90,31 +145,24 @@ double measure_lufs(const std::string& path) {
 
 } // namespace
 
-int main() {
-    const std::string norm_path = (std::filesystem::temp_directory_path() / "loudness_norm_test.wav").string();
-    const std::string silence_path = (std::filesystem::temp_directory_path() / "loudness_silence_test.wav").string();
+int main() try {
+    const auto tmp = std::filesystem::temp_directory_path();
+    const auto loud_input = tmp / "loudness_norm_input.wav";
+    const auto norm_path = tmp / "loudness_norm_test.wav";
+    const auto silence_input = tmp / "loudness_silence_input.wav";
+    const auto silence_output = tmp / "loudness_silence_test.wav";
 
     // ── Test 1: normalise loud signal to -23 LUFS within 1.5 LU ─────────────
     // 440 Hz sine at -6 dBFS for 5 seconds — safely above gating threshold.
-    if (!write_sine_wav(norm_path, 0.5F, 5.0)) {
-        return EXIT_FAILURE;
+    write_objects_sine_wav(0.5F, 5.0, loud_input);
+    const auto res = render_normalised(loud_input, norm_path);
+    std::filesystem::remove(loud_input);
+    if (!res.success()) {
+        std::filesystem::remove(norm_path);
+        return fail_exit("loudness-normalised render returned error: " + res.error.message);
     }
 
-    const double before = measure_lufs(norm_path);
-    if (!std::isfinite(before)) {
-        return fail_exit("failed to measure integrated loudness before normalization");
-    }
-
-    NullLog logs;
-    {
-        auto res = mradm::apply_loudness_norm(norm_path, -23.0F, logs);
-        if (!res) {
-            std::filesystem::remove(norm_path);
-            return fail_exit("apply_loudness_norm returned error: " + res.error().message);
-        }
-    }
-
-    const double after = measure_lufs(norm_path);
+    const double after = measure_lufs(norm_path.string());
     std::filesystem::remove(norm_path);
 
     if (!std::isfinite(after)) {
@@ -127,31 +175,32 @@ int main() {
     }
 
     // ── Test 2: silence is a no-op (no error) ────────────────────────────────
-    if (!write_sine_wav(silence_path, 0.0F, 3.0)) {
-        return EXIT_FAILURE;
-    }
+    write_objects_sine_wav(0.0F, 3.0, silence_input);
     {
-        auto res = mradm::apply_loudness_norm(silence_path, -23.0F, logs);
-        std::filesystem::remove(silence_path);
-        if (!res) {
-            return fail_exit("apply_loudness_norm on silence returned error: " + res.error().message);
+        const auto silent = render_normalised(silence_input, silence_output);
+        std::filesystem::remove(silence_input);
+        std::filesystem::remove(silence_output);
+        if (!silent.success()) {
+            return fail_exit("loudness-normalised render of silence returned error: " + silent.error.message);
         }
     }
 
-    // ── Test 3: missing file is an I/O error, not a silent no-op ─────────────
+    // ── Test 3: missing input is an I/O error, not a silent no-op ────────────
     {
-        const std::string missing_path =
-            (std::filesystem::temp_directory_path() / "loudness_missing_test.wav").string();
+        const auto missing_path = tmp / "loudness_missing_test.wav";
         std::filesystem::remove(missing_path);
-        auto res = mradm::apply_loudness_norm(missing_path, -23.0F, logs);
-        if (res) {
-            return fail_exit("apply_loudness_norm on missing file unexpectedly succeeded");
+        const auto missing = render_normalised(missing_path, tmp / "loudness_missing_output.wav");
+        if (missing.success()) {
+            return fail_exit("loudness-normalised render of a missing file unexpectedly succeeded");
         }
-        if (res.error().code != mradm::ErrorCode::io_error) {
-            return fail_exit("apply_loudness_norm on missing file returned non-io_error");
+        if (missing.error.code != mradm::ErrorCode::io_error) {
+            return fail_exit("loudness-normalised render of a missing file returned non-io_error");
         }
     }
 
     std::cout << "loudness fixture test passed (after=" << after << " LUFS, error=" << error_lu << " LU)\n";
     return EXIT_SUCCESS;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return EXIT_FAILURE;
 }
