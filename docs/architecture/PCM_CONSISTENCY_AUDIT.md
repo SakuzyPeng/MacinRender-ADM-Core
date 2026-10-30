@@ -157,7 +157,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | S04 | 保留（运行时条件） | HpTF 排队目标在淡化结束帧开始（1.5，Scene 与文件流式监听共用）；回放固定事件位置与虚拟时钟；三期结项：Monitor 按墙钟取样控制快照，同一 UI 操作落在哪个样本取决于调度，不要求逐位相同 |
 | S05 | 保留（运行时条件） | Scene 欠载补零不推进 HpTF 与峰值保护（1.5）；三期结项：Monitor 是否欠载取决于调度，数值比较使用无欠载的文件流式与 Scene 重放 |
 | S06 | 已处理 | Scene epoch、preroll、短尾与 EOS 规则已锁定（1.5）；3.6：输出裁剪、预览窗口与 Monitor 定位 / 循环共用 Rust `timeline::seconds_to_frame`（最近帧，半帧远离零），`timeline.*` 内核与半帧边界裁剪用例设为门禁 |
-| S07 | 保留（构建条件） | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁；三期结项：门禁依赖固定的工具链、`Cargo.lock`、有效编译选项与默认宿主浮点环境，C++ 剩余乘法与加法都是单独语句，锁定的三个平台不会融合（GCC 在 C++ 中默认 `-ffp-contract=fast`，不在矩阵内的组合不受保护） |
+| S07 | 保留（构建条件） | Scene 由 `scene-separate-v1` 与 Rust 实现覆盖，一致性 config A 改用发布构建选项（1.6）；3.1：双耳 `extent_spread_deg`、`BinauralStream` 归约与拓扑淡化移入 Rust 并有文件流式重放门禁；3.2：核对 EAR 的 C++ 部分只剩单独的加法与乘法，不受乘加融合影响，EAR 文件流式重放设为门禁；3.3：HOA 的 C++ 部分同样不含可融合的乘加，HOA 文件流式重放设为门禁；3.4：Triple Balance 的 C++ 部分只做校验与编排，数值运算全部在 Rust，文件流式重放设为门禁；三期结项：门禁依赖固定的工具链、`Cargo.lock`、有效编译选项与默认宿主浮点环境，C++ 剩余乘法与加法都是单独语句，锁定的三个平台不会融合（GCC 在 C++ 中默认 `-ffp-contract=fast`，不在矩阵内的组合不受保护）；4.7：双耳的声源计划、OLA、spreader 与文件流式编排全部移入 Rust，C++ 适配壳不再含 PCM 或滤波控制参数的算术 |
 | S08 | 已处理 | 3.5：在 libstdc++ 上复现（40 个同起点块时旧实现生效的不是文档中的最后一块）。规则：同起点块保持场景（ADM 文档）顺序，最后一块在其整个区间生效，被覆盖块不留下分量、插值前驱或路由判断。双耳、EAR、VBAP、HOA、Apple、22.2 LFE 路由与 VBAP 高度判断都在建立增益、总线或路由前经 `render_common::last_blocks_at_each_start` 只保留每个起点的最后一块；`binaural_render_fixture_test` 与 `same_start_blocks_test` 与仅含获胜块的场景逐位比较，`params-*` 用例设为门禁 |
 
 ## C++ 剩余执行点
@@ -173,9 +173,9 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | Scene 输出 | 1.4 起 `SceneOutputSession` 不再有决定样本值的 C++ 浮点运算；无保护路径的音量在 Rust `gain::scale` 中相乘。 | 只剩缓冲清零和拷贝；回调路径无锁、无 C++ 分配（1.6）。 | 一期（已结项） |
 | Scene 帧计数 | `SceneStreamEngine` 的输入/输出帧边界有理数累加。 | S06；纯整数运算，规则与测试在 1.5 锁定。 | 一期（已结项） |
 | 公共路由与布局 | DirectSpeakers 矩阵的权重归一化（4.4 起在 Rust `mradm-scene` `direct_matrix`）；声道床/布局常量（4.3 起在 `mradm-scene`）；标签规范化、DS 矩阵按块路由与 22.2 LFE 路由（4.5 起在 `mradm-render` `routing`，C++ 只剩给 Apple 岛、双耳以及 VBAP 布局注册与渲染器工厂的 LFE 标签判定用的薄包装）。 | `sqrt(weight/sum)` 与固定求和本身确定。1.6 核对确认 Scene 不调用 DirectSpeakers 矩阵。 | 三期核对为确定性运算；4.3 迁入布局表，4.4 迁入 DS 矩阵 JSON，4.5 迁入路由与标签 |
-| 文件流式及离线后端准备 | EAR double 增益乘积与发散累加、VBAP 增益表组装、HOA 元数据分组与扬声器离线驱动 4.5 起在 Rust `mradm-render`；Triple Balance 的规范化、床与计划，room 的事件表与运行时 4.6 起也在其中；C++ 只剩双耳的块排序。 | N03/N06/N07/N12/S08；包括确定性运算与顺序风险。 | 三期已收敛数学函数与同起点块；四期 4.5 迁入 EAR、VBAP、HOA，4.6 迁入 Triple Balance 与 room，4.7 迁入双耳 |
-| 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期（3.1 已迁移）；四期 4.7 迁移其余编排 |
-| 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；[`BinauralSpreaderAdapter::push_batch/drain_ring`](../../src/adm_render_binaural/binaural_spreader.cpp#L120) 仍逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期核对为确定性运算；四期 4.7 迁入 Rust |
+| 文件流式及离线后端准备 | EAR double 增益乘积与发散累加、VBAP 增益表组装、HOA 元数据分组与扬声器离线驱动 4.5 起在 Rust `mradm-render`；Triple Balance 的规范化、床与计划，room 的事件表与运行时 4.6 起也在其中，双耳的声源计划与块排序 4.7 起也在其中。 | N03/N06/N07/N12/S08；包括确定性运算与顺序风险。 | 三期已收敛数学函数与同起点块；四期 4.5 迁入 EAR、VBAP、HOA，4.6 迁入 Triple Balance 与 room，4.7 迁入双耳 |
+| 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期（3.1 已迁移）；四期 4.7 C 起其余编排（FIFO、seek、gain ramp、拓扑重建）也在 Rust [`binaural_stream`](../../rust/crates/mradm-render/src/binaural_stream.rs) |
+| 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；原 C++ `BinauralSpreaderAdapter::push_batch/drain_ring` 逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期核对为确定性运算；四期 4.7 B 迁入 Rust [`binaural_render`](../../rust/crates/mradm-render/src/binaural_render.rs)（spreader 适配器、OLA 与离线驱动），归约顺序不变 |
 | 文件流式渲染的监听适配 | Monitor 折叠矩阵、实时覆盖增益、`clamp_frame` 秒到帧换算。 | N03/N18/S06；实时监听用途不改变其所属渲染流程。 | 三期（3.1、3.6 已迁移） |
 | 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移）；四期 4.8 迁移文件编排 |
 | PCM 输出控制 | 写出块循环与临时文件替换。3.6 起秒到帧换算在 Rust `timeline`；WAVE 样本量化和序列化在 Rust；CAF float32 由 C++ 显式按小端序列化。 | S06 已处理；I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期（3.6 已完成）；四期 4.8 迁移 WAV / CAF 写出编排 |
@@ -472,11 +472,13 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **4.6 状态**：Triple Balance 后端（场景规范化、床、报告、离线 TB 内核、文件流式与 Scene 流式渲染器）和 room 后端（资源与 HRIR 加载、事件表、准备线程状态机、文件流式与 Scene 流式渲染器）迁入 `mradm-render` 与 `mradm-dsp` `room::loading`。C++ 只剩适配壳、能力表、`render_window` 的写出 / 计量 / 取消，以及 `IRoomControl` 薄壳；只剩测试使用的 Triple Balance C++ 移到 `tests/support/triple_balance`。`.30-triple-*` 检查点改由 Rust 写出，room 原有的浮点环境边界由 FFI 作用域保留。Triple Balance 报告以删除前 C++ 生成的 1,300 例黄金数据验收；各批新旧对照（Triple Balance 离线 992 例、文件流式 650 例，room CLI 1,014 例，88 个 Scene 重放的普通与诊断构建）全部逐字节相同。行为差别只有 Scene Triple Balance 警告的顺序；room 离线默认 ramp 的 `×48` 照原样迁移，记为已知问题。生产 C/C++ 由 39,747 行降到 36,931 行。三平台 Consistency 40099269643（`6940df9`）、40122405263（`a072146`）、40166924313（`305159f`）、40176869018（`72c188b`）与 40186174718（`ea07aa9`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
 
-**4.7 B 本机对照（2026-10-27）**：`c967d840` 与 `1c52d999` 在无诊断插桩 Release 下，macOS arm64 的 83 例、Windows x64 的 77 例全部与基线逐位相同，77 个共用候选输出跨平台也相同。Windows 复测仍有 cloud 离线端到端耗时 +10.02%、带拓扑编辑的文件流式渲染峰值内存 +21.04% 两项开放回退。维护者要求记录问题后合并；性能验收尚未完成，本轮未继续 macOS 性能矩阵或长测。范围、隔离观察和原始轮次见 [4.7 B 记录](RUST_INVERSION_BINAURAL.md)。
+**4.7 B 本机对照（2026-10-27）**：`c967d840` 与 `1c52d999` 在无诊断插桩 Release 下，macOS arm64 的 83 例、Windows x64 的 77 例全部与基线逐位相同，77 个共用候选输出跨平台也相同。Windows 复测仍有 cloud 离线端到端耗时 +10.02%、带拓扑编辑的文件流式渲染峰值内存 +21.04% 两项开放回退。维护者要求记录问题后合并；性能验收尚未完成，本轮未继续 macOS 性能矩阵或长测。范围、隔离观察和原始轮次见 [4.7 记录的 B 合并审查](RUST_INVERSION_BINAURAL.md#b-合并审查2026-10-27)。
 
 **4.7 B 性能续查（同日）**：原端到端计时受约 15.55 ms 的退出轮询粒度影响；直接等待进程退出的两轮无插桩 cloud 对照为 +3.21% / +1.39%，不删除原始历史记录。拓扑重建的新旧卷积 bank 重叠解释了内存回退，提前释放的归因实验将峰值从 52.11 MiB 降到 43.28 MiB（参考 43.15 MiB）。内部工作池提交与输出归约有已测优化方向；未合入生产修复，问题仍开放。见[性能调查](RUST_BINAURAL_PERFORMANCE_REVIEW.md)。
 
 **4.7 B 内存修复（2026-10-28）**：文件流式拓扑重建复用 bank、工作池及卷积工作区，增长时只补足差额。完整控制重放的峰值在 Windows 由 52.31 降至 43.02 MiB，macOS 直接 Rust 对照由 58.30 降至 48.45 MiB；静态对照未见本次改动新增开销。Windows 77 项、macOS 83 项 PCM 对照和 77 个共用候选输出全部逐位一致。BINAURAL-002 已修复，其他耗时问题仍开放。见[内存修复](RUST_BINAURAL_MEMORY_FIX.md)。
+
+**4.7 状态**：双耳后端的 HRTF 状态与缓存（A）、声源计划、逐源 OLA、spreader 适配器、工作池与离线驱动（B）、文件流式渲染（C）和 Scene 流式渲染器（D）迁入 `mradm-render`（`binaural_hrtf`、`binaural`、`binaural_render`、`binaural_stream`、`live_binaural`），源索引与组索引的归约顺序不变，线程数不影响输出。C++ 只剩适配壳、能力表、`HrtfState` 视图、写出 / 取消 / 进度与创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural` 与 `tests/support/head_rotation.h`。`binaural.01–05`、`hrtf-grid-*`、`cloud.*`、`spreader/*` 与 `.30-binaural-*` 检查点改由 Rust 写出。声源计划以删除前 C++ 生成的 2,511 例黄金数据与 54 个 CLI 渲染指纹验收；各批新旧对照（离线 CLI 948 例、文件流式 574 例、88 个 Scene 重放的普通与诊断构建、矩阵子集的普通与诊断构建）中，成功渲染用例的 PCM 逐位相同。离线文件比较时将 bext 的墙钟日期时间置零；逐字节对照仍有三类例外：A 中 1 例两版均中止但 stderr 不同，B 中 10 例由中止改为报错，D 中 1 个 VBAP 设备回放的 24 个设备回调 trace 切分不同（按样本顺序拼接后 36 条流全部相同）。行为差别：线程数取法、worker 中止改为返回错误、文件流式检查输出缓冲、Scene 双耳 session 创建失败改为返回错误。生产 C/C++ 由 36,931 行降到 33,732 行。三平台 Consistency 40300248787（`c967d84`）、40484741776（`c34f937`）、40653088266（`0f49c1b`）、40808829856（`f6c697e`）与 40931990370（`31bb6dc`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。BINAURAL-001（Windows cloud 离线端到端耗时）仍开放。见 [4.7 记录](RUST_INVERSION_BINAURAL.md)。
 
 ## 每个迁移切片的验证
 
