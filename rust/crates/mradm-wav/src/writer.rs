@@ -1,5 +1,9 @@
 use crate::{Chna, Container, Error, Format, Result, SampleFormat, add, write_chunk};
-use std::io::{Seek, SeekFrom, Write};
+use std::{
+    fs::{File, OpenOptions},
+    io::{Seek, SeekFrom, Write},
+    path::Path,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct WriterOptions {
@@ -214,4 +218,51 @@ impl<W: Write + Seek> Writer<W> {
         self.sink.flush()?;
         Ok(self.sink)
     }
+}
+
+/// Creates a file writer: float output is always RF64 (32-bit only) because a streaming writer
+/// cannot know the final size; integer PCM is 16/24/32-bit and starts as RIFF. `exclusive` fails on
+/// an existing file instead of replacing it. A file created here is removed if setup fails.
+pub fn create_file_writer(
+    path: &Path,
+    channels: u32,
+    rate: u32,
+    bits: u16,
+    float: bool,
+    exclusive: bool,
+) -> Result<Writer<File>> {
+    let (sample_format, container) = match (float, bits) {
+        (true, 32) => (SampleFormat::Float32, Some(Container::Rf64)),
+        (true, _) => return Err(Error::unsupported("浮点 WAVE 位深必须为 32")),
+        (false, 16) => (SampleFormat::Pcm16, None),
+        (false, 24) => (SampleFormat::Pcm24, None),
+        (false, 32) => (SampleFormat::Pcm32, None),
+        (false, _) => return Err(Error::unsupported("整数 WAVE 位深必须为 16/24/32")),
+    };
+    let format = Format {
+        channels: u16::try_from(channels).map_err(|_| Error::invalid("WAVE 声道数过大"))?,
+        sample_rate: rate,
+        sample_format,
+        channel_mask: None,
+    };
+    format.block_align()?;
+    let mut options = OpenOptions::new();
+    options.write(true);
+    if exclusive {
+        options.create_new(true);
+    } else {
+        options.create(true).truncate(true);
+    }
+    let file = options.open(path)?;
+    Writer::new(
+        file,
+        format,
+        WriterOptions {
+            container,
+            ..WriterOptions::default()
+        },
+    )
+    .inspect_err(|_| {
+        let _ = std::fs::remove_file(path);
+    })
 }

@@ -412,7 +412,7 @@ Result<void> WriterHandle::finish() {
             if constexpr (requires { w.finish(); }) {
                 return w.finish();
             } else {
-                return {}; // CAF and FLAC writers finalize in their destructors.
+                return {}; // The FLAC writer finalizes in its destructor.
             }
         },
         impl_);

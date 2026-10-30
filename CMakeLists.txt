@@ -410,7 +410,6 @@ target_sources(
     PRIVATE
         src/adm_audio/apac_io.cpp
         src/adm_audio/audio_handles.cpp
-        src/adm_audio/caf_io.cpp
         src/adm_audio/flac_io.cpp
         src/adm_audio/iamf_io.cpp
         src/adm_audio/metadata_io.cpp

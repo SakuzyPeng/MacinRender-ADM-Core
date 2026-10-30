@@ -9,6 +9,7 @@
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -675,7 +676,17 @@ OSStatus input_render_callback(void* ref_con,
     return noErr;
 }
 
-[[nodiscard]] RenderMetrics collect_metrics(const dsp::Meter* state) {
+// Waits for the queued meter blocks, finalizes the output file and reads loudness and True Peak.
+[[nodiscard]] Result<RenderMetrics>
+finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& writer, const dsp::Meter* state) {
+    for (auto& pending : meter_pending) {
+        if (pending.valid()) {
+            pending.get();
+        }
+    }
+    if (auto finished = writer.finish(); !finished) {
+        return tl::unexpected{finished.error()};
+    }
     RenderMetrics metrics;
     if (state == nullptr) {
         return metrics;
@@ -1624,13 +1635,8 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
             buf_idx = (buf_idx + 1U) % k_num_buffers;
             frames_done += frames_now;
         }
-        for (auto& pending : meter_pending) {
-            if (pending.valid()) {
-                pending.get();
-            }
-        }
         progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-        return collect_metrics(&*lufs_st);
+        return finish_output(meter_pending, writer, &*lufs_st);
     }
 
     // Declare the callback backing storage BEFORE the AU so it is destroyed AFTER the AU's
@@ -1829,15 +1835,9 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                               "rendering"});
     }
 
-    for (auto& pending : meter_pending) {
-        if (pending.valid()) {
-            pending.get();
-        }
-    }
-
     progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
     logs.log(LogLevel::info, "apple", fmt::format("wrote {} frames to {}", frames_to_write, plan.output_path));
-    return collect_metrics(&*lufs_st);
+    return finish_output(meter_pending, writer, &*lufs_st);
 }
 
 // Render callback for the LFE-routing self-test: an 80 Hz sine on the (single) mono LFE bus.

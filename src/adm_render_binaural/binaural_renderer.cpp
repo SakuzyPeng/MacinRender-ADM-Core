@@ -315,6 +315,9 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     uint64_t out_written = 0;
     MradmRenderOfflineMetrics measured{};
     (void) mradm_render_binaural_offline_finish(driver.get(), &out_written, &measured);
+    if (auto finished = writer.finish(); !finished) {
+        return tl::unexpected{finished.error()};
+    }
 
     progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
     const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
