@@ -367,6 +367,9 @@ dependencies = [
 [[package]]
 name = "mradm-wav"
 version = "0.1.0"
+dependencies = [
+ "mradm-json",
+]
 
 [[package]]
 name = "nalgebra"
