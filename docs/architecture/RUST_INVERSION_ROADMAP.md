@@ -61,13 +61,14 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | `src/adm_loudness`、`src/adm_peak` | 0（原 165、143） | 删除（4.8 A，无生产调用者） | 四期 |
 
 四期估计删除生产 C/C++ 1.6–1.8 万行（约 35%），以各切片实测为准。
+实测：生产 C/C++ 由 4.1 起算的 45,090 行降到结项时的 32,551 行（−12,539 行，27.8%），逐模块的结项行数与差额原因见[四期结项](RUST_INVERSION_CLOSEOUT.md#规模)。
 
 ## 各期目标（五期起为初拟）
 
 | 期 | 目标 | 退出条件 |
 | --- | --- | --- |
-| 四期 | PCM 写出为止的数据链路迁入 Rust；`room-binaural` exact 档进矩阵；S03、观察内核、N01 JSON 残留与覆盖缺口收尾 | 后端与公共渲染层的 C++ 只剩适配壳；锁定矩阵三平台逐位相同；C++ 规模按切片实测下降 |
-| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度 | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
+| 四期 | PCM 写出为止的数据链路迁入 Rust；`room-binaural` exact 档进矩阵；S03、观察内核、N01 JSON 残留与覆盖缺口收尾 | 后端与公共渲染层的 C++ 只剩适配壳；锁定矩阵三平台逐位相同；C++ 规模按切片实测下降（2026-10-31 已满足，见[四期结项](RUST_INVERSION_CLOSEOUT.md)） |
+| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（初拟切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust初拟)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
 | 六期 | 边界迁入 Rust：C ABI 由 Rust cdylib 实现（`mradm_capi`、同一 `c_api.h`、`SOVERSION 1`、只导出 `adm_*`）；CLI 改为 Rust；删除 C++ SDK 与安装规则；构建以 Cargo 为主 | ABI 导出、GUI P/Invoke、CLI 输出与退出码回归通过；CLI11、spdlog/fmt、nlohmann_json、tl-expected 移除 |
 | 七期 | 平台岛收缩：Apple / Windows sink 与编码器 C 库只留窄 C 接口，评估 objc2 / windows crate；冻结参考按条件退役；C++ 测试清退 | 生产 C/C++ 只剩岛 |
 
