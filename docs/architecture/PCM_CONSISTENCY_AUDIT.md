@@ -484,6 +484,33 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **4.9 状态**：4.5 之后扬声器文件流式（VBAP、HOA、EAR）已按固定块渲染进 FIFO，与请求分块无关、从第 0 帧起与离线相同；剩下的偏差在 seek：块不在离线的绝对网格上（开平滑时插值端点不同），HOA / EAR 也不预滚。4.9 让 seek 从离线窗口的起点（`offline::window_start`，离线与流共用）渲染并丢弃目标之前的帧，seek 时重启 live gain 去拉链，seek 之后与同一位置的离线窗口逐位相同；离线输出不变。新增 8 个开平滑（2048 帧）的文件流式重放并设门禁，PCM id 由 283 增至 291，文件流式重放由 28 增至 36。有意变化的是 12 个 EAR / HOA 文件流式重放 seek 之后的 PCM；全部 79 个离线行与其余 16 个基线文件流式行在普通与诊断构建中相同，8 个新增文件流式行仅候选支持，候选 36 个重放都与分块无关。Scene 流式的双耳卷积与分数比率重采样仍依赖分块，S03 的这一部分不变。三平台 Consistency 41159930885（`ecb2fb5`）在 config A、B 的普通与诊断四份报告中均为 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。见 [4.9 记录](RUST_INVERSION_SMOOTHING.md)。
 
+**4.10 状态（四期结项）**：结项提交 main `221ce28`。Consistency 41166081362 在 config A、B 的普通与诊断四份报告中都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0；诊断报告中每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。CI 41166081382 与 Quality 41166081381 通过；Release Build 41183519975 与 Reference tests 41183521970 待回填。生产 C/C++ 由 4.1 的 45,090 行降到 32,551 行（−12,539 行，27.8%），岛与 CUDA 边界不变。四期目标逐条完成；room 离线默认 ramp 的 `×48` 与 BINAURAL-001 移交五期。见 [四期结项](RUST_INVERSION_CLOSEOUT.md)。
+
+## 五期：编排与实时调度迁入 Rust（初拟）
+
+> 初拟于 4.10（2026-10-31），五期开始时由维护者确定。总路线见[逆转路线](RUST_INVERSION_ROADMAP.md#各期目标五期起为初拟)。
+
+五期把四期留在 C++ 的驱动面迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine` / `SceneOutputSession`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度。退出条件是一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除。公开 C ABI 与 CLI 留到六期，五期内经 C++ 薄壳调用 Rust 编排。
+
+| 执行顺序 | 工作 | 具体范围与交付 |
+| --- | --- | --- |
+| 5.1 | 方向与基线 | 驱动面清单（离线、文件流式、Scene、Monitor 各经哪些 C++ 接口）与规模基线；Rust 一致性工具的对照规则：同一构建上新旧工具逐位相同，包括 PCM、检查点、日志与错误；切换后旧工具删除。 |
+| 5.2 | 离线编排 | `RenderService` 的导入、策略、后端选择（`src/adm_renderer_factory`）、离线循环、写出与后处理编排、进度与取消，以及能力表、support matrix、格式 / 布局表与场景 JSON（nlohmann 在 engine 的用途）迁入 Rust；`mr_adm_phase2_render` 改为 Rust 并与旧工具逐位对照；CLI 与 C ABI 经 C++ 薄壳调用。 |
+| 5.3 | 预览与文件流式驱动面 | `PreviewSession` 与文件流式的打开、seek、覆盖迁入 Rust；`mr_adm_phase2_stream` 改为 Rust。 |
+| 5.4 | Scene 流式引擎 | `SceneStreamEngine`（generation、事件、时钟缝、epoch、preroll、EOS）与 `SceneOutputSession`（捕获设备、设备侧 DSP）迁入 Rust；`mr_adm_phase2_scene` 改为 Rust。 |
+| 5.5 | Monitor 与实时调度 | `MonitorEngine`、`monitor_session`、ring buffer、downmix、立体声峰值保护、OSC 头追踪的 UDP 收发与快照、设备调度与 Windows room worker 等待迁入 Rust；miniaudio 留作 C 岛，Apple / Windows 系统空间 sink 经窄 C 接口。设备回调的分配计数约束保留。 |
+| 5.6 | 删除适配壳 | 删除 C++ `AdmScene`、`IRenderer` / `IRenderStream` / `ILiveSceneRenderer` 适配壳、`src/adm_render_common` 的剩余薄包装与失去调用者的私有 FFI 头；Apple 岛改经窄 C 接口取用 Rust 的路由与预处理。 |
+| 5.7 | room 默认 ramp | 有意的数值变化：room 离线与文件流式的默认 ramp 由 `default_interp_ms × 48` 改为按采样率换算，96 kHz room 的 PCM 改变，单独成片。 |
+| 5.8 | 三平台验收与结项 | 全矩阵三平台验收、Release Build 与 Reference tests，记录规模变化，准备六期。 |
+
+排序依据：
+- 离线编排最先：它是另外几条驱动面共用的导入、策略与后端选择入口。
+- Scene 引擎先于 Monitor：Monitor 经 Scene 引擎与文件流式渲染取 PCM。
+- 适配壳在所有驱动面迁走之后删除，否则一致性工具没有可驱动的接口。
+- 有意的数值变化单独成片，不与结构迁移混在一起。
+
+验证要求沿用四期：结构迁移逐位不变（锁定矩阵的 PCM、内核与诊断检查点）、迁出即删除、生产 C/C++ 棘轮只减不增、三平台验收集中进行。BINAURAL-001 作为性能任务另行跟踪，不阻塞五期。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
