@@ -1,11 +1,12 @@
 //! Private file I/O boundary. Owners and their allocations never cross allocators.
+use mradm_render::postprocess::{self, Begin, Failure, Pass, Profile, Progress};
 use mradm_wav::{
-    AMBI_HOA3, BextFields, Chna, ChnaTrack, ChunkReader, Error, LayoutOptions, LayoutRewriter,
-    Reader, Result, Writer, append_bext, bext_payload, has_chunk, replace_chunk,
+    AMBI_HOA3, BextFields, Chna, ChunkReader, Error, Reader, Result, Writer, append_bext,
+    bext_payload, has_chunk,
 };
 use std::{
     fs::{File, OpenOptions},
-    io::{BufReader, BufWriter, Write},
+    io::BufReader,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice, str,
 };
@@ -15,17 +16,6 @@ pub struct ReadHandle {
 }
 pub struct ChunkReadHandle {
     reader: ChunkReader<BufReader<File>>,
-}
-struct CreatedPathGuard<'a> {
-    path: &'a str,
-    keep: bool,
-}
-impl Drop for CreatedPathGuard<'_> {
-    fn drop(&mut self) {
-        if !self.keep {
-            let _ = std::fs::remove_file(self.path);
-        }
-    }
 }
 pub struct WriteHandle {
     writer: Option<Writer<File>>,
@@ -343,6 +333,200 @@ pub unsafe extern "C" fn mradm_wav_append_bext(
     })
 }
 
+// ── Post-processing passes (PCM consistency 4.8) ──────────────────────────────
+
+pub struct PostHandle {
+    pass: Option<Pass>,
+}
+/// One progress report. `emit` asks for a progress event; once `complete`, the data is written
+/// and finish installs the output. `install_check` (begin only) asks for one more cancellation
+/// check before finish.
+#[repr(C)]
+pub struct OutputPostProgress {
+    fraction: f64,
+    done: u64,
+    total: u64,
+    /// Static text.
+    message: *const u8,
+    message_len: usize,
+    emit: u8,
+    complete: u8,
+    install_check: u8,
+}
+fn report(progress: Progress, complete: bool, install_check: bool) -> OutputPostProgress {
+    OutputPostProgress {
+        fraction: progress.fraction,
+        done: progress.done,
+        total: progress.total,
+        message: progress.message.as_ptr(),
+        message_len: progress.message.len(),
+        emit: u8::from(progress.emit),
+        complete: u8::from(complete),
+        install_check: u8::from(install_check),
+    }
+}
+/// Copies `text` into a C buffer, truncated at a character boundary and NUL-terminated.
+fn copy_text(text: &str, output: *mut u8, capacity: usize) {
+    if !output.is_null() && capacity != 0 {
+        let mut len = text.len().min(capacity - 1);
+        while !text.is_char_boundary(len) {
+            len -= 1;
+        }
+        unsafe {
+            ptr::copy_nonoverlapping(text.as_ptr(), output, len);
+            *output.add(len) = 0;
+        }
+    }
+}
+/// The FFI boundary of a pass: errors carry their own context.
+fn post(
+    message: *mut u8,
+    capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
+    f: impl FnOnce() -> std::result::Result<(), Failure>,
+) -> i32 {
+    let failure = match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(Ok(())) => None,
+        Ok(Err(failure)) => Some(failure),
+        Err(_) => Some(Failure {
+            code: 6,
+            message: "Rust 后处理 panic".into(),
+            context: String::new(),
+        }),
+    };
+    copy_text(
+        failure.as_ref().map_or("", |f| &f.message),
+        message,
+        capacity,
+    );
+    copy_text(
+        failure.as_ref().map_or("", |f| &f.context),
+        context,
+        context_capacity,
+    );
+    failure.map_or(0, |f| f.code)
+}
+fn invalid(error: Error) -> Failure {
+    Failure {
+        code: error.code,
+        message: error.message,
+        context: String::new(),
+    }
+}
+/// Publishes a begin result: a handle for a started pass, or null with the final event.
+unsafe fn started(
+    begin: Begin,
+    output: *mut *mut PostHandle,
+    progress: *mut OutputPostProgress,
+) -> std::result::Result<(), Failure> {
+    let (handle, first) = match begin {
+        Begin::Skipped(event) => (ptr::null_mut(), report(event, true, false)),
+        Begin::Started(pass, event) => {
+            let check = pass.cancel_before_install();
+            (
+                Box::into_raw(Box::new(PostHandle { pass: Some(*pass) })),
+                report(event, false, check),
+            )
+        }
+    };
+    unsafe {
+        *output = handle;
+        *progress = first;
+    }
+    Ok(())
+}
+unsafe fn post_outputs(
+    output: *mut *mut PostHandle,
+    progress: *mut OutputPostProgress,
+) -> std::result::Result<(), Failure> {
+    valid(output, 1).map_err(invalid)?;
+    valid(progress, 1).map_err(invalid)?;
+    unsafe {
+        *output = ptr::null_mut();
+    }
+    Ok(())
+}
+unsafe fn post_path<'a>(data: *const u8, len: usize) -> std::result::Result<&'a str, Failure> {
+    unsafe { path(data, len) }.map_err(invalid)
+}
+unsafe fn post_bytes<'a>(data: *const u8, len: usize) -> std::result::Result<&'a [u8], Failure> {
+    unsafe { borrowed(data, len) }.map_err(invalid)
+}
+
+/// `apply_gain_to_file`; `cancelled` is checked after the unity-gain test.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_gain_begin(
+    name: *const u8,
+    length: usize,
+    gain: f32,
+    layout: *const u8,
+    layout_len: usize,
+    cancelled: u8,
+    output: *mut *mut PostHandle,
+    progress: *mut OutputPostProgress,
+    message: *mut u8,
+    capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
+) -> i32 {
+    post(message, capacity, context, context_capacity, || unsafe {
+        post_outputs(output, progress)?;
+        let name = post_path(name, length)?;
+        let layout = post_bytes(layout, layout_len)?;
+        started(
+            postprocess::gain(name, gain, layout, cancelled != 0)?,
+            output,
+            progress,
+        )
+    })
+}
+/// `trim_file_frames`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_trim_begin(
+    name: *const u8,
+    length: usize,
+    start_frame: u64,
+    frame_count: u64,
+    layout: *const u8,
+    layout_len: usize,
+    output: *mut *mut PostHandle,
+    progress: *mut OutputPostProgress,
+    message: *mut u8,
+    capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
+) -> i32 {
+    post(message, capacity, context, context_capacity, || unsafe {
+        post_outputs(output, progress)?;
+        let name = post_path(name, length)?;
+        let layout = post_bytes(layout, layout_len)?;
+        started(
+            postprocess::trim(name, start_frame, frame_count, layout)?,
+            output,
+            progress,
+        )
+    })
+}
+/// `downconvert_to_int`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_bitdepth_begin(
+    name: *const u8,
+    length: usize,
+    bits: u16,
+    output: *mut *mut PostHandle,
+    progress: *mut OutputPostProgress,
+    message: *mut u8,
+    capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
+) -> i32 {
+    post(message, capacity, context, context_capacity, || unsafe {
+        post_outputs(output, progress)?;
+        let name = post_path(name, length)?;
+        started(postprocess::bitdepth(name, bits)?, output, progress)
+    })
+}
 #[repr(C)]
 pub struct WavChnaTrack {
     uid: *const u8,
@@ -368,125 +552,118 @@ pub struct WavLayoutOptions {
     prefer_riff: u8,
     include_pcm_fact: u8,
 }
-pub struct LayoutHandle {
-    rewriter: Option<LayoutRewriter<BufReader<File>, BufWriter<File>>>,
-}
-
-/// Opens `source`, creates `target` exclusively and writes the new header. The caller owns the
-/// target path (including removal on failure) and installs it only after a successful finish.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_layout_begin(
-    source: *const u8,
-    source_length: usize,
-    target: *const u8,
-    target_length: usize,
-    options: *const WavLayoutOptions,
-    output: *mut *mut LayoutHandle,
-    frames: *mut u64,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        valid(output, 1)?;
-        valid(frames, 1)?;
-        disjoint(&[region(output, 1), region(frames, 1)])?;
-        unsafe {
-            *output = ptr::null_mut();
-            *frames = 0;
-        }
-        valid(options, 1)?;
-        let options = unsafe { &*options };
-        let tracks = unsafe { borrowed(options.chna, options.chna_len)? }
-            .iter()
-            .map(|track| unsafe {
-                Ok(ChnaTrack {
-                    track_index: track.track_index,
-                    uid: borrowed(track.uid, track.uid_len)?,
-                    track_format: borrowed(track.track_format, track.track_format_len)?,
-                    pack_format: borrowed(track.pack_format, track.pack_format_len)?,
-                })
+unsafe fn explicit_layout(options: &WavLayoutOptions) -> Result<postprocess::Layout> {
+    let chna = unsafe { borrowed(options.chna, options.chna_len)? }
+        .iter()
+        .map(|track| unsafe {
+            Ok(postprocess::ChnaEntry {
+                track_index: track.track_index,
+                uid: borrowed(track.uid, track.uid_len)?.to_vec(),
+                track_format: borrowed(track.track_format, track.track_format_len)?.to_vec(),
+                pack_format: borrowed(track.pack_format, track.pack_format_len)?.to_vec(),
             })
-            .collect::<Result<Vec<_>>>()?;
-        let layout = LayoutOptions {
-            channel_mask: options.channel_mask,
-            force_extensible: options.force_extensible != 0,
-            include_pcm_fact: options.include_pcm_fact != 0,
-            prefer_riff: options.prefer_riff != 0,
-            permutation: unsafe { borrowed(options.permutation, options.permutation_len)? },
-            axml: unsafe { borrowed(options.axml, options.axml_len)? },
-            chna: &tracks,
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(postprocess::Layout {
+        channel_mask: options.channel_mask,
+        permutation: unsafe { borrowed(options.permutation, options.permutation_len)? }.to_vec(),
+        axml: unsafe { borrowed(options.axml, options.axml_len)? }.to_vec(),
+        chna,
+        force_extensible: options.force_extensible != 0,
+        prefer_riff: options.prefer_riff != 0,
+        include_pcm_fact: options.include_pcm_fact != 0,
+    })
+}
+/// WAV layout finalization, in place. With `options` the layout is explicit (the caller has
+/// checked cancellation); otherwise it follows `layout` and `profile` (0 ADM semantics, 1 speaker
+/// re-render) and `cancelled` is checked after building it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_output_finalize_begin(
+    name: *const u8,
+    length: usize,
+    layout: *const u8,
+    layout_len: usize,
+    profile: u32,
+    options: *const WavLayoutOptions,
+    cancelled: u8,
+    output: *mut *mut PostHandle,
+    progress: *mut OutputPostProgress,
+    message: *mut u8,
+    capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
+) -> i32 {
+    post(message, capacity, context, context_capacity, || unsafe {
+        post_outputs(output, progress)?;
+        let name = post_path(name, length)?;
+        let begin = if options.is_null() {
+            let layout = String::from_utf8_lossy(post_bytes(layout, layout_len)?);
+            let profile = if profile == 1 {
+                Profile::SpeakerRerender
+            } else {
+                Profile::AdmSemantics
+            };
+            postprocess::finalize_rendered(name, &layout, profile, cancelled != 0)?
+        } else {
+            valid(options, 1).map_err(invalid)?;
+            postprocess::finalize(name, &explicit_layout(&*options).map_err(invalid)?)?
         };
-        let input = BufReader::new(File::open(unsafe { path(source, source_length)? })?);
-        let target = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(unsafe { path(target, target_length)? })?;
-        let rewriter = LayoutRewriter::new(input, BufWriter::new(target), &layout)?;
-        unsafe {
-            *frames = rewriter.frames();
-            *output = Box::into_raw(Box::new(LayoutHandle {
-                rewriter: Some(rewriter),
-            }));
-        }
-        Ok(())
+        started(begin, output, progress)
     })
 }
+/// One block of a started pass.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_layout_step(
-    handle: *mut LayoutHandle,
-    max_frames: u64,
-    copied: *mut u64,
+pub unsafe extern "C" fn mradm_output_post_step(
+    handle: *mut PostHandle,
+    progress: *mut OutputPostProgress,
     message: *mut u8,
     capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
 ) -> i32 {
-    boundary(message, capacity, || {
-        valid(copied, 1)?;
-        unsafe {
-            *copied = 0;
-        }
-        valid(handle, 1)?;
-        let count = unsafe { &mut *handle }
-            .rewriter
+    post(message, capacity, context, context_capacity, || unsafe {
+        valid(handle, 1).map_err(invalid)?;
+        valid(progress, 1).map_err(invalid)?;
+        let pass = (*handle)
+            .pass
             .as_mut()
-            .ok_or_else(|| Error::invalid("WAVE 布局重写已结束"))?
-            .step(max_frames)?;
-        unsafe {
-            *copied = count;
-        }
+            .ok_or_else(|| invalid(Error::invalid("后处理已结束")))?;
+        let step = pass.step()?;
+        *progress = report(step.progress, step.complete, false);
         Ok(())
     })
 }
+/// Installs the output of a completed pass; `progress` receives the final event.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_layout_finish(
-    handle: *mut LayoutHandle,
+pub unsafe extern "C" fn mradm_output_post_finish(
+    handle: *mut PostHandle,
+    progress: *mut OutputPostProgress,
     message: *mut u8,
     capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
 ) -> i32 {
-    boundary(message, capacity, || {
-        valid(handle, 1)?;
-        let rewriter = unsafe { &mut *handle }
-            .rewriter
+    post(message, capacity, context, context_capacity, || unsafe {
+        valid(handle, 1).map_err(invalid)?;
+        valid(progress, 1).map_err(invalid)?;
+        let pass = (*handle)
+            .pass
             .take()
-            .ok_or_else(|| Error::invalid("WAVE 布局重写已结束"))?;
-        let mut sink = rewriter.finish()?;
-        sink.flush()?;
-        sink.into_inner()
-            .map_err(|error| Error::io(error.error().to_string()))?;
+            .ok_or_else(|| invalid(Error::invalid("后处理已结束")))?;
+        *progress = report(pass.finish()?, true, false);
         Ok(())
     })
 }
+/// Destroying an unfinished pass removes its temporary file.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_layout_destroy(handle: *mut LayoutHandle) {
+pub unsafe extern "C" fn mradm_output_post_destroy(handle: *mut PostHandle) {
     if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
+        let _ = catch_unwind(AssertUnwindSafe(|| unsafe { drop(Box::from_raw(handle)) }));
     }
 }
 
-/// Creates `target` exclusively as a copy of `source` with the axml payload replaced.
-/// Existing targets (including aliases of the source) are left untouched. The caller installs
-/// the completed file; a target created by this call is removed if the rewrite fails.
+/// `target` becomes a copy of `source` with the axml payload replaced, written to a sidecar and
+/// installed (aliases of the source included); on failure the target is left as it was.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_wav_replace_axml(
     source: *const u8,
@@ -497,31 +674,14 @@ pub unsafe extern "C" fn mradm_wav_replace_axml(
     axml_length: usize,
     message: *mut u8,
     capacity: usize,
+    context: *mut u8,
+    context_capacity: usize,
 ) -> i32 {
-    boundary(message, capacity, || {
-        let axml = unsafe { borrowed(axml, axml_length)? };
-        let source = unsafe { path(source, source_length)? };
-        let target = unsafe { path(target, target_length)? };
-        let input = BufReader::new(File::open(source)?);
-        let output = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(target)?;
-        // create_new established ownership. The sink below closes before this guard runs,
-        // including on Windows and when the boundary catches a panic.
-        let mut guard = CreatedPathGuard {
-            path: target,
-            keep: false,
-        };
-        let result = (|| {
-            let mut sink = BufWriter::new(output);
-            replace_chunk(input, &mut sink, *b"axml", axml)?;
-            sink.into_inner()
-                .map_err(|error| Error::io(error.error().to_string()))?;
-            Ok(())
-        })();
-        guard.keep = result.is_ok();
-        result
+    post(message, capacity, context, context_capacity, || unsafe {
+        let axml = post_bytes(axml, axml_length)?;
+        let source = post_path(source, source_length)?;
+        let target = post_path(target, target_length)?;
+        postprocess::replace_axml(source, target, axml)
     })
 }
 
@@ -939,21 +1099,19 @@ mod tests {
     }
 
     #[test]
-    fn axml_replacement_preserves_existing_files_and_removes_failed_outputs() {
+    fn axml_replacement_installs_or_leaves_the_target_unchanged() {
         let root = std::env::temp_dir().join(format!("mradm-replace-{}", std::process::id()));
         std::fs::create_dir(&root).unwrap();
         let source = root.join("source.wav");
         let target = root.join("target.wav");
-        let hard_link = root.join("hard.wav");
         let original = metadata_wave(1, 16);
         std::fs::write(&source, &original).unwrap();
         std::fs::write(&target, b"existing output").unwrap();
-        std::fs::hard_link(&source, &hard_link).unwrap();
-        let replace = |target: &std::path::Path| {
+        let replace = |source: &std::path::Path, target: &std::path::Path| {
             let source = source.to_str().unwrap();
             let target = target.to_str().unwrap();
-            let mut message = [0; 128];
-            unsafe {
+            let (mut message, mut context) = ([0; 128], [0; 256]);
+            let code = unsafe {
                 mradm_wav_replace_axml(
                     source.as_ptr(),
                     source.len(),
@@ -963,39 +1121,43 @@ mod tests {
                     6,
                     message.as_mut_ptr(),
                     128,
+                    context.as_mut_ptr(),
+                    256,
                 )
-            }
+            };
+            let end = context.iter().position(|b| *b == 0).unwrap();
+            (code, String::from_utf8(context[..end].to_vec()).unwrap())
         };
-        for path in [&source, &target, &hard_link] {
-            let before = std::fs::read(path).unwrap();
-            assert_eq!(replace(path), 3);
-            assert_eq!(std::fs::read(path).unwrap(), before);
-            assert_eq!(std::fs::read(&source).unwrap(), original);
-        }
-        #[cfg(unix)]
-        {
-            let link = root.join("symbolic.wav");
-            std::os::unix::fs::symlink(&source, &link).unwrap();
-            assert_eq!(replace(&link), 3);
-            assert!(link.is_symlink());
-            assert_eq!(std::fs::read(&source).unwrap(), original);
-        }
+        let axml = |path: &std::path::Path| {
+            let mut reader = ChunkReader::new(BufReader::new(File::open(path).unwrap())).unwrap();
+            reader.metadata(*b"axml", 6).unwrap().unwrap()
+        };
         let fresh = root.join("fresh.wav");
-        assert_eq!(replace(&fresh), 0);
-        let mut reader = ChunkReader::new(BufReader::new(File::open(&fresh).unwrap())).unwrap();
-        assert_eq!(reader.metadata(*b"axml", 6).unwrap().unwrap(), b"<new/>");
-        drop(reader);
-        std::fs::remove_file(&fresh).unwrap();
-
+        assert_eq!(replace(&source, &fresh).0, 0);
+        assert_eq!(axml(&fresh), b"<new/>");
+        // An existing target, and the source itself, are replaced by an installed copy.
+        assert_eq!(replace(&source, &target).0, 0);
+        assert_eq!(axml(&target), b"<new/>");
+        assert_eq!(replace(&source, &source).0, 0);
+        assert_eq!(axml(&source), b"<new/>");
+        // A failed rewrite leaves the target and no sidecar.
         std::fs::write(&source, &original[..original.len() - 1]).unwrap();
-        assert_eq!(replace(&fresh), 3);
-        assert!(!fresh.exists());
-        assert_eq!(
-            std::fs::read(&source).unwrap(),
-            original[..original.len() - 1]
-        );
-        assert_eq!(replace(&target), 3);
-        assert_eq!(std::fs::read(&target).unwrap(), b"existing output");
+        let before = std::fs::read(&target).unwrap();
+        let (code, context) = replace(&source, &target);
+        assert_eq!(code, 3);
+        assert!(context.starts_with("path=") && context.contains(" -> "));
+        assert_eq!(std::fs::read(&target).unwrap(), before);
+        // A directory target is never moved out of the way.
+        let directory = root.join("directory.wav");
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(&source, &original).unwrap();
+        assert_eq!(replace(&source, &directory).0, 3);
+        assert!(directory.is_dir());
+        let names: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert!(names.iter().all(|n| !n.contains("axml_tmp")), "{names:?}");
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1312,24 +1474,31 @@ mod tests {
             );
             mradm_wav_writer_destroy(writer);
 
-            // Layout: null options are rejected and outputs cleared; a swap with ADM chunks succeeds.
-            let mut layout = ptr::dangling_mut();
-            let mut frames = 99;
+            // Layout: an unknown layout id is rejected with its context; an explicit swap with ADM
+            // chunks is finalized in place.
+            std::fs::copy(&source, &target).unwrap();
+            let mut pass = ptr::dangling_mut();
+            let mut progress = std::mem::zeroed::<OutputPostProgress>();
+            let mut context = [0u8; 256];
             assert_eq!(
-                mradm_wav_layout_begin(
-                    source_text.as_ptr(),
-                    source_text.len(),
+                mradm_output_finalize_begin(
                     target_text.as_ptr(),
                     target_text.len(),
+                    b"nope".as_ptr(),
+                    4,
+                    0,
                     ptr::null(),
-                    &mut layout,
-                    &mut frames,
+                    0,
+                    &mut pass,
+                    &mut progress,
                     message.as_mut_ptr(),
-                    128
+                    128,
+                    context.as_mut_ptr(),
+                    256
                 ),
-                1
+                3
             );
-            assert!(layout.is_null() && frames == 0);
+            assert!(pass.is_null());
             let permutation = [1u16, 0];
             let tracks = [1u16, 2].map(|index| WavChnaTrack {
                 uid: b"ATU_00000001".as_ptr(),
@@ -1351,58 +1520,64 @@ mod tests {
                 ..empty_options()
             };
             assert_eq!(
-                mradm_wav_layout_begin(
-                    source_text.as_ptr(),
-                    source_text.len(),
+                mradm_output_finalize_begin(
                     target_text.as_ptr(),
                     target_text.len(),
+                    ptr::null(),
+                    0,
+                    0,
                     &options,
-                    &mut layout,
-                    &mut frames,
+                    0,
+                    &mut pass,
+                    &mut progress,
                     message.as_mut_ptr(),
-                    128
+                    128,
+                    context.as_mut_ptr(),
+                    256
                 ),
                 0
             );
-            assert_eq!(frames, 3);
-            let mut copied = 0;
-            let mut total = 0;
-            loop {
+            assert_eq!(
+                (progress.total, progress.emit, progress.install_check),
+                (3, 1, 0)
+            );
+            while progress.complete == 0 {
                 assert_eq!(
-                    mradm_wav_layout_step(layout, 2, &mut copied, message.as_mut_ptr(), 128),
+                    mradm_output_post_step(
+                        pass,
+                        &mut progress,
+                        message.as_mut_ptr(),
+                        128,
+                        context.as_mut_ptr(),
+                        256
+                    ),
                     0
                 );
-                if copied == 0 {
-                    break;
-                }
-                total += copied;
             }
-            assert_eq!(total, 3);
+            assert_eq!(progress.done, 3);
             assert_eq!(
-                mradm_wav_layout_finish(layout, message.as_mut_ptr(), 128),
+                mradm_output_post_finish(
+                    pass,
+                    &mut progress,
+                    message.as_mut_ptr(),
+                    128,
+                    context.as_mut_ptr(),
+                    256
+                ),
                 0
             );
             assert_eq!(
-                mradm_wav_layout_finish(layout, message.as_mut_ptr(), 128),
+                mradm_output_post_finish(
+                    pass,
+                    &mut progress,
+                    message.as_mut_ptr(),
+                    128,
+                    context.as_mut_ptr(),
+                    256
+                ),
                 1
             );
-            mradm_wav_layout_destroy(layout);
-            // The target is created exclusively.
-            assert_eq!(
-                mradm_wav_layout_begin(
-                    source_text.as_ptr(),
-                    source_text.len(),
-                    target_text.as_ptr(),
-                    target_text.len(),
-                    &empty_options(),
-                    &mut layout,
-                    &mut frames,
-                    message.as_mut_ptr(),
-                    128
-                ),
-                3
-            );
-            assert!(layout.is_null());
+            mradm_output_post_destroy(pass);
 
             // bext append keeps the file readable; then the reader exposes axml and CHNA.
             let fields = WavBext {
@@ -1586,7 +1761,9 @@ mod tests {
                     b"<b/>!".as_ptr(),
                     5,
                     message.as_mut_ptr(),
-                    128
+                    128,
+                    ptr::null_mut(),
+                    0
                 ),
                 0
             );

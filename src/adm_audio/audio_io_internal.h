@@ -48,6 +48,13 @@ Result<void> finalize_wav_layout(const std::string& path,
                                  const std::stop_token& cancel_token = {},
                                  ProgressSink* progress = nullptr,
                                  RenderOperation operation = RenderOperation::write_metadata);
+// finalize_wav_layout with the layout's mask, 7.1.4 order or rendered ADM, built in Rust; the
+// speaker re-render profile writes the 7.1.4 / 9.1.6 compatibility form.
+Result<void> finalize_wav_output(const std::string& path,
+                                 const std::string& output_layout,
+                                 bool speaker_rerender,
+                                 const std::stop_token& cancel_token,
+                                 ProgressSink* progress);
 
 // Subprocess worker behind convert_to_apac's stall watchdog. Runs the real
 // AudioToolbox encode in-process and streams a line-based heartbeat protocol on

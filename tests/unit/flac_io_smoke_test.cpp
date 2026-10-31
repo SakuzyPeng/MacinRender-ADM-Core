@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -293,7 +294,7 @@ bool verify_flac_roundtrip() {
 }
 
 // ── apply_gain_to_file on FLAC ────────────────────────────────────────────────
-// Constant-amplitude file → gain 0.5 → verify amplitude halved within tolerance.
+// The gain rewrite only accepts WAV and CAF (PCM consistency 4.8): a FLAC file is left untouched.
 
 bool verify_flac_gain() {
     constexpr uint32_t k_ch = 1U;
@@ -301,7 +302,6 @@ bool verify_flac_gain() {
     constexpr uint32_t k_frames = 512U;
     constexpr float k_amp = 0.5F;
     constexpr float k_gain = 0.5F;
-    constexpr float k_tol = 2e-6F;
 
     const std::string path = temp_path("mr_flac_gain_test", ".flac").string();
     FileGuard guard(path);
@@ -314,32 +314,19 @@ bool verify_flac_gain() {
         }
         wr->write(samples.data(), k_frames);
     }
+    const auto read_bytes = [&path] {
+        std::ifstream input(path, std::ios::binary);
+        return std::vector<char>{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+    };
+    const auto before = read_bytes();
+    if (!check(!before.empty(), "read FLAC before rejected gain")) {
+        return false;
+    }
 
     auto res = mradm::audio::apply_gain_to_file(path, k_gain);
-    if (!check(res.has_value(), "apply_gain_to_file on FLAC failed")) {
-        return false;
-    }
-
-    auto rd = mradm::audio::FloatFlacReader::open(path);
-    if (!check(rd.has_value(), "FloatFlacReader::open after gain failed")) {
-        return false;
-    }
-    if (!check(rd->frame_count() == k_frames, "frame_count changed after gain")) {
-        return false;
-    }
-
-    std::vector<float> back(sample_count(k_ch, k_frames));
-    rd->read(back.data(), k_frames);
-
-    const float expected = k_amp * k_gain;
-    const auto bad =
-        std::ranges::find_if(back, [expected](float sample) { return std::abs(sample - expected) > k_tol; });
-    if (bad != back.end()) {
-        const auto i = static_cast<std::size_t>(std::distance(back.begin(), bad));
-        std::cerr << "FAIL: gain sample " << i << ": got=" << *bad << " expected=" << expected << "\n";
-        return false;
-    }
-    return true;
+    return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
+                 "apply_gain_to_file on FLAC is unsupported") &&
+           check(read_bytes() == before, "FLAC file unchanged after rejected gain");
 }
 
 // ── Vorbis Comment: single VC block, required tags present ───────────────────
