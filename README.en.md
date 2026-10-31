@@ -185,12 +185,12 @@ All modules ──→ ADMCore (domain model, errors, options, capabilities)
 | `ADMEngine` / `ADMCAPI` | `RenderService` orchestration and the stable C ABI |
 | `rust/crates/mradm-dsp` | Numerical DSP: FFT, VBAP, HRTF/SOFA, convolution, OM spreader, resampling, metering, HOA, Monitor, and more |
 | `rust/crates/mradm-ear` | Layouts, gains, and FIR design ported from libear |
-| `rust/crates/mradm-adm` / `mradm-wav` | ADM XML metadata; WAVE / RF64 / BW64 I/O and container editing |
+| `rust/crates/mradm-adm` / `mradm-wav` | ADM XML metadata; WAVE / RF64 / BW64 and CAF I/O and container editing |
 | `rust/crates/mradm-math` | Portable, cross-platform bit-identical sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC head-tracking datagram decoding (loopback UDP input) |
 | `rust/crates/mradm-scene` | Render scene: input import, CHNA mapping, channel beds and loudspeaker layout tables; semantic policy, report and template, export writeback, DirectSpeakers matrix and screen configuration |
 | `rust/crates/mradm-json` | JSON parsing and output byte-compatible with nlohmann/json 3.12.0 |
-| `rust/crates/mradm-render` | Loudspeaker backends (VBAP, HOA, EAR, Scene stream VBAP), the Triple Balance and room backends (offline, file and Scene streaming, the room preparation thread), the binaural backend (HRTF state and caches, source plan, OLA, spreader, offline, file and Scene streaming) and the shared render layer: DirectSpeakers / label / LFE routing, the offline driver and file streaming |
+| `rust/crates/mradm-render` | Loudspeaker backends (VBAP, HOA, EAR, Scene stream VBAP), the Triple Balance and room backends (offline, file and Scene streaming, the room preparation thread), the binaural backend (HRTF state and caches, source plan, OLA, spreader, offline, file and Scene streaming) and the shared render layer: DirectSpeakers / label / LFE routing, the offline driver and file streaming; the final PCM writer and the post-processing passes (gain rewrite, trim, bit-depth conversion, WAV layout finalization and their temporary-file installation) |
 | `rust/crates/mradm-ffi` | The only private C boundary containing `unsafe` |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT desktop GUI calling the C ABI through P/Invoke |
 

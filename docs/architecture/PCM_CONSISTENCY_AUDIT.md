@@ -177,8 +177,8 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | 双耳文件流式渲染 | 逐源加权归约、拓扑两路淡化、spreader 锥角计算。 | S07；有潜在乘加融合，直接改变 PCM 或滤波控制参数。 | 三期（3.1 已迁移）；四期 4.7 C 起其余编排（FIFO、seek、gain ramp、拓扑重建）也在 Rust [`binaural_stream`](../../rust/crates/mradm-render/src/binaural_stream.rs) |
 | 双耳离线渲染 | OLA 源归约、LFE 旁路、spreader 分组/延迟环归约与尾部排空；原 C++ `BinauralSpreaderAdapter::push_batch/drain_ring` 逐样本施加输入增益并累加输出。 | S07；归约顺序固定，乘加与单纯加法分别审查。 | 三期核对为确定性运算；四期 4.7 B 迁入 Rust [`binaural_render`](../../rust/crates/mradm-render/src/binaural_render.rs)（spreader 适配器、OLA 与离线驱动），归约顺序不变 |
 | 文件流式渲染的监听适配 | Monitor 折叠矩阵、实时覆盖增益、`clamp_frame` 秒到帧换算。 | N03/N18/S06；实时监听用途不改变其所属渲染流程。 | 三期（3.1、3.6 已迁移） |
-| 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移）；四期 4.8 迁移文件编排 |
-| PCM 输出控制 | 写出块循环与临时文件替换。3.6 起秒到帧换算在 Rust `timeline`；WAVE 样本量化和序列化在 Rust；CAF float32 由 C++ 显式按小端序列化。 | S06 已处理；I/O 生命周期继续由 C++ 管理。整数 PCM 继续拒绝 NaN。 | 三期（3.6 已完成）；四期 4.8 迁移 WAV / CAF 写出编排 |
+| 离线后处理 | 2.3 后只剩文件读写、取消、进度、日志与临时文件替换；峰值转 dB、增益判定与逐样本乘法在 Rust。 | N13—N15/S01 已处理；保留各 API 已定义的行为。 | 二期（2.3 已迁移）；四期 4.8 起文件遍历、临时文件与安装在 Rust [`postprocess`](../../rust/crates/mradm-render/src/postprocess.rs)，C++ 只剩取消与进度的循环壳 |
+| PCM 输出控制 | 写出块循环与临时文件替换。3.6 起秒到帧换算在 Rust `timeline`；WAVE 样本量化和序列化在 Rust；CAF float32 由 C++ 显式按小端序列化。 | S06 已处理；4.8 起写出端与 CAF 容器在 Rust（[`output`](../../rust/crates/mradm-render/src/output.rs)、[`mradm-wav::caf`](../../rust/crates/mradm-wav/src/caf.rs)），C++ 只剩薄包装与编码器。整数 PCM 继续拒绝 NaN。 | 三期（3.6 已完成）；四期 4.8 已迁移 |
 
 ## 已收敛的实现与 PCM 写出
 
@@ -194,8 +194,8 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 | HRTF 缓存 | [`Filters` 查询缓存](../../rust/crates/mradm-dsp/src/hrtf_filters/cache.rs)、[`PreparedHrtfs`](../../rust/crates/mradm-dsp/src/live_binaural/prepared.rs)保留原有邻居和乘加顺序，缓存保存已计算结果。 | 缓存容量或命中本身未发现新的数值算法切换；需继续保持命中与未命中逐位回归。 |
 | WAV float32 | [`Writer::write_frames`](../../rust/crates/mradm-wav/src/writer.rs#L136)直接 `sample.to_le_bytes()`。 | 有限样本位模式相同就写出相同样本字节。NaN payload 若在上游不同，writer 不会替上游统一它。 |
 | WAV 整数 PCM | 同一 writer：f32 裁剪到 [-1,1]，转 f64 乘 32767 / 8388607 / 2147483647，再向零截断；NaN 拒绝。 | 无随机 dither，无平台 `lrint`。相同 f32 输入在默认浮点环境下有明确结果；不同上游样本在整数阈值附近可能相差 1 LSB，也可能量化成相同整数。 |
-| CAF float32 | [`FloatCafWriter::write`](../../src/adm_audio/caf_io.cpp#L400)：3.6 起把位模式显式按小端序列化（读取同样显式解析），文件声明 little-endian float32。 | 不再依赖主机字节序；三平台输出字节不变，没有额外 DSP。`final-caf-*` 用例设为门禁。 |
-| 后处理重写 | `apply_gain_to_file`、trim、`downconvert_to_int` 使用同一 WAVE 读写层；增益是单独的 f32 乘法。 | 增益来源见 N15，帧边界见 S06。成功完成后的样本比较不应包含临时路径、metadata 或文件头差异。 |
+| CAF float32 | [`caf::Writer::write_frames`](../../rust/crates/mradm-wav/src/caf.rs#L106)：3.6 起把位模式显式按小端序列化（读取同样显式解析），文件声明 little-endian float32；4.8 B 起由 Rust 写出，字节不变。 | 不再依赖主机字节序；三平台输出字节不变，没有额外 DSP。`final-caf-*` 用例设为门禁。 |
+| 后处理重写 | 增益改写、trim、降位（4.8 C 起在 Rust [`postprocess`](../../rust/crates/mradm-render/src/postprocess.rs)）使用同一 WAVE 读写层；增益是单独的 f32 乘法。 | 增益来源见 N15，帧边界见 S06。成功完成后的样本比较不应包含临时路径、metadata 或文件头差异。 |
 
 ## 本轮实施优先级
 
@@ -449,7 +449,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 | 4.5 | 扬声器后端与公共渲染层 | EAR、VBAP（含 Scene 胶水）、HOA，DirectSpeakers 路由与矩阵、标签别名、LFE / 22.2 路由与 `speaker_pcm` 离线驱动迁入 Rust。渲染循环由 Rust 驱动，进度、日志、取消与 PCM sink 经 C 回调接口，计量顺序不变。 |
 | 4.6 | Triple Balance 与 room | Triple Balance 的场景改写、床、文件流式与 Scene 胶水，room 的准备、准备线程状态机与 Scene 胶水迁入 Rust。只被冻结参考使用的 C++（`panner` / `size_*`）连同参考冻结进 `tests/reference/`。 |
 | 4.7 | 双耳 | 计划构建（channelLock 参考对、cloud、divergence×extent 槽、种子、ADR 0017 分组）、OLA 源归约、LFE 旁路、spreader 适配器 / 延迟环 / 排空、工作池、HRTF 网格缓存与 Scene 胶水迁入 Rust，保持源索引归约顺序。 |
-| 4.8 | PCM 写出与后处理 IO | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据与 peak / loudness 公共 API 迁入 Rust；编码器沿用同一 sink 接口，留在 C 岛；删除失去调用者的私有 FFI 头。 |
+| 4.8 | PCM 写出与后处理 IO | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据与 peak / loudness 公共 API 迁入 Rust；编码器沿用同一 sink 接口，留在 C 岛（4.8 解释为编码器继续经 Rust reader 读取已写完的 float WAVE，不另建 C++ sink）；删除失去调用者的私有 FFI 头。 |
 | 4.9 | S03 对象平滑规则 | 有意的数值变化：文件流式对象平滑改为按绝对样本网格的内部块插值，与离线渲染一致、与请求分块无关；增加开平滑的文件流式重放（固定与碎片分块逐位相同）并设门禁。离线平滑输出不变。 |
 | 4.10 | 三平台验收与结项 | 全矩阵三平台 Release 验收，记录 C/C++ 规模变化，准备五期。 |
 
@@ -479,6 +479,8 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 **4.7 B 内存修复（2026-10-28）**：文件流式拓扑重建复用 bank、工作池及卷积工作区，增长时只补足差额。完整控制重放的峰值在 Windows 由 52.31 降至 43.02 MiB，macOS 直接 Rust 对照由 58.30 降至 48.45 MiB；静态对照未见本次改动新增开销。Windows 77 项、macOS 83 项 PCM 对照和 77 个共用候选输出全部逐位一致。BINAURAL-002 已修复，其他耗时问题仍开放。见[内存修复](RUST_BINAURAL_MEMORY_FIX.md)。
 
 **4.7 状态**：双耳后端的 HRTF 状态与缓存（A）、声源计划、逐源 OLA、spreader 适配器、工作池与离线驱动（B）、文件流式渲染（C）和 Scene 流式渲染器（D）迁入 `mradm-render`（`binaural_hrtf`、`binaural`、`binaural_render`、`binaural_stream`、`live_binaural`），源索引与组索引的归约顺序不变，线程数不影响输出。C++ 只剩适配壳、能力表、`HrtfState` 视图、写出 / 取消 / 进度与创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural` 与 `tests/support/head_rotation.h`。`binaural.01–05`、`hrtf-grid-*`、`cloud.*`、`spreader/*` 与 `.30-binaural-*` 检查点改由 Rust 写出。声源计划以删除前 C++ 生成的 2,511 例黄金数据与 54 个 CLI 渲染指纹验收；各批新旧对照（离线 CLI 948 例、文件流式 574 例、88 个 Scene 重放的普通与诊断构建、矩阵子集的普通与诊断构建）中，成功渲染用例的 PCM 逐位相同。离线文件比较时将 bext 的墙钟日期时间置零；逐字节对照仍有三类例外：A 中 1 例两版均中止但 stderr 不同，B 中 10 例由中止改为报错，D 中 1 个 VBAP 设备回放的 24 个设备回调 trace 切分不同（按样本顺序拼接后 36 条流全部相同）。行为差别：线程数取法、worker 中止改为返回错误、文件流式检查输出缓冲、Scene 双耳 session 创建失败改为返回错误。生产 C/C++ 由 36,931 行降到 33,732 行。三平台 Consistency 40300248787（`c967d84`）、40484741776（`c34f937`）、40653088266（`0f49c1b`）、40808829856（`f6c697e`）与 40931990370（`31bb6dc`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。BINAURAL-001（Windows cloud 离线端到端耗时）仍开放。见 [4.7 记录](RUST_INVERSION_BINAURAL.md)。
+
+**4.8 状态**：没有生产调用者的 peak / loudness 公共 API 删除（A）；CAF 容器、最终 float 写出端、进程级 writer 编号与 `writer/pass*` 检查点迁入 `mradm-wav::caf` 与 `mradm-render::output`（B）；增益改写、trim、整数降位、WAV 布局收尾与 AXML 替换，连同 sidecar 命名、安装与备份恢复，迁入 `mradm-render::postprocess`（C）。C++ 只剩 `audio_io.h` 的薄包装、检查取消与发进度的分步循环壳 `run_output_pass`，以及留在 C 岛的编码器（FLAC、Opus MKA、IAMF、APAC 与 MP4 udta）。错误码、文字、context、进度与取消点、sidecar 命名与 writer 编号顺序不变。维护者决定的四处修正：写出端报告 `finish()` 失败、改写保留源 CAF 的布局标签、`.caf` 拒绝 i16 / i24、`trim_file_smoke_test` 的断言；另有增益与 trim 不再接受 FLAC 输入。CAF 以删除前 C++ 生成的 376 例 `caf-v1` 黄金数据验收；新旧对照中 B 的 460 例 CLI 0 差异，C 的 CLI 460 例与直接 API 373 个操作只在上述有意变化处不同，矩阵子集普通与诊断 0 个问题。逐字节对照的例外：bext 与 CAF `info` 的日期置零、上述有意变化，以及 Windows 上的安装语义、OS 错误文字与路径编码。生产 C/C++ 由 33,718 行降到 32,551 行。三平台 Consistency 41037527666（`4207627`）与 41074793418（`e9a9541`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0；C 的 41152970680（`8278a4b`）待回填。见 [4.8 记录](RUST_INVERSION_OUTPUT.md)。
 
 ## 每个迁移切片的验证
 

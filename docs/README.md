@@ -87,6 +87,7 @@
 - [双耳渲染迁入 Rust（四期 4.7，含 B 合并审查与开放性能问题）](architecture/RUST_INVERSION_BINAURAL.md)
 - [双耳性能调查：计时修正、拓扑重建内存与归约成本](architecture/RUST_BINAURAL_PERFORMANCE_REVIEW.md)
 - [双耳文件流式拓扑重建的内存修复](architecture/RUST_BINAURAL_MEMORY_FIX.md)
+- [PCM 写出与后处理迁入 Rust（四期 4.8）](architecture/RUST_INVERSION_OUTPUT.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)
