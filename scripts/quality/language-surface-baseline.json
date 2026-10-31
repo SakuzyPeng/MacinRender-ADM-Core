@@ -15,7 +15,7 @@
     },
     "tests": {
       "files": 131,
-      "lines": 48680
+      "lines": 48690
     },
     "reference": {
       "files": 38,
@@ -93,6 +93,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 2564,
     "tests/tools": 2823,
-    "tests/unit": 40888
+    "tests/unit": 40898
   }
 }
