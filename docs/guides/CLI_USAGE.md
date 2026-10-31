@@ -114,7 +114,7 @@ ROOM 默认按房间几何自动映射归一化位置，以听者为原点；`--
 
 WAV 可写 float32 / 24-bit / 16-bit PCM；`--output-bit-depth` 的作用域为 WAV。最终 WAV 携带机器可读布局语义：`5.1`、`5.1.2`、`7.1`、`5.1.4`、`7.1.4` 写 WAVEFORMATEXTENSIBLE mask，并严格采用升序 mask 位序；`7.1.4` 因而写成 `L R C LFE Rls Rrs Ls Rs ...`。`9.1.4`、`9.1.6`、`22.2` 写 ADM DirectSpeakers AXML/CHNA；`binaural` 写 ADM Binaural `leftEar/rightEar`；`hoa3` 写 ADM HOA ACN/SN3D AXML/CHNA 与 `ambi` chunk。
 
-WAV 输出与母版输入都支持超过 4GB。float32 固定使用 RF64；带 ADM 语义的 float32 是携带 AXML/CHNA 的 RF64 扩展，整数 `i24` / `i16` 写规范 PCM BW64。使用 WAVE mask 的整数文件在 4GB 内写 RIFF，超过 4GB 时写 RF64，以保留 WAVEFORMATEXTENSIBLE 语义。读取端支持 RIFF / RF64 / BW64，并可读回本项目的 float32 ADM RF64。交付链明确要求 PCM BW64 时，使用 `--output-bit-depth i24`。CAF 当前固定写 float32 PCM，适合作为 CoreAudio 生态下携带空间布局标签的未压缩容器。FLAC 当前固定写 24-bit lossless，最多 8 声道，布局集合为 `binaural`、`5.1` 和 `7.1` 等基础层布局。高度声道的无损交付使用 WAV 或 CAF。
+WAV 输出与母版输入都支持超过 4GB。float32 固定使用 RF64；带 ADM 语义的 float32 是携带 AXML/CHNA 的 RF64 扩展，整数 `i24` / `i16` 写规范 PCM BW64。使用 WAVE mask 的整数文件在 4GB 内写 RIFF，超过 4GB 时写 RF64，以保留 WAVEFORMATEXTENSIBLE 语义。读取端支持 RIFF / RF64 / BW64，并可读回本项目的 float32 ADM RF64。交付链明确要求 PCM BW64 时，使用 `--output-bit-depth i24`。CAF 当前固定写 float32 PCM（`.caf` 输出指定 `--output-bit-depth i16` / `i24` 时报错），适合作为 CoreAudio 生态下携带空间布局标签的未压缩容器。FLAC 当前固定写 24-bit lossless，最多 8 声道，布局集合为 `binaural`、`5.1` 和 `7.1` 等基础层布局。高度声道的无损交付使用 WAV 或 CAF。
 
 带高度或超过 8 声道的无损 / 未压缩交付优先使用 WAV 或 CAF。播放器兼容性验证覆盖目标播放器、容器、布局标签和声道数。
 
@@ -215,7 +215,7 @@ Apple binaural 的 `auto` 仍为 `position`，显式 `label` 返回 unsupported�
 | `--speaker-geometry standard\|apple` | EAR / SAF 输出扬声器坐标；Apple 后端始终使用 CoreAudio 几何 | `standard` |
 | `--direct-speakers-routing auto\|label\|position\|matrix` | DirectSpeakers 原生、标签、位置或自定义标签矩阵路由 | `auto` |
 | `--direct-speakers-matrix <path>` | `matrix` 模式所需的严格 v1 稀疏矩阵 JSON | 关闭 |
-| `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
+| `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32，指定 `i24` / `i16` 时报错；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
 | `--loudness-target <LUFS>` | 响度归一化目标；HOA 通过 7.1.4 AllRAD 参考解码测量，LUFS 使用全频声道 | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
 | `--peak-normalize-to-limit` | 在响度增益后，如 True Peak 低于 `--peak-limit-dbtp`，自动补全局增益到上限；需要开启 True Peak 限制 | 关闭 |

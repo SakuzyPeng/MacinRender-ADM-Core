@@ -44,8 +44,8 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | 模块 | 行数 | 去向 | 期次 |
 | --- | ---: | --- | --- |
 | `src/adm_realtime` | 5,402 | Scene 引擎、Monitor、ring buffer、OSC UDP、设备调度 → Rust；miniaudio 留作 C 岛 | 五期 |
-| `src/adm_audio` | 4,909 | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据 → Rust（四期 4.8）；FLAC / Opus / IAMF 编码留作 C 岛，APAC 归 Apple 岛 | 四期、七期 |
-| `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除（4.4 删除 `semantic_policy.h` 与 `io::write_scene`） | 四期～六期 |
+| `src/adm_audio` | 4,909 | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据 → Rust（4.8 已完成：CAF 在 `mradm-wav::caf`，写出端与后处理遍历在 `mradm-render` `output` / `postprocess`；剩 4,184 行，主要是编码器与 `audio_io.h` 薄包装）；FLAC / Opus / IAMF 编码留作 C 岛，APAC 归 Apple 岛 | 四期、七期 |
+| `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除（4.4 删除 `semantic_policy.h` 与 `io::write_scene`，4.8 A 删除 `peak.h` 与 `loudness.h`） | 四期～六期 |
 | `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust | 五期 |
 | `src/adm_c_api` | 3,614 | Rust 实现同一 `c_api.h` | 六期 |
 | `src/adm_render_binaural` | 3,486 | Rust `mradm-render`（4.7 已完成，剩 596 行的适配壳、能力表、`HrtfState` 视图与 Scene 双耳的创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural`） | 四期 |
