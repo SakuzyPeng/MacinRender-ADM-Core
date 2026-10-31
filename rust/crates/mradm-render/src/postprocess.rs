@@ -900,13 +900,13 @@ mod tests {
 
     #[test]
     fn sidecar_names_follow_std_filesystem_stem_and_extension() {
-        let name = |p: &str| text(&sidecar(Path::new(p), "x", "0001"));
-        assert_eq!(name("a.wav"), "a.x.0001.wav");
-        assert_eq!(name("dir/a.b.caf"), "dir/a.b.x.0001.caf");
-        assert_eq!(name("dir/.hidden"), "dir/.hidden.x.0001");
-        assert_eq!(name("a."), "a.x.0001.");
-        assert_eq!(name("noext"), "noext.x.0001");
-        assert_eq!(name("..a"), "..x.0001.a");
+        let name = |p: &str| sidecar(Path::new(p), "x", "0001");
+        assert_eq!(name("a.wav"), Path::new("a.x.0001.wav"));
+        assert_eq!(name("dir/a.b.caf"), Path::new("dir/a.b.x.0001.caf"));
+        assert_eq!(name("dir/.hidden"), Path::new("dir/.hidden.x.0001"));
+        assert_eq!(name("a."), Path::new("a.x.0001."));
+        assert_eq!(name("noext"), Path::new("noext.x.0001"));
+        assert_eq!(name("..a"), Path::new("..x.0001.a"));
     }
 
     fn scratch(name: &str) -> PathBuf {
