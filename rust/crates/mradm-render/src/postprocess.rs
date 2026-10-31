@@ -944,6 +944,9 @@ mod tests {
 
     #[test]
     fn abandoned_passes_leave_only_the_original() {
+        let _turn = output::TEST_WRITER_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let directory = scratch("abandon");
         let path = directory.join("a.wav");
         wav(&path, 2, 9000);
@@ -1075,6 +1078,9 @@ mod tests {
 
     #[test]
     fn rewrites_keep_the_source_caf_tag_and_unity_gain_is_skipped() {
+        let _turn = output::TEST_WRITER_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let directory = scratch("caf");
         let path = directory.join("a.caf");
         let mut writer = output::Writer::create(&path, 2, 48000, Some(b"binaural")).unwrap();
@@ -1098,6 +1104,9 @@ mod tests {
 
     #[test]
     fn trim_clamps_and_rejects_empty_ranges() {
+        let _turn = output::TEST_WRITER_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let directory = scratch("trim");
         let path = directory.join("a.wav");
         wav(&path, 1, 100);
