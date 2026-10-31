@@ -376,7 +376,8 @@ def stream_cases():
     and (binaural) topology overrides, a head orientation and a seek land at fixed output frames.
     The IRenderStream contract makes the delivered PCM independent of the request partition.
     Version 3 names the renderer, the requested output layout and the channel count; version 4
-    (PCM consistency 4.2) adds the room pack of a room-binaural replay and the tail it appends.
+    (PCM consistency 4.2) adds the room pack of a room-binaural replay and the tail it appends;
+    version 5 (4.9) adds object smoothing, whose block grid a seek follows as the offline window does.
     """
     binaural_events = [
         {'frame': 0, 'objects': [{'index': 0, 'gain_db': -3.0}]},
@@ -445,6 +446,20 @@ def stream_cases():
                 case['spread'] = spread
             case.update({'partition': partition, 'input_frames': 48000, 'sample_rate': 48000,
                          'frames': 96000, 'events': events})
+            result.append(case)
+    # PCM consistency 4.9: object smoothing over the moving blocks of objects-room, as the offline
+    # smoothing-* cases, with live gain, mute and a seek off the 2048-frame block grid.
+    for name, renderer, layout, channels, spread in [('smoothing-saf-714', 'saf', '7.1.4', 12, None),
+                                                     ('smoothing-hoa3', 'hoa', 'hoa3', 16, None),
+                                                     ('smoothing-ear-714', 'ear', '7.1.4', 12, None),
+                                                     ('smoothing-binaural', 'saf-binaural', 'binaural', 2, 'cloud')]:
+        for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+            case = {'id': f'stream-{name}-{partition_name}', 'version': 5, 'fixture': 'objects-room',
+                    'renderer': renderer, 'output_layout': layout, 'channels': channels}
+            if spread is not None:
+                case['spread'] = spread
+            case.update({'object_smoothing_frames': 2048, 'partition': partition, 'input_frames': 48000,
+                         'sample_rate': 48000, 'frames': 96000, 'events': object_events})
             result.append(case)
     # room-binaural at the exact tier with live overrides, a head orientation and a seek. Room
     # switches are asynchronous (a preparation thread decides when the new room starts), so they

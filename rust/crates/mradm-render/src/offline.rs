@@ -503,6 +503,25 @@ impl MeterWorker {
     }
 }
 
+/// The first rendered frame of a window starting at `target`, on the absolute block grid that
+/// object smoothing interpolates across. Loudspeaker mixing is stateless at block edges, so a
+/// window starts at its own block. HOA's 1024-frame diffuse delay line and EAR's decorrelation
+/// overlap and compensation delay are refilled by one aligned pre-roll block. A stateful Triple
+/// Balance stage needs every block from frame 0. File-stream seeks start here too (4.9).
+pub(crate) fn window_start(engine: &Engine, target: u64, block_size: u64) -> u64 {
+    if engine.is_hoa() || engine.is_ear() {
+        if target >= block_size {
+            (target / block_size - 1) * block_size
+        } else {
+            0
+        }
+    } else if engine.is_stateful() {
+        0
+    } else {
+        target / block_size * block_size
+    }
+}
+
 pub struct Driver {
     reader: Reader<BufReader<File>>,
     engine: Engine,
@@ -606,16 +625,9 @@ impl Driver {
             }
             None => (0, frames),
         };
-        // Loudspeaker mixing is stateless at block edges, so a window starts at its own block.
-        // HOA's 1024-frame diffuse delay line and EAR's decorrelation overlap and compensation
-        // delay are refilled by one aligned pre-roll block.
-        let stateful = engine.is_stateful();
-        let start_pos = match (settings.window, engine.is_hoa() || engine.is_ear()) {
-            (None, _) => 0,
-            (Some(_), false) if !stateful => win_start / block_size * block_size,
-            (Some(_), false) => 0,
-            (Some(_), true) if win_start >= block_size => (win_start / block_size - 1) * block_size,
-            (Some(_), true) => 0,
+        let start_pos = match settings.window {
+            None => 0,
+            Some(_) => window_start(&engine, win_start, block_size),
         };
         let buffers = || {
             Some((
