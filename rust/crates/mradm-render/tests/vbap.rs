@@ -478,3 +478,32 @@ fn errors_and_warnings_keep_the_cpp_text() {
         )
     );
 }
+
+#[test]
+fn seeks_follow_the_offline_window() {
+    const FRAMES: u64 = 9000;
+    let file = input(&sine(FRAMES as usize, 0.5));
+    let layout = "4+7+0";
+    let outputs = speakers(layout).len();
+    let p = Case::new(layout).prepare(&scene(single("AO_1", 0.8, moving_track(FRAMES)), FRAMES));
+    let kernel = Kernel::Mix(Arc::clone(&p.plan));
+    for smoothing in [0, 1024, 1500, 2048] {
+        assert_seeks_follow_windows(
+            &kernel,
+            &p.bindings,
+            &file,
+            outputs,
+            FRAMES,
+            smoothing,
+            "vbap",
+        );
+    }
+    assert_seeks_restart_live_gain(
+        &kernel,
+        &p.bindings,
+        &file,
+        outputs,
+        FRAMES,
+        &gain_override(b"AO_1"),
+    );
+}

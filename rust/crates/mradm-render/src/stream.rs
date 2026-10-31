@@ -2,9 +2,13 @@
 //! `HoaStream` and `EarStream`: blocks of `max(1024, smoothing)` frames go through the same
 //! renderer as the offline driver into a FIFO served at any frame count, so a gap-free run from
 //! frame 0 is bit-identical to the offline render. Live gain pre-scales each input channel (the
-//! render is linear) through a 20 ms de-zipper; `seek` resets the mixer cursors, the HOA diffuse
-//! delay lines or EAR's decorrelation state, but not the de-zipper.
-use crate::offline::{Driver, Engine, Error, HOA_SHORT_READ, Kernel, Location, Result};
+//! render is linear) through a 20 ms de-zipper. A seek renders from where an offline window at the
+//! target starts (PCM consistency 4.9): the block grid that object smoothing interpolates across,
+//! one more aligned block for HOA and EAR state, and the frames before the target dropped. It
+//! also restarts the de-zipper at the current targets, so the dropped frames leave no ramp.
+use crate::offline::{
+    Driver, Engine, Error, HOA_SHORT_READ, Kernel, Location, Result, window_start,
+};
 use crate::routing::{self, Override};
 use crate::vbap::Binding;
 use mradm_dsp::gain::GainBank;
@@ -35,6 +39,8 @@ pub struct FileStream {
     fifo_len: usize,
     fifo_read: usize,
     done: u64,
+    /// Rendered frames still to drop before the seek target.
+    skip: u64,
     targets: Vec<f32>,
     smoother: GainBank,
 }
@@ -78,6 +84,7 @@ impl FileStream {
             fifo_len: 0,
             fifo_read: 0,
             done: 0,
+            skip: 0,
             targets: vec![1.; s.inputs],
             smoother: GainBank::new(s.inputs, s.sample_rate, 20).map_err(failed)?,
         })
@@ -101,8 +108,11 @@ impl FileStream {
                     break;
                 }
                 self.render_block()?;
+                let dropped = self.skip.min((self.fifo_len / self.outputs) as u64);
+                self.fifo_read = dropped as usize * self.outputs;
+                self.skip -= dropped;
                 if self.fifo_read >= self.fifo_len {
-                    break;
+                    continue;
                 }
             }
             let available = (self.fifo_len - self.fifo_read) / self.outputs;
@@ -117,12 +127,16 @@ impl FileStream {
     }
 
     pub fn seek(&mut self, frame: u64) -> Result<()> {
-        self.done = frame.min(self.frames);
-        self.engine.reset(self.done);
-        self.reader.seek_frame(self.done).map_err(Error::wav)?;
+        let target = frame.min(self.frames);
+        let start = window_start(&self.engine, target, self.block_size);
+        self.reader.seek_frame(start).map_err(Error::wav)?;
+        self.engine.reset(start);
+        self.done = start;
+        self.skip = target - start;
         self.fifo_len = 0;
         self.fifo_read = 0;
-        Ok(())
+        self.smoother.reset();
+        self.smoother.set_targets(&self.targets).map_err(failed)
     }
 
     /// Each input channel follows its owning object's override; a DirectSpeakers channel also
