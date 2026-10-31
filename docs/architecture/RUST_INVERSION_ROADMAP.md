@@ -93,7 +93,7 @@ C ABI 目前替代不了这些路径：离线没有 listener orientation；文�
 - 五期迁移这些接口时，工具改为 Rust 并直接驱动 Rust 引擎。切换前先在同一构建上证明新旧工具输出逐位相同，
   不在 C ABI 中为测试新增入口。做法（5.1）：用 `run-rust-phase2.py --tool NAME=PATH` 以新工具替换
   `mr_adm_phase2_render` / `_stream` / `_scene` 采集一次，再用 `compare-collections.py` 与旧工具的采集逐字节比较；
-  0 差异后才替换构建目录里的同名工具，旧工具随即删除。带替换的采集记录 `tool_overrides`，不能作为三平台证据。
+  0 差异后才替换构建目录里的同名工具，旧工具随即删除。带替换的采集记录 `tool_overrides`，不能作为跨平台证据。
 
 ## C++ 删除与冻结参考
 

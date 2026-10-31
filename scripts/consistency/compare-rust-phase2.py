@@ -114,11 +114,11 @@ def validate_scene_status(manifest):
                 raise ValueError('invalid Scene state/frame-count evidence')
 
 
-def validate(root):
+def validate(root, *, allow_tool_overrides=False):
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-    if manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
+    if not isinstance(manifest, dict) or manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
         raise ValueError('incomplete or unsupported baseline')
-    if manifest.get('tool_overrides'):
+    if manifest.get('tool_overrides') and not allow_tool_overrides:
         raise ValueError('replay tools were replaced; such collections are same-build comparisons, not platform evidence')
     if manifest['source']['sha256'] != common.json_digest(manifest['source']['files']):
         raise ValueError('source fingerprint does not match inventory')
