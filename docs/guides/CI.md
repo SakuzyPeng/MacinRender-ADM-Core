@@ -80,10 +80,10 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 
 config A 使用与 `release.yml` 相同的构建选项（含 `MR_ADM_BUILD_CAPI_BUNDLE`，即全部目标位置无关编译；`consistency_build_test.py` 校验两者不漂移），config B 只在其上打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
-二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 79 个离线场景、88 个 Scene 流式渲染配置（各含两个 epoch）、28 个文件流式重放（`mr_adm_phase2_stream`，三期 3.1 双耳、3.2 EAR、3.3 HOA、3.4 Triple Balance，四期 4.2 `room-binaural`）及
+二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 79 个离线场景、88 个 Scene 流式渲染配置（各含两个 epoch）、36 个文件流式重放（`mr_adm_phase2_stream`，三期 3.1 双耳、3.2 EAR、3.3 HOA、3.4 Triple Balance，四期 4.2 `room-binaural`、4.9 开平滑的 VBAP / HOA / EAR / 双耳）及
 255 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM、spreader、HpTF 设计与左右独立 HpTF、生产计量及其验收节目、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化与 `room-binaural` exact 档准备），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计、生产计量、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化、EAR 布局、Scene 空间数学与 `room-binaural` 准备内核及全部 283 个 PCM 用例）必须三平台逐位相同；
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计、生产计量、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化、EAR 布局、Scene 空间数学与 `room-binaural` 准备内核及全部 291 个 PCM 用例）必须三平台逐位相同；
 新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。四期 4.2 起 25 个内核模式覆盖全部内核
 文件（`3ca0d2c` 加入左右独立 HpTF 后为 255 个），不再有观察项。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
 f64 twiddle 列三平台相同并设为门禁；1.4 起 HpTF 设计也取自 `libm`，其 4 个内核文件设为门禁。
