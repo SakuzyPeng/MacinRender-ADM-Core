@@ -112,7 +112,7 @@ The status column describes the codec / container combinations this project curr
 
 WAV can be written as float32, 24-bit, or 16-bit PCM. The scope of `--output-bit-depth` is WAV. Final WAV output carries machine-readable layout semantics: `5.1`, `5.1.2`, `7.1`, `5.1.4`, and `7.1.4` carry WAVEFORMATEXTENSIBLE masks in ascending mask-bit order, so `7.1.4` is written as `L R C LFE Rls Rrs Ls Rs ...`. `9.1.4`, `9.1.6`, and `22.2` carry ADM DirectSpeakers AXML/CHNA; `binaural` carries ADM Binaural `leftEar/rightEar`; and `hoa3` carries ADM HOA ACN/SN3D AXML/CHNA plus the `ambi` chunk.
 
-WAV output and master input both support files larger than 4 GB. Float32 WAV always uses RF64; for ADM-labelled layouts this is an RF64 extension carrying AXML/CHNA, while integer `i24` / `i16` uses normative PCM BW64. Mask-labelled integer output uses RIFF up to 4 GB and RF64 above 4 GB so WAVEFORMATEXTENSIBLE semantics are retained. The reader accepts RIFF, RF64, BW64, and this project's float32 ADM RF64 output. Choose `--output-bit-depth i24` when a delivery chain explicitly requires PCM BW64. CAF currently writes float32 PCM and carries CoreAudio spatial layout tags. FLAC currently writes fixed 24-bit lossless audio, supports up to 8 channels, and exposes `binaural`, `5.1`, `7.1` and similar base-layer layouts. Height-channel lossless delivery uses WAV or CAF.
+WAV output and master input both support files larger than 4 GB. Float32 WAV always uses RF64; for ADM-labelled layouts this is an RF64 extension carrying AXML/CHNA, while integer `i24` / `i16` uses normative PCM BW64. Mask-labelled integer output uses RIFF up to 4 GB and RF64 above 4 GB so WAVEFORMATEXTENSIBLE semantics are retained. The reader accepts RIFF, RF64, BW64, and this project's float32 ADM RF64 output. Choose `--output-bit-depth i24` when a delivery chain explicitly requires PCM BW64. CAF currently writes float32 PCM (requesting `--output-bit-depth i16` / `i24` for `.caf` output is an error) and carries CoreAudio spatial layout tags. FLAC currently writes fixed 24-bit lossless audio, supports up to 8 channels, and exposes `binaural`, `5.1`, `7.1` and similar base-layer layouts. Height-channel lossless delivery uses WAV or CAF.
 
 For lossless or uncompressed delivery with height channels or more than 8 channels, prefer WAV or CAF. Validate playback compatibility against the target player, container, layout tag, and channel count.
 
@@ -217,7 +217,7 @@ Common differences:
 | `--speaker-geometry standard\|apple` | EAR / SAF output-speaker coordinates; the Apple backend always uses CoreAudio geometry | `standard` |
 | `--direct-speakers-routing auto\|label\|position\|matrix` | Native, label, position, or custom label-matrix DirectSpeakers routing | `auto` |
 | `--direct-speakers-matrix <path>` | Strict v1 sparse-matrix JSON required by `matrix` mode | Off |
-| `--output-bit-depth f32\|i24\|i16` | WAV output bit depth (CAF is fixed float32; FLAC is fixed 24-bit / up to 8 channels) | `f32` |
+| `--output-bit-depth f32\|i24\|i16` | WAV output bit depth (CAF is fixed float32 and rejects `i24` / `i16`; FLAC is fixed 24-bit / up to 8 channels) | `f32` |
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA uses a 7.1.4 AllRAD reference decode and full-range channels for LUFS | Off |
 | `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |
 | `--peak-normalize-to-limit` | After loudness gain, raise global gain up to `--peak-limit-dbtp` when True Peak is below the ceiling; requires peak limiting | Off |
