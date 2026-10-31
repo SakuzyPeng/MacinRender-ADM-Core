@@ -6,6 +6,7 @@ import fnmatch
 import io
 import json
 import os
+import platform
 import shutil
 from pathlib import Path
 import struct
@@ -1053,7 +1054,7 @@ class ToolSubstitutionTests(unittest.TestCase):
         manifest = {'schema': 'mradm.phase2.v1', 'complete': True, 'config': 'a', 'diagnostics': False,
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': self.offline, 'scene': self.scene, 'stream': [], 'sofa': {}, 'json_fixtures': {}, 'room': {},
-                    'build': {'platform.system': 'Darwin', 'platform.machine': 'arm64',
+                    'build': {'platform.system': platform.system(), 'platform.machine': platform.machine(),
                               'cmake.CMAKE_BUILD_TYPE': 'Release', 'cmake.CMAKE_CXX_FLAGS': '-O2',
                               'cmake.MR_ADM_ENABLE_SOFA': 'ON',
                               'rust.compiler_verbose': 'release: 1.98.0\ncommit-hash: test\nLLVM version: test',
@@ -1144,6 +1145,20 @@ class ToolSubstitutionTests(unittest.TestCase):
                 (root / 'logs/case-cli1.log').write_bytes(text.encode())
                 self.seal(root)
             with self.subTest(forward_slashes=forward_slashes):
+                self.assertTrue(collections.compare(reference, candidate)['identical'])
+
+    def test_posix_log_roots_are_interpreted_independently_of_the_comparison_host(self):
+        reference, candidate = self.collection('reference'), self.collection('candidate')
+        for system, machine in (('Darwin', 'arm64'), ('Linux', 'x86_64')):
+            for root in (reference, candidate):
+                manifest = self.seal(root)
+                manifest['build'].update({'platform.system': system, 'platform.machine': machine})
+                origin = '/captures/' + root.name
+                manifest['collection_root'] = origin
+                common.save(root / 'manifest.json', manifest)
+                (root / 'logs/case-cli1.log').write_bytes(f'wrote {origin}/pcm/case\n'.encode())
+                self.seal(root)
+            with self.subTest(platform=system):
                 self.assertTrue(collections.compare(reference, candidate)['identical'])
 
     def test_checkpoint_differences_name_the_first_word(self):
