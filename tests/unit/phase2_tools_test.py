@@ -23,6 +23,7 @@ import phase2_common as common
 from render_scene_checkpoint import validate_render_scene
 comparator = common.load_module('phase2_comparator', ROOT / 'scripts/consistency/compare-rust-phase2.py')
 collector = common.load_module('phase2_collector', ROOT / 'scripts/consistency/run-rust-phase2.py')
+collections = common.load_module('compare_collections', ROOT / 'scripts/consistency/compare-collections.py')
 
 
 class CollectionTests(unittest.TestCase):
@@ -977,6 +978,118 @@ class ReplayTests(unittest.TestCase):
         case = common.scene_cases()[0]
         case['metadata'] = list(reversed(case['metadata']))
         self.run_probe(case, False)
+
+
+class ToolSubstitutionTests(unittest.TestCase):
+    """Phase 5.1: replacement replay tools and same-build collection comparison."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def tool(self, name='tool'):
+        path = self.root / name
+        path.write_bytes(b'#!/bin/sh\n')
+        path.chmod(0o755)
+        return path
+
+    def test_tool_overrides_accept_only_replay_tools(self):
+        tool = self.tool()
+        parsed = collector.parse_tool_overrides([f'mr_adm_phase2_stream={tool}', f'mr_adm_phase2_scene={tool}'])
+        self.assertEqual(parsed, {'mr_adm_phase2_stream': tool.resolve(), 'mr_adm_phase2_scene': tool.resolve()})
+        self.assertEqual(collector.parse_tool_overrides(None), {})
+        for values, message in (([f'mradm={tool}'], 'only'), ([f'mr_adm_phase2_kernels={tool}'], 'only'),
+                                ([f'mr_adm_phase2_render={tool}'] * 2, 'twice'), (['mr_adm_phase2_render'], 'NAME=PATH'),
+                                (['mr_adm_phase2_render='], 'NAME=PATH'),
+                                ([f'mr_adm_phase2_render={self.root / "missing"}'], 'not an executable')):
+            with self.subTest(values=values), self.assertRaisesRegex(ValueError, message):
+                collector.parse_tool_overrides(values)
+        if os.name != 'nt':
+            plain = self.root / 'plain'; plain.write_bytes(b'')
+            with self.assertRaisesRegex(ValueError, 'not an executable'):
+                collector.parse_tool_overrides([f'mr_adm_phase2_render={plain}'])
+
+    def test_platform_comparison_rejects_substituted_tools(self):
+        root = self.root / 'collection'; root.mkdir()
+        common.save(root / 'manifest.json', {'schema': 'mradm.phase2.v1', 'complete': True,
+                                             'tool_overrides': {'mr_adm_phase2_stream': {'path': 'x', 'sha256': 'y'}}})
+        with self.assertRaisesRegex(ValueError, 'not platform evidence'):
+            comparator.validate(root)
+
+    def collection(self, name, **changes):
+        root = self.root / name
+        (root / 'logs').mkdir(parents=True)
+        manifest = {'schema': 'mradm.phase2.v1', 'complete': True, 'source': {'sha256': 's'}, 'config': 'a',
+                    'diagnostics': False, 'offline': [], 'scene': [], 'stream': [], 'sofa': [], 'json_fixtures': [],
+                    'room': [], 'build': {'platform.system': 'Linux', 'platform.machine': 'x86_64'},
+                    'outputs': {'case': {'path': 'pcm/case.pcmbits', 'sha256': 'a'}}, 'fixtures': {'f.wav': 'f'},
+                    'comparisons': {'case-new-process': {'identical': True}}, 'replay_status': {},
+                    'artifacts': {'kernels/k.f32': 'k'}, 'tool_overrides': {}}
+        for key, value in changes.items():
+            manifest[key] = value
+        common.save(root / 'manifest.json', manifest)
+        (root / 'logs' / 'case-cli1.log').write_bytes(f'wrote {root.resolve()}/pcm/case\n'.encode())
+        return root.resolve()
+
+    def test_identical_collections_compare_equal_after_path_normalization(self):
+        report = collections.compare(self.collection('a'), self.collection('b'))
+        self.assertTrue(report['identical'])
+        self.assertEqual(report['logs']['identical'], 1)
+
+    def test_each_kind_of_difference_is_reported(self):
+        cases = {
+            'outputs': {'outputs': {'case': {'path': 'pcm/case.pcmbits', 'sha256': 'changed'}}},
+            'fixtures': {'fixtures': {'f.wav': 'changed'}},
+            'comparisons': {'comparisons': {}},
+            'replay_status': {'replay_status': {'scene-process1': []}},
+            'artifacts': {'artifacts': {'kernels/k.f32': 'k', 'kernels/extra.f32': 'e'}},
+        }
+        reference = self.collection('reference')
+        for key, change in cases.items():
+            with self.subTest(key=key):
+                report = collections.compare(reference, self.collection('candidate-' + key, **change))
+                self.assertFalse(report['identical'])
+                row = report[key]
+                self.assertTrue(row['different'] or row['only_reference'] or row['only_candidate'])
+        candidate = self.collection('candidate-log')
+        (candidate / 'logs' / 'case-cli1.log').write_bytes(b'different\n')
+        report = collections.compare(reference, candidate)
+        self.assertEqual(report['logs']['different'], ['case-cli1.log'])
+        self.assertFalse(report['identical'])
+
+    def test_path_normalization_only_replaces_the_collection_root(self):
+        reference, candidate = self.collection('one'), self.collection('two')
+        (candidate / 'logs' / 'case-cli1.log').write_bytes(f'wrote {reference}/pcm/case\n'.encode())
+        self.assertFalse(collections.compare(reference, candidate)['identical'])
+
+    def test_checkpoint_differences_name_the_first_word(self):
+        reference = self.collection('ref', artifacts={'checkpoints/c/x.f32': 'a'})
+        candidate = self.collection('cand', artifacts={'checkpoints/c/x.f32': 'b'})
+        for root, words in ((reference, (1.0, 2.0, 3.0)), (candidate, (1.0, 2.5, 3.0))):
+            (root / 'checkpoints/c').mkdir(parents=True)
+            (root / 'checkpoints/c/x.f32').write_bytes(struct.pack('<3f', *words))
+        report = collections.compare(reference, candidate)
+        self.assertEqual(report['artifacts']['first_difference'], {'checkpoints/c/x.f32': {'word': 1}})
+
+    def test_preconditions_reject_unrelated_collections(self):
+        reference = self.collection('base')
+        for name, change in (('config', {'config': 'b'}), ('source', {'source': {'sha256': 't'}}),
+                             ('diagnostics', {'diagnostics': True}), ('stream', {'stream': [{'id': 'x'}]}),
+                             ('platform', {'build': {'platform.system': 'Darwin', 'platform.machine': 'arm64'}}),
+                             ('incomplete', {'complete': False})):
+            with self.subTest(name=name), self.assertRaises(collections.PreconditionError):
+                collections.compare(reference, self.collection('other-' + name, **change))
+
+    def test_exit_codes(self):
+        reference, same = self.collection('x'), self.collection('y')
+        other = self.collection('z', fixtures={'f.wav': 'changed'})
+        platform = self.collection('w', build={'platform.system': 'Windows', 'platform.machine': 'AMD64'})
+        script = ROOT / 'scripts/consistency/compare-collections.py'
+        for candidate, code in ((same, 0), (other, 1), (platform, 2)):
+            result = subprocess.run([sys.executable, str(script), str(reference), str(candidate),
+                                     '--output', str(self.root / 'report.json')], capture_output=True)
+            self.assertEqual(result.returncode, code, result.stderr)
 
 
 if __name__ == '__main__':
