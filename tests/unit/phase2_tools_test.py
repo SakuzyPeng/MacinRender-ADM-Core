@@ -3,6 +3,7 @@
 import importlib.util
 import copy
 import fnmatch
+import io
 import json
 import os
 import shutil
@@ -987,6 +988,17 @@ class ToolSubstitutionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
+        self.offline = [{'id': 'case'}]
+        self.scene = [{'id': 'scene-case', 'input_rate': 48000, 'output_rate': 48000,
+                       'epochs': [{'epoch': 1, 'target': 0, 'end': 2}, {'epoch': 2, 'target': 0, 'end': 1}]}]
+        # Keep real file/provenance validation, with a small catalog instead of 291 production outputs.
+        for name, value in (('offline_cases', self.offline), ('scene_cases', self.scene),
+                            ('stream_cases', []), ('kernel_outputs', ['k.f32'])):
+            mocked = patch.object(common, name, return_value=value)
+            mocked.start(); self.addCleanup(mocked.stop)
+        for name in ('SOFA_FIXTURES', 'JSON_FIXTURES', 'ROOM_FIXTURES'):
+            mocked = patch.object(common, name, {})
+            mocked.start(); self.addCleanup(mocked.stop)
 
     def tool(self, name='tool'):
         path = self.root / name
@@ -1019,18 +1031,61 @@ class ToolSubstitutionTests(unittest.TestCase):
 
     def collection(self, name, **changes):
         root = self.root / name
-        (root / 'logs').mkdir(parents=True)
-        manifest = {'schema': 'mradm.phase2.v1', 'complete': True, 'source': {'sha256': 's'}, 'config': 'a',
-                    'diagnostics': False, 'offline': [], 'scene': [], 'stream': [], 'sofa': [], 'json_fixtures': [],
-                    'room': [], 'build': {'platform.system': 'Linux', 'platform.machine': 'x86_64'},
-                    'outputs': {'case': {'path': 'pcm/case.pcmbits', 'sha256': 'a'}}, 'fixtures': {'f.wav': 'f'},
-                    'comparisons': {'case-new-process': {'identical': True}}, 'replay_status': {},
-                    'artifacts': {'kernels/k.f32': 'k'}, 'tool_overrides': {}}
-        for key, value in changes.items():
-            manifest[key] = value
-        common.save(root / 'manifest.json', manifest)
+        for directory in ('logs', 'pcm', 'fixtures', 'kernels'):
+            (root / directory).mkdir(parents=True)
+        outputs = {}
+        for case, frames in (('case', 1), ('scene-case-epoch1', 2), ('scene-case-epoch2', 1)):
+            path = root / 'pcm' / (case + '.pcmbits')
+            path.write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, 2, 48000, frames)
+                             + struct.pack('<ff', 0.25, -0.25) * frames)
+            outputs[case] = {'path': path.relative_to(root).as_posix()}
+        for case in self.offline + self.scene:
+            common.save(root / 'cases' / (case['id'] + '.json'), case)
+        (root / 'fixtures/f.wav').write_bytes(b'fixture bytes')
+        (root / 'kernels/k.f32').write_bytes(struct.pack('<f', 1.0))
         (root / 'logs' / 'case-cli1.log').write_bytes(f'wrote {root.resolve()}/pcm/case\n'.encode())
+        binaries = {name: common.digest(name.encode()) for name in common.BUILD_TOOLS}
+        comparisons = {'case' + suffix: {'identical': True} for suffix in
+                       ('-new-process', '-same-process-1', '-same-process-2')}
+        comparisons.update({'scene-case' + f'-epoch{epoch}' + suffix: {'identical': True}
+                            for epoch in (1, 2) for suffix in ('-same-process1', '-same-process2', '-new-process')})
+        status = {'epochs': [{'epoch': 1, 'frames': 2}, {'epoch': 2, 'frames': 1}], 'status': 'passed', 'underruns': 0}
+        manifest = {'schema': 'mradm.phase2.v1', 'complete': True, 'config': 'a', 'diagnostics': False,
+                    'source': {'files': {}, 'sha256': common.json_digest({})},
+                    'offline': self.offline, 'scene': self.scene, 'stream': [], 'sofa': {}, 'json_fixtures': {}, 'room': {},
+                    'build': {'platform.system': 'Darwin', 'platform.machine': 'arm64',
+                              'cmake.CMAKE_BUILD_TYPE': 'Release', 'cmake.CMAKE_CXX_FLAGS': '-O2',
+                              'cmake.MR_ADM_ENABLE_SOFA': 'ON',
+                              'rust.compiler_verbose': 'release: 1.98.0\ncommit-hash: test\nLLVM version: test',
+                              'rust.resolved_features': json.dumps({'mradm-ffi': ['sofa'], 'mradm-dsp': ['sofa']}),
+                              'rust.fft_features': json.dumps({'rustfft': [], 'realfft': []})},
+                    'build_identity': {'configuration': {name: common.digest(name.encode())
+                                                        for name in common.BUILD_CONFIGURATION_FILES},
+                                       'binaries': binaries},
+                    'binaries': dict(binaries), 'collection_root': str(root.resolve()), 'tool_overrides': {},
+                    'outputs': outputs, 'comparisons': comparisons,
+                    'replay_status': {'scene-case' + f'-process{i}': [status, status] for i in (1, 2)}}
+        common.save(root / 'manifest.json', manifest)
+        manifest = self.seal(root)
+        manifest.update(changes)
+        common.save(root / 'manifest.json', manifest)
         return root.resolve()
+
+    def seal(self, root):
+        """Record the actual bytes, as the collector does after a successful run."""
+        manifest = json.loads((root / 'manifest.json').read_text())
+        for row in manifest['outputs'].values():
+            shape, bits = common.pcm_bytes(root / row['path'])
+            row.update(shape=list(shape), sha256=common.digest(bits))
+        manifest['fixtures'] = {p.relative_to(root / 'fixtures').as_posix(): common.digest(p.read_bytes())
+                                for p in (root / 'fixtures').rglob('*') if p.is_file()}
+        manifest['artifacts'] = {p.relative_to(root).as_posix(): common.digest(p.read_bytes())
+                                 for folder in ('kernels', 'checkpoints', 'kernel-checkpoints')
+                                 for p in (root / folder).rglob('*') if p.is_file()}
+        manifest['logs'] = {p.relative_to(root / 'logs').as_posix(): common.digest(p.read_bytes())
+                            for p in (root / 'logs').rglob('*') if p.is_file()}
+        common.save(root / 'manifest.json', manifest)
+        return manifest
 
     def test_identical_collections_compare_equal_after_path_normalization(self):
         report = collections.compare(self.collection('a'), self.collection('b'))
@@ -1038,37 +1093,65 @@ class ToolSubstitutionTests(unittest.TestCase):
         self.assertEqual(report['logs']['identical'], 1)
 
     def test_each_kind_of_difference_is_reported(self):
-        cases = {
-            'outputs': {'outputs': {'case': {'path': 'pcm/case.pcmbits', 'sha256': 'changed'}}},
-            'fixtures': {'fixtures': {'f.wav': 'changed'}},
-            'comparisons': {'comparisons': {}},
-            'replay_status': {'replay_status': {'scene-process1': []}},
-            'artifacts': {'artifacts': {'kernels/k.f32': 'k', 'kernels/extra.f32': 'e'}},
+        files = {
+            'outputs': ('pcm/case.pcmbits', struct.pack('<4sIIIQ4f', b'MRPB', 1, 2, 48000, 2, 1, 2, 3, 4)),
+            'fixtures': ('fixtures/f.wav', b'changed fixture'),
+            'artifacts': ('kernels/k.f32', struct.pack('<f', 2.0)),
+            'logs': ('logs/case-cli1.log', b'different\n'),
         }
         reference = self.collection('reference')
-        for key, change in cases.items():
+        for key, (name, data) in files.items():
             with self.subTest(key=key):
-                report = collections.compare(reference, self.collection('candidate-' + key, **change))
+                candidate = self.collection('candidate-' + key)
+                (candidate / name).write_bytes(data)
+                self.seal(candidate)
+                report = collections.compare(reference, candidate)
                 self.assertFalse(report['identical'])
                 row = report[key]
                 self.assertTrue(row['different'] or row['only_reference'] or row['only_candidate'])
-        candidate = self.collection('candidate-log')
-        (candidate / 'logs' / 'case-cli1.log').write_bytes(b'different\n')
+        candidate = self.collection('candidate-comparisons')
+        manifest = self.seal(candidate)
+        manifest['comparisons']['case-new-process']['shape'] = [2, 48000, 1]
+        common.save(candidate / 'manifest.json', manifest)
         report = collections.compare(reference, candidate)
-        self.assertEqual(report['logs']['different'], ['case-cli1.log'])
-        self.assertFalse(report['identical'])
+        self.assertEqual(report['comparisons']['different'], ['case-new-process'])
 
     def test_path_normalization_only_replaces_the_collection_root(self):
         reference, candidate = self.collection('one'), self.collection('two')
         (candidate / 'logs' / 'case-cli1.log').write_bytes(f'wrote {reference}/pcm/case\n'.encode())
+        self.seal(candidate)
         self.assertFalse(collections.compare(reference, candidate)['identical'])
 
+    def test_moved_collections_keep_their_original_log_paths(self):
+        reference, candidate = self.collection('before-one'), self.collection('before-two')
+        self.assertTrue(collections.compare(reference, candidate)['identical'])
+        reference = reference.rename(self.root / 'saved-one')
+        candidate = candidate.rename(self.root / 'saved-two')
+        self.assertTrue(collections.compare(reference, candidate)['identical'])
+
+    def test_windows_log_roots_are_interpreted_independently_of_the_comparison_host(self):
+        reference, candidate = self.collection('reference'), self.collection('candidate')
+        for forward_slashes in (False, True):
+            for root in (reference, candidate):
+                manifest = self.seal(root)
+                manifest['build'].update({'platform.system': 'Windows', 'platform.machine': 'AMD64'})
+                origin = 'C:\\captures\\' + root.name
+                manifest['collection_root'] = origin
+                common.save(root / 'manifest.json', manifest)
+                text = 'wrote ' + origin + '\\pcm\\case\n'
+                if forward_slashes:
+                    text = text.replace('\\', '/')
+                (root / 'logs/case-cli1.log').write_bytes(text.encode())
+                self.seal(root)
+            with self.subTest(forward_slashes=forward_slashes):
+                self.assertTrue(collections.compare(reference, candidate)['identical'])
+
     def test_checkpoint_differences_name_the_first_word(self):
-        reference = self.collection('ref', artifacts={'checkpoints/c/x.f32': 'a'})
-        candidate = self.collection('cand', artifacts={'checkpoints/c/x.f32': 'b'})
+        reference, candidate = self.collection('ref'), self.collection('cand')
         for root, words in ((reference, (1.0, 2.0, 3.0)), (candidate, (1.0, 2.5, 3.0))):
             (root / 'checkpoints/c').mkdir(parents=True)
             (root / 'checkpoints/c/x.f32').write_bytes(struct.pack('<3f', *words))
+            self.seal(root)
         report = collections.compare(reference, candidate)
         self.assertEqual(report['artifacts']['first_difference'], {'checkpoints/c/x.f32': {'word': 1}})
 
@@ -1081,15 +1164,90 @@ class ToolSubstitutionTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(collections.PreconditionError):
                 collections.compare(reference, self.collection('other-' + name, **change))
 
+    def test_missing_or_modified_payloads_are_rejected_before_comparison(self):
+        reference = self.collection('reference')
+        files = ('pcm/case.pcmbits', 'fixtures/f.wav', 'kernels/k.f32', 'logs/case-cli1.log', 'cases/case.json')
+        for name in files:
+            for action in ('remove', 'modify'):
+                with self.subTest(file=name, action=action):
+                    candidate = self.collection(name.replace('/', '-') + '-' + action)
+                    path = candidate / name
+                    if action == 'remove':
+                        path.unlink()
+                    else:
+                        data = bytearray(path.read_bytes()); data[-1] ^= 1; path.write_bytes(data)
+                    with self.assertRaises(collections.PreconditionError):
+                        collections.compare(reference, candidate)
+        candidate = self.collection('unlisted')
+        (candidate / 'pcm/extra.pcmbits').write_bytes((candidate / 'pcm/case.pcmbits').read_bytes())
+        with self.assertRaisesRegex(collections.PreconditionError, 'PCM inventory'):
+            collections.compare(reference, candidate)
+
+    def test_unsupported_or_missing_evidence_is_rejected(self):
+        reference = self.collection('reference')
+        for key in ('build_identity', 'collection_root', 'logs', 'outputs', 'comparisons', 'replay_status'):
+            candidate = self.collection('missing-' + key)
+            manifest = self.seal(candidate); del manifest[key]
+            common.save(candidate / 'manifest.json', manifest)
+            with self.subTest(key=key), self.assertRaises(collections.PreconditionError):
+                collections.compare(reference, candidate)
+        with self.assertRaisesRegex(collections.PreconditionError, 'unsupported'):
+            collections.compare(reference, self.collection('unsupported', schema='future'))
+        with self.assertRaises(collections.PreconditionError):
+            collections.compare(reference, self.collection('empty', outputs={}))
+        with self.assertRaisesRegex(collections.PreconditionError, 'Scene health'):
+            collections.compare(reference, self.collection('no-status', replay_status={}))
+
+    def test_build_identity_and_unreplaced_binaries_must_match(self):
+        reference = self.collection('reference')
+        for field in ('configuration', 'original-binary', 'unreplaced-binary', 'compiler-flags', 'rust-features'):
+            candidate = self.collection(field)
+            manifest = self.seal(candidate)
+            if field == 'configuration':
+                manifest['build_identity']['configuration']['compile_commands.json'] = common.digest(b'changed')
+            elif field == 'original-binary':
+                manifest['build_identity']['binaries']['mradm'] = common.digest(b'changed')
+                manifest['binaries']['mradm'] = common.digest(b'changed')
+            elif field == 'unreplaced-binary':
+                manifest['binaries']['mradm'] = common.digest(b'changed')
+            elif field == 'compiler-flags':
+                manifest['build']['cmake.CMAKE_CXX_FLAGS'] = '-O3'
+            else:
+                manifest['build']['rust.resolved_features'] = json.dumps(
+                    {'mradm-ffi': ['sofa', 'diagnostics'], 'mradm-dsp': ['sofa', 'diagnostics']})
+            common.save(candidate / 'manifest.json', manifest)
+            with self.subTest(field=field), self.assertRaises(collections.PreconditionError):
+                collections.compare(reference, candidate)
+
+    def test_only_declared_replay_binary_changes_are_accepted(self):
+        reference, candidate = self.collection('reference'), self.collection('candidate')
+        manifest = self.seal(candidate)
+        name = 'mr_adm_phase2_stream'
+        manifest['binaries'][name] = common.digest(b'new replay')
+        common.save(candidate / 'manifest.json', manifest)
+        with self.assertRaisesRegex(collections.PreconditionError, 'declared tool overrides'):
+            collections.compare(reference, candidate)
+        manifest['tool_overrides'][name] = {'path': str(self.root / 'new-replay'), 'sha256': manifest['binaries'][name]}
+        common.save(candidate / 'manifest.json', manifest)
+        self.assertTrue(collections.compare(reference, candidate)['identical'])
+        manifest['tool_overrides']['mradm'] = manifest['tool_overrides'][name]
+        common.save(candidate / 'manifest.json', manifest)
+        with self.assertRaisesRegex(collections.PreconditionError, 'only replay tools'):
+            collections.compare(reference, candidate)
+
     def test_exit_codes(self):
         reference, same = self.collection('x'), self.collection('y')
-        other = self.collection('z', fixtures={'f.wav': 'changed'})
+        other = self.collection('z')
+        (other / 'fixtures/f.wav').write_bytes(b'changed fixture'); self.seal(other)
         platform = self.collection('w', build={'platform.system': 'Windows', 'platform.machine': 'AMD64'})
-        script = ROOT / 'scripts/consistency/compare-collections.py'
-        for candidate, code in ((same, 0), (other, 1), (platform, 2)):
-            result = subprocess.run([sys.executable, str(script), str(reference), str(candidate),
-                                     '--output', str(self.root / 'report.json')], capture_output=True)
-            self.assertEqual(result.returncode, code, result.stderr)
+        corrupt = self.collection('corrupt'); (corrupt / 'pcm/case.pcmbits').unlink()
+        for candidate, code in ((same, 0), (other, 1), (platform, 2), (corrupt, 2)):
+            report = self.root / (candidate.name + '-report.json')
+            with self.subTest(candidate=candidate.name), \
+                    patch.object(sys, 'argv', ['compare-collections', str(reference), str(candidate), '--output', str(report)]), \
+                    patch.object(sys, 'stdout', io.StringIO()), patch.object(sys, 'stderr', io.StringIO()):
+                self.assertEqual(collections.main(), code)
+                self.assertEqual(report.exists(), code != 2)
 
 
 if __name__ == '__main__':

@@ -101,7 +101,8 @@ A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹�
 五期 5.1 起另有本机同平台对照（CI 不跑）：`run-rust-phase2.py <build> <out> --config a --tool mr_adm_phase2_stream=<新工具>`
 以新工具替换回放工具采集（只能替换 `mr_adm_phase2_render` / `_stream` / `_scene`，manifest 记录 `tool_overrides`，
 `compare-rust-phase2.py` 拒绝这类采集），再用 `compare-collections.py <旧工具的采集> <新工具的采集>` 逐字节比较 PCM、夹具、比较记录、
-回放状态、内核与检查点和日志（日志只把采集根目录换成 `<collection>`），相同退出 0、不同退出 1、前提不符退出 2，
+回放状态、内核与检查点和日志（日志按记录的原始 `collection_root` 换成 `<collection>`，支持采集目录移动），
+比较前核验实际文件与摘要、完整构建身份及日志清单；旧采集缺少这些新增字段时需重新采集。相同退出 0、不同退出 1、前提不符或证据损坏退出 2，
 见 `docs/architecture/RUST_ORCHESTRATION_BASELINE.md`。
 原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
 历史 SAF 清单和定位脚本保留原始边界。

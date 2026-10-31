@@ -74,22 +74,26 @@ Rust 编排在五期要调回 C/C++ 的点。5.1 只列出，接口在各切片�
 ## 规则
 
 - **工具切换。** 新的 Rust 工具先与旧工具在同一构建上，用 `compare-collections.py` 对完整采集达到 0 差异，才替换构建目录里的同名工具；
-  切换后旧工具删除。替换期间的采集带 `tool_overrides`，不能作为三平台证据。
+  切换后旧工具删除。替换期间的采集带 `tool_overrides`，不能作为跨平台证据。
 - **调用方向。** CLI 与 C ABI 在五期内经 C++ 薄壳调用 Rust 编排（`mradm-engine`），六期再迁；不为测试在 C ABI 中新增入口。
 - **检查点。** 每个检查点名仍只归一方，迁移时随代码转到 Rust，名称与内容不变。
-- **棘轮与验收。** 迁出即删除，生产 C/C++ 只减不增（同一提交 `language-surface.py --update`）；每个切片以 Linux x64 本机新旧对照为完成条件，
-  三平台验收集中进行，结果回填。
+- **棘轮与验收。** 迁出即删除，生产 C/C++ 只减不增（同一提交 `language-surface.py --update`）；每个切片先在本地工作区完成新旧对照，
+  再集中完成 macOS arm64 + Windows x64 的适用验收并回填结果。Linux 测试机已下线，不再安排 Linux 主机验证，
+  缺少 Linux 结果不阻塞验收；已有 Linux 支持和历史证据保留。性能候选仍按 AGENTS.md 的 Windows 优先顺序筛选。
 
 ## 对照工具
 
 - `run-rust-phase2.py --tool NAME=PATH`（可重复）：只能替换 `mr_adm_phase2_render`、`mr_adm_phase2_stream`、`mr_adm_phase2_scene`；
   名字未知、重复、文件不存在或不可执行时拒绝。构建目录里的原二进制照旧通过 build stamp 校验；manifest 的 `binaries` 记替换文件的摘要，
-  另记 `tool_overrides: {name: {path, sha256}}`（不替换时为 `{}`）。`compare-rust-phase2.py` 拒绝带替换的采集。
+  另记 `tool_overrides: {name: {path, sha256}}`（不替换时为 `{}`）、替换前的 `build_identity`（四份构建配置文件及原二进制的摘要）、
+  原始绝对路径 `collection_root` 和日志摘要清单 `logs`。`compare-rust-phase2.py` 拒绝带替换的采集。
 - `compare-collections.py <reference> <candidate> [--output report.json]`：比较同一构建、同一平台的两份完整采集。
-  - 前提（不符时退出码 2）：schema、source、config、diagnostics、平台（`platform.system` / `platform.machine`）与用例清单相同；
+  - 前提（不符时退出码 2）：先复用跨平台比较器的证据校验，核验实际 PCM 的形状与摘要、夹具、用例参数、内核与检查点、回放状态和比较清单，
+    再核验日志清单与摘要；schema、source、config、diagnostics、平台、用例清单、`build_identity` 与完整构建记录相同，
+    二进制摘要只允许与已声明的回放工具替换相符。缺少新增身份、路径或日志字段的旧采集需要重新采集；
   - 比较（不同时退出码 1）：outputs（路径与 PCM sha256）、fixtures（含 Scene 工具写出的输入与事件表）、comparisons、replay_status、
     artifacts（kernels、checkpoints、kernel-checkpoints），以及 `logs/` 下每个文件；
-  - 日志只做一项规范化：把各自采集根目录的绝对路径换成 `<collection>`；
+  - 日志只做一项规范化：把各自 `collection_root` 记录的原始绝对路径换成 `<collection>`，采集目录可以改名或移动；
   - 不同的检查点报告第一个不同的字。
 - 单元测试在 `tests/unit/phase2_tools_test.py` 的 `ToolSubstitutionTests`（随 ctest 运行）。
 
@@ -114,7 +118,7 @@ Rust 编排在五期要调回 C/C++ 的点。5.1 只列出，接口在各切片�
 
 ## 验证
 
-Linux x64 本机，`build/consistency-a`（config A 普通构建，`8ef7017` 加本切片的脚本）：
+初始提交 `3f41bedd` 的历史验证：Linux x64 本机，`build/consistency-a`（config A 普通构建，`8ef7017` 加本切片的脚本）：
 
 | 采集 | 替换 | `compare-collections`（对照不替换的采集） |
 | --- | --- | --- |
@@ -126,3 +130,18 @@ Linux x64 本机，`build/consistency-a`（config A 普通构建，`8ef7017` 加
 - 带替换的采集在 manifest 里记录三个工具的摘要；`compare-rust-phase2.py` 的校验拒绝它，不带替换的采集照常通过。
 - 检查点差异需要诊断采集。本机的诊断构建树用已安装的依赖（`MR_ADM_CORE_USE_INSTALLED_DEPS=ON`），采集脚本拒收，所以检查点一项只由单元测试覆盖（第一个不同的字）。
 - `phase2_tools_test.py` 全部通过，新增 `ToolSubstitutionTests` 8 个测试；生产代码没有改动，棘轮不变。
+
+### 合并审查修正（2026-10-31，macOS arm64）
+
+- 比较前复用完整证据校验，拒绝缺失或损坏的 PCM、夹具、内核、用例与日志；新增构建身份核验，
+  原二进制和构建配置必须相同，只有声明的回放工具允许替换。日志按保存的原始根路径规范化，支持目录改名、移动和异地主机比较。
+- `ctest --preset debug -R '^mr_adm_phase2_tool_tests$' --parallel 4 --output-on-failure` 通过；
+  工具对照测试由 8 项增至 14 项，覆盖产物损坏、缺失、未列出的 PCM、构建与未替换二进制变化、目录移动和 Windows 日志路径。
+  原生 Scene 重放一并运行；需要诊断构建的检查点测试跳过。
+- `cmake --build --preset release --target mr_adm_phase2_tools --parallel 8` 通过。
+  config A 普通构建在本机完整采集两次，候选通过包装脚本替换三个回放工具，均执行原始 Release 二进制；
+  比较为 0 差异：291 outputs、208 fixtures、979 comparisons、176 replay_status、256 artifacts、656 logs，目录改名后仍为 0。
+- 在上述真实采集上，修改或删除 PCM、修改夹具或内核、改未替换的 CLI 摘要和构建身份均被拒收（退出 2）；
+  对合法采集增加一行日志并更新其摘要则报告差异（退出 1）。跨平台比较器继续拒绝带工具替换的采集。
+  这两份临时完整采集已删除，本机 `local/review-phase51-20261031/` 留下摘要报告与运行日志。
+- `git diff --check` 与 `language-surface.py --check --base-ref origin/main` 通过；生产 C/C++ 未改动。
