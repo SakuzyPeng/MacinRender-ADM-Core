@@ -13,8 +13,8 @@
 | Consistency | [41166081362](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41166081362) | 通过；config A、B 的普通与诊断四份报告都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0 |
 | CI | [41166081382](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41166081382) | 通过 |
 | Quality | [41166081381](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41166081381) | 通过 |
-| Release Build | [41183519975](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41183519975) | 写本记录时仍在运行，结果待回填 |
-| Reference tests | [41183521970](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41183521970) | 写本记录时仍在运行，结果待回填 |
+| Release Build | [41183519975](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41183519975) | 通过；macOS / Windows CLI、Linux AppImage、macOS / Windows GUI 五个打包 job 成功（Publish 只在 tag push 时运行，已跳过） |
+| Reference tests | [41183521970](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41183521970) | 通过；7 个单元全部成功 |
 
 诊断报告中，每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。
 Release Build 在三个平台上构建发布配置，跑许可证全量校验、C ABI 导出校验、CLI 与打包 smoke，并打包 macOS / Windows
