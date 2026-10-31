@@ -1,100 +1,15 @@
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
-#include <random>
 #include <stop_token>
 #include <string>
-#include <string_view>
-#include <vector>
-
-#include <fmt/format.h>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
-#include "../adm_dsp/post_gain_ffi.h"
 #include "wav_backend.h"
 
 namespace mradm::audio {
-
-namespace {
-
-class TempPathGuard {
-  public:
-    explicit TempPathGuard(std::filesystem::path path) : path_(std::move(path)) {}
-    TempPathGuard(const TempPathGuard&) = delete;
-    TempPathGuard& operator=(const TempPathGuard&) = delete;
-    TempPathGuard(TempPathGuard&&) = delete;
-    TempPathGuard& operator=(TempPathGuard&&) = delete;
-    ~TempPathGuard() {
-        if (active_) {
-            std::error_code ec;
-            std::filesystem::remove(path_, ec);
-        }
-    }
-
-    void dismiss() noexcept { active_ = false; }
-
-  private:
-    std::filesystem::path path_;
-    bool active_{true};
-};
-
-[[nodiscard]] std::filesystem::path unique_sidecar_path(const std::filesystem::path& original_path,
-                                                        std::string_view purpose) {
-    static thread_local std::mt19937_64 rng{std::random_device{}()};
-    std::uniform_int_distribution<uint64_t> dist;
-
-    const auto parent = original_path.parent_path();
-    const auto stem = original_path.stem().string();
-    const auto ext = original_path.extension().string();
-
-    for (int attempt = 0; attempt < 16; ++attempt) {
-        const auto token = dist(rng);
-        auto candidate = parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, token, ext);
-        if (!std::filesystem::exists(candidate)) {
-            return candidate;
-        }
-    }
-    return parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), ext);
-}
-
-// Install a finished temporary rewrite over the original. Windows cannot rename over an
-// existing file, so fall back to remove + rename.
-[[nodiscard]] Result<void> replace_with_rewrite(const std::filesystem::path& tmp_path,
-                                                const std::filesystem::path& original_path,
-                                                std::string_view operation) {
-    std::error_code ec;
-    std::filesystem::rename(tmp_path, original_path, ec);
-    if (ec) {
-        std::error_code remove_ec;
-        std::filesystem::remove(original_path, remove_ec);
-        ec.clear();
-        std::filesystem::rename(tmp_path, original_path, ec);
-        if (ec) {
-            return make_error(ErrorCode::io_error,
-                              fmt::format("failed to replace output after {}: {}", operation, ec.message()),
-                              "path=" + original_path.string());
-        }
-    }
-    return {};
-}
-
-void emit_audio_progress(ProgressSink* progress,
-                         RenderOperation operation,
-                         double fraction,
-                         uint64_t current_frame,
-                         uint64_t total_frames,
-                         std::string_view message) {
-    if (progress == nullptr) {
-        return;
-    }
-    const double f = std::clamp(fraction, 0.0, 1.0);
-    progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
-}
-
-} // namespace
 
 // ── RenderInputReader ────────────────────────────────────────────────────────
 
@@ -174,7 +89,8 @@ uint64_t ReaderHandle::read(float* out, uint64_t frames) {
     return std::visit([&](auto& r) { return r.read(out, frames); }, impl_);
 }
 
-// ── apply_gain_to_file ────────────────────────────────────────────────────────
+// ── apply_gain_to_file / trim_file_frames ───────────────────────────────────
+// Rust rewrites the file through the final-PCM writer and installs it (PCM consistency 4.8).
 
 Result<void> apply_gain_to_file(const std::string& path,
                                 float gain,
@@ -182,87 +98,17 @@ Result<void> apply_gain_to_file(const std::string& path,
                                 const std::stop_token& cancel_token,
                                 ProgressSink* progress,
                                 RenderOperation operation) {
-    if (std::abs(gain - 1.0F) < 1e-6F) {
-        emit_audio_progress(progress, operation, 1.0, 0, 0, "gain skipped");
-        return {};
-    }
-    if (cancel_token.stop_requested()) {
-        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-    }
-
-    const std::filesystem::path original_path{path};
-    const auto tmp_path = unique_sidecar_path(original_path, "gain_tmp");
-    TempPathGuard tmp_guard{tmp_path};
-
-    {
-        auto reader_res = ReaderHandle::open(path);
-        if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
-        }
-        auto& reader = *reader_res;
-
-        const uint32_t num_ch = reader.channels();
-        const uint32_t sr = reader.sample_rate();
-        const uint64_t total_frames = reader.frame_count();
-        emit_audio_progress(progress, operation, 0.0, 0, total_frames, "applying gain");
-
-        auto writer_res = WriterHandle::open(tmp_path.string(), num_ch, sr, layout_id);
-        if (!writer_res) {
-            return tl::unexpected{writer_res.error()};
-        }
-        auto& writer = *writer_res;
-
-        constexpr uint64_t k_block = 4096;
-        std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
-        uint64_t left = total_frames;
-        uint64_t done = 0;
-
-        while (left > 0) {
-            if (cancel_token.stop_requested()) {
-                return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-            }
-            const uint64_t n = std::min(k_block, left);
-            const uint64_t got = reader.read(buf.data(), n);
-            if (got == 0) {
-                break;
-            }
-            const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
-            if (mradm_dsp_apply_gain(buf.data(), samples, gain) != 0) {
-                return make_error(ErrorCode::internal_error, "apply_gain_to_file: invalid gain buffer", "path=" + path);
-            }
-            if (writer.write(buf.data(), got) != got) {
-                return make_error(
-                    ErrorCode::io_error, "short write in apply_gain_to_file", "path=" + tmp_path.string());
-            }
-            left -= got;
-            done += got;
-            emit_audio_progress(progress,
-                                operation,
-                                static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, total_frames)),
-                                done,
-                                total_frames,
-                                "applying gain");
-        }
-        if (left != 0) {
-            return make_error(ErrorCode::io_error, "short read in apply_gain_to_file", "path=" + path);
-        }
-        if (auto finished = writer.finish(); !finished) {
-            return tl::unexpected{finished.error()};
-        }
-    }
-
-    if (cancel_token.stop_requested()) {
-        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-    }
-    if (auto replaced = replace_with_rewrite(tmp_path, original_path, "apply_gain_to_file"); !replaced) {
-        return replaced;
-    }
-    tmp_guard.dismiss();
-    emit_audio_progress(progress, operation, 1.0, 0, 0, "gain applied");
-    return {};
+    const auto utf8_path = wav_path_utf8(path);
+    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
+        return mradm_output_gain_begin(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                       utf8_path.size(),
+                                       gain,
+                                       reinterpret_cast<const uint8_t*>(layout_id.data()),
+                                       layout_id.size(),
+                                       cancel_token.stop_requested() ? 1U : 0U,
+                                       out...);
+    });
 }
-
-// ── trim_file_frames ──────────────────────────────────────────────────────────
 
 Result<void> trim_file_frames(const std::string& path,
                               uint64_t start_frame,
@@ -274,103 +120,16 @@ Result<void> trim_file_frames(const std::string& path,
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
     }
-
-    const std::filesystem::path original_path{path};
-    const auto tmp_path = unique_sidecar_path(original_path, "trim_tmp");
-    TempPathGuard tmp_guard{tmp_path};
-
-    {
-        auto reader_res = ReaderHandle::open(path);
-        if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
-        }
-        auto& reader = *reader_res;
-
-        const uint32_t num_ch = reader.channels();
-        const uint32_t sr = reader.sample_rate();
-        const uint64_t total_frames = reader.frame_count();
-
-        // Clamp the range to the file: a start past the end yields no frames, and
-        // frame_count is capped at what remains after start_frame.
-        const uint64_t clamped_start = std::min(start_frame, total_frames);
-        const uint64_t avail = total_frames - clamped_start;
-        const uint64_t out_frames = std::min(frame_count, avail);
-        if (out_frames == 0) {
-            return make_error(ErrorCode::invalid_argument,
-                              "trim range selects no audio frames",
-                              fmt::format("path={} start_frame={} frame_count={} total_frames={}",
-                                          path,
-                                          start_frame,
-                                          frame_count,
-                                          total_frames));
-        }
-        // Whole-file range: nothing to do, leave the file untouched.
-        if (clamped_start == 0 && out_frames == total_frames) {
-            emit_audio_progress(progress, operation, 1.0, out_frames, out_frames, "trim skipped");
-            return {};
-        }
-        emit_audio_progress(progress, operation, 0.0, 0, out_frames, "trimming output");
-
-        auto writer_res = WriterHandle::open(tmp_path.string(), num_ch, sr, layout_id);
-        if (!writer_res) {
-            return tl::unexpected{writer_res.error()};
-        }
-        auto& writer = *writer_res;
-
-        constexpr uint64_t k_block = 4096;
-        std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
-
-        // The readers are forward-only (no seek), so discard the head by reading it.
-        uint64_t to_skip = clamped_start;
-        while (to_skip > 0) {
-            if (cancel_token.stop_requested()) {
-                return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-            }
-            const uint64_t n = std::min(k_block, to_skip);
-            const uint64_t got = reader.read(buf.data(), n);
-            if (got == 0) {
-                return make_error(ErrorCode::io_error, "short read while skipping to trim start", "path=" + path);
-            }
-            to_skip -= got;
-        }
-
-        uint64_t left = out_frames;
-        uint64_t done = 0;
-        while (left > 0) {
-            if (cancel_token.stop_requested()) {
-                return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-            }
-            const uint64_t n = std::min(k_block, left);
-            const uint64_t got = reader.read(buf.data(), n);
-            if (got == 0) {
-                return make_error(ErrorCode::io_error, "short read in trim_file_frames", "path=" + path);
-            }
-            if (writer.write(buf.data(), got) != got) {
-                return make_error(ErrorCode::io_error, "short write in trim_file_frames", "path=" + tmp_path.string());
-            }
-            left -= got;
-            done += got;
-            emit_audio_progress(progress,
-                                operation,
-                                static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, out_frames)),
-                                done,
-                                out_frames,
-                                "trimming output");
-        }
-        if (auto finished = writer.finish(); !finished) {
-            return tl::unexpected{finished.error()};
-        }
-    }
-
-    if (cancel_token.stop_requested()) {
-        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-    }
-    if (auto replaced = replace_with_rewrite(tmp_path, original_path, "trim_file_frames"); !replaced) {
-        return replaced;
-    }
-    tmp_guard.dismiss();
-    emit_audio_progress(progress, operation, 1.0, 0, 0, "trimmed output");
-    return {};
+    const auto utf8_path = wav_path_utf8(path);
+    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
+        return mradm_output_trim_begin(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                       utf8_path.size(),
+                                       start_frame,
+                                       frame_count,
+                                       reinterpret_cast<const uint8_t*>(layout_id.data()),
+                                       layout_id.size(),
+                                       out...);
+    });
 }
 
 // ── WriterHandle ──────────────────────────────────────────────────────────────

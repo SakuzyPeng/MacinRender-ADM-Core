@@ -725,6 +725,11 @@ RenderResult RenderService::render(const RenderRequest& request,
                                      !wants_apac_caf;
     const bool is_apac_caf_final = wants_apac_caf && final_ext == ".caf";
     const bool is_apac_final = is_apac_mpeg4_final || is_apac_caf_final;
+    if (final_ext == ".caf" && !is_apac_caf_final && request.options.output_bit_depth != OutputBitDepth::f32) {
+        const auto msg = fmt::format("--output-bit-depth {} is not supported for .caf output (CAF is float32 only)",
+                                     request.options.output_bit_depth == OutputBitDepth::i16 ? "i16" : "i24");
+        return fail_with_report({ErrorCode::invalid_argument, msg, {}});
+    }
     const bool is_iamf_final = (final_ext == ".iamf");
     const bool is_iamf_mp4_final =
         (request.options.iamf_container == RenderOptions::IamfContainer::mp4) && audio::iamf_encoding_available();
@@ -997,28 +1002,21 @@ RenderResult RenderService::render(const RenderRequest& request,
         return std::move(*cancelled);
     }
 
-    // Bit depth conversion: WAV output only.
-    // CAF is always float32. For FLAC, the temp WAV stays float32 here so that
-    // quantisation happens exactly once during the final FLAC encode step below.
+    // Bit depth conversion: WAV output only (CAF float32 is checked above). For FLAC, the temp
+    // WAV stays float32 here so that quantisation happens exactly once during the final encode.
     if (!is_lossy_final && request.options.output_bit_depth != OutputBitDepth::f32) {
-        auto render_ext = std::filesystem::path(render_path).extension().string();
-        std::ranges::transform(render_ext, render_ext.begin(), [](char c) {
-            return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c);
-        });
-        if (render_ext != ".caf") {
-            const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
-            logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
-            ProgressRangeSink bitdepth_progress(progress,
-                                                RenderStage::post_processing,
-                                                RenderOperation::convert_bit_depth,
-                                                0.89,
-                                                0.90,
-                                                "converting bit depth");
-            auto conv_res = audio::downconvert_to_int(
-                render_path, depth, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
-            if (!conv_res) {
-                return fail_with_report(conv_res.error());
-            }
+        const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
+        logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
+        ProgressRangeSink bitdepth_progress(progress,
+                                            RenderStage::post_processing,
+                                            RenderOperation::convert_bit_depth,
+                                            0.89,
+                                            0.90,
+                                            "converting bit depth");
+        auto conv_res = audio::downconvert_to_int(
+            render_path, depth, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
+        if (!conv_res) {
+            return fail_with_report(conv_res.error());
         }
     }
     if (auto cancelled = fail_if_cancelled()) {

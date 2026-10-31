@@ -501,6 +501,36 @@ void rust_only_checks(const fs::path& root, const std::vector<Fixture>& all) {
     require(!leftovers, "layout temporary file left behind");
 }
 
+class ThrowingProgress final : public mradm::ProgressSink {
+  public:
+    void on_progress(const mradm::ProgressEvent& /*event*/) override {
+        throw std::runtime_error("progress sink failed");
+    }
+};
+
+void progress_exception_checks(const fs::path& root) {
+    const auto directory = root / "progress-exception";
+    fs::create_directory(directory);
+    const auto path = directory / "source.wav";
+    const auto original = wave("RIFF", {{"fmt ", fmt_payload(1, 2, 16)}, {"data", Bytes(20000, 0)}});
+    save(path, original);
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        ThrowingProgress progress;
+        bool threw = false;
+        try {
+            static_cast<void>(mradm::audio::finalize_wav_layout(path.string(), {}, {}, &progress));
+        } catch (const std::runtime_error& error) {
+            threw = std::string_view{error.what()} == "progress sink failed";
+        }
+        require(threw, "initial layout progress exception was not propagated");
+        require(load(path) == original, "progress exception modified the source");
+        for (const auto& entry : fs::directory_iterator(directory)) {
+            require(entry.path() == path, "progress exception left a layout temporary file behind");
+        }
+    }
+    fs::remove_all(directory);
+}
+
 void replace_alias_checks(const fs::path& root) {
     const auto source = root / "alias-source.wav";
     const auto destination = root / "alias-destination.wav";
@@ -580,6 +610,7 @@ int main() {
         }
         scan_parity(root, all);
         rust_only_checks(root, all);
+        progress_exception_checks(root);
         replace_alias_checks(root);
         fs::remove_all(root);
         std::cout << case_count() << " WAVE container cases match the frozen C++ implementation\n";
