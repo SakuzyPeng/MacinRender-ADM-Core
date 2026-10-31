@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -313,12 +314,19 @@ bool verify_flac_gain() {
         }
         wr->write(samples.data(), k_frames);
     }
-    const auto before = std::filesystem::file_size(path);
+    const auto read_bytes = [&path] {
+        std::ifstream input(path, std::ios::binary);
+        return std::vector<char>{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+    };
+    const auto before = read_bytes();
+    if (!check(!before.empty(), "read FLAC before rejected gain")) {
+        return false;
+    }
 
     auto res = mradm::audio::apply_gain_to_file(path, k_gain);
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
                  "apply_gain_to_file on FLAC is unsupported") &&
-           check(std::filesystem::file_size(path) == before, "FLAC file unchanged after rejected gain");
+           check(read_bytes() == before, "FLAC file unchanged after rejected gain");
 }
 
 // ── Vorbis Comment: single VC block, required tags present ───────────────────

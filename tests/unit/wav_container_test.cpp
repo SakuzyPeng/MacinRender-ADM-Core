@@ -503,7 +503,9 @@ void rust_only_checks(const fs::path& root, const std::vector<Fixture>& all) {
 
 class ThrowingProgress final : public mradm::ProgressSink {
   public:
-    void on_progress(const mradm::ProgressEvent&) override { throw std::runtime_error("progress sink failed"); }
+    void on_progress(const mradm::ProgressEvent& /*event*/) override {
+        throw std::runtime_error("progress sink failed");
+    }
 };
 
 void progress_exception_checks(const fs::path& root) {
