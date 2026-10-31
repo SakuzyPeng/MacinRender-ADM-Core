@@ -37,13 +37,43 @@ def load_uninstrumented_baseline(root, source, config):
     return baseline
 
 
+# Replay tools a candidate implementation may stand in for (phase 5.1). The CLI and the fixture,
+# PCM-extraction and kernel tools always come from the build directory.
+REPLACEABLE_TOOLS = ('mr_adm_phase2_render', 'mr_adm_phase2_stream', 'mr_adm_phase2_scene')
+
+
+def parse_tool_overrides(values):
+    """Parse --tool NAME=PATH options; reject unknown, repeated, missing or non-executable tools."""
+    overrides = {}
+    for value in values or ():
+        name, sep, path = value.partition('=')
+        if not sep or not path:
+            raise ValueError(f'--tool expects NAME=PATH: {value}')
+        if name not in REPLACEABLE_TOOLS:
+            raise ValueError(f'--tool {name}: only {", ".join(REPLACEABLE_TOOLS)} can be replaced')
+        if name in overrides:
+            raise ValueError(f'--tool {name} given twice')
+        path = Path(path).resolve()
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError(f'--tool {name}: not an executable file: {path}')
+        overrides[name] = path
+    return overrides
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('build', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--config', required=True, choices=['a', 'b'])
     parser.add_argument('--baseline', type=Path, help='diagnostic run must match this uninstrumented run')
+    parser.add_argument('--tool', action='append', metavar='NAME=PATH',
+                        help='replace a replay tool for a same-build comparison (compare-collections.py); '
+                             'such collections are not platform evidence')
     args = parser.parse_args()
+    try:
+        overrides = parse_tool_overrides(args.tool)
+    except ValueError as error:
+        parser.error(str(error))
     build, out = args.build.resolve(), args.output.resolve()
     if out.exists() and any(out.iterdir()):
         parser.error('output must be empty; do not mix runs')
@@ -64,6 +94,7 @@ def main():
             parser.error(f'missing tool: {binary}')
     source = common.source_fingerprint()
     common.validate_build_stamp(build, source, binaries)
+    binaries.update(overrides)
     baseline = load_uninstrumented_baseline(args.baseline, source, args.config) if diagnostics else None
     offline, scenes, streams = common.offline_cases(), common.scene_cases(), common.stream_cases()
     stream_by_id = {row['id']: row for row in streams}
@@ -77,6 +108,8 @@ def main():
                 'source': source, 'offline': offline, 'scene': scenes, 'stream': streams, 'sofa': common.SOFA_FIXTURES,
                 'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES, 'build': build_record,
                 'binaries': {k: common.digest(v.read_bytes()) for k, v in binaries.items()},
+                'tool_overrides': {k: {'path': str(v), 'sha256': common.digest(v.read_bytes())}
+                                   for k, v in sorted(overrides.items())},
                 'comparisons': {}, 'outputs': {}, 'fixtures': {}, 'replay_status': {}}
     if manifest['build'].get('rust.compiler_verbose') == 'unavailable':
         raise ValueError('actual Rust compiler provenance unavailable')

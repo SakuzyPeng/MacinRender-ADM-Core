@@ -90,6 +90,7 @@
 - [PCM 写出与后处理迁入 Rust（四期 4.8）](architecture/RUST_INVERSION_OUTPUT.md)
 - [文件流式 seek 与对象平滑（四期 4.9）](architecture/RUST_INVERSION_SMOOTHING.md)
 - [四期结项（四期 4.10）](architecture/RUST_INVERSION_CLOSEOUT.md)
+- [方向与基线（五期 5.1）](architecture/RUST_ORCHESTRATION_BASELINE.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [房间反射网格实验记录（历史方案与原始测量）](architecture/ROOM_REFLECTION_GRID_EVALUATION.md)

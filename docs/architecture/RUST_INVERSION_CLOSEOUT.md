@@ -2,7 +2,7 @@
 
 > 状态：已完成（2026-10-31）。四期按 [ADR 0021](../adr/0021-rust-primary-project.md) 把 PCM 写出为止的数据链路迁入 Rust，
 > 切片与验证要求见 [PCM 一致性审计](PCM_CONSISTENCY_AUDIT.md#四期-pcm-写出为止的数据链路迁入-rust)。
-> 五期的初拟切片见审计的[五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust初拟)。
+> 五期的初拟切片见审计的[五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)。
 
 ## 验收结论
 

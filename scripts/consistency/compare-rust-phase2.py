@@ -118,6 +118,8 @@ def validate(root):
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
         raise ValueError('incomplete or unsupported baseline')
+    if manifest.get('tool_overrides'):
+        raise ValueError('replay tools were replaced; such collections are same-build comparisons, not platform evidence')
     if manifest['source']['sha256'] != common.json_digest(manifest['source']['files']):
         raise ValueError('source fingerprint does not match inventory')
     if (manifest['offline'] != common.offline_cases() or manifest['scene'] != common.scene_cases()
