@@ -175,12 +175,12 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 | `ADMEngine` / `ADMCAPI` | `RenderService` 编排与稳定 C ABI |
 | `rust/crates/mradm-dsp` | FFT、VBAP、HRTF/SOFA、卷积、OM spreader、重采样、计量、HOA、Monitor 等数值 DSP |
 | `rust/crates/mradm-ear` | 移植自 libear 的布局、增益与 FIR 设计 |
-| `rust/crates/mradm-adm` / `mradm-wav` | ADM XML 元数据；WAVE / RF64 / BW64 读写与容器编辑 |
+| `rust/crates/mradm-adm` / `mradm-wav` | ADM XML 元数据；WAVE / RF64 / BW64 与 CAF 读写、容器编辑 |
 | `rust/crates/mradm-math` | 跨平台逐位一致的可移植 sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC 头追踪数据报解码（回环 UDP 输入） |
 | `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表；语义策略、报告与模板、导出回写、DirectSpeakers 矩阵与屏幕配置 |
 | `rust/crates/mradm-json` | 与 nlohmann/json 3.12.0 字节一致的 JSON 解析与写出 |
-| `rust/crates/mradm-render` | 扬声器后端（VBAP、HOA、EAR、Scene 流式 VBAP）、Triple Balance 与 room 后端（离线、文件流式、Scene 流式，room 准备线程状态机）、双耳后端（HRTF 状态与缓存、声源计划、OLA、spreader、离线、文件流式、Scene 流式）与公共渲染层：DirectSpeakers / 标签 / LFE 路由、离线驱动与文件流式 |
+| `rust/crates/mradm-render` | 扬声器后端（VBAP、HOA、EAR、Scene 流式 VBAP）、Triple Balance 与 room 后端（离线、文件流式、Scene 流式，room 准备线程状态机）、双耳后端（HRTF 状态与缓存、声源计划、OLA、spreader、离线、文件流式、Scene 流式）与公共渲染层：DirectSpeakers / 标签 / LFE 路由、离线驱动与文件流式；最终 PCM 写出端与后处理遍历（增益改写、trim、降位、WAV 布局收尾及其临时文件安装） |
 | `rust/crates/mradm-ffi` | 唯一含 `unsafe` 的私有 C 边界 |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT 桌面 GUI，经 P/Invoke 调用 C ABI |
 
