@@ -52,8 +52,8 @@ S03 的其余部分不变：Scene 流式的双耳卷积与分数比率重采样�
 
 **Rust 测试。** `mradm-render` 的 `tests/vbap.rs`、`tests/hoa.rs`、`tests/ear.rs`（含 `wav71`）各加一个测试：流先播放一段，再 seek 到 8 个目标（0、511、块长 −1、块长、块长 +476、两倍块长 +1、末尾前 7 帧、末尾），在不开平滑与平滑 1024 / 1500 / 2048 帧、两种拉取分块下，与 `Driver` 的离线窗口逐位相同；seek 之前没走完的 ramp 不留痕迹。植入 4 处缺陷（旧的 seek、网格对齐但不预滚、丢弃帧数差一、seek 不重启去拉链），三个后端都能抓到。
 
-**新旧对照。** 基线 `9e52bcb`，矩阵子集（79 个离线行与 36 个文件流式行）的普通与诊断构建：
-- 离线行与 24 个文件流式重放相同；
+**新旧对照。** 基线 `9e52bcb`，候选矩阵子集包含 79 个离线行与 36 个文件流式行，基线支持其中 28 个文件流式行。普通与诊断构建的对照结果：
+- 全部 79 个离线行与 16 个文件流式重放相同；
 - 12 个 EAR / HOA 文件流式重放不同，即 `stream-{ear-point,ear-extent,ear-bed,ear-hoa3,hoa-extent,hoa-bed}-{fixed,fragmented}`。它们都从 seek 那一帧（输出第 31000 帧）开始不同；`hoa-bed` 没有 diffuse 状态，从 40217 帧开始，原因见发布说明第 2 项；
 - 8 个新用例只有候选能跑（基线工具不认识 version 5）；
 - 36 个重放的固定与碎片分块都逐位相同。
@@ -66,4 +66,4 @@ S03 的其余部分不变：Scene 流式的双耳卷积与分数比率重采样�
 
 | 运行 | 提交 | 结果 |
 | --- | --- | --- |
-| [41159930885](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41159930885) | `ecb2fb5` | 写本记录时仍在运行，结果待回填 |
+| [41159930885](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41159930885) | `ecb2fb5` | 通过；config A、B 的普通与诊断四份报告均为 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
