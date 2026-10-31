@@ -54,11 +54,11 @@ Result<void> run_output_pass(const std::string& path,
         code != 0) {
         return tl::unexpected{post_error(code, message, context)};
     }
+    const std::unique_ptr<MradmOutputPost, decltype(&mradm_output_post_destroy)> pass{raw, mradm_output_post_destroy};
     emit();
-    if (raw == nullptr) {
+    if (pass == nullptr) {
         return {};
     }
-    const std::unique_ptr<MradmOutputPost, decltype(&mradm_output_post_destroy)> pass{raw, mradm_output_post_destroy};
     const bool install_check = report.install_check != 0U;
     const auto cancelled = [&] { return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path); };
     while (report.complete == 0U) {

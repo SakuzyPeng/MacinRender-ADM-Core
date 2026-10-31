@@ -12,6 +12,10 @@ use std::{
 
 static NEXT_TRACE: AtomicU64 = AtomicU64::new(0);
 
+/// Unit tests that create output writers take turns so sequence assertions remain isolated.
+#[cfg(test)]
+pub(crate) static TEST_WRITER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 enum Sink {
     Wav(mradm_wav::Writer<File>),
     Caf(caf::Writer<BufWriter<File>>),
@@ -84,12 +88,9 @@ impl Drop for Writer {
 mod tests {
     use super::*;
 
-    /// The two tests here are the only writers of this test binary; they take turns.
-    static TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn wave_and_caf_writers_share_one_sequence_and_failed_opens_take_no_number() {
-        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = TEST_WRITER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let directory = std::env::temp_dir().join(format!("mradm-output-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let wav = Writer::create(&directory.join("a.wav"), 2, 48000, None).unwrap();
@@ -116,7 +117,7 @@ mod tests {
 
     #[test]
     fn finish_runs_once_and_closes_the_writer() {
-        let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = TEST_WRITER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let path = std::env::temp_dir().join(format!("mradm-output-{}.caf", std::process::id()));
         let mut writer = Writer::create(&path, 2, 48000, Some(b"0+2+0")).unwrap();
         assert_eq!(writer.write(&[0.5, -0.5, 0.25, -0.25]).unwrap(), 2);
