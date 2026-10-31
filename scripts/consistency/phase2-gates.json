@@ -1764,6 +1764,54 @@
     },
     {
       "kind": "case",
+      "pattern": "stream-smoothing-saf-714-fixed",
+      "reason": "VBAP 7.1.4 file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-saf-714-fragmented",
+      "reason": "VBAP 7.1.4 file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-hoa3-fixed",
+      "reason": "HOA3 file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-hoa3-fragmented",
+      "reason": "HOA3 file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-ear-714-fixed",
+      "reason": "EAR 7.1.4 file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-ear-714-fragmented",
+      "reason": "EAR 7.1.4 file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-binaural-fixed",
+      "reason": "binaural cloud file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-smoothing-binaural-fragmented",
+      "reason": "binaural cloud file stream with 2048-frame object smoothing, live gain, mute and a seek off the block grid; the seek renders from the offline window start, so the PCM is partition-invariant (PCM consistency 4.9)",
+      "reference": "docs/architecture/RUST_INVERSION_SMOOTHING.md"
+    },
+    {
+      "kind": "case",
       "pattern": "scene-room-binaural-cloud0-48000-48000-fixed-epoch1",
       "reason": "Scene replay on room-binaural at the exact tier with the room tail (PCM consistency 4.2)",
       "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"

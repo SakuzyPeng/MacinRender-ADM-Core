@@ -408,3 +408,33 @@ fn file_streaming_and_windows_equal_the_full_offline_render() {
         }
     }
 }
+
+#[test]
+fn seeks_follow_the_offline_window() {
+    const FRAMES: u64 = 9000;
+    let file = input(&noise(FRAMES as usize));
+    let mut track = moving_track(FRAMES);
+    for (block, diffuse) in track.blocks.iter_mut().zip([0.6, 0.25, 0.4]) {
+        block.diffuse = diffuse;
+    }
+    let p = prepare(&scene(single("AO_1", 0.75, track), FRAMES));
+    for smoothing in [0, 1024, 1500, 2048] {
+        assert_seeks_follow_windows(
+            &kernel(&p),
+            &p.bindings,
+            &file,
+            CHANNELS,
+            FRAMES,
+            smoothing,
+            "hoa",
+        );
+    }
+    assert_seeks_restart_live_gain(
+        &kernel(&p),
+        &p.bindings,
+        &file,
+        CHANNELS,
+        FRAMES,
+        &gain_override(b"AO_1"),
+    );
+}
