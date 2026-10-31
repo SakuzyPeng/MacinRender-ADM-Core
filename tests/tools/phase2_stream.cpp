@@ -42,6 +42,7 @@ mradm::RendererSelection renderer(const std::string& name) {
     static const std::map<std::string, mradm::RendererSelection> names{
         {"ear", mradm::RendererSelection::ear},
         {"hoa", mradm::RendererSelection::hoa},
+        {"saf", mradm::RendererSelection::saf},
         {"saf-binaural", mradm::RendererSelection::saf_binaural},
         {"triple-balance", mradm::RendererSelection::triple_balance},
         {"room-binaural", mradm::RendererSelection::room_binaural}};
@@ -101,11 +102,14 @@ std::vector<float> replay(const Json& spec,
                           const mradm::io::RenderScene& render_scene,
                           uint32_t& sample_rate) {
     const auto& scene = render_scene.scene();
-    // Version 4 (PCM consistency 4.2) adds a room pack and the tail the room appends after EOS.
+    // Version 4 (PCM consistency 4.2) adds a room pack and the tail the room appends after EOS;
+    // version 5 (4.9) adds object smoothing.
     const auto version = spec.at("version").get<int>();
-    phase2::require(version == 3 || version == 4, "unsupported file-streaming replay version");
+    phase2::require(version >= 3 && version <= 5, "unsupported file-streaming replay version");
     phase2::require((version == 4) == (spec.contains("room") && spec.contains("tail_frames")),
                     "room replays are version 4 and name their room pack and tail");
+    phase2::require((version == 5) == spec.contains("object_smoothing_frames"),
+                    "smoothed replays are version 5 and name their smoothing length");
     phase2::require(scene.info.num_frames == spec.at("input_frames").get<uint64_t>(),
                     "file-streaming input frame count differs from the case");
     phase2::require(scene.info.sample_rate == spec.at("sample_rate").get<uint32_t>(),
@@ -122,6 +126,9 @@ std::vector<float> replay(const Json& spec,
     plan.scene_handle = render_scene.handle();
     if (spec.contains("spread")) {
         plan.binaural_spread_mode = spread_mode(spec.at("spread").get<std::string>());
+    }
+    if (version == 5) {
+        plan.object_smoothing_frames = spec.at("object_smoothing_frames").get<uint32_t>();
     }
     const auto tail = version == 4 ? configure_room(spec, fixtures, plan) : uint64_t{0};
     const auto media_frames = scene.info.num_frames + tail;

@@ -1070,12 +1070,13 @@ bool verify_hoa_stream_boundaries(mradm::IRenderer& renderer,
     ok &= check(sentinel == before, "HOA rejected output remains untouched");
     ok &= check((*stream)->process({}, 0).value_or(1) == 0, "HOA zero frames do not consume audio");
     for (uint64_t target : {0U, 37U, 809U, 1023U, 1024U, 2049U}) {
-        ok &= check((*stream)->seek(target).has_value() && (*fresh)->seek(target).has_value(), "HOA cold seek");
+        ok &= check((*stream)->seek(target).has_value() && (*fresh)->seek(target).has_value(), "HOA seek");
         std::vector<float> a(std::size_t{733} * 16);
         std::vector<float> b(a.size());
         const auto got = (*stream)->process(a, 733);
         const auto wanted = (*fresh)->process(b, 733);
-        ok &= check(got && wanted && *got == *wanted && a == b, "HOA cold seek resets all diffuse history");
+        ok &= check(got && wanted && *got == *wanted && a == b,
+                    "HOA seek keeps no diffuse history from earlier playback");
     }
     auto mismatched_plan = plan;
     ++mismatched_plan.scene.info.num_channels;

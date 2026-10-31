@@ -750,3 +750,38 @@ fn file_streaming_and_windows_equal_the_full_offline_render() {
         }
     }
 }
+
+#[test]
+fn seeks_follow_the_offline_window() {
+    const FRAMES: u64 = 9000;
+    let file = input(&sine(FRAMES as usize, 0.5));
+    let track = || {
+        let mut track = moving_track(FRAMES);
+        track.blocks[1].diffuse = 0.5;
+        track.blocks[2].width = 60.;
+        track
+    };
+    for layout in ["4+7+0", "wav71"] {
+        let p = Case::new(layout).prepare(&scene(single("AO_1", 0.8, track()), FRAMES));
+        let kernel = kernel(&p, layout);
+        for smoothing in [0, 1024, 1500, 2048] {
+            assert_seeks_follow_windows(
+                &kernel,
+                &p.bindings,
+                &file,
+                p.outputs,
+                FRAMES,
+                smoothing,
+                layout,
+            );
+        }
+        assert_seeks_restart_live_gain(
+            &kernel,
+            &p.bindings,
+            &file,
+            p.outputs,
+            FRAMES,
+            &gain_override(b"AO_1"),
+        );
+    }
+}

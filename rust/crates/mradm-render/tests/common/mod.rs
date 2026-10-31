@@ -300,3 +300,145 @@ pub fn single(id: &'static str, gain: f32, track: TrackSpec) -> Vec<ObjectSpec> 
         tracks: vec![track],
     }]
 }
+
+fn open_stream(
+    kernel: &Kernel,
+    bindings: &[Binding],
+    input: &Temp,
+    outputs: usize,
+    frames: u64,
+    smoothing: u64,
+) -> FileStream {
+    FileStream::open(
+        input.path(),
+        kernel,
+        Arc::from(bindings.to_vec()),
+        stream::Settings {
+            inputs: 1,
+            outputs,
+            frames,
+            sample_rate: RATE,
+            default_interp_ms: 5,
+            smoothing_frames: smoothing,
+        },
+    )
+    .unwrap()
+}
+
+fn pull(s: &mut FileStream, outputs: usize, chunks: &[usize], limit: usize) -> Vec<f32> {
+    let mut pcm = Vec::new();
+    for chunk in chunks.iter().cycle() {
+        let want = (*chunk).min(limit - pcm.len() / outputs);
+        if want == 0 {
+            break;
+        }
+        let mut buffer = vec![0.; want * outputs];
+        let got = s.process(&mut buffer, want).unwrap();
+        if got == 0 {
+            break;
+        }
+        pcm.extend_from_slice(&buffer[..got * outputs]);
+    }
+    pcm
+}
+
+/// A file stream that played a while and then seeks gives, for any pull partition, exactly the
+/// offline window starting at the target (PCM consistency 4.9): the window's block grid, which
+/// object smoothing interpolates across, and its pre-roll block for HOA and EAR state.
+pub fn assert_seeks_follow_windows(
+    kernel: &Kernel,
+    bindings: &[Binding],
+    input: &Temp,
+    outputs: usize,
+    frames: u64,
+    smoothing: u64,
+    label: &str,
+) {
+    let block = smoothing.max(1024);
+    let targets = [
+        0,
+        511,
+        block - 1,
+        block,
+        block + 476,
+        2 * block + 1,
+        frames - 7,
+        frames,
+    ];
+    for target in targets {
+        let window = render_offline(
+            kernel.clone(),
+            input,
+            outputs,
+            frames,
+            smoothing,
+            Some(Window {
+                start: target,
+                count: u64::MAX,
+            }),
+        )
+        .unwrap();
+        for chunks in [&[1024][..], &[1, 7, 1023, 4096]] {
+            let mut s = open_stream(kernel, bindings, input, outputs, frames, smoothing);
+            pull(&mut s, outputs, &[333], 600);
+            s.seek(target).unwrap();
+            assert_eq!(
+                bits(&pull(&mut s, outputs, chunks, usize::MAX)),
+                bits(&window),
+                "{label} smoothing={smoothing} seek={target} chunks={chunks:?}"
+            );
+        }
+    }
+}
+
+/// A seek restarts the live gain de-zipper at its targets, so a ramp in progress before the seek
+/// and the frames the seek drops leave no trace. The target is 10 frames past a block edge: a
+/// loudspeaker mix drops only those, while the HOA and EAR pre-roll block (longer than the 20 ms
+/// ramp) shows a leftover ramp only through the state it leaves.
+pub fn assert_seeks_restart_live_gain(
+    kernel: &Kernel,
+    bindings: &[Binding],
+    input: &Temp,
+    outputs: usize,
+    frames: u64,
+    overrides: &[Override],
+) {
+    let target = 2058;
+    let mut fresh = open_stream(kernel, bindings, input, outputs, frames, 0);
+    fresh.set_overrides(overrides).unwrap();
+    fresh.seek(target).unwrap();
+    let mut ramping = open_stream(kernel, bindings, input, outputs, frames, 0);
+    pull(&mut ramping, outputs, &[64], 64);
+    ramping.set_overrides(overrides).unwrap();
+    pull(&mut ramping, outputs, &[100], 100);
+    ramping.seek(target).unwrap();
+    assert_eq!(
+        bits(&pull(&mut ramping, outputs, &[512], usize::MAX)),
+        bits(&pull(&mut fresh, outputs, &[512], usize::MAX))
+    );
+}
+
+/// One object moving across three blocks, the later two interpolated, so object smoothing and the
+/// block grid change the gains of every block.
+pub fn moving_track(frames: u64) -> TrackSpec {
+    let mut second = object_block(2900, 6100, -70.);
+    second.interpolation_present = 1;
+    second.interpolation = 700;
+    let mut third = object_block(6100, frames, 110.);
+    third.interpolation_present = 1;
+    third.interpolation = 2400;
+    TrackSpec {
+        blocks: vec![object_block(0, 2900, 30.), second, third],
+        ..TrackSpec::default()
+    }
+}
+
+pub fn gain_override(object_id: &'static [u8]) -> [Override<'static>; 1] {
+    [Override {
+        object_id,
+        speaker_label: b"",
+        mute: false,
+        gain_db: -12.,
+        head_locked: None,
+    }]
+}

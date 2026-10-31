@@ -254,10 +254,13 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len({r['id'] for r in offline}), 79)
         self.assertEqual(len(scene), 88)
         streams = common.stream_cases()
-        self.assertEqual(len(streams), 28)
-        self.assertEqual(len(common.case_ids()), 283)
+        self.assertEqual(len(streams), 36)
+        self.assertEqual(len(common.case_ids()), 291)
         self.assertEqual({r['renderer'] for r in streams},
-                         {'saf-binaural', 'ear', 'hoa', 'triple-balance', 'room-binaural'})
+                         {'saf', 'saf-binaural', 'ear', 'hoa', 'triple-balance', 'room-binaural'})
+        # PCM consistency 4.9: smoothed replays for every backend that smooths objects.
+        self.assertEqual({r['renderer'] for r in streams if r.get('object_smoothing_frames')},
+                         {'saf', 'saf-binaural', 'ear', 'hoa'})
         self.assertIn('objects-room', {r['fixture'] for r in offline + streams})
         self.assertTrue(any('--triple-balance-mode' in r['args'] for r in offline))
         # Phase 3.6: integer WAVE and float32 CAF final files.
