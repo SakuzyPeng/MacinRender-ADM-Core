@@ -46,7 +46,7 @@ C++ 侧只剩适配与编码器：
 1. **删除的公共头与目标（A）。** `include/adm/peak.h`、`include/adm/loudness.h`（`apply_peak_limit`、`apply_loudness_norm`）、`src/adm_peak`、`src/adm_loudness`、`ADMPeak` / `ADMLoudness` 目标及其安装规则。只由它们写出的 `post/peak.*`、`post/loudness.*` 诊断检查点随之消失；锁定矩阵与比较器都不依赖它们，比较器中 `post/` 的排序规则保留，供对照旧数据使用。C ABI 没有变化。
 2. **写出端报告收尾失败（B，修正 1）。** 扬声器、双耳与 Apple 后端写完后调用 `finish()`，失败时返回错误，不再在析构中丢掉（room 原本就如此）；`WriterHandle::finish` 对 CAF 也真正收尾，FLAC 仍在析构中收尾。
 3. **CAF 的 IO 错误（B）。** CAF 写入与 `info` 追加不再忽略 IO 错误；写入改为全部写入或报错，不再返回部分帧数；偏移改为 64 位，Windows 上读取超过 2 GiB 的 CAF 不再受 `long` 限制；异常的 CAF 采样率（NaN、超出 u32）改为饱和转换，原来是未定义行为；CAF 路径与 WAVE 一样按 UTF-8 传给 Rust。
-4. **改写保留 CAF 布局标签（C，修正 2）。** 增益改写与 trim 从源 CAF 的 `chan` 块读取布局标签并原样写回，源文件没有 `chan` 块时才用 `output_layout`；原来按 `output_layout` 重新打标签，Apple `0+2+0` 输出的 binaural 标签会被改成 `0+2+0`，与输出布局不符的还会报错。
+4. **改写保留 CAF 布局标签（C，修正 2）。** 增益改写与 trim 从源 CAF 的 `chan` 块读取布局标签；标签属于 `mradm-wav::caf` 支持的十种布局且声道数匹配时，保留该标签。缺少 `chan` 块、标签不受支持或声道数不匹配时，回退到 `output_layout`；原来按 `output_layout` 重新打标签，Apple `0+2+0` 输出的 binaural 标签会被改成 `0+2+0`，与输出布局不符的还会报错。
 5. **`.caf` 拒绝整数位深（C，修正 3）。** 终稿为 PCM `.caf`（不是 APAC-in-CAF）且 `--output-bit-depth` 为 `i16` / `i24` 时，在渲染前报 invalid_argument：“--output-bit-depth i16 is not supported for .caf output (CAF is float32 only)”（`i24` 同理）。原来静默写出 float32；默认位深就是 f32，不受影响。
 6. **测试断言（C，修正 4）。** `trim_file_smoke_test` 检查 `.bitdepth_tmp.NNNN` 残留的断言原来匹配不到实际名字、永远通过，改为按实际命名匹配。
 7. **增益与 trim 不再接受 FLAC 输入（C）。** 对 `.flac` 调用 `apply_gain_to_file` / `trim_file_frames` 返回 unsupported “{op} does not support FLAC input”，文件逐字节不变。生产路径不会改写 FLAC：FLAC 终稿先渲染到临时 WAVE，后处理之后才编码；原来只有 `flac_io_smoke_test` 走这条路。
@@ -116,4 +116,4 @@ C 的遍历没有另冻结黄金数据：它们的输出字节由已有的 C++ �
 | --- | --- | --- | --- |
 | [41037527666](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41037527666) | `4207627` | A | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
 | [41074793418](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41074793418) | `e9a9541` | B | 同上 |
-| [41152970680](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41152970680) | `8278a4b` | C | 写本记录时仍在运行，结果待回填 |
+| [41152970680](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41152970680) | `8278a4b` | C | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
