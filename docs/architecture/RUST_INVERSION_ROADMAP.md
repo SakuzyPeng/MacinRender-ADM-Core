@@ -68,7 +68,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | 期 | 目标 | 退出条件 |
 | --- | --- | --- |
 | 四期 | PCM 写出为止的数据链路迁入 Rust；`room-binaural` exact 档进矩阵；S03、观察内核、N01 JSON 残留与覆盖缺口收尾 | 后端与公共渲染层的 C++ 只剩适配壳；锁定矩阵三平台逐位相同；C++ 规模按切片实测下降（2026-10-31 已满足，见[四期结项](RUST_INVERSION_CLOSEOUT.md)） |
-| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（初拟切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust初拟)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
+| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)，5.1 起确定；编排代码放进新 crate `mradm-engine`；驱动面与岛接口清单见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
 | 六期 | 边界迁入 Rust：C ABI 由 Rust cdylib 实现（`mradm_capi`、同一 `c_api.h`、`SOVERSION 1`、只导出 `adm_*`）；CLI 改为 Rust；删除 C++ SDK 与安装规则；构建以 Cargo 为主 | ABI 导出、GUI P/Invoke、CLI 输出与退出码回归通过；CLI11、spdlog/fmt、nlohmann_json、tl-expected 移除 |
 | 七期 | 平台岛收缩：Apple / Windows sink 与编码器 C 库只留窄 C 接口，评估 objc2 / windows crate；冻结参考按条件退役；C++ 测试清退 | 生产 C/C++ 只剩岛 |
 
@@ -91,7 +91,9 @@ C ABI 目前替代不了这些路径：离线没有 listener orientation；文�
 - 迁进 Rust 的代码继续发出同名检查点。Rust 侧的生产路径写出器是 `mradm-dsp` `diagnostics::process`，
   与 C++ `consistency::dump` 使用同一约定；每个检查点名只归一方所有。
 - 五期迁移这些接口时，工具改为 Rust 并直接驱动 Rust 引擎。切换前先在同一构建上证明新旧工具输出逐位相同，
-  不在 C ABI 中为测试新增入口。
+  不在 C ABI 中为测试新增入口。做法（5.1）：用 `run-rust-phase2.py --tool NAME=PATH` 以新工具替换
+  `mr_adm_phase2_render` / `_stream` / `_scene` 采集一次，再用 `compare-collections.py` 与旧工具的采集逐字节比较；
+  0 差异后才替换构建目录里的同名工具，旧工具随即删除。带替换的采集记录 `tool_overrides`，不能作为跨平台证据。
 
 ## C++ 删除与冻结参考
 

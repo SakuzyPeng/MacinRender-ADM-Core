@@ -486,9 +486,9 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **4.10 状态（四期结项）**：结项提交 main `221ce28`。Consistency 41166081362 在 config A、B 的普通与诊断四份报告中都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0；诊断报告中每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。CI 41166081382 与 Quality 41166081381 通过；Release Build 41183519975（5 个打包 job）与 Reference tests 41183521970（7 个参考单元）通过。生产 C/C++ 由 4.1 的 45,090 行降到 32,551 行（−12,539 行，27.8%），岛与 CUDA 边界不变。四期目标逐条完成；room 离线默认 ramp 的 `×48` 与 BINAURAL-001 移交五期。见 [四期结项](RUST_INVERSION_CLOSEOUT.md)。
 
-## 五期：编排与实时调度迁入 Rust（初拟）
+## 五期：编排与实时调度迁入 Rust
 
-> 初拟于 4.10（2026-10-31），五期开始时由维护者确定。总路线见[逆转路线](RUST_INVERSION_ROADMAP.md#各期目标五期起为初拟)。
+> 初拟于 4.10（2026-10-31），5.1 起确定（用户 2026-10-31 决定：照此顺序推进，不新增 ADR，编排与实时调度放进新 crate `mradm-engine`）。总路线见[逆转路线](RUST_INVERSION_ROADMAP.md#各期目标五期起为初拟)，驱动面与岛接口清单见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)。
 
 五期把四期留在 C++ 的驱动面迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine` / `SceneOutputSession`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度。退出条件是一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除。公开 C ABI 与 CLI 留到六期，五期内经 C++ 薄壳调用 Rust 编排。
 
@@ -501,7 +501,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 | 5.5 | Monitor 与实时调度 | `MonitorEngine`、`monitor_session`、ring buffer、downmix、立体声峰值保护、OSC 头追踪的 UDP 收发与快照、设备调度与 Windows room worker 等待迁入 Rust；miniaudio 留作 C 岛，Apple / Windows 系统空间 sink 经窄 C 接口。设备回调的分配计数约束保留。 |
 | 5.6 | 删除适配壳 | 删除 C++ `AdmScene`、`IRenderer` / `IRenderStream` / `ILiveSceneRenderer` 适配壳、`src/adm_render_common` 的剩余薄包装与失去调用者的私有 FFI 头；Apple 岛改经窄 C 接口取用 Rust 的路由与预处理。 |
 | 5.7 | room 默认 ramp | 有意的数值变化：room 离线与文件流式的默认 ramp 由 `default_interp_ms × 48` 改为按采样率换算，96 kHz room 的 PCM 改变，单独成片。 |
-| 5.8 | 三平台验收与结项 | 全矩阵三平台验收、Release Build 与 Reference tests，记录规模变化，准备六期。 |
+| 5.8 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收、Release Build 与 Reference tests，记录规模变化，准备六期；保留已有 Linux 证据，不再安排 Linux 主机验证。 |
 
 排序依据：
 - 离线编排最先：它是另外几条驱动面共用的导入、策略与后端选择入口。
@@ -509,7 +509,11 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 - 适配壳在所有驱动面迁走之后删除，否则一致性工具没有可驱动的接口。
 - 有意的数值变化单独成片，不与结构迁移混在一起。
 
-验证要求沿用四期：结构迁移逐位不变（锁定矩阵的 PCM、内核与诊断检查点）、迁出即删除、生产 C/C++ 棘轮只减不增、三平台验收集中进行。BINAURAL-001 作为性能任务另行跟踪，不阻塞五期。
+工具切换的规则：新的 Rust 一致性工具先与旧工具在同一构建上，用 `scripts/consistency/compare-collections.py` 对完整采集达到 0 差异（采集时以 `run-rust-phase2.py --tool` 替换旧工具），才替换构建目录里的同名工具，切换后旧工具删除；带替换的采集不能作为跨平台证据。
+
+数值与规模要求沿用四期：结构迁移逐位不变（锁定矩阵的 PCM、内核与诊断检查点）、迁出即删除、生产 C/C++ 棘轮只减不增。主机验收按当前 AGENTS.md，集中完成 macOS arm64 + Windows x64 的适用验证；保留历史 Linux 证据，缺少 Linux 结果不阻塞验收。BINAURAL-001 作为性能任务另行跟踪，不阻塞五期。
+
+**5.1 状态**：驱动面清单（4 个一致性工具、7 个 CLI 子命令、164 个 C ABI 导出按家族归入 5.2–5.5 与六期）、岛接口清单与五期规模基线（`8ef7017`，生产 C/C++ 32,551 行）记录在 5.1 记录。新增新旧工具的对照手段：`run-rust-phase2.py --tool` 替换回放工具并在 manifest 记录 `tool_overrides`，`compare-rust-phase2.py` 拒绝这类采集，`compare-collections.py` 对同一构建、同一平台的两份采集逐字节比较 PCM、夹具、比较记录、回放状态、内核与检查点和日志。本机以同一批工具替换采集的自对照为 0 差异，植入的 PCM 与日志差异都被报出。PCM 与生产代码不变。见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)。
 
 ## 每个迁移切片的验证
 

@@ -16,6 +16,11 @@ SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support'
                'tests/fixtures/room/phase2', 'scripts/consistency')
 BINARY_SUFFIXES = {'.bin', '.sofa', '.f32le', '.f32', '.f64', '.u32'}
 TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml', '.dat'}
+REPLAY_TOOLS = ('mr_adm_phase2_render', 'mr_adm_phase2_stream', 'mr_adm_phase2_scene')
+BUILD_TOOLS = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', *REPLAY_TOOLS,
+               'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
+BUILD_CONFIGURATION_FILES = ('CMakeCache.txt', 'compile_commands.json', 'consistency-dependencies.json',
+                             'rust-dependencies.json')
 
 
 def save(path, value):
@@ -773,8 +778,7 @@ def require_same(a, b):
 def build_configuration(build):
     # Local build identity, not a cross-platform equality key. A configure-only
     # change updates these files even when every executable still has its old hash.
-    names = ('CMakeCache.txt', 'compile_commands.json', 'consistency-dependencies.json', 'rust-dependencies.json')
-    return {name: digest((build / name).read_bytes()) for name in names}
+    return {name: digest((build / name).read_bytes()) for name in BUILD_CONFIGURATION_FILES}
 
 
 def validate_build_stamp(build, source, binaries):
@@ -787,10 +791,8 @@ def validate_build_stamp(build, source, binaries):
 
 def stamp_build(build):
     """Called by CMake only after all measured executables were built."""
-    names = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render',
-             'mr_adm_phase2_scene', 'mr_adm_phase2_stream', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
     import os
-    binaries = {name: digest((build / (name + ('.exe' if os.name == 'nt' else ''))).read_bytes()) for name in names}
+    binaries = {name: digest((build / (name + ('.exe' if os.name == 'nt' else ''))).read_bytes()) for name in BUILD_TOOLS}
     save(build / 'phase2-build-stamp.json', {'source': source_fingerprint(), 'binaries': binaries,
                                            'configuration': build_configuration(build)})
 
