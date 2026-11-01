@@ -82,7 +82,7 @@ is_platform_excluded() {
             fi
             return 1
             ;;
-        tests/reference/libadm/*)
+        tests/reference/libadm/*|tests/support/scene_json/*)
             if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
                 return 0
             fi

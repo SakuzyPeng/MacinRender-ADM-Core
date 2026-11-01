@@ -18,7 +18,7 @@ if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMake
     reference_excludes+=(-i "$repo_root/tests/reference/libbw64")
 fi
 if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    reference_excludes+=(-i "$repo_root/tests/reference/libadm")
+    reference_excludes+=(-i "$repo_root/tests/reference/libadm" -i "$repo_root/tests/support/scene_json")
 fi
 if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
     for file in tests/reference/saf_reference_test.cpp tests/reference/spreader_mr.c tests/reference/spreader_mr.h tests/reference/spreader_mr_internal.h tests/tools/export_saf_hoa_matrix.cpp tests/tools/numeric_probe.cpp tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c tests/tools/fft_lifecycle_probe.cpp; do

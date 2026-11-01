@@ -104,12 +104,6 @@ class BackendRecords {
     MradmEngineBackend record_{};
 };
 
-struct SpatialLayout {
-    std::string id;
-    std::string display_name;
-    uint16_t channel_count{0};
-};
-
 } // namespace
 
 std::string document(Document kind) {
@@ -121,32 +115,30 @@ std::string document(Document kind) {
         platform.iamf_mp4_packager = platform.iamf != 0U && audio::iamf_mp4_packager_available() ? 1U : 0U;
     }
     std::unique_ptr<BackendRecords> apple;
-    std::vector<SpatialLayout> spatial;
+    std::vector<MradmEngineSpatialLayout> spatial_records;
 #ifdef __APPLE__
     const CapabilityReport apple_caps = apple_capabilities();
-    // macOS system-spatial monitoring (AVSampleBufferAudioRenderer) accepts Apple's speaker layouts.
-    for (const auto& layout : apple_caps.supported_layouts) {
-        if (!layout.is_binaural) {
-            spatial.push_back({layout.id, layout.display_name, layout.channel_count});
-        }
-    }
     if (kind == Document::capabilities) {
+        // macOS system-spatial monitoring (AVSampleBufferAudioRenderer) accepts Apple's speaker layouts.
+        for (const auto& layout : apple_caps.supported_layouts) {
+            if (!layout.is_binaural) {
+                spatial_records.push_back({text(layout.id), text(layout.display_name), layout.channel_count, 0});
+            }
+        }
         // Runtime self-test: macOS <=26.3's AUSpatialMixer misroutes a bypass-LFE source to Center.
         platform.apple_lfe_routing_ok = apple_system_spatial_lfe_routing_ok() ? 1 : 0;
     }
     apple = std::make_unique<BackendRecords>(apple_caps, "apple");
     platform.apple = apple->get();
 #elif defined(_WIN32)
-    for (const auto& layout : realtime::system_spatial_layouts()) {
-        spatial.push_back({layout.id, layout.display_name, static_cast<uint16_t>(layout.channel_count)});
-    }
-#endif
-    std::vector<MradmEngineSpatialLayout> spatial_records;
+    const auto spatial = realtime::system_spatial_layouts();
     if (kind == Document::capabilities) {
         for (const auto& layout : spatial) {
-            spatial_records.push_back({text(layout.id), text(layout.display_name), layout.channel_count, 0});
+            spatial_records.push_back(
+                {text(layout.id), text(layout.display_name), static_cast<uint16_t>(layout.channel_count), 0});
         }
     }
+#endif
     platform.system_spatial = spatial_records.data();
     platform.system_spatial_len = spatial_records.size();
 
