@@ -45,6 +45,8 @@ class RenderScene {
     [[nodiscard]] Result<std::string> semantic_report(const SemanticReportOptions& options) const;
     // The neutral policy template of the scene; no trailing newline.
     [[nodiscard]] Result<std::string> policy_template() const;
+    // The scene inspect JSON (mradm.scene-inspect v1, PCM consistency 5.2 A).
+    [[nodiscard]] Result<std::string> inspect_json() const;
     // Writes the source file with this scene's semantic edits patched into its AXML: PCM and every
     // other chunk are copied byte for byte (a temporary file replaces `dst`). Positions, user levels
     // and HOA pack gain or mute are not written back; edits to shared nodes that disagree and edits

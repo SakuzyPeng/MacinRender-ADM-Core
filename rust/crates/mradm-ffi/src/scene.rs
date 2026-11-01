@@ -571,6 +571,38 @@ pub unsafe extern "C" fn mradm_scene_template(
     })
 }
 
+/// The scene inspect document `mradm.scene-inspect` v1 (PCM consistency 5.2 A, nlohmann
+/// `dump(2)` bytes, no trailing newline) for the input `path` as the caller spelled it in UTF-8,
+/// held by the handle until the next report, template, inspect or export call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_inspect_json(
+    handle: *mut SceneHandle,
+    path: *const u8,
+    path_len: usize,
+    output: *mut Text,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    scene_boundary(ptr::null_mut(), message, capacity, || {
+        if handle.is_null() || output.is_null() {
+            return Err(invalid("无效场景检查参数"));
+        }
+        let handle = unsafe { &mut *handle };
+        let path = unsafe {
+            lossy(Text {
+                data: path,
+                len: path_len,
+            })?
+        }
+        .into_owned();
+        handle.output = mradm_engine::scene_json::inspect_json(&handle.scene, &path);
+        unsafe {
+            *output = Text::new(&handle.output);
+        }
+        Ok(())
+    })
+}
+
 /// The source AXML `xml` with this scene's semantic edits patched in, held by the handle until
 /// the next report, template or export call.
 #[unsafe(no_mangle)]

@@ -300,6 +300,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mradm-engine"
+version = "0.1.0"
+dependencies = [
+ "mradm-adm",
+ "mradm-json",
+ "mradm-scene",
+ "mradm-wav",
+]
+
+[[package]]
 name = "mradm-ffi"
 version = "0.1.0"
 dependencies = [
@@ -307,6 +317,7 @@ dependencies = [
  "mradm-adm",
  "mradm-dsp",
  "mradm-ear",
+ "mradm-engine",
  "mradm-math",
  "mradm-osc",
  "mradm-render",

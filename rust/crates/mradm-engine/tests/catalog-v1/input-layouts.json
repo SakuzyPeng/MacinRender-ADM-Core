@@ -1,0 +1,1145 @@
+{
+  "aliases": {
+    "C": "M+000",
+    "FC": "M+000",
+    "FL": "M+030",
+    "FR": "M-030",
+    "L": "M+030",
+    "LFE": "LFE1",
+    "R": "M-030"
+  },
+  "auto_detection": {
+    "axml_absent": "recognised WAVEFORMATEXTENSIBLE channel mask",
+    "axml_present": "strict ADM import; invalid ADM never falls back",
+    "unrecognised_or_missing_mask": "explicit input layout or channel labels required"
+  },
+  "containers": [
+    "WAVE",
+    "RF64",
+    "BW64"
+  ],
+  "coordinate_convention": {
+    "azimuth": "degrees; positive left, negative right, 0 front",
+    "distance": "normalised; 1.0 for channel-bed speakers",
+    "elevation": "degrees; positive up, 0 horizontal"
+  },
+  "custom_channel_catalog": [
+    {
+      "azimuth": 30.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+030",
+      "token": "M+030"
+    },
+    {
+      "azimuth": -30.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-030",
+      "token": "M-030"
+    },
+    {
+      "azimuth": 0.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+000",
+      "token": "M+000"
+    },
+    {
+      "azimuth": 45.0,
+      "elevation": -30.0,
+      "is_lfe": true,
+      "speaker_label": "LFE1",
+      "token": "LFE1"
+    },
+    {
+      "azimuth": 110.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+110",
+      "token": "M+110"
+    },
+    {
+      "azimuth": -110.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-110",
+      "token": "M-110"
+    },
+    {
+      "azimuth": 30.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+030",
+      "token": "U+030"
+    },
+    {
+      "azimuth": -30.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U-030",
+      "token": "U-030"
+    },
+    {
+      "azimuth": 110.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+110",
+      "token": "U+110@30"
+    },
+    {
+      "azimuth": -110.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U-110",
+      "token": "U-110@30"
+    },
+    {
+      "azimuth": 135.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+135",
+      "token": "M+135"
+    },
+    {
+      "azimuth": -135.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-135",
+      "token": "M-135"
+    },
+    {
+      "azimuth": 90.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+090",
+      "token": "M+090"
+    },
+    {
+      "azimuth": -90.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-090",
+      "token": "M-090"
+    },
+    {
+      "azimuth": 45.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+045",
+      "token": "U+045"
+    },
+    {
+      "azimuth": -45.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U-045",
+      "token": "U-045"
+    },
+    {
+      "azimuth": 135.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+135",
+      "token": "U+135"
+    },
+    {
+      "azimuth": -135.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U-135",
+      "token": "U-135"
+    },
+    {
+      "azimuth": 150.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+150",
+      "token": "M+150"
+    },
+    {
+      "azimuth": -150.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-150",
+      "token": "M-150"
+    },
+    {
+      "azimuth": 70.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+070",
+      "token": "M+070"
+    },
+    {
+      "azimuth": -70.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-070",
+      "token": "M-070"
+    },
+    {
+      "azimuth": 70.0,
+      "elevation": 45.0,
+      "is_lfe": false,
+      "speaker_label": "U+070",
+      "token": "U+070"
+    },
+    {
+      "azimuth": -70.0,
+      "elevation": 45.0,
+      "is_lfe": false,
+      "speaker_label": "U-070",
+      "token": "U-070"
+    },
+    {
+      "azimuth": 150.0,
+      "elevation": 45.0,
+      "is_lfe": false,
+      "speaker_label": "U+150",
+      "token": "U+150"
+    },
+    {
+      "azimuth": -150.0,
+      "elevation": 45.0,
+      "is_lfe": false,
+      "speaker_label": "U-150",
+      "token": "U-150"
+    },
+    {
+      "azimuth": 110.0,
+      "elevation": 45.0,
+      "is_lfe": false,
+      "speaker_label": "U+110",
+      "token": "U+110@45"
+    },
+    {
+      "azimuth": -110.0,
+      "elevation": 45.0,
+      "is_lfe": false,
+      "speaker_label": "U-110",
+      "token": "U-110@45"
+    },
+    {
+      "azimuth": 60.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+060",
+      "token": "M+060"
+    },
+    {
+      "azimuth": -60.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M-060",
+      "token": "M-060"
+    },
+    {
+      "azimuth": 180.0,
+      "elevation": 0.0,
+      "is_lfe": false,
+      "speaker_label": "M+180",
+      "token": "M+180"
+    },
+    {
+      "azimuth": -45.0,
+      "elevation": -30.0,
+      "is_lfe": true,
+      "speaker_label": "LFE2",
+      "token": "LFE2"
+    },
+    {
+      "azimuth": 0.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+000",
+      "token": "U+000"
+    },
+    {
+      "azimuth": 0.0,
+      "elevation": 90.0,
+      "is_lfe": false,
+      "speaker_label": "T+000",
+      "token": "T+000"
+    },
+    {
+      "azimuth": 90.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+090",
+      "token": "U+090"
+    },
+    {
+      "azimuth": -90.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U-090",
+      "token": "U-090"
+    },
+    {
+      "azimuth": 180.0,
+      "elevation": 30.0,
+      "is_lfe": false,
+      "speaker_label": "U+180",
+      "token": "U+180"
+    },
+    {
+      "azimuth": 0.0,
+      "elevation": -30.0,
+      "is_lfe": false,
+      "speaker_label": "B+000",
+      "token": "B+000"
+    },
+    {
+      "azimuth": 45.0,
+      "elevation": -30.0,
+      "is_lfe": false,
+      "speaker_label": "B+045",
+      "token": "B+045"
+    },
+    {
+      "azimuth": -45.0,
+      "elevation": -30.0,
+      "is_lfe": false,
+      "speaker_label": "B-045",
+      "token": "B-045"
+    }
+  ],
+  "custom_constraints": {
+    "ambiguous_labels": {
+      "U+110": [
+        "U+110@30",
+        "U+110@45"
+      ],
+      "U-110": [
+        "U-110@30",
+        "U-110@45"
+      ]
+    },
+    "arbitrary_coordinates_allowed": false,
+    "duplicate_canonical_labels_allowed": false,
+    "empty_labels_allowed": false,
+    "label_count_must_match_file_channels": true
+  },
+  "layouts": [
+    {
+      "channel_count": 6,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+110",
+          "token": "M+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-110",
+          "token": "M-110"
+        }
+      ],
+      "display_name": "5.1",
+      "id": "5.1",
+      "internal_id": "0+5+0",
+      "wave_channel_mask": 63,
+      "wave_mask_channel_order": [
+        "M+030",
+        "M-030",
+        "M+000",
+        "LFE1",
+        "M+110",
+        "M-110"
+      ]
+    },
+    {
+      "channel_count": 8,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+110",
+          "token": "M+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-110",
+          "token": "M-110"
+        },
+        {
+          "azimuth": 30.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+030",
+          "token": "U+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-030",
+          "token": "U-030"
+        }
+      ],
+      "display_name": "5.1.2",
+      "id": "5.1.2",
+      "internal_id": "2+5+0",
+      "wave_channel_mask": 20543,
+      "wave_mask_channel_order": [
+        "M+030",
+        "M-030",
+        "M+000",
+        "LFE1",
+        "M+110",
+        "M-110",
+        "U+030",
+        "U-030"
+      ]
+    },
+    {
+      "channel_count": 8,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 135.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+135",
+          "token": "M+135"
+        },
+        {
+          "azimuth": -135.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-135",
+          "token": "M-135"
+        },
+        {
+          "azimuth": 90.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+090",
+          "token": "M+090"
+        },
+        {
+          "azimuth": -90.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-090",
+          "token": "M-090"
+        }
+      ],
+      "display_name": "7.1",
+      "id": "7.1",
+      "internal_id": "wav71",
+      "wave_channel_mask": 1599,
+      "wave_mask_channel_order": [
+        "M+030",
+        "M-030",
+        "M+000",
+        "LFE1",
+        "M+135",
+        "M-135",
+        "M+090",
+        "M-090"
+      ]
+    },
+    {
+      "channel_count": 10,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+110",
+          "token": "M+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-110",
+          "token": "M-110"
+        },
+        {
+          "azimuth": 30.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+030",
+          "token": "U+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-030",
+          "token": "U-030"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+110",
+          "token": "U+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-110",
+          "token": "U-110"
+        }
+      ],
+      "display_name": "5.1.4",
+      "id": "5.1.4",
+      "internal_id": "4+5+0",
+      "wave_channel_mask": 184383,
+      "wave_mask_channel_order": [
+        "M+030",
+        "M-030",
+        "M+000",
+        "LFE1",
+        "M+110",
+        "M-110",
+        "U+030",
+        "U-030",
+        "U+110",
+        "U-110"
+      ]
+    },
+    {
+      "channel_count": 12,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 135.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+135",
+          "token": "M+135"
+        },
+        {
+          "azimuth": -135.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-135",
+          "token": "M-135"
+        },
+        {
+          "azimuth": 90.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+090",
+          "token": "M+090"
+        },
+        {
+          "azimuth": -90.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-090",
+          "token": "M-090"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+045",
+          "token": "U+045"
+        },
+        {
+          "azimuth": -45.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-045",
+          "token": "U-045"
+        },
+        {
+          "azimuth": 135.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+135",
+          "token": "U+135"
+        },
+        {
+          "azimuth": -135.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-135",
+          "token": "U-135"
+        }
+      ],
+      "display_name": "7.1.4",
+      "id": "7.1.4",
+      "internal_id": "4+7+0",
+      "wave_channel_mask": 185919,
+      "wave_mask_channel_order": [
+        "M+030",
+        "M-030",
+        "M+000",
+        "LFE1",
+        "M+135",
+        "M-135",
+        "M+090",
+        "M-090",
+        "U+045",
+        "U-045",
+        "U+135",
+        "U-135"
+      ]
+    },
+    {
+      "channel_count": 14,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+110",
+          "token": "M+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-110",
+          "token": "M-110"
+        },
+        {
+          "azimuth": 150.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+150",
+          "token": "M+150"
+        },
+        {
+          "azimuth": -150.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-150",
+          "token": "M-150"
+        },
+        {
+          "azimuth": 70.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+070",
+          "token": "M+070"
+        },
+        {
+          "azimuth": -70.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-070",
+          "token": "M-070"
+        },
+        {
+          "azimuth": 70.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U+070",
+          "token": "U+070"
+        },
+        {
+          "azimuth": -70.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U-070",
+          "token": "U-070"
+        },
+        {
+          "azimuth": 150.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U+150",
+          "token": "U+150"
+        },
+        {
+          "azimuth": -150.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U-150",
+          "token": "U-150"
+        }
+      ],
+      "display_name": "9.1.4",
+      "id": "9.1.4",
+      "internal_id": "4+5+4"
+    },
+    {
+      "channel_count": 16,
+      "channels": [
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+110",
+          "token": "M+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-110",
+          "token": "M-110"
+        },
+        {
+          "azimuth": 150.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+150",
+          "token": "M+150"
+        },
+        {
+          "azimuth": -150.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-150",
+          "token": "M-150"
+        },
+        {
+          "azimuth": 70.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+070",
+          "token": "M+070"
+        },
+        {
+          "azimuth": -70.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-070",
+          "token": "M-070"
+        },
+        {
+          "azimuth": 70.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U+070",
+          "token": "U+070"
+        },
+        {
+          "azimuth": -70.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U-070",
+          "token": "U-070"
+        },
+        {
+          "azimuth": 110.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U+110",
+          "token": "U+110"
+        },
+        {
+          "azimuth": -110.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U-110",
+          "token": "U-110"
+        },
+        {
+          "azimuth": 150.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U+150",
+          "token": "U+150"
+        },
+        {
+          "azimuth": -150.0,
+          "elevation": 45.0,
+          "is_lfe": false,
+          "speaker_label": "U-150",
+          "token": "U-150"
+        }
+      ],
+      "display_name": "9.1.6 (Dolby Atmos)",
+      "id": "9.1.6",
+      "internal_id": "9.1.6"
+    },
+    {
+      "channel_count": 24,
+      "channels": [
+        {
+          "azimuth": 60.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+060",
+          "token": "M+060"
+        },
+        {
+          "azimuth": -60.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-060",
+          "token": "M-060"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+000",
+          "token": "M+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE1",
+          "token": "LFE1"
+        },
+        {
+          "azimuth": 135.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+135",
+          "token": "M+135"
+        },
+        {
+          "azimuth": -135.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-135",
+          "token": "M-135"
+        },
+        {
+          "azimuth": 30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+030",
+          "token": "M+030"
+        },
+        {
+          "azimuth": -30.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-030",
+          "token": "M-030"
+        },
+        {
+          "azimuth": 180.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+180",
+          "token": "M+180"
+        },
+        {
+          "azimuth": -45.0,
+          "elevation": -30.0,
+          "is_lfe": true,
+          "speaker_label": "LFE2",
+          "token": "LFE2"
+        },
+        {
+          "azimuth": 90.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M+090",
+          "token": "M+090"
+        },
+        {
+          "azimuth": -90.0,
+          "elevation": 0.0,
+          "is_lfe": false,
+          "speaker_label": "M-090",
+          "token": "M-090"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+045",
+          "token": "U+045"
+        },
+        {
+          "azimuth": -45.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-045",
+          "token": "U-045"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+000",
+          "token": "U+000"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": 90.0,
+          "is_lfe": false,
+          "speaker_label": "T+000",
+          "token": "T+000"
+        },
+        {
+          "azimuth": 135.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+135",
+          "token": "U+135"
+        },
+        {
+          "azimuth": -135.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-135",
+          "token": "U-135"
+        },
+        {
+          "azimuth": 90.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+090",
+          "token": "U+090"
+        },
+        {
+          "azimuth": -90.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U-090",
+          "token": "U-090"
+        },
+        {
+          "azimuth": 180.0,
+          "elevation": 30.0,
+          "is_lfe": false,
+          "speaker_label": "U+180",
+          "token": "U+180"
+        },
+        {
+          "azimuth": 0.0,
+          "elevation": -30.0,
+          "is_lfe": false,
+          "speaker_label": "B+000",
+          "token": "B+000"
+        },
+        {
+          "azimuth": 45.0,
+          "elevation": -30.0,
+          "is_lfe": false,
+          "speaker_label": "B+045",
+          "token": "B+045"
+        },
+        {
+          "azimuth": -45.0,
+          "elevation": -30.0,
+          "is_lfe": false,
+          "speaker_label": "B-045",
+          "token": "B-045"
+        }
+      ],
+      "display_name": "22.2",
+      "id": "22.2",
+      "internal_id": "9+10+3"
+    }
+  ],
+  "max_channels": 64,
+  "sample_encodings": [
+    "pcm16",
+    "pcm24",
+    "pcm32",
+    "float32"
+  ],
+  "schema": "mradm.input-layouts",
+  "schema_version": 1,
+  "two_channel_output_semantic": "binaural"
+}

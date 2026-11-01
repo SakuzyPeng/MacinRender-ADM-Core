@@ -6,6 +6,7 @@
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
+#include "capability_records.h"
 #include "render_common.h"
 #include "scene_handle.h"
 #include "speaker_pcm.h"
@@ -89,19 +90,7 @@ class HoaRenderer final : public IRenderer {
 } // namespace
 
 CapabilityReport hoa_capabilities() {
-    CapabilityReport r;
-    r.backend_name = "hoa-encode";
-    r.backend_version = "1.0";
-    r.supports_objects = true;
-    r.supports_direct_speakers = true;
-    r.supports_hoa = false;
-    r.supports_object_divergence = true;
-    r.supports_diffuse = true;
-    r.supports_render_window = true; // block-aligned seek + 1 pre-roll block (diffuse delay line)
-    r.supported_layouts = {
-        {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)", 16, true, 0, false},
-    };
-    return r;
+    return render_common::engine_capabilities(render_common::EngineBackend::hoa);
 }
 
 std::unique_ptr<IRenderer> create_hoa_renderer() {
