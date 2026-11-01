@@ -6,6 +6,7 @@
 #include "adm/render.h"
 #include "adm/render_ear.h"
 
+#include "capability_records.h"
 #include "render_common.h"
 #include "scene_handle.h"
 #include "speaker_layouts.h"
@@ -82,30 +83,7 @@ class EarRenderer final : public IRenderer {
 } // namespace
 
 CapabilityReport ear_capabilities() {
-    CapabilityReport r;
-    r.backend_name = "libear";
-    r.backend_version = "rust-ear-0.1.0";
-    r.supports_objects = true;
-    r.supports_direct_speakers = true;
-    r.supports_hoa = true; // HOA block decode via GainCalculatorHOA
-    r.supports_channel_lock = true;
-    r.supports_object_divergence = true;
-    r.supports_screen_ref = false;
-    r.supports_diffuse = true;
-    r.supports_render_window = true; // seek + 1-block pre-roll; bit-exact windowed output
-    for (const auto& spec : render_layouts::speaker_layouts()) {
-        CapabilityReport::Layout layout;
-        layout.id = std::string{spec.id};
-        layout.display_name = std::string{spec.display_name};
-        layout.channel_count = static_cast<uint16_t>(spec.speakers.size());
-        layout.lfe_count =
-            static_cast<uint16_t>(std::ranges::count_if(spec.speakers, [](const auto& s) { return s.is_lfe; }));
-        layout.is_3d = std::ranges::any_of(spec.speakers,
-                                           [](const auto& s) { return !s.is_lfe && std::fabs(s.elevation) > 1.0e-6F; });
-        layout.supports_spread = true;
-        r.supported_layouts.push_back(std::move(layout));
-    }
-    return r;
+    return render_common::engine_capabilities(render_common::EngineBackend::ear);
 }
 
 std::unique_ptr<IRenderer> create_ear_renderer() {

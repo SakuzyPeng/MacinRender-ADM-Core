@@ -194,6 +194,22 @@ Result<std::string> RenderScene::policy_template() const {
     return copy(output);
 }
 
+Result<std::string> RenderScene::inspect_json() const {
+    const auto path = audio::wav_path_utf8(path_);
+    std::array<uint8_t, 1024> message{};
+    MradmAdmText output{};
+    if (const auto code = mradm_scene_inspect_json(handle_->raw,
+                                                   reinterpret_cast<const uint8_t*>(path.data()),
+                                                   path.size(),
+                                                   &output,
+                                                   message.data(),
+                                                   message.size());
+        code != 0) {
+        return make_error(static_cast<ErrorCode>(code), message_text(message), {});
+    }
+    return copy(output);
+}
+
 Result<std::string> read_policy_file(const std::filesystem::path& path) {
     std::ifstream in(path);
     if (!in) {

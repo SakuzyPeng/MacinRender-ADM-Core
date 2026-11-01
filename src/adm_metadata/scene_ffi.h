@@ -112,6 +112,13 @@ int32_t mradm_scene_report(MradmSceneHandle* handle,
                            uint8_t* message,
                            size_t capacity);
 int32_t mradm_scene_template(MradmSceneHandle* handle, MradmAdmText* output, uint8_t* message, size_t capacity);
+// The scene inspect JSON (mradm.scene-inspect v1) for the UTF-8 input path, held like a report.
+int32_t mradm_scene_inspect_json(MradmSceneHandle* handle,
+                                 const uint8_t* path,
+                                 size_t path_len,
+                                 MradmAdmText* output,
+                                 uint8_t* message,
+                                 size_t capacity);
 // The source AXML with the scene's semantic edits patched in, held like a report.
 int32_t mradm_scene_export_axml(MradmSceneHandle* handle,
                                 const uint8_t* xml,

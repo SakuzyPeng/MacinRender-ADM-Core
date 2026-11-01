@@ -1,0 +1,368 @@
+{
+  "backends": [
+    {
+      "backend_name": "libear",
+      "backend_version": "rust-ear-0.1.0",
+      "hrtf_sources": [],
+      "layouts": [
+        {
+          "channel_count": 6,
+          "display_name": "5.1",
+          "id": "0+5+0",
+          "is_3d": false,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 8,
+          "display_name": "5.1.2",
+          "id": "2+5+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 10,
+          "display_name": "5.1.4",
+          "id": "4+5+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 8,
+          "display_name": "7.1",
+          "id": "wav71",
+          "is_3d": false,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 12,
+          "display_name": "7.1.4",
+          "id": "4+7+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 14,
+          "display_name": "9.1.4",
+          "id": "4+5+4",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 16,
+          "display_name": "9.1.6 (Dolby Atmos)",
+          "id": "9.1.6",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 24,
+          "display_name": "22.2",
+          "id": "9+10+3",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 2,
+          "supports_spread": true
+        }
+      ],
+      "renderer": "ear",
+      "supports_channel_lock": true,
+      "supports_diffuse": true,
+      "supports_direct_speakers": true,
+      "supports_hoa": true,
+      "supports_object_divergence": true,
+      "supports_objects": true,
+      "supports_screen_ref": false
+    },
+    {
+      "backend_name": "saf-vbap",
+      "backend_version": "1.3.4",
+      "hrtf_sources": [],
+      "layouts": [
+        {
+          "channel_count": 6,
+          "display_name": "5.1",
+          "id": "0+5+0",
+          "is_3d": false,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": false
+        },
+        {
+          "channel_count": 8,
+          "display_name": "5.1.2",
+          "id": "2+5+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 10,
+          "display_name": "5.1.4",
+          "id": "4+5+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 8,
+          "display_name": "7.1",
+          "id": "wav71",
+          "is_3d": false,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": false
+        },
+        {
+          "channel_count": 12,
+          "display_name": "7.1.4",
+          "id": "4+7+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 14,
+          "display_name": "9.1.4",
+          "id": "4+5+4",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 16,
+          "display_name": "9.1.6 (Dolby Atmos)",
+          "id": "9.1.6",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 24,
+          "display_name": "22.2",
+          "id": "9+10+3",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 2,
+          "supports_spread": true
+        }
+      ],
+      "renderer": "saf",
+      "supports_channel_lock": true,
+      "supports_diffuse": false,
+      "supports_direct_speakers": true,
+      "supports_hoa": false,
+      "supports_object_divergence": true,
+      "supports_objects": true,
+      "supports_screen_ref": false
+    },
+    {
+      "backend_name": "triple-balance",
+      "backend_version": "1",
+      "hrtf_sources": [],
+      "layouts": [
+        {
+          "channel_count": 12,
+          "display_name": "7.1.4",
+          "id": "4+7+0",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 16,
+          "display_name": "9.1.6",
+          "id": "9.1.6",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 1,
+          "supports_spread": true
+        },
+        {
+          "channel_count": 24,
+          "display_name": "22.2 (experimental)",
+          "id": "9+10+3",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 2,
+          "supports_spread": true
+        }
+      ],
+      "modes": [
+        {
+          "display_name": "Standard",
+          "id": "standard",
+          "layouts": [
+            "4+7+0",
+            "9.1.6",
+            "9+10+3"
+          ],
+          "sample_rates": [],
+          "supports_realtime": true
+        },
+        {
+          "display_name": "D mode",
+          "id": "d",
+          "layouts": [
+            "9.1.6",
+            "9+10+3"
+          ],
+          "sample_rates": [
+            48000
+          ],
+          "supports_realtime": false
+        }
+      ],
+      "renderer": "triple-balance",
+      "supports_channel_lock": false,
+      "supports_diffuse": false,
+      "supports_direct_speakers": true,
+      "supports_hoa": false,
+      "supports_object_divergence": false,
+      "supports_objects": true,
+      "supports_screen_ref": false
+    },
+    {
+      "backend_name": "hoa-encode",
+      "backend_version": "1.0",
+      "hrtf_sources": [],
+      "layouts": [
+        {
+          "channel_count": 16,
+          "display_name": "HOA 3rd Order (16ch, ACN/SN3D)",
+          "id": "hoa3",
+          "is_3d": true,
+          "is_binaural": false,
+          "lfe_count": 0,
+          "supports_spread": false
+        }
+      ],
+      "renderer": "hoa",
+      "supports_channel_lock": false,
+      "supports_diffuse": true,
+      "supports_direct_speakers": true,
+      "supports_hoa": false,
+      "supports_object_divergence": true,
+      "supports_objects": true,
+      "supports_screen_ref": false
+    },
+    {
+      "backend_name": "saf-binaural-hrtf",
+      "backend_version": "1.0",
+      "hrtf_sources": [
+        "built-in",
+        "user-sofa"
+      ],
+      "layouts": [
+        {
+          "channel_count": 2,
+          "display_name": "SAF HRTF binaural (KEMAR or user SOFA HRIR)",
+          "id": "binaural",
+          "is_3d": false,
+          "is_binaural": true,
+          "lfe_count": 0,
+          "supports_spread": true
+        }
+      ],
+      "renderer": "saf-binaural",
+      "supports_channel_lock": true,
+      "supports_diffuse": true,
+      "supports_direct_speakers": true,
+      "supports_hoa": false,
+      "supports_object_divergence": true,
+      "supports_objects": true,
+      "supports_screen_ref": false
+    },
+    {
+      "backend_name": "room-binaural",
+      "backend_version": "1",
+      "default_quality": "exact",
+      "hrtf_sources": [
+        "user-sofa",
+        "prepared-hrir",
+        "hrtf-collection"
+      ],
+      "layouts": [
+        {
+          "channel_count": 2,
+          "display_name": "Room binaural",
+          "id": "binaural",
+          "is_3d": true,
+          "is_binaural": true,
+          "lfe_count": 0,
+          "supports_spread": true
+        }
+      ],
+      "modes": [
+        {
+          "display_name": "Finite hybrid room",
+          "id": "hybrid-shoebox-v1",
+          "layouts": [
+            "binaural"
+          ],
+          "sample_rates": [
+            48000,
+            96000
+          ],
+          "supports_realtime": true
+        }
+      ],
+      "qualities": [
+        {
+          "display_name": "精确",
+          "id": "exact",
+          "layouts": [
+            "binaural"
+          ],
+          "sample_rates": [
+            48000,
+            96000
+          ],
+          "supports_realtime": true
+        },
+        {
+          "display_name": "实时",
+          "id": "realtime",
+          "layouts": [
+            "binaural"
+          ],
+          "sample_rates": [
+            48000,
+            96000
+          ],
+          "supports_realtime": true
+        }
+      ],
+      "renderer": "room-binaural",
+      "supports_channel_lock": true,
+      "supports_diffuse": true,
+      "supports_direct_speakers": true,
+      "supports_hoa": false,
+      "supports_object_divergence": true,
+      "supports_objects": true,
+      "supports_screen_ref": true
+    }
+  ],
+  "schema": "mradm.capabilities",
+  "schema_version": 1,
+  "system_spatial_layouts": []
+}
