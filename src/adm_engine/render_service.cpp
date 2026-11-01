@@ -23,14 +23,9 @@
 #include "adm/render.h"
 
 #include "../adm_io/scene_import_internal.h"
-#include "capability_json.h"
-#include "format_table.h"
-#include "input_layout_json.h"
-#include "layout_table.h"
+#include "catalog.h"
 #include "post_gain.h"
 #include "renderer_factory.h"
-#include "scene_json.h"
-#include "support_matrix.h"
 #include "timeline.h"
 #include "wav_output.h"
 
@@ -1272,15 +1267,16 @@ Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
 }
 
 Result<std::string> RenderService::inspect_json(const std::string& input_path) const {
-    auto scene_result = io::import_scene(input_path, {});
-    if (!scene_result) {
-        return tl::unexpected(scene_result.error());
+    const io::SceneImportOptions no_options{};
+    auto scene = io::RenderScene::import(input_path, &no_options);
+    if (!scene) {
+        return tl::unexpected(scene.error());
     }
-    return engine::scene_to_json(*scene_result);
+    return scene->inspect_json();
 }
 
 std::string RenderService::capabilities_json() const {
-    return engine::capabilities_to_json();
+    return engine::document(engine::Document::capabilities);
 }
 
 std::vector<OutputLayoutRow> RenderService::output_layouts() const {
@@ -1288,11 +1284,11 @@ std::vector<OutputLayoutRow> RenderService::output_layouts() const {
 }
 
 std::string RenderService::layouts_json() const {
-    return engine::layouts_to_json();
+    return engine::document(engine::Document::layouts);
 }
 
 std::string RenderService::input_layouts_json() const {
-    return engine::input_layouts_to_json();
+    return engine::document(engine::Document::input_layouts);
 }
 
 OutputFormats RenderService::output_formats() const {
@@ -1300,11 +1296,11 @@ OutputFormats RenderService::output_formats() const {
 }
 
 std::string RenderService::output_formats_json() const {
-    return engine::output_formats_to_json();
+    return engine::document(engine::Document::output_formats);
 }
 
 std::string RenderService::render_support_matrix_json() const {
-    return engine::render_support_matrix_to_json();
+    return engine::document(engine::Document::support_matrix);
 }
 
 Result<std::string> RenderService::axml(const std::string& input_path) const {

@@ -10,6 +10,7 @@
 #include "adm/render_room.h"
 
 #include "../adm_audio/wav_backend.h"
+#include "capability_records.h"
 #include "meter.h"
 #include "post_gain.h"
 #include "render_common.h"
@@ -262,22 +263,7 @@ Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan&
 }
 } // namespace
 CapabilityReport room_capabilities() {
-    CapabilityReport result;
-    result.backend_name = "room-binaural";
-    result.backend_version = "1";
-    result.supports_objects = true;
-    result.supports_direct_speakers = true;
-    result.supports_channel_lock = true;
-    result.supports_object_divergence = true;
-    result.supports_diffuse = true;
-    result.supports_screen_ref = true;
-    result.supports_render_window = true;
-    result.hrtf_sources = {"user-sofa", "prepared-hrir", "hrtf-collection"};
-    result.supported_layouts = {{"binaural", "Room binaural", 2, true, 0, true, true}};
-    result.modes = {{"hybrid-shoebox-v1", "Finite hybrid room", {"binaural"}, {48000, 96000}, true}};
-    result.qualities = {{"exact", "精确", {"binaural"}, {48000, 96000}, true},
-                        {"realtime", "实时", {"binaural"}, {48000, 96000}, true}};
-    return result;
+    return render_common::engine_capabilities(render_common::EngineBackend::room);
 }
 std::unique_ptr<IRenderer> create_room_renderer() {
     return std::make_unique<RoomRenderer>();

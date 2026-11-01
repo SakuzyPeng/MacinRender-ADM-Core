@@ -1,0 +1,123 @@
+{
+  "features": {
+    "apac": false,
+    "hptf": true,
+    "iamf": false,
+    "iamf_mp4_packager": false,
+    "sofa": true
+  },
+  "formats": [
+    {
+      "available": true,
+      "bit_depths": [
+        "f32",
+        "i24",
+        "i16"
+      ],
+      "extensions": [
+        ".wav"
+      ],
+      "fixed_sample_rate": 0,
+      "format": "wav",
+      "lossy": false,
+      "max_channels": 0,
+      "note": "Uncompressed PCM; not a preferred delivery format.",
+      "supports_height": true
+    },
+    {
+      "available": true,
+      "bit_depths": [
+        "f32"
+      ],
+      "extensions": [
+        ".caf"
+      ],
+      "fixed_sample_rate": 0,
+      "format": "caf",
+      "lossy": false,
+      "max_channels": 0,
+      "note": "Float32 CoreAudio container; richer metadata on macOS.",
+      "supports_height": true
+    },
+    {
+      "available": true,
+      "bit_depths": [
+        "i24"
+      ],
+      "extensions": [
+        ".flac"
+      ],
+      "fixed_sample_rate": 0,
+      "format": "flac",
+      "lossy": false,
+      "max_channels": 8,
+      "note": "1-8 channels; no height layouts; fixed 24-bit.",
+      "supports_height": false
+    },
+    {
+      "available": true,
+      "bitrate_kbps_per_ch": {
+        "auto": 0,
+        "max": 320,
+        "min": 6
+      },
+      "extensions": [
+        ".mka"
+      ],
+      "fixed_sample_rate": 48000,
+      "format": "opus_mka",
+      "lossy": true,
+      "max_channels": 255,
+      "note": "48 kHz input required.",
+      "supports_height": true
+    },
+    {
+      "available": false,
+      "available_reason": "macOS only (AudioToolbox)",
+      "bitrate_kbps_total": {
+        "auto": 0,
+        "max": 32768,
+        "min": 64
+      },
+      "extensions": [
+        ".m4a",
+        ".mp4",
+        ".caf"
+      ],
+      "fixed_sample_rate": 48000,
+      "format": "apac",
+      "lossy": true,
+      "max_channels": 24,
+      "note": "macOS only; .caf requires --apac-container caf; spatial/HOA default bitrate scales from 7.1.4 = 2048 kbps.",
+      "supports_height": true
+    },
+    {
+      "available": false,
+      "available_reason": "requires MR_ADM_ENABLE_IAMF=ON and the AOM iamf-tools bridge",
+      "extensions": [
+        ".iamf"
+      ],
+      "fixed_sample_rate": 48000,
+      "format": "iamf",
+      "lossy": true,
+      "max_channels": 12,
+      "note": "Raw OBU stream (Opus); layouts up to 7.1.4 (9.1.6 disabled).",
+      "supports_height": true
+    },
+    {
+      "available": false,
+      "available_reason": "requires MR_ADM_ENABLE_IAMF=ON and the AOM iamf-tools bridge",
+      "extensions": [
+        ".mp4"
+      ],
+      "fixed_sample_rate": 48000,
+      "format": "iamf_mp4",
+      "lossy": true,
+      "max_channels": 12,
+      "note": "ISOBMFF-packaged IAMF; select via --iamf-container mp4.",
+      "supports_height": true
+    }
+  ],
+  "schema": "mradm.output-formats",
+  "schema_version": 1
+}

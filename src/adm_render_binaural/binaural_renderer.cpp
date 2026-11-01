@@ -16,6 +16,7 @@
 #include "adm/render_binaural.h"
 
 #include "../adm_audio/wav_backend.h"
+#include "capability_records.h"
 #include "hrtf_state.h"
 #include "render_common.h"
 #include "scene_handle.h"
@@ -345,28 +346,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
 } // namespace binaural_internal
 
 CapabilityReport binaural_capabilities() {
-    CapabilityReport r;
-    r.backend_name = "saf-binaural-hrtf";
-    r.backend_version = "1.0";
-    r.supports_objects = true;
-    r.supports_direct_speakers = true;
-    r.supports_hoa = false;
-    r.supports_channel_lock = true;
-    r.supports_object_divergence = true;
-    r.supports_diffuse = true;
-    r.hrtf_sources = {"built-in"};
-#if MR_ADM_ENABLE_SOFA
-    r.hrtf_sources.emplace_back("user-sofa");
-#endif
-    // Default (cloud/none) path windows via seek + aligned pre-roll; the experimental
-    // saf_spreader path keeps full STFT warm-up and only trims output.
-    r.supports_render_window = true;
-    r.supported_layouts = {
-        // clang-format off
-        {"binaural", "SAF HRTF binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
-        // clang-format on
-    };
-    return r;
+    return render_common::engine_capabilities(render_common::EngineBackend::binaural);
 }
 
 std::unique_ptr<IRenderer> create_binaural_renderer() {
