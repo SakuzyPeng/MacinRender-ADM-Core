@@ -1,5 +1,6 @@
 #include "catalog.h"
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <stdexcept>
@@ -29,17 +30,15 @@ MradmAdmText text(std::string_view value) {
 // Borrowed records of a C++ capability report (the Apple island); they point into `report`.
 class BackendRecords {
   public:
-    BackendRecords(CapabilityReport report, std::string renderer)
-        : report_(std::move(report)), renderer_(std::move(renderer)) {
+    explicit BackendRecords(CapabilityReport report) : report_(std::move(report)) {
         for (const auto& l : report_.supported_layouts) {
             const uint32_t flags = (l.is_3d ? 1U : 0U) | (l.supports_spread ? 2U : 0U) | (l.is_binaural ? 4U : 0U);
             layouts_.push_back({text(l.id), text(l.display_name), l.channel_count, l.lfe_count, flags});
         }
         modes_ = modes(report_.modes);
         qualities_ = modes(report_.qualities);
-        for (const auto& source : report_.hrtf_sources) {
-            hrtf_.push_back(text(source));
-        }
+        hrtf_.resize(report_.hrtf_sources.size());
+        std::ranges::transform(report_.hrtf_sources, hrtf_.begin(), text);
         const std::array bits{report_.supports_objects,
                               report_.supports_direct_speakers,
                               report_.supports_hoa,
@@ -54,7 +53,7 @@ class BackendRecords {
             flags |= set ? (1U << bit) : 0U;
             ++bit;
         }
-        record_ = {text(renderer_),
+        record_ = {text("apple"),
                    text(report_.backend_name),
                    text(report_.backend_version),
                    layouts_.data(),
@@ -80,9 +79,8 @@ class BackendRecords {
         std::vector<MradmEngineMode> out;
         for (const auto& mode : source) {
             auto& names = mode_layouts_.emplace_back();
-            for (const auto& layout : mode.layouts) {
-                names.push_back(text(layout));
-            }
+            names.resize(mode.layouts.size());
+            std::ranges::transform(mode.layouts, names.begin(), text);
             out.push_back({text(mode.id),
                            text(mode.display_name),
                            names.data(),
@@ -95,7 +93,6 @@ class BackendRecords {
     }
 
     CapabilityReport report_;
-    std::string renderer_;
     std::vector<MradmEngineLayout> layouts_;
     std::vector<std::vector<MradmAdmText>> mode_layouts_;
     std::vector<MradmEngineMode> modes_;
@@ -114,7 +111,6 @@ std::string document(Document kind) {
         // The packager probe runs only in IAMF builds.
         platform.iamf_mp4_packager = platform.iamf != 0U && audio::iamf_mp4_packager_available() ? 1U : 0U;
     }
-    std::unique_ptr<BackendRecords> apple;
     std::vector<MradmEngineSpatialLayout> spatial_records;
 #ifdef __APPLE__
     const CapabilityReport apple_caps = apple_capabilities();
@@ -128,15 +124,16 @@ std::string document(Document kind) {
         // Runtime self-test: macOS <=26.3's AUSpatialMixer misroutes a bypass-LFE source to Center.
         platform.apple_lfe_routing_ok = apple_system_spatial_lfe_routing_ok() ? 1 : 0;
     }
-    apple = std::make_unique<BackendRecords>(apple_caps, "apple");
-    platform.apple = apple->get();
+    const BackendRecords apple{apple_caps};
+    platform.apple = apple.get();
 #elif defined(_WIN32)
     const auto spatial = realtime::system_spatial_layouts();
     if (kind == Document::capabilities) {
-        for (const auto& layout : spatial) {
-            spatial_records.push_back(
-                {text(layout.id), text(layout.display_name), static_cast<uint16_t>(layout.channel_count), 0});
-        }
+        spatial_records.resize(spatial.size());
+        std::ranges::transform(spatial, spatial_records.begin(), [](const auto& layout) {
+            return MradmEngineSpatialLayout{
+                text(layout.id), text(layout.display_name), static_cast<uint16_t>(layout.channel_count), 0};
+        });
     }
 #endif
     platform.system_spatial = spatial_records.data();
@@ -153,16 +150,16 @@ std::string document(Document kind) {
 
 std::vector<OutputLayoutRow> build_output_layouts() {
     const auto root = nlohmann::json::parse(document(Document::layouts));
-    std::vector<OutputLayoutRow> rows;
-    for (const auto& j : root.at("layouts")) {
-        rows.push_back({j.at("format").get<std::string>(),
-                        j.at("layout").get<std::string>(),
-                        j.at("channels").get<uint32_t>(),
-                        j.at("container").get<std::string>(),
-                        j.at("order").get<std::string>(),
-                        j.value("note", std::string{}),
-                        j.at("supported_by").get<std::vector<std::string>>()});
-    }
+    std::vector<OutputLayoutRow> rows(root.at("layouts").size());
+    std::ranges::transform(root.at("layouts"), rows.begin(), [](const nlohmann::json& j) -> OutputLayoutRow {
+        return {j.at("format").get<std::string>(),
+                j.at("layout").get<std::string>(),
+                j.at("channels").get<uint32_t>(),
+                j.at("container").get<std::string>(),
+                j.at("order").get<std::string>(),
+                j.value("note", std::string{}),
+                j.at("supported_by").get<std::vector<std::string>>()};
+    });
     return rows;
 }
 

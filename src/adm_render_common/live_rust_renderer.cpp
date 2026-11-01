@@ -105,6 +105,7 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
         trace_ = consistency::scene_renderer_key(frame) + suffix_;
 #endif
+        const auto trace = text(trace_);
         const MradmRenderLiveFrame record{frame.generation_id,
                                           frame.duration_samples,
                                           planes_.data(),
@@ -113,7 +114,7 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
                                           initial_.size(),
                                           updates_.data(),
                                           updates_.size(),
-                                          text(trace_)};
+                                          trace};
         const MradmRenderLiveDiagnostic* list = nullptr;
         std::size_t count = 0;
         const auto code = mradm_render_live_render(handle_.get(),
