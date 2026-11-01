@@ -24,9 +24,9 @@
 
 #include "../adm_io/scene_import_internal.h"
 #include "catalog.h"
+#include "engine_result.h"
 #include "post_gain.h"
 #include "renderer_factory.h"
-#include "timeline.h"
 #include "wav_output.h"
 
 namespace mradm {
@@ -70,104 +70,6 @@ namespace {
     return unique_sidecar_temp_path(final_path, "output_tmp", ext.empty() ? ".tmp" : ext);
 }
 
-struct IamfLayerInfo {
-    std::string_view id;
-    std::string_view display;
-    int bed_channels{0};
-    int lfe_channels{0};
-    int height_channels{0};
-};
-
-[[nodiscard]] const IamfLayerInfo* iamf_layer_info(std::string_view layout_id) {
-    static constexpr std::array<IamfLayerInfo, 5> k_layers{{
-        {"0+5+0", "5.1", 5, 1, 0},
-        {"2+5+0", "5.1.2", 5, 1, 2},
-        {"4+5+0", "5.1.4", 5, 1, 4},
-        {"wav71", "7.1", 7, 1, 0},
-        {"4+7+0", "7.1.4", 7, 1, 4},
-    }};
-    // 不用 `auto*`：libstdc++/libc++ 下 std::array 迭代器是裸指针，但 MSVC 是类
-    // (_Array_const_iterator)，`const auto* const` 会推导失败 (C3535)。保持 auto 迭代器，
-    // 末尾用 &*it 取地址，全平台通用。
-    // NOLINTNEXTLINE(readability-qualified-auto)
-    const auto it =
-        std::ranges::find_if(k_layers, [layout_id](const IamfLayerInfo& layer) { return layer.id == layout_id; });
-    return it == std::end(k_layers) ? nullptr : &*it;
-}
-
-[[nodiscard]] std::string supported_iamf_layers_message() {
-    return "supported: 5.1, 5.1.2, 5.1.4, 7.1, 7.1.4";
-}
-
-[[nodiscard]] Result<std::vector<std::string>> validate_iamf_scalable_layers(const std::vector<std::string>& raw_layers,
-                                                                             std::string_view output_layout,
-                                                                             LogSink& logs) {
-    if (raw_layers.empty()) {
-        return std::vector<std::string>{};
-    }
-    if (raw_layers.size() > 7U) {
-        return make_error(ErrorCode::invalid_argument, "IAMF scalable layers support at most 7 layers");
-    }
-
-    const IamfLayerInfo* final_info = iamf_layer_info(output_layout);
-    if (final_info == nullptr) {
-        return make_error(ErrorCode::invalid_argument,
-                          fmt::format("IAMF scalable layers are not supported for output layout '{}'; {}",
-                                      output_layout,
-                                      supported_iamf_layers_message()));
-    }
-
-    std::vector<std::string> normalized;
-    normalized.reserve(raw_layers.size());
-    std::vector<const IamfLayerInfo*> infos;
-    infos.reserve(raw_layers.size());
-    for (const auto& raw : raw_layers) {
-        const std::string id = normalize_output_layout(raw);
-        const IamfLayerInfo* info = iamf_layer_info(id);
-        if (info == nullptr) {
-            return make_error(
-                ErrorCode::invalid_argument,
-                fmt::format("IAMF scalable layer '{}' is not supported; {}", raw, supported_iamf_layers_message()));
-        }
-        normalized.push_back(id);
-        infos.push_back(info);
-    }
-
-    if (normalized.back() != output_layout) {
-        return make_error(ErrorCode::invalid_argument,
-                          fmt::format("last IAMF scalable layer must match output layout '{}'; got '{}'",
-                                      final_info->display,
-                                      infos.back()->display));
-    }
-
-    for (size_t i = 1; i < infos.size(); ++i) {
-        const auto* prev = infos[i - 1];
-        const auto* cur = infos[i];
-        if (cur->bed_channels < prev->bed_channels || cur->lfe_channels < prev->lfe_channels ||
-            cur->height_channels < prev->height_channels) {
-            return make_error(ErrorCode::invalid_argument,
-                              fmt::format("IAMF scalable layers must be monotonic; '{}' cannot follow '{}'",
-                                          cur->display,
-                                          prev->display));
-        }
-    }
-
-    if (final_info->height_channels > 0) {
-        for (const auto* info : infos) {
-            if (info->height_channels == 0) {
-                logs.log(LogLevel::warning,
-                         "engine",
-                         fmt::format("IAMF scalable layers include flat layer '{}' for height output '{}'; "
-                                     "official guidance recommends height layouts, continuing",
-                                     info->display,
-                                     final_info->display));
-            }
-        }
-    }
-
-    return normalized;
-}
-
 [[nodiscard]] std::optional<uint16_t> channel_count_for_layout(const CapabilityReport& caps,
                                                                std::string_view layout_id) {
     const auto it = std::ranges::find_if(
@@ -185,10 +87,6 @@ struct IamfLayerInfo {
     }
 
     return std::nullopt;
-}
-
-[[nodiscard]] bool flac_supports_layout(std::string_view layout_id) {
-    return layout_id == "binaural" || layout_id == "0+2+0" || layout_id == "0+5+0" || layout_id == "wav71";
 }
 
 [[nodiscard]] std::string renderer_name(RendererSelection sel) {
@@ -471,72 +369,31 @@ RenderResult RenderService::render(const RenderRequest& request,
         return {{ErrorCode::cancelled, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::info, msg}}};
     }
 
-    // Resolve the optional output time-range trim against the rendered timeline
-    // (which equals the input timeline). We compute the frame range here, while
-    // the scene info is still available, and apply it to the rendered PCM below.
-    const uint32_t trim_sample_rate = scene_result->info.sample_rate;
-    const uint64_t trim_total_frames = scene_result->info.num_frames;
-    bool need_trim = false;
-    uint64_t trim_start_frame = 0;
-    uint64_t trim_frame_count = 0;
+    // Resolve the optional output time-range trim against the rendered timeline (which equals the
+    // input timeline) in Rust mradm-engine `request` (PCM consistency 5.2 B); the frame range is
+    // applied to the rendered PCM below.
+    MradmEngineTrim trim{};
     {
-        const double start_sec = request.options.render_start_sec;
-        const bool has_end = request.options.render_end_sec.has_value();
-        // NaN and negative starts must also enter validation when no end was supplied.
-        if (start_sec != 0.0 || has_end) {
-            if (trim_sample_rate == 0) {
-                constexpr auto msg = "cannot apply time-range trim: input sample rate is unknown";
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
-            const auto start_frame = dsp::seconds_to_frame(start_sec, trim_sample_rate);
-            if (!start_frame) {
-                const auto msg = fmt::format("--start must be finite and >= 0 (got {:.6g}s)", start_sec);
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
-            const double end_sec = request.options.render_end_sec.value_or(0.0);
-            const auto requested_end_frame =
-                has_end ? dsp::seconds_to_frame(end_sec, trim_sample_rate) : std::optional<uint64_t>{trim_total_frames};
-            if (!requested_end_frame) {
-                const auto msg = fmt::format("--end must be finite and >= 0 (got {:.6g}s)", end_sec);
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
-            if (has_end && end_sec <= start_sec) {
-                const auto msg =
-                    fmt::format("--end ({:.6g}s) must be greater than --start ({:.6g}s)", end_sec, start_sec);
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
-            const auto sr = static_cast<double>(trim_sample_rate);
-            // Nearest frame, ties away from zero (PCM consistency 3.6); shared with Monitor seek.
-            trim_start_frame = *start_frame;
-            if (trim_start_frame >= trim_total_frames) {
-                const auto msg = fmt::format("--start ({:.6g}s) is at or beyond the input duration ({:.6g}s)",
-                                             start_sec,
-                                             static_cast<double>(trim_total_frames) / sr);
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
-            const uint64_t end_frame = std::min(*requested_end_frame, trim_total_frames);
-            // The seconds-level "--end > --start" check above can still collapse to
-            // an empty frame range once rounded (e.g. both endpoints land in the same
-            // frame). Reject it here, before rendering, so we neither waste a full
-            // render nor leave an un-trimmed file for direct WAV/CAF outputs.
-            if (end_frame <= trim_start_frame) {
-                const auto msg = fmt::format("trim window [{:.6g}s, {:.6g}s) is shorter than one sample frame at {}Hz",
-                                             start_sec,
-                                             end_sec,
-                                             trim_sample_rate);
-                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-            }
-            trim_frame_count = end_frame - trim_start_frame;
-            need_trim = true;
-            logs.log(LogLevel::info,
-                     "engine",
-                     fmt::format("output trim: frames [{}, {}) of {} @ {}Hz",
-                                 trim_start_frame,
-                                 trim_start_frame + trim_frame_count,
-                                 trim_total_frames,
-                                 trim_sample_rate));
+        const auto& end = request.options.render_end_sec;
+        const render_common::EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
+            return mradm_engine_trim_window(request.options.render_start_sec,
+                                            end.has_value() ? 1U : 0U,
+                                            end.value_or(0.0),
+                                            scene_result->info.sample_rate,
+                                            scene_result->info.num_frames,
+                                            &trim,
+                                            out,
+                                            status);
+        });
+        if (!outcome.ok()) {
+            const auto error = outcome.error();
+            return {error, std::nullopt, std::nullopt, {{LogLevel::error, error.message}}};
         }
+        outcome.emit(logs, "engine");
     }
+    const bool need_trim = trim.has_trim != 0U;
+    const uint64_t trim_start_frame = trim.start_frame;
+    const uint64_t trim_frame_count = trim.frame_count;
 
     // Resolve output path.
     std::string output_path;
@@ -634,7 +491,8 @@ RenderResult RenderService::render(const RenderRequest& request,
         return fail_with_report({ErrorCode::cancelled, "render cancelled", {}}, LogLevel::info);
     };
 
-    auto matrix_res = resolve_direct_speakers_matrix(request.options, *scene_result, output_layout, logs);
+    const auto& scene_handle = render_scene.has_value() ? render_scene->handle() : preimported_scene->handle;
+    auto matrix_res = resolve_direct_speakers_matrix(request.options, *scene_handle, output_layout, logs);
     if (!matrix_res) {
         return fail_with_report(matrix_res.error());
     }
@@ -703,95 +561,56 @@ RenderResult RenderService::render(const RenderRequest& request,
     // post-processing can compensate.  Use a float32 temp WAV as the render target
     // and encode to FLAC as the very last step, after all adjustments are applied.
     const auto final_path = std::filesystem::path(output_path);
-    auto final_ext = final_path.extension().string();
-    std::ranges::transform(final_ext, final_ext.begin(), [](char c) {
-        return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c);
+    const auto final_ext = [&final_path] {
+        auto ext = final_path.extension().string();
+        std::ranges::transform(
+            ext, ext.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
+        return ext;
+    }();
+    const bool wants_iamf_mp4 = request.options.iamf_container == RenderOptions::IamfContainer::mp4;
+    const bool iamf_available = audio::iamf_encoding_available();
+    // The packager probe runs for --iamf-container mp4 in IAMF builds, before the target checks.
+    const auto packager =
+        wants_iamf_mp4 && iamf_available ? audio::detect_iamf_mp4_packager() : audio::IamfMp4PackagerInfo{};
+    const auto channels = channel_count_for_layout(caps, output_layout);
+    std::vector<MradmAdmText> layer_texts(request.options.iamf_layers.size());
+    std::ranges::transform(request.options.iamf_layers, layer_texts.begin(), [](std::string_view layer) {
+        return render_common::engine_text(layer);
     });
-    const bool is_flac_final = (final_ext == ".flac");
-    const bool is_opus_final = (final_ext == ".mka");
-    const bool wants_apac_caf = request.options.apac_container == RenderOptions::ApacContainer::caf;
-    if (wants_apac_caf && final_ext != ".caf") {
-        const auto msg = fmt::format("--apac-container caf requires output path with .caf extension; got '{}'",
-                                     final_ext.empty() ? std::string{"<none>"} : final_ext);
-        return fail_with_report({ErrorCode::invalid_argument, msg, {}});
+    const auto extension = final_path.extension().string();
+    const MradmEngineOutputRequest target_request{
+        render_common::engine_text(extension),
+        render_common::engine_text(output_layout),
+        static_cast<uint32_t>(request.options.output_bit_depth),
+        request.options.apac_container == RenderOptions::ApacContainer::caf ? 1U : 0U,
+        wants_iamf_mp4 ? 1U : 0U,
+        layer_texts.data(),
+        layer_texts.size(),
+        channels.has_value() ? static_cast<int32_t>(*channels) : -1,
+        iamf_available ? 1U : 0U,
+        static_cast<uint32_t>(packager.kind),
+        packager.ffmpeg_major};
+    uint32_t targets = 0;
+    const render_common::EngineOutcome target_outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
+        return mradm_engine_output_target(&target_request, &targets, out, status);
+    });
+    target_outcome.emit(logs, "engine", "iamf-layer");
+    if (!target_outcome.ok()) {
+        return fail_with_report(target_outcome.error());
     }
-    const bool is_apac_mpeg4_final = (final_ext == ".m4a" || final_ext == ".mp4") &&
-                                     request.options.iamf_container != RenderOptions::IamfContainer::mp4 &&
-                                     !wants_apac_caf;
-    const bool is_apac_caf_final = wants_apac_caf && final_ext == ".caf";
-    const bool is_apac_final = is_apac_mpeg4_final || is_apac_caf_final;
-    if (final_ext == ".caf" && !is_apac_caf_final && request.options.output_bit_depth != OutputBitDepth::f32) {
-        const auto msg = fmt::format("--output-bit-depth {} is not supported for .caf output (CAF is float32 only)",
-                                     request.options.output_bit_depth == OutputBitDepth::i16 ? "i16" : "i24");
-        return fail_with_report({ErrorCode::invalid_argument, msg, {}});
-    }
-    const bool is_iamf_final = (final_ext == ".iamf");
-    const bool is_iamf_mp4_final =
-        (request.options.iamf_container == RenderOptions::IamfContainer::mp4) && audio::iamf_encoding_available();
-    const bool requests_iamf_output =
-        is_iamf_final || request.options.iamf_container == RenderOptions::IamfContainer::mp4;
     std::vector<std::string> iamf_layers;
-    if (requests_iamf_output) {
-        auto layers_res = validate_iamf_scalable_layers(request.options.iamf_layers, output_layout, logs);
-        if (!layers_res) {
-            return fail_with_report(layers_res.error());
-        }
-        iamf_layers = std::move(*layers_res);
-    } else if (!request.options.iamf_layers.empty()) {
-        logs.log(LogLevel::warning, "engine", "ignoring IAMF scalable layers for non-IAMF output");
-    }
-    if (is_flac_final) {
-        if (!flac_supports_layout(output_layout)) {
-            const auto msg = fmt::format(
-                "FLAC output supports only non-height layouts (binaural, 5.1, 7.1); layout '{}' is not supported",
-                output_layout);
-            return fail_with_report({ErrorCode::unsupported, msg, {}});
-        }
-        const auto channels = channel_count_for_layout(caps, output_layout);
-        if (channels.has_value() && *channels > 8U) {
-            const auto msg =
-                fmt::format("FLAC supports 1-8 channels; layout '{}' renders {} channels", output_layout, *channels);
-            return fail_with_report({ErrorCode::unsupported, msg, {}});
+    for (const auto& line : target_outcome.lines()) {
+        if (render_common::engine_text(line.module) == "iamf-layer") {
+            iamf_layers.push_back(render_common::engine_text(line.message));
         }
     }
-    if (is_iamf_final && !audio::iamf_encoding_available()) {
-        constexpr auto msg =
-            "IAMF output requires a build configured with MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools "
-            "bridge";
-        return fail_with_report({ErrorCode::unsupported, msg, {}});
-    }
-    if ((is_iamf_final || request.options.iamf_container == RenderOptions::IamfContainer::mp4) &&
-        output_layout == "9.1.6") {
-        constexpr auto msg =
-            "IAMF 9.1.6 output is disabled because expanded/Base-Enhanced IAMF is not currently compatible enough "
-            "for release output";
-        return fail_with_report({ErrorCode::unsupported, msg, {}});
-    }
-    if (request.options.iamf_container == RenderOptions::IamfContainer::mp4) {
-        if (final_ext != ".mp4") {
-            const auto msg =
-                fmt::format("--iamf-container mp4 requires output path with .mp4 extension; got '{}'", final_ext);
-            return fail_with_report({ErrorCode::invalid_argument, msg, {}});
-        }
-        if (!audio::iamf_encoding_available()) {
-            constexpr auto msg = "--iamf-container mp4 requires a build configured with MR_ADM_ENABLE_IAMF=ON";
-            return fail_with_report({ErrorCode::unsupported, msg, {}});
-        }
-        const auto packager = audio::detect_iamf_mp4_packager();
-        if (packager.kind == audio::IamfMp4PackagerKind::none) {
-            constexpr auto msg = "--iamf-container mp4 requires mp4box (GPAC) or ffmpeg in PATH; "
-                                 "install GPAC: https://gpac.io";
-            return fail_with_report({ErrorCode::unsupported, msg, {}});
-        }
-        if (packager.kind == audio::IamfMp4PackagerKind::ffmpeg && packager.ffmpeg_major < 7) {
-            logs.log(LogLevel::warning,
-                     "engine",
-                     fmt::format("ffmpeg {} detected; IAMF-in-MP4 ialb loudness box is unreliable "
-                                 "below version 7.0 — consider installing mp4box (GPAC)",
-                                 packager.ffmpeg_major));
-        }
-    }
-    const bool is_lossy_final = (is_flac_final || is_opus_final || is_apac_final || is_iamf_final || is_iamf_mp4_final);
+    const bool is_flac_final = (targets & 1U) != 0U;
+    const bool is_opus_final = (targets & 2U) != 0U;
+    const bool is_apac_caf_final = (targets & 8U) != 0U;
+    const bool is_apac_final = (targets & 12U) != 0U;
+    const bool is_iamf_final = (targets & 16U) != 0U;
+    const bool is_iamf_mp4_final = (targets & 32U) != 0U;
+    const bool is_lossy_final = targets != 0U;
     const auto render_temp_path = is_lossy_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
     auto render_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
     const std::string render_path = is_lossy_final ? render_temp_path.string() : output_path;

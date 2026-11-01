@@ -1,0 +1,55 @@
+{
+ "schema": "mradm.direct-speakers-matrix.v1",
+ "output_layout": "0+5+0",
+ "routes": [
+  {
+   "source_label": "M+030",
+   "targets": [
+    {
+     "label": "M+030",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "source_label": "M-030",
+   "targets": [
+    {
+     "label": "M-030",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "source_label": "M+000",
+   "targets": [
+    {
+     "label": "M+000",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "source_label": "M+110",
+   "targets": [
+    {
+     "label": "M+110",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "source_label": "M-110",
+   "targets": [
+    {
+     "label": "M-110",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "source_label": "U+000",
+   "mute": true
+  }
+ ]
+}

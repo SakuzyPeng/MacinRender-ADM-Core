@@ -49,7 +49,7 @@ struct ResolvedRenderer {
 //   - apple is unavailable on non-Apple builds
 // Returns ErrorCode::unsupported for the rejected / unavailable cases.
 [[nodiscard]] Result<ResolvedRenderer>
-resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo);
+resolve_renderer(RendererSelection requested, const std::string& requested_layout, bool internal_allow_speaker_stereo);
 
 // Validate an explicit DirectSpeakers routing request after backend/layout
 // resolution. Automatic preserves native behaviour on unsupported backends.
@@ -57,11 +57,14 @@ resolve_renderer(RendererSelection requested, std::string requested_layout, bool
                                                             std::string_view effective_output_layout,
                                                             DirectSpeakersRoutingMode mode);
 
-// Resolve path/JSON precedence, validate the matrix against the effective scene
-// and output layout, and return an immutable profile shared by offline and
+// Resolve path/JSON precedence, validate the matrix against the (policy-applied) Rust render
+// scene and the effective output layout, and return an immutable profile shared by offline and
 // realtime plans. A null shared_ptr means no matrix was requested.
-[[nodiscard]] Result<std::shared_ptr<const DirectSpeakersMatrix>> resolve_direct_speakers_matrix(
-    const RenderOptions& options, const AdmScene& scene, std::string_view effective_output_layout, LogSink& logs);
+[[nodiscard]] Result<std::shared_ptr<const DirectSpeakersMatrix>>
+resolve_direct_speakers_matrix(const RenderOptions& options,
+                               const detail::RenderSceneHandle& scene,
+                               std::string_view effective_output_layout,
+                               LogSink& logs);
 
 // Map a requested output-layout string (case-insensitive aliases like "5.1" / "atmos714" /
 // "stereo") to its canonical layout id ("0+5+0" / "4+7+0" / "0+2+0" / "binaural" / "hoa3"…).
