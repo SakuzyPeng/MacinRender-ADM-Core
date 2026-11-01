@@ -1,11 +1,7 @@
 #include "renderer_factory.h"
 
-#include <algorithm>
-#include <set>
-#include <unordered_map>
-
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <filesystem>
+#include <stdexcept>
 
 #include "adm/direct_speakers_matrix.h"
 #include "adm/render_binaural.h"
@@ -15,301 +11,145 @@
 #include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
-#include "render_common.h"
+#include "../adm_core/direct_matrix_records.h"
+#include "engine_result.h"
+#include "scene_handle.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
 #endif
 
+// Selection, routing and matrix rules live in Rust mradm-engine `request` (PCM consistency 5.2 B);
+// this side constructs the C++ IRenderer adapters the streaming paths still drive.
 namespace mradm {
 
-std::string normalize_output_layout(const std::string& layout) {
-    std::string key = layout;
-    std::ranges::transform(
-        key, key.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
+namespace {
 
-    if (key.empty()) {
-        return "binaural";
+using render_common::engine_text;
+using render_common::EngineOutcome;
+
+const uint8_t* bytes(std::string_view text) noexcept {
+    return reinterpret_cast<const uint8_t*>(text.data());
+}
+
+#ifdef __APPLE__
+constexpr uint32_t k_apple_available = 1U;
+#else
+constexpr uint32_t k_apple_available = 0U;
+#endif
+
+std::unique_ptr<IRenderer> create_renderer(RendererSelection backend) {
+    switch (backend) {
+    case RendererSelection::ear:
+        return create_ear_renderer();
+    case RendererSelection::saf:
+        return create_vbap_renderer();
+    case RendererSelection::triple_balance:
+        return create_triple_balance_renderer();
+    case RendererSelection::room_binaural:
+        return create_room_renderer();
+    case RendererSelection::hoa:
+        return create_hoa_renderer();
+    case RendererSelection::saf_binaural:
+        return create_binaural_renderer();
+#ifdef __APPLE__
+    case RendererSelection::apple:
+        return create_apple_renderer();
+#endif
+    default:
+        throw std::logic_error("mradm-engine resolved an unknown backend");
     }
-    if (key == "stereo" || key == "2.0" || key == "0+2+0") {
-        return "0+2+0";
+}
+
+} // namespace
+
+std::string normalize_output_layout(const std::string& layout) {
+    MradmAdmText out{};
+    if (mradm_engine_normalize_layout(bytes(layout), layout.size(), &out) != 0) {
+        throw std::logic_error("output layout normalization failed");
     }
-    if (key == "5.1" || key == "0+5+0") {
-        return "0+5+0";
-    }
-    if (key == "5.1.2" || key == "2+5+0") {
-        return "2+5+0";
-    }
-    if (key == "7.1" || key == "wav71" || key == "wave_7_1" || key == "wave-7.1" || key == "0+7+0") {
-        return "wav71";
-    }
-    if (key == "5.1.4" || key == "atmos514" || key == "4+5+0") {
-        return "4+5+0";
-    }
-    if (key == "9.1.4" || key == "4+5+4") {
-        return "4+5+4";
-    }
-    if (key == "7.1.4" || key == "atmos714" || key == "4+7+0") {
-        return "4+7+0";
-    }
-    if (key == "9.1.6" || key == "atmos916") {
-        return "9.1.6";
-    }
-    if (key == "22.2" || key == "9+10+3") {
-        return "9+10+3";
-    }
-    if (key == "binaural" || key == "hoa3") {
-        return key;
-    }
-    return layout;
+    return engine_text(out);
 }
 
 Result<ResolvedRenderer>
 resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo) {
-    const bool requests_speaker_stereo = (requested_layout == "0+2+0");
-
-    // Two-channel loudspeaker rendering is intentionally not exposed: the current 2ch speaker
-    // projection is not a downmix and can be badly misleading for ADM content.
-    // Automatic 2ch output therefore means binaural.
-    auto sel = requested;
-    if (sel == RendererSelection::automatic && (requests_speaker_stereo || requested_layout == "binaural")) {
-        sel = RendererSelection::saf_binaural;
+    MradmEngineRenderer record{};
+    const EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
+        return mradm_engine_resolve_renderer(static_cast<uint32_t>(requested),
+                                             bytes(requested_layout),
+                                             requested_layout.size(),
+                                             internal_allow_speaker_stereo ? 1U : 0U,
+                                             k_apple_available,
+                                             &record,
+                                             out,
+                                             status);
+    });
+    if (!outcome.ok()) {
+        return tl::unexpected{outcome.error()};
     }
-    if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo &&
-        !internal_allow_speaker_stereo) {
-        return make_error(ErrorCode::unsupported,
-                          "two-channel loudspeaker rendering is unavailable; use binaural output instead");
-    }
-
-    std::unique_ptr<IRenderer> renderer;
-    RendererSelection backend = sel;
-    if (sel == RendererSelection::ear || sel == RendererSelection::automatic) {
-        renderer = create_ear_renderer();
-        backend = RendererSelection::ear;
-    } else if (sel == RendererSelection::saf) {
-        renderer = create_vbap_renderer();
-    } else if (sel == RendererSelection::triple_balance) {
-        renderer = create_triple_balance_renderer();
-    } else if (sel == RendererSelection::room_binaural) {
-        renderer = create_room_renderer();
-    } else if (sel == RendererSelection::hoa) {
-        renderer = create_hoa_renderer();
-    } else if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
-        renderer = create_binaural_renderer();
-        backend = RendererSelection::saf_binaural;
-#ifdef __APPLE__
-    } else if (sel == RendererSelection::apple) {
-        renderer = create_apple_renderer();
-#endif
-    } else {
-        return make_error(ErrorCode::unsupported,
-                          fmt::format("renderer '{}' is not available in this build", static_cast<int>(sel)));
-    }
-
     ResolvedRenderer resolved;
-    resolved.selected = sel;
-    resolved.backend = backend;
-    resolved.effective_output_layout = requested_layout;
-
-    if (sel == RendererSelection::binaural) {
-        resolved.diagnostics.emplace_back(
-            LogLevel::warning,
-            "--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural");
+    resolved.selected = static_cast<RendererSelection>(record.selected);
+    resolved.backend = static_cast<RendererSelection>(record.backend);
+    resolved.effective_output_layout = engine_text(record.effective_layout);
+    for (const auto& line : outcome.lines()) {
+        resolved.diagnostics.emplace_back(static_cast<LogLevel>(line.level), engine_text(line.message));
     }
-    if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
-        if (requested_layout != "0+2+0" && requested_layout != "binaural") {
-            return make_error(ErrorCode::unsupported,
-                              fmt::format("SAF binaural backend does not support output layout '{}'", requested_layout),
-                              "layout=" + requested_layout);
-        }
-        resolved.effective_output_layout = "binaural";
-    }
-
-    resolved.renderer = std::move(renderer);
+    resolved.renderer = create_renderer(resolved.backend);
     return resolved;
 }
 
 Result<void> validate_direct_speakers_routing(RendererSelection backend,
                                               std::string_view effective_output_layout,
                                               DirectSpeakersRoutingMode mode) {
-    if (mode == DirectSpeakersRoutingMode::automatic) {
-        return {};
-    }
-    const bool binaural = effective_output_layout == "0+2+0" || effective_output_layout == "binaural";
-    if (mode == DirectSpeakersRoutingMode::matrix) {
-        // EAR and SAF identify loudspeaker backends directly; the internal
-        // 0+2+0 speaker test layout must not be mistaken for binaural output.
-        if (backend == RendererSelection::ear || backend == RendererSelection::saf) {
-            return {};
-        }
-        if (backend == RendererSelection::apple && !binaural) {
-            return {};
-        }
-        return make_error(ErrorCode::unsupported,
-                          "DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs");
-    }
-    if (backend == RendererSelection::saf) {
-        return {};
-    }
-    if (backend == RendererSelection::apple) {
-        if (binaural && mode == DirectSpeakersRoutingMode::label) {
-            return make_error(ErrorCode::unsupported,
-                              "Apple binaural output does not support DirectSpeakers label routing; use position");
-        }
-        return {};
-    }
-    return make_error(ErrorCode::unsupported,
-                      "explicit DirectSpeakers routing is supported only by SAF and Apple renderers");
-}
-
-namespace {
-
-using MatrixSourceRows = std::unordered_map<std::string, std::size_t>;
-
-[[nodiscard]] Result<MatrixSourceRows> validate_matrix_route_labels(const DirectSpeakersMatrix& matrix) {
-    MatrixSourceRows source_rows;
-    source_rows.reserve(matrix.routes.size());
-    for (std::size_t route_index = 0; route_index < matrix.routes.size(); ++route_index) {
-        const auto& route = matrix.routes[route_index];
-        const std::string source_key = render_common::canonical_direct_speaker_label(route.source_label);
-        if (source_key.empty()) {
-            return make_error(ErrorCode::invalid_argument,
-                              "DirectSpeakers matrix source_label resolves to an empty label",
-                              "source_label=" + route.source_label);
-        }
-        if (render_common::is_lfe_label(source_key)) {
-            return make_error(ErrorCode::invalid_argument,
-                              fmt::format("DirectSpeakers matrix source '{}' is LFE; LFE uses dedicated routing",
-                                          route.source_label));
-        }
-        if (!source_rows.emplace(source_key, route_index).second) {
-            return make_error(
-                ErrorCode::invalid_argument,
-                fmt::format("duplicate DirectSpeakers matrix source '{}' after alias resolution", route.source_label));
-        }
-
-        std::set<std::string> target_keys;
-        for (const auto& target : route.targets) {
-            const std::string target_key = render_common::canonical_direct_speaker_label(target.label);
-            if (target_key.empty()) {
-                return make_error(ErrorCode::invalid_argument,
-                                  "DirectSpeakers matrix target label resolves to an empty label",
-                                  "source_label=" + route.source_label);
-            }
-            if (render_common::is_lfe_label(target_key)) {
-                return make_error(
-                    ErrorCode::invalid_argument,
-                    fmt::format("DirectSpeakers matrix target '{}' is LFE; LFE uses dedicated routing", target.label),
-                    "source_label=" + route.source_label);
-            }
-            if (!target_keys.insert(target_key).second) {
-                return make_error(
-                    ErrorCode::invalid_argument,
-                    fmt::format("duplicate DirectSpeakers matrix target '{}' after alias resolution", target.label),
-                    "source_label=" + route.source_label);
-            }
-        }
-    }
-    return source_rows;
-}
-
-[[nodiscard]] Result<void> validate_matrix_scene_coverage(const DirectSpeakersMatrix& matrix,
-                                                          const MatrixSourceRows& source_rows,
-                                                          const AdmScene& scene,
-                                                          LogSink& logs) {
-    std::vector<bool> used(matrix.routes.size(), false);
-    for (const auto& object : scene.objects) {
-        for (const auto& track : object.tracks) {
-            for (const auto& block : track.ds_blocks) {
-                if (render_common::direct_speakers_block_is_lfe(block)) {
-                    continue;
-                }
-                std::optional<std::size_t> matched;
-                for (const auto& label : block.speaker_labels) {
-                    const auto row = source_rows.find(render_common::canonical_direct_speaker_label(label));
-                    if (row == source_rows.end()) {
-                        continue;
-                    }
-                    if (matched.has_value() && *matched != row->second) {
-                        return make_error(ErrorCode::invalid_argument,
-                                          "DirectSpeakers block matches multiple matrix source rows",
-                                          fmt::format("track_uid={} labels={}",
-                                                      track.track_uid,
-                                                      fmt::join(block.speaker_labels, ",")));
-                    }
-                    matched = row->second;
-                }
-                if (!matched.has_value()) {
-                    const std::string labels = block.speaker_labels.empty()
-                                                   ? std::string{"<missing>"}
-                                                   : fmt::format("{}", fmt::join(block.speaker_labels, ","));
-                    return make_error(
-                        ErrorCode::invalid_argument,
-                        fmt::format("DirectSpeakers block label '{}' is not covered by the routing matrix", labels),
-                        "track_uid=" + track.track_uid);
-                }
-                used[*matched] = true;
-            }
-        }
-    }
-
-    for (std::size_t route_index = 0; route_index < matrix.routes.size(); ++route_index) {
-        if (!used[route_index]) {
-            logs.log(LogLevel::warning,
-                     "direct-speakers-matrix",
-                     fmt::format("matrix source '{}' is not present in this scene",
-                                 matrix.routes[route_index].source_label));
-        }
+    const EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
+        return mradm_engine_validate_routing(static_cast<uint32_t>(backend),
+                                             bytes(effective_output_layout),
+                                             effective_output_layout.size(),
+                                             static_cast<uint32_t>(mode),
+                                             out,
+                                             status);
+    });
+    if (!outcome.ok()) {
+        return tl::unexpected{outcome.error()};
     }
     return {};
 }
 
-} // namespace
-
-Result<std::shared_ptr<const DirectSpeakersMatrix>> resolve_direct_speakers_matrix(
-    const RenderOptions& options, const AdmScene& scene, std::string_view effective_output_layout, LogSink& logs) {
-    const bool has_path = options.direct_speakers_matrix_path.has_value();
-    const bool has_json = options.direct_speakers_matrix_json.has_value();
-    if (options.direct_speakers_routing_mode != DirectSpeakersRoutingMode::matrix) {
-        if (has_path || has_json) {
-            return make_error(ErrorCode::invalid_argument,
-                              "DirectSpeakers matrix configuration requires routing mode 'matrix'");
-        }
+Result<std::shared_ptr<const DirectSpeakersMatrix>>
+resolve_direct_speakers_matrix(const RenderOptions& options,
+                               const detail::RenderSceneHandle& scene,
+                               std::string_view effective_output_layout,
+                               LogSink& logs) {
+    const auto& json = options.direct_speakers_matrix_json;
+    const auto& path = options.direct_speakers_matrix_path;
+    const auto utf8 = path ? path->u8string() : std::u8string{};
+    const std::string_view utf8_path{reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    const auto label = path ? path->string() : std::string{};
+    const MradmEngineMatrixRequest request{static_cast<uint32_t>(options.direct_speakers_routing_mode),
+                                           json ? 1U : 0U,
+                                           engine_text(json ? std::string_view{*json} : std::string_view{}),
+                                           path ? 1U : 0U,
+                                           engine_text(utf8_path),
+                                           engine_text(label)};
+    uint32_t has_matrix = 0;
+    MradmDirectMatrixView view{};
+    const EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
+        return mradm_engine_resolve_matrix(scene.raw,
+                                           &request,
+                                           bytes(effective_output_layout),
+                                           effective_output_layout.size(),
+                                           &has_matrix,
+                                           &view,
+                                           out,
+                                           status);
+    });
+    outcome.emit(logs, "direct-speakers-matrix");
+    if (!outcome.ok()) {
+        return tl::unexpected{outcome.error()};
+    }
+    if (has_matrix == 0U) {
         return std::shared_ptr<const DirectSpeakersMatrix>{};
     }
-    if (!has_path && !has_json) {
-        return make_error(ErrorCode::invalid_argument,
-                          "DirectSpeakers matrix routing requires a matrix path or in-memory JSON");
-    }
-
-    Result<DirectSpeakersMatrix> loaded = has_json
-                                              ? parse_direct_speakers_matrix(*options.direct_speakers_matrix_json)
-                                              : load_direct_speakers_matrix_file(*options.direct_speakers_matrix_path);
-    if (has_json && has_path) {
-        logs.log(LogLevel::warning,
-                 "direct-speakers-matrix",
-                 "in-memory DirectSpeakers matrix supplied; ignoring direct_speakers_matrix_path");
-    }
-    if (!loaded) {
-        return tl::unexpected{loaded.error()};
-    }
-
-    const std::string matrix_layout = normalize_output_layout(loaded->output_layout);
-    if (matrix_layout != effective_output_layout) {
-        return make_error(ErrorCode::invalid_argument,
-                          fmt::format("DirectSpeakers matrix layout '{}' does not match output layout '{}'",
-                                      loaded->output_layout,
-                                      effective_output_layout));
-    }
-
-    auto source_rows = validate_matrix_route_labels(*loaded);
-    if (!source_rows) {
-        return tl::unexpected{source_rows.error()};
-    }
-    auto coverage = validate_matrix_scene_coverage(*loaded, *source_rows, scene, logs);
-    if (!coverage) {
-        return tl::unexpected{coverage.error()};
-    }
-    return std::make_shared<const DirectSpeakersMatrix>(std::move(*loaded));
+    return std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(view));
 }
 
 } // namespace mradm

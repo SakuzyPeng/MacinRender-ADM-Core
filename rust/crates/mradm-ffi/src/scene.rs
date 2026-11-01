@@ -134,7 +134,7 @@ pub struct SceneImportInfo {
 }
 
 pub struct SceneHandle {
-    scene: RenderScene,
+    pub(crate) scene: RenderScene,
     texts: Vec<Text>,
     labels: Vec<Text>,
     objects: Vec<SceneObjectState>,
@@ -1094,25 +1094,9 @@ pub struct DirectMatrix {
     routes: Vec<DirectMatrixRoute>,
 }
 
-/// Parses `mradm.direct-speakers-matrix.v1`; the caller attaches its source label to errors.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
-    json: *const u8,
-    json_len: usize,
-    output: *mut *mut DirectMatrix,
-    view: *mut DirectMatrixView,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
-    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
-        if output.is_null() || view.is_null() {
-            return Err(invalid("无效 DirectSpeakers 矩阵输出"));
-        }
-        unsafe {
-            *output = ptr::null_mut();
-        }
-        let matrix = direct_matrix::parse(unsafe { bytes(json, json_len)? })?;
+impl DirectMatrix {
+    /// Owns `matrix` and the records its view points at.
+    pub(crate) fn new(matrix: direct_matrix::Matrix) -> Box<Self> {
         let targets: Vec<Vec<DirectMatrixTarget>> = matrix
             .routes
             .iter()
@@ -1139,17 +1123,44 @@ pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
                 targets_len: records.len(),
             })
             .collect();
-        let handle = Box::new(DirectMatrix {
+        Box::new(Self {
             matrix,
             _targets: targets,
             routes,
-        });
+        })
+    }
+
+    pub(crate) fn view(&self) -> DirectMatrixView {
+        DirectMatrixView {
+            output_layout: Text::new(&self.matrix.output_layout),
+            routes: self.routes.as_ptr(),
+            routes_len: self.routes.len(),
+        }
+    }
+}
+
+/// Parses `mradm.direct-speakers-matrix.v1`; the caller attaches its source label to errors.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
+    json: *const u8,
+    json_len: usize,
+    output: *mut *mut DirectMatrix,
+    view: *mut DirectMatrixView,
+    message: *mut u8,
+    message_len: *mut usize,
+) -> i32 {
+    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
+    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
+        if output.is_null() || view.is_null() {
+            return Err(invalid("无效 DirectSpeakers 矩阵输出"));
+        }
         unsafe {
-            *view = DirectMatrixView {
-                output_layout: Text::new(&handle.matrix.output_layout),
-                routes: handle.routes.as_ptr(),
-                routes_len: handle.routes.len(),
-            };
+            *output = ptr::null_mut();
+        }
+        let matrix = direct_matrix::parse(unsafe { bytes(json, json_len)? })?;
+        let handle = DirectMatrix::new(matrix);
+        unsafe {
+            *view = handle.view();
             *output = Box::into_raw(handle);
         }
         Ok(())

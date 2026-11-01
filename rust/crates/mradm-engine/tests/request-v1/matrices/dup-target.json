@@ -1,0 +1,19 @@
+{
+ "schema": "mradm.direct-speakers-matrix.v1",
+ "output_layout": "5.1",
+ "routes": [
+  {
+   "source_label": "C",
+   "targets": [
+    {
+     "label": "L",
+     "weight": 1
+    },
+    {
+     "label": "M+030",
+     "weight": 1
+    }
+   ]
+  }
+ ]
+}
