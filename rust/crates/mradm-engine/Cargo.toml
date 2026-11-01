@@ -1,0 +1,15 @@
+[package]
+name = "mradm-engine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Render orchestration: backend capability catalog, discovery JSON and the offline render service"
+
+[dependencies]
+mradm-adm = { path = "../mradm-adm" }
+mradm-json = { path = "../mradm-json" }
+mradm-scene = { path = "../mradm-scene" }
+
+[dev-dependencies]
+mradm-wav = { path = "../mradm-wav" }

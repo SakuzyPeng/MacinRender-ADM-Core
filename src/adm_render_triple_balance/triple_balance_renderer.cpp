@@ -3,6 +3,7 @@
 
 #include "adm/render_triple_balance.h"
 
+#include "capability_records.h"
 #include "render_common.h"
 #include "render_state.h"
 #include "scene_handle.h"
@@ -108,21 +109,7 @@ Result<RenderMetrics> TripleBalanceRenderer::render_window(const IPreparedRender
 } // namespace
 
 CapabilityReport triple_balance_capabilities() {
-    CapabilityReport result;
-    result.backend_name = "triple-balance";
-    result.backend_version = "1";
-    result.supports_objects = true;
-    result.supports_direct_speakers = true;
-    result.supports_render_window = true;
-    result.modes = {{"standard", "Standard", {"4+7+0", "9.1.6", "9+10+3"}, {}, true},
-                    {"d", "D mode", {"9.1.6", "9+10+3"}, {48000}, false}};
-    // Fixed room layouts; no custom SAF layouts or listener-oriented geometry.
-    result.supported_layouts = {
-        {"4+7+0", "7.1.4", 12, true, 1, true, false},
-        {"9.1.6", "9.1.6", 16, true, 1, true, false},
-        {"9+10+3", "22.2 (experimental)", 24, true, 2, true, false},
-    };
-    return result;
+    return render_common::engine_capabilities(render_common::EngineBackend::triple_balance);
 }
 
 std::unique_ptr<IRenderer> create_triple_balance_renderer() {

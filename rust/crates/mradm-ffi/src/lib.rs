@@ -14,6 +14,7 @@ mod convolution;
 mod decimal;
 mod ear;
 mod ear_post;
+mod engine;
 mod hoa;
 mod hptf;
 mod hrtf;

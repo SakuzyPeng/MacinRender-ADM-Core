@@ -1,0 +1,392 @@
+{
+  "layouts": [
+    {
+      "channels": 2,
+      "container": "RF64/BW64 + ADM Binaural AXML/CHNA",
+      "format": "wav",
+      "layout": "binaural",
+      "note": "No loudspeaker channel mask is written.",
+      "order": "leftEar rightEar",
+      "supported_by": [
+        "saf-binaural",
+        "room-binaural"
+      ]
+    },
+    {
+      "channels": 6,
+      "container": "WAVEFORMATEXTENSIBLE mask 0x0000003F",
+      "format": "wav",
+      "layout": "5.1",
+      "order": "L R C LFE Ls Rs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "WAVEFORMATEXTENSIBLE mask 0x0000503F",
+      "format": "wav",
+      "layout": "5.1.2",
+      "order": "L R C LFE Ls Rs U+030 U-030",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "WAVEFORMATEXTENSIBLE mask 0x0000063F",
+      "format": "wav",
+      "layout": "7.1",
+      "note": "WAVE mask-bit order.",
+      "order": "L R C LFE Rls Rrs Ls Rs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 10,
+      "container": "WAVEFORMATEXTENSIBLE mask 0x0002D03F",
+      "format": "wav",
+      "layout": "5.1.4",
+      "order": "L R C LFE Ls Rs U+030 U-030 U+110 U-110",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 12,
+      "container": "WAVEFORMATEXTENSIBLE mask 0x0002D63F",
+      "format": "wav",
+      "layout": "7.1.4",
+      "note": "Renderer order is converted to WAVE mask-bit order at write time.",
+      "order": "L R C LFE Rls Rrs Ls Rs U+045 U-045 U+135 U-135",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 14,
+      "container": "PCM BW64 / float RF64 + ADM DirectSpeakers AXML/CHNA",
+      "format": "wav",
+      "layout": "9.1.4",
+      "note": "No WAVE mask can express the exact geometry.",
+      "order": "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 16,
+      "container": "ADM AXML/CHNA; Triple Balance: WAVE mask 0",
+      "format": "wav",
+      "layout": "9.1.6",
+      "note": "No WAVE mask can express the exact geometry. Triple Balance writes WAVEFORMATEXTENSIBLE with mask 0, in the same channel order, without ADM; use CAF for explicit 9.1.6 layout metadata.",
+      "order": "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 24,
+      "container": "PCM BW64 / float RF64 + ADM DirectSpeakers AXML/CHNA",
+      "format": "wav",
+      "layout": "22.2",
+      "note": "Exact BS.2051 geometry is carried by ADM.",
+      "order": "M+060 M-060 M+000 LFE1 M+135 M-135 M+030 M-030 M+180 LFE2 M+090 M-090 U+045 U-045 U+000 T+000 U+135 U-135 U+090 U-090 U+180 B+000 B+045 B-045",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 16,
+      "container": "PCM BW64 / float RF64 + ADM HOA AXML/CHNA + ambi",
+      "format": "wav",
+      "layout": "hoa3",
+      "note": "No loudspeaker channel mask is written.",
+      "order": "ACN 0..15, SN3D",
+      "supported_by": [
+        "hoa"
+      ]
+    },
+    {
+      "channels": 2,
+      "container": "CoreAudio Binaural",
+      "format": "caf",
+      "layout": "binaural",
+      "order": "BinauralLeft BinauralRight",
+      "supported_by": [
+        "saf-binaural",
+        "room-binaural"
+      ]
+    },
+    {
+      "channels": 6,
+      "container": "CoreAudio MPEG_5_1_A / CICP_6",
+      "format": "caf",
+      "layout": "5.1",
+      "order": "L R C LFE Ls Rs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "CoreAudio WAVE_7_1",
+      "format": "caf",
+      "layout": "7.1",
+      "note": "Same order as internal wav71.",
+      "order": "L R C LFE Rls Rrs Ls Rs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 16,
+      "container": "CoreAudio HOA_ACN_SN3D",
+      "format": "caf",
+      "layout": "hoa3",
+      "note": "HOA encode output, not a speaker layout.",
+      "order": "ACN 0..15, SN3D",
+      "supported_by": [
+        "hoa"
+      ]
+    },
+    {
+      "channels": 10,
+      "container": "CoreAudio Atmos_5_1_4",
+      "format": "caf",
+      "layout": "5.1.4",
+      "order": "L R C LFE Ls Rs Vhl Vhr Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 12,
+      "container": "CoreAudio Atmos_7_1_4",
+      "format": "caf",
+      "layout": "7.1.4",
+      "order": "L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 16,
+      "container": "CoreAudio Atmos_9_1_6",
+      "format": "caf",
+      "layout": "9.1.6",
+      "order": "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 24,
+      "container": "CoreAudio CICP_13",
+      "format": "caf",
+      "layout": "22.2",
+      "note": "CoreAudio names the two LFE slots LFE2/LFE3.",
+      "order": "Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 2,
+      "container": "FLAC Vorbis Comment layout=binaural",
+      "format": "flac",
+      "layout": "binaural",
+      "note": "Some readers may display only generic two-channel metadata.",
+      "order": "Binaural L, Binaural R",
+      "supported_by": [
+        "saf-binaural",
+        "room-binaural"
+      ]
+    },
+    {
+      "channels": 6,
+      "container": "FLAC + WAVEFORMATEXTENSIBLE mask 0x0000003F",
+      "format": "flac",
+      "layout": "5.1",
+      "order": "L R C LFE Ls Rs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "FLAC + WAVEFORMATEXTENSIBLE mask 0x0000063F",
+      "format": "flac",
+      "layout": "7.1",
+      "note": "WAVE_7_1 / wav71 order.",
+      "order": "L R C LFE Rls Rrs Ls Rs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 2,
+      "container": "APAC requests CoreAudio Binaural",
+      "format": "apac",
+      "layout": "binaural",
+      "note": "Some inspection tools report a generic two-channel layout; metadata preserves layout=binaural.",
+      "order": "L R",
+      "supported_by": [
+        "saf-binaural",
+        "room-binaural"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "CoreAudio AudioUnit_7_1",
+      "format": "apac",
+      "layout": "7.1",
+      "note": "Input wav71 is reordered before APAC encoding.",
+      "order": "L R C LFE Ls Rs Rls Rrs",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 16,
+      "container": "CoreAudio HOA_ACN_SN3D",
+      "format": "apac",
+      "layout": "hoa3",
+      "note": "HOA encode output, not a speaker layout.",
+      "order": "ACN 0..15, SN3D",
+      "supported_by": [
+        "hoa"
+      ]
+    },
+    {
+      "channels": 10,
+      "container": "CoreAudio Atmos_5_1_4",
+      "format": "apac",
+      "layout": "5.1.4",
+      "order": "L R C LFE Ls Rs Vhl Vhr Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 12,
+      "container": "CoreAudio Atmos_7_1_4",
+      "format": "apac",
+      "layout": "7.1.4",
+      "order": "L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 16,
+      "container": "CoreAudio Atmos_9_1_6",
+      "format": "apac",
+      "layout": "9.1.6",
+      "order": "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 24,
+      "container": "CoreAudio CICP_13",
+      "format": "apac",
+      "layout": "22.2",
+      "note": "CoreAudio names the two LFE slots LFE2/LFE3.",
+      "order": "Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    },
+    {
+      "channels": 6,
+      "container": "IAMF kLayout5_1_ch (Opus VBR)",
+      "format": "iamf",
+      "layout": "5.1",
+      "order": "FL FR SiL SiR C LFE (encoding order)",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "IAMF kLayout5_1_2_ch (Opus VBR)",
+      "format": "iamf",
+      "layout": "5.1.2",
+      "order": "FL FR SiL SiR TpFL TpFR C LFE (encoding order)",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 10,
+      "container": "IAMF kLayout5_1_4_ch (Opus VBR)",
+      "format": "iamf",
+      "layout": "5.1.4",
+      "order": "FL FR SiL SiR TpFL TpFR TpBL TpBR C LFE (enc order)",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 8,
+      "container": "IAMF kLayout7_1_ch (Opus VBR)",
+      "format": "iamf",
+      "layout": "7.1",
+      "order": "FL FR Ls Rs Rls Rrs C LFE (wav71 reordered)",
+      "supported_by": [
+        "ear",
+        "saf"
+      ]
+    },
+    {
+      "channels": 12,
+      "container": "IAMF kLayout7_1_4_ch (Opus VBR)",
+      "format": "iamf",
+      "layout": "7.1.4",
+      "order": "FL FR Ls Rs Rls Rrs TpFL TpFR TpBL TpBR C LFE",
+      "supported_by": [
+        "ear",
+        "saf",
+        "triple-balance"
+      ]
+    }
+  ],
+  "schema": "mradm.layouts",
+  "schema_version": 1
+}

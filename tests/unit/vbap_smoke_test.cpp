@@ -2004,67 +2004,6 @@ bool verify_default_interp_ms_controls_ramp() {
     return ok;
 }
 
-bool verify_register_vbap_layout() {
-    bool ok = true;
-
-    // ── Valid registration ─────────────────────────────────────────────────────
-    const bool registered = mradm::register_vbap_layout(
-        "test+custom",
-        "Test Custom 4ch",
-        {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}, {110.0F, 0.0F, "Ls"}, {-110.0F, 0.0F, "Rs"}});
-    ok &= check(registered, "register_vbap_layout: valid layout should succeed");
-
-    // ── Duplicate rejection (same id, different speakers) ──────────────────────
-    const bool dup =
-        mradm::register_vbap_layout("test+custom", "Dup", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}, {0.0F, 0.0F, "C"}});
-    ok &= check(!dup, "register_vbap_layout: duplicate id must return false");
-
-    // ── Built-in id is immutable ───────────────────────────────────────────────
-    const bool builtin_dup =
-        mradm::register_vbap_layout("0+5+0", "Override", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}, {0.0F, 0.0F, "C"}});
-    ok &= check(!builtin_dup, "register_vbap_layout: built-in id must not be overridden");
-
-    for (const auto* id : {"test+stereo", "binaural"}) {
-        ok &= check(!mradm::register_vbap_layout(id, "Speaker stereo", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}}),
-                    "register_vbap_layout: a custom name cannot enable speaker stereo");
-    }
-    ok &= check(
-        !mradm::register_vbap_layout("test+mono-lfe", "Two outputs", {{0.0F, 0.0F, "C"}, {0.0F, 0.0F, "LFE", true}}),
-        "register_vbap_layout: a two-channel layout with one LFE is also rejected");
-
-    // ── Registered layout visible in capabilities with correct metadata ─────────
-    const auto caps = mradm::vbap_capabilities();
-    ok &= check(std::ranges::none_of(caps.supported_layouts,
-                                     [](const auto& layout) {
-                                         return layout.id == "test+stereo" || layout.id == "binaural" ||
-                                                layout.id == "test+mono-lfe";
-                                     }),
-                "register_vbap_layout: rejected stereo layouts do not enter the registry");
-    const auto it = std::ranges::find_if(caps.supported_layouts, [](const auto& l) { return l.id == "test+custom"; });
-    ok &= check(it != caps.supported_layouts.end(), "register_vbap_layout: registered layout appears in capabilities");
-    if (it != caps.supported_layouts.end()) {
-        ok &= check(it->channel_count == 4, "register_vbap_layout: channel_count == 4");
-        ok &= check(!it->is_3d, "register_vbap_layout: 2D custom layout: is_3d == false");
-        ok &= check(it->lfe_count == 0, "register_vbap_layout: lfe_count == 0");
-    }
-
-    // ── Invalid input rejection ────────────────────────────────────────────────
-    ok &= check(!mradm::register_vbap_layout("", "Empty id", {{30.0F, 0.0F, "L"}}),
-                "register_vbap_layout: empty id rejected");
-    ok &= check(!mradm::register_vbap_layout("test+empty-speakers", "Empty speakers", {}),
-                "register_vbap_layout: empty speakers rejected");
-    ok &= check(!mradm::register_vbap_layout("test+all-lfe", "All LFE", {{0.0F, 0.0F, "LFE1", true}}),
-                "register_vbap_layout: all-LFE layout rejected");
-    ok &= check(!mradm::register_vbap_layout(
-                    "test+nan-az", "NaN azimuth", {{std::numeric_limits<float>::quiet_NaN(), 0.0F, "L"}}),
-                "register_vbap_layout: NaN azimuth rejected");
-    ok &= check(!mradm::register_vbap_layout(
-                    "test+inf-el", "Inf elevation", {{30.0F, std::numeric_limits<float>::infinity(), "L"}}),
-                "register_vbap_layout: infinite elevation rejected");
-
-    return ok;
-}
-
 // Creates a minimal Objects document with a source at the given polar position.
 std::pair<std::shared_ptr<fixture::Document>, std::string> make_positioned_objects_doc(float azimuth_deg,
                                                                                        float elevation_deg) {
@@ -2461,7 +2400,6 @@ int main() try {
     ok &= verify_vbap_channel_lock_max_distance_rejects_lock();
     ok &= verify_vbap_object_divergence_spreads_center_source();
     ok &= verify_default_interp_ms_controls_ramp();
-    ok &= verify_register_vbap_layout();
     ok &= verify_speaker_geometry_switch_changes_vbap();
     ok &= verify_2d_layout_elevated_source_warning();
     ok &= verify_vbap_stream_matches_window();

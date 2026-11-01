@@ -226,6 +226,7 @@ add_library(MacinRender::ADMRenderCommon ALIAS mr_adm_render_common)
 target_sources(
     mr_adm_render_common
     PRIVATE
+        src/adm_render_common/capability_records.cpp
         src/adm_render_common/hptf_eq.cpp
         src/adm_render_common/live_rust_renderer.cpp
         src/adm_render_common/live_scene_trace.cpp
@@ -536,12 +537,7 @@ target_sources(
         src/adm_engine/render_service.cpp
         src/adm_engine/monitor_session.cpp
         src/adm_engine/scene_output_session.cpp
-        src/adm_engine/scene_json.cpp
-        src/adm_engine/capability_json.cpp
-        src/adm_engine/input_layout_json.cpp
-        src/adm_engine/layout_table.cpp
-        src/adm_engine/format_table.cpp
-        src/adm_engine/support_matrix.cpp
+        src/adm_engine/catalog.cpp
         src/adm_engine/wav_output.cpp
 )
 
@@ -557,7 +553,7 @@ if(WIN32)
     # Windows system-spatial monitoring; the symbol lives in mr_adm_windows.
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderWindows)
 endif()
-# nlohmann/json is header-only and used solely inside scene_json.cpp; keep it PRIVATE
+# nlohmann/json is header-only and only reads the Rust discovery documents back (catalog.cpp); PRIVATE
 # so no third-party type leaks across the module boundary (ADR 0003 / 0004).
 target_include_directories(mr_adm_engine SYSTEM PRIVATE
     "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
@@ -994,8 +990,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_libadm_reference PRIVATE MacinRender::ADMIo MacinRender::ADMAudio adm)
         add_executable(mr_adm_make_libadm_fixture tests/reference/libadm/make_fixture.cpp)
         target_link_libraries(mr_adm_make_libadm_fixture PRIVATE libbw64 adm)
-        add_executable(mr_adm_libadm_reference_tests tests/reference/libadm/reference_test.cpp)
-        target_include_directories(mr_adm_libadm_reference_tests PRIVATE src/adm_engine)
+        # The frozen comparison serializes both AdmScene copies with the former C++ inspect writer,
+        # kept as test support since PCM consistency 5.2 A moved the production document to Rust.
+        add_executable(mr_adm_libadm_reference_tests tests/reference/libadm/reference_test.cpp
+            tests/support/scene_json/scene_json.cpp)
+        target_include_directories(mr_adm_libadm_reference_tests PRIVATE tests/support/scene_json)
         target_link_libraries(mr_adm_libadm_reference_tests PRIVATE mr_adm_libadm_reference
             MacinRender::ADMMetadata MacinRender::ADMEngine MacinRender::ADMRenderCommon libbw64 adm nlohmann_json::nlohmann_json)
         add_test(NAME mr_adm_libadm_reference_tests COMMAND "${Python3_EXECUTABLE}"
