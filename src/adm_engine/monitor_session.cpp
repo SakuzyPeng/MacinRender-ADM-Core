@@ -97,7 +97,10 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         if (!routing_validation) {
             return tl::unexpected{routing_validation.error()};
         }
-        auto matrix = resolve_direct_speakers_matrix(options, scene, resolved->effective_output_layout, logs);
+        if (scene_handle_ == nullptr) {
+            return make_error(ErrorCode::internal_error, "monitor requires the Rust render scene");
+        }
+        auto matrix = resolve_direct_speakers_matrix(options, *scene_handle_, resolved->effective_output_layout, logs);
         if (!matrix) {
             return tl::unexpected{matrix.error()};
         }

@@ -1,0 +1,864 @@
+{"backend":0,"layout":"binaural","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":0,"layout":"0+2+0","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":0,"layout":"0+5+0","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+5+0","mode":3}
+{"backend":0,"layout":"2+5+0","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"2+5+0","mode":3}
+{"backend":0,"layout":"wav71","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"wav71","mode":3}
+{"backend":0,"layout":"4+5+0","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+0","mode":3}
+{"backend":0,"layout":"4+5+4","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+4","mode":3}
+{"backend":0,"layout":"4+7+0","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+7+0","mode":3}
+{"backend":0,"layout":"9.1.6","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6","mode":3}
+{"backend":0,"layout":"9+10+3","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9+10+3","mode":3}
+{"backend":0,"layout":"hoa3","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa3","mode":3}
+{"backend":0,"layout":"hoa2","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa2","mode":3}
+{"backend":0,"layout":" 5.1","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":" 5.1","mode":3}
+{"backend":0,"layout":"5.1 ","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"5.1 ","mode":3}
+{"backend":0,"layout":"7.1.2","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"7.1.2","mode":3}
+{"backend":0,"layout":"xyz","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"xyz","mode":3}
+{"backend":0,"layout":"Xyz","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"Xyz","mode":3}
+{"backend":0,"layout":"é","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"é","mode":3}
+{"backend":0,"layout":"５.１","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"５.１","mode":3}
+{"backend":0,"layout":"9.1.6x","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6x","mode":3}
+{"backend":0,"layout":"+","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"+","mode":3}
+{"backend":0,"layout":"0+2+0 ","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0 ","mode":3}
+{"backend":0,"layout":"mono","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"mono","mode":3}
+{"backend":0,"layout":"1.0","mode":0}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":0,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":0,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"1.0","mode":3}
+{"backend":1,"layout":"binaural","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":1,"layout":"binaural","mode":3}
+{"backend":1,"layout":"0+2+0","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":1,"layout":"0+2+0","mode":3}
+{"backend":1,"layout":"0+5+0","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":1,"layout":"0+5+0","mode":3}
+{"backend":1,"layout":"2+5+0","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":1,"layout":"2+5+0","mode":3}
+{"backend":1,"layout":"wav71","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":1,"layout":"wav71","mode":3}
+{"backend":1,"layout":"4+5+0","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":1,"layout":"4+5+0","mode":3}
+{"backend":1,"layout":"4+5+4","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":1,"layout":"4+5+4","mode":3}
+{"backend":1,"layout":"4+7+0","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":1,"layout":"4+7+0","mode":3}
+{"backend":1,"layout":"9.1.6","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":1,"layout":"9.1.6","mode":3}
+{"backend":1,"layout":"9+10+3","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":1,"layout":"9+10+3","mode":3}
+{"backend":1,"layout":"hoa3","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":1,"layout":"hoa3","mode":3}
+{"backend":1,"layout":"hoa2","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":1,"layout":"hoa2","mode":3}
+{"backend":1,"layout":" 5.1","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":1,"layout":" 5.1","mode":3}
+{"backend":1,"layout":"5.1 ","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":1,"layout":"5.1 ","mode":3}
+{"backend":1,"layout":"7.1.2","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":1,"layout":"7.1.2","mode":3}
+{"backend":1,"layout":"xyz","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":1,"layout":"xyz","mode":3}
+{"backend":1,"layout":"Xyz","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":1,"layout":"Xyz","mode":3}
+{"backend":1,"layout":"é","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":1,"layout":"é","mode":3}
+{"backend":1,"layout":"５.１","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":1,"layout":"５.１","mode":3}
+{"backend":1,"layout":"9.1.6x","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":1,"layout":"9.1.6x","mode":3}
+{"backend":1,"layout":"+","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":1,"layout":"+","mode":3}
+{"backend":1,"layout":"0+2+0 ","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":1,"layout":"0+2+0 ","mode":3}
+{"backend":1,"layout":"mono","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":1,"layout":"mono","mode":3}
+{"backend":1,"layout":"1.0","mode":0}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":1,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":1,"layout":"1.0","mode":3}
+{"backend":2,"layout":"binaural","mode":0}
+{"backend":2,"layout":"binaural","mode":1}
+{"backend":2,"layout":"binaural","mode":2}
+{"backend":2,"layout":"binaural","mode":3}
+{"backend":2,"layout":"0+2+0","mode":0}
+{"backend":2,"layout":"0+2+0","mode":1}
+{"backend":2,"layout":"0+2+0","mode":2}
+{"backend":2,"layout":"0+2+0","mode":3}
+{"backend":2,"layout":"0+5+0","mode":0}
+{"backend":2,"layout":"0+5+0","mode":1}
+{"backend":2,"layout":"0+5+0","mode":2}
+{"backend":2,"layout":"0+5+0","mode":3}
+{"backend":2,"layout":"2+5+0","mode":0}
+{"backend":2,"layout":"2+5+0","mode":1}
+{"backend":2,"layout":"2+5+0","mode":2}
+{"backend":2,"layout":"2+5+0","mode":3}
+{"backend":2,"layout":"wav71","mode":0}
+{"backend":2,"layout":"wav71","mode":1}
+{"backend":2,"layout":"wav71","mode":2}
+{"backend":2,"layout":"wav71","mode":3}
+{"backend":2,"layout":"4+5+0","mode":0}
+{"backend":2,"layout":"4+5+0","mode":1}
+{"backend":2,"layout":"4+5+0","mode":2}
+{"backend":2,"layout":"4+5+0","mode":3}
+{"backend":2,"layout":"4+5+4","mode":0}
+{"backend":2,"layout":"4+5+4","mode":1}
+{"backend":2,"layout":"4+5+4","mode":2}
+{"backend":2,"layout":"4+5+4","mode":3}
+{"backend":2,"layout":"4+7+0","mode":0}
+{"backend":2,"layout":"4+7+0","mode":1}
+{"backend":2,"layout":"4+7+0","mode":2}
+{"backend":2,"layout":"4+7+0","mode":3}
+{"backend":2,"layout":"9.1.6","mode":0}
+{"backend":2,"layout":"9.1.6","mode":1}
+{"backend":2,"layout":"9.1.6","mode":2}
+{"backend":2,"layout":"9.1.6","mode":3}
+{"backend":2,"layout":"9+10+3","mode":0}
+{"backend":2,"layout":"9+10+3","mode":1}
+{"backend":2,"layout":"9+10+3","mode":2}
+{"backend":2,"layout":"9+10+3","mode":3}
+{"backend":2,"layout":"hoa3","mode":0}
+{"backend":2,"layout":"hoa3","mode":1}
+{"backend":2,"layout":"hoa3","mode":2}
+{"backend":2,"layout":"hoa3","mode":3}
+{"backend":2,"layout":"hoa2","mode":0}
+{"backend":2,"layout":"hoa2","mode":1}
+{"backend":2,"layout":"hoa2","mode":2}
+{"backend":2,"layout":"hoa2","mode":3}
+{"backend":2,"layout":" 5.1","mode":0}
+{"backend":2,"layout":" 5.1","mode":1}
+{"backend":2,"layout":" 5.1","mode":2}
+{"backend":2,"layout":" 5.1","mode":3}
+{"backend":2,"layout":"5.1 ","mode":0}
+{"backend":2,"layout":"5.1 ","mode":1}
+{"backend":2,"layout":"5.1 ","mode":2}
+{"backend":2,"layout":"5.1 ","mode":3}
+{"backend":2,"layout":"7.1.2","mode":0}
+{"backend":2,"layout":"7.1.2","mode":1}
+{"backend":2,"layout":"7.1.2","mode":2}
+{"backend":2,"layout":"7.1.2","mode":3}
+{"backend":2,"layout":"xyz","mode":0}
+{"backend":2,"layout":"xyz","mode":1}
+{"backend":2,"layout":"xyz","mode":2}
+{"backend":2,"layout":"xyz","mode":3}
+{"backend":2,"layout":"Xyz","mode":0}
+{"backend":2,"layout":"Xyz","mode":1}
+{"backend":2,"layout":"Xyz","mode":2}
+{"backend":2,"layout":"Xyz","mode":3}
+{"backend":2,"layout":"é","mode":0}
+{"backend":2,"layout":"é","mode":1}
+{"backend":2,"layout":"é","mode":2}
+{"backend":2,"layout":"é","mode":3}
+{"backend":2,"layout":"５.１","mode":0}
+{"backend":2,"layout":"５.１","mode":1}
+{"backend":2,"layout":"５.１","mode":2}
+{"backend":2,"layout":"５.１","mode":3}
+{"backend":2,"layout":"9.1.6x","mode":0}
+{"backend":2,"layout":"9.1.6x","mode":1}
+{"backend":2,"layout":"9.1.6x","mode":2}
+{"backend":2,"layout":"9.1.6x","mode":3}
+{"backend":2,"layout":"+","mode":0}
+{"backend":2,"layout":"+","mode":1}
+{"backend":2,"layout":"+","mode":2}
+{"backend":2,"layout":"+","mode":3}
+{"backend":2,"layout":"0+2+0 ","mode":0}
+{"backend":2,"layout":"0+2+0 ","mode":1}
+{"backend":2,"layout":"0+2+0 ","mode":2}
+{"backend":2,"layout":"0+2+0 ","mode":3}
+{"backend":2,"layout":"mono","mode":0}
+{"backend":2,"layout":"mono","mode":1}
+{"backend":2,"layout":"mono","mode":2}
+{"backend":2,"layout":"mono","mode":3}
+{"backend":2,"layout":"1.0","mode":0}
+{"backend":2,"layout":"1.0","mode":1}
+{"backend":2,"layout":"1.0","mode":2}
+{"backend":2,"layout":"1.0","mode":3}
+{"backend":3,"layout":"binaural","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":3,"layout":"0+2+0","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":3,"layout":"0+5+0","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+5+0","mode":3}
+{"backend":3,"layout":"2+5+0","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"2+5+0","mode":3}
+{"backend":3,"layout":"wav71","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"wav71","mode":3}
+{"backend":3,"layout":"4+5+0","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+0","mode":3}
+{"backend":3,"layout":"4+5+4","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+4","mode":3}
+{"backend":3,"layout":"4+7+0","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+7+0","mode":3}
+{"backend":3,"layout":"9.1.6","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6","mode":3}
+{"backend":3,"layout":"9+10+3","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9+10+3","mode":3}
+{"backend":3,"layout":"hoa3","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa3","mode":3}
+{"backend":3,"layout":"hoa2","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa2","mode":3}
+{"backend":3,"layout":" 5.1","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":" 5.1","mode":3}
+{"backend":3,"layout":"5.1 ","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"5.1 ","mode":3}
+{"backend":3,"layout":"7.1.2","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"7.1.2","mode":3}
+{"backend":3,"layout":"xyz","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"xyz","mode":3}
+{"backend":3,"layout":"Xyz","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"Xyz","mode":3}
+{"backend":3,"layout":"é","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"é","mode":3}
+{"backend":3,"layout":"５.１","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"５.１","mode":3}
+{"backend":3,"layout":"9.1.6x","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6x","mode":3}
+{"backend":3,"layout":"+","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"+","mode":3}
+{"backend":3,"layout":"0+2+0 ","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0 ","mode":3}
+{"backend":3,"layout":"mono","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"mono","mode":3}
+{"backend":3,"layout":"1.0","mode":0}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":3,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":3,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"1.0","mode":3}
+{"backend":4,"layout":"binaural","mode":0}
+{"backend":4,"error":{"code":2,"context":"","message":"Apple binaural output does not support DirectSpeakers label routing; use position"},"layout":"binaural","mode":1}
+{"backend":4,"layout":"binaural","mode":2}
+{"backend":4,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":4,"layout":"0+2+0","mode":0}
+{"backend":4,"error":{"code":2,"context":"","message":"Apple binaural output does not support DirectSpeakers label routing; use position"},"layout":"0+2+0","mode":1}
+{"backend":4,"layout":"0+2+0","mode":2}
+{"backend":4,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":4,"layout":"0+5+0","mode":0}
+{"backend":4,"layout":"0+5+0","mode":1}
+{"backend":4,"layout":"0+5+0","mode":2}
+{"backend":4,"layout":"0+5+0","mode":3}
+{"backend":4,"layout":"2+5+0","mode":0}
+{"backend":4,"layout":"2+5+0","mode":1}
+{"backend":4,"layout":"2+5+0","mode":2}
+{"backend":4,"layout":"2+5+0","mode":3}
+{"backend":4,"layout":"wav71","mode":0}
+{"backend":4,"layout":"wav71","mode":1}
+{"backend":4,"layout":"wav71","mode":2}
+{"backend":4,"layout":"wav71","mode":3}
+{"backend":4,"layout":"4+5+0","mode":0}
+{"backend":4,"layout":"4+5+0","mode":1}
+{"backend":4,"layout":"4+5+0","mode":2}
+{"backend":4,"layout":"4+5+0","mode":3}
+{"backend":4,"layout":"4+5+4","mode":0}
+{"backend":4,"layout":"4+5+4","mode":1}
+{"backend":4,"layout":"4+5+4","mode":2}
+{"backend":4,"layout":"4+5+4","mode":3}
+{"backend":4,"layout":"4+7+0","mode":0}
+{"backend":4,"layout":"4+7+0","mode":1}
+{"backend":4,"layout":"4+7+0","mode":2}
+{"backend":4,"layout":"4+7+0","mode":3}
+{"backend":4,"layout":"9.1.6","mode":0}
+{"backend":4,"layout":"9.1.6","mode":1}
+{"backend":4,"layout":"9.1.6","mode":2}
+{"backend":4,"layout":"9.1.6","mode":3}
+{"backend":4,"layout":"9+10+3","mode":0}
+{"backend":4,"layout":"9+10+3","mode":1}
+{"backend":4,"layout":"9+10+3","mode":2}
+{"backend":4,"layout":"9+10+3","mode":3}
+{"backend":4,"layout":"hoa3","mode":0}
+{"backend":4,"layout":"hoa3","mode":1}
+{"backend":4,"layout":"hoa3","mode":2}
+{"backend":4,"layout":"hoa3","mode":3}
+{"backend":4,"layout":"hoa2","mode":0}
+{"backend":4,"layout":"hoa2","mode":1}
+{"backend":4,"layout":"hoa2","mode":2}
+{"backend":4,"layout":"hoa2","mode":3}
+{"backend":4,"layout":" 5.1","mode":0}
+{"backend":4,"layout":" 5.1","mode":1}
+{"backend":4,"layout":" 5.1","mode":2}
+{"backend":4,"layout":" 5.1","mode":3}
+{"backend":4,"layout":"5.1 ","mode":0}
+{"backend":4,"layout":"5.1 ","mode":1}
+{"backend":4,"layout":"5.1 ","mode":2}
+{"backend":4,"layout":"5.1 ","mode":3}
+{"backend":4,"layout":"7.1.2","mode":0}
+{"backend":4,"layout":"7.1.2","mode":1}
+{"backend":4,"layout":"7.1.2","mode":2}
+{"backend":4,"layout":"7.1.2","mode":3}
+{"backend":4,"layout":"xyz","mode":0}
+{"backend":4,"layout":"xyz","mode":1}
+{"backend":4,"layout":"xyz","mode":2}
+{"backend":4,"layout":"xyz","mode":3}
+{"backend":4,"layout":"Xyz","mode":0}
+{"backend":4,"layout":"Xyz","mode":1}
+{"backend":4,"layout":"Xyz","mode":2}
+{"backend":4,"layout":"Xyz","mode":3}
+{"backend":4,"layout":"é","mode":0}
+{"backend":4,"layout":"é","mode":1}
+{"backend":4,"layout":"é","mode":2}
+{"backend":4,"layout":"é","mode":3}
+{"backend":4,"layout":"５.１","mode":0}
+{"backend":4,"layout":"５.１","mode":1}
+{"backend":4,"layout":"５.１","mode":2}
+{"backend":4,"layout":"５.１","mode":3}
+{"backend":4,"layout":"9.1.6x","mode":0}
+{"backend":4,"layout":"9.1.6x","mode":1}
+{"backend":4,"layout":"9.1.6x","mode":2}
+{"backend":4,"layout":"9.1.6x","mode":3}
+{"backend":4,"layout":"+","mode":0}
+{"backend":4,"layout":"+","mode":1}
+{"backend":4,"layout":"+","mode":2}
+{"backend":4,"layout":"+","mode":3}
+{"backend":4,"layout":"0+2+0 ","mode":0}
+{"backend":4,"layout":"0+2+0 ","mode":1}
+{"backend":4,"layout":"0+2+0 ","mode":2}
+{"backend":4,"layout":"0+2+0 ","mode":3}
+{"backend":4,"layout":"mono","mode":0}
+{"backend":4,"layout":"mono","mode":1}
+{"backend":4,"layout":"mono","mode":2}
+{"backend":4,"layout":"mono","mode":3}
+{"backend":4,"layout":"1.0","mode":0}
+{"backend":4,"layout":"1.0","mode":1}
+{"backend":4,"layout":"1.0","mode":2}
+{"backend":4,"layout":"1.0","mode":3}
+{"backend":5,"layout":"binaural","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":5,"layout":"0+2+0","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":5,"layout":"0+5+0","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+5+0","mode":3}
+{"backend":5,"layout":"2+5+0","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"2+5+0","mode":3}
+{"backend":5,"layout":"wav71","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"wav71","mode":3}
+{"backend":5,"layout":"4+5+0","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+0","mode":3}
+{"backend":5,"layout":"4+5+4","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+4","mode":3}
+{"backend":5,"layout":"4+7+0","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+7+0","mode":3}
+{"backend":5,"layout":"9.1.6","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6","mode":3}
+{"backend":5,"layout":"9+10+3","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9+10+3","mode":3}
+{"backend":5,"layout":"hoa3","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa3","mode":3}
+{"backend":5,"layout":"hoa2","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa2","mode":3}
+{"backend":5,"layout":" 5.1","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":" 5.1","mode":3}
+{"backend":5,"layout":"5.1 ","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"5.1 ","mode":3}
+{"backend":5,"layout":"7.1.2","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"7.1.2","mode":3}
+{"backend":5,"layout":"xyz","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"xyz","mode":3}
+{"backend":5,"layout":"Xyz","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"Xyz","mode":3}
+{"backend":5,"layout":"é","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"é","mode":3}
+{"backend":5,"layout":"５.１","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"５.１","mode":3}
+{"backend":5,"layout":"9.1.6x","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6x","mode":3}
+{"backend":5,"layout":"+","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"+","mode":3}
+{"backend":5,"layout":"0+2+0 ","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0 ","mode":3}
+{"backend":5,"layout":"mono","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"mono","mode":3}
+{"backend":5,"layout":"1.0","mode":0}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":5,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":5,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"1.0","mode":3}
+{"backend":6,"layout":"binaural","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":6,"layout":"0+2+0","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":6,"layout":"0+5+0","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+5+0","mode":3}
+{"backend":6,"layout":"2+5+0","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"2+5+0","mode":3}
+{"backend":6,"layout":"wav71","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"wav71","mode":3}
+{"backend":6,"layout":"4+5+0","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+0","mode":3}
+{"backend":6,"layout":"4+5+4","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+4","mode":3}
+{"backend":6,"layout":"4+7+0","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+7+0","mode":3}
+{"backend":6,"layout":"9.1.6","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6","mode":3}
+{"backend":6,"layout":"9+10+3","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9+10+3","mode":3}
+{"backend":6,"layout":"hoa3","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa3","mode":3}
+{"backend":6,"layout":"hoa2","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa2","mode":3}
+{"backend":6,"layout":" 5.1","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":" 5.1","mode":3}
+{"backend":6,"layout":"5.1 ","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"5.1 ","mode":3}
+{"backend":6,"layout":"7.1.2","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"7.1.2","mode":3}
+{"backend":6,"layout":"xyz","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"xyz","mode":3}
+{"backend":6,"layout":"Xyz","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"Xyz","mode":3}
+{"backend":6,"layout":"é","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"é","mode":3}
+{"backend":6,"layout":"５.１","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"５.１","mode":3}
+{"backend":6,"layout":"9.1.6x","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6x","mode":3}
+{"backend":6,"layout":"+","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"+","mode":3}
+{"backend":6,"layout":"0+2+0 ","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0 ","mode":3}
+{"backend":6,"layout":"mono","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"mono","mode":3}
+{"backend":6,"layout":"1.0","mode":0}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":6,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":6,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"1.0","mode":3}
+{"backend":7,"layout":"binaural","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":7,"layout":"0+2+0","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":7,"layout":"0+5+0","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+5+0","mode":3}
+{"backend":7,"layout":"2+5+0","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"2+5+0","mode":3}
+{"backend":7,"layout":"wav71","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"wav71","mode":3}
+{"backend":7,"layout":"4+5+0","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+0","mode":3}
+{"backend":7,"layout":"4+5+4","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+4","mode":3}
+{"backend":7,"layout":"4+7+0","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+7+0","mode":3}
+{"backend":7,"layout":"9.1.6","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6","mode":3}
+{"backend":7,"layout":"9+10+3","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9+10+3","mode":3}
+{"backend":7,"layout":"hoa3","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa3","mode":3}
+{"backend":7,"layout":"hoa2","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa2","mode":3}
+{"backend":7,"layout":" 5.1","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":" 5.1","mode":3}
+{"backend":7,"layout":"5.1 ","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"5.1 ","mode":3}
+{"backend":7,"layout":"7.1.2","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"7.1.2","mode":3}
+{"backend":7,"layout":"xyz","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"xyz","mode":3}
+{"backend":7,"layout":"Xyz","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"Xyz","mode":3}
+{"backend":7,"layout":"é","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"é","mode":3}
+{"backend":7,"layout":"５.１","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"５.１","mode":3}
+{"backend":7,"layout":"9.1.6x","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6x","mode":3}
+{"backend":7,"layout":"+","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"+","mode":3}
+{"backend":7,"layout":"0+2+0 ","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0 ","mode":3}
+{"backend":7,"layout":"mono","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"mono","mode":3}
+{"backend":7,"layout":"1.0","mode":0}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":7,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":7,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"1.0","mode":3}
+{"backend":8,"layout":"binaural","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"binaural","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"binaural","mode":3}
+{"backend":8,"layout":"0+2+0","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0","mode":3}
+{"backend":8,"layout":"0+5+0","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+5+0","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+5+0","mode":3}
+{"backend":8,"layout":"2+5+0","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"2+5+0","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"2+5+0","mode":3}
+{"backend":8,"layout":"wav71","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"wav71","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"wav71","mode":3}
+{"backend":8,"layout":"4+5+0","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+0","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+0","mode":3}
+{"backend":8,"layout":"4+5+4","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+5+4","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+5+4","mode":3}
+{"backend":8,"layout":"4+7+0","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"4+7+0","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"4+7+0","mode":3}
+{"backend":8,"layout":"9.1.6","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6","mode":3}
+{"backend":8,"layout":"9+10+3","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9+10+3","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9+10+3","mode":3}
+{"backend":8,"layout":"hoa3","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa3","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa3","mode":3}
+{"backend":8,"layout":"hoa2","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"hoa2","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"hoa2","mode":3}
+{"backend":8,"layout":" 5.1","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":" 5.1","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":" 5.1","mode":3}
+{"backend":8,"layout":"5.1 ","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"5.1 ","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"5.1 ","mode":3}
+{"backend":8,"layout":"7.1.2","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"7.1.2","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"7.1.2","mode":3}
+{"backend":8,"layout":"xyz","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"xyz","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"xyz","mode":3}
+{"backend":8,"layout":"Xyz","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"Xyz","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"Xyz","mode":3}
+{"backend":8,"layout":"é","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"é","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"é","mode":3}
+{"backend":8,"layout":"５.１","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"５.１","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"５.１","mode":3}
+{"backend":8,"layout":"9.1.6x","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"9.1.6x","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"9.1.6x","mode":3}
+{"backend":8,"layout":"+","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"+","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"+","mode":3}
+{"backend":8,"layout":"0+2+0 ","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"0+2+0 ","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"0+2+0 ","mode":3}
+{"backend":8,"layout":"mono","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"mono","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"mono","mode":3}
+{"backend":8,"layout":"1.0","mode":0}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":1}
+{"backend":8,"error":{"code":2,"context":"","message":"explicit DirectSpeakers routing is supported only by SAF and Apple renderers"},"layout":"1.0","mode":2}
+{"backend":8,"error":{"code":2,"context":"","message":"DirectSpeakers matrix routing is supported only by EAR, SAF, and Apple speaker outputs"},"layout":"1.0","mode":3}

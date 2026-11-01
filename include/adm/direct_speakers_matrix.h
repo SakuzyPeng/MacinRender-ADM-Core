@@ -1,6 +1,5 @@
 #pragma once
 
-#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +36,5 @@ struct DirectSpeakersMatrix {
 [[nodiscard]] Result<DirectSpeakersMatrix> parse_direct_speakers_matrix(std::string_view json,
                                                                         std::string_view source_label = "<memory>");
 
-[[nodiscard]] Result<DirectSpeakersMatrix> load_direct_speakers_matrix_file(const std::filesystem::path& path);
 
 } // namespace mradm

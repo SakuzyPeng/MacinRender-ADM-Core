@@ -304,7 +304,9 @@ name = "mradm-engine"
 version = "0.1.0"
 dependencies = [
  "mradm-adm",
+ "mradm-dsp",
  "mradm-json",
+ "mradm-render",
  "mradm-scene",
  "mradm-wav",
 ]

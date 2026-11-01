@@ -1,0 +1,432 @@
+{"allow_speaker_stereo":false,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":6,"selection":0}
+{"allow_speaker_stereo":true,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":6,"selection":0}
+{"allow_speaker_stereo":false,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"0+2+0","selected":6,"selection":0}
+{"allow_speaker_stereo":true,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"0+2+0","selected":6,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":0,"selection":0}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":0,"selection":0}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"two-channel loudspeaker rendering is unavailable; use binaural output instead"},"layout":"0+2+0","selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":1,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":1,"selection":1}
+{"allow_speaker_stereo":true,"backend":1,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":1,"selection":1}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"two-channel loudspeaker rendering is unavailable; use binaural output instead"},"layout":"0+2+0","selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":2,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":2,"selection":2}
+{"allow_speaker_stereo":true,"backend":2,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":2,"selection":2}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"backend":3,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":3,"selection":3}
+{"allow_speaker_stereo":true,"backend":3,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":3,"selection":3}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"binaural","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"binaural","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"0+2+0","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"0+2+0","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"0+5+0","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"0+5+0","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"2+5+0","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"2+5+0","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"wav71","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"wav71","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"4+5+0","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"4+5+0","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"4+5+4","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"4+5+4","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"4+7+0","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"4+7+0","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"9.1.6","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"9.1.6","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"9+10+3","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"9+10+3","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"hoa3","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"hoa3","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"hoa2","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"hoa2","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":" 5.1","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":" 5.1","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"5.1 ","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"5.1 ","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"7.1.2","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"7.1.2","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"xyz","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"xyz","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"Xyz","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"Xyz","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"é","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"é","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"５.１","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"５.１","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"9.1.6x","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"9.1.6x","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"+","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"+","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"0+2+0 ","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"0+2+0 ","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"mono","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"mono","selection":4}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"1.0","selection":4}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"","message":"renderer '4' is not available in this build"},"layout":"1.0","selection":4}
+{"allow_speaker_stereo":false,"backend":6,"diagnostics":[[2,"--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural"]],"effective_output_layout":"binaural","layout":"binaural","selected":5,"selection":5}
+{"allow_speaker_stereo":true,"backend":6,"diagnostics":[[2,"--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural"]],"effective_output_layout":"binaural","layout":"binaural","selected":5,"selection":5}
+{"allow_speaker_stereo":false,"backend":6,"diagnostics":[[2,"--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural"]],"effective_output_layout":"binaural","layout":"0+2+0","selected":5,"selection":5}
+{"allow_speaker_stereo":true,"backend":6,"diagnostics":[[2,"--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural"]],"effective_output_layout":"binaural","layout":"0+2+0","selected":5,"selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=0+5+0","message":"SAF binaural backend does not support output layout '0+5+0'"},"layout":"0+5+0","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=0+5+0","message":"SAF binaural backend does not support output layout '0+5+0'"},"layout":"0+5+0","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=2+5+0","message":"SAF binaural backend does not support output layout '2+5+0'"},"layout":"2+5+0","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=2+5+0","message":"SAF binaural backend does not support output layout '2+5+0'"},"layout":"2+5+0","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=wav71","message":"SAF binaural backend does not support output layout 'wav71'"},"layout":"wav71","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=wav71","message":"SAF binaural backend does not support output layout 'wav71'"},"layout":"wav71","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=4+5+0","message":"SAF binaural backend does not support output layout '4+5+0'"},"layout":"4+5+0","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=4+5+0","message":"SAF binaural backend does not support output layout '4+5+0'"},"layout":"4+5+0","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=4+5+4","message":"SAF binaural backend does not support output layout '4+5+4'"},"layout":"4+5+4","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=4+5+4","message":"SAF binaural backend does not support output layout '4+5+4'"},"layout":"4+5+4","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=4+7+0","message":"SAF binaural backend does not support output layout '4+7+0'"},"layout":"4+7+0","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=4+7+0","message":"SAF binaural backend does not support output layout '4+7+0'"},"layout":"4+7+0","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=9.1.6","message":"SAF binaural backend does not support output layout '9.1.6'"},"layout":"9.1.6","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=9.1.6","message":"SAF binaural backend does not support output layout '9.1.6'"},"layout":"9.1.6","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=9+10+3","message":"SAF binaural backend does not support output layout '9+10+3'"},"layout":"9+10+3","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=9+10+3","message":"SAF binaural backend does not support output layout '9+10+3'"},"layout":"9+10+3","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=hoa3","message":"SAF binaural backend does not support output layout 'hoa3'"},"layout":"hoa3","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=hoa3","message":"SAF binaural backend does not support output layout 'hoa3'"},"layout":"hoa3","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=hoa2","message":"SAF binaural backend does not support output layout 'hoa2'"},"layout":"hoa2","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=hoa2","message":"SAF binaural backend does not support output layout 'hoa2'"},"layout":"hoa2","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout= 5.1","message":"SAF binaural backend does not support output layout ' 5.1'"},"layout":" 5.1","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout= 5.1","message":"SAF binaural backend does not support output layout ' 5.1'"},"layout":" 5.1","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=5.1 ","message":"SAF binaural backend does not support output layout '5.1 '"},"layout":"5.1 ","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=5.1 ","message":"SAF binaural backend does not support output layout '5.1 '"},"layout":"5.1 ","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=7.1.2","message":"SAF binaural backend does not support output layout '7.1.2'"},"layout":"7.1.2","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=7.1.2","message":"SAF binaural backend does not support output layout '7.1.2'"},"layout":"7.1.2","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=xyz","message":"SAF binaural backend does not support output layout 'xyz'"},"layout":"xyz","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=xyz","message":"SAF binaural backend does not support output layout 'xyz'"},"layout":"xyz","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=Xyz","message":"SAF binaural backend does not support output layout 'Xyz'"},"layout":"Xyz","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=Xyz","message":"SAF binaural backend does not support output layout 'Xyz'"},"layout":"Xyz","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=é","message":"SAF binaural backend does not support output layout 'é'"},"layout":"é","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=é","message":"SAF binaural backend does not support output layout 'é'"},"layout":"é","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=５.１","message":"SAF binaural backend does not support output layout '５.１'"},"layout":"５.１","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=５.１","message":"SAF binaural backend does not support output layout '５.１'"},"layout":"５.１","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=9.1.6x","message":"SAF binaural backend does not support output layout '9.1.6x'"},"layout":"9.1.6x","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=9.1.6x","message":"SAF binaural backend does not support output layout '9.1.6x'"},"layout":"9.1.6x","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=+","message":"SAF binaural backend does not support output layout '+'"},"layout":"+","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=+","message":"SAF binaural backend does not support output layout '+'"},"layout":"+","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=0+2+0 ","message":"SAF binaural backend does not support output layout '0+2+0 '"},"layout":"0+2+0 ","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=0+2+0 ","message":"SAF binaural backend does not support output layout '0+2+0 '"},"layout":"0+2+0 ","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=mono","message":"SAF binaural backend does not support output layout 'mono'"},"layout":"mono","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=mono","message":"SAF binaural backend does not support output layout 'mono'"},"layout":"mono","selection":5}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=1.0","message":"SAF binaural backend does not support output layout '1.0'"},"layout":"1.0","selection":5}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=1.0","message":"SAF binaural backend does not support output layout '1.0'"},"layout":"1.0","selection":5}
+{"allow_speaker_stereo":false,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":6,"selection":6}
+{"allow_speaker_stereo":true,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":6,"selection":6}
+{"allow_speaker_stereo":false,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"0+2+0","selected":6,"selection":6}
+{"allow_speaker_stereo":true,"backend":6,"diagnostics":[],"effective_output_layout":"binaural","layout":"0+2+0","selected":6,"selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=0+5+0","message":"SAF binaural backend does not support output layout '0+5+0'"},"layout":"0+5+0","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=0+5+0","message":"SAF binaural backend does not support output layout '0+5+0'"},"layout":"0+5+0","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=2+5+0","message":"SAF binaural backend does not support output layout '2+5+0'"},"layout":"2+5+0","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=2+5+0","message":"SAF binaural backend does not support output layout '2+5+0'"},"layout":"2+5+0","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=wav71","message":"SAF binaural backend does not support output layout 'wav71'"},"layout":"wav71","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=wav71","message":"SAF binaural backend does not support output layout 'wav71'"},"layout":"wav71","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=4+5+0","message":"SAF binaural backend does not support output layout '4+5+0'"},"layout":"4+5+0","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=4+5+0","message":"SAF binaural backend does not support output layout '4+5+0'"},"layout":"4+5+0","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=4+5+4","message":"SAF binaural backend does not support output layout '4+5+4'"},"layout":"4+5+4","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=4+5+4","message":"SAF binaural backend does not support output layout '4+5+4'"},"layout":"4+5+4","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=4+7+0","message":"SAF binaural backend does not support output layout '4+7+0'"},"layout":"4+7+0","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=4+7+0","message":"SAF binaural backend does not support output layout '4+7+0'"},"layout":"4+7+0","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=9.1.6","message":"SAF binaural backend does not support output layout '9.1.6'"},"layout":"9.1.6","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=9.1.6","message":"SAF binaural backend does not support output layout '9.1.6'"},"layout":"9.1.6","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=9+10+3","message":"SAF binaural backend does not support output layout '9+10+3'"},"layout":"9+10+3","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=9+10+3","message":"SAF binaural backend does not support output layout '9+10+3'"},"layout":"9+10+3","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=hoa3","message":"SAF binaural backend does not support output layout 'hoa3'"},"layout":"hoa3","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=hoa3","message":"SAF binaural backend does not support output layout 'hoa3'"},"layout":"hoa3","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=hoa2","message":"SAF binaural backend does not support output layout 'hoa2'"},"layout":"hoa2","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=hoa2","message":"SAF binaural backend does not support output layout 'hoa2'"},"layout":"hoa2","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout= 5.1","message":"SAF binaural backend does not support output layout ' 5.1'"},"layout":" 5.1","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout= 5.1","message":"SAF binaural backend does not support output layout ' 5.1'"},"layout":" 5.1","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=5.1 ","message":"SAF binaural backend does not support output layout '5.1 '"},"layout":"5.1 ","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=5.1 ","message":"SAF binaural backend does not support output layout '5.1 '"},"layout":"5.1 ","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=7.1.2","message":"SAF binaural backend does not support output layout '7.1.2'"},"layout":"7.1.2","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=7.1.2","message":"SAF binaural backend does not support output layout '7.1.2'"},"layout":"7.1.2","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=xyz","message":"SAF binaural backend does not support output layout 'xyz'"},"layout":"xyz","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=xyz","message":"SAF binaural backend does not support output layout 'xyz'"},"layout":"xyz","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=Xyz","message":"SAF binaural backend does not support output layout 'Xyz'"},"layout":"Xyz","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=Xyz","message":"SAF binaural backend does not support output layout 'Xyz'"},"layout":"Xyz","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=é","message":"SAF binaural backend does not support output layout 'é'"},"layout":"é","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=é","message":"SAF binaural backend does not support output layout 'é'"},"layout":"é","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=５.１","message":"SAF binaural backend does not support output layout '５.１'"},"layout":"５.１","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=５.１","message":"SAF binaural backend does not support output layout '５.１'"},"layout":"５.１","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=9.1.6x","message":"SAF binaural backend does not support output layout '9.1.6x'"},"layout":"9.1.6x","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=9.1.6x","message":"SAF binaural backend does not support output layout '9.1.6x'"},"layout":"9.1.6x","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=+","message":"SAF binaural backend does not support output layout '+'"},"layout":"+","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=+","message":"SAF binaural backend does not support output layout '+'"},"layout":"+","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=0+2+0 ","message":"SAF binaural backend does not support output layout '0+2+0 '"},"layout":"0+2+0 ","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=0+2+0 ","message":"SAF binaural backend does not support output layout '0+2+0 '"},"layout":"0+2+0 ","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=mono","message":"SAF binaural backend does not support output layout 'mono'"},"layout":"mono","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=mono","message":"SAF binaural backend does not support output layout 'mono'"},"layout":"mono","selection":6}
+{"allow_speaker_stereo":false,"error":{"code":2,"context":"layout=1.0","message":"SAF binaural backend does not support output layout '1.0'"},"layout":"1.0","selection":6}
+{"allow_speaker_stereo":true,"error":{"code":2,"context":"layout=1.0","message":"SAF binaural backend does not support output layout '1.0'"},"layout":"1.0","selection":6}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":7,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":7,"selection":7}
+{"allow_speaker_stereo":true,"backend":7,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":7,"selection":7}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"binaural","layout":"binaural","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"0+2+0","layout":"0+2+0","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"0+5+0","layout":"0+5+0","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"2+5+0","layout":"2+5+0","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"wav71","layout":"wav71","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"4+5+0","layout":"4+5+0","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"4+5+4","layout":"4+5+4","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"4+7+0","layout":"4+7+0","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"9.1.6","layout":"9.1.6","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"9+10+3","layout":"9+10+3","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"hoa3","layout":"hoa3","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"hoa2","layout":"hoa2","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":" 5.1","layout":" 5.1","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"5.1 ","layout":"5.1 ","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"7.1.2","layout":"7.1.2","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"xyz","layout":"xyz","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"Xyz","layout":"Xyz","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"é","layout":"é","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"５.１","layout":"５.１","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"9.1.6x","layout":"9.1.6x","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"+","layout":"+","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"0+2+0 ","layout":"0+2+0 ","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"mono","layout":"mono","selected":8,"selection":8}
+{"allow_speaker_stereo":false,"backend":8,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":8,"selection":8}
+{"allow_speaker_stereo":true,"backend":8,"diagnostics":[],"effective_output_layout":"1.0","layout":"1.0","selected":8,"selection":8}
