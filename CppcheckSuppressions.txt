@@ -24,6 +24,8 @@ unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h
 unusedStructMember:*/src/adm_render_common/speaker_layouts.h
+# Private FFI records are shared with Rust; cppcheck cannot see their foreign consumers.
+unusedStructMember:*/src/adm_render_common/engine_ffi.h
 # Room geometry and per-object DSP state are consumed by their implementation
 # units; standalone header checks cannot see those uses.
 unusedStructMember:*/tests/support/triple_balance/layout_222.h

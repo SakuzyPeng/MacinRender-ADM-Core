@@ -2,8 +2,10 @@
 //! before PCM consistency 5.2 A moved them to Rust (see `catalog-v1/README.md`).
 use mradm_engine::{catalog::Platform, scene_json, tables};
 use mradm_json::Value;
-use mradm_wav::{Chna, ChnaEntry, Format, SampleFormat, Writer, WriterOptions};
-use std::fs::File;
+
+mod common;
+use common::{adm_wav, bed_wav, field};
+use mradm_wav::SampleFormat;
 use std::path::{Path, PathBuf};
 
 fn dir() -> PathBuf {
@@ -15,16 +17,6 @@ fn scene_dir(set: &str) -> PathBuf {
         .join("../mradm-scene/tests")
         .join(set)
         .join("scenes")
-}
-
-fn field<'a>(value: &'a Value, key: &str) -> &'a Value {
-    value.as_object().unwrap().get(key).unwrap()
-}
-
-fn fixed<const N: usize>(text: &str) -> [u8; N] {
-    let mut out = [b' '; N];
-    out[..text.len()].copy_from_slice(text.as_bytes());
-    out
 }
 
 const ADM_SCENES: [(&str, &str); 18] = [
@@ -48,75 +40,6 @@ const ADM_SCENES: [(&str, &str); 18] = [
     ("policy-v1", "hoa3"),
 ];
 
-/// A 480-frame PCM24 BW64 file with the scene's AXML and CHNA (as `mradm-scene`'s tests write it).
-fn adm_wav(set: &str, name: &str, path: &Path, sample_format: SampleFormat) {
-    let meta =
-        mradm_json::parse(&std::fs::read(scene_dir(set).join(format!("{name}.json"))).unwrap())
-            .unwrap();
-    let channels = field(&meta, "channels").as_f64().unwrap() as u16;
-    let entries = field(&meta, "chna")
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|e| {
-            let e = e.as_array().unwrap();
-            ChnaEntry {
-                track_index: e[0].as_f64().unwrap() as u16,
-                uid: fixed::<12>(e[1].as_str().unwrap()),
-                track_format: fixed::<14>(e[2].as_str().unwrap()),
-                pack_format: fixed::<11>(e[3].as_str().unwrap()),
-                pad: 0,
-            }
-        })
-        .collect::<Vec<_>>();
-    let format = Format {
-        channels,
-        sample_rate: field(&meta, "sample_rate").as_f64().unwrap() as u32,
-        sample_format,
-        channel_mask: None,
-    };
-    let options = WriterOptions {
-        container: None,
-        axml: Some(std::fs::read(scene_dir(set).join(format!("{name}.xml"))).unwrap()),
-        chna: Some(Chna {
-            tracks: entries.len() as u16,
-            entries,
-        }),
-    };
-    let mut writer = Writer::new(File::create(path).unwrap(), format, options).unwrap();
-    writer
-        .write_frames(&vec![0.0; usize::from(channels) * 480])
-        .unwrap();
-    writer.finish().unwrap();
-}
-
-/// A plain WAVE channel bed without ADM chunks.
-fn bed_wav(
-    path: &Path,
-    channels: u16,
-    rate: u32,
-    sample_format: SampleFormat,
-    mask: Option<u32>,
-    frames: usize,
-) {
-    let format = Format {
-        channels,
-        sample_rate: rate,
-        sample_format,
-        channel_mask: mask,
-    };
-    let options = WriterOptions {
-        container: None,
-        axml: None,
-        chna: None,
-    };
-    let mut writer = Writer::new(File::create(path).unwrap(), format, options).unwrap();
-    writer
-        .write_frames(&vec![0.0; usize::from(channels) * frames])
-        .unwrap();
-    writer.finish().unwrap();
-}
-
 /// Name, channels, rate, sample format, WAVE mask and frames of an extra channel-bed input.
 type Bed = (&'static str, u16, u32, SampleFormat, Option<u32>, usize);
 
@@ -130,7 +53,12 @@ pub fn write_inputs(out: &Path) -> Vec<String> {
             17 => (format!("{name}-pcm16"), SampleFormat::Pcm16),
             _ => (name.to_string(), SampleFormat::Pcm24),
         };
-        adm_wav(set, name, &out.join(format!("{label}.wav")), format);
+        adm_wav(
+            &scene_dir(set),
+            name,
+            &out.join(format!("{label}.wav")),
+            format,
+        );
         names.push(label);
     }
     for layout in mradm_scene::input::input_layouts() {

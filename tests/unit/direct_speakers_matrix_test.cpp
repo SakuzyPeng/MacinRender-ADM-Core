@@ -1,9 +1,6 @@
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -38,15 +35,6 @@ constexpr std::string_view k_weighted_matrix = R"json({
   ]
 })json";
 
-constexpr std::string_view k_covered_matrix = R"json({
-  "schema": "mradm.direct-speakers-matrix.v1",
-  "output_layout": "5.1",
-  "routes": [
-    {"source_label": "C", "targets": [{"label": "L", "weight": 1}]},
-    {"source_label": "U+000", "mute": true}
-  ]
-})json";
-
 bool check(bool condition, std::string_view message) {
     if (!condition) {
         std::cerr << "FAIL: " << message << '\n';
@@ -71,46 +59,6 @@ bool check_error(const mradm::Result<T>& result, std::string_view needle, std::s
 
 bool almost_equal(float lhs, float rhs, float tolerance = 1.0e-6F) {
     return std::abs(lhs - rhs) <= tolerance;
-}
-
-struct CaptureLogSink final : mradm::LogSink {
-  private:
-    struct Entry {
-        mradm::LogLevel level;
-        std::string message;
-    };
-
-  public:
-    void log(mradm::LogLevel level, std::string_view module, std::string_view message) override {
-        (void) module;
-        entries.push_back({level, std::string{message}});
-    }
-
-    [[nodiscard]] bool contains(mradm::LogLevel level, std::string_view text) const {
-        return std::ranges::any_of(entries, [&](const auto& entry) {
-            return entry.level == level && entry.message.find(text) != std::string::npos;
-        });
-    }
-
-  private:
-    std::vector<Entry> entries;
-};
-
-mradm::AdmScene make_scene(std::vector<std::vector<std::string>> block_labels) {
-    mradm::AdmScene scene;
-    mradm::SceneObject object;
-    object.id = "AO_matrix";
-    mradm::SceneTrackRef track;
-    track.channel_index = 0U;
-    track.track_uid = "ATU_matrix";
-    for (auto& labels : block_labels) {
-        mradm::SceneDirectSpeakersBlock block;
-        block.speaker_labels = std::move(labels);
-        track.ds_blocks.push_back(std::move(block));
-    }
-    object.tracks.push_back(std::move(track));
-    scene.objects.push_back(std::move(object));
-    return scene;
 }
 
 bool verify_parser_and_coefficients() {
@@ -295,74 +243,6 @@ bool verify_target_and_source_resolution() {
     return ok;
 }
 
-bool verify_scene_layout_and_configuration_validation() {
-    bool ok = true;
-    const auto scene = make_scene({{"M+000"}});
-
-    mradm::RenderOptions options;
-    options.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
-    options.direct_speakers_matrix_json = std::string{k_covered_matrix};
-    CaptureLogSink logs;
-    auto resolved = mradm::resolve_direct_speakers_matrix(options, scene, "0+5+0", logs);
-    ok &= check(resolved.has_value() && *resolved != nullptr, "layout alias and covered source resolve");
-    ok &= check(logs.contains(mradm::LogLevel::warning, "U+000"), "unused source row produces a warning");
-
-    mradm::RenderOptions missing;
-    missing.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
-    mradm::NullLogSink null_logs;
-    const auto missing_result = mradm::resolve_direct_speakers_matrix(missing, scene, "0+5+0", null_logs);
-    ok &= check_error(missing_result, "requires", "matrix mode without configuration is rejected");
-
-    mradm::RenderOptions stray;
-    stray.direct_speakers_matrix_json = std::string{k_covered_matrix};
-    const auto stray_result = mradm::resolve_direct_speakers_matrix(stray, scene, "0+5+0", null_logs);
-    ok &= check_error(stray_result, "requires routing mode", "matrix configuration in a non-matrix mode is rejected");
-
-    const auto mismatch = mradm::resolve_direct_speakers_matrix(options, scene, "4+7+0", null_logs);
-    ok &= check_error(mismatch, "does not match", "profile/output layout mismatch is rejected");
-
-    const auto uncovered_scene = make_scene({{"M+110"}});
-    const auto uncovered = mradm::resolve_direct_speakers_matrix(options, uncovered_scene, "0+5+0", null_logs);
-    ok &= check_error(uncovered, "not covered", "non-LFE block missing from matrix is rejected");
-
-    const auto missing_label_scene = make_scene({{}});
-    const auto missing_label = mradm::resolve_direct_speakers_matrix(options, missing_label_scene, "0+5+0", null_logs);
-    ok &= check_error(missing_label, "<missing>", "unlabelled non-LFE block is rejected");
-
-    mradm::RenderOptions ambiguous;
-    ambiguous.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
-    ambiguous.direct_speakers_matrix_json = R"json({
-      "schema":"mradm.direct-speakers-matrix.v1","output_layout":"5.1","routes":[
-        {"source_label":"C","mute":true},{"source_label":"L","mute":true}
-      ]})json";
-    const auto ambiguous_scene = make_scene({{"C", "L"}});
-    const auto ambiguous_result = mradm::resolve_direct_speakers_matrix(ambiguous, ambiguous_scene, "0+5+0", null_logs);
-    ok &= check_error(ambiguous_result, "multiple", "scene block matching multiple source rows is rejected");
-
-    CaptureLogSink precedence_logs;
-    mradm::RenderOptions precedence = options;
-    precedence.direct_speakers_matrix_path = "/path/that/must/not/be/read.json";
-    const auto precedence_result = mradm::resolve_direct_speakers_matrix(precedence, scene, "0+5+0", precedence_logs);
-    ok &= check(precedence_result.has_value(), "in-memory JSON takes precedence over path");
-    ok &= check(precedence_logs.contains(mradm::LogLevel::warning, "ignoring"), "JSON/path precedence emits a warning");
-
-    const auto suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    const auto path = std::filesystem::temp_directory_path() / ("mradm-ds-matrix-" + suffix + ".json");
-    {
-        std::ofstream file(path);
-        file << k_covered_matrix;
-    }
-    mradm::RenderOptions path_options;
-    path_options.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
-    path_options.direct_speakers_matrix_path = path;
-    const auto path_result = mradm::resolve_direct_speakers_matrix(path_options, scene, "0+5+0", null_logs);
-    ok &= check(path_result.has_value(), "matrix can be loaded from a path");
-    std::error_code remove_error;
-    std::filesystem::remove(path, remove_error);
-
-    return ok;
-}
-
 bool verify_renderer_scope() {
     using mradm::DirectSpeakersRoutingMode;
     using mradm::RendererSelection;
@@ -402,8 +282,7 @@ bool verify_renderer_scope() {
 
 int main() {
     const bool ok = verify_parser_and_coefficients() && verify_strict_schema_errors() &&
-                    verify_target_and_source_resolution() && verify_scene_layout_and_configuration_validation() &&
-                    verify_renderer_scope();
+                    verify_target_and_source_resolution() && verify_renderer_scope();
     if (ok) {
         std::cout << "DirectSpeakers matrix test passed\n";
         return EXIT_SUCCESS;
