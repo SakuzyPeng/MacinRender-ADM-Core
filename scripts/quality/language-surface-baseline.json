@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 156,
-      "lines": 31175
+      "lines": 31174
     },
     "islands": {
       "files": 5,
@@ -15,7 +15,7 @@
     },
     "tests": {
       "files": 133,
-      "lines": 48820
+      "lines": 48811
     },
     "reference": {
       "files": 38,
@@ -23,7 +23,7 @@
     },
     "rust": {
       "files": 286,
-      "lines": 103209
+      "lines": 103210
     },
     "rust-vendor": {
       "files": 175,
@@ -35,7 +35,7 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40297,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 3452,
+    "rust/crates/mradm-engine": 3453,
     "rust/crates/mradm-ffi": 20279,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
@@ -56,7 +56,7 @@
     "src/adm_cli": 1642,
     "src/adm_core": 350,
     "src/adm_dsp": 1994,
-    "src/adm_engine": 2559,
+    "src/adm_engine": 2558,
     "src/adm_io": 447,
     "src/adm_metadata": 772,
     "src/adm_realtime": 5437,
@@ -94,6 +94,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 2860,
     "tests/tools": 2830,
-    "tests/unit": 40725
+    "tests/unit": 40716
   }
 }

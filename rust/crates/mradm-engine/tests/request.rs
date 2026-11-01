@@ -226,10 +226,11 @@ fn matrix_resolution_matches_the_cpp_factory() {
             _ => None,
         };
         let path_text = path.as_ref().map(|p| p.to_str().unwrap().to_owned());
-        let label = path_text
-            .as_deref()
-            .unwrap_or("")
-            .replace(matrices.to_str().unwrap(), "<dir>");
+        // Keep the frozen diagnostic spelling independent of the host's path separator.
+        let label = path
+            .as_ref()
+            .map(|p| format!("<dir>/{}", p.file_name().unwrap().to_str().unwrap()))
+            .unwrap_or_default();
         let source = MatrixSource {
             json: matches!(source_kind, "json" | "both").then_some(json.as_slice()),
             path: path_text.as_deref(),

@@ -71,7 +71,7 @@ std::string normalize_output_layout(const std::string& layout) {
 }
 
 Result<ResolvedRenderer>
-resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo) {
+resolve_renderer(RendererSelection requested, const std::string& requested_layout, bool internal_allow_speaker_stereo) {
     MradmEngineRenderer record{};
     const EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
         return mradm_engine_resolve_renderer(static_cast<uint32_t>(requested),

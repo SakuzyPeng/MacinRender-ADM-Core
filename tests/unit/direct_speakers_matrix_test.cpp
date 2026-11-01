@@ -35,15 +35,6 @@ constexpr std::string_view k_weighted_matrix = R"json({
   ]
 })json";
 
-constexpr std::string_view k_covered_matrix = R"json({
-  "schema": "mradm.direct-speakers-matrix.v1",
-  "output_layout": "5.1",
-  "routes": [
-    {"source_label": "C", "targets": [{"label": "L", "weight": 1}]},
-    {"source_label": "U+000", "mute": true}
-  ]
-})json";
-
 bool check(bool condition, std::string_view message) {
     if (!condition) {
         std::cerr << "FAIL: " << message << '\n';
