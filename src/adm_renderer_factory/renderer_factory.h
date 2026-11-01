@@ -49,7 +49,7 @@ struct ResolvedRenderer {
 //   - apple is unavailable on non-Apple builds
 // Returns ErrorCode::unsupported for the rejected / unavailable cases.
 [[nodiscard]] Result<ResolvedRenderer>
-resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo);
+resolve_renderer(RendererSelection requested, const std::string& requested_layout, bool internal_allow_speaker_stereo);
 
 // Validate an explicit DirectSpeakers routing request after backend/layout
 // resolution. Automatic preserves native behaviour on unsupported backends.

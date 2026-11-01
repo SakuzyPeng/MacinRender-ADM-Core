@@ -573,11 +573,10 @@ RenderResult RenderService::render(const RenderRequest& request,
     const auto packager =
         wants_iamf_mp4 && iamf_available ? audio::detect_iamf_mp4_packager() : audio::IamfMp4PackagerInfo{};
     const auto channels = channel_count_for_layout(caps, output_layout);
-    std::vector<MradmAdmText> layer_texts;
-    layer_texts.reserve(request.options.iamf_layers.size());
-    for (const auto& layer : request.options.iamf_layers) {
-        layer_texts.push_back(render_common::engine_text(layer));
-    }
+    std::vector<MradmAdmText> layer_texts(request.options.iamf_layers.size());
+    std::ranges::transform(request.options.iamf_layers, layer_texts.begin(), [](std::string_view layer) {
+        return render_common::engine_text(layer);
+    });
     const auto extension = final_path.extension().string();
     const MradmEngineOutputRequest target_request{
         render_common::engine_text(extension),
