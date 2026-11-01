@@ -272,11 +272,11 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 | **HRTF / SOFA binauraliser** | ✅ 已有独立 `saf-binaural` 后端：默认 SAF 内置 KEMAR HRTF，支持 `--sofa` 加载用户 FIR SOFA HRIR；Objects 已接入 channelLock / objectDivergence / extent / diffuse，输出 2ch binaural | 后续可扩展 HOA 输入、更多 HRTF 数据集选择、距离策略和房间响应 |
 | **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；HOA encode 使用 divergence-aware 逐系数 32-tap diffuse decorrelator；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
-| **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
+| **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目内置布局表；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
 | **输出扬声器几何 profile** | ✅ `standard` / `apple` 两套内置坐标；EAR / SAF 可切换，Apple 后端固定 CoreAudio；CLI `--speaker-geometry`、C ABI v1.31 | profile 只改变非 LFE 有效输出坐标，不改变 ADM 输入语义或声道顺序 |
 | **DirectSpeakers 路由与自定义标签矩阵** | ✅ `RenderOptions::direct_speakers_routing_mode` / CLI `--direct-speakers-routing`；C ABI v1.32 提供 `label` / `position`，v1.34 追加 `matrix` 与 path/JSON 配置；EAR、SAF、Apple 扬声器支持矩阵 | `matrix` 将每个非 LFE 输入标签按 `sqrt(weight/sum)` 分配到一个或多个输出标签，要求严格布局绑定与完整覆盖；LFE 始终优先走专用路径；binaural/HOA 拒绝矩阵 |
 | **ADM `headLocked` / 头追踪** | ✅ Objects、DirectSpeakers、HOA 读取/inspect/策略/写回；SAF 与 Apple binaural 离线及实时按活动 block 生效；C ABI v1.33 支持可选 live override | scene-relative=`false`、head-relative=`true`；扬声器后端不做听者旋转，仅保留元数据；系统空间音频监听不传递逐对象状态 |
-| **VBAP 布局扩展** | ✅ 通道顺序和 LFE 位置已校对；SAF 补齐 `5.1.2` / `9.1.4` / `9.1.6`，并保留 `register_vbap_layout()` 运行时注册入口 | — |
+| **VBAP 内置布局** | ✅ 通道顺序和 LFE 位置已校对；SAF 支持 `5.1.2` / `9.1.4` / `9.1.6` 等项目内置输出布局 | — |
 | **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
 | **Objects 动态元数据去拉链** | ✅ `RenderOptions.object_smoothing_frames`（默认 0，CLI `--object-smoothing-frames`）；VBAP / EAR / HOA encode / binaural 均接入，DirectSpeakers 不平滑 | 用于高密度 jumpPosition 压力素材的工程平滑；默认逐样本跟随 ADM 块，问题素材可显式调大 |
