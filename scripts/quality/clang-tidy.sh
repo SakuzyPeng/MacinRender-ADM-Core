@@ -61,7 +61,7 @@ while IFS= read -r -d '' file; do
         files+=("$file")
         continue
     fi
-    if [[ "$file" == */tests/reference/libadm/* ]]; then
+    if [[ "$file" == */tests/reference/libadm/* || "$file" == */tests/support/scene_json/* ]]; then
         if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
             continue
         fi

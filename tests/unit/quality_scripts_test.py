@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Regressions for private FFI array contracts, reference retirement and the C/C++ surface ratchet."""
+"""Regressions for FFI contracts, optional reference analysis, retirement and the C/C++ surface ratchet."""
 
 from contextlib import redirect_stderr, redirect_stdout
 import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,6 +30,94 @@ def load_check(name):
 ffi = load_check("check-ffi-headers")
 retention = load_check("check-reference-retention")
 surface = load_check("language-surface")
+
+
+@unittest.skipIf(sys.platform == "win32", "Quality shell scripts run on the macOS quality host")
+class OptionalReferenceAnalysisTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="mradm-quality-scope-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.build = self.root / "build/debug"
+        self.build.mkdir(parents=True)
+        (self.build / "compile_commands.json").write_text("[]", encoding="utf-8")
+        self.log = self.root / "tools.jsonl"
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        for name in ("clang-format", "clang-tidy", "cppcheck"):
+            tool = self.bin / name
+            tool.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, sys\n"
+                "with open(os.environ['QUALITY_TEST_LOG'], 'a', encoding='utf-8') as log:\n"
+                "    log.write(json.dumps(sys.argv) + '\\n')\n", encoding="utf-8",
+            )
+            tool.chmod(0o755)
+        self.env = {
+            **os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
+            "CLANG_FORMAT": str(self.bin / "clang-format"), "CLANG_TIDY": str(self.bin / "clang-tidy"),
+            "QUALITY_TEST_LOG": str(self.log),
+        }
+        self.git("init", "-q")
+        (self.root / "README.md").write_text("Quality scope fixture.\n", encoding="utf-8")
+        self.git("add", "README.md")
+        self.git("commit", "-qm", "baseline")
+        self.sources = (
+            "src/adm_core/module.cpp", "tests/reference/libadm/reference_test.cpp",
+            "tests/support/scene_json/scene_json.cpp", "tests/support/unconditional.cpp",
+        )
+        for name in self.sources:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("// Analysis fixture.\n", encoding="utf-8")
+        for name in ("clang-tidy.sh", "check-changed.sh", "cppcheck.sh"):
+            path = self.root / "scripts/quality" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(REPO / "scripts/quality" / name, path)
+        (self.root / "include").mkdir()
+        self.git("add", ".")
+        self.git("commit", "-qm", "candidate")
+
+    def git(self, *args):
+        subprocess.run(["git", "-c", "user.name=Quality test", "-c", "user.email=test@example.invalid",
+                        "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={self.root / 'no-hooks'}",
+                        *args], cwd=self.root, check=True, capture_output=True, text=True)
+
+    def run_quality(self, script, enabled):
+        (self.build / "CMakeCache.txt").write_text(
+            f"MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL={'ON' if enabled else 'OFF'}\n", encoding="utf-8",
+        )
+        self.log.unlink(missing_ok=True)
+        args = ["--base", "HEAD^", "--build-dir", str(self.build)] if script == "check-changed.sh" else [str(self.build)]
+        result = subprocess.run(["bash", str(self.root / "scripts/quality" / script), *args],
+                                cwd=self.root, env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return {Path(call[0]).name: call[1:] for call in
+                (json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines())}
+
+    def test_full_tidy_analyzes_reference_sources_only_when_enabled(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                args = self.run_quality("clang-tidy.sh", enabled)["clang-tidy"]
+                for index, name in enumerate(self.sources):
+                    self.assertEqual(str(self.root / name) in args, enabled or index in (0, 3), name)
+
+    def test_changed_checks_keep_formatting_optional_reference_sources(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                calls = self.run_quality("check-changed.sh", enabled)
+                for index, name in enumerate(self.sources):
+                    self.assertIn(str(self.root / name), calls["clang-format"])
+                    for tool in ("clang-tidy", "cppcheck"):
+                        self.assertEqual(str(self.root / name) in calls[tool], enabled or index in (0, 3), name)
+
+    def test_full_cppcheck_excludes_disabled_reference_support(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                args = self.run_quality("cppcheck.sh", enabled)["cppcheck"]
+                excludes = [args[index + 1] for index, arg in enumerate(args[:-1]) if arg == "-i"]
+                for name in ("tests/reference/libadm", "tests/support/scene_json"):
+                    self.assertEqual(str(self.root / name) in excludes, not enabled, name)
 
 
 class FfiArrayTests(unittest.TestCase):
