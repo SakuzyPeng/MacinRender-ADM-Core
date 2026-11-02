@@ -12,22 +12,13 @@
 #include "adm/live_override.h"
 #include "adm/render.h"
 
+#include "capability_records.h"
+#include "engine_ffi.h"
 #include "routing_ffi.h"
 
 namespace mradm::render_common {
 
-// The driver's log, progress and error wording: the loudspeaker backends', or the HOA encoder's
-// and EAR's own.
-enum class DriverStyle : uint8_t { speaker, hoa, ear };
-
-// A Rust backend's offline driver plan (its preparation's kernel) of `tracks` input channels.
-struct SpeakerMix {
-    const void* plan{nullptr};
-    std::size_t tracks{0};
-    DriverStyle style{DriverStyle::speaker};
-};
-
-// A Rust driver or stream error with the locator its kind names (routing_ffi.h).
+// A Rust stream error with the locator its kind names (routing_ffi.h).
 class DriverError {
   public:
     uint32_t* location() noexcept { return &location_; }
@@ -56,38 +47,36 @@ struct MatrixRecords {
     std::size_t label_bytes{0};
 };
 
-// A VBAP, HOA, EAR or Triple Balance plan prepared in Rust mradm-render; immutable and reused across
-// render_window() and open_stream() calls (PreviewSession scrubbing).
-struct RustPrepared final : IPreparedRender {
+// A Rust backend preparation (mradm-engine `backend`, PCM consistency 5.2 C1): immutable and reused
+// across offline windows and file streams (PreviewSession scrubbing). It keeps the plan's input
+// format and the Triple Balance mode for the stream checks.
+struct EnginePrepared final : IPreparedRender {
     std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
         nullptr, &mradm_render_prepared_destroy};
-    SpeakerMix mix;
     uint16_t outputs{0};
     uint16_t inputs{0};
     uint32_t sample_rate{0};
+    uint64_t frames{0};
+    TripleBalanceMode mode{TripleBalanceMode::standard};
 };
 
-// Takes ownership of a Rust preparation, logs its lines under `module` and returns its error or
-// the prepared plan.
-[[nodiscard]] Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
-                                                                   MradmRenderPrepared* raw,
-                                                                   const MradmRenderPreparedView& view,
-                                                                   DriverStyle style,
-                                                                   LogSink& logs,
-                                                                   std::string_view module);
+// The one preparation entry of the Rust backends (also for MonitorEngine and the stream tools):
+// the plan's backend checks, logs and the backend's own preparation run in Rust. `room_profile` is
+// the room package handle of plan.room (room-binaural only).
+[[nodiscard]] Result<std::shared_ptr<EnginePrepared>>
+prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, const void* room_profile = nullptr);
 
-// File streaming over a Rust preparation (mradm-render `stream`): the offline block size and
-// renderer into a FIFO, so a gap-free run from frame 0 is bit-identical to render_window. Live
+// The offline render of a Rust backend preparation (mradm-engine `offline`): reading, rendering,
+// writing, metering, the progress events, logs and cancellation points run in Rust; this loop
+// forwards them and passes the stop token before every step.
+[[nodiscard]] Result<RenderMetrics>
+render_offline(const IPreparedRender& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs);
+
+// File streaming over a loudspeaker preparation (mradm-render `stream`): the offline block size and
+// renderer into a FIFO, so a gap-free run from frame 0 is bit-identical to the offline render. Live
 // gain pre-scales each input channel by its object's (or speaker label's) override; topology
 // scales (diffuse / extent / divergence) are ignored.
-[[nodiscard]] Result<std::unique_ptr<IRenderStream>> open_file_stream(const RustPrepared& prepared,
+[[nodiscard]] Result<std::unique_ptr<IRenderStream>> open_file_stream(const EnginePrepared& prepared,
                                                                       const RenderPlan& plan);
-
-[[nodiscard]] Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                                       const SpeakerMix& gain_matrix,
-                                                       uint16_t num_out_ch,
-                                                       std::string_view backend,
-                                                       ProgressSink& progress,
-                                                       LogSink& logs);
 
 } // namespace mradm::render_common

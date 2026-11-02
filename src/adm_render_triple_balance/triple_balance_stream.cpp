@@ -17,7 +17,7 @@ class TripleBalanceStream final : public IRenderStream {
   public:
     TripleBalanceStream(MradmRenderTripleBalanceStream* raw, const Prepared& prepared, const RenderPlan& plan)
         : handle_(raw, &mradm_render_triple_balance_stream_destroy), input_path_(plan.input_path),
-          layout_(plan.output_layout), outputs_(prepared.output_channels), sample_rate_(prepared.sample_rate) {}
+          layout_(plan.output_layout), outputs_(prepared.outputs), sample_rate_(prepared.sample_rate) {}
 
     Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
         DriverError error;
@@ -115,14 +115,14 @@ class TripleBalanceStream final : public IRenderStream {
 } // namespace
 
 Result<std::unique_ptr<IRenderStream>> open_stream(const Prepared& prepared, const RenderPlan& plan) {
-    if (plan.scene.info.num_channels == 0 || prepared.output_channels == 0 ||
+    if (plan.scene.info.num_channels == 0 || prepared.outputs == 0 ||
         prepared.sample_rate != plan.scene.info.sample_rate) {
         return make_error(ErrorCode::invalid_argument, "triple-balance: invalid stream format");
     }
     const auto path = audio::wav_path_utf8(plan.input_path);
     DriverError error;
     MradmRenderTripleBalanceStream* raw = nullptr;
-    if (const auto code = mradm_render_triple_balance_stream_open(prepared.rust->handle.get(),
+    if (const auto code = mradm_render_triple_balance_stream_open(prepared.handle.get(),
                                                                   reinterpret_cast<const uint8_t*>(path.data()),
                                                                   path.size(),
                                                                   plan.default_interp_ms,

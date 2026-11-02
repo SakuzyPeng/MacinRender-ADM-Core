@@ -1,6 +1,7 @@
 // Private render-orchestration boundary (mradm-engine, PCM consistency 5.2): the Rust backends'
-// capability records and the discovery JSON documents (5.2 A), and the request resolution (5.2 B). Backend records are
-// process-lifetime Rust data and are never freed; a document is owned by its MradmEngineText handle.
+// capability records and the discovery JSON documents (5.2 A), the request resolution (5.2 B), and the
+// backend preparation and offline render step (5.2 C1). Backend records are process-lifetime Rust data
+// and are never freed; a document is owned by its MradmEngineText handle.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -8,6 +9,7 @@
 #include "../adm_core/config_ffi.h"
 #include "../adm_metadata/adm_ffi.h"
 #include "../adm_metadata/scene_ffi.h"
+#include "routing_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -173,6 +175,113 @@ int32_t mradm_engine_output_target(const MradmEngineOutputRequest* request,
                                    MradmEngineResult** out,
                                    MradmEngineStatus* status);
 void mradm_engine_result_destroy(MradmEngineResult* result);
+
+// ── Backend preparation and the offline render step (5.2 C1) ──────────────────────────────────
+
+// RenderPlan for a backend: kind is render_common::EngineBackend; routing, speaker_spread and
+// binaural_spread the C++ enum values; reference holds the default geometry when absent; sofa_path is
+// UTF-8; room_profile may be null.
+typedef struct MradmEnginePrepareRequest {
+    uint32_t kind;
+    MradmAdmText layout_id;
+    uint32_t apple_geometry;
+    uint32_t routing;
+    uint32_t has_matrix;
+    const MradmRenderMatrixRoute* matrix;
+    size_t matrix_len;
+    uint32_t speaker_spread;
+    uint32_t binaural_spread;
+    uint32_t triple_balance_d;
+    uint32_t split_power;
+    uint32_t smoothing_frames;
+    uint32_t default_interp_ms;
+    MradmAdmText input_path;
+    uint32_t has_sofa;
+    MradmAdmText sofa_path;
+    MradmAdmText sofa_file_name;
+    uint32_t has_reference;
+    MradmRoomScreenGeometry reference;
+    uint32_t has_reproduction;
+    MradmRoomScreenGeometry reproduction;
+    const void* room_profile;
+    MradmAdmText room_hrir;
+    double room_metres;
+    uint32_t room_quality;
+} MradmEnginePrepareRequest;
+
+// The status and log lines, the Triple Balance report (has_report, also of a rejection) and the
+// plan's counts; valid while the handle lives.
+typedef struct MradmEnginePreparedView {
+    MradmEngineStatus status;
+    uint32_t has_report;
+    MradmAdmText report;
+    size_t tracks;
+    size_t inputs;
+    size_t outputs;
+    uint32_t sample_rate;
+} MradmEnginePreparedView;
+
+// Unless the arguments are invalid (1, *output null) *output and *view are set, also for a rejected
+// preparation; destroy with mradm_render_prepared_destroy.
+int32_t mradm_engine_prepare(const MradmSceneHandle* scene,
+                             const MradmEnginePrepareRequest* request,
+                             MradmRenderPrepared** output,
+                             MradmEnginePreparedView* view);
+
+typedef struct MradmEngineOffline MradmEngineOffline;
+
+// input_path / output_path are the UTF-8 paths the files open with; the display texts appear in
+// locators and logs.
+typedef struct MradmEngineOfflineSettings {
+    MradmAdmText input_path;
+    MradmAdmText output_path;
+    MradmAdmText input_display;
+    MradmAdmText output_display;
+    MradmAdmText output_layout;
+    size_t inputs;
+    uint64_t frames;
+    uint32_t sample_rate;
+    uint32_t default_interp_ms;
+    uint32_t smoothing_frames;
+    uint32_t has_window;
+    uint64_t window_start;
+    uint64_t window_count;
+    uint32_t has_meter_window;
+    uint64_t meter_start;
+    uint64_t meter_count;
+    float pose[3];
+} MradmEngineOfflineSettings;
+
+// kind 0 nothing, 1 progress (stage .. message), 2 log (level, module, message), 3 done (the metrics);
+// the texts live until the next call.
+typedef struct MradmEngineOfflineEvent {
+    uint32_t kind;
+    uint32_t stage;
+    uint32_t operation;
+    double fraction;
+    double stage_fraction;
+    uint64_t current;
+    uint64_t total;
+    uint32_t level;
+    MradmAdmText module;
+    MradmAdmText message;
+    uint32_t has_lufs;
+    uint32_t has_peak;
+    double lufs;
+    double peak_dbtp;
+} MradmEngineOfflineEvent;
+
+// The offline render of a successful preparation; nothing opens before the first next.
+int32_t mradm_engine_offline_open(const MradmRenderPrepared* prepared,
+                                  const MradmEngineOfflineSettings* settings,
+                                  MradmEngineOffline** output);
+// cancelled is the caller's stop token now; an error (the status code, *status valid until the next
+// call) or the done event spends the run.
+int32_t mradm_engine_offline_next(MradmEngineOffline* handle,
+                                  uint32_t cancelled,
+                                  MradmEngineOfflineEvent* event,
+                                  MradmEngineStatus* status);
+void mradm_engine_offline_destroy(MradmEngineOffline* handle);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
 // Rust mradm-render (PCM consistency 4.5): the DirectSpeakers, speaker-label and LFE routing
-// rules, the offline driver stepped block by block (next, write, commit, finish), and the VBAP,
-// HOA and EAR backends with their file streams. Inputs are borrowed for the call; views live until the
-// handle's next call or destroy. Error buffers: capacity in *len, bytes written out,
+// rules, the file streams over a backend preparation (mradm_engine_prepare, engine_ffi.h) and the
+// Scene stream renderers. Inputs are borrowed for the call; views live until the handle's next call
+// or destroy. Error buffers: capacity in *len, bytes written out,
 // NUL-terminated. Status values follow adm::ErrorCode.
 #pragma once
 #include "../adm_dsp/room_ffi.h"
@@ -11,7 +11,6 @@ extern "C" {
 #endif
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmRenderMatrix MradmRenderMatrix;
-typedef struct MradmRenderOffline MradmRenderOffline;
 typedef struct MradmRenderPrepared MradmRenderPrepared;
 typedef struct MradmRenderStream MradmRenderStream;
 
@@ -74,106 +73,6 @@ typedef struct MradmRenderLfeRouting {
     size_t logs_len;
 } MradmRenderLfeRouting;
 
-typedef struct MradmRenderOfflineSettings {
-    size_t inputs;
-    size_t outputs;
-    uint64_t frames;
-    uint32_t sample_rate;
-    uint32_t default_interp_ms;
-    uint64_t smoothing_frames;
-    uint32_t has_window;
-    uint64_t window_start;
-    uint64_t window_count;
-    uint32_t has_meter_window;
-    uint64_t meter_start;
-    uint64_t meter_count;
-} MradmRenderOfflineSettings;
-
-// frames is 0 after the last block.
-typedef struct MradmRenderOfflineBlock {
-    uint64_t start;
-    size_t frames;
-    uint32_t last;
-    size_t emit_offset;
-    size_t emit_frames;
-    const float* input;
-    size_t input_len;
-    float* output;
-    size_t output_len;
-} MradmRenderOfflineBlock;
-
-typedef struct MradmRenderOfflineProgress {
-    double fraction;
-    double stage_fraction;
-    uint64_t done;
-    uint64_t total;
-} MradmRenderOfflineProgress;
-
-typedef struct MradmRenderOfflineMetrics {
-    uint32_t has_lufs;
-    uint32_t has_peak;
-    double lufs;
-    double peak_dbtp;
-} MradmRenderOfflineMetrics;
-
-typedef struct MradmRenderSpeaker {
-    MradmAdmText label;
-    float azimuth;
-    float elevation;
-    uint32_t is_lfe;
-} MradmRenderSpeaker;
-
-// routing: 0 label, 1 position, 2 matrix; matrix is read when has_matrix != 0.
-typedef struct MradmRenderVbapRequest {
-    const MradmRenderSpeaker* speakers;
-    size_t speakers_len;
-    MradmAdmText layout_id;
-    MradmAdmText input_path;
-    uint32_t spread;
-    uint32_t routing;
-    uint32_t has_matrix;
-    const MradmRenderMatrixRoute* matrix;
-    size_t matrix_len;
-    uint32_t split_power;
-} MradmRenderVbapRequest;
-
-typedef struct MradmRenderHoaRequest {
-    MradmAdmText layout_id;
-    uint32_t split_power;
-} MradmRenderHoaRequest;
-
-// geometry: 0 standard, 1 Apple; matrix_routing selects matrix DirectSpeakers routing (otherwise
-// automatic), and matrix is read when has_matrix != 0.
-typedef struct MradmRenderEarRequest {
-    MradmAdmText layout_id;
-    uint32_t geometry;
-    MradmAdmText input_path;
-    uint32_t matrix_routing;
-    uint32_t has_matrix;
-    const MradmRenderMatrixRoute* matrix;
-    size_t matrix_len;
-    uint32_t split_power;
-} MradmRenderEarRequest;
-
-// mode: 0 standard, 1 D; spread: 0 automatic, 1 none, 2 MDAP; routing: 0 automatic, 1 label,
-// 2 position, 3 matrix.
-typedef struct MradmRenderTripleBalanceRequest {
-    MradmAdmText layout_id;
-    uint32_t mode;
-    uint32_t spread;
-    uint32_t split_power;
-    uint32_t standard_geometry;
-    uint32_t smoothing_frames;
-    uint32_t routing;
-    uint32_t has_matrix;
-    MradmAdmText input_path;
-} MradmRenderTripleBalanceRequest;
-
-// The backend report, also of a rejected preparation.
-typedef struct MradmRenderTripleBalanceView {
-    MradmAdmText report;
-} MradmRenderTripleBalanceView;
-
 // A live edit (`LiveObjectOverride`): the common override and the topology scales.
 typedef struct MradmRenderLiveOverride {
     MradmRenderOverride base;
@@ -187,16 +86,6 @@ typedef struct MradmRenderLiveOverride {
 
 typedef struct MradmRenderTripleBalanceStream MradmRenderTripleBalanceStream;
 
-// The error text of a failed preparation; plan (the offline driver's plan) is null unless prepared.
-typedef struct MradmRenderPreparedView {
-    const MradmRenderLogLine* logs;
-    size_t logs_len;
-    MradmAdmText message;
-    MradmAdmText context;
-    const void* plan;
-    size_t tracks;
-    size_t outputs;
-} MradmRenderPreparedView;
 // Scene stream VBAP and Triple Balance renderers (live_scene::ILiveSceneRenderer). Roles: 0 object,
 // 1 DirectSpeakers, 2 LFE; object_id is the semantic identity's AudioObject id, empty without one. A
 // plane's samples are read only with a signal; `trace` is the checkpoint prefix.
@@ -280,20 +169,6 @@ typedef struct MradmRenderLiveDiagnostic {
     uint64_t field;
     MradmAdmText message;
 } MradmRenderLiveDiagnostic;
-// Room renderer preparation (PCM consistency 4.6 D): spread 0 automatic, 1 none, 2 cloud, 3 SAF
-// spreader; routing 0 automatic, 1 label, 2 position, 3 matrix.
-typedef struct MradmRenderRoomRequest {
-    MradmAdmText layout_id;
-    uint32_t sample_rate;
-    uint32_t spread;
-    uint32_t routing;
-    uint32_t has_matrix;
-    uint32_t default_interp_ms;
-    uint32_t has_reference;
-    MradmRoomScreenGeometry reference;
-    uint32_t has_reproduction;
-    MradmRoomScreenGeometry reproduction;
-} MradmRenderRoomRequest;
 // A RoomConfig: a room profile handle, the UTF-8 personal HRIR path (empty for none), the scale
 // and the quality (0 exact, 1 realtime).
 typedef struct MradmRenderRoomConfig {
@@ -337,38 +212,13 @@ typedef struct MradmRenderBinauralHrtfView {
     const float* directions;
     size_t directions_len;
 } MradmRenderBinauralHrtfView;
-// The Scene stream binaural renderer (4.7 D); spread as in MradmRenderBinauralRequest.
+// The Scene stream binaural renderer (4.7 D); spread 0 cloud, 1 none, 2 SAF spreader.
 typedef struct MradmRenderLiveBinauralRequest {
     uint32_t sample_rate;
     uint32_t spread;
     uint32_t smoothing_frames;
 } MradmRenderLiveBinauralRequest;
-// A binaural plan (4.7 B): spread 0 cloud, 1 none, 2 SAF spreader.
-typedef struct MradmRenderBinauralRequest {
-    uint32_t spread;
-    uint32_t smoothing_frames;
-} MradmRenderBinauralRequest;
-typedef struct MradmRenderBinauralOffline MradmRenderBinauralOffline;
-typedef struct MradmRenderBinauralOfflineSettings {
-    size_t inputs;
-    uint64_t frames;
-    uint32_t sample_rate;
-    uint32_t has_window;
-    uint64_t window_start;
-    uint64_t window_count;
-    uint32_t smoothing_frames;
-    uint32_t has_pose;
-    float pose[3];
-} MradmRenderBinauralOfflineSettings;
-// pending 1 an input block, 2 a spreader tail block; emit interleaved frames at output.
-typedef struct MradmRenderBinauralStep {
-    uint32_t pending;
-    size_t emit;
-    const float* output;
-    uint32_t has_progress;
-    MradmRenderOfflineProgress progress;
-} MradmRenderBinauralStep;
-// A binaural file stream (4.7 C); spread as in MradmRenderBinauralRequest.
+// A binaural file stream (4.7 C); spread 0 cloud, 1 none, 2 SAF spreader.
 typedef struct MradmRenderBinauralStream MradmRenderBinauralStream;
 typedef struct MradmRenderBinauralStreamSettings {
     size_t inputs;
@@ -428,48 +278,6 @@ int32_t mradm_render_lfe_routing(uint32_t split_power,
                                  size_t* message_len);
 float mradm_render_lfe_gain(const MradmRenderLfeRouting* routing, uint32_t input_target, uint32_t output_target);
 
-// Driver errors set *location: 0 none, 1 path=<input>, 2 input=<input>, 3 meter, 4 HOA DSP,
-// 5 Triple Balance DSP, 6 room-binaural.
-int32_t mradm_render_offline_open(const uint8_t* path,
-                                  size_t path_len,
-                                  const void* plan,
-                                  const MradmRenderOfflineSettings* settings,
-                                  MradmAdmText backend,
-                                  MradmRenderOffline** output,
-                                  uint32_t* location,
-                                  uint8_t* message,
-                                  size_t* message_len);
-int32_t mradm_render_offline_next(MradmRenderOffline* handle,
-                                  MradmRenderOfflineBlock* block,
-                                  uint32_t* location,
-                                  uint8_t* message,
-                                  size_t* message_len);
-int32_t mradm_render_offline_commit(MradmRenderOffline* handle,
-                                    MradmRenderOfflineProgress* progress,
-                                    uint32_t* location,
-                                    uint8_t* message,
-                                    size_t* message_len);
-int32_t mradm_render_offline_finish(MradmRenderOffline* handle,
-                                    MradmRenderOfflineMetrics* metrics,
-                                    uint32_t* location,
-                                    uint8_t* message,
-                                    size_t* message_len);
-void mradm_render_offline_destroy(MradmRenderOffline* handle);
-
-// *output and *view are set unless the arguments are invalid: the log lines precede the error.
-int32_t mradm_render_vbap_prepare(const MradmSceneHandle* scene,
-                                  const MradmRenderVbapRequest* request,
-                                  MradmRenderPrepared** output,
-                                  MradmRenderPreparedView* view);
-int32_t mradm_render_hoa_prepare(const MradmSceneHandle* scene,
-                                 const MradmRenderHoaRequest* request,
-                                 MradmRenderPrepared** output,
-                                 MradmRenderPreparedView* view);
-int32_t mradm_render_triple_balance_prepare(const MradmSceneHandle* scene,
-                                            const MradmRenderTripleBalanceRequest* request,
-                                            MradmRenderPrepared** output,
-                                            MradmRenderPreparedView* view,
-                                            MradmRenderTripleBalanceView* triple_balance);
 // Standard-mode file stream. Serialize process/seek/overrides; validate/requires_preroll may run concurrently.
 // Step seeks through begin/step/finish, checking cancellation while pending. Destroy after all calls return.
 int32_t mradm_render_triple_balance_stream_open(const MradmRenderPrepared* prepared,
@@ -516,12 +324,10 @@ int32_t mradm_render_triple_balance_stream_overrides(MradmRenderTripleBalanceStr
 // 1 when size tracks make a seek render from an earlier block.
 uint32_t mradm_render_triple_balance_stream_requires_preroll(const MradmRenderTripleBalanceStream* handle);
 void mradm_render_triple_balance_stream_destroy(MradmRenderTripleBalanceStream* handle);
-int32_t mradm_render_ear_prepare(const MradmSceneHandle* scene,
-                                 const MradmRenderEarRequest* request,
-                                 MradmRenderPrepared** output,
-                                 MradmRenderPreparedView* view);
+// A backend preparation (mradm_engine_prepare, engine_ffi.h).
 void mradm_render_prepared_destroy(MradmRenderPrepared* handle);
-// Stream errors set *location like the offline driver's.
+// Stream errors set *location: 0 none, 1 path=<input>, 2 input=<input>, 3 meter, 4 HOA DSP,
+// 5 Triple Balance DSP, 6 room-binaural.
 int32_t mradm_render_stream_open(const MradmRenderPrepared* prepared,
                                  const uint8_t* path,
                                  size_t path_len,
@@ -544,11 +350,6 @@ int32_t mradm_render_stream_seek(
 int32_t mradm_render_stream_overrides(MradmRenderStream* handle, const MradmRenderOverride* values, size_t values_len);
 void mradm_render_stream_destroy(MradmRenderStream* handle);
 
-int32_t mradm_render_room_prepare(const MradmSceneHandle* scene,
-                                  const MradmRenderRoomRequest* request,
-                                  MradmRenderPrepared** output,
-                                  MradmRenderPreparedView* view);
-
 int32_t mradm_room_control_request(const MradmRenderRoomControl* handle,
                                    const MradmRenderRoomConfig* config,
                                    uint64_t* revision,
@@ -560,12 +361,10 @@ void mradm_room_control_status(MradmRenderRoomControl* handle, MradmRenderRoomSt
 void mradm_room_control_source(const MradmRenderRoomControl* handle, uint64_t id, MradmRoomSourceInfo* out);
 void mradm_room_control_destroy(MradmRenderRoomControl* handle);
 
-// Opens the stream of a room preparation and its room set, seeked to 0; pose is yaw, pitch, roll.
+// Opens the file stream of a room preparation, seeked to 0; pose is yaw, pitch, roll.
 int32_t mradm_render_room_stream_open(const MradmRenderPrepared* prepared,
-                                      const void* room,
                                       const uint8_t* path,
                                       size_t path_len,
-                                      const MradmRenderRoomConfig* config,
                                       const float* pose,
                                       MradmRenderRoomStream** output,
                                       uint32_t* location,
@@ -660,7 +459,8 @@ int32_t mradm_render_live_render(MradmRenderLive* handle,
                                  uint8_t* context,
                                  size_t* context_len);
 
-// sofa 0 selects the built-in set; path is UTF-8, display and file_name the caller's text of it.
+// The file renderer's HRTF state outside a render (the engine prepares its own); sofa 0 selects the
+// built-in set; path is UTF-8, display and file_name the caller's text of it.
 int32_t mradm_render_binaural_hrtf_prepare(uint32_t sofa,
                                            MradmAdmText path,
                                            MradmAdmText display,
@@ -673,7 +473,8 @@ int32_t mradm_render_binaural_hrtf_prepare(uint32_t sofa,
                                            size_t* message_len,
                                            uint8_t* context,
                                            size_t* context_len);
-// The Scene stream renderer's cached state at sample_rate, without HRIRs and directions.
+// The Scene stream renderer's cached state at sample_rate, without HRIRs and directions; sofa 0
+// selects the built-in set, path is UTF-8, display and file_name the caller's text of it.
 int32_t mradm_render_binaural_hrtf_live(uint32_t sofa,
                                         MradmAdmText path,
                                         MradmAdmText display,
@@ -693,36 +494,7 @@ int32_t mradm_render_live_binaural_create(const MradmBinauralHrtfHandle* hrtf,
                                           uint8_t* message,
                                           size_t* message_len);
 
-// The sources (and SAF spreader groups) over a prepared HRTF state; the view carries the plan's
-// log lines and error.
-int32_t mradm_render_binaural_prepare(const MradmSceneHandle* scene,
-                                      const MradmBinauralHrtfHandle* hrtf,
-                                      const MradmRenderBinauralRequest* request,
-                                      MradmRenderPrepared** output,
-                                      MradmRenderPreparedView* view);
-// Driver errors set *location like the offline driver's; pools is the diagnostic build's worker
-// log line (empty otherwise).
-int32_t mradm_render_binaural_offline_open(const MradmRenderPrepared* prepared,
-                                           const uint8_t* path,
-                                           size_t path_len,
-                                           const MradmRenderBinauralOfflineSettings* settings,
-                                           MradmRenderBinauralOffline** output,
-                                           MradmAdmText* pools,
-                                           uint32_t* location,
-                                           uint8_t* message,
-                                           size_t* message_len);
-// 0 finished, 1 an input block next (check cancellation first), 2 a spreader tail block next.
-uint32_t mradm_render_binaural_offline_pending(const MradmRenderBinauralOffline* handle);
-int32_t mradm_render_binaural_offline_next(MradmRenderBinauralOffline* handle,
-                                           MradmRenderBinauralStep* step,
-                                           uint32_t* location,
-                                           uint8_t* message,
-                                           size_t* message_len);
-int32_t mradm_render_binaural_offline_finish(MradmRenderBinauralOffline* handle,
-                                             uint64_t* written,
-                                             MradmRenderOfflineMetrics* metrics);
-void mradm_render_binaural_offline_destroy(MradmRenderBinauralOffline* handle);
-// Driver errors set *location like the offline driver's. Every call but destroy runs on the worker;
+// Stream errors set *location as above. Every call but destroy runs on the worker;
 // *pending is whether a pre-roll block remains before the seek target.
 int32_t mradm_render_binaural_stream_open(const MradmRenderPrepared* prepared,
                                           const uint8_t* path,

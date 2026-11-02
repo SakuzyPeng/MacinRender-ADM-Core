@@ -4,14 +4,10 @@
 //! and its view lives until `mradm_render_matrix_destroy`. Errors fill the caller's message and
 //! context buffers (capacity in, length written out, NUL-terminated) with the C++ bytes.
 use crate::adm::Text;
-use crate::scene::SceneHandle;
-use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
 use mradm_render::{
-    ear, hoa, live, live_binaural, live_triple_balance, live_vbap, offline, room, stream,
-    triple_balance, triple_balance_stream, vbap,
+    live, live_binaural, live_triple_balance, live_vbap, offline, stream, triple_balance_stream,
 };
-use std::ffi::c_void;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
@@ -115,7 +111,7 @@ unsafe fn input<'a, T>(data: *const T, len: usize) -> Result<&'a [T], Error> {
     Ok(unsafe { slice::from_raw_parts(data, len) })
 }
 
-unsafe fn bytes<'a>(text: &Text) -> Result<&'a [u8], Error> {
+pub(crate) unsafe fn bytes<'a>(text: &Text) -> Result<&'a [u8], Error> {
     unsafe { input(text.data, text.len) }
 }
 
@@ -534,55 +530,6 @@ pub unsafe extern "C" fn mradm_render_lfe_gain(
     .gain(target(input_target), target(output_target))
 }
 
-#[repr(C)]
-pub struct RenderOfflineSettings {
-    inputs: usize,
-    outputs: usize,
-    frames: u64,
-    sample_rate: u32,
-    default_interp_ms: u32,
-    smoothing_frames: u64,
-    has_window: u32,
-    window_start: u64,
-    window_count: u64,
-    has_meter_window: u32,
-    meter_start: u64,
-    meter_count: u64,
-}
-
-/// One rendered block; `frames` is 0 after the last one. The spans live until the next call.
-#[repr(C)]
-pub struct RenderOfflineBlock {
-    start: u64,
-    frames: usize,
-    last: u32,
-    emit_offset: usize,
-    emit_frames: usize,
-    input: *const f32,
-    input_len: usize,
-    output: *mut f32,
-    output_len: usize,
-}
-
-#[repr(C)]
-pub struct RenderOfflineProgress {
-    fraction: f64,
-    stage_fraction: f64,
-    done: u64,
-    total: u64,
-}
-
-#[repr(C)]
-pub struct RenderOfflineMetrics {
-    has_lufs: u32,
-    has_peak: u32,
-    lufs: f64,
-    peak_dbtp: f64,
-}
-
-/// An offline loudspeaker render in progress.
-pub struct RenderOffline(Option<offline::Driver>);
-
 /// Like `boundary` for the driver: the locator kind (0 none, 1 `path=<input>`, 2 `input=<input>`,
 /// 3 `meter`, 4 `HOA DSP`, 5 `Triple Balance DSP`, 6 `room-binaural`) and the message, cut at a
 /// character boundary as the WAVE reader did.
@@ -631,382 +578,35 @@ fn driver_error(message: &str) -> offline::Error {
     }
 }
 
-unsafe fn driver<'a>(handle: *mut RenderOffline) -> offline::Result<&'a mut offline::Driver> {
-    unsafe { handle.as_mut() }
-        .and_then(|h| h.0.as_mut())
-        .ok_or_else(|| driver_error("无效离线渲染句柄"))
+/// A prepared backend (`mradm-engine::backend`), or the log lines, error and Triple Balance report
+/// of a failed preparation.
+pub struct RenderPrepared {
+    pub(crate) logs: Vec<mradm_engine::request::Log>,
+    pub(crate) log_views: Vec<crate::engine::EngineLog>,
+    pub(crate) error: Option<mradm_engine::request::Error>,
+    pub(crate) report: Option<String>,
+    pub(crate) prepared: Option<Arc<mradm_engine::backend::Prepared>>,
 }
 
-/// Opens the input (UTF-8 path) and prepares the renderer and meter for `plan`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_offline_open(
-    path: *const u8,
-    path_len: usize,
-    plan: *const c_void,
-    settings: *const RenderOfflineSettings,
-    backend: Text,
-    output: *mut *mut RenderOffline,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let (Some(out), Some(s)) = (unsafe { output.as_mut() }, unsafe { settings.as_ref() })
-        else {
-            return Err(driver_error("无效离线渲染参数"));
-        };
-        // The kernel of a Rust preparation (`RenderPreparedView::plan`).
-        let kernel = unsafe { plan.cast::<offline::Kernel>().as_ref() }
-            .cloned()
-            .ok_or_else(|| driver_error("无效离线渲染参数"))?;
-        *out = ptr::null_mut();
-        let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
-            code: e.code,
-            message: e.message,
-            location: offline::Location::Path,
-        })?;
-        let backend = String::from_utf8_lossy(
-            unsafe { bytes(&backend) }
-                .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?,
-        )
-        .into_owned();
-        let window =
-            |has: u32, start, count| (has != 0).then_some(offline::Window { start, count });
-        let reader = offline::Driver::open_reader(path)?;
-        let driver = offline::Driver::new(
-            reader,
-            offline::Settings {
-                kernel,
-                inputs: s.inputs,
-                outputs: s.outputs,
-                frames: s.frames,
-                sample_rate: s.sample_rate,
-                default_interp_ms: s.default_interp_ms,
-                smoothing_frames: s.smoothing_frames,
-                window: window(s.has_window, s.window_start, s.window_count),
-                meter_window: window(s.has_meter_window, s.meter_start, s.meter_count),
-                backend,
-            },
-        )?;
-        *out = Box::into_raw(Box::new(RenderOffline(Some(driver))));
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_offline_next(
-    handle: *mut RenderOffline,
-    block: *mut RenderOfflineBlock,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let out = unsafe { block.as_mut() }.ok_or_else(|| driver_error("无效离线渲染块"))?;
-        let d = unsafe { driver(handle)? };
-        *out = RenderOfflineBlock {
-            start: 0,
-            frames: 0,
-            last: 0,
-            emit_offset: 0,
-            emit_frames: 0,
-            input: ptr::null(),
-            input_len: 0,
-            output: ptr::null_mut(),
-            output_len: 0,
-        };
-        let Some(b) = d.render()? else {
-            return Ok(());
-        };
-        let (input, input_len) = (d.input().as_ptr(), d.input().len());
-        let output = d.output();
-        *out = RenderOfflineBlock {
-            start: b.start,
-            frames: b.frames,
-            last: u32::from(b.last),
-            emit_offset: b.emit_offset,
-            emit_frames: b.emit_frames,
-            input,
-            input_len,
-            output: output.as_mut_ptr(),
-            output_len: output.len(),
-        };
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_offline_commit(
-    handle: *mut RenderOffline,
-    progress: *mut RenderOfflineProgress,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let out = unsafe { progress.as_mut() }.ok_or_else(|| driver_error("无效离线渲染进度"))?;
-        let p = unsafe { driver(handle)? }.commit()?;
-        *out = RenderOfflineProgress {
-            fraction: p.fraction,
-            stage_fraction: p.stage_fraction,
-            done: p.done,
-            total: p.total,
-        };
-        Ok(())
-    })
-}
-
-/// Waits for the meter and reports the global loudness and true peak; the handle is spent.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_offline_finish(
-    handle: *mut RenderOffline,
-    metrics: *mut RenderOfflineMetrics,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let out = unsafe { metrics.as_mut() }.ok_or_else(|| driver_error("无效离线渲染结果"))?;
-        let d = unsafe { handle.as_mut() }
-            .and_then(|h| h.0.take())
-            .ok_or_else(|| driver_error("无效离线渲染句柄"))?;
-        let m = d.finish()?;
-        *out = RenderOfflineMetrics {
-            has_lufs: u32::from(m.lufs.is_some()),
-            has_peak: u32::from(m.peak_dbtp.is_some()),
-            lufs: m.lufs.unwrap_or(0.),
-            peak_dbtp: m.peak_dbtp.unwrap_or(0.),
-        };
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_offline_destroy(handle: *mut RenderOffline) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
+impl RenderPrepared {
+    pub(crate) fn plan(&self) -> Option<&mradm_engine::backend::Prepared> {
+        self.prepared.as_deref()
     }
 }
 
-#[repr(C)]
-pub struct RenderSpeaker {
-    label: Text,
+pub(crate) fn room_polar(
     azimuth: f32,
     elevation: f32,
-    is_lfe: u32,
-}
-
-/// `routing`: 0 label, 1 position, 2 matrix; `matrix` is read when `has_matrix != 0`.
-#[repr(C)]
-pub struct RenderVbapRequest {
-    speakers: *const RenderSpeaker,
-    speakers_len: usize,
-    layout_id: Text,
-    input_path: Text,
-    spread: u32,
-    routing: u32,
-    has_matrix: u32,
-    matrix: *const RenderMatrixRoute,
-    matrix_len: usize,
-    split_power: u32,
-}
-
-/// The log lines (also of a failed preparation) and the error, or the offline driver's plan,
-/// its input-channel count and its output channels once prepared.
-#[repr(C)]
-pub struct RenderPreparedView {
-    logs: *const RenderLogLine,
-    logs_len: usize,
-    message: Text,
-    context: Text,
-    plan: *const c_void,
-    tracks: usize,
-    outputs: usize,
-}
-
-/// A prepared VBAP, HOA, EAR or Triple Balance render, or the log lines and error of a failed one.
-pub struct RenderPrepared {
-    texts: Vec<Vec<u8>>,
-    lines: Vec<RenderLogLine>,
-    error: Error,
-    kernel: Option<offline::Kernel>,
-    bindings: Arc<[vbap::Binding]>,
-    settings: (usize, usize, u64, u32),
-    triple_balance: Option<Box<TripleBalanceData>>,
-    room: Option<Arc<room::Prepared>>,
-    binaural: Option<Arc<mradm_render::binaural_render::Prepared>>,
-}
-
-/// Boxes a preparation's logs and result, fills `view` and returns the status.
-fn prepared(
-    logs: Vec<(routing::Level, Vec<u8>)>,
-    result: Result<Option<(offline::Kernel, Vec<vbap::Binding>)>, Error>,
-    settings: (usize, usize, u64, u32),
-    output: &mut *mut RenderPrepared,
-    view: &mut RenderPreparedView,
-) -> Result<(), Error> {
-    let mut handle = Box::new(RenderPrepared {
-        texts: Vec::with_capacity(logs.len()),
-        lines: Vec::with_capacity(logs.len()),
-        error: Error {
-            code: 0,
-            message: Vec::new(),
-            context: Vec::new(),
-        },
-        kernel: None,
-        bindings: Arc::from([]),
-        settings,
-        triple_balance: None,
-        room: None,
-        binaural: None,
-    });
-    for (level, text) in logs {
-        handle.lines.push(RenderLogLine {
-            level: match level {
-                routing::Level::Info => 1,
-                routing::Level::Warning => 2,
-            },
-            message: Text::bytes(&text),
-        });
-        handle.texts.push(text);
-    }
-    let (code, tracks) = match result {
-        Ok(Some((kernel, bindings))) => {
-            handle.kernel = Some(kernel);
-            let tracks = bindings.len();
-            handle.bindings = Arc::from(bindings);
-            (0, tracks)
-        }
-        Ok(None) => (0, 0),
-        Err(e) => {
-            let code = e.code;
-            handle.error = e;
-            (code, 0)
-        }
-    };
-    *view = RenderPreparedView {
-        logs: handle.lines.as_ptr(),
-        logs_len: handle.lines.len(),
-        message: Text::bytes(&handle.error.message),
-        context: Text::bytes(&handle.error.context),
-        plan: handle
-            .kernel
-            .as_ref()
-            .map_or(ptr::null(), |k| ptr::from_ref(k).cast()),
-        tracks,
-        outputs: handle.settings.1,
-    };
-    *output = Box::into_raw(handle);
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(Error {
-            code,
-            message: Vec::new(),
-            context: Vec::new(),
-        })
-    }
-}
-
-/// The room renderer's configuration (`RenderPlan`): spread 0 automatic, 1 none, 2 cloud, 3 SAF
-/// spreader; routing 0 automatic, 1 label, 2 position, 3 matrix.
-#[repr(C)]
-pub struct RenderRoomRequest {
-    layout_id: Text,
-    /// The prepared room's sample rate.
-    sample_rate: u32,
-    spread: u32,
-    routing: u32,
-    has_matrix: u32,
-    default_interp_ms: u32,
-    has_reference: u32,
-    reference: RoomScreenGeometry,
-    has_reproduction: u32,
-    reproduction: RoomScreenGeometry,
-}
-
-fn room_polar(azimuth: f32, elevation: f32, distance: f32) -> mradm_dsp::Result<[f32; 3]> {
+    distance: f32,
+) -> mradm_dsp::Result<[f32; 3]> {
     // The former C++ preparation used mradm_room_polar: only this conversion enters the
     // ROOM environment. Preserve that scope for the Rust event table's gain/offset arithmetic.
     let _environment = crate::room_environment::Environment::enter();
     mradm_dsp::room::loading::polar(azimuth, elevation, distance)
 }
 
-/// `screens` holds the validated screen configuration; the handle keeps the sources and events
-/// for the file stream.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_prepare(
-    scene: *const SceneHandle,
-    request: *const RenderRoomRequest,
-    output: *mut *mut RenderPrepared,
-    view: *mut RenderPreparedView,
-) -> i32 {
-    boundary(
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(view), Some(scene), Some(r)) = (
-                unsafe { output.as_mut() },
-                unsafe { view.as_mut() },
-                unsafe { scene.as_ref() },
-                unsafe { request.as_ref() },
-            ) else {
-                return Err(bad("无效房间准备参数"));
-            };
-            *out = ptr::null_mut();
-            let scene = scene.scene();
-            let request = room::Request {
-                scene,
-                sample_rate: r.sample_rate,
-                layout_id: unsafe { bytes(&r.layout_id)? },
-                spread: match r.spread {
-                    1 => room::Spread::None,
-                    3 => room::Spread::SafSpreader,
-                    _ => room::Spread::Automatic,
-                },
-                routing: match r.routing {
-                    1 => room::Routing::Label,
-                    2 => room::Routing::Position,
-                    3 => room::Routing::Matrix,
-                    _ => room::Routing::Automatic,
-                },
-                has_matrix: r.has_matrix != 0,
-                default_interp_ms: r.default_interp_ms,
-                screens: room::Screens {
-                    reference: (r.has_reference != 0).then_some(r.reference),
-                    reproduction: (r.has_reproduction != 0).then_some(r.reproduction),
-                },
-            };
-            let mut logs = Vec::new();
-            let result = room::prepare(
-                &request,
-                &mut |level, text| logs.push((level, text)),
-                room_polar,
-            );
-            let settings = (
-                usize::from(scene.info.channels),
-                2,
-                scene.info.frames,
-                scene.info.sample_rate,
-            );
-            let (result, data) = match result {
-                Ok(p) => (Ok(None), Some(p)),
-                Err(e) => (Err(e), None),
-            };
-            let status = prepared(logs, result, settings, out, view);
-            if let Some(p) = data {
-                // `prepared` boxed the handle.
-                unsafe { &mut **out }.room = Some(Arc::new(p));
-            }
-            status
-        },
-    )
-}
-
 /// A borrowed DirectSpeakers matrix.
-unsafe fn matrix_routes<'a>(
+pub(crate) unsafe fn matrix_routes<'a>(
     data: *const RenderMatrixRoute,
     len: usize,
 ) -> Result<Vec<MatrixRoute<'a>>, Error> {
@@ -1023,313 +623,6 @@ unsafe fn matrix_routes<'a>(
             })
         })
         .collect()
-}
-
-/// Prepares the VBAP gain plan of the policy-applied scene. `*output` and `*view` are set unless
-/// the arguments are invalid: the log lines precede the error.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_vbap_prepare(
-    scene: *const SceneHandle,
-    request: *const RenderVbapRequest,
-    output: *mut *mut RenderPrepared,
-    view: *mut RenderPreparedView,
-) -> i32 {
-    boundary(
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(view), Some(scene), Some(r)) = (
-                unsafe { output.as_mut() },
-                unsafe { view.as_mut() },
-                unsafe { scene.as_ref() },
-                unsafe { request.as_ref() },
-            ) else {
-                return Err(bad("无效 VBAP 准备参数"));
-            };
-            *out = ptr::null_mut();
-            let speakers = unsafe { input(r.speakers, r.speakers_len)? }
-                .iter()
-                .map(|s| {
-                    Ok(vbap::Speaker {
-                        label: unsafe { bytes(&s.label)? },
-                        azimuth: s.azimuth,
-                        elevation: s.elevation,
-                        is_lfe: s.is_lfe != 0,
-                    })
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
-            let matrix = unsafe { matrix_routes(r.matrix, r.matrix_len)? };
-            let routing = match r.routing {
-                0 => vbap::Routing::Label,
-                1 => vbap::Routing::Position,
-                2 => vbap::Routing::Matrix,
-                _ => return Err(bad("无效 DirectSpeakers 路由")),
-            };
-            let scene = scene.scene();
-            let request = vbap::Request {
-                scene,
-                speakers: &speakers,
-                layout_id: unsafe { bytes(&r.layout_id)? },
-                input_path: unsafe { bytes(&r.input_path)? },
-                spread: r.spread != 0,
-                routing,
-                matrix: (r.has_matrix != 0).then_some(&matrix[..]),
-                split_power: r.split_power != 0,
-            };
-            let mut logs = Vec::new();
-            let result = vbap::prepare(&request, &mut |level, text| logs.push((level, text)));
-            let settings = (
-                usize::from(scene.info.channels),
-                speakers.len(),
-                scene.info.frames,
-                scene.info.sample_rate,
-            );
-            let result = result.map(|p| (offline::Kernel::Mix(p.plan), p.bindings));
-            prepared(logs, result.map(Some), settings, out, view)
-        },
-    )
-}
-
-/// The HOA3 encoder request; the output layout must be `hoa3`.
-#[repr(C)]
-pub struct RenderHoaRequest {
-    layout_id: Text,
-    split_power: u32,
-}
-
-/// Prepares the HOA encoder plan of the policy-applied scene, like `mradm_render_vbap_prepare`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_hoa_prepare(
-    scene: *const SceneHandle,
-    request: *const RenderHoaRequest,
-    output: *mut *mut RenderPrepared,
-    view: *mut RenderPreparedView,
-) -> i32 {
-    boundary(
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(view), Some(scene), Some(r)) = (
-                unsafe { output.as_mut() },
-                unsafe { view.as_mut() },
-                unsafe { scene.as_ref() },
-                unsafe { request.as_ref() },
-            ) else {
-                return Err(bad("无效 HOA 准备参数"));
-            };
-            *out = ptr::null_mut();
-            let scene = scene.scene();
-            let request = hoa::Request {
-                scene,
-                layout_id: unsafe { bytes(&r.layout_id)? },
-                split_power: r.split_power != 0,
-            };
-            let mut logs = Vec::new();
-            let result = hoa::prepare(&request, &mut |level, text| logs.push((level, text)));
-            let settings = (
-                usize::from(scene.info.channels),
-                mradm_dsp::hoa::CHANNELS,
-                scene.info.frames,
-                scene.info.sample_rate,
-            );
-            let result = result.map(|p| (offline::Kernel::Hoa(p.plan), p.bindings));
-            prepared(logs, result.map(Some), settings, out, view)
-        },
-    )
-}
-
-/// `geometry`: 0 standard, 1 Apple. `matrix_routing` selects matrix DirectSpeakers routing
-/// (otherwise automatic); its matrix is read when `has_matrix != 0`.
-#[repr(C)]
-pub struct RenderEarRequest {
-    layout_id: Text,
-    geometry: u32,
-    input_path: Text,
-    matrix_routing: u32,
-    has_matrix: u32,
-    matrix: *const RenderMatrixRoute,
-    matrix_len: usize,
-    split_power: u32,
-}
-
-/// Prepares the EAR gain plan and filters of the policy-applied scene, like
-/// `mradm_render_vbap_prepare`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_ear_prepare(
-    scene: *const SceneHandle,
-    request: *const RenderEarRequest,
-    output: *mut *mut RenderPrepared,
-    view: *mut RenderPreparedView,
-) -> i32 {
-    boundary(
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(view), Some(scene), Some(r)) = (
-                unsafe { output.as_mut() },
-                unsafe { view.as_mut() },
-                unsafe { scene.as_ref() },
-                unsafe { request.as_ref() },
-            ) else {
-                return Err(bad("无效 EAR 准备参数"));
-            };
-            *out = ptr::null_mut();
-            let matrix = unsafe { matrix_routes(r.matrix, r.matrix_len)? };
-            let layout_id = unsafe { bytes(&r.layout_id)? };
-            let scene = scene.scene();
-            let request = ear::Request {
-                scene,
-                layout_id,
-                geometry: match r.geometry {
-                    0 => mradm_scene::layouts::Geometry::Standard,
-                    1 => mradm_scene::layouts::Geometry::Apple,
-                    _ => return Err(bad("无效扬声器几何")),
-                },
-                matrix_routing: r.matrix_routing != 0,
-                matrix: (r.has_matrix != 0).then_some(&matrix[..]),
-                input_path: unsafe { bytes(&r.input_path)? },
-                split_power: r.split_power != 0,
-            };
-            let mut logs = Vec::new();
-            let result = ear::prepare(&request, &mut |level, text| logs.push((level, text)));
-            let outputs = result.as_ref().map_or(0, |p| p.outputs);
-            let settings = (
-                usize::from(scene.info.channels),
-                outputs,
-                scene.info.frames,
-                scene.info.sample_rate,
-            );
-            let result = result.map(|p| {
-                let plan = offline::EarPlan {
-                    mix: p.plan,
-                    filters: p.filters,
-                    wav71: layout_id == b"wav71",
-                };
-                (offline::Kernel::Ear(Arc::new(plan)), p.bindings)
-            });
-            prepared(logs, result.map(Some), settings, out, view)
-        },
-    )
-}
-
-/// The Triple Balance request. `mode`: 0 standard, 1 D. `spread`: 0 automatic, 1 none, 2 MDAP.
-/// `routing`: 0 automatic, 1 label, 2 position, 3 matrix.
-#[repr(C)]
-pub struct RenderTripleBalanceRequest {
-    layout_id: Text,
-    mode: u32,
-    spread: u32,
-    split_power: u32,
-    standard_geometry: u32,
-    smoothing_frames: u32,
-    routing: u32,
-    has_matrix: u32,
-    input_path: Text,
-}
-
-/// The backend report, also of a rejected preparation.
-#[repr(C)]
-pub struct RenderTripleBalanceView {
-    report: Text,
-}
-
-/// What the file stream reads besides the offline kernel: the size tracks and the spread mode.
-struct TripleBalanceData {
-    report: Vec<u8>,
-    sizes: Arc<[triple_balance::SizeTrack]>,
-    spread_none: bool,
-}
-
-/// Prepares the Triple Balance plan of the policy-applied scene. `*output`, `*view` and
-/// `*triple_balance` are set unless the arguments are invalid; the report is set on rejection too.
-/// The handle also opens the standard-mode file stream.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_prepare(
-    scene: *const SceneHandle,
-    request: *const RenderTripleBalanceRequest,
-    output: *mut *mut RenderPrepared,
-    view: *mut RenderPreparedView,
-    triple_balance: *mut RenderTripleBalanceView,
-) -> i32 {
-    boundary(
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(view), Some(tb_view), Some(scene), Some(r)) = (
-                unsafe { output.as_mut() },
-                unsafe { view.as_mut() },
-                unsafe { triple_balance.as_mut() },
-                unsafe { scene.as_ref() },
-                unsafe { request.as_ref() },
-            ) else {
-                return Err(bad("无效 Triple Balance 准备参数"));
-            };
-            *out = ptr::null_mut();
-            let scene = scene.scene();
-            let request = triple_balance::Request {
-                scene,
-                layout_id: unsafe { bytes(&r.layout_id)? },
-                mode: match r.mode {
-                    0 => triple_balance::Mode::Standard,
-                    1 => triple_balance::Mode::D,
-                    _ => return Err(bad("invalid Triple Balance mode")),
-                },
-                spread: match r.spread {
-                    0 => triple_balance::Spread::Automatic,
-                    1 => triple_balance::Spread::None,
-                    2 => triple_balance::Spread::Mdap,
-                    _ => return Err(bad("无效扩展模式")),
-                },
-                split_power: r.split_power != 0,
-                standard_geometry: r.standard_geometry != 0,
-                smoothing_frames: r.smoothing_frames,
-                routing: match r.routing {
-                    0 => triple_balance::Routing::Automatic,
-                    1 => triple_balance::Routing::Label,
-                    2 => triple_balance::Routing::Position,
-                    3 => triple_balance::Routing::Matrix,
-                    _ => return Err(bad("无效 DirectSpeakers 路由")),
-                },
-                has_matrix: r.has_matrix != 0,
-                input_path: unsafe { bytes(&r.input_path)? },
-            };
-            let mut logs = Vec::new();
-            let outcome =
-                triple_balance::prepare(&request, &mut |level, text| logs.push((level, text)));
-            let outputs = outcome.result.as_ref().map_or(0, |p| p.outputs);
-            let settings = (
-                usize::from(scene.info.channels),
-                outputs,
-                scene.info.frames,
-                scene.info.sample_rate,
-            );
-            let mut data = TripleBalanceData {
-                report: outcome.report.into_bytes(),
-                sizes: Arc::from([]),
-                spread_none: request.spread == triple_balance::Spread::None,
-            };
-            let result = outcome.result.map(|p| {
-                data.sizes = Arc::from(p.size_tracks);
-                (offline::Kernel::TripleBalance(p.plan), p.bindings)
-            });
-            let status = prepared(logs, result.map(Some), settings, out, view);
-            // `prepared` boxed the handle.
-            let handle = unsafe { &mut **out };
-            let data = handle.triple_balance.insert(Box::new(data));
-            *tb_view = RenderTripleBalanceView {
-                report: Text::bytes(&data.report),
-            };
-            status
-        },
-    )
 }
 
 /// A live edit (`LiveObjectOverride`): the common override and the topology scales.
@@ -1410,8 +703,10 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_open(
     message_len: *mut usize,
 ) -> i32 {
     driver_boundary(location, message, message_len, || {
-        let (Some(out), Some(p)) = (unsafe { output.as_mut() }, unsafe { prepared.as_ref() })
-        else {
+        let (Some(out), Some(p)) = (
+            unsafe { output.as_mut() },
+            unsafe { prepared.as_ref() }.and_then(RenderPrepared::plan),
+        ) else {
             return Err(driver_error("无效流式渲染参数"));
         };
         *out = ptr::null_mut();
@@ -1427,7 +722,7 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_open(
             message: e.message,
             location: offline::Location::Path,
         })?;
-        let (inputs, outputs, frames, sample_rate) = p.settings;
+        let (inputs, outputs, frames, sample_rate) = (p.inputs, p.outputs, p.frames, p.sample_rate);
         let source = triple_balance_stream::Source {
             mix,
             session,
@@ -1573,13 +868,6 @@ pub unsafe extern "C" fn mradm_render_triple_balance_stream_destroy(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_prepared_destroy(handle: *mut RenderPrepared) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
 /// File streaming over a prepared plan.
 pub struct RenderStream(stream::FileStream);
 
@@ -1597,8 +885,10 @@ pub unsafe extern "C" fn mradm_render_stream_open(
     message_len: *mut usize,
 ) -> i32 {
     driver_boundary(location, message, message_len, || {
-        let (Some(out), Some(p)) = (unsafe { output.as_mut() }, unsafe { prepared.as_ref() })
-        else {
+        let (Some(out), Some(p)) = (
+            unsafe { output.as_mut() },
+            unsafe { prepared.as_ref() }.and_then(RenderPrepared::plan),
+        ) else {
             return Err(driver_error("无效流式渲染参数"));
         };
         *out = ptr::null_mut();
@@ -1611,7 +901,7 @@ pub unsafe extern "C" fn mradm_render_stream_open(
             message: e.message,
             location: offline::Location::Path,
         })?;
-        let (inputs, outputs, frames, sample_rate) = p.settings;
+        let (inputs, outputs, frames, sample_rate) = (p.inputs, p.outputs, p.frames, p.sample_rate);
         let s = stream::FileStream::open(
             path,
             kernel,
@@ -2304,7 +1594,7 @@ pub unsafe extern "C" fn mradm_render_live_render(
 }
 
 #[path = "render_room.rs"]
-mod room_ffi;
+pub(crate) mod room_ffi;
 
 #[path = "render_binaural.rs"]
 mod binaural_ffi;

@@ -1,5 +1,3 @@
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <memory>
@@ -9,30 +7,21 @@
 #include <string_view>
 #include <utility>
 
-#include <fmt/format.h>
-
-#include "adm/audio_io.h"
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 
 #include "../adm_audio/wav_backend.h"
 #include "capability_records.h"
-#include "hrtf_state.h"
 #include "render_common.h"
-#include "scene_handle.h"
 #include "speaker_pcm.h"
 
 namespace mradm {
 
-using namespace binaural_internal;
-
-// OLA convolution and the offline loop (4.7 B), and the file stream (4.7 C) are Rust mradm-render
-// OLA convolution and the offline loop (4.7 B) and the file stream (4.7 C) are Rust mradm-render
-// `binaural_hrtf`, `binaural`, `binaural_render` and `binaural_stream`.
+// The HRTF state (4.7 A), the source plan, OLA convolution and the offline loop (4.7 B) and the
+// file stream (4.7 C) are Rust mradm-render `binaural_hrtf`, `binaural`, `binaural_render` and
+// `binaural_stream`; the preparation and offline windows run in mradm-engine (5.2 C1).
 namespace binaural_internal {
 namespace {
-
-constexpr uint64_t k_min_block_size = 1024U;
 
 [[nodiscard]] uint32_t numerical_spread(BinauralSpreadMode mode) noexcept {
     switch (mode) {
@@ -45,12 +34,7 @@ constexpr uint64_t k_min_block_size = 1024U;
     }
 }
 
-// The HRTF state and the Rust plan, reused across render_window() calls (PreviewSession scrubbing);
-// the per-output convolution and spreader state is created per render.
-struct BinauralPrepared final : IPreparedRender {
-    std::shared_ptr<const HrtfState> bs;
-    std::shared_ptr<render_common::RustPrepared> rust;
-};
+using render_common::EnginePrepared;
 
 // File streaming over the same prepared HRTF state and source list as render_window. The FIFO,
 // seek pre-roll, live gain ramps, coalesced topology crossfades and head tracking are Rust
@@ -58,7 +42,7 @@ struct BinauralPrepared final : IPreparedRender {
 // factory keeps the prepared state alive for the stream's lifetime.
 class BinauralStream final : public IRenderStream {
   public:
-    [[nodiscard]] static Result<std::unique_ptr<IRenderStream>> create(const BinauralPrepared& prepared,
+    [[nodiscard]] static Result<std::unique_ptr<IRenderStream>> create(const EnginePrepared& prepared,
                                                                        const RenderPlan& plan) {
         const auto& info = plan.scene.info;
         const MradmRenderBinauralStreamSettings settings{info.num_channels,
@@ -69,7 +53,7 @@ class BinauralStream final : public IRenderStream {
         const auto path = audio::wav_path_utf8(plan.input_path);
         MradmRenderBinauralStream* raw = nullptr;
         render_common::DriverError error;
-        if (const auto code = mradm_render_binaural_stream_open(prepared.rust->handle.get(),
+        if (const auto code = mradm_render_binaural_stream_open(prepared.handle.get(),
                                                                 reinterpret_cast<const uint8_t*>(path.data()),
                                                                 path.size(),
                                                                 &settings,
@@ -161,16 +145,19 @@ class BinauralStream final : public IRenderStream {
 
 class BinauralRenderer final : public IRenderer {
   public:
-    [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override;
-    [[nodiscard]] Result<RenderMetrics> render_window(const IPreparedRender& prepared,
-                                                      const RenderPlan& plan,
-                                                      ProgressSink& progress,
-                                                      LogSink& logs) override;
+    [[nodiscard]] CapabilityReport capabilities() const override { return binaural_capabilities(); }
+
+    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override {
+        auto prepared = render_common::prepare_backend(render_common::EngineBackend::binaural, plan, logs);
+        if (!prepared) {
+            return tl::unexpected{prepared.error()};
+        }
+        return std::static_pointer_cast<IPreparedRender>(*prepared);
+    }
 
     [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
     open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
-        const auto* prepared = dynamic_cast<const BinauralPrepared*>(&prep);
+        const auto* prepared = dynamic_cast<const EnginePrepared*>(&prep);
         if (prepared == nullptr) {
             return make_error(
                 ErrorCode::internal_error, "binaural: open_stream received an incompatible prepared state", {});
@@ -180,168 +167,6 @@ class BinauralRenderer final : public IRenderer {
     }
 };
 
-CapabilityReport BinauralRenderer::capabilities() const {
-    return binaural_capabilities();
-}
-
-Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
-    if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic) {
-        return make_error(ErrorCode::unsupported,
-                          "SAF binaural renderer does not support explicit DirectSpeakers routing; use automatic",
-                          {});
-    }
-    auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "binaural");
-    if (!lfe_routing) {
-        return tl::unexpected{lfe_routing.error()};
-    }
-    const auto& info = plan.scene.info;
-
-    if (info.sample_rate != 48000U) {
-        return make_error(ErrorCode::invalid_argument,
-                          fmt::format("binaural renderer requires 48000 Hz input, got {}", info.sample_rate),
-                          "input=" + plan.input_path);
-    }
-
-    const uint64_t render_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
-
-    // One-time setup: load the HRIR dataset, then build the HRTF table and interpolation grid.
-    auto state_result = HrtfState::prepare(plan.sofa_path, info.sample_rate, render_block_size);
-    if (!state_result) {
-        return tl::unexpected{state_result.error()};
-    }
-    auto bs = std::move(*state_result);
-    logs.log(LogLevel::info,
-             "binaural",
-             fmt::format("HRTF source: {} ({} dirs, {} taps @ {} Hz)",
-                         bs->dataset_name,
-                         bs->num_dirs,
-                         bs->hrir_len,
-                         info.sample_rate));
-    if (plan.scene_handle == nullptr) {
-        return make_error(ErrorCode::internal_error, "binaural requires the Rust render scene");
-    }
-
-    const MradmRenderBinauralRequest request{numerical_spread(plan.binaural_spread_mode), plan.object_smoothing_frames};
-    MradmRenderPrepared* raw = nullptr;
-    MradmRenderPreparedView view{};
-    const auto code = mradm_render_binaural_prepare(plan.scene_handle->raw, bs->handle.get(), &request, &raw, &view);
-    auto rust = render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::speaker, logs, "binaural");
-    if (!rust) {
-        return tl::unexpected{rust.error()};
-    }
-    auto prepared = std::make_shared<BinauralPrepared>();
-    prepared->bs = std::move(bs);
-    prepared->rust = std::move(*rust);
-    return std::static_pointer_cast<IPreparedRender>(prepared);
-}
-
-Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& prep,
-                                                      const RenderPlan& plan,
-                                                      ProgressSink& progress,
-                                                      LogSink& logs) {
-    const auto* prepared = dynamic_cast<const BinauralPrepared*>(&prep);
-    if (prepared == nullptr) {
-        return make_error(
-            ErrorCode::internal_error, "binaural: render_window received an incompatible prepared state", {});
-    }
-    const auto& info = plan.scene.info;
-    const uint64_t num_frames = info.num_frames;
-    const bool windowed = plan.render_window.has_value();
-    const auto& pose = plan.listener_orientation;
-    const MradmRenderBinauralOfflineSettings settings{info.num_channels,
-                                                      num_frames,
-                                                      info.sample_rate,
-                                                      windowed ? 1U : 0U,
-                                                      windowed ? plan.render_window->start_frame : 0U,
-                                                      windowed ? plan.render_window->frame_count : 0U,
-                                                      plan.object_smoothing_frames,
-                                                      pose.is_identity() ? 0U : 1U,
-                                                      {pose.yaw_deg, pose.pitch_deg, pose.roll_deg}};
-
-    // The input, the per-output (primed) spreader adapters, the OLA state and the meter.
-    const auto path = audio::wav_path_utf8(plan.input_path);
-    MradmRenderBinauralOffline* raw = nullptr;
-    MradmAdmText pools{};
-    render_common::DriverError error;
-    if (const auto code = mradm_render_binaural_offline_open(prepared->rust->handle.get(),
-                                                             reinterpret_cast<const uint8_t*>(path.data()),
-                                                             path.size(),
-                                                             &settings,
-                                                             &raw,
-                                                             &pools,
-                                                             error.location(),
-                                                             error.message(),
-                                                             error.message_len());
-        code != 0) {
-        return error.error(code, plan.input_path);
-    }
-    const std::unique_ptr<MradmRenderBinauralOffline, decltype(&mradm_render_binaural_offline_destroy)> driver(
-        raw, &mradm_render_binaural_offline_destroy);
-    auto writer_res = audio::WriterHandle::open(plan.output_path, 2U, info.sample_rate, "binaural");
-    if (!writer_res) {
-        return tl::unexpected{writer_res.error()};
-    }
-    auto& writer = *writer_res;
-    if (pools.len != 0U) {
-        logs.log(LogLevel::info, "binaural", std::string{reinterpret_cast<const char*>(pools.data), pools.len});
-    }
-
-    progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.2, 0.0, 0, 0, "rendering"});
-    while (const auto pending = mradm_render_binaural_offline_pending(driver.get())) {
-        if (pending == 1U && plan.cancel_token.stop_requested()) {
-            return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
-        }
-        MradmRenderBinauralStep step{};
-        if (const auto code = mradm_render_binaural_offline_next(
-                driver.get(), &step, error.location(), error.message(), error.message_len());
-            code != 0) {
-            return error.error(code, plan.input_path);
-        }
-        if (step.emit != 0U && writer.write(step.output, step.emit) != step.emit) {
-            return make_error(ErrorCode::io_error,
-                              step.pending == 2U ? "short write during binaural spreader tail"
-                                                 : "short write during binaural render",
-                              "output=" + plan.output_path);
-        }
-        if (step.has_progress != 0U) {
-            progress.on_progress({RenderStage::rendering,
-                                  RenderOperation::render_audio,
-                                  step.progress.fraction,
-                                  step.progress.stage_fraction,
-                                  step.progress.done,
-                                  step.progress.total,
-                                  "rendering"});
-        }
-    }
-    uint64_t out_written = 0;
-    MradmRenderOfflineMetrics measured{};
-    (void) mradm_render_binaural_offline_finish(driver.get(), &out_written, &measured);
-    if (auto finished = writer.finish(); !finished) {
-        return tl::unexpected{finished.error()};
-    }
-
-    progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-    const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
-    const uint64_t win_end = windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
-    logs.log(LogLevel::info,
-             "binaural",
-             fmt::format("wrote {} frames to {}{}",
-                         out_written,
-                         plan.output_path,
-                         windowed ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, num_frames)
-                                  : std::string{}));
-
-    RenderMetrics metrics;
-    if (measured.has_lufs != 0U) {
-        metrics.measured_lufs = measured.lufs;
-    }
-    if (measured.has_peak != 0U) {
-        // Rust keeps the binaural backend's established -200 dB silent floor.
-        metrics.measured_peak_dbtp = measured.peak_dbtp;
-    }
-    return metrics;
-}
-
 } // namespace
 } // namespace binaural_internal
 
@@ -350,7 +175,7 @@ CapabilityReport binaural_capabilities() {
 }
 
 std::unique_ptr<IRenderer> create_binaural_renderer() {
-    return std::make_unique<BinauralRenderer>();
+    return std::make_unique<binaural_internal::BinauralRenderer>();
 }
 
 bool binaural_sofa_supported() {

@@ -1,7 +1,9 @@
 //! The room event table must keep the floating-point boundary of its former C++ polar calls.
 use super::*;
+use crate::scene::SceneHandle;
+use mradm_render::room;
 use mradm_wav::{Format, SampleFormat, Writer, WriterOptions};
-use std::{mem::MaybeUninit, path::PathBuf};
+use std::path::PathBuf;
 
 struct Input(PathBuf);
 impl Input {
@@ -64,32 +66,21 @@ impl Drop for Scene {
     }
 }
 
-struct Preparation(*mut RenderPrepared);
-impl Drop for Preparation {
-    fn drop(&mut self) {
-        unsafe { mradm_render_prepared_destroy(self.0) };
-    }
-}
-
 fn positions(scene: &Scene) -> Vec<[u32; 3]> {
-    let request = RenderRoomRequest {
-        layout_id: Text::bytes(b"binaural"),
+    let request = room::Request {
+        scene: unsafe { &*scene.0 }.scene(),
         sample_rate: 48000,
-        spread: 0,
-        routing: 0,
-        has_matrix: 0,
+        layout_id: b"binaural",
+        spread: room::Spread::Automatic,
+        routing: room::Routing::Automatic,
+        has_matrix: false,
         default_interp_ms: 5,
-        has_reference: 0,
-        reference: RoomScreenGeometry::default(),
-        has_reproduction: 0,
-        reproduction: RoomScreenGeometry::default(),
+        screens: room::Screens {
+            reference: None,
+            reproduction: None,
+        },
     };
-    let mut prepared = Preparation(ptr::null_mut());
-    let mut view = MaybeUninit::uninit();
-    let code =
-        unsafe { mradm_render_room_prepare(scene.0, &request, &mut prepared.0, view.as_mut_ptr()) };
-    assert_eq!(code, 0);
-    let room = unsafe { &*prepared.0 }.room.clone().unwrap();
+    let room = room::prepare(&request, &mut |_, _| {}, room_polar).unwrap();
     room.events
         .iter()
         .filter(|e| e.priority == 2)

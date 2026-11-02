@@ -30,6 +30,7 @@
 
 #include "render_common.h"
 #include "scene_import_internal.h"
+#include "speaker_pcm.h"
 
 namespace {
 
@@ -1653,7 +1654,7 @@ bool verify_ear_stream_matches_window() {
     FileGuard ref_guard{ref_path};
     mradm::RenderPlan window_plan = plan;
     window_plan.output_path = ref_path.string();
-    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+    if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "ear stream: reference render_window")) {
         return false;
     }
