@@ -1,7 +1,8 @@
 // Private render-orchestration boundary (mradm-engine, PCM consistency 5.2): the Rust backends'
-// capability records and the discovery JSON documents (5.2 A), the request resolution (5.2 B), and the
-// backend preparation and offline render step (5.2 C1). Backend records are process-lifetime Rust data
-// and are never freed; a document is owned by its MradmEngineText handle.
+// capability records and the discovery JSON documents (5.2 A), the request resolution (5.2 B), the
+// backend preparation and offline render step (5.2 C1), and the offline render service (5.2 C2).
+// Backend records are process-lifetime Rust data and are never freed; a document is owned by its
+// MradmEngineText handle.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -113,27 +114,6 @@ typedef struct MradmEngineMatrixRequest {
     MradmAdmText path_label;
 } MradmEngineMatrixRequest;
 
-typedef struct MradmEngineTrim {
-    uint32_t has_trim;
-    uint64_t start_frame;
-    uint64_t frame_count;
-} MradmEngineTrim;
-
-// bit_depth: 0 f32, 1 i24, 2 i16; packager: 0 none, 1 mp4box, 2 ffmpeg; channels: -1 unknown.
-typedef struct MradmEngineOutputRequest {
-    MradmAdmText extension;
-    MradmAdmText layout;
-    uint32_t bit_depth;
-    uint32_t apac_caf;
-    uint32_t iamf_mp4;
-    const MradmAdmText* iamf_layers;
-    size_t iamf_layers_len;
-    int32_t channels;
-    uint32_t iamf_available;
-    uint32_t packager;
-    int32_t ffmpeg_major;
-} MradmEngineOutputRequest;
-
 // The canonical layout id (static text) or the input itself.
 int32_t mradm_engine_normalize_layout(const uint8_t* layout, size_t len, MradmAdmText* out);
 // Values follow RendererSelection; diagnostics are the status log lines (empty module).
@@ -160,20 +140,6 @@ int32_t mradm_engine_resolve_matrix(const MradmSceneHandle* scene,
                                     MradmDirectMatrixView* matrix,
                                     MradmEngineResult** out,
                                     MradmEngineStatus* status);
-int32_t mradm_engine_trim_window(double start_sec,
-                                 uint32_t has_end,
-                                 double end_sec,
-                                 uint32_t sample_rate,
-                                 uint64_t frames,
-                                 MradmEngineTrim* trim,
-                                 MradmEngineResult** out,
-                                 MradmEngineStatus* status);
-// targets bits: 1 FLAC, 2 Opus MKA, 4 APAC MPEG-4, 8 APAC CAF, 16 IAMF, 32 IAMF MP4. The normalized
-// IAMF layers follow the log lines as entries with module "iamf-layer".
-int32_t mradm_engine_output_target(const MradmEngineOutputRequest* request,
-                                   uint32_t* targets,
-                                   MradmEngineResult** out,
-                                   MradmEngineStatus* status);
 void mradm_engine_result_destroy(MradmEngineResult* result);
 
 // ── Backend preparation and the offline render step (5.2 C1) ──────────────────────────────────
@@ -282,6 +248,186 @@ int32_t mradm_engine_offline_next(MradmEngineOffline* handle,
                                   MradmEngineOfflineEvent* event,
                                   MradmEngineStatus* status);
 void mradm_engine_offline_destroy(MradmEngineOffline* handle);
+
+// ── The offline render service (5.2 C2) ───────────────────────────────────────────────────────
+
+// A path's UTF-8 text and its spelling in messages.
+typedef struct MradmEnginePath {
+    MradmAdmText utf8;
+    MradmAdmText display;
+} MradmEnginePath;
+
+// RenderRequest with its RenderOptions; the enum fields are the C++ values; room_profile may be null.
+typedef struct MradmEngineRenderRequest {
+    MradmEnginePath input;
+    uint32_t has_output;
+    MradmEnginePath output;
+    uint32_t renderer;
+    MradmAdmText output_layout;
+    uint32_t has_input_layout;
+    MradmAdmText input_layout;
+    const MradmAdmText* input_channel_labels;
+    size_t input_channel_labels_len;
+    uint32_t measure_loudness;
+    float loudness_target_lufs;
+    uint32_t peak_limit;
+    float peak_limit_dbtp;
+    uint32_t peak_normalize_to_limit;
+    double final_gain_db;
+    uint32_t output_bit_depth;
+    uint32_t opus_bitrate_per_ch_kbps;
+    uint32_t apac_bitrate_kbps;
+    uint32_t apac_drc_music;
+    uint32_t apac_caf;
+    uint32_t has_sofa;
+    MradmEnginePath sofa;
+    MradmAdmText sofa_file_name;
+    uint32_t has_policy_path;
+    MradmEnginePath policy_path;
+    uint32_t has_policy_json;
+    MradmAdmText policy_json;
+    uint32_t has_matrix_path;
+    MradmEnginePath matrix_path;
+    uint32_t has_matrix_json;
+    MradmAdmText matrix_json;
+    uint32_t has_report_path;
+    MradmEnginePath report_path;
+    uint32_t capture_report;
+    uint32_t default_interp_ms;
+    uint32_t object_smoothing_frames;
+    uint32_t apple_geometry;
+    uint32_t routing;
+    uint32_t speaker_spread;
+    uint32_t triple_balance_mode;
+    uint32_t binaural_spread;
+    uint32_t split_power;
+    uint32_t apple_spatial_preset;
+    uint32_t apple_speaker_rendering_flags;
+    float listener_orientation[3];
+    double render_start_sec;
+    uint32_t has_end;
+    double render_end_sec;
+    const void* room_profile;
+    MradmAdmText room_hrir;
+    double room_metres;
+    uint32_t room_quality;
+    uint32_t has_reference;
+    MradmRoomScreenGeometry reference;
+    uint32_t has_reproduction;
+    MradmRoomScreenGeometry reproduction;
+    uint32_t internal_allow_speaker_stereo;
+    uint32_t iamf_mp4;
+    const MradmAdmText* iamf_layers;
+    size_t iamf_layers_len;
+} MradmEngineRenderRequest;
+
+typedef struct MradmEngineProgress {
+    uint32_t stage;
+    uint32_t operation;
+    double fraction;
+    double stage_fraction;
+    uint64_t current;
+    uint64_t total;
+    MradmAdmText message;
+} MradmEngineProgress;
+
+// kind 0 nothing, 1 progress, 2 log (level, module, message), 3 island, 4 done. Islands: 1 MP4
+// packager probe, 2 Apple prepare, 3 Apple render, 4 FLAC, 5 Opus MKA, 6 APAC, 7 IAMF, 8 MP4
+// packaging, 9 metadata; src / dst the files (the Apple plan's output in dst).
+typedef struct MradmEngineRenderEvent {
+    uint32_t kind;
+    MradmEngineProgress progress;
+    uint32_t level;
+    MradmAdmText module;
+    MradmAdmText message;
+    uint32_t island;
+    MradmEnginePath src;
+    MradmEnginePath dst;
+    MradmAdmText layout;
+    uint32_t bitrate;
+    uint32_t drc_music;
+    uint32_t caf;
+    uint32_t has_lufs;
+    uint32_t has_peak;
+    double lufs;
+    double peak_dbtp;
+    const MradmAdmText* layers;
+    size_t layers_len;
+    uint32_t has_window;
+    uint64_t window_start;
+    uint64_t window_count;
+    uint32_t has_meter_window;
+    uint64_t meter_start;
+    uint64_t meter_count;
+    uint32_t has_matrix;
+    MradmDirectMatrixView matrix;
+    MradmAdmText encoder;
+    MradmAdmText date_utc;
+    MradmAdmText renderer;
+} MradmEngineRenderEvent;
+
+// code 0 for success; the Apple render's metrics; packager 0 none, 1 mp4box, 2 ffmpeg.
+typedef struct MradmEngineIslandReply {
+    int32_t code;
+    MradmAdmText message;
+    MradmAdmText context;
+    uint32_t has_lufs;
+    uint32_t has_peak;
+    double lufs;
+    double peak_dbtp;
+    uint32_t packager;
+    int32_t ffmpeg_major;
+} MradmEngineIslandReply;
+
+typedef struct MradmEngineRenderResult {
+    int32_t code;
+    MradmAdmText message;
+    MradmAdmText context;
+    uint32_t has_output;
+    MradmAdmText output_path;
+    uint32_t has_metrics;
+    uint32_t has_lufs;
+    uint32_t has_peak;
+    double lufs;
+    double peak_dbtp;
+    const MradmEngineLog* logs;
+    size_t logs_len;
+    uint32_t has_report;
+    MradmAdmText report;
+} MradmEngineRenderResult;
+
+typedef struct MradmEngineRender MradmEngineRender;
+
+// preimported (may be null) is a preview session's scene, cached its Rust preparation (may be null),
+// apple_cached whether the caller holds the Apple preparation.
+int32_t mradm_engine_render_begin(const MradmEngineRenderRequest* request,
+                                  const MradmEnginePlatform* platform,
+                                  const MradmSceneHandle* preimported,
+                                  const MradmRenderPrepared* cached,
+                                  uint32_t apple_cached,
+                                  MradmEngineRender** output);
+// cancelled is the caller's stop token now; texts live until the next call on the handle.
+int32_t mradm_engine_render_next(MradmEngineRender* handle, uint32_t cancelled, MradmEngineRenderEvent* event);
+int32_t mradm_engine_render_resume(MradmEngineRender* handle, const MradmEngineIslandReply* reply);
+// An island's progress event mapped into the render's range.
+int32_t mradm_engine_render_map_progress(const MradmEngineRender* handle,
+                                         const MradmEngineProgress* event,
+                                         MradmEngineProgress* output);
+int32_t mradm_engine_render_result(MradmEngineRender* handle, MradmEngineRenderResult* output);
+// The preparation the render made, or null; destroy with mradm_render_prepared_destroy.
+MradmRenderPrepared* mradm_engine_render_take_prepared(MradmEngineRender* handle);
+// A copy of the render's scene (the Apple island); destroy with mradm_scene_destroy.
+MradmSceneHandle* mradm_engine_render_scene(const MradmEngineRender* handle);
+void mradm_engine_render_destroy(MradmEngineRender* handle);
+// The semantic policy applied to an imported scene (preview, export); warnings as log lines.
+int32_t mradm_engine_apply_policy(MradmSceneHandle* scene,
+                                  uint32_t has_json,
+                                  MradmAdmText json,
+                                  uint32_t has_path,
+                                  MradmEnginePath path,
+                                  MradmAdmText input_display,
+                                  MradmEngineResult** result,
+                                  MradmEngineStatus* status);
 
 #ifdef __cplusplus
 }

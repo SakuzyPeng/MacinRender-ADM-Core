@@ -33,7 +33,7 @@ pub struct Info {
 /// no ADM provenance, so its source records are left at their defaults and must not be read.
 /// A semantic policy edits the records in place and the state they do not carry in `overlay`;
 /// the pre-policy scene is kept for the report and the export patches.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RenderScene {
     pub info: Info,
     pub snapshot: Snapshot,

@@ -16,6 +16,7 @@
 #include "adm/render_triple_balance.h"
 
 #include "../adm_io/scene_import_internal.h"
+#include "scene_policy.h"
 #include "speaker_pcm.h"
 #include "wav_fixture.h"
 
@@ -208,7 +209,7 @@ make_plan(const Files& files, const std::string& layout, const Variant& v = {}, 
     }
     auto scene = take(mradm::io::RenderScene::import(name, nullptr));
     if (!policy.empty()) {
-        done(scene.apply_policy(policy, "<memory>"));
+        done(mradm::test::apply_policy(scene, policy));
     }
     mradm::RenderPlan plan;
     plan.input_path = name;

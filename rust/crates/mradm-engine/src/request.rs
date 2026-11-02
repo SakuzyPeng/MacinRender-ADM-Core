@@ -579,9 +579,10 @@ pub enum BitDepth {
 }
 
 /// The MP4 packager in PATH (`audio::IamfMp4PackagerKind`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[repr(u32)]
 pub enum Packager {
+    #[default]
     None = 0,
     Mp4box = 1,
     Ffmpeg = 2,

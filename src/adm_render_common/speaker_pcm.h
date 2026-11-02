@@ -60,6 +60,9 @@ struct EnginePrepared final : IPreparedRender {
     TripleBalanceMode mode{TripleBalanceMode::standard};
 };
 
+// A screen as the Rust room record.
+[[nodiscard]] MradmRoomScreenGeometry screen_geometry(const ScreenGeometry& screen);
+
 // The one preparation entry of the Rust backends (also for MonitorEngine and the stream tools):
 // the plan's backend checks, logs and the backend's own preparation run in Rust. `room_profile` is
 // the room package handle of plan.room (room-binaural only).

@@ -148,6 +148,25 @@ std::string document(Document kind) {
     return {reinterpret_cast<const char*>(json.data), json.len};
 }
 
+class RenderPlatform::Apple {
+  public:
+    explicit Apple(CapabilityReport report) : records_(std::move(report)) {}
+    [[nodiscard]] const MradmEngineBackend* get() const { return records_.get(); }
+
+  private:
+    BackendRecords records_;
+};
+
+RenderPlatform::RenderPlatform() {
+    platform_.iamf = audio::iamf_encoding_available() ? 1U : 0U;
+#ifdef __APPLE__
+    apple_ = std::make_unique<Apple>(apple_capabilities());
+    platform_.apple = apple_->get();
+#endif
+}
+
+RenderPlatform::~RenderPlatform() = default;
+
 std::vector<OutputLayoutRow> build_output_layouts() {
     const auto root = nlohmann::json::parse(document(Document::layouts));
     std::vector<OutputLayoutRow> rows(root.at("layouts").size());

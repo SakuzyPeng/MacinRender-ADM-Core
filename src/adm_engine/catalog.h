@@ -1,10 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "adm/render.h"
+
+#include "engine_ffi.h"
 
 namespace mradm::engine {
 
@@ -25,5 +28,23 @@ enum class Document : uint32_t {
 // The output channel-order reference and the output container formats, read from their documents.
 [[nodiscard]] std::vector<OutputLayoutRow> build_output_layouts();
 [[nodiscard]] OutputFormats build_output_formats();
+
+// The platform facts of an offline render (PCM consistency 5.2 C2): IAMF availability and, in Apple
+// builds, the Apple backend's capability records.
+class RenderPlatform {
+  public:
+    RenderPlatform();
+    ~RenderPlatform();
+    RenderPlatform(const RenderPlatform&) = delete;
+    RenderPlatform& operator=(const RenderPlatform&) = delete;
+    RenderPlatform(RenderPlatform&&) = delete;
+    RenderPlatform& operator=(RenderPlatform&&) = delete;
+    [[nodiscard]] const MradmEnginePlatform* get() const noexcept { return &platform_; }
+
+  private:
+    class Apple;
+    std::unique_ptr<Apple> apple_;
+    MradmEnginePlatform platform_{0, 0, 0, -1, nullptr, nullptr, 0};
+};
 
 } // namespace mradm::engine
