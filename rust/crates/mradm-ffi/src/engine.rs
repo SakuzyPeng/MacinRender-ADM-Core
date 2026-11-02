@@ -368,19 +368,19 @@ pub unsafe extern "C" fn mradm_engine_text_destroy(text: *mut EngineText) {
 
 #[repr(C)]
 pub struct EngineLog {
-    level: u32,
-    module: Text,
-    message: Text,
+    pub(crate) level: u32,
+    pub(crate) module: Text,
+    pub(crate) message: Text,
 }
 
 /// `code` 0 is success; the views stay valid until `mradm_engine_result_destroy`.
 #[repr(C)]
 pub struct EngineStatus {
-    code: i32,
-    message: Text,
-    context: Text,
-    logs: *const EngineLog,
-    logs_len: usize,
+    pub(crate) code: i32,
+    pub(crate) message: Text,
+    pub(crate) context: Text,
+    pub(crate) logs: *const EngineLog,
+    pub(crate) logs_len: usize,
 }
 
 /// The status and log lines of one resolution, plus a validated DirectSpeakers matrix.

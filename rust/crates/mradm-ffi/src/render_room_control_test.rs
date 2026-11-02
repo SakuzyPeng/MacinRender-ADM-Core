@@ -3,6 +3,7 @@ use super::super::test_common as common;
 
 use super::*;
 use mradm_dsp::room::loading;
+use mradm_render::room;
 use mradm_render::room_runtime::Resources;
 use std::mem::MaybeUninit;
 use std::sync::{

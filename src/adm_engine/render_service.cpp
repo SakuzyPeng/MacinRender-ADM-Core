@@ -27,6 +27,7 @@
 #include "engine_result.h"
 #include "post_gain.h"
 #include "renderer_factory.h"
+#include "speaker_pcm.h"
 #include "wav_output.h"
 
 namespace mradm {
@@ -698,7 +699,11 @@ RenderResult RenderService::render(const RenderRequest& request,
     // Render (inline measurement of loudness + True Peak over the meter window).
     ProgressRangeSink render_progress(
         progress, RenderStage::rendering, RenderOperation::render_audio, 0.15, 0.88, "rendering audio");
-    auto render_res = renderer->render_window(*prepared_slot, plan, render_progress, logs);
+    // The Rust backends' offline window renders in the engine (PCM consistency 5.2 C1); the Apple
+    // backend renders its own.
+    auto render_res = backend == RendererSelection::apple
+                          ? renderer->render_window(*prepared_slot, plan, render_progress, logs)
+                          : render_common::render_offline(*prepared_slot, plan, render_progress, logs);
     if (!render_res) {
         if (!is_lossy_final) {
             output_guard.arm();

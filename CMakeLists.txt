@@ -1231,6 +1231,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMEngine
             MacinRender::ADMRenderVBAP
             MacinRender::ADMRenderTripleBalance
+            MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
     )
@@ -1507,6 +1508,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderHOA
+            MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
     )
@@ -1535,6 +1537,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderBinaural
+            MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
             MacinRender::ADMDsp

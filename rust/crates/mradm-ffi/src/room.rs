@@ -101,7 +101,7 @@ pub unsafe extern "C" fn mradm_room_polar(
     })
 }
 
-fn description(
+pub(crate) fn description(
     prepared: &PreparedSet,
     metres: f64,
     cuda: Option<serde_json::Value>,
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn mradm_room_prepare_quality(
 }
 /// `mradm_room_prepare_quality` after argument checks: the quality and scale, the CUDA selection,
 /// the room set and its CUDA binding. A room switch prepares through the same path.
-fn prepare_set(
+pub(crate) fn prepare_set(
     package: &Package,
     hrir: &[u8],
     sofa: &[u8],

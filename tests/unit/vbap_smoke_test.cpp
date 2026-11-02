@@ -33,6 +33,7 @@
 #include <unistd.h>
 #endif
 
+#include "speaker_pcm.h"
 #include "test_portable.h"
 
 namespace {
@@ -923,7 +924,7 @@ bool verify_direct_speakers_routing_modes() {
         CapturingLogSink rear_logs;
         mradm::NullProgressSink progress;
         auto prepared = renderer->prepare(plan, rear_logs);
-        if (!prepared || !renderer->render_window(**prepared, plan, progress, rear_logs)) {
+        if (!prepared || !mradm::render_common::render_offline(**prepared, plan, progress, rear_logs)) {
             return check(false, "SAF rear-label fallback render succeeds");
         }
         const auto rear = read_channel_sums(output, 6U);
@@ -2187,7 +2188,7 @@ bool verify_vbap_stream_matches_window() {
     FileGuard ref_guard{ref_path};
     mradm::RenderPlan window_plan = plan;
     window_plan.output_path = ref_path.string();
-    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+    if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "vbap stream: reference render_window")) {
         return false;
     }

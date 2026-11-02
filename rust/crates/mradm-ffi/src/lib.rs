@@ -15,6 +15,7 @@ mod decimal;
 mod ear;
 mod ear_post;
 mod engine;
+mod engine_render;
 mod hoa;
 mod hptf;
 mod hrtf;
