@@ -5,8 +5,6 @@
 #include <iterator>
 #include <memory>
 
-#include <fmt/format.h>
-
 #include "adm/audio_io.h"
 
 #include "../adm_audio/wav_backend.h"
@@ -164,15 +162,6 @@ namespace {
     return {reinterpret_cast<const char*>(t.data), t.len};
 }
 
-[[nodiscard]] MradmRoomScreenGeometry geometry(const ScreenGeometry& screen) {
-    MradmRoomScreenGeometry out{};
-    out.cartesian = screen.cartesian ? 1U : 0U;
-    out.aspect_ratio = screen.aspect_ratio;
-    std::ranges::copy(screen.centre, std::begin(out.centre));
-    out.width = screen.width;
-    return out;
-}
-
 [[nodiscard]] std::string_view module_of(EngineBackend backend) {
     switch (backend) {
     case EngineBackend::ear:
@@ -193,11 +182,20 @@ namespace {
 
 } // namespace
 
+MradmRoomScreenGeometry screen_geometry(const ScreenGeometry& screen) {
+    MradmRoomScreenGeometry out{};
+    out.cartesian = screen.cartesian ? 1U : 0U;
+    out.aspect_ratio = screen.aspect_ratio;
+    std::ranges::copy(screen.centre, std::begin(out.centre));
+    out.width = screen.width;
+    return out;
+}
+
 Result<std::shared_ptr<EnginePrepared>>
 prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, const void* room_profile) {
     const auto module = module_of(backend);
     if (plan.scene_handle == nullptr) {
-        return make_error(ErrorCode::internal_error, fmt::format("{} requires the Rust render scene", module));
+        return make_error(ErrorCode::internal_error, std::string{module} + " requires the Rust render scene");
     }
     static const DirectSpeakersMatrix no_matrix;
     const auto* matrix = plan.direct_speakers_matrix.get();
@@ -224,9 +222,9 @@ prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, co
                                             text(sofa),
                                             text(sofa_name),
                                             screens.reference ? 1U : 0U,
-                                            geometry(screens.reference.value_or(ScreenGeometry{})),
+                                            screen_geometry(screens.reference.value_or(ScreenGeometry{})),
                                             screens.reproduction ? 1U : 0U,
-                                            geometry(screens.reproduction.value_or(ScreenGeometry{})),
+                                            screen_geometry(screens.reproduction.value_or(ScreenGeometry{})),
                                             room_profile,
                                             text(hrir),
                                             plan.room.metres_per_unit,
@@ -237,7 +235,7 @@ prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, co
     auto prepared = std::make_shared<EnginePrepared>();
     prepared->handle.reset(raw);
     if (raw == nullptr) {
-        return make_error(static_cast<ErrorCode>(code), fmt::format("{} preparation failed", module));
+        return make_error(static_cast<ErrorCode>(code), std::string{module} + " preparation failed");
     }
     // The backend report also describes a rejected preparation.
     if (view.has_report != 0U && plan.renderer_semantics_sink) {
@@ -271,8 +269,8 @@ render_offline(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink
     const auto& pose = plan.listener_orientation;
     const MradmEngineOfflineSettings settings{text(input),
                                               text(output),
-                                              text(plan.input_path),
-                                              text(plan.output_path),
+                                              text(input),
+                                              text(output),
                                               text(plan.output_layout),
                                               info.num_channels,
                                               info.num_frames,

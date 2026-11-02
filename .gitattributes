@@ -34,3 +34,4 @@ resources/rooms/**/*.u32 filter=lfs diff=lfs merge=lfs -text
 /rust/crates/mradm-render/tests/binaural-v1/** -text
 /rust/crates/mradm-engine/tests/catalog-v1/** -text
 /rust/crates/mradm-engine/tests/request-v1/** -text
+/rust/crates/mradm-engine/tests/render-v1/** -text

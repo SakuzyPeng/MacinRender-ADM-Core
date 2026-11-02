@@ -60,17 +60,6 @@ typedef struct MradmSceneOverlay {
     size_t direct_blocks_len;
 } MradmSceneOverlay;
 
-typedef struct MradmSceneReportOptions {
-    MradmAdmText renderer;
-    MradmAdmText policy_path;
-    uint32_t supports_channel_lock;
-    uint32_t supports_object_divergence;
-    uint32_t supports_diffuse;
-    const MradmAdmText* hrtf_sources;
-    size_t hrtf_sources_len;
-    MradmAdmText renderer_effective;
-} MradmSceneReportOptions;
-
 typedef struct MradmSceneHandle MradmSceneHandle;
 
 // routed: 0 = ADM BW64 only; 1 = ADM or channel bed by the options. path is UTF-8.
@@ -92,25 +81,8 @@ void mradm_scene_destroy(MradmSceneHandle* handle);
 int32_t mradm_scene_checkpoint(const MradmSceneHandle* handle, MradmAdmText stage, uint8_t* message, size_t capacity);
 int32_t
 mradm_scene_overlay(const MradmSceneHandle* handle, MradmSceneOverlay* overlay, uint8_t* message, size_t capacity);
-// Parses mradm.semantic-policy.v1 JSON and applies it; policy errors set context 3.
-int32_t mradm_scene_apply_policy(MradmSceneHandle* handle,
-                                 const uint8_t* json,
-                                 size_t json_len,
-                                 uint32_t* context,
-                                 uint8_t* message,
-                                 size_t capacity);
-int32_t mradm_scene_policy_warnings(const MradmSceneHandle* handle,
-                                    const MradmAdmText** warnings,
-                                    size_t* warnings_len,
-                                    uint8_t* message,
-                                    size_t capacity);
-// The semantic report and the policy template: nlohmann dump(2) bytes without a trailing newline,
-// held by the handle until the next report or template call.
-int32_t mradm_scene_report(MradmSceneHandle* handle,
-                           const MradmSceneReportOptions* options,
-                           MradmAdmText* output,
-                           uint8_t* message,
-                           size_t capacity);
+// The policy template: nlohmann dump(2) bytes without a trailing newline, held by the handle until
+// the next template call.
 int32_t mradm_scene_template(MradmSceneHandle* handle, MradmAdmText* output, uint8_t* message, size_t capacity);
 // The scene inspect JSON (mradm.scene-inspect v1) for the UTF-8 input path, held like a report.
 int32_t mradm_scene_inspect_json(MradmSceneHandle* handle,

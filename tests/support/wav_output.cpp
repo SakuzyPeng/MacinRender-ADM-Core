@@ -4,7 +4,8 @@
 
 namespace mradm::engine {
 
-// The layout table and the ADM metadata are built in Rust (PCM consistency 4.8).
+// The layout table and the ADM metadata are built in Rust (PCM consistency 4.8); the offline render
+// finalizes in mradm-engine since 5.2 C2, so this wrapper only serves the WAV profile test.
 Result<void> finalize_rendered_wav(const std::string& path,
                                    const std::string& output_layout,
                                    const std::stop_token& cancel_token,
