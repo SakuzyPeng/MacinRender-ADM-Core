@@ -23,7 +23,7 @@ use std::{
 };
 
 /// The platform services of the engine (formerly the C++ `RoomRenderer::prepare` calls).
-pub(crate) struct FfiHost;
+pub struct FfiHost;
 
 impl Host for FfiHost {
     fn validate_screens(&self, screens: &RoomScreens) -> Result<(), (i32, String)> {

@@ -46,6 +46,11 @@ mod timeline;
 mod triple_balance;
 mod wav;
 
+/// The engine host the C++ shell and the Rust consistency tools share (5.2 D); Rust visibility
+/// only, no C symbol.
+#[doc(hidden)]
+pub use engine_render::FfiHost;
+
 /// Error codes follow the project's public ErrorCode values. Messages belong to
 /// the caller, making error reporting reentrant without thread-local allocation.
 fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -> i32 {

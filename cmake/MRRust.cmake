@@ -74,17 +74,21 @@ if(_mr_phase2_features)
     list(JOIN _mr_phase2_features "," _mr_phase2_feature_string)
     set(_mr_phase2_feature_args --features "${_mr_phase2_feature_string}")
 endif()
-add_custom_target(mr_adm_phase2_kernels
-    COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-        "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
-        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
-        --example phase2_kernels --no-default-features ${_mr_phase2_feature_args}
-        --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/phase2_kernels${CMAKE_EXECUTABLE_SUFFIX}"
-        "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_kernels${CMAKE_EXECUTABLE_SUFFIX}"
-    USES_TERMINAL
-)
+# Rust consistency tools (`mradm-ffi` examples): the kernel probe and, from 5.2 D, the offline
+# same-process repeat render (formerly tests/tools/phase2_render.cpp).
+foreach(_mr_phase2_example IN ITEMS kernels render)
+    add_custom_target(mr_adm_phase2_${_mr_phase2_example}
+        COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+            "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+            --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
+            --example phase2_${_mr_phase2_example} --no-default-features ${_mr_phase2_feature_args}
+            --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/phase2_${_mr_phase2_example}${CMAKE_EXECUTABLE_SUFFIX}"
+            "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_${_mr_phase2_example}${CMAKE_EXECUTABLE_SUFFIX}"
+        USES_TERMINAL
+    )
+endforeach()
 
 # Record Cargo's actual source locations for license verification and build
 # provenance. The lockfile includes dependencies for all supported platforms.
