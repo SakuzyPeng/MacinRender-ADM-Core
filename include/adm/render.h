@@ -306,9 +306,16 @@ class IRenderer {
 
     // Render one output (window) using `prepared` — which MUST come from THIS
     // renderer's prepare() — plus the per-call plan.output_path / render_window /
-    // meter_window / cancel_token.
+    // meter_window / cancel_token. Only the Apple backend implements it: the Rust backends'
+    // offline windows render in the engine (PCM consistency 5.2 C1).
     [[nodiscard]] virtual Result<RenderMetrics>
-    render_window(const IPreparedRender& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
+    render_window(const IPreparedRender& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+        (void) prepared;
+        (void) plan;
+        (void) progress;
+        (void) logs;
+        return make_error(ErrorCode::unsupported, "this backend renders offline windows in the render engine");
+    }
 
     // Convenience: prepare + render_window in one call (the non-preview path).
     [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {

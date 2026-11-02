@@ -19,6 +19,7 @@
 
 #include "../adm_io/scene_import_internal.h"
 #include "live_room_renderer.h"
+#include "speaker_pcm.h"
 #include "wav_fixture.h"
 
 namespace {
@@ -132,7 +133,7 @@ void screened_file_test(const std::filesystem::path& root,
     plan.screens = take(mradm::parse_screen_config_json(k_screen_json));
     auto renderer = mradm::create_room_renderer();
     auto prepared = take(renderer->prepare(plan, logs));
-    take(renderer->render_window(*prepared, plan, progress, logs));
+    take(mradm::render_common::render_offline(*prepared, plan, progress, logs));
     auto expected = read(plan.output_path);
     require(expected != reference, "screen mapping must affect off-centre file source");
     auto stream = take(renderer->open_stream(*prepared, plan, logs));
@@ -168,7 +169,7 @@ void file_test(const std::filesystem::path& root,
     }
     auto renderer = mradm::create_room_renderer();
     auto prepared = take(renderer->prepare(plan, logs));
-    take(renderer->render_window(*prepared, plan, progress, logs));
+    take(mradm::render_common::render_offline(*prepared, plan, progress, logs));
     auto reference = read(plan.output_path);
     auto stream = take(renderer->open_stream(*prepared, plan, logs));
     require(reference.size() / 2 == input.size() + stream->appended_tail_frames(), "offline appends complete tail");
@@ -192,7 +193,7 @@ void file_test(const std::filesystem::path& root,
     }
     plan.render_window = mradm::RenderWindow{20111, 877};
     plan.output_path = utf8(root / "window.wav");
-    take(renderer->render_window(*prepared, plan, progress, logs));
+    take(mradm::render_common::render_offline(*prepared, plan, progress, logs));
     const auto window = read(plan.output_path);
     require(window.size() == 1754 && std::equal(window.begin(), window.end(), reference.begin() + 40222),
             "exact offline window");

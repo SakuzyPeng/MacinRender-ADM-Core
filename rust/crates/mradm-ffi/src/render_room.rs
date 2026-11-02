@@ -62,7 +62,7 @@ unsafe fn room_config(r: *const RenderRoomConfig) -> Result<Config, Error> {
     })
 }
 
-fn switch() -> Prepare {
+pub(crate) fn switch() -> Prepare {
     Arc::new(prepare_switch)
 }
 
@@ -170,14 +170,12 @@ unsafe fn room_stream<'a>(handle: *mut RenderRoomStream) -> offline::Result<&'a 
         .ok_or_else(|| driver_error("无效流式渲染句柄"))
 }
 
-/// Opens the stream of a room preparation (`prepared`) and its room set (`room`), seeked to 0.
+/// Opens the file stream of a room preparation (`mradm_engine_prepare`), seeked to 0.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_room_stream_open(
     prepared: *const RenderPrepared,
-    room: *const RoomPreparedHandle,
     path: *const u8,
     path_len: usize,
-    config: *const RenderRoomConfig,
     pose: *const f32,
     output: *mut *mut RenderRoomStream,
     location: *mut u32,
@@ -189,15 +187,13 @@ pub unsafe extern "C" fn mradm_render_room_stream_open(
             return Err(driver_error("无效流式渲染参数"));
         };
         *out = ptr::null_mut();
-        let (Some(table), Some(resources)) = (
-            unsafe { prepared.as_ref() }.and_then(|p| p.room.clone()),
-            unsafe { resources(room) },
-        ) else {
+        let Some(room) = unsafe { prepared.as_ref() }
+            .and_then(RenderPrepared::plan)
+            .and_then(|p| p.room.as_ref())
+        else {
             return Err(driver_error("无效流式渲染参数"));
         };
         let pose = unsafe { input(pose, 3) }
-            .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?;
-        let config = unsafe { room_config(config) }
             .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?;
         let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
             code: e.code,
@@ -206,9 +202,9 @@ pub unsafe extern "C" fn mradm_render_room_stream_open(
         })?;
         let stream = FileStream::open(
             path,
-            table,
-            resources,
-            config,
+            Arc::clone(&room.table),
+            Arc::clone(&room.resources),
+            room.config.clone(),
             [pose[0], pose[1], pose[2]],
             scope,
             switch(),
