@@ -141,10 +141,11 @@ pub struct Request {
     pub iamf_layers: Vec<String>,
 }
 
-/// A scene imported and policy-applied before (a preview session), with the preparation it
-/// cached for earlier windows.
-pub struct Preimported {
-    pub scene: RenderScene,
+/// Optional reusable inputs. A cached backend preparation is independent of whether the caller
+/// supplies a policy-applied scene or asks the render to import and apply the policy again.
+#[derive(Default)]
+pub struct Reuse {
+    pub scene: Option<RenderScene>,
     pub prepared: Option<Arc<Prepared>>,
     /// The Apple preparation the caller caches.
     pub apple_prepared: bool,
@@ -857,6 +858,7 @@ enum Step {
     Probe,
     Target,
     Plan,
+    Prepare,
     Prepared,
     Render,
     Rendered,
@@ -957,23 +959,20 @@ struct PendingPass {
 }
 
 impl Render {
-    pub fn new(r: Request, platform: Platform, preimported: Option<Preimported>) -> Self {
-        let (scene, cached, apple_cached, preimported) = match preimported {
-            Some(p) => (Some(p.scene), p.prepared, p.apple_prepared, true),
-            None => (None, None, false, false),
-        };
+    pub fn new(r: Request, platform: Platform, reuse: Reuse) -> Self {
+        let preimported = reuse.scene.is_some();
         Self {
             r,
             platform,
             preimported,
-            apple_cached,
-            cached,
+            apple_cached: reuse.apple_prepared,
+            cached: reuse.prepared,
             new_prepared: None,
             queue: VecDeque::new(),
             step: Step::Validate,
             awaiting: None,
             outcome: None,
-            scene,
+            scene: reuse.scene,
             trim: None,
             output: PathText::default(),
             sel: Selection::Automatic,
@@ -1239,7 +1238,8 @@ impl Render {
                 self.island(Awaiting::Packager, Island::ProbeMp4Packager, None);
             }
             Step::Target => self.target(),
-            Step::Plan => self.plan(host),
+            Step::Plan => self.plan(),
+            Step::Prepare => self.prepare(host),
             Step::Prepared => {
                 if cancelled {
                     self.cancelled();
@@ -1719,7 +1719,7 @@ impl Render {
         }
     }
 
-    fn plan(&mut self, host: &dyn Host) {
+    fn plan(&mut self) {
         if self.backend == Selection::Apple {
             if self.apple_cached {
                 self.step = Step::Prepared;
@@ -1747,6 +1747,10 @@ impl Render {
             0.,
             "preparing backend",
         ));
+        self.step = Step::Prepare;
+    }
+
+    fn prepare(&mut self, host: &dyn Host) {
         let Some(kind) = kind_of(self.backend) else {
             return self.fail(Error::new(6, "unknown backend", ""), Level::Error);
         };

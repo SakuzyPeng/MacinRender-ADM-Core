@@ -11,8 +11,7 @@ use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_engine::backend::Screens;
 use mradm_engine::offline::{Metrics, Progress};
 use mradm_engine::render::{
-    self, Event, Island, Outcome, PathText, Preimported, Render, Reply, Request, RoomOptions,
-    SofaPath,
+    self, Event, Island, Outcome, PathText, Render, Reply, Request, Reuse, RoomOptions, SofaPath,
 };
 use mradm_engine::request::{self, Packager};
 use std::{
@@ -210,8 +209,12 @@ unsafe fn string(t: &Text) -> Option<String> {
 }
 
 unsafe fn path(p: &EnginePath) -> Option<PathText> {
+    let utf8 = std::str::from_utf8(unsafe { bytes(&p.utf8)? }).ok()?;
+    if utf8.contains('\0') {
+        return None;
+    }
     Some(PathText {
-        utf8: unsafe { string(&p.utf8)? },
+        utf8: utf8.to_owned(),
         display: unsafe { string(&p.display)? },
     })
 }
@@ -315,8 +318,10 @@ unsafe fn request_of(r: &EngineRenderRequest) -> Option<Request> {
 }
 
 /// Starts a render. `preimported` (may be null) is a preview session's policy-applied scene, with
-/// its cached preparation `cached` (may be null) or the Apple preparation the caller caches
-/// (`apple_cached`). The handle copies what it needs.
+/// a cached preparation `cached` (may be null) or the Apple preparation the caller caches
+/// (`apple_cached`). Preparation reuse does not require a preimported scene. The handle copies
+/// what it needs. Returns 1 for invalid arguments, including paths not encoded as UTF-8 or
+/// containing NUL, and 6 for a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_render_begin(
     request: *const EngineRenderRequest,
@@ -340,13 +345,13 @@ pub unsafe extern "C" fn mradm_engine_render_begin(
         else {
             return 1;
         };
-        let preimported = unsafe { preimported.as_ref() }.map(|scene| Preimported {
-            scene: scene.scene().clone(),
+        let reuse = Reuse {
+            scene: unsafe { preimported.as_ref() }.map(|scene| scene.scene().clone()),
             prepared: unsafe { cached.as_ref() }.and_then(|c| c.prepared.clone()),
             apple_prepared: apple_cached != 0,
-        });
+        };
         *out = Box::into_raw(Box::new(EngineRender {
-            render: Render::new(request, platform, preimported),
+            render: Render::new(request, platform, reuse),
             island: None,
             texts: Vec::new(),
             matrix: None,
@@ -742,7 +747,8 @@ pub unsafe extern "C" fn mradm_engine_render_destroy(handle: *mut EngineRender) 
 
 /// The render request's semantic policy applied to an imported scene (a preview session or an
 /// export): the in-memory JSON preferred over the file, with the warnings as log lines. Returns
-/// the status code; `*result` owns the views (`mradm_engine_result_destroy`).
+/// 0 when `*result` owns the status and views (`mradm_engine_result_destroy`), including a policy
+/// error; nonzero only for a broken boundary contract or panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_apply_policy(
     scene: *mut SceneHandle,
@@ -764,15 +770,51 @@ pub unsafe extern "C" fn mradm_engine_apply_policy(
             None
         };
         let policy_path = if has_path != 0 {
-            unsafe { path(&path_record) }
+            let Some(path) = (unsafe { path(&path_record) }) else {
+                crate::engine::finish(
+                    request::Outcome::<()> {
+                        logs: Vec::new(),
+                        result: Err(request::Error::new(
+                            request::code::INVALID_ARGUMENT,
+                            "semantic policy path must use UTF-8 without NUL",
+                            "",
+                        )),
+                    },
+                    result,
+                    status,
+                );
+                return 0;
+            };
+            Some(path)
         } else {
             None
         };
         let display = unsafe { string(&input_display) }.unwrap_or_default();
         let outcome = render::apply_policy(&mut handle.scene, json, policy_path.as_ref(), &display);
         handle.refresh();
-        let code = outcome.result.as_ref().err().map_or(0, |e| e.code);
         crate::engine::finish(outcome, result, status);
-        code
+        0
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filesystem_paths_reject_invalid_utf8_and_nul() {
+        for raw in [&b"out-\xff.wav"[..], &b"out\0.wav"[..]] {
+            let p = EnginePath {
+                utf8: Text::bytes(raw),
+                display: Text::bytes(raw),
+            };
+            assert!(unsafe { path(&p) }.is_none());
+        }
+        let raw = "out-\u{fffd}.wav";
+        let p = EnginePath {
+            utf8: Text::new(raw),
+            display: Text::new(raw),
+        };
+        assert_eq!(unsafe { path(&p) }.unwrap().utf8, raw);
+    }
 }

@@ -9,8 +9,7 @@ use mradm_engine::catalog::Platform;
 use mradm_engine::fmt::fixed;
 use mradm_engine::offline::Progress;
 use mradm_engine::render::{
-    Event, Island, PathText, Preimported, Render, Reply, Request, RoomOptions, operation, stage,
-    utc_date,
+    Event, Island, PathText, Render, Reply, Request, Reuse, RoomOptions, operation, stage, utc_date,
 };
 use mradm_engine::request::{Error, Level, Packager};
 use mradm_render::room::PolarConversion;
@@ -246,7 +245,7 @@ fn drive_with(
 }
 
 fn drive(r: Request, platform: Platform, cancel_from: Option<usize>) -> Driven {
-    drive_with(Render::new(r, platform, None), cancel_from, ok)
+    drive_with(Render::new(r, platform, Reuse::default()), cancel_from, ok)
 }
 
 fn ok(_: &Island) -> Reply {
@@ -549,9 +548,11 @@ fn the_semantic_report_rides_every_later_error() {
     assert!(report(&run).is_some());
     let mut r = base("out.flac");
     r.output_layout = "5.1".into();
-    let run = drive_with(Render::new(r, Platform::default(), None), None, |_| {
-        failure(3, "boom", "x")
-    });
+    let run = drive_with(
+        Render::new(r, Platform::default(), Reuse::default()),
+        None,
+        |_| failure(3, "boom", "x"),
+    );
     assert_eq!(run.error().unwrap().message, "boom");
     assert!(report(&run).is_some());
     assert_eq!(dir.names(), Vec::<String>::new());
@@ -648,7 +649,7 @@ fn lossy_outputs_request_islands_and_clean_up() {
         }
     };
     let run = drive_with(
-        Render::new(r.clone(), Platform::default(), None),
+        Render::new(r.clone(), Platform::default(), Reuse::default()),
         None,
         encoder,
     );
@@ -691,7 +692,7 @@ fn lossy_outputs_request_islands_and_clean_up() {
 
     // A failed encoder: its error, no files.
     let run = drive_with(
-        Render::new(r.clone(), Platform::default(), None),
+        Render::new(r.clone(), Platform::default(), Reuse::default()),
         None,
         |i| match i {
             Island::EncodeFlac { dst, .. } => {
@@ -711,7 +712,7 @@ fn lossy_outputs_request_islands_and_clean_up() {
 
     // Cancelled while encoding: checked before the installation.
     let at = drive_with(
-        Render::new(r.clone(), Platform::default(), None),
+        Render::new(r.clone(), Platform::default(), Reuse::default()),
         None,
         encoder,
     )
@@ -721,7 +722,7 @@ fn lossy_outputs_request_islands_and_clean_up() {
     .unwrap();
     std::fs::remove_file(&output).unwrap();
     let run = drive_with(
-        Render::new(r.clone(), Platform::default(), None),
+        Render::new(r.clone(), Platform::default(), Reuse::default()),
         Some(at + 1),
         encoder,
     );
@@ -730,7 +731,7 @@ fn lossy_outputs_request_islands_and_clean_up() {
 
     // A failed metadata write only warns.
     let run = drive_with(
-        Render::new(r.clone(), Platform::default(), None),
+        Render::new(r.clone(), Platform::default(), Reuse::default()),
         None,
         |i| match i {
             Island::EncodeFlac { dst, .. } => {
@@ -755,7 +756,7 @@ fn lossy_outputs_request_islands_and_clean_up() {
     opus.output = Some(path_text(&dir.file("out.mka")));
     opus.opus_bitrate_per_ch_kbps = 48;
     let run = drive_with(
-        Render::new(opus, Platform::default(), None),
+        Render::new(opus, Platform::default(), Reuse::default()),
         None,
         |i| match i {
             Island::EncodeOpus { dst, .. } => {
@@ -791,23 +792,27 @@ fn iamf_outputs_stage_32_bit_pcm_and_package_mp4() {
         ..Platform::default()
     };
     let depth = std::cell::Cell::new(0);
-    let run = drive_with(Render::new(r, platform, None), None, |i| match i {
-        Island::ProbeMp4Packager => Reply {
-            packager: Packager::Mp4box,
-            ..Reply::default()
+    let run = drive_with(
+        Render::new(r, platform, Reuse::default()),
+        None,
+        |i| match i {
+            Island::ProbeMp4Packager => Reply {
+                packager: Packager::Mp4box,
+                ..Reply::default()
+            },
+            Island::EncodeIamf { src, dst, .. } => {
+                depth.set(bits(Path::new(&src.utf8)));
+                std::fs::write(&dst.utf8, b"iamf").unwrap();
+                Reply::default()
+            }
+            Island::PackageMp4 { src, dst } => {
+                assert_eq!(std::fs::read(&src.utf8).unwrap(), b"iamf");
+                std::fs::write(&dst.utf8, b"mp4").unwrap();
+                Reply::default()
+            }
+            _ => Reply::default(),
         },
-        Island::EncodeIamf { src, dst, .. } => {
-            depth.set(bits(Path::new(&src.utf8)));
-            std::fs::write(&dst.utf8, b"iamf").unwrap();
-            Reply::default()
-        }
-        Island::PackageMp4 { src, dst } => {
-            assert_eq!(std::fs::read(&src.utf8).unwrap(), b"iamf");
-            std::fs::write(&dst.utf8, b"mp4").unwrap();
-            Reply::default()
-        }
-        _ => Reply::default(),
-    });
+    );
     assert_eq!(run.error(), None);
     assert_eq!(depth.get(), 32);
     let kinds: Vec<&str> = run
@@ -844,7 +849,7 @@ fn island_progress_maps_into_the_render_range() {
     scene_wav("objects-point", &input, 4800);
     let mut r = request(&input, &dir.file("out.flac"));
     r.output_layout = "5.1".into();
-    let mut render = Render::new(r, Platform::default(), None);
+    let mut render = Render::new(r, Platform::default(), Reuse::default());
     loop {
         match render.next(false, &TestHost) {
             Event::Island(Island::EncodeFlac { .. }) => break,
@@ -903,16 +908,12 @@ fn preimported_scenes_skip_import_policy_report_and_preparation() {
     let prepared = first.render.take_prepared().unwrap();
     let expected = samples(&dir.file("out.wav"));
     std::fs::remove_file(dir.file("out.wav")).unwrap();
-    let preimported = Preimported {
-        scene,
+    let reuse = Reuse {
+        scene: Some(scene),
         prepared: Some(prepared),
         apple_prepared: false,
     };
-    let mut second = drive_with(
-        Render::new(r, Platform::default(), Some(preimported)),
-        None,
-        ok,
-    );
+    let mut second = drive_with(Render::new(r, Platform::default(), reuse), None, ok);
     assert_eq!(second.error(), None);
     let messages = second.messages();
     assert!(messages.contains(&"using cached scene"));
@@ -932,6 +933,89 @@ fn preimported_scenes_skip_import_policy_report_and_preparation() {
     );
     assert!(second.render.take_prepared().is_none());
     assert_eq!(samples(&dir.file("out.wav")), expected);
+}
+
+#[test]
+fn cached_preparation_does_not_skip_import_policy_or_report() {
+    let dir = Dir::new("cached-preparation");
+    let input = dir.file("in.wav");
+    scene_wav("objects-point", &input, 9600);
+    let mut r = request(&input, &dir.file("out.wav"));
+    r.capture_semantic_report = true;
+    r.semantic_policy_json =
+        Some(br#"{"schema":"mradm.semantic-policy.v1","global":{"gain":{"gain_db":-6}}}"#.to_vec());
+    let mut first = drive(r.clone(), Platform::default(), None);
+    assert_eq!(first.error(), None);
+    let expected = samples(&dir.file("out.wav"));
+    let reuse = Reuse {
+        prepared: first.render.take_prepared(),
+        ..Reuse::default()
+    };
+    assert!(reuse.prepared.is_some());
+    let mut second = drive_with(Render::new(r, Platform::default(), reuse), None, ok);
+    assert_eq!(second.error(), None);
+    let messages = second.messages();
+    assert!(messages.contains(&"importing scene"));
+    assert!(messages.contains(&"applying semantic policy"));
+    assert!(!messages.contains(&"using cached scene"));
+    assert!(!messages.contains(&"preparing backend"));
+    assert!(second.render.outcome().unwrap().semantic_report.is_some());
+    assert!(second.render.scene().unwrap().policy.is_some());
+    assert_eq!(samples(&dir.file("out.wav")), expected);
+    assert!(second.render.take_prepared().is_none());
+}
+
+#[test]
+fn prepare_progress_precedes_backend_work() {
+    use std::cell::Cell;
+
+    struct ObservingHost(Cell<bool>);
+    impl Host for ObservingHost {
+        fn validate_screens(&self, _: &RoomScreens) -> Result<(), (i32, String)> {
+            self.0.set(true);
+            Err((2, "stop at backend entry".to_owned()))
+        }
+        fn prepare_room(
+            &self,
+            _: &Package,
+            _: &[u8],
+            _: &[u8],
+            _: u32,
+            _: f64,
+        ) -> Result<Resources, (i32, String)> {
+            unreachable!()
+        }
+        fn room_polar(&self) -> PolarConversion {
+            loading::polar
+        }
+        fn room_scope(&self) -> Scope {
+            scope
+        }
+        fn room_switch(&self) -> Prepare {
+            TestHost.room_switch()
+        }
+    }
+
+    let dir = Dir::new("prepare-progress");
+    let input = dir.file("in.wav");
+    scene_wav("objects-point", &input, 64);
+    let mut r = request(&input, &dir.file("out.wav"));
+    r.renderer = mradm_engine::request::Selection::RoomBinaural as u32;
+    r.output_layout = "binaural".into();
+    let host = ObservingHost(Cell::new(false));
+    let mut render = Render::new(r, Platform::default(), Reuse::default());
+    loop {
+        match render.next(false, &host) {
+            Event::Progress(p) if p.operation == operation::PREPARE_BACKEND => {
+                assert!(!host.0.get(), "backend work must follow its start event");
+                break;
+            }
+            Event::Done => panic!("missing prepare progress"),
+            _ => {}
+        }
+    }
+    let _ = render.next(false, &host);
+    assert!(host.0.get(), "the following step must enter the backend");
 }
 
 #[test]

@@ -777,6 +777,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
 
+    add_executable(mr_adm_render_service_tests tests/unit/render_service_test.cpp)
+    target_link_libraries(mr_adm_render_service_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_render_service_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_render_service_tests)
+    add_test(NAME mr_adm_render_service_tests COMMAND mr_adm_render_service_tests)
+
     add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp tests/support/wav_output.cpp)
     target_include_directories(mr_adm_wav_profile_tests PRIVATE tests/support src/adm_audio)
     target_link_libraries(mr_adm_wav_profile_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)

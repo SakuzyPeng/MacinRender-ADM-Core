@@ -45,7 +45,7 @@ using render_common::engine_text;
 }
 
 [[nodiscard]] Error error_of(int32_t code, MradmAdmText message, MradmAdmText context) {
-    const auto kind = code >= 1 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
+    const auto kind = code >= 0 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
     return {kind, engine_text(message), engine_text(context)};
 }
 
@@ -378,9 +378,6 @@ class Islands {
         return {{ErrorCode::internal_error, "render result is unavailable", {}}, std::nullopt, std::nullopt, {}};
     }
     RenderResult result{error_of(r.code, r.message, r.context), std::nullopt, std::nullopt, {}};
-    if (r.code == 0) {
-        result.error = {ErrorCode::ok, "", {}};
-    }
     if (r.has_output != 0U) {
         const std::u8string bytes(reinterpret_cast<const char8_t*>(r.output_path.data), r.output_path.len);
         result.output_path = std::filesystem::path(bytes);
@@ -449,13 +446,15 @@ RenderResult RenderService::render(const RenderRequest& request,
     auto& slot = prepared_cache != nullptr ? *prepared_cache : local;
     const auto* cached = dynamic_cast<const render_common::EnginePrepared*>(slot.get());
     MradmEngineRender* raw = nullptr;
-    if (mradm_engine_render_begin(&record,
-                                  platform.get(),
-                                  preimported_scene != nullptr ? preimported_scene->handle->raw : nullptr,
-                                  cached != nullptr ? cached->handle.get() : nullptr,
-                                  slot != nullptr && cached == nullptr ? 1U : 0U,
-                                  &raw) != 0) {
-        return {{ErrorCode::internal_error, "invalid render request", {}}, std::nullopt, std::nullopt, {}};
+    const auto code = mradm_engine_render_begin(&record,
+                                                platform.get(),
+                                                preimported_scene != nullptr ? preimported_scene->handle->raw : nullptr,
+                                                cached != nullptr ? cached->handle.get() : nullptr,
+                                                slot != nullptr && cached == nullptr ? 1U : 0U,
+                                                &raw);
+    if (code != 0) {
+        return {
+            error_of(code, engine_text("invalid render request (UTF-8 paths without NUL required)"), {}), {}, {}, {}};
     }
     const RenderHandle render(raw, &mradm_engine_render_destroy);
     Islands islands(render.get(), request, progress, logs, slot);
