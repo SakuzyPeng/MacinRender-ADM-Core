@@ -16,6 +16,7 @@ mod ear;
 mod ear_post;
 mod engine;
 mod engine_render;
+mod engine_service;
 mod hoa;
 mod hptf;
 mod hrtf;

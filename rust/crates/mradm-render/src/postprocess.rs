@@ -36,6 +36,10 @@ fn wav(error: mradm_wav::Error, path: &str) -> Failure {
     fail(error.code, error.message, at(path))
 }
 /// The operating system's description, as C++ `std::error_code::message` gives it.
+/// An OS error's description without Rust's " (os error N)" suffix (`std::error_code::message`).
+pub fn os_message(error: &std::io::Error) -> String {
+    os(error)
+}
 fn os(error: &std::io::Error) -> String {
     let text = error.to_string();
     match error.raw_os_error() {

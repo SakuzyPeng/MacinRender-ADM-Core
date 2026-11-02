@@ -1,286 +1,427 @@
 #include <algorithm>
-#include <array>
-#include <cctype>
-#include <cmath>
 #include <cstdint>
-#include <cstdlib>
-#include <ctime>
 #include <filesystem>
-#include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
-#include <random>
+#include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
-
-#include <fmt/format.h>
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/options.h"
 #include "adm/render.h"
 
+#include "../adm_core/direct_matrix_records.h"
 #include "../adm_io/scene_import_internal.h"
+#include "../adm_render_room/room_internal.h"
 #include "catalog.h"
 #include "engine_result.h"
-#include "post_gain.h"
 #include "renderer_factory.h"
+#include "scene_handle.h"
 #include "speaker_pcm.h"
-#include "wav_output.h"
 
 namespace mradm {
 
 namespace {
 
-[[nodiscard]] std::tm utc_time(std::time_t t) {
-    std::tm tm_utc{};
-#ifdef _WIN32
-    gmtime_s(&tm_utc, &t);
-#else
-    gmtime_r(&t, &tm_utc);
-#endif
-    return tm_utc;
+using render_common::engine_text;
+
+[[nodiscard]] std::string utf8(const std::filesystem::path& path) {
+    const auto bytes = path.u8string();
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
 }
 
-[[nodiscard]] std::filesystem::path unique_sidecar_temp_path(const std::filesystem::path& final_path,
-                                                             std::string_view purpose,
-                                                             std::string_view extension) {
-    static thread_local std::mt19937_64 rng{std::random_device{}()};
-    std::uniform_int_distribution<std::uint64_t> dist;
-
-    const auto parent = final_path.parent_path();
-    const auto stem = final_path.stem().string();
-    for (int attempt = 0; attempt < 16; ++attempt) {
-        auto candidate = parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), extension);
-        std::error_code ec;
-        if (!std::filesystem::exists(candidate, ec)) {
-            return candidate;
-        }
-    }
-    return parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), extension);
+// The native spelling of a UTF-8 path from the engine (the islands open native paths).
+[[nodiscard]] std::string native(MradmAdmText text) {
+    const std::u8string bytes(reinterpret_cast<const char8_t*>(text.data), text.len);
+    return std::filesystem::path(bytes).string();
 }
 
-[[nodiscard]] std::filesystem::path unique_render_temp_path(const std::filesystem::path& final_path) {
-    return unique_sidecar_temp_path(final_path, "render_tmp", ".wav");
+[[nodiscard]] MradmEnginePath engine_path(const std::string& text) {
+    return {engine_text(text), engine_text(text)};
 }
 
-[[nodiscard]] std::filesystem::path unique_output_temp_path(const std::filesystem::path& final_path) {
-    const auto ext = final_path.extension().string();
-    return unique_sidecar_temp_path(final_path, "output_tmp", ext.empty() ? ".tmp" : ext);
+[[nodiscard]] Error error_of(int32_t code, MradmAdmText message, MradmAdmText context) {
+    const auto kind = code >= 0 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
+    return {kind, engine_text(message), engine_text(context)};
 }
 
-[[nodiscard]] std::optional<uint16_t> channel_count_for_layout(const CapabilityReport& caps,
-                                                               std::string_view layout_id) {
-    const auto it = std::ranges::find_if(
-        caps.supported_layouts, [layout_id](const CapabilityReport::Layout& layout) { return layout.id == layout_id; });
-    if (it != caps.supported_layouts.end()) {
-        return it->channel_count;
-    }
-
-    if (layout_id == "binaural") {
-        const auto binaural_it = std::ranges::find_if(
-            caps.supported_layouts, [](const CapabilityReport::Layout& layout) { return layout.is_binaural; });
-        if (binaural_it != caps.supported_layouts.end()) {
-            return binaural_it->channel_count;
-        }
-    }
-
-    return std::nullopt;
-}
-
-[[nodiscard]] std::string renderer_name(RendererSelection sel) {
-    switch (sel) {
-    case RendererSelection::automatic:
-        return "auto";
-    case RendererSelection::ear:
-        return "ear";
-    case RendererSelection::triple_balance:
-        return "triple-balance";
-    case RendererSelection::saf:
-        return "saf";
-    case RendererSelection::hoa:
-        return "hoa";
-    case RendererSelection::apple:
-        return "apple";
-    case RendererSelection::binaural:
-        return "binaural";
-    case RendererSelection::saf_binaural:
-        return "saf-binaural";
-    case RendererSelection::room_binaural:
-        return "room-binaural";
-    }
-    return "unknown";
-}
-
-[[nodiscard]] std::string apple_spatial_preset_name(AppleSpatialPreset preset) {
-    switch (preset) {
-    case AppleSpatialPreset::off:
-        return "off";
-    case AppleSpatialPreset::headphone_default:
-        return "headphone-default";
-    case AppleSpatialPreset::headphone_movie:
-        return "headphone-movie";
-    }
-    return "unknown";
-}
-
-[[nodiscard]] double clamp_progress(double value) {
-    if (!std::isfinite(value)) {
-        return 0.0;
-    }
-    return std::clamp(value, 0.0, 1.0);
-}
-
-void emit_progress(ProgressSink& progress,
-                   RenderStage stage,
-                   RenderOperation operation,
-                   double fraction,
-                   double stage_fraction,
-                   std::string_view message,
-                   uint64_t current_frame = 0,
-                   uint64_t total_frames = 0) {
-    progress.on_progress({stage,
-                          operation,
-                          clamp_progress(fraction),
-                          clamp_progress(stage_fraction),
-                          current_frame,
-                          total_frames,
-                          message});
-}
-
-class ProgressRangeSink final : public ProgressSink {
+// The request's texts, owned for the render; paths are UTF-8 for opening and in messages.
+class RequestTexts {
   public:
-    ProgressRangeSink(ProgressSink& downstream,
-                      RenderStage stage,
-                      RenderOperation operation,
-                      double start,
-                      double end,
-                      std::string_view fallback_message)
-        : downstream_(&downstream), stage_(stage), operation_(operation), start_(clamp_progress(start)),
-          end_(clamp_progress(end)), fallback_message_(fallback_message) {}
+    explicit RequestTexts(const RenderRequest& request) : input(utf8(request.input_path)) {
+        const auto& o = request.options;
+        if (request.output_path) {
+            output = utf8(*request.output_path);
+        }
+        if (o.sofa_path) {
+            sofa = utf8(*o.sofa_path);
+            sofa_name = utf8(o.sofa_path->filename());
+        }
+        if (o.semantic_policy_path) {
+            policy = utf8(*o.semantic_policy_path);
+        }
+        if (o.direct_speakers_matrix_path) {
+            matrix = utf8(*o.direct_speakers_matrix_path);
+        }
+        if (o.semantic_report_path) {
+            report = utf8(*o.semantic_report_path);
+        }
+        hrir = utf8(o.room.hrir_manifest);
+        labels.resize(o.input_channel_labels.size());
+        std::ranges::transform(
+            o.input_channel_labels, labels.begin(), [](std::string_view l) { return engine_text(l); });
+        layers.resize(o.iamf_layers.size());
+        std::ranges::transform(o.iamf_layers, layers.begin(), [](std::string_view l) { return engine_text(l); });
+    }
 
+    [[nodiscard]] MradmEngineRenderRequest record(const RenderRequest& request) const {
+        const auto& o = request.options;
+        const auto& screens = o.screens;
+        const auto& pose = o.listener_orientation;
+        const void* profile = o.room.profile ? room_internal::Access::get(*o.room.profile) : nullptr;
+        return {engine_path(input),
+                request.output_path ? 1U : 0U,
+                engine_path(output),
+                static_cast<uint32_t>(o.renderer),
+                engine_text(o.output_layout),
+                o.input_layout ? 1U : 0U,
+                engine_text(o.input_layout ? std::string_view{*o.input_layout} : std::string_view{}),
+                labels.data(),
+                labels.size(),
+                o.measure_loudness ? 1U : 0U,
+                o.loudness_target_lufs,
+                o.peak_limit ? 1U : 0U,
+                o.peak_limit_dbtp,
+                o.peak_normalize_to_limit ? 1U : 0U,
+                o.final_gain_db,
+                static_cast<uint32_t>(o.output_bit_depth),
+                o.opus_bitrate_per_ch_kbps,
+                o.apac_bitrate_kbps,
+                o.apac_drc_music ? 1U : 0U,
+                o.apac_container == RenderOptions::ApacContainer::caf ? 1U : 0U,
+                o.sofa_path ? 1U : 0U,
+                engine_path(sofa),
+                engine_text(sofa_name),
+                o.semantic_policy_path ? 1U : 0U,
+                engine_path(policy),
+                o.semantic_policy_json ? 1U : 0U,
+                engine_text(o.semantic_policy_json ? std::string_view{*o.semantic_policy_json} : std::string_view{}),
+                o.direct_speakers_matrix_path ? 1U : 0U,
+                engine_path(matrix),
+                o.direct_speakers_matrix_json ? 1U : 0U,
+                engine_text(o.direct_speakers_matrix_json ? std::string_view{*o.direct_speakers_matrix_json}
+                                                          : std::string_view{}),
+                o.semantic_report_path ? 1U : 0U,
+                engine_path(report),
+                o.capture_semantic_report ? 1U : 0U,
+                o.default_interp_ms,
+                o.object_smoothing_frames,
+                o.speaker_geometry == SpeakerGeometry::apple ? 1U : 0U,
+                static_cast<uint32_t>(o.direct_speakers_routing_mode),
+                static_cast<uint32_t>(o.speaker_spread_mode),
+                static_cast<uint32_t>(o.triple_balance_mode),
+                static_cast<uint32_t>(o.binaural_spread_mode),
+                o.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U,
+                static_cast<uint32_t>(o.apple_spatial_preset),
+                o.apple_speaker_rendering_flags ? 1U : 0U,
+                {pose.yaw_deg, pose.pitch_deg, pose.roll_deg},
+                o.render_start_sec,
+                o.render_end_sec ? 1U : 0U,
+                o.render_end_sec.value_or(0.0),
+                profile,
+                engine_text(hrir),
+                o.room.metres_per_unit,
+                static_cast<uint32_t>(o.room.quality),
+                screens.reference ? 1U : 0U,
+                render_common::screen_geometry(screens.reference.value_or(ScreenGeometry{})),
+                screens.reproduction ? 1U : 0U,
+                render_common::screen_geometry(screens.reproduction.value_or(ScreenGeometry{})),
+                o.internal_allow_speaker_stereo ? 1U : 0U,
+                o.iamf_container == RenderOptions::IamfContainer::mp4 ? 1U : 0U,
+                layers.data(),
+                layers.size()};
+    }
+
+  private:
+    std::string input;
+    std::string output;
+    std::string sofa;
+    std::string sofa_name;
+    std::string policy;
+    std::string matrix;
+    std::string report;
+    std::string hrir;
+    std::vector<MradmAdmText> labels;
+    std::vector<MradmAdmText> layers;
+};
+
+using RenderHandle = std::unique_ptr<MradmEngineRender, decltype(&mradm_engine_render_destroy)>;
+
+[[nodiscard]] ProgressEvent progress_of(const MradmEngineProgress& p) {
+    return {static_cast<RenderStage>(p.stage),
+            static_cast<RenderOperation>(p.operation),
+            p.fraction,
+            p.stage_fraction,
+            p.current,
+            p.total,
+            std::string_view{reinterpret_cast<const char*>(p.message.data), p.message.len}};
+}
+
+// An island's progress mapped into the render's range by the engine.
+class MappedProgress final : public ProgressSink {
+  public:
+    MappedProgress(const MradmEngineRender* render, ProgressSink& downstream)
+        : render_(render), downstream_(&downstream) {}
     void on_progress(const ProgressEvent& event) override {
-        const double local = (event.stage == RenderStage::finished) ? 1.0 : clamp_progress(event.stage_fraction);
-        const double mapped = start_ + ((end_ - start_) * local);
-        const auto operation = (event.operation == RenderOperation::unknown || event.stage == RenderStage::finished)
-                                   ? operation_
-                                   : event.operation;
-        const auto message = event.message.empty() ? std::string_view{fallback_message_} : event.message;
-        downstream_->on_progress(
-            {stage_, operation, clamp_progress(mapped), local, event.current_frame, event.total_frames, message});
+        const MradmEngineProgress raw{static_cast<uint32_t>(event.stage),
+                                      static_cast<uint32_t>(event.operation),
+                                      event.fraction,
+                                      event.stage_fraction,
+                                      event.current_frame,
+                                      event.total_frames,
+                                      engine_text(event.message)};
+        MradmEngineProgress mapped{};
+        if (mradm_engine_render_map_progress(render_, &raw, &mapped) == 0) {
+            downstream_->on_progress(progress_of(mapped));
+        }
     }
 
   private:
+    const MradmEngineRender* render_;
     ProgressSink* downstream_;
-    RenderStage stage_;
-    RenderOperation operation_;
-    double start_{0.0};
-    double end_{1.0};
-    std::string_view fallback_message_;
 };
 
-class TempFileGuard {
+// The C++ islands of a render: encoders, container metadata, the MP4 packager probe and the Apple
+// backend. The reply's texts live until the engine resumes.
+class Islands {
   public:
-    explicit TempFileGuard(std::filesystem::path path) : path_(std::move(path)) {}
-    TempFileGuard(const TempFileGuard&) = delete;
-    TempFileGuard& operator=(const TempFileGuard&) = delete;
-    TempFileGuard(TempFileGuard&&) = delete;
-    TempFileGuard& operator=(TempFileGuard&&) = delete;
-    ~TempFileGuard() { remove_now(); }
+    Islands(const MradmEngineRender* render,
+            const RenderRequest& request,
+            ProgressSink& progress,
+            LogSink& logs,
+            std::shared_ptr<IPreparedRender>& slot)
+        : render_(render), request_(&request), progress_(&progress), logs_(&logs), slot_(&slot) {}
 
-    void remove_now() noexcept {
-        if (!active_) {
+    const MradmEngineIslandReply& run(const MradmEngineRenderEvent& e) {
+        message_.clear();
+        context_.clear();
+        reply_ = {};
+        reply_.ffmpeg_major = -1;
+        const auto& token = request_->options.cancel_token;
+        const auto src = native(e.src.utf8);
+        const auto dst = native(e.dst.utf8);
+        const auto layout = engine_text(e.layout);
+        MappedProgress mapped(render_, *progress_);
+        switch (e.island) {
+        case 1: {
+            const auto packager = audio::detect_iamf_mp4_packager();
+            reply_.packager = static_cast<uint32_t>(packager.kind);
+            reply_.ffmpeg_major = packager.ffmpeg_major;
+            break;
+        }
+        case 2:
+        case 3:
+            apple(e, dst, mapped);
+            break;
+        case 4:
+            done(audio::convert_to_flac(src, dst, token, &mapped));
+            break;
+        case 5:
+            done(audio::convert_to_opus_mka(src, dst, layout, e.bitrate, token));
+            break;
+        case 6:
+            done(audio::convert_to_apac(src,
+                                        dst,
+                                        layout,
+                                        e.bitrate,
+                                        e.drc_music != 0U,
+                                        e.caf != 0U ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4,
+                                        token,
+                                        &mapped));
+            break;
+        case 7: {
+            std::vector<std::string> layers;
+            for (const auto& layer : std::span{e.layers, e.layers_len}) {
+                layers.push_back(engine_text(layer));
+            }
+            done(audio::convert_to_iamf(src,
+                                        dst,
+                                        layout,
+                                        e.bitrate,
+                                        e.has_lufs != 0U ? std::optional<double>(e.lufs) : std::nullopt,
+                                        e.has_peak != 0U ? std::optional<double>(e.peak_dbtp) : std::nullopt,
+                                        token,
+                                        layers));
+            break;
+        }
+        case 8:
+            done(audio::package_iamf_to_mp4(src, dst, token));
+            break;
+        case 9: {
+            audio::MetadataFields fields;
+            fields.encoder = engine_text(e.encoder);
+            fields.date_utc = engine_text(e.date_utc);
+            fields.renderer = engine_text(e.renderer);
+            fields.output_layout = layout;
+            if (e.has_lufs != 0U) {
+                fields.lufs = e.lufs;
+            }
+            if (e.has_peak != 0U) {
+                fields.peak_dbtp = e.peak_dbtp;
+            }
+            done(audio::write_file_metadata(dst, fields));
+            break;
+        }
+        default:
+            fail({ErrorCode::internal_error, "unknown render island", {}});
+            break;
+        }
+        return reply_;
+    }
+
+  private:
+    void fail(const Error& error) {
+        message_ = error.message;
+        context_ = error.context;
+        reply_.code = static_cast<int32_t>(error.code);
+        reply_.message = engine_text(message_);
+        reply_.context = engine_text(context_);
+    }
+    void done(const Result<void>& result) {
+        if (!result) {
+            fail(result.error());
+        }
+    }
+
+    // The Apple backend prepares and renders its own windows over the engine's scene and plan.
+    void apple(const MradmEngineRenderEvent& e, const std::string& output, ProgressSink& mapped) {
+        const auto& o = request_->options;
+        auto scene = io::RenderScene::adopt(mradm_engine_render_scene(render_), request_->input_path.string());
+        if (!scene) {
+            fail(scene.error());
             return;
         }
-        std::error_code ec;
-        std::filesystem::remove(path_, ec);
-        active_ = false;
+        RenderPlan plan;
+        plan.input_path = request_->input_path.string();
+        plan.output_path = output;
+        plan.output_layout = engine_text(e.layout);
+        plan.sofa_path = o.sofa_path;
+        plan.room = o.room;
+        plan.screens = o.screens;
+        plan.default_interp_ms = o.default_interp_ms;
+        plan.object_smoothing_frames = o.object_smoothing_frames;
+        plan.speaker_geometry = o.speaker_geometry;
+        plan.direct_speakers_routing_mode = o.direct_speakers_routing_mode;
+        if (e.has_matrix != 0U) {
+            plan.direct_speakers_matrix =
+                std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(e.matrix));
+        }
+        plan.speaker_spread_mode = o.speaker_spread_mode;
+        plan.triple_balance_mode = o.triple_balance_mode;
+        plan.binaural_spread_mode = o.binaural_spread_mode;
+        plan.lfe_routing_mode = o.lfe_routing_mode;
+        plan.apple_spatial_preset = o.apple_spatial_preset;
+        plan.apple_speaker_rendering_flags = o.apple_speaker_rendering_flags;
+        plan.listener_orientation = o.listener_orientation;
+        if (e.has_window != 0U) {
+            plan.render_window = RenderWindow{e.window_start, e.window_count};
+        }
+        if (e.has_meter_window != 0U) {
+            plan.meter_window = MeterWindow{e.meter_start, e.meter_count};
+        }
+        plan.cancel_token = o.cancel_token;
+        plan.scene = scene->scene();
+        plan.scene_handle = scene->handle();
+        auto resolved = resolve_renderer(RendererSelection::apple, plan.output_layout, o.internal_allow_speaker_stereo);
+        if (!resolved) {
+            fail(resolved.error());
+            return;
+        }
+        if (e.island == 2U) {
+            auto prepared = resolved->renderer->prepare(plan, *logs_);
+            if (!prepared) {
+                fail(prepared.error());
+                return;
+            }
+            *slot_ = std::move(*prepared);
+            return;
+        }
+        auto metrics = resolved->renderer->render_window(**slot_, plan, mapped, *logs_);
+        if (!metrics) {
+            fail(metrics.error());
+            return;
+        }
+        reply_.has_lufs = metrics->measured_lufs ? 1U : 0U;
+        reply_.lufs = metrics->measured_lufs.value_or(0.0);
+        reply_.has_peak = metrics->measured_peak_dbtp ? 1U : 0U;
+        reply_.peak_dbtp = metrics->measured_peak_dbtp.value_or(0.0);
     }
-    void dismiss() noexcept { active_ = false; }
 
-  private:
-    std::filesystem::path path_;
-    bool active_{true};
+    const MradmEngineRender* render_;
+    const RenderRequest* request_;
+    ProgressSink* progress_;
+    LogSink* logs_;
+    std::shared_ptr<IPreparedRender>* slot_;
+    MradmEngineIslandReply reply_{};
+    std::string message_;
+    std::string context_;
 };
 
-[[nodiscard]] Result<void> replace_output_file(const std::filesystem::path& temp_path,
-                                               const std::filesystem::path& final_path) {
-    std::error_code ec;
-    std::filesystem::rename(temp_path, final_path, ec);
-    if (!ec) {
-        return {};
+[[nodiscard]] RenderResult result_of(MradmEngineRender* render) {
+    MradmEngineRenderResult r{};
+    if (mradm_engine_render_result(render, &r) != 0) {
+        return {{ErrorCode::internal_error, "render result is unavailable", {}}, std::nullopt, std::nullopt, {}};
     }
-
-    std::error_code remove_ec;
-    std::filesystem::remove(final_path, remove_ec);
-    ec.clear();
-    std::filesystem::rename(temp_path, final_path, ec);
-    if (ec) {
-        return make_error(
-            ErrorCode::io_error, "failed to replace output file: " + ec.message(), "path=" + final_path.string());
+    RenderResult result{error_of(r.code, r.message, r.context), std::nullopt, std::nullopt, {}};
+    if (r.has_output != 0U) {
+        const std::u8string bytes(reinterpret_cast<const char8_t*>(r.output_path.data), r.output_path.len);
+        result.output_path = std::filesystem::path(bytes);
     }
-    return {};
+    if (r.has_metrics != 0U) {
+        RenderMetrics metrics;
+        if (r.has_lufs != 0U) {
+            metrics.measured_lufs = r.lufs;
+        }
+        if (r.has_peak != 0U) {
+            metrics.measured_peak_dbtp = r.peak_dbtp;
+        }
+        result.metrics = metrics;
+    }
+    for (const auto& line : std::span{r.logs, r.logs_len}) {
+        result.diagnostics.push_back({static_cast<LogLevel>(line.level), engine_text(line.message)});
+    }
+    if (r.has_report != 0U) {
+        result.semantic_report_json = engine_text(r.report);
+    }
+    return result;
 }
 
-class OutputCleanupGuard {
-  public:
-    explicit OutputCleanupGuard(std::filesystem::path path) : path_(std::move(path)) {}
-    OutputCleanupGuard(const OutputCleanupGuard&) = delete;
-    OutputCleanupGuard& operator=(const OutputCleanupGuard&) = delete;
-    OutputCleanupGuard(OutputCleanupGuard&&) = delete;
-    OutputCleanupGuard& operator=(OutputCleanupGuard&&) = delete;
-    ~OutputCleanupGuard() { remove_now(); }
-
-    void arm() noexcept { active_ = true; }
-    void commit() noexcept { active_ = false; }
-
-    void remove_now() noexcept {
-        if (!active_) {
-            return;
-        }
-        std::error_code ec;
-        std::filesystem::remove(path_, ec);
-        active_ = false;
+// The policy of a preview or export import, in Rust (mradm-engine `render`, PCM consistency 5.2 C2).
+[[nodiscard]] Result<void>
+apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptions& options, LogSink& logs) {
+    const auto json = options.semantic_policy_json;
+    const auto path = options.semantic_policy_path ? utf8(*options.semantic_policy_path) : std::string{};
+    const auto display = utf8(input);
+    const render_common::EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
+        return mradm_engine_apply_policy(scene.handle()->raw,
+                                         json ? 1U : 0U,
+                                         engine_text(json ? std::string_view{*json} : std::string_view{}),
+                                         options.semantic_policy_path ? 1U : 0U,
+                                         engine_path(path),
+                                         engine_text(display),
+                                         out,
+                                         status);
+    });
+    outcome.emit(logs, "semantic-policy");
+    if (auto refreshed = scene.refresh(); !refreshed) {
+        return refreshed;
     }
-
-  private:
-    std::filesystem::path path_;
-    bool active_{false};
-};
-
-// Resolve the semantic policy from options (in-memory JSON preferred over a file
-// path) and apply it to the Rust render scene (PCM consistency 4.4), which keeps the
-// policy and the original scene for the report. Shared by render(), export_file() and
-// prepare_preview_scene() so the json/path precedence stays in one place.
-[[nodiscard]] Result<void> resolve_and_apply_policy(io::RenderScene& scene,
-                                                    const RenderOptions& options,
-                                                    std::vector<std::string>& warnings,
-                                                    LogSink& logs) {
-    Result<void> applied;
-    if (options.semantic_policy_json.has_value()) {
-        if (options.semantic_policy_path.has_value()) {
-            logs.log(LogLevel::warning,
-                     "semantic-policy",
-                     "in-memory semantic policy supplied; ignoring semantic_policy_path");
-        }
-        applied = scene.apply_policy(*options.semantic_policy_json, "<memory>");
-    } else if (options.semantic_policy_path.has_value()) {
-        auto text = io::read_policy_file(*options.semantic_policy_path);
-        if (!text) {
-            return tl::unexpected{text.error()};
-        }
-        applied = scene.apply_policy(*text, options.semantic_policy_path->string());
-    } else {
-        return {};
-    }
-    if (!applied) {
-        return applied;
-    }
-    warnings = scene.policy_warnings();
-    for (const auto& warning : warnings) {
-        logs.log(LogLevel::warning, "semantic-policy", warning);
+    if (!outcome.ok()) {
+        return tl::unexpected{outcome.error()};
     }
     return {};
 }
@@ -289,780 +430,60 @@ class OutputCleanupGuard {
 
 RenderService::RenderService() = default;
 
-// RenderService intentionally owns the full orchestration pipeline; splitting it
-// mechanically would hide the ordering constraints between render, post-process,
-// encode, and metadata.
-// NOLINTNEXTLINE(readability-function-size)
+// The offline render is a Rust step machine (mradm-engine `render`, PCM consistency 5.2 C2): this
+// loop forwards its progress and logs, passes the stop token before every step and executes the
+// islands it requests.
 RenderResult RenderService::render(const RenderRequest& request,
                                    ProgressSink& progress,
                                    LogSink& logs,
                                    const PreparedScene* preimported_scene,
                                    std::shared_ptr<IPreparedRender>* prepared_cache) const {
-    emit_progress(progress, RenderStage::validating, RenderOperation::validate_request, 0.0, 0.0, "validating request");
-
-    if (request.input_path.empty()) {
-        return {{ErrorCode::invalid_argument, "input path is required", {}}, std::nullopt, std::nullopt, {}};
+    const RequestTexts texts(request);
+    const auto record = texts.record(request);
+    const engine::RenderPlatform platform;
+    std::shared_ptr<IPreparedRender> local;
+    auto& slot = prepared_cache != nullptr ? *prepared_cache : local;
+    const auto* cached = dynamic_cast<const render_common::EnginePrepared*>(slot.get());
+    MradmEngineRender* raw = nullptr;
+    const auto code = mradm_engine_render_begin(&record,
+                                                platform.get(),
+                                                preimported_scene != nullptr ? preimported_scene->handle->raw : nullptr,
+                                                cached != nullptr ? cached->handle.get() : nullptr,
+                                                slot != nullptr && cached == nullptr ? 1U : 0U,
+                                                &raw);
+    if (code != 0) {
+        return {
+            error_of(code, engine_text("invalid render request (UTF-8 paths without NUL required)"), {}), {}, {}, {}};
     }
-    if (request.options.triple_balance_mode != TripleBalanceMode::standard &&
-        request.options.triple_balance_mode != TripleBalanceMode::d) {
-        return {{ErrorCode::invalid_argument, "invalid Triple Balance mode", {}}, std::nullopt, std::nullopt, {}};
-    }
-    if (request.options.triple_balance_mode == TripleBalanceMode::d &&
-        request.options.renderer != RendererSelection::triple_balance) {
-        return {{ErrorCode::invalid_argument, "D mode requires the Triple Balance renderer", {}},
-                std::nullopt,
-                std::nullopt,
-                {}};
-    }
-
-    logs.log(LogLevel::info, "engine", fmt::format("render request: {}", request.input_path.string()));
-
-    if (request.options.peak_normalize_to_limit && !request.options.peak_limit) {
-        const auto msg = std::string{"peak normalization to limit requires peak limiting to be enabled"};
-        return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-    }
-    if (!std::isfinite(request.options.final_gain_db)) {
-        const auto msg = std::string{"final gain must be finite"};
-        return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-    }
-
-    // Probe input for early error detection and logging. A PreviewSession supplies an
-    // already-imported, policy-applied scene (copied here); otherwise import from disk.
-    emit_progress(progress, RenderStage::probing, RenderOperation::probe_input, 0.03, 0.0, "probing input");
-    emit_progress(progress,
-                  RenderStage::importing_scene,
-                  RenderOperation::import_scene,
-                  0.06,
-                  0.0,
-                  preimported_scene != nullptr ? "using cached scene" : "importing scene");
-    const io::SceneImportOptions import_options{request.options.input_layout, request.options.input_channel_labels};
-    // The offline import records the render-scene checkpoint 05-import (PCM consistency 4.3).
-    std::optional<io::RenderScene> render_scene;
-    Result<AdmScene> scene_result = [&]() -> Result<AdmScene> {
-        if (preimported_scene != nullptr) {
-            return preimported_scene->scene;
+    const RenderHandle render(raw, &mradm_engine_render_destroy);
+    Islands islands(render.get(), request, progress, logs, slot);
+    for (;;) {
+        MradmEngineRenderEvent event{};
+        if (mradm_engine_render_next(render.get(), request.options.cancel_token.stop_requested() ? 1U : 0U, &event) !=
+            0) {
+            return {{ErrorCode::internal_error, "render step failed", {}}, std::nullopt, std::nullopt, {}};
         }
-        auto imported = io::RenderScene::import(request.input_path.string(), &import_options, "05-import");
-        if (!imported) {
-            return tl::unexpected{imported.error()};
-        }
-        render_scene = std::move(*imported);
-        return render_scene->scene();
-    }();
-    if (!scene_result) {
-        return {scene_result.error(), std::nullopt, std::nullopt, {{LogLevel::error, scene_result.error().message}}};
-    }
-    logs.log(LogLevel::info,
-             "engine",
-             fmt::format("scene: {} programmes, {} objects, {} ch @ {}Hz",
-                         scene_result->programmes.size(),
-                         scene_result->objects.size(),
-                         scene_result->info.num_channels,
-                         scene_result->info.sample_rate));
-    if (preimported_scene == nullptr) {
-        for (const auto& w : scene_result->import_warnings) {
-            logs.log(LogLevel::warning, "importer", w);
-        }
-    }
-
-    if (request.options.cancel_token.stop_requested()) {
-        constexpr auto msg = "render cancelled";
-        return {{ErrorCode::cancelled, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::info, msg}}};
-    }
-
-    // Resolve the optional output time-range trim against the rendered timeline (which equals the
-    // input timeline) in Rust mradm-engine `request` (PCM consistency 5.2 B); the frame range is
-    // applied to the rendered PCM below.
-    MradmEngineTrim trim{};
-    {
-        const auto& end = request.options.render_end_sec;
-        const render_common::EngineOutcome outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
-            return mradm_engine_trim_window(request.options.render_start_sec,
-                                            end.has_value() ? 1U : 0U,
-                                            end.value_or(0.0),
-                                            scene_result->info.sample_rate,
-                                            scene_result->info.num_frames,
-                                            &trim,
-                                            out,
-                                            status);
-        });
-        if (!outcome.ok()) {
-            const auto error = outcome.error();
-            return {error, std::nullopt, std::nullopt, {{LogLevel::error, error.message}}};
-        }
-        outcome.emit(logs, "engine");
-    }
-    const bool need_trim = trim.has_trim != 0U;
-    const uint64_t trim_start_frame = trim.start_frame;
-    const uint64_t trim_frame_count = trim.frame_count;
-
-    // Resolve output path.
-    std::string output_path;
-    if (request.output_path.has_value() && !request.output_path->empty()) {
-        output_path = request.output_path->string();
-    } else {
-        const auto stem = request.input_path.stem().string();
-        const auto dir = request.input_path.parent_path();
-        output_path = (dir / (stem + "_rendered.wav")).string();
-    }
-
-    const auto requested_layout = normalize_output_layout(
-        request.options.output_layout.empty() ? std::string{"0+2+0"} : request.options.output_layout);
-    // Resolve the backend (selection, legacy-alias, speaker-stereo guard, binaural layout
-    // forcing) via the shared factory so RenderService and the realtime MonitorEngine
-    // never diverge. effective_output_layout reflects e.g. SAF binaural forcing "binaural".
-    auto resolved =
-        resolve_renderer(request.options.renderer, requested_layout, request.options.internal_allow_speaker_stereo);
-    if (!resolved) {
-        return {resolved.error(), std::nullopt, std::nullopt, {{LogLevel::error, resolved.error().message}}};
-    }
-    const auto sel = resolved->selected;
-    const auto backend = resolved->backend;
-    std::unique_ptr<IRenderer> renderer = std::move(resolved->renderer);
-    auto output_layout = std::move(resolved->effective_output_layout);
-
-    auto routing_validation =
-        validate_direct_speakers_routing(backend, output_layout, request.options.direct_speakers_routing_mode);
-    if (!routing_validation) {
-        return {routing_validation.error(),
-                std::nullopt,
-                std::nullopt,
-                {{LogLevel::error, routing_validation.error().message}}};
-    }
-
-    const auto caps = renderer->capabilities();
-    logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
-    for (const auto& [level, message] : resolved->diagnostics) {
-        logs.log(level, "engine", message);
-    }
-
-    if (request.options.sofa_path.has_value()) {
-        if (output_layout != "binaural") {
-            const std::string msg{"--sofa is valid only for binaural output"};
-            return {{ErrorCode::invalid_argument, msg, "layout=" + output_layout},
-                    std::nullopt,
-                    std::nullopt,
-                    {{LogLevel::error, msg}}};
-        }
-        if (std::ranges::find(caps.hrtf_sources, "user-sofa") == caps.hrtf_sources.end()) {
-            const auto msg = fmt::format("renderer '{}' does not support user SOFA HRTFs", renderer_name(sel));
-            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-        }
-    }
-
-    // A preview session has already imported + applied the policy; it does not
-    // re-derive the semantic report per window. The Rust scene keeps the original.
-    const bool needs_semantic_report =
-        (preimported_scene == nullptr) &&
-        (request.options.semantic_report_path.has_value() || request.options.capture_semantic_report);
-    // Effective semantic report captured in-memory when requested; surfaced via RenderResult.
-    std::optional<std::string> semantic_report_json;
-
-    // Resolve + apply the semantic policy (skipped when a preview session already did, which
-    // supplies its scene without the Rust render scene).
-    if (render_scene.has_value()) {
-        emit_progress(progress,
-                      RenderStage::importing_scene,
-                      RenderOperation::apply_semantic_policy,
-                      0.10,
-                      0.0,
-                      "applying semantic policy");
-        std::vector<std::string> semantic_warnings;
-        auto policy_res = resolve_and_apply_policy(*render_scene, request.options, semantic_warnings, logs);
-        if (!policy_res) {
-            return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
-        }
-        *scene_result = render_scene->scene();
-        render_scene->checkpoint("06-policy");
-    }
-
-    // From here on the semantic report may be captured; every error path must carry
-    // it back so the C ABI's adm_render_result_semantic_report_json stays readable
-    // regardless of the render's error code (see include/adm/c_api.h). Captured by
-    // reference; the success return moves it out afterwards, after the last call.
-    const auto fail_with_report = [&semantic_report_json](Error error,
-                                                          LogLevel level = LogLevel::error) -> RenderResult {
-        const std::string message = error.message;
-        return {std::move(error), std::nullopt, std::nullopt, {{level, message}}, semantic_report_json};
-    };
-    const auto fail_if_cancelled = [&request, &fail_with_report]() -> std::optional<RenderResult> {
-        if (!request.options.cancel_token.stop_requested()) {
-            return std::nullopt;
-        }
-        return fail_with_report({ErrorCode::cancelled, "render cancelled", {}}, LogLevel::info);
-    };
-
-    const auto& scene_handle = render_scene.has_value() ? render_scene->handle() : preimported_scene->handle;
-    auto matrix_res = resolve_direct_speakers_matrix(request.options, *scene_handle, output_layout, logs);
-    if (!matrix_res) {
-        return fail_with_report(matrix_res.error());
-    }
-    auto direct_speakers_matrix = std::move(*matrix_res);
-
-    if (request.options.apple_spatial_preset != AppleSpatialPreset::off) {
-        if (sel != RendererSelection::apple) {
-            return fail_with_report({ErrorCode::invalid_argument,
-                                     fmt::format("--apple-spatial-preset {} requires --renderer apple",
-                                                 apple_spatial_preset_name(request.options.apple_spatial_preset)),
-                                     {}});
-        }
-        if (output_layout != "0+2+0" && output_layout != "binaural") {
-            return fail_with_report({ErrorCode::invalid_argument,
-                                     fmt::format("--apple-spatial-preset {} requires Apple binaural output; got '{}'",
-                                                 apple_spatial_preset_name(request.options.apple_spatial_preset),
-                                                 output_layout),
-                                     {}});
-        }
-    }
-
-    if (request.options.apple_speaker_rendering_flags) {
-        if (sel != RendererSelection::apple) {
-            return fail_with_report(
-                {ErrorCode::invalid_argument, "--apple-speaker-rendering-flags requires --renderer apple", {}});
-        }
-        if (output_layout == "0+2+0" || output_layout == "binaural") {
-            return fail_with_report({ErrorCode::invalid_argument,
-                                     "--apple-speaker-rendering-flags requires Apple speaker output",
-                                     "layout=" + output_layout});
-        }
-    }
-
-    // The report from the Rust scene; file and in-memory copies are the same bytes.
-    const auto emit_semantic_report = [&](std::string renderer_effective_json) -> Result<void> {
-        const io::SemanticReportOptions report_options{
-            .renderer = renderer_name(sel),
-            .policy_path =
-                request.options.semantic_policy_path ? request.options.semantic_policy_path->string() : std::string{},
-            .capabilities = caps,
-            .renderer_effective_json = std::move(renderer_effective_json),
-        };
-        if (!render_scene.has_value()) {
-            return {};
-        }
-        auto report = render_scene->semantic_report(report_options);
-        if (!report) {
-            return tl::unexpected{report.error()};
-        }
-        if (request.options.capture_semantic_report) {
-            semantic_report_json = *report;
-        }
-        if (request.options.semantic_report_path.has_value()) {
-            return io::write_policy_json(*request.options.semantic_report_path, *report, "report");
-        }
-        return {};
-    };
-    if (needs_semantic_report) {
-        if (auto report_res = emit_semantic_report({}); !report_res) {
-            return fail_with_report(report_res.error());
-        }
-    }
-
-    // Detect FLAC final output: FLAC does not carry float32 samples, so rendering
-    // directly to FLAC would clip any > 0 dBFS content before loudness/peak
-    // post-processing can compensate.  Use a float32 temp WAV as the render target
-    // and encode to FLAC as the very last step, after all adjustments are applied.
-    const auto final_path = std::filesystem::path(output_path);
-    const auto final_ext = [&final_path] {
-        auto ext = final_path.extension().string();
-        std::ranges::transform(
-            ext, ext.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
-        return ext;
-    }();
-    const bool wants_iamf_mp4 = request.options.iamf_container == RenderOptions::IamfContainer::mp4;
-    const bool iamf_available = audio::iamf_encoding_available();
-    // The packager probe runs for --iamf-container mp4 in IAMF builds, before the target checks.
-    const auto packager =
-        wants_iamf_mp4 && iamf_available ? audio::detect_iamf_mp4_packager() : audio::IamfMp4PackagerInfo{};
-    const auto channels = channel_count_for_layout(caps, output_layout);
-    std::vector<MradmAdmText> layer_texts(request.options.iamf_layers.size());
-    std::ranges::transform(request.options.iamf_layers, layer_texts.begin(), [](std::string_view layer) {
-        return render_common::engine_text(layer);
-    });
-    const auto extension = final_path.extension().string();
-    const MradmEngineOutputRequest target_request{
-        render_common::engine_text(extension),
-        render_common::engine_text(output_layout),
-        static_cast<uint32_t>(request.options.output_bit_depth),
-        request.options.apac_container == RenderOptions::ApacContainer::caf ? 1U : 0U,
-        wants_iamf_mp4 ? 1U : 0U,
-        layer_texts.data(),
-        layer_texts.size(),
-        channels.has_value() ? static_cast<int32_t>(*channels) : -1,
-        iamf_available ? 1U : 0U,
-        static_cast<uint32_t>(packager.kind),
-        packager.ffmpeg_major};
-    uint32_t targets = 0;
-    const render_common::EngineOutcome target_outcome([&](MradmEngineResult** out, MradmEngineStatus* status) {
-        return mradm_engine_output_target(&target_request, &targets, out, status);
-    });
-    target_outcome.emit(logs, "engine", "iamf-layer");
-    if (!target_outcome.ok()) {
-        return fail_with_report(target_outcome.error());
-    }
-    std::vector<std::string> iamf_layers;
-    for (const auto& line : target_outcome.lines()) {
-        if (render_common::engine_text(line.module) == "iamf-layer") {
-            iamf_layers.push_back(render_common::engine_text(line.message));
-        }
-    }
-    const bool is_flac_final = (targets & 1U) != 0U;
-    const bool is_opus_final = (targets & 2U) != 0U;
-    const bool is_apac_caf_final = (targets & 8U) != 0U;
-    const bool is_apac_final = (targets & 12U) != 0U;
-    const bool is_iamf_final = (targets & 16U) != 0U;
-    const bool is_iamf_mp4_final = (targets & 32U) != 0U;
-    const bool is_lossy_final = targets != 0U;
-    const auto render_temp_path = is_lossy_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
-    auto render_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
-    const std::string render_path = is_lossy_final ? render_temp_path.string() : output_path;
-    const auto output_temp_path = is_lossy_final ? unique_output_temp_path(final_path) : std::filesystem::path{};
-    auto output_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(output_temp_path) : nullptr;
-    const std::string encoded_output_path = is_lossy_final ? output_temp_path.string() : output_path;
-    OutputCleanupGuard output_guard{final_path};
-    // For IAMF-in-MP4: intermediate .iamf temp alongside the render WAV temp.
-    const auto iamf_temp_path = is_iamf_mp4_final
-                                    ? render_temp_path.parent_path() / (render_temp_path.stem().string() + ".iamf")
-                                    : std::filesystem::path{};
-    auto iamf_temp_guard = is_iamf_mp4_final ? std::make_unique<TempFileGuard>(iamf_temp_path) : nullptr;
-
-    // Build plan.
-    emit_progress(progress, RenderStage::planning, RenderOperation::plan_render, 0.13, 0.0, "planning render");
-    RenderPlan plan;
-    plan.input_path = request.input_path.string();
-    plan.output_path = render_path;
-    plan.output_layout = output_layout;
-    plan.sofa_path = request.options.sofa_path;
-    plan.room = request.options.room;
-    plan.screens = request.options.screens;
-    if ((plan.screens.reference || plan.screens.reproduction) && sel != RendererSelection::room_binaural) {
-        return fail_with_report({ErrorCode::unsupported, "屏幕配置当前仅支持 room-binaural", {}});
-    }
-    plan.default_interp_ms = request.options.default_interp_ms;
-    plan.object_smoothing_frames = request.options.object_smoothing_frames;
-    plan.speaker_geometry = request.options.speaker_geometry;
-    plan.direct_speakers_routing_mode = request.options.direct_speakers_routing_mode;
-    plan.direct_speakers_matrix = std::move(direct_speakers_matrix);
-    plan.speaker_spread_mode = request.options.speaker_spread_mode;
-    plan.triple_balance_mode = request.options.triple_balance_mode;
-    plan.binaural_spread_mode = request.options.binaural_spread_mode;
-    plan.lfe_routing_mode = request.options.lfe_routing_mode;
-    plan.apple_spatial_preset = request.options.apple_spatial_preset;
-    plan.apple_speaker_rendering_flags = request.options.apple_speaker_rendering_flags;
-    plan.listener_orientation = request.options.listener_orientation;
-    // Output time-range trim: prefer on-demand window rendering when the backend
-    // supports it (seek + pre-roll → writes only the window, bit-identical to a full
-    // render then trimmed, and skips the post-render trim pass below). Otherwise fall
-    // back to a full render with the meter restricted to the kept window, then
-    // trim_file_frames. The two are mutually exclusive on the plan.
-    const bool window_render = need_trim && caps.supports_render_window;
-    if (window_render) {
-        plan.render_window = RenderWindow{trim_start_frame, trim_frame_count};
-    } else if (need_trim) {
-        plan.meter_window = MeterWindow{trim_start_frame, trim_frame_count};
-    }
-    plan.cancel_token = request.options.cancel_token;
-    plan.scene = std::move(*scene_result);
-    plan.scene_handle = render_scene.has_value() ? render_scene->handle() : preimported_scene->handle;
-    std::string renderer_semantics;
-    if (needs_semantic_report) {
-        plan.renderer_semantics_sink = [&renderer_semantics](std::string value) {
-            renderer_semantics = std::move(value);
-        };
-    }
-
-    // Build (or reuse) the backend's immutable prepared state. A PreviewSession passes
-    // a persistent cache slot so the gain matrices / HRTF are built once and reused
-    // across windows; without a cache, prepare runs per render.
-    std::shared_ptr<IPreparedRender> local_prepared;
-    std::shared_ptr<IPreparedRender>& prepared_slot = (prepared_cache != nullptr) ? *prepared_cache : local_prepared;
-    if (!prepared_slot) {
-        emit_progress(
-            progress, RenderStage::planning, RenderOperation::prepare_backend, 0.15, 0.0, "preparing backend");
-        auto prep_res = renderer->prepare(plan, logs);
-        // A rejected preparation still carries the same diagnostics to the file
-        // and in-memory reports. "effective" continues to mean policy output;
-        // the separately named section describes actual backend interpretation.
-        if (!renderer_semantics.empty() && needs_semantic_report) {
-            if (const auto written = emit_semantic_report(renderer_semantics); !written) {
-                return fail_with_report(written.error());
+        if (event.kind == 1U) {
+            progress.on_progress(progress_of(event.progress));
+        } else if (event.kind == 2U) {
+            logs.log(static_cast<LogLevel>(event.level), engine_text(event.module), engine_text(event.message));
+        } else if (event.kind == 3U) {
+            const auto& reply = islands.run(event);
+            if (mradm_engine_render_resume(render.get(), &reply) != 0) {
+                return {{ErrorCode::internal_error, "render island reply failed", {}}, std::nullopt, std::nullopt, {}};
             }
-        }
-        if (!prep_res) {
-            return fail_with_report(prep_res.error());
-        }
-        prepared_slot = std::move(*prep_res);
-    }
-    if (auto cancelled = fail_if_cancelled()) {
-        return std::move(*cancelled);
-    }
-
-    // Render (inline measurement of loudness + True Peak over the meter window).
-    ProgressRangeSink render_progress(
-        progress, RenderStage::rendering, RenderOperation::render_audio, 0.15, 0.88, "rendering audio");
-    // The Rust backends' offline window renders in the engine (PCM consistency 5.2 C1); the Apple
-    // backend renders its own.
-    auto render_res = backend == RendererSelection::apple
-                          ? renderer->render_window(*prepared_slot, plan, render_progress, logs)
-                          : render_common::render_offline(*prepared_slot, plan, render_progress, logs);
-    if (!render_res) {
-        if (!is_lossy_final) {
-            output_guard.arm();
-            output_guard.remove_now();
-        }
-        const auto level = render_res.error().code == ErrorCode::cancelled ? LogLevel::info : LogLevel::error;
-        return fail_with_report(render_res.error(), level);
-    }
-    const RenderMetrics& metrics = *render_res;
-    if (!is_lossy_final) {
-        output_guard.arm();
-    }
-    if (auto cancelled = fail_if_cancelled()) {
-        return std::move(*cancelled);
-    }
-
-    if (metrics.measured_lufs) {
-        logs.log(LogLevel::info, "engine", fmt::format("measured loudness: {:.1f} LUFS", *metrics.measured_lufs));
-    }
-    if (metrics.measured_peak_dbtp) {
-        logs.log(LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
-    }
-
-    // Apply the output time-range trim before gain/encode so every downstream step
-    // operates on the trimmed PCM. The backend already measured loudness/True-Peak
-    // over this same window (plan.meter_window), so `metrics`, the applied gain, and
-    // the file metadata all describe the trimmed segment. Skipped when window_render
-    // already produced a trimmed file (the backend wrote only the window).
-    if (need_trim && !window_render) {
-        ProgressRangeSink trim_progress(
-            progress, RenderStage::post_processing, RenderOperation::trim_output, 0.88, 0.885, "trimming output");
-        auto trim_res = audio::trim_file_frames(render_path,
-                                                trim_start_frame,
-                                                trim_frame_count,
-                                                output_layout,
-                                                plan.cancel_token,
-                                                &trim_progress,
-                                                RenderOperation::trim_output);
-        if (!trim_res) {
-            return fail_with_report(trim_res.error());
+        } else if (event.kind == 4U) {
+            break;
         }
     }
-    if (auto cancelled = fail_if_cancelled()) {
-        return std::move(*cancelled);
-    }
-
-    // Compute combined gain: loudness target first, optional peak makeup second,
-    // peak ceiling third, then explicit final gain after the automatic stages.
-    // Merging both into one apply_gain_to_file avoids a second read-write pass.
-    // The final gain is added after the peak clamp, so it deliberately bypasses peak
-    // limiting and may exceed the ceiling / 0 dBFS (integer outputs can clip); it is
-    // folded into gain_db so the applied gain, file metadata, and reported metrics
-    // all include it. The decisions and dB conversion run in Rust (PCM consistency 2.3).
-    const auto gain_plan = dsp::render_gain({metrics.measured_lufs,
-                                             metrics.measured_peak_dbtp,
-                                             static_cast<double>(request.options.loudness_target_lufs),
-                                             static_cast<double>(request.options.peak_limit_dbtp),
-                                             request.options.final_gain_db,
-                                             request.options.measure_loudness,
-                                             request.options.peak_normalize_to_limit,
-                                             request.options.peak_limit});
-    if (!gain_plan) {
-        return fail_with_report(gain_plan.error());
-    }
-    const auto target_peak = static_cast<double>(request.options.peak_limit_dbtp);
-    if (gain_plan->loudness == dsp::GainStage::applied) {
-        logs.log(LogLevel::info,
-                 "engine",
-                 fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB",
-                             static_cast<double>(request.options.loudness_target_lufs),
-                             gain_plan->loudness_db));
-    } else if (gain_plan->loudness == dsp::GainStage::unchanged) {
-        logs.log(LogLevel::info, "engine", "integrated loudness within 0.1 LU of target — no adjustment");
-    }
-    if (gain_plan->makeup == dsp::GainStage::applied) {
-        logs.log(LogLevel::info,
-                 "engine",
-                 fmt::format("true peak after loudness {:.2f} dBTP, target {:.1f} dBTP -> makeup {:.2f} dB",
-                             gain_plan->makeup_peak_after,
-                             target_peak,
-                             gain_plan->makeup_db));
-    } else if (gain_plan->makeup == dsp::GainStage::unchanged) {
-        logs.log(LogLevel::info, "engine", "true peak already at/above normalization target; no makeup");
-    }
-    if (gain_plan->ceiling == dsp::GainStage::applied) {
-        logs.log(LogLevel::info,
-                 "engine",
-                 fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp {:.2f} dB",
-                             gain_plan->ceiling_peak_after,
-                             target_peak,
-                             gain_plan->ceiling_db));
-    } else if (gain_plan->ceiling == dsp::GainStage::unchanged) {
-        logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
-    }
-    if (gain_plan->final_applied) {
-        logs.log(
-            LogLevel::info,
-            "engine",
-            fmt::format("final gain {:+.2f} dB (unconstrained, bypasses peak limit)", request.options.final_gain_db));
-    }
-    const double gain_db = gain_plan->gain_db;
-
-    if (gain_plan->apply) {
-        const float gain_linear = gain_plan->gain;
-        logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
-        ProgressRangeSink gain_progress(
-            progress, RenderStage::post_processing, RenderOperation::apply_gain, 0.885, 0.89, "applying gain");
-        auto gain_res = audio::apply_gain_to_file(
-            render_path, gain_linear, output_layout, plan.cancel_token, &gain_progress, RenderOperation::apply_gain);
-        if (!gain_res) {
-            return fail_with_report(gain_res.error());
+    if (prepared_cache != nullptr) {
+        if (auto* made = mradm_engine_render_take_prepared(render.get()); made != nullptr) {
+            auto prepared = std::make_shared<render_common::EnginePrepared>();
+            prepared->handle.reset(made);
+            slot = std::move(prepared);
         }
     }
-    if (auto cancelled = fail_if_cancelled()) {
-        return std::move(*cancelled);
-    }
-
-    // Bit depth conversion: WAV output only (CAF float32 is checked above). For FLAC, the temp
-    // WAV stays float32 here so that quantisation happens exactly once during the final encode.
-    if (!is_lossy_final && request.options.output_bit_depth != OutputBitDepth::f32) {
-        const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
-        logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
-        ProgressRangeSink bitdepth_progress(progress,
-                                            RenderStage::post_processing,
-                                            RenderOperation::convert_bit_depth,
-                                            0.89,
-                                            0.90,
-                                            "converting bit depth");
-        auto conv_res = audio::downconvert_to_int(
-            render_path, depth, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
-        if (!conv_res) {
-            return fail_with_report(conv_res.error());
-        }
-    }
-    if (auto cancelled = fail_if_cancelled()) {
-        return std::move(*cancelled);
-    }
-
-    // FLAC final encode: the temp WAV is now fully post-processed (float32, gain
-    // applied).  Encode to FLAC (24-bit) and remove the temp WAV regardless of
-    // outcome to avoid leaving stale files on disk.
-    if (is_flac_final) {
-        logs.log(LogLevel::info, "engine", "encoding float32 render to FLAC (24-bit)");
-        ProgressRangeSink flac_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_flac, 0.90, 0.98, "encoding FLAC");
-        auto flac_res = audio::convert_to_flac(render_path, encoded_output_path, plan.cancel_token, &flac_progress);
-        render_temp_guard->remove_now();
-        if (!flac_res) {
-            return fail_with_report(flac_res.error());
-        }
-    }
-
-    if (is_opus_final) {
-        logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.90, 0.0, "encoding Opus");
-        auto opus_res = audio::convert_to_opus_mka(render_path,
-                                                   encoded_output_path,
-                                                   output_layout,
-                                                   request.options.opus_bitrate_per_ch_kbps,
-                                                   plan.cancel_token);
-        render_temp_guard->remove_now();
-        if (!opus_res) {
-            return fail_with_report(opus_res.error());
-        }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.98, 1.0, "Opus encoded");
-    }
-
-    if (is_apac_final) {
-        logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
-        ProgressRangeSink apac_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.90, 0.98, "encoding APAC");
-        const auto apac_container = is_apac_caf_final ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4;
-        auto apac_res = audio::convert_to_apac(render_path,
-                                               encoded_output_path,
-                                               output_layout,
-                                               request.options.apac_bitrate_kbps,
-                                               request.options.apac_drc_music,
-                                               apac_container,
-                                               plan.cancel_token,
-                                               &apac_progress);
-        render_temp_guard->remove_now();
-        if (!apac_res) {
-            return fail_with_report(apac_res.error());
-        }
-    }
-
-    if (is_iamf_final) {
-        logs.log(LogLevel::info, "engine", "encoding 32-bit PCM staging to IAMF (Opus, raw OBU stream)");
-        const auto lufs =
-            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
-        const auto peak =
-            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-        ProgressRangeSink bitdepth_progress(progress,
-                                            RenderStage::post_processing,
-                                            RenderOperation::convert_bit_depth,
-                                            0.89,
-                                            0.90,
-                                            "converting bit depth");
-        auto conv_res = audio::downconvert_to_int(
-            render_path, 32U, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
-        if (!conv_res) {
-            return fail_with_report(conv_res.error());
-        }
-        if (auto cancelled = fail_if_cancelled()) {
-            return std::move(*cancelled);
-        }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
-        auto iamf_res = audio::convert_to_iamf(render_path,
-                                               encoded_output_path,
-                                               output_layout,
-                                               request.options.opus_bitrate_per_ch_kbps,
-                                               lufs,
-                                               peak,
-                                               plan.cancel_token,
-                                               iamf_layers);
-        render_temp_guard->remove_now();
-        if (!iamf_res) {
-            return fail_with_report(iamf_res.error());
-        }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.98, 1.0, "IAMF encoded");
-    }
-
-    if (is_iamf_mp4_final) {
-        logs.log(LogLevel::info, "engine", "encoding 32-bit PCM staging to IAMF (Opus) and packaging to MP4");
-        const auto lufs =
-            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
-        const auto peak =
-            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-        ProgressRangeSink bitdepth_progress(progress,
-                                            RenderStage::post_processing,
-                                            RenderOperation::convert_bit_depth,
-                                            0.89,
-                                            0.90,
-                                            "converting bit depth");
-        auto conv_res = audio::downconvert_to_int(
-            render_path, 32U, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
-        if (!conv_res) {
-            return fail_with_report(conv_res.error());
-        }
-        if (auto cancelled = fail_if_cancelled()) {
-            return std::move(*cancelled);
-        }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
-        auto iamf_res = audio::convert_to_iamf(render_path,
-                                               iamf_temp_path.string(),
-                                               output_layout,
-                                               request.options.opus_bitrate_per_ch_kbps,
-                                               lufs,
-                                               peak,
-                                               plan.cancel_token,
-                                               iamf_layers);
-        render_temp_guard->remove_now();
-        if (!iamf_res) {
-            return fail_with_report(iamf_res.error());
-        }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.96, 1.0, "IAMF encoded");
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.96, 0.0, "packaging IAMF MP4");
-        auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path, plan.cancel_token);
-        iamf_temp_guard->remove_now();
-        if (!pkg_res) {
-            return fail_with_report(pkg_res.error());
-        }
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.98, 1.0, "IAMF MP4 packaged");
-    }
-
-    if (auto cancelled = fail_if_cancelled()) {
-        return std::move(*cancelled);
-    }
-    if (is_lossy_final) {
-        auto replace_res = replace_output_file(output_temp_path, final_path);
-        if (!replace_res) {
-            return fail_with_report(replace_res.error());
-        }
-        output_temp_guard->dismiss();
-    }
-
-    if (final_ext == ".wav") {
-        const bool speaker_rerender =
-            sel == RendererSelection::triple_balance && (output_layout == "4+7+0" || output_layout == "9.1.6");
-        const bool uses_adm_layout_metadata = output_layout == "binaural" || output_layout == "4+5+4" ||
-                                              output_layout == "9.1.6" || output_layout == "9+10+3" ||
-                                              output_layout == "hoa3";
-        if (uses_adm_layout_metadata && !speaker_rerender && request.options.output_bit_depth == OutputBitDepth::f32) {
-            logs.log(LogLevel::warning,
-                     "engine",
-                     "float32 spatial WAV stores exact ADM AXML/CHNA semantics in RF64; use --output-bit-depth i24 "
-                     "for normative PCM BW64 interoperability");
-        }
-        if (speaker_rerender && output_layout == "9.1.6") {
-            logs.log(LogLevel::info,
-                     "engine",
-                     "triple-balance 9.1.6 WAV: native order, WAVEFORMATEXTENSIBLE mask 0, no ADM; "
-                     "CAF provides an explicit CoreAudio 9.1.6 layout");
-        }
-        logs.log(LogLevel::info, "engine", "finalizing machine-readable WAV channel layout");
-        ProgressRangeSink wav_layout_progress(progress,
-                                              RenderStage::post_processing,
-                                              RenderOperation::write_metadata,
-                                              0.98,
-                                              0.99,
-                                              "finalizing WAV channel layout");
-        auto layout_res = engine::finalize_rendered_wav(output_path,
-                                                        output_layout,
-                                                        plan.cancel_token,
-                                                        &wav_layout_progress,
-                                                        speaker_rerender ? engine::WavLayoutProfile::speaker_rerender
-                                                                         : engine::WavLayoutProfile::adm_semantics);
-        if (!layout_res) {
-            return fail_with_report(layout_res.error());
-        }
-    }
-
-    // Write format-specific metadata (non-fatal on failure).
-    {
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::write_metadata, 0.99, 0.0, "writing metadata");
-        const std::time_t now = std::time(nullptr);
-        const std::tm tm_utc = utc_time(now);
-
-        audio::MetadataFields meta_fields;
-        meta_fields.encoder = "MacinRender ADM Core Alpha";
-        meta_fields.date_utc = fmt::format("{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z",
-                                           tm_utc.tm_year + 1900,
-                                           tm_utc.tm_mon + 1,
-                                           tm_utc.tm_mday,
-                                           tm_utc.tm_hour,
-                                           tm_utc.tm_min,
-                                           tm_utc.tm_sec);
-        meta_fields.renderer = caps.backend_name;
-        meta_fields.output_layout = output_layout;
-        // bext / info fields must reflect the actual file after gain adjustment.
-        meta_fields.lufs =
-            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
-        meta_fields.peak_dbtp =
-            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-
-        auto meta_res = audio::write_file_metadata(output_path, meta_fields);
-        if (!meta_res) {
-            logs.log(LogLevel::warning, "engine", "metadata write failed: " + meta_res.error().message);
-        }
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::write_metadata, 0.995, 1.0, "metadata written");
-    }
-    output_guard.commit();
-
-    // Return the post-processing effective values (gain-adjusted), matching what was
-    // written to the file's metadata. Raw renderer measurements live in `metrics`.
-    const RenderMetrics final_metrics{
-        metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt,
-        metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt,
-    };
-    emit_progress(progress, RenderStage::finished, RenderOperation::finish, 1.0, 1.0, "done");
-    return {{ErrorCode::ok, "", {}},
-            std::filesystem::path{output_path},
-            final_metrics,
-            {{LogLevel::info, "render completed"}},
-            std::move(semantic_report_json)};
+    return result_of(render.get());
 }
 
 Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
@@ -1165,10 +586,8 @@ Result<void> RenderService::export_file(const std::string& input_path,
     for (const auto& w : scene->scene().import_warnings) {
         logs.log(LogLevel::warning, "importer", w);
     }
-    std::vector<std::string> warnings;
-    auto policy_res = resolve_and_apply_policy(*scene, options, warnings, logs);
-    if (!policy_res) {
-        return tl::unexpected(policy_res.error());
+    if (auto applied = apply_policy(*scene, input_path, options, logs); !applied) {
+        return applied;
     }
     return scene->write(output_path);
 }
@@ -1184,10 +603,8 @@ Result<PreparedScene> RenderService::prepare_preview_scene(const std::filesystem
     for (const auto& w : scene->scene().import_warnings) {
         logs.log(LogLevel::warning, "importer", w);
     }
-    std::vector<std::string> warnings;
-    auto policy_res = resolve_and_apply_policy(*scene, options, warnings, logs);
-    if (!policy_res) {
-        return tl::unexpected(policy_res.error());
+    if (auto applied = apply_policy(*scene, input_path.string(), options, logs); !applied) {
+        return tl::unexpected(applied.error());
     }
     return PreparedScene{scene->scene(), scene->handle()};
 }

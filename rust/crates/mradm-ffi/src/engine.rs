@@ -227,12 +227,12 @@ unsafe fn items<'a, T>(data: *const T, len: usize) -> Option<&'a [T]> {
     Some(unsafe { slice::from_raw_parts(data, len) })
 }
 
-unsafe fn text(value: Text) -> Option<String> {
+pub(crate) unsafe fn text(value: Text) -> Option<String> {
     let bytes = unsafe { items(value.data, value.len)? };
     Some(String::from_utf8_lossy(bytes).into_owned())
 }
 
-unsafe fn texts(data: *const Text, len: usize) -> Option<Vec<String>> {
+pub(crate) unsafe fn texts(data: *const Text, len: usize) -> Option<Vec<String>> {
     unsafe { items(data, len)? }
         .iter()
         .map(|&t| unsafe { text(t) })
@@ -288,7 +288,7 @@ unsafe fn backend(b: &EngineBackend) -> Option<Backend> {
     })
 }
 
-unsafe fn platform(p: &EnginePlatform) -> Option<Platform> {
+pub(crate) unsafe fn platform(p: &EnginePlatform) -> Option<Platform> {
     let apple = if p.apple.is_null() {
         None
     } else {
@@ -391,7 +391,7 @@ pub struct EngineResult {
     matrix: Option<Box<crate::scene::DirectMatrix>>,
 }
 
-fn finish<T>(
+pub(crate) fn finish<T>(
     outcome: request::Outcome<T>,
     out: *mut *mut EngineResult,
     status: *mut EngineStatus,
@@ -438,7 +438,7 @@ fn status_view(result: &EngineResult) -> EngineStatus {
     }
 }
 
-fn guarded(
+pub(crate) fn guarded(
     out: *mut *mut EngineResult,
     status: *mut EngineStatus,
     call: impl FnOnce() -> i32,
@@ -648,130 +648,6 @@ pub unsafe extern "C" fn mradm_engine_resolve_matrix(
     })
 }
 
-#[repr(C)]
-pub struct EngineTrim {
-    has_trim: u32,
-    start_frame: u64,
-    frame_count: u64,
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_trim_window(
-    start_sec: f64,
-    has_end: u32,
-    end_sec: f64,
-    sample_rate: u32,
-    frames: u64,
-    trim: *mut EngineTrim,
-    out: *mut *mut EngineResult,
-    status: *mut EngineStatus,
-) -> i32 {
-    guarded(out, status, || {
-        if trim.is_null() {
-            return 1;
-        }
-        let outcome = request::trim_window(
-            start_sec,
-            (has_end != 0).then_some(end_sec),
-            sample_rate,
-            frames,
-        );
-        let window = finish(outcome, out, status).flatten();
-        unsafe {
-            *trim = EngineTrim {
-                has_trim: u32::from(window.is_some()),
-                start_frame: window.map_or(0, |w| w.start_frame),
-                frame_count: window.map_or(0, |w| w.frame_count),
-            };
-        }
-        0
-    })
-}
-
-/// `bit_depth` 0 f32, 1 i24, 2 i16; `packager` 0 none, 1 mp4box, 2 ffmpeg; `channels` -1 unknown.
-#[repr(C)]
-pub struct EngineOutputRequest {
-    extension: Text,
-    layout: Text,
-    bit_depth: u32,
-    apac_caf: u32,
-    iamf_mp4: u32,
-    iamf_layers: *const Text,
-    iamf_layers_len: usize,
-    channels: i32,
-    iamf_available: u32,
-    packager: u32,
-    ffmpeg_major: i32,
-}
-
-/// Bits: 1 FLAC, 2 Opus MKA, 4 APAC MPEG-4, 8 APAC CAF, 16 IAMF, 32 IAMF MP4. The normalized IAMF
-/// layers are the status log lines with module `iamf-layer`, after the real log lines.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_output_target(
-    request_record: *const EngineOutputRequest,
-    targets: *mut u32,
-    out: *mut *mut EngineResult,
-    status: *mut EngineStatus,
-) -> i32 {
-    guarded(out, status, || {
-        if request_record.is_null() || targets.is_null() {
-            return 1;
-        }
-        let r = unsafe { &*request_record };
-        let (Some(extension), Some(layout), Some(layers)) = (
-            unsafe { text(r.extension) },
-            unsafe { text(r.layout) },
-            unsafe { texts(r.iamf_layers, r.iamf_layers_len) },
-        ) else {
-            return 1;
-        };
-        let bit_depth = match r.bit_depth {
-            0 => request::BitDepth::F32,
-            1 => request::BitDepth::I24,
-            2 => request::BitDepth::I16,
-            _ => return 1,
-        };
-        let packager = match r.packager {
-            0 => request::Packager::None,
-            1 => request::Packager::Mp4box,
-            2 => request::Packager::Ffmpeg,
-            _ => return 1,
-        };
-        let req = request::OutputRequest {
-            extension: &extension,
-            layout: &layout,
-            bit_depth,
-            apac_caf: r.apac_caf != 0,
-            iamf_mp4: r.iamf_mp4 != 0,
-            iamf_layers: &layers,
-            channels: u16::try_from(r.channels).ok(),
-            iamf_available: r.iamf_available != 0,
-            packager,
-            ffmpeg_major: r.ffmpeg_major,
-        };
-        let mut outcome = request::output_target(&req);
-        if let Ok(t) = &outcome.result {
-            for layer in &t.iamf_layers {
-                outcome.logs.push(request::Log {
-                    level: request::Level::Debug,
-                    module: "iamf-layer",
-                    message: layer.clone(),
-                });
-            }
-        }
-        if let Some(t) = finish(outcome, out, status) {
-            let bits = [t.flac, t.opus, t.apac_mpeg4, t.apac_caf, t.iamf, t.iamf_mp4];
-            unsafe {
-                *targets = bits
-                    .iter()
-                    .enumerate()
-                    .fold(0, |acc, (bit, &set)| acc | (u32::from(set) << bit));
-            }
-        }
-        0
-    })
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_result_destroy(result: *mut EngineResult) {
     if !result.is_null() {
@@ -851,40 +727,6 @@ mod tests {
         assert_eq!((code, status.code, renderer.backend), (0, 0, 6));
         assert_eq!(text_of(renderer.effective_layout), "binaural");
         assert_eq!(status.logs_len, 1, "the legacy alias warning");
-        unsafe { mradm_engine_result_destroy(result) };
-
-        let layers = [Text::new("5.1"), Text::new("7.1.4")];
-        let request = EngineOutputRequest {
-            extension: Text::new(".iamf"),
-            layout: Text::new("4+7+0"),
-            bit_depth: 0,
-            apac_caf: 0,
-            iamf_mp4: 0,
-            iamf_layers: layers.as_ptr(),
-            iamf_layers_len: layers.len(),
-            channels: -1,
-            iamf_available: 1,
-            packager: 0,
-            ffmpeg_major: -1,
-        };
-        let mut targets = 0;
-        assert_eq!(
-            unsafe { mradm_engine_output_target(&request, &mut targets, &mut result, &mut status) },
-            0
-        );
-        assert_eq!((status.code, targets), (0, 16));
-        let lines = unsafe { slice::from_raw_parts(status.logs, status.logs_len) };
-        let payload: Vec<String> = lines
-            .iter()
-            .filter(|l| text_of(l.module) == "iamf-layer")
-            .map(|l| text_of(l.message))
-            .collect();
-        assert_eq!(payload, ["0+5+0", "4+7+0"]);
-        assert_eq!(
-            text_of(lines[0].module),
-            "engine",
-            "the flat-layer warning comes first"
-        );
         unsafe { mradm_engine_result_destroy(result) };
     }
 

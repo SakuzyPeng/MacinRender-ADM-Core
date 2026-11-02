@@ -12,6 +12,4 @@ mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-json = { path = "../mradm-json" }
 mradm-render = { path = "../mradm-render" }
 mradm-scene = { path = "../mradm-scene" }
-
-[dev-dependencies]
 mradm-wav = { path = "../mradm-wav" }

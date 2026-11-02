@@ -23,7 +23,7 @@ use std::{
 };
 
 /// The platform services of the engine (formerly the C++ `RoomRenderer::prepare` calls).
-struct FfiHost;
+pub(crate) struct FfiHost;
 
 impl Host for FfiHost {
     fn validate_screens(&self, screens: &RoomScreens) -> Result<(), (i32, String)> {
@@ -109,7 +109,7 @@ pub struct EnginePreparedView {
     sample_rate: u32,
 }
 
-fn log_views(logs: &[request::Log]) -> Vec<EngineLog> {
+pub(crate) fn log_views(logs: &[request::Log]) -> Vec<EngineLog> {
     logs.iter()
         .map(|l| EngineLog {
             level: l.level as u32,
@@ -119,7 +119,7 @@ fn log_views(logs: &[request::Log]) -> Vec<EngineLog> {
         .collect()
 }
 
-fn status_of(error: Option<&request::Error>, logs: &[EngineLog]) -> EngineStatus {
+pub(crate) fn status_of(error: Option<&request::Error>, logs: &[EngineLog]) -> EngineStatus {
     let (code, message, context) = error.map_or((0, Text::new(""), Text::new("")), |e| {
         (e.code, Text::new(&e.message), Text::new(&e.context))
     });
