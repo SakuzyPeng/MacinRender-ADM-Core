@@ -14,8 +14,8 @@
       "lines": 512
     },
     "tests": {
-      "files": 138,
-      "lines": 49065
+      "files": 139,
+      "lines": 49217
     },
     "reference": {
       "files": 38,
@@ -23,7 +23,7 @@
     },
     "rust": {
       "files": 293,
-      "lines": 108809
+      "lines": 108939
     },
     "rust-vendor": {
       "files": 175,
@@ -35,8 +35,8 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40297,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 9028,
-    "rust/crates/mradm-ffi": 20299,
+    "rust/crates/mradm-engine": 9116,
+    "rust/crates/mradm-ffi": 20341,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
@@ -56,12 +56,12 @@
     "src/adm_cli": 1642,
     "src/adm_core": 350,
     "src/adm_dsp": 1811,
-    "src/adm_engine": 1983,
+    "src/adm_engine": 1982,
     "src/adm_io": 381,
     "src/adm_metadata": 744,
     "src/adm_realtime": 5437,
     "src/adm_render_binaural": 404,
-    "src/adm_render_common": 3803,
+    "src/adm_render_common": 3804,
     "src/adm_render_ear": 55,
     "src/adm_render_hoa": 59,
     "src/adm_render_room": 417,
@@ -94,6 +94,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 3112,
     "tests/tools": 2830,
-    "tests/unit": 40718
+    "tests/unit": 40870
   }
 }

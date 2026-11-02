@@ -398,8 +398,8 @@ typedef struct MradmEngineRenderResult {
 
 typedef struct MradmEngineRender MradmEngineRender;
 
-// preimported (may be null) is a preview session's scene, cached its Rust preparation (may be null),
-// apple_cached whether the caller holds the Apple preparation.
+// Optional preimported scene and independent cached Rust/Apple preparation. Invalid arguments
+// (including non-UTF-8 or NUL-containing paths) return 1; panics return 6.
 int32_t mradm_engine_render_begin(const MradmEngineRenderRequest* request,
                                   const MradmEnginePlatform* platform,
                                   const MradmSceneHandle* preimported,
@@ -419,7 +419,7 @@ MradmRenderPrepared* mradm_engine_render_take_prepared(MradmEngineRender* handle
 // A copy of the render's scene (the Apple island); destroy with mradm_scene_destroy.
 MradmSceneHandle* mradm_engine_render_scene(const MradmEngineRender* handle);
 void mradm_engine_render_destroy(MradmEngineRender* handle);
-// The semantic policy applied to an imported scene (preview, export); warnings as log lines.
+// Policy for preview/export: returns 0 with result/status also on policy errors; nonzero on boundary failures.
 int32_t mradm_engine_apply_policy(MradmSceneHandle* scene,
                                   uint32_t has_json,
                                   MradmAdmText json,
