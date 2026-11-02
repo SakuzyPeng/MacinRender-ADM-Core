@@ -9,6 +9,7 @@ pub mod backend;
 pub mod catalog;
 pub mod fmt;
 pub mod offline;
+pub mod render;
 pub mod request;
 pub mod scene_json;
 pub mod tables;

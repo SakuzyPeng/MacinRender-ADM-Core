@@ -538,7 +538,6 @@ target_sources(
         src/adm_engine/monitor_session.cpp
         src/adm_engine/scene_output_session.cpp
         src/adm_engine/catalog.cpp
-        src/adm_engine/wav_output.cpp
 )
 
 target_link_libraries(mr_adm_engine
@@ -778,8 +777,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
 
-    add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp)
-    target_include_directories(mr_adm_wav_profile_tests PRIVATE src/adm_engine)
+    add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp tests/support/wav_output.cpp)
+    target_include_directories(mr_adm_wav_profile_tests PRIVATE tests/support src/adm_audio)
     target_link_libraries(mr_adm_wav_profile_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_wav_profile_tests)
     mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
@@ -1636,6 +1635,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_executable(mr_adm_ebur128_reference_tests tests/reference/ebur128_reference_test.cpp)
         target_link_libraries(mr_adm_ebur128_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp ebur128)
         target_include_directories(mr_adm_ebur128_reference_tests SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+        target_include_directories(mr_adm_ebur128_reference_tests PRIVATE tests/support/post_gain)
         mr_adm_core_apply_warnings(mr_adm_ebur128_reference_tests)
         mr_adm_core_apply_static_analysis(mr_adm_ebur128_reference_tests)
         add_test(NAME mr_adm_ebur128_reference_tests COMMAND mr_adm_ebur128_reference_tests)

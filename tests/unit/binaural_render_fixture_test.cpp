@@ -26,6 +26,7 @@
 #include "adm/render_binaural.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/scene_policy.h"
 #include "../support/wav_fixture.h"
 #include "binaural_test_probe.h"
 #include "scene_import_internal.h"
@@ -1111,7 +1112,7 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
 
     if (!policy.empty()) {
         auto effective = mradm::io::RenderScene::import(input.string(), nullptr);
-        if (!check(effective.has_value() && effective->apply_policy(policy, "<test>").has_value(),
+        if (!check(effective.has_value() && mradm::test::apply_policy(*effective, policy).has_value(),
                    "stream: apply semantic policy")) {
             return std::nullopt;
         }

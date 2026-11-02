@@ -36,7 +36,7 @@ FFI_HEADERS = [
     "src/adm_dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
     "src/adm_dsp/scene_transition_ffi.h",
-    "src/adm_dsp/post_gain_ffi.h",
+    "tests/support/post_gain/post_gain_ffi.h",
     "src/adm_dsp/stream_dsp_ffi.h",
     "src/adm_dsp/semantic_policy_ffi.h",
     "tests/support/triple_balance/triple_balance_ffi.h",

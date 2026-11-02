@@ -36,3 +36,22 @@ fn trim_zeros(text: &str) -> &str {
         text
     }
 }
+
+/// `{:.<precision>f}` (`{:+.<precision>f}` with `plus`): the correctly rounded decimal (exact
+/// ties to even), and `nan` / `inf` with their sign as fmt writes them.
+pub fn fixed(value: f64, precision: usize, plus: bool) -> String {
+    let sign = if value.is_sign_negative() {
+        "-"
+    } else if plus {
+        "+"
+    } else {
+        ""
+    };
+    if value.is_nan() {
+        return format!("{sign}nan");
+    }
+    if value.is_infinite() {
+        return format!("{sign}inf");
+    }
+    format!("{sign}{:.*}", precision, value.abs())
+}
