@@ -6,7 +6,7 @@ use crate::test_alloc::COUNT;
 use mradm_dsp::dataset::Dataset;
 use mradm_render::binaural_render::Bank;
 
-fn plan() -> RenderPrepared {
+fn plan() -> binaural::Prepared {
     let mut block = object_block(0, 4096, 30.);
     block.width = 60.;
     block.diffuse = 0.3;
@@ -23,25 +23,12 @@ fn plan() -> RenderPrepared {
         4096,
     );
     let hrtf = Arc::new(binaural_hrtf::build(Dataset::kemar(), 1024, false).unwrap());
-    RenderPrepared {
-        texts: Vec::new(),
-        lines: Vec::new(),
-        error: bad(""),
-        kernel: None,
-        bindings: Arc::from([]),
-        settings: (1, 2, 4096, 48000),
-        triple_balance: None,
-        room: None,
-        binaural: Some(Arc::new(
-            binaural::prepare(&scene, hrtf, Spread::Cloud, 0, &mut |_, _| {}).unwrap(),
-        )),
-    }
+    binaural::prepare(&scene, hrtf, Spread::Cloud, 0, &mut |_, _| {}).unwrap()
 }
 
 #[test]
 fn equal_or_smaller_binaural_graphs_do_not_allocate_workspaces() {
-    let plan = plan();
-    let p = plan.binaural.as_ref().unwrap();
+    let p = plan();
     let mut bank = Bank::new(&p.hrtf, 4, 1024, 2).unwrap();
     for count in [4, 3, 1, 0] {
         COUNT.with(|counter| counter.set(Some(0)));

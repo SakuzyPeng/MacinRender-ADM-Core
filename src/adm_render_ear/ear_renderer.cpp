@@ -1,69 +1,31 @@
-#include <algorithm>
-#include <cmath>
 #include <memory>
-#include <string>
 
 #include "adm/render.h"
 #include "adm/render_ear.h"
 
 #include "capability_records.h"
-#include "render_common.h"
-#include "scene_handle.h"
-#include "speaker_layouts.h"
 #include "speaker_pcm.h"
 
 namespace mradm {
 
 namespace {
 
-using render_common::RustPrepared;
-using render_common::text;
+using render_common::EngineBackend;
+using render_common::EnginePrepared;
 
-// The EAR layout, gain plan, decorrelation filters and live-control bindings are built in Rust
-// mradm-render `ear` (PCM consistency 4.5) from the Rust render scene; offline rendering and file
-// streaming run in its `offline` and `stream`.
+// The EAR layout, gain plan, decorrelation filters and live-control bindings are prepared in Rust
+// (mradm-engine `backend`, mradm-render `ear`); offline windows render in the engine and file
+// streaming in mradm-render `stream`.
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return ear_capabilities(); }
 
     [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override {
-        const bool matrix_routing = plan.direct_speakers_routing_mode == DirectSpeakersRoutingMode::matrix;
-        if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic && !matrix_routing) {
-            return make_error(
-                ErrorCode::unsupported, "EAR renderer supports only automatic or matrix DirectSpeakers routing", {});
-        }
-        if (plan.scene_handle == nullptr) {
-            return make_error(ErrorCode::internal_error, "ear requires the Rust render scene");
-        }
-        static const DirectSpeakersMatrix no_matrix;
-        const auto* matrix = plan.direct_speakers_matrix.get();
-        const render_common::MatrixRecords routes(matrix != nullptr ? *matrix : no_matrix); // borrows the labels
-        const MradmRenderEarRequest request{text(plan.output_layout),
-                                            plan.speaker_geometry == SpeakerGeometry::apple ? 1U : 0U,
-                                            text(plan.input_path),
-                                            matrix_routing ? 1U : 0U,
-                                            matrix != nullptr ? 1U : 0U,
-                                            routes.routes.data(),
-                                            routes.routes.size(),
-                                            plan.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U};
-        MradmRenderPrepared* raw = nullptr;
-        MradmRenderPreparedView view{};
-        const auto code = mradm_render_ear_prepare(plan.scene_handle->raw, &request, &raw, &view);
-        auto prepared = render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::ear, logs, "ear");
+        auto prepared = render_common::prepare_backend(EngineBackend::ear, plan, logs);
         if (!prepared) {
             return tl::unexpected{prepared.error()};
         }
         return std::static_pointer_cast<IPreparedRender>(*prepared);
-    }
-
-    [[nodiscard]] Result<RenderMetrics>
-    render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override {
-        const auto* prepared = dynamic_cast<const RustPrepared*>(&prep);
-        if (prepared == nullptr) {
-            return make_error(
-                ErrorCode::internal_error, "ear: render_window received an incompatible prepared state", {});
-        }
-        return render_common::render_speaker_pcm(plan, prepared->mix, prepared->outputs, "ear", progress, logs);
     }
 
     // Live gain pre-scales the matching input channels before the (linear) gain mix and
@@ -71,7 +33,7 @@ class EarRenderer final : public IRenderer {
     [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
     open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
         (void) logs;
-        const auto* prepared = dynamic_cast<const RustPrepared*>(&prep);
+        const auto* prepared = dynamic_cast<const EnginePrepared*>(&prep);
         if (prepared == nullptr) {
             return make_error(
                 ErrorCode::internal_error, "ear: open_stream received an incompatible prepared state", {});
@@ -83,7 +45,7 @@ class EarRenderer final : public IRenderer {
 } // namespace
 
 CapabilityReport ear_capabilities() {
-    return render_common::engine_capabilities(render_common::EngineBackend::ear);
+    return render_common::engine_capabilities(EngineBackend::ear);
 }
 
 std::unique_ptr<IRenderer> create_ear_renderer() {

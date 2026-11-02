@@ -29,6 +29,7 @@
 #include "../support/wav_fixture.h"
 #include "binaural_test_probe.h"
 #include "scene_import_internal.h"
+#include "speaker_pcm.h"
 
 #ifdef _WIN32
 #include <process.h>
@@ -1181,7 +1182,7 @@ render_binaural_window(const std::filesystem::path& input,
     if (!check(prepared.has_value(), "headtrack-window: prepare")) {
         return std::nullopt;
     }
-    if (!check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
+    if (!check(mradm::render_common::render_offline(**prepared, plan, progress, logs).has_value(),
                "headtrack-window: render_window")) {
         return std::nullopt;
     }
@@ -1269,7 +1270,7 @@ bool verify_binaural_stream_matches_window() {
     FileGuard ref_guard(ref_path);
     mradm::RenderPlan window_plan = plan;
     window_plan.output_path = ref_path.string();
-    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+    if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "stream: reference render_window")) {
         return false;
     }
@@ -1424,7 +1425,7 @@ bool verify_binaural_stream_seek() {
         for (const uint64_t target : {1024U, 4096U, 1031U, 0U, 8191U, 9600U, k_frames, 12000U}) {
             auto window = plan;
             window.render_window = mradm::RenderWindow{std::min<uint64_t>(target, k_frames), 2051U};
-            if (!check(renderer->render_window(**prepared, window, progress, logs).has_value(),
+            if (!check(mradm::render_common::render_offline(**prepared, window, progress, logs).has_value(),
                        "stream-seek: offline window") ||
                 !check((*stream)->seek(target).has_value(), "stream-seek: seek")) {
                 return false;

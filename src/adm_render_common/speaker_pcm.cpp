@@ -11,6 +11,7 @@
 
 #include "../adm_audio/wav_backend.h"
 #include "render_common.h"
+#include "scene_handle.h"
 
 namespace mradm::render_common {
 tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_path) const {
@@ -77,29 +78,6 @@ MatrixRecords::MatrixRecords(const DirectSpeakersMatrix& matrix) {
     }
 }
 
-Result<std::shared_ptr<RustPrepared>> adopt_prepared(int32_t code,
-                                                     MradmRenderPrepared* raw,
-                                                     const MradmRenderPreparedView& view,
-                                                     DriverStyle style,
-                                                     LogSink& logs,
-                                                     std::string_view module) {
-    auto prepared = std::make_shared<RustPrepared>();
-    prepared->handle.reset(raw);
-    if (raw == nullptr) {
-        return make_error(static_cast<ErrorCode>(code), std::string{module} + " preparation failed");
-    }
-    const auto string_of = [](MradmAdmText t) { return std::string{reinterpret_cast<const char*>(t.data), t.len}; };
-    for (const auto& line : std::span{view.logs, view.logs_len}) {
-        logs.log(static_cast<LogLevel>(line.level), module, string_of(line.message));
-    }
-    if (code != 0) {
-        return make_error(static_cast<ErrorCode>(code), string_of(view.message), string_of(view.context));
-    }
-    prepared->mix = {view.plan, view.tracks, style};
-    prepared->outputs = static_cast<uint16_t>(view.outputs);
-    return prepared;
-}
-
 namespace {
 
 class FileStream final : public IRenderStream {
@@ -156,7 +134,7 @@ class FileStream final : public IRenderStream {
 
 } // namespace
 
-Result<std::unique_ptr<IRenderStream>> open_file_stream(const RustPrepared& prepared, const RenderPlan& plan) {
+Result<std::unique_ptr<IRenderStream>> open_file_stream(const EnginePrepared& prepared, const RenderPlan& plan) {
     const auto path = audio::wav_path_utf8(plan.input_path);
     DriverError error;
     MradmRenderStream* raw = nullptr;
@@ -177,156 +155,171 @@ Result<std::unique_ptr<IRenderStream>> open_file_stream(const RustPrepared& prep
 
 namespace {
 
-struct DriverText {
-    std::string_view begin;
-    std::string_view step;
-    std::string_view short_write;
-};
-constexpr DriverText k_speaker_text{"rendering audio", "rendering", "short write while rendering"};
-constexpr DriverText k_hoa_text{"encoding HOA", "encoding", "short write while encoding HOA"};
-
-[[nodiscard]] std::string begin_log(DriverStyle style, std::size_t tracks, uint16_t outputs, uint64_t frames) {
-    switch (style) {
-    case DriverStyle::hoa:
-        return fmt::format(
-            "encoding {} input channels (Objects + DirectSpeakers) → HOA3 ({} ch), {} frames", tracks, outputs, frames);
-    case DriverStyle::ear:
-        return fmt::format("rendering {} tracks → {} channels, {} frames", tracks, outputs, frames);
-    case DriverStyle::speaker:
-        break;
-    }
-    return fmt::format(
-        "rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames", tracks, outputs, frames);
+[[nodiscard]] std::string utf8(const std::filesystem::path& path) {
+    const auto bytes = path.u8string();
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
 }
 
-[[nodiscard]] std::string failure(DriverStyle style, std::string_view backend, const char* what) {
-    switch (style) {
-    case DriverStyle::hoa:
-        return fmt::format("HOA encode failed: {}", what);
-    case DriverStyle::ear:
-        return fmt::format("render failed: {}", what);
-    case DriverStyle::speaker:
-        break;
+[[nodiscard]] std::string string_of(MradmAdmText t) {
+    return {reinterpret_cast<const char*>(t.data), t.len};
+}
+
+[[nodiscard]] MradmRoomScreenGeometry geometry(const ScreenGeometry& screen) {
+    MradmRoomScreenGeometry out{};
+    out.cartesian = screen.cartesian ? 1U : 0U;
+    out.aspect_ratio = screen.aspect_ratio;
+    std::ranges::copy(screen.centre, std::begin(out.centre));
+    out.width = screen.width;
+    return out;
+}
+
+[[nodiscard]] std::string_view module_of(EngineBackend backend) {
+    switch (backend) {
+    case EngineBackend::ear:
+        return "ear";
+    case EngineBackend::saf:
+        return "saf-vbap";
+    case EngineBackend::triple_balance:
+        return "triple-balance";
+    case EngineBackend::hoa:
+        return "hoa-encode";
+    case EngineBackend::binaural:
+        return "binaural";
+    case EngineBackend::room:
+        return "room-binaural";
     }
-    return fmt::format("{} render failed: {}", backend, what);
+    return "engine";
 }
 
 } // namespace
 
-// The loop itself runs in Rust mradm-render `offline` (PCM consistency 4.5): input reading,
-// mixing (with Triple Balance's size or D-mode processor, 4.6), checkpoints and the asynchronous
-// meter. This side owns the writer, cancellation, progress and logs.
-Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                         const SpeakerMix& gain_matrix,
-                                         uint16_t num_out_ch,
-                                         std::string_view backend,
-                                         ProgressSink& progress,
-                                         LogSink& logs) {
+Result<std::shared_ptr<EnginePrepared>>
+prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, const void* room_profile) {
+    const auto module = module_of(backend);
+    if (plan.scene_handle == nullptr) {
+        return make_error(ErrorCode::internal_error, fmt::format("{} requires the Rust render scene", module));
+    }
+    static const DirectSpeakersMatrix no_matrix;
+    const auto* matrix = plan.direct_speakers_matrix.get();
+    const MatrixRecords routes(matrix != nullptr ? *matrix : no_matrix); // borrows the labels
+    const auto sofa = plan.sofa_path ? utf8(*plan.sofa_path) : std::string{};
+    const auto sofa_name = plan.sofa_path ? utf8(plan.sofa_path->filename()) : std::string{};
+    const auto hrir = utf8(plan.room.hrir_manifest);
+    const auto& screens = plan.screens;
+    const MradmEnginePrepareRequest request{static_cast<uint32_t>(backend),
+                                            text(plan.output_layout),
+                                            plan.speaker_geometry == SpeakerGeometry::apple ? 1U : 0U,
+                                            static_cast<uint32_t>(plan.direct_speakers_routing_mode),
+                                            matrix != nullptr ? 1U : 0U,
+                                            routes.routes.data(),
+                                            routes.routes.size(),
+                                            static_cast<uint32_t>(plan.speaker_spread_mode),
+                                            static_cast<uint32_t>(plan.binaural_spread_mode),
+                                            plan.triple_balance_mode == TripleBalanceMode::d ? 1U : 0U,
+                                            plan.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U,
+                                            plan.object_smoothing_frames,
+                                            plan.default_interp_ms,
+                                            text(plan.input_path),
+                                            plan.sofa_path ? 1U : 0U,
+                                            text(sofa),
+                                            text(sofa_name),
+                                            screens.reference ? 1U : 0U,
+                                            geometry(screens.reference.value_or(ScreenGeometry{})),
+                                            screens.reproduction ? 1U : 0U,
+                                            geometry(screens.reproduction.value_or(ScreenGeometry{})),
+                                            room_profile,
+                                            text(hrir),
+                                            plan.room.metres_per_unit,
+                                            static_cast<uint32_t>(plan.room.quality)};
+    MradmRenderPrepared* raw = nullptr;
+    MradmEnginePreparedView view{};
+    const auto code = mradm_engine_prepare(plan.scene_handle->raw, &request, &raw, &view);
+    auto prepared = std::make_shared<EnginePrepared>();
+    prepared->handle.reset(raw);
+    if (raw == nullptr) {
+        return make_error(static_cast<ErrorCode>(code), fmt::format("{} preparation failed", module));
+    }
+    // The backend report also describes a rejected preparation.
+    if (view.has_report != 0U && plan.renderer_semantics_sink) {
+        plan.renderer_semantics_sink(string_of(view.report));
+    }
+    for (const auto& line : std::span{view.status.logs, view.status.logs_len}) {
+        logs.log(static_cast<LogLevel>(line.level), string_of(line.module), string_of(line.message));
+    }
+    if (code != 0) {
+        return make_error(static_cast<ErrorCode>(code), string_of(view.status.message), string_of(view.status.context));
+    }
+    prepared->outputs = static_cast<uint16_t>(view.outputs);
+    prepared->inputs = static_cast<uint16_t>(view.inputs);
+    prepared->sample_rate = view.sample_rate;
+    prepared->frames = plan.scene.info.num_frames;
+    prepared->mode = plan.triple_balance_mode;
+    return prepared;
+}
+
+Result<RenderMetrics>
+render_offline(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+    const auto* prepared = dynamic_cast<const EnginePrepared*>(&prep);
+    if (prepared == nullptr) {
+        return make_error(ErrorCode::internal_error, "offline render received an incompatible prepared state");
+    }
     const auto& info = plan.scene.info;
-    const auto style = gain_matrix.style;
-    const auto& wording = style == DriverStyle::hoa ? k_hoa_text : k_speaker_text;
-    try {
-        logs.log(LogLevel::info, backend, begin_log(style, gain_matrix.tracks, num_out_ch, info.num_frames));
-        progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, wording.begin});
-
-        const auto& window = plan.render_window;
-        const auto& meter_window = plan.meter_window;
-        const MradmRenderOfflineSettings settings{info.num_channels,
-                                                  num_out_ch,
-                                                  info.num_frames,
-                                                  static_cast<uint32_t>(info.sample_rate),
-                                                  plan.default_interp_ms,
-                                                  plan.object_smoothing_frames,
-                                                  window ? 1U : 0U,
-                                                  window ? window->start_frame : 0,
-                                                  window ? window->frame_count : 0,
-                                                  meter_window ? 1U : 0U,
-                                                  meter_window ? meter_window->start_frame : 0,
-                                                  meter_window ? meter_window->frame_count : 0};
-        const auto path = audio::wav_path_utf8(plan.input_path);
-        DriverError error;
-        MradmRenderOffline* raw = nullptr;
-        const auto code = mradm_render_offline_open(reinterpret_cast<const uint8_t*>(path.data()),
-                                                    path.size(),
-                                                    gain_matrix.plan,
-                                                    &settings,
-                                                    {reinterpret_cast<const uint8_t*>(backend.data()), backend.size()},
-                                                    &raw,
-                                                    error.location(),
-                                                    error.message(),
-                                                    error.message_len());
-        if (code != 0) {
-            return error.error(code, plan.input_path);
+    const auto input = audio::wav_path_utf8(plan.input_path);
+    const auto output = audio::wav_path_utf8(plan.output_path);
+    const auto& window = plan.render_window;
+    const auto& meter = plan.meter_window;
+    const auto& pose = plan.listener_orientation;
+    const MradmEngineOfflineSettings settings{text(input),
+                                              text(output),
+                                              text(plan.input_path),
+                                              text(plan.output_path),
+                                              text(plan.output_layout),
+                                              info.num_channels,
+                                              info.num_frames,
+                                              info.sample_rate,
+                                              plan.default_interp_ms,
+                                              plan.object_smoothing_frames,
+                                              window ? 1U : 0U,
+                                              window ? window->start_frame : 0,
+                                              window ? window->frame_count : 0,
+                                              meter ? 1U : 0U,
+                                              meter ? meter->start_frame : 0,
+                                              meter ? meter->frame_count : 0,
+                                              {pose.yaw_deg, pose.pitch_deg, pose.roll_deg}};
+    MradmEngineOffline* raw = nullptr;
+    if (const auto code = mradm_engine_offline_open(prepared->handle.get(), &settings, &raw); code != 0) {
+        return make_error(static_cast<ErrorCode>(code), "invalid offline render arguments");
+    }
+    const std::unique_ptr<MradmEngineOffline, decltype(&mradm_engine_offline_destroy)> run(
+        raw, &mradm_engine_offline_destroy);
+    for (;;) {
+        MradmEngineOfflineEvent event{};
+        MradmEngineStatus status{};
+        if (const auto code =
+                mradm_engine_offline_next(run.get(), plan.cancel_token.stop_requested() ? 1U : 0U, &event, &status);
+            code != 0) {
+            return make_error(static_cast<ErrorCode>(code), string_of(status.message), string_of(status.context));
         }
-        const std::unique_ptr<MradmRenderOffline, decltype(&mradm_render_offline_destroy)> driver(
-            raw, &mradm_render_offline_destroy);
-        auto writer = audio::WriterHandle::open(
-            plan.output_path, num_out_ch, static_cast<uint32_t>(info.sample_rate), plan.output_layout);
-        if (!writer) {
-            return tl::unexpected{writer.error()};
-        }
-        for (;;) {
-            if (plan.cancel_token.stop_requested()) {
-                return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
+        if (event.kind == 1U) {
+            progress.on_progress({static_cast<RenderStage>(event.stage),
+                                  static_cast<RenderOperation>(event.operation),
+                                  event.fraction,
+                                  event.stage_fraction,
+                                  event.current,
+                                  event.total,
+                                  string_of(event.message)});
+        } else if (event.kind == 2U) {
+            logs.log(static_cast<LogLevel>(event.level), string_of(event.module), string_of(event.message));
+        } else if (event.kind == 3U) {
+            RenderMetrics metrics;
+            if (event.has_lufs != 0U) {
+                metrics.measured_lufs = event.lufs;
             }
-            MradmRenderOfflineBlock block{};
-            if (const auto status = mradm_render_offline_next(
-                    driver.get(), &block, error.location(), error.message(), error.message_len());
-                status != 0) {
-                return error.error(status, plan.input_path);
+            if (event.has_peak != 0U) {
+                metrics.measured_peak_dbtp = event.peak_dbtp;
             }
-            if (block.frames == 0) {
-                break;
-            }
-            if (block.emit_frames > 0 && writer->write(block.output + (block.emit_offset * num_out_ch),
-                                                       block.emit_frames) != block.emit_frames) {
-                return make_error(ErrorCode::io_error, std::string{wording.short_write}, "output=" + plan.output_path);
-            }
-            MradmRenderOfflineProgress step{};
-            if (const auto status = mradm_render_offline_commit(
-                    driver.get(), &step, error.location(), error.message(), error.message_len());
-                status != 0) {
-                return error.error(status, plan.input_path);
-            }
-            progress.on_progress({RenderStage::rendering,
-                                  RenderOperation::render_audio,
-                                  step.fraction,
-                                  step.stage_fraction,
-                                  step.done,
-                                  step.total,
-                                  wording.step});
+            return metrics;
         }
-        MradmRenderOfflineMetrics measured{};
-        if (const auto status = mradm_render_offline_finish(
-                driver.get(), &measured, error.location(), error.message(), error.message_len());
-            status != 0) {
-            return error.error(status, plan.input_path);
-        }
-        if (auto finished = writer->finish(); !finished) {
-            return tl::unexpected{finished.error()};
-        }
-
-        progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-        const uint64_t start = window ? std::min(window->start_frame, info.num_frames) : 0;
-        const uint64_t end = window ? start + std::min(window->frame_count, info.num_frames - start) : info.num_frames;
-        logs.log(LogLevel::info,
-                 backend,
-                 fmt::format("wrote {} frames to {}{}",
-                             end - start,
-                             plan.output_path,
-                             window ? fmt::format(" (window [{}, {}) of {} frames)", start, end, info.num_frames)
-                                    : std::string{}));
-
-        RenderMetrics metrics;
-        if (measured.has_lufs != 0U) {
-            metrics.measured_lufs = measured.lufs;
-        }
-        if (measured.has_peak != 0U) {
-            metrics.measured_peak_dbtp = measured.peak_dbtp;
-        }
-        return metrics;
-    } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error, failure(style, backend, e.what()), "input=" + plan.input_path);
     }
 }
 

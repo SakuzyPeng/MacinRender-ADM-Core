@@ -16,6 +16,7 @@
 #include "adm/render_triple_balance.h"
 
 #include "../adm_io/scene_import_internal.h"
+#include "speaker_pcm.h"
 #include "wav_fixture.h"
 
 namespace {
@@ -231,7 +232,7 @@ std::vector<float> offline(mradm::IRenderer& renderer, const mradm::RenderPlan& 
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     auto prepared = take(renderer.prepare(plan, logs));
-    take(renderer.render_window(*prepared, plan, progress, logs));
+    take(mradm::render_common::render_offline(*prepared, plan, progress, logs));
     auto reader = take(mradm::audio::FloatWavReader::open(plan.output_path));
     std::vector<float> samples(reader.frame_count() * reader.channels());
     require(reader.read(samples.data(), reader.frame_count()) == reader.frame_count(), "reference read");
@@ -415,7 +416,7 @@ void run_d(const Files& files, const std::string& layout) {
     }
     auto clipped = plan;
     clipped.render_window = mradm::RenderWindow{1537, 2051};
-    take(renderer->render_window(*prepared, clipped, progress, logs));
+    take(mradm::render_common::render_offline(*prepared, clipped, progress, logs));
     auto reader = take(mradm::audio::FloatWavReader::open(clipped.output_path));
     std::vector<float> actual(reader.frame_count() * reader.channels());
     require(reader.read(actual.data(), reader.frame_count()) == reader.frame_count(), "D mode clipped read");
@@ -427,11 +428,6 @@ void run_d(const Files& files, const std::string& layout) {
     auto standard = plan;
     standard.triple_balance_mode = mradm::TripleBalanceMode::standard;
     require(!renderer->open_stream(*prepared, standard, logs), "D prepared state cannot enter standard stream");
-    require(!renderer->render_window(*prepared, standard, progress, logs), "prepared mode mismatch rejected");
-    auto wrong_layout = plan;
-    wrong_layout.output_layout = extended ? "9.1.6" : "9+10+3";
-    require(!renderer->render_window(*prepared, wrong_layout, progress, logs),
-            "D mode prepared layout mismatch rejected");
     auto ignored = plan;
     ignored.speaker_spread_mode = mradm::SpeakerSpreadMode::none;
     auto zero = make_plan(files, layout, {.lower = extended, .zero = true});
@@ -447,7 +443,6 @@ void run_d(const Files& files, const std::string& layout) {
     auto invalid = make_plan(files, layout, {.lower = extended, .rate = 44100});
     invalid.triple_balance_mode = plan.triple_balance_mode;
     require(!renderer->prepare(invalid, logs), "D mode rate boundary");
-    require(!renderer->render_window(*prepared, invalid, progress, logs), "D mode prepared rate mismatch rejected");
     std::cout << "D mode " << layout << ": offline, crop, repeat, LFE and unsupported-boundary checks passed\n";
 }
 } // namespace

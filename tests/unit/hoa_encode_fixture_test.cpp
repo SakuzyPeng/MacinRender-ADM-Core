@@ -25,6 +25,7 @@
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
 #include "scene_import_internal.h"
+#include "speaker_pcm.h"
 
 namespace {
 
@@ -1113,7 +1114,7 @@ bool verify_hoa_stream_matches_window() {
     FileGuard ref_guard{ref_path};
     mradm::RenderPlan window_plan = plan;
     window_plan.output_path = ref_path.string();
-    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+    if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "hoa stream: reference render_window")) {
         return false;
     }
@@ -1161,7 +1162,7 @@ bool verify_hoa_stream_matches_window() {
     tail_plan.output_path = tail_path.string();
     tail_plan.render_window = mradm::RenderWindow{1023, std::numeric_limits<uint64_t>::max()};
     CapturingLogSink tail_logs;
-    const auto rendered_tail = renderer->render_window(**prepared, tail_plan, progress, tail_logs);
+    const auto rendered_tail = mradm::render_common::render_offline(**prepared, tail_plan, progress, tail_logs);
     ok &= check(rendered_tail.has_value(), "HOA window count clamps without integer overflow");
     const auto expected_log = "wrote 3080 frames to " + tail_path.string() + " (window [1023, 4103) of 4103 frames)";
     ok &=

@@ -1,55 +1,38 @@
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <exception>
 #include <span>
 #include <string>
-#include <vector>
 
-#include "adm/audio_io.h"
 #include "adm/render_room.h"
 
 #include "../adm_audio/wav_backend.h"
 #include "capability_records.h"
-#include "meter.h"
-#include "post_gain.h"
 #include "render_common.h"
 #include "room_internal.h"
-#include "scene_handle.h"
 #include "speaker_pcm.h"
 
 namespace mradm {
 namespace {
-constexpr std::size_t k_read_frames = 2048;
 using render_common::DriverError;
+using render_common::EnginePrepared;
 
-struct FilePrepared final : IPreparedRender {
-    std::shared_ptr<render_common::RustPrepared> rust;
-    std::shared_ptr<const room_internal::Prepared> room;
-    RoomConfig config;
-    std::uint64_t frames{0};
-    std::uint16_t input_channels{0};
-};
 // Reading, the room runtime, events, the tail, seek steps and live edits are Rust mradm-render
 // `room_stream` (PCM consistency 4.6 E); this side owns cancellation.
 class RoomStream final : public IRenderStream {
   public:
-    static Result<std::unique_ptr<IRenderStream>> create(const FilePrepared& prepared, const RenderPlan& plan) {
-        if (plan.scene.info.num_frames != prepared.frames || plan.scene.info.num_channels != prepared.input_channels ||
-            plan.scene.info.sample_rate != prepared.room->info.sample_rate) {
+    static Result<std::unique_ptr<IRenderStream>> create(const EnginePrepared& prepared, const RenderPlan& plan) {
+        if (plan.scene.info.num_frames != prepared.frames || plan.scene.info.num_channels != prepared.inputs ||
+            plan.scene.info.sample_rate != prepared.sample_rate) {
             return make_error(ErrorCode::invalid_argument, "room-binaural prepared 输入格式不匹配");
         }
         const auto path = audio::wav_path_utf8(plan.input_path);
-        const room_internal::ConfigRecord config(prepared.config);
         const std::array<float, 3> pose{
             plan.listener_orientation.yaw_deg, plan.listener_orientation.pitch_deg, plan.listener_orientation.roll_deg};
         DriverError error;
         MradmRenderRoomStream* raw = nullptr;
-        if (const auto code = mradm_render_room_stream_open(prepared.rust->handle.get(),
-                                                            prepared.room->handle.get(),
+        if (const auto code = mradm_render_room_stream_open(prepared.handle.get(),
                                                             reinterpret_cast<const uint8_t*>(path.data()),
                                                             path.size(),
-                                                            &config.record,
                                                             pose.data(),
                                                             &raw,
                                                             error.location(),
@@ -128,139 +111,40 @@ class RoomStream final : public IRenderStream {
     [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
 
   private:
-    RoomStream(MradmRenderRoomStream* raw, const FilePrepared& prepared, const RenderPlan& plan)
+    RoomStream(MradmRenderRoomStream* raw, const EnginePrepared& prepared, const RenderPlan& plan)
         : handle_(raw, &mradm_render_room_stream_destroy),
           control_(room_internal::control(mradm_render_room_stream_control(raw))), input_path_(plan.input_path),
-          sample_rate_(prepared.room->info.sample_rate) {}
+          sample_rate_(prepared.sample_rate) {}
     std::unique_ptr<MradmRenderRoomStream, decltype(&mradm_render_room_stream_destroy)> handle_;
     std::shared_ptr<IRoomControl> control_;
     std::string input_path_;
     std::uint32_t sample_rate_;
 };
 
+// Sources, events and the room resources are prepared in Rust (mradm-engine `backend`,
+// mradm-render `room`, PCM consistency 4.6, 5.2 C1); offline windows render in the engine over the
+// file stream.
 class RoomRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return room_capabilities(); }
-    Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override;
+    Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override {
+        const void* profile = plan.room.profile ? room_internal::Access::get(*plan.room.profile) : nullptr;
+        auto prepared = render_common::prepare_backend(render_common::EngineBackend::room, plan, logs, profile);
+        if (!prepared) {
+            return tl::unexpected{prepared.error()};
+        }
+        return std::static_pointer_cast<IPreparedRender>(*prepared);
+    }
     Result<std::unique_ptr<IRenderStream>>
     open_stream(const IPreparedRender& state, const RenderPlan& plan, LogSink& logs) override {
         (void) logs;
-        const auto* prepared = dynamic_cast<const FilePrepared*>(&state);
+        const auto* prepared = dynamic_cast<const EnginePrepared*>(&state);
         if (prepared == nullptr) {
             return make_error(ErrorCode::invalid_argument, "room-binaural prepared 类型错误");
         }
         return RoomStream::create(*prepared, plan);
     }
-    Result<RenderMetrics> render_window(const IPreparedRender& state,
-                                        const RenderPlan& plan,
-                                        ProgressSink& progress,
-                                        LogSink& logs) override {
-        auto stream = open_stream(state, plan, logs);
-        if (!stream) {
-            return tl::unexpected{stream.error()};
-        }
-        const auto total = plan.scene.info.num_frames + (*stream)->appended_tail_frames();
-        const auto start = plan.render_window ? std::min(plan.render_window->start_frame, total) : 0;
-        const auto count = plan.render_window ? std::min(plan.render_window->frame_count, total - start) : total;
-        auto seek = (*stream)->seek_with_cancel(start, plan.cancel_token);
-        if (!seek) {
-            return tl::unexpected{seek.error()};
-        }
-        auto writer = audio::WriterHandle::open(plan.output_path, 2, (*stream)->sample_rate(), "binaural");
-        if (!writer) {
-            return tl::unexpected{writer.error()};
-        }
-        auto meter = dsp::Meter::create(2, (*stream)->sample_rate(), dsp::MeterMode::integrated_true_peak);
-        if (!meter) {
-            return tl::unexpected{meter.error()};
-        }
-        std::array<float, k_read_frames * 2> output{};
-        std::uint64_t written = 0;
-        while (written < count) {
-            if (plan.cancel_token.stop_requested()) {
-                return make_error(ErrorCode::cancelled, "room-binaural 离线渲染已取消");
-            }
-            auto rendered = (*stream)->process(
-                output, static_cast<std::size_t>(std::min<std::uint64_t>(k_read_frames, count - written)));
-            if (!rendered) {
-                return tl::unexpected{rendered.error()};
-            }
-            if (*rendered == 0 || writer->write(output.data(), *rendered) != *rendered) {
-                return make_error(ErrorCode::io_error, "room-binaural 输出未完成");
-            }
-            const auto measured = render_common::meter_window_chunk(plan.meter_window, start + written, *rendered);
-            if (measured.frame_count != 0) {
-                auto metered = meter->add_frames(output.data() + (2 * measured.offset_frames), measured.frame_count);
-                if (!metered) {
-                    return tl::unexpected{metered.error()};
-                }
-            }
-            written += *rendered;
-            const auto fraction = static_cast<double>(written) / static_cast<double>(count);
-            progress.on_progress({RenderStage::rendering,
-                                  RenderOperation::render_audio,
-                                  fraction,
-                                  fraction,
-                                  written,
-                                  count,
-                                  "room-binaural"});
-        }
-        auto finish = writer->finish();
-        if (!finish) {
-            return tl::unexpected{finish.error()};
-        }
-        RenderMetrics metrics;
-        if (auto value = meter->integrated(); value && std::isfinite(*value)) {
-            metrics.measured_lufs = *value;
-        }
-        if (auto value = meter->max_true_peak(); value) {
-            metrics.measured_peak_dbtp = dsp::amplitude_to_db(std::max(*value, 1e-10));
-        }
-        return metrics;
-    }
 };
-
-// Sources and events are Rust mradm-render `room` (PCM consistency 4.6); this shell validates the
-// screens and prepares the room resources for the file stream.
-Result<std::shared_ptr<IPreparedRender>> RoomRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
-    auto screen_valid = validate_screen_config(plan.screens);
-    if (!screen_valid) {
-        return tl::unexpected{screen_valid.error()};
-    }
-    auto room = room_internal::prepare(plan.room, plan.sofa_path.value_or(std::filesystem::path{}));
-    if (!room) {
-        return tl::unexpected{room.error()};
-    }
-    if (plan.scene_handle == nullptr) {
-        return make_error(ErrorCode::internal_error, "room-binaural requires the Rust render scene");
-    }
-    const auto& screens = plan.screens;
-    const MradmRenderRoomRequest request{render_common::text(plan.output_layout),
-                                         (*room)->info.sample_rate,
-                                         static_cast<std::uint32_t>(plan.binaural_spread_mode),
-                                         static_cast<std::uint32_t>(plan.direct_speakers_routing_mode),
-                                         plan.direct_speakers_matrix ? 1U : 0U,
-                                         plan.default_interp_ms,
-                                         screens.reference ? 1U : 0U,
-                                         room_internal::geometry(screens.reference.value_or(ScreenGeometry{})),
-                                         screens.reproduction ? 1U : 0U,
-                                         room_internal::geometry(screens.reproduction.value_or(ScreenGeometry{}))};
-    MradmRenderPrepared* raw = nullptr;
-    MradmRenderPreparedView view{};
-    const auto code = mradm_render_room_prepare(plan.scene_handle->raw, &request, &raw, &view);
-    auto rust =
-        render_common::adopt_prepared(code, raw, view, render_common::DriverStyle::speaker, logs, "room-binaural");
-    if (!rust) {
-        return tl::unexpected{rust.error()};
-    }
-    auto result = std::make_shared<FilePrepared>();
-    result->rust = std::move(*rust);
-    result->room = *room;
-    result->config = plan.room;
-    result->frames = plan.scene.info.num_frames;
-    result->input_channels = plan.scene.info.num_channels;
-    return std::shared_ptr<IPreparedRender>{std::move(result)};
-}
 } // namespace
 CapabilityReport room_capabilities() {
     return render_common::engine_capabilities(render_common::EngineBackend::room);
