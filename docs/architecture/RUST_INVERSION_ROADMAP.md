@@ -46,7 +46,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | `src/adm_realtime` | 5,402 | Scene 引擎、Monitor、ring buffer、OSC UDP、设备调度 → Rust；miniaudio 留作 C 岛 | 五期 |
 | `src/adm_audio` | 4,909 | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据 → Rust（4.8 已完成：CAF 在 `mradm-wav::caf`，写出端与后处理遍历在 `mradm-render` `output` / `postprocess`；剩 4,184 行，主要是编码器与 `audio_io.h` 薄包装）；FLAC / Opus / IAMF 编码留作 C 岛，APAC 归 Apple 岛 | 四期、七期 |
 | `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除（4.4 删除 `semantic_policy.h` 与 `io::write_scene`，4.8 A 删除 `peak.h` 与 `loudness.h`） | 四期～六期 |
-| `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust | 五期 |
+| `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust（5.2 已迁离线编排与能力表，剩 1,981 行：`RenderService` 的循环壳与岛、平台事实、`monitor_session` 与 `scene_output_session`） | 五期 |
 | `src/adm_c_api` | 3,614 | Rust 实现同一 `c_api.h` | 六期 |
 | `src/adm_render_binaural` | 3,486 | Rust `mradm-render`（4.7 已完成，剩 596 行的适配壳、能力表、`HrtfState` 视图与 Scene 双耳的创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural`） | 四期 |
 | `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除（4.5 把只剩测试使用的 HOA、EAR、Live VBAP 头移到 `tests/unit`，4.6 把 Triple Balance 头移到 `tests/support` 并删去 Live TB 与 room session 的声明，4.7 把只剩测试使用的双耳头移到 `tests/support/binaural` 并删去 `live_binaural.h`，剩 1,994 行） | 四期～六期 |
@@ -57,7 +57,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | `src/adm_render_room` | 1,344 | Rust `mradm-render` 与 `mradm-dsp` `room::loading`（4.6 已完成，剩 568 行：适配壳、`render_window` 循环、`RoomProfile` 与 `IRoomControl` 薄壳） | 四期 |
 | `src/adm_render_vbap` / `ear` / `hoa` | 1,236 / 1,039 / 770 | Rust `mradm-render`（4.5 已完成，含 Scene 流式 VBAP；剩 257 / 115 / 111 行的适配壳与能力表，Scene VBAP 的适配 4.6 C 移入 `render_common`） | 四期 |
 | `src/adm_metadata`、`src/adm_io` | 788、590 | Rust 渲染场景 `mradm-scene`（4.3）；导出回写随语义策略迁入（4.4 已完成，剩 765、444 行的场景视图与文件编排） | 四期 |
-| `src/adm_renderer_factory` | 387 | 五期随编排迁入 Rust | 五期 |
+| `src/adm_renderer_factory` | 387 | 五期随编排迁入 Rust（5.2 B 已迁判定，剩 230 行的 `IRenderer` 构造） | 五期 |
 | `src/adm_loudness`、`src/adm_peak` | 0（原 165、143） | 删除（4.8 A，无生产调用者） | 四期 |
 
 四期估计删除生产 C/C++ 1.6–1.8 万行（约 35%），以各切片实测为准。
@@ -68,7 +68,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | 期 | 目标 | 退出条件 |
 | --- | --- | --- |
 | 四期 | PCM 写出为止的数据链路迁入 Rust；`room-binaural` exact 档进矩阵；S03、观察内核、N01 JSON 残留与覆盖缺口收尾 | 后端与公共渲染层的 C++ 只剩适配壳；锁定矩阵三平台逐位相同；C++ 规模按切片实测下降（2026-10-31 已满足，见[四期结项](RUST_INVERSION_CLOSEOUT.md)） |
-| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)，5.1 起确定；编排代码放进新 crate `mradm-engine`；驱动面与岛接口清单见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
+| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)，5.1 起确定；编排代码放进新 crate `mradm-engine`；驱动面与岛接口清单见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)；离线编排 5.2 已完成，见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
 | 六期 | 边界迁入 Rust：C ABI 由 Rust cdylib 实现（`mradm_capi`、同一 `c_api.h`、`SOVERSION 1`、只导出 `adm_*`）；CLI 改为 Rust；删除 C++ SDK 与安装规则；构建以 Cargo 为主 | ABI 导出、GUI P/Invoke、CLI 输出与退出码回归通过；CLI11、spdlog/fmt、nlohmann_json、tl-expected 移除 |
 | 七期 | 平台岛收缩：Apple / Windows sink 与编码器 C 库只留窄 C 接口，评估 objc2 / windows crate；冻结参考按条件退役；C++ 测试清退 | 生产 C/C++ 只剩岛 |
 
@@ -78,7 +78,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 
 | 路径 | 工具 | 驱动的接口 |
 | --- | --- | --- |
-| 离线 | `mradm` CLI、`mr_adm_phase2_render` | C++ `RenderService` |
+| 离线 | `mradm` CLI、`mr_adm_phase2_render` | C++ `RenderService`（5.2 起为驱动 Rust 状态机的循环壳）；`mr_adm_phase2_render` 5.2 D 起为 Rust，直接驱动 `mradm-engine` |
 | 文件流式 | `mr_adm_phase2_stream` | `io::import_scene`、内部 `resolve_renderer`、`IRenderStream` |
 | Scene | `mr_adm_phase2_scene` | 内部 `SceneStreamEngine` 的时钟缝、`SceneOutputSession` 的捕获设备 |
 | 内核 | `mr_adm_phase2_kernels` | 直接调用 Rust crate |
@@ -94,6 +94,7 @@ C ABI 目前替代不了这些路径：离线没有 listener orientation；文�
   不在 C ABI 中为测试新增入口。做法（5.1）：用 `run-rust-phase2.py --tool NAME=PATH` 以新工具替换
   `mr_adm_phase2_render` / `_stream` / `_scene` 采集一次，再用 `compare-collections.py` 与旧工具的采集逐字节比较；
   0 差异后才替换构建目录里的同名工具，旧工具随即删除。带替换的采集记录 `tool_overrides`，不能作为跨平台证据。
+  `mr_adm_phase2_render` 已按此切换（5.2 D，见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md#验证)）。
 
 ## C++ 删除与冻结参考
 

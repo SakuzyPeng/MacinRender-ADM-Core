@@ -160,7 +160,7 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
           ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio
-C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render
+C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render / mradm-engine
 所有模块 ──→ ADMCore（领域模型、错误、选项、能力）
 ```
 
@@ -181,6 +181,7 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 | `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表；语义策略、报告与模板、导出回写、DirectSpeakers 矩阵与屏幕配置 |
 | `rust/crates/mradm-json` | 与 nlohmann/json 3.12.0 字节一致的 JSON 解析与写出 |
 | `rust/crates/mradm-render` | 扬声器后端（VBAP、HOA、EAR、Scene 流式 VBAP）、Triple Balance 与 room 后端（离线、文件流式、Scene 流式，room 准备线程状态机）、双耳后端（HRTF 状态与缓存、声源计划、OLA、spreader、离线、文件流式、Scene 流式）与公共渲染层：DirectSpeakers / 标签 / LFE 路由、离线驱动与文件流式；最终 PCM 写出端与后处理遍历（增益改写、trim、降位、WAV 布局收尾及其临时文件安装） |
+| `rust/crates/mradm-engine` | 离线编排：能力表与发现文档、请求判定（渲染器、DS 路由与矩阵、trim、输出目标）、后端准备与分步离线驱动、`RenderService` 的分步状态机（编码器、元数据与 Apple 后端作为岛请求交给 C++） |
 | `rust/crates/mradm-ffi` | 唯一含 `unsafe` 的私有 C 边界 |
 | `gui/MacinRender.Gui` | Avalonia NativeAOT 桌面 GUI，经 P/Invoke 调用 C ABI |
 
