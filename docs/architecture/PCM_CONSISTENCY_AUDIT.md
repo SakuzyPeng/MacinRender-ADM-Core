@@ -515,6 +515,24 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **5.1 状态**：驱动面清单（4 个一致性工具、7 个 CLI 子命令、164 个 C ABI 导出按家族归入 5.2–5.5 与六期）、岛接口清单与五期规模基线（`8ef7017`，生产 C/C++ 32,551 行）记录在 5.1 记录。新增新旧工具的对照手段：`run-rust-phase2.py --tool` 替换回放工具并在 manifest 记录 `tool_overrides`，`compare-rust-phase2.py` 拒绝这类采集，`compare-collections.py` 对同一构建、同一平台的两份采集逐字节比较 PCM、夹具、比较记录、回放状态、内核与检查点和日志。本机以同一批工具替换采集的自对照为 0 差异，植入的 PCM 与日志差异都被报出。PCM 与生产代码不变。见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)。
 
+**5.2 状态**：离线编排在 Rust `mradm-engine`，分五批完成：
+- A：能力表与发现文档、inspect 场景 JSON（`catalog`）；
+- B：布局别名、渲染器选择、DS 路由与矩阵、trim 窗口与输出目标（`request`）；
+- C1：后端准备的统一入口与分步离线驱动，删除 6 个 C++ `render_window` 与 `render_speaker_pcm`（`backend` / `offline`）；
+- C2：`RenderService::render` 改为 C++ 循环壳，驱动 Rust 分步状态机（`render`）；编码器、FLAC / Matroska / MP4 元数据、打包器探测与 Apple 后端作为岛请求，由 C++ 执行；
+- D：`mr_adm_phase2_render` 改为 `mradm-ffi` example。
+
+除 [5.2 发布说明](RUST_ORCHESTRATION_OFFLINE.md#发布说明) 列出的例外外，文字、context、日志、进度事件、取消点与输出逐项不变。
+例外包括 Windows 显示路径改为 UTF-8、非 UTF-8 或含 NUL 的路径提前拒绝、策略文件按二进制读取，以及一致性工具的选项与夹具名解析差异。
+
+各批的本机对照都是 0 差异，例如：
+- C2：进度探针 2,997 例与 10 组 CLI 对照；
+- D：在同一构建上，`compare-collections` 比较 C++ 工具与 Rust 工具的两份采集，291 个输出与 656 份日志相同。
+
+六次合并后的三平台 Consistency 都通过。最后一次是 41455133059（`af322c5`），config A、B 的普通与诊断四份报告都是 291 个 PCM id 相同、门禁失败 0。
+
+生产 C/C++ 32,551 → 29,805 行。见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
