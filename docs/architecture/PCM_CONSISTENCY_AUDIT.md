@@ -522,7 +522,8 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 - C2：`RenderService::render` 改为 C++ 循环壳，驱动 Rust 分步状态机（`render`）；编码器、FLAC / Matroska / MP4 元数据、打包器探测与 Apple 后端作为岛请求，由 C++ 执行；
 - D：`mr_adm_phase2_render` 改为 `mradm-ffi` example。
 
-文字、context、日志、进度事件、取消点与输出逐项不变，有意的差别只在路径：Windows 上的显示路径改为 UTF-8，非 UTF-8 或含 NUL 的路径在请求开始时即被拒绝。
+除 [5.2 发布说明](RUST_ORCHESTRATION_OFFLINE.md#发布说明) 列出的例外外，文字、context、日志、进度事件、取消点与输出逐项不变。
+例外包括 Windows 显示路径改为 UTF-8、非 UTF-8 或含 NUL 的路径提前拒绝、策略文件按二进制读取，以及一致性工具的选项与夹具名解析差异。
 
 各批的本机对照都是 0 差异，例如：
 - C2：进度探针 2,997 例与 10 组 CLI 对照；
