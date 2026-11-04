@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 152,
-      "lines": 29805
+      "files": 150,
+      "lines": 29408
     },
     "islands": {
       "files": 5,
@@ -22,8 +22,8 @@
       "lines": 12022
     },
     "rust": {
-      "files": 294,
-      "lines": 109346
+      "files": 298,
+      "lines": 109634
     },
     "rust-vendor": {
       "files": 175,
@@ -35,8 +35,8 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40297,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 9116,
-    "rust/crates/mradm-ffi": 20748,
+    "rust/crates/mradm-engine": 9821,
+    "rust/crates/mradm-ffi": 20331,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
@@ -60,13 +60,13 @@
     "src/adm_io": 381,
     "src/adm_metadata": 744,
     "src/adm_realtime": 5437,
-    "src/adm_render_binaural": 404,
+    "src/adm_render_binaural": 278,
     "src/adm_render_common": 3802,
     "src/adm_render_ear": 55,
-    "src/adm_render_hoa": 59,
-    "src/adm_render_room": 417,
+    "src/adm_render_hoa": 56,
+    "src/adm_render_room": 305,
     "src/adm_render_room/cuda": 512,
-    "src/adm_render_triple_balance": 257,
+    "src/adm_render_triple_balance": 101,
     "src/adm_render_vbap": 94,
     "src/adm_renderer_factory": 230,
     "src/adm_windows": 709,

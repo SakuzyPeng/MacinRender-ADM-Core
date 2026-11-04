@@ -501,7 +501,10 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 | 5.5 | Monitor 与实时调度 | `MonitorEngine`、`monitor_session`、ring buffer、downmix、立体声峰值保护、OSC 头追踪的 UDP 收发与快照、设备调度与 Windows room worker 等待迁入 Rust；miniaudio 留作 C 岛，Apple / Windows 系统空间 sink 经窄 C 接口。设备回调的分配计数约束保留。 |
 | 5.6 | 删除适配壳 | 删除 C++ `AdmScene`、`IRenderer` / `IRenderStream` / `ILiveSceneRenderer` 适配壳、`src/adm_render_common` 的剩余薄包装与失去调用者的私有 FFI 头；Apple 岛改经窄 C 接口取用 Rust 的路由与预处理。 |
 | 5.7 | room 默认 ramp | 有意的数值变化：room 离线与文件流式的默认 ramp 由 `default_interp_ms × 48` 改为按采样率换算，96 kHz room 的 PCM 改变，单独成片。 |
-| 5.8 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收、Release Build 与 Reference tests，记录规模变化，准备六期；保留已有 Linux 证据，不再安排 Linux 主机验证。 |
+| 5.8 | 一致性工具与命名清理 | 把按迁移期次或实现语言命名的部分改为按功能命名：一致性采集脚本与工具（`run-rust-phase2.py`、`phase2_common.py`、`compare-rust-phase2.py`、`phase2-gates.json`、build stamp、`mr_adm_phase2_{render,scene,stream,kernels}`、`examples/phase2/`、`tests/tools/phase2_*`、`phase2_tools_test.py`、`tests/fixtures/room/phase2/`，以及对应的 CMake 目标与 CI 步骤）统一改用 consistency 命名；C++ 剩余的 `Rust*` 包装（`RustWavReader`、`RustOutputWriter`、`live_rust_renderer` 等）与 `*_rust_tests` 测试目标按功能改名；生产源码注释中的切片编号（如“PCM consistency 5.2 C1”）改写为功能描述，追溯留在迁移记录与 git 历史；过时的阶段注释（`include/adm/render.h` 的 Phase 2a / 2b、GUI 头追踪的 Phase 2）删除。PCM、检查点名、错误文字与日志不变；已有记录、`RUST_PHASE2_*.md` 与 `evidence/` 保持原名，只在新文档里写新名字；改名前后在同一构建上采集，逐项相同后才删除旧名，维护者本机脚本同步更新。放在 5.6 删除适配壳之后，多数 `Rust*` 包装届时已随壳删除。 |
+| 5.9 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收、Release Build 与 Reference tests，记录规模变化，准备六期；保留已有 Linux 证据，不再安排 Linux 主机验证。 |
+
+5.8 于 5.3 A 之后加入（用户 2026-11-04 决定：期次与实现语言不再出现在工具、目标与源码注释的命名中），原 5.8 两平台验收顺延为 5.9。
 
 排序依据：
 - 离线编排最先：它是另外几条驱动面共用的导入、策略与后端选择入口。

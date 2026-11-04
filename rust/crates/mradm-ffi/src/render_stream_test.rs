@@ -1,7 +1,9 @@
 //! Control queries must remain independent of an exclusive worker borrow, including under Miri.
 use super::test_common as common;
 
+use super::stream_ffi::{EngineStream, mradm_engine_stream_destroy, mradm_engine_stream_validate};
 use super::*;
+use mradm_engine::stream::{Body, Validator};
 use mradm_render::triple_balance;
 use std::sync::{
     Barrier,
@@ -11,7 +13,7 @@ use std::sync::{
 const FRAMES: usize = 4096;
 
 struct TestStream {
-    handle: *mut RenderTripleBalanceStream,
+    handle: *mut EngineStream,
     _input: common::Temp,
 }
 
@@ -65,7 +67,10 @@ impl TestStream {
         let stream =
             triple_balance_stream::Stream::open(input.path(), source.clone(), 5, 0).unwrap();
         Self {
-            handle: Box::into_raw(Box::new(RenderTripleBalanceStream { source, stream })),
+            handle: Box::into_raw(Box::new(EngineStream::new(
+                Validator::TripleBalance(source),
+                Body::TripleBalance(Box::new(stream)),
+            ))),
             _input: input,
         }
     }
@@ -74,11 +79,11 @@ impl TestStream {
 impl Drop for TestStream {
     fn drop(&mut self) {
         // All worker and control calls have returned before the owning test drops this handle.
-        unsafe { mradm_render_triple_balance_stream_destroy(self.handle) };
+        unsafe { mradm_engine_stream_destroy(self.handle) };
     }
 }
 
-fn check_control(handle: *const RenderTripleBalanceStream) {
+fn check_control(handle: *const EngineStream) {
     let mut edit = RenderLiveOverride {
         base: RenderOverride {
             object_id: Text::bytes(b"AO_1001"),
@@ -100,7 +105,7 @@ fn check_control(handle: *const RenderTripleBalanceStream) {
     for expected in [0, 2] {
         let (mut message_len, mut context_len) = (message.len(), context.len());
         let code = unsafe {
-            mradm_render_triple_balance_stream_validate(
+            mradm_engine_stream_validate(
                 handle,
                 &edit,
                 1,
@@ -122,22 +127,17 @@ fn check_control(handle: *const RenderTripleBalanceStream) {
         }
         edit.extent_height_scale = 2.;
     }
-    assert_eq!(
-        unsafe { mradm_render_triple_balance_stream_requires_preroll(handle) },
-        1
-    );
 }
 
-fn render_seeks(worker: &mut triple_balance_stream::Stream) -> Vec<u32> {
+fn render_seeks(worker: &mut Body) -> Vec<u32> {
     let mut bits = Vec::new();
     for start in [0, 1023, 2049, 17] {
-        let mut pending = worker.seek_begin(start).unwrap();
+        let mut pending = worker.seek_begin(start, false).unwrap();
         while pending {
-            pending = worker.seek_step().unwrap();
+            pending = worker.seek_step(false).unwrap();
         }
-        worker.seek_finish().unwrap();
         for frames in [7, 333, 512] {
-            let mut output = vec![0.; frames * worker.outputs()];
+            let mut output = vec![0.; frames * 16]; // 9.1.6
             assert_eq!(worker.process(&mut output, frames).unwrap(), frames);
             bits.extend(output.into_iter().map(f32::to_bits));
         }
@@ -148,12 +148,9 @@ fn render_seeks(worker: &mut triple_balance_stream::Stream) -> Vec<u32> {
 #[test]
 fn control_queries_do_not_borrow_worker_state() {
     let fixture = TestStream::new();
-    let worker = unsafe { tb_stream(fixture.handle) }.unwrap();
+    let worker = unsafe { super::stream_ffi::body(fixture.handle) }.unwrap();
     let reference = render_seeks(worker);
-    fn query_with_worker(
-        worker: &mut triple_balance_stream::Stream,
-        handle: *const RenderTripleBalanceStream,
-    ) -> Vec<u32> {
+    fn query_with_worker(worker: &mut Body, handle: *const EngineStream) -> Vec<u32> {
         // This function's &mut parameter stays protected across the control query.
         // Miri rejects a query that borrows the enclosing handle or worker state.
         check_control(handle);
@@ -165,7 +162,7 @@ fn control_queries_do_not_borrow_worker_state() {
 #[test]
 fn concurrent_control_queries_preserve_seek_pcm() {
     let fixture = TestStream::new();
-    let worker = unsafe { tb_stream(fixture.handle) }.unwrap();
+    let worker = unsafe { super::stream_ffi::body(fixture.handle) }.unwrap();
     let reference = render_seeks(worker);
     let handle = AtomicPtr::new(fixture.handle);
     let start = Barrier::new(2);

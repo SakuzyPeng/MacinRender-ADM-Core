@@ -8,7 +8,7 @@ use crate::room::{
 use mradm_dsp::room::quality::Quality;
 use mradm_dsp::room::screen::RoomScreens;
 use mradm_render::room_runtime::{Config, Control, Prepare};
-use mradm_render::room_stream::{FileStream, Live, validate_overrides};
+use mradm_render::room_stream::Live;
 
 /// `RoomConfig`: a profile handle, the UTF-8 personal HRIR path (empty for none), the scale and
 /// the quality (0 exact, 1 realtime).
@@ -66,7 +66,7 @@ pub(crate) fn switch() -> Prepare {
     Arc::new(prepare_switch)
 }
 
-fn control_handle(control: Control) -> *mut RenderRoomControl {
+pub(crate) fn control_handle(control: Control) -> *mut RenderRoomControl {
     Box::into_raw(Box::new(RenderRoomControl {
         control,
         message: Vec::new(),
@@ -155,189 +155,6 @@ pub unsafe extern "C" fn mradm_room_control_source(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_room_control_destroy(handle: *mut RenderRoomControl) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-/// The room file stream (`IRenderStream`). Validation may overlap worker calls; serialize all
-/// other calls and destroy after every call returns.
-pub struct RenderRoomStream(FileStream);
-
-unsafe fn room_stream<'a>(handle: *mut RenderRoomStream) -> offline::Result<&'a mut FileStream> {
-    unsafe { handle.as_mut() }
-        .map(|h| &mut h.0)
-        .ok_or_else(|| driver_error("无效流式渲染句柄"))
-}
-
-/// Opens the file stream of a room preparation (`mradm_engine_prepare`), seeked to 0.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_open(
-    prepared: *const RenderPrepared,
-    path: *const u8,
-    path_len: usize,
-    pose: *const f32,
-    output: *mut *mut RenderRoomStream,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let Some(out) = (unsafe { output.as_mut() }) else {
-            return Err(driver_error("无效流式渲染参数"));
-        };
-        *out = ptr::null_mut();
-        let Some(room) = unsafe { prepared.as_ref() }
-            .and_then(RenderPrepared::plan)
-            .and_then(|p| p.room.as_ref())
-        else {
-            return Err(driver_error("无效流式渲染参数"));
-        };
-        let pose = unsafe { input(pose, 3) }
-            .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?;
-        let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
-            code: e.code,
-            message: e.message,
-            location: offline::Location::Path,
-        })?;
-        let stream = FileStream::open(
-            path,
-            Arc::clone(&room.table),
-            Arc::clone(&room.resources),
-            room.config.clone(),
-            [pose[0], pose[1], pose[2]],
-            scope,
-            switch(),
-        )?;
-        *out = Box::into_raw(Box::new(RenderRoomStream(stream)));
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_process(
-    handle: *mut RenderRoomStream,
-    output: *mut f32,
-    output_len: usize,
-    frames: usize,
-    produced: *mut usize,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let out = unsafe { produced.as_mut() }.ok_or_else(|| driver_error("无效流式渲染输出"))?;
-        *out = 0;
-        let s = unsafe { room_stream(handle)? };
-        let buffer = unsafe { checked_output(output, output_len) }
-            .ok_or_else(|| driver_error("无效流式渲染输出"))?;
-        *out = s.process(buffer, frames)?;
-        Ok(())
-    })
-}
-
-/// `*pending` (set unless the call fails) is whether a history block remains to be stepped.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_seek_begin(
-    handle: *mut RenderRoomStream,
-    frame: u64,
-    pending: *mut u32,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let more = unsafe { room_stream(handle)? }.seek_begin(frame)?;
-        if let Some(p) = unsafe { pending.as_mut() } {
-            *p = u32::from(more);
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_seek_step(
-    handle: *mut RenderRoomStream,
-    pending: *mut u32,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let more = unsafe { room_stream(handle)? }.seek_step()?;
-        if let Some(p) = unsafe { pending.as_mut() } {
-            *p = u32::from(more);
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_validate_overrides(
-    values: *const RenderLiveOverride,
-    values_len: usize,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    boundary(
-        message,
-        message_len,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            // Validation depends only on the edits and the room boundary; no stream is borrowed.
-            let o = unsafe { live_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
-            validate_overrides(&o, scope).map_err(|(code, message)| Error {
-                code,
-                message: message.into_bytes(),
-                context: Vec::new(),
-            })
-        },
-    )
-}
-
-/// Latches a rejected update for the next `process`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_overrides(
-    handle: *mut RenderRoomStream,
-    values: *const RenderLiveOverride,
-    values_len: usize,
-) -> i32 {
-    driver_boundary(ptr::null_mut(), ptr::null_mut(), ptr::null_mut(), || {
-        let o = unsafe { live_overrides(values, values_len)? };
-        unsafe { room_stream(handle)? }.set_overrides(&o);
-        Ok(())
-    })
-}
-
-/// Latches a rejected orientation for the next `process`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_pose(
-    handle: *mut RenderRoomStream,
-    yaw: f32,
-    pitch: f32,
-    roll: f32,
-) {
-    if let Some(h) = unsafe { handle.as_mut() } {
-        h.0.set_pose([yaw, pitch, roll]);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_tail(handle: *const RenderRoomStream) -> u64 {
-    unsafe { handle.as_ref() }.map_or(0, |h| h.0.tail_frames())
-}
-
-/// A new control handle; null for a null stream.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_control(
-    handle: *const RenderRoomStream,
-) -> *mut RenderRoomControl {
-    unsafe { handle.as_ref() }.map_or(ptr::null_mut(), |h| control_handle(h.0.control()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_room_stream_destroy(handle: *mut RenderRoomStream) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
     }

@@ -299,7 +299,6 @@ target_sources(mr_adm_render_triple_balance
     PRIVATE
         src/adm_render_triple_balance/live_triple_balance_renderer.cpp
         src/adm_render_triple_balance/triple_balance_renderer.cpp
-        src/adm_render_triple_balance/triple_balance_stream.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
 )
 target_link_libraries(mr_adm_render_triple_balance
