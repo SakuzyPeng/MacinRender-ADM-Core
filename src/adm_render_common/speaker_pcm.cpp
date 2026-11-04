@@ -4,6 +4,9 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <stop_token>
+#include <string>
+#include <utility>
 
 #include "adm/audio_io.h"
 
@@ -78,16 +81,35 @@ MatrixRecords::MatrixRecords(const DirectSpeakersMatrix& matrix) {
 
 namespace {
 
-class FileStream final : public IRenderStream {
+[[nodiscard]] uint32_t numerical_spread(BinauralSpreadMode mode) noexcept {
+    switch (mode) {
+    case BinauralSpreadMode::none:
+        return 1U;
+    case BinauralSpreadMode::saf_spreader:
+        return 2U;
+    default:
+        return 0U;
+    }
+}
+
+// The file stream of every Rust backend (mradm-engine `stream`, PCM consistency 5.3 A): the open
+// checks, seek steps, their cancellation points and texts, live edits and validation run in Rust;
+// this side samples the stop token before every seek call and maps the error locators.
+class EngineStream final : public IRenderStream {
   public:
-    FileStream(MradmRenderStream* raw, const RenderPlan& plan, uint16_t outputs)
-        : handle_(raw, &mradm_render_stream_destroy), input_path_(plan.input_path), outputs_(outputs),
-          sample_rate_(plan.scene.info.sample_rate), output_layout_(plan.output_layout) {}
+    EngineStream(MradmEngineStream* raw,
+                 const MradmEngineStreamInfo& info,
+                 const RenderPlan& plan,
+                 std::shared_ptr<IRoomControl> control)
+        : handle_(raw, &mradm_engine_stream_destroy), control_(std::move(control)), input_path_(plan.input_path),
+          output_layout_(info.binaural != 0U ? std::string{"binaural"} : plan.output_layout),
+          outputs_(static_cast<uint32_t>(info.outputs)), sample_rate_(info.sample_rate),
+          requires_preroll_(info.requires_preroll != 0U) {}
 
     [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
         DriverError error;
         std::size_t produced = 0;
-        if (const auto code = mradm_render_stream_process(handle_.get(),
+        if (const auto code = mradm_engine_stream_process(handle_.get(),
                                                           out.data(),
                                                           out.size(),
                                                           frames,
@@ -101,54 +123,125 @@ class FileStream final : public IRenderStream {
         return produced;
     }
 
-    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+    [[nodiscard]] Result<void> seek(uint64_t frame) override { return seek_with_cancel(frame, {}); }
+    [[nodiscard]] bool seek_requires_preroll() const override { return requires_preroll_; }
+
+    [[nodiscard]] Result<void> seek_with_cancel(uint64_t frame, std::stop_token cancel) override {
         DriverError error;
-        if (const auto code =
-                mradm_render_stream_seek(handle_.get(), frame, error.location(), error.message(), error.message_len());
+        uint32_t pending = 0;
+        if (const auto code = mradm_engine_stream_seek_begin(handle_.get(),
+                                                             frame,
+                                                             cancel.stop_requested() ? 1U : 0U,
+                                                             &pending,
+                                                             error.location(),
+                                                             error.message(),
+                                                             error.message_len());
             code != 0) {
             return error.error(code, input_path_);
+        }
+        while (pending != 0U) {
+            if (const auto code = mradm_engine_stream_seek_step(handle_.get(),
+                                                                cancel.stop_requested() ? 1U : 0U,
+                                                                &pending,
+                                                                error.location(),
+                                                                error.message(),
+                                                                error.message_len());
+                code != 0) {
+                return error.error(code, input_path_);
+            }
+        }
+        return {};
+    }
+
+    [[nodiscard]] Result<void> validate_overrides(const LiveOverrides& overrides) const override {
+        const auto records = live_override_records(overrides);
+        std::string message(512, '\0');
+        std::string context(512, '\0');
+        for (const auto& item : overrides.objects) {
+            context.resize(std::max(context.size(), item.object_id.size() + 1));
+        }
+        auto message_len = message.size();
+        auto context_len = context.size();
+        if (const auto code = mradm_engine_stream_validate(handle_.get(),
+                                                           records.data(),
+                                                           records.size(),
+                                                           reinterpret_cast<uint8_t*>(message.data()),
+                                                           &message_len,
+                                                           reinterpret_cast<uint8_t*>(context.data()),
+                                                           &context_len);
+            code != 0) {
+            message.resize(message_len);
+            context.resize(context_len);
+            return make_error(static_cast<ErrorCode>(code), std::move(message), std::move(context));
         }
         return {};
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        const auto records = override_records(overrides);
-        if (mradm_render_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
+        const auto records = live_override_records(overrides);
+        if (mradm_engine_stream_overrides(handle_.get(), records.data(), records.size()) != 0) {
             std::terminate();
         }
     }
 
+    void set_listener_orientation(const ListenerOrientation& orientation) override {
+        mradm_engine_stream_pose(handle_.get(), orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg);
+    }
+
+    [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const override { return control_; }
+    [[nodiscard]] std::uint64_t appended_tail_frames() const override {
+        return mradm_engine_stream_tail(handle_.get());
+    }
     [[nodiscard]] uint32_t out_channels() const override { return outputs_; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
 
   private:
-    std::unique_ptr<MradmRenderStream, decltype(&mradm_render_stream_destroy)> handle_;
+    std::unique_ptr<MradmEngineStream, decltype(&mradm_engine_stream_destroy)> handle_;
+    std::shared_ptr<IRoomControl> control_;
     std::string input_path_;
-    uint16_t outputs_;
-    uint32_t sample_rate_;
     std::string output_layout_;
+    uint32_t outputs_;
+    uint32_t sample_rate_;
+    bool requires_preroll_;
 };
 
 } // namespace
 
-Result<std::unique_ptr<IRenderStream>> open_file_stream(const EnginePrepared& prepared, const RenderPlan& plan) {
+Result<std::unique_ptr<IRenderStream>>
+open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomControlAdopter room_control) {
+    const auto& info = plan.scene.info;
+    const auto& pose = plan.listener_orientation;
+    const MradmEngineStreamSettings settings{info.num_channels,
+                                             info.num_frames,
+                                             info.sample_rate,
+                                             plan.default_interp_ms,
+                                             plan.object_smoothing_frames,
+                                             numerical_spread(plan.binaural_spread_mode),
+                                             {pose.yaw_deg, pose.pitch_deg, pose.roll_deg}};
     const auto path = audio::wav_path_utf8(plan.input_path);
     DriverError error;
-    MradmRenderStream* raw = nullptr;
-    if (const auto code = mradm_render_stream_open(prepared.handle.get(),
+    MradmEngineStream* raw = nullptr;
+    MradmEngineStreamInfo stream_info{};
+    if (const auto code = mradm_engine_stream_open(prepared.handle.get(),
                                                    reinterpret_cast<const uint8_t*>(path.data()),
                                                    path.size(),
-                                                   plan.default_interp_ms,
-                                                   plan.object_smoothing_frames,
+                                                   &settings,
                                                    &raw,
+                                                   &stream_info,
                                                    error.location(),
                                                    error.message(),
                                                    error.message_len());
         code != 0) {
         return error.error(code, plan.input_path);
     }
-    return std::unique_ptr<IRenderStream>{std::make_unique<FileStream>(raw, plan, prepared.outputs)};
+    std::shared_ptr<IRoomControl> control;
+    if (room_control != nullptr) {
+        if (auto* handle = mradm_engine_stream_control(raw); handle != nullptr) {
+            control = room_control(handle);
+        }
+    }
+    return std::unique_ptr<IRenderStream>{std::make_unique<EngineStream>(raw, stream_info, plan, std::move(control))};
 }
 
 namespace {
@@ -247,11 +340,6 @@ prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, co
     if (code != 0) {
         return make_error(static_cast<ErrorCode>(code), string_of(view.status.message), string_of(view.status.context));
     }
-    prepared->outputs = static_cast<uint16_t>(view.outputs);
-    prepared->inputs = static_cast<uint16_t>(view.inputs);
-    prepared->sample_rate = view.sample_rate;
-    prepared->frames = plan.scene.info.num_frames;
-    prepared->mode = plan.triple_balance_mode;
     return prepared;
 }
 

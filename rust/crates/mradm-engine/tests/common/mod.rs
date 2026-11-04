@@ -1,5 +1,6 @@
 //! Test inputs shared by the engine tests: ADM BW64 scenes and plain WAVE channel beds.
 #![allow(dead_code)]
+pub mod backend;
 use mradm_json::Value;
 use mradm_wav::{Chna, ChnaEntry, Format, SampleFormat, Writer, WriterOptions};
 use std::fs::File;

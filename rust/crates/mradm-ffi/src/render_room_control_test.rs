@@ -1,10 +1,15 @@
 //! ROOM control queries stay independent of the worker and of the status message buffer.
 use super::super::test_common as common;
 
+use super::super::stream_ffi::{
+    EngineStream, body, mradm_engine_stream_destroy, mradm_engine_stream_validate,
+};
 use super::*;
 use mradm_dsp::room::loading;
+use mradm_engine::stream::{Body, Validator};
 use mradm_render::room;
 use mradm_render::room_runtime::Resources;
+use mradm_render::room_stream::FileStream;
 use std::mem::MaybeUninit;
 use std::sync::{
     Barrier,
@@ -12,7 +17,7 @@ use std::sync::{
 };
 
 struct Fixture {
-    stream: *mut RenderRoomStream,
+    stream: *mut EngineStream,
     control: *mut RenderRoomControl,
     profile: *mut RoomProfileHandle,
     _input: common::Temp,
@@ -84,7 +89,10 @@ impl Fixture {
         .unwrap();
         let control = control_handle(stream.control());
         Self {
-            stream: Box::into_raw(Box::new(RenderRoomStream(stream))),
+            stream: Box::into_raw(Box::new(EngineStream::new(
+                Validator::Room(scope),
+                Body::Room(Box::new(stream)),
+            ))),
             control,
             profile,
             _input: input,
@@ -97,13 +105,13 @@ impl Drop for Fixture {
         // Every scoped worker/control call has joined before destruction.
         unsafe {
             mradm_room_control_destroy(self.control);
-            mradm_render_room_stream_destroy(self.stream);
+            mradm_engine_stream_destroy(self.stream);
             crate::room::mradm_room_profile_destroy(self.profile);
         }
     }
 }
 
-fn validate() {
+fn validate(handle: *const EngineStream) {
     let mut edit = RenderLiveOverride {
         base: RenderOverride {
             object_id: Text::bytes(b"AO_1001"),
@@ -121,14 +129,24 @@ fn validate() {
         divergence_scale: 1.,
     };
     let mut message = [0u8; 128];
+    let mut context = [0u8; 16];
     for expected in [0, 1] {
-        let mut size = message.len();
+        let (mut size, mut context_len) = (message.len(), context.len());
         assert_eq!(
             unsafe {
-                mradm_render_room_validate_overrides(&edit, 1, message.as_mut_ptr(), &mut size)
+                mradm_engine_stream_validate(
+                    handle,
+                    &edit,
+                    1,
+                    message.as_mut_ptr(),
+                    &mut size,
+                    context.as_mut_ptr(),
+                    &mut context_len,
+                )
             },
             expected
         );
+        assert_eq!(context_len, 0);
         if expected == 0 {
             assert_eq!(size, 0);
         } else {
@@ -141,11 +159,11 @@ fn validate() {
     }
 }
 
-fn render_seeks(worker: &mut FileStream) -> Vec<u32> {
+fn render_seeks(worker: &mut Body) -> Vec<u32> {
     let mut bits = Vec::new();
     for start in [0, 1023, 2049, 17] {
-        if worker.seek_begin(start).unwrap() {
-            while worker.seek_step().unwrap() {}
+        if worker.seek_begin(start, false).unwrap() {
+            while worker.seek_step(false).unwrap() {}
         }
         for frames in [7, 333, 512] {
             let mut output = vec![0.; frames * 2];
@@ -159,14 +177,15 @@ fn render_seeks(worker: &mut FileStream) -> Vec<u32> {
 #[test]
 fn validation_can_overlap_worker_seeks_and_processing() {
     let fixture = Fixture::new();
-    let worker = unsafe { room_stream(fixture.stream) }.unwrap();
+    let worker = unsafe { body(fixture.stream) }.unwrap();
     let expected = render_seeks(worker);
+    let handle = AtomicPtr::new(fixture.stream);
     let start = Barrier::new(2);
     std::thread::scope(|threads| {
         threads.spawn(|| {
             start.wait();
             for _ in 0..64 {
-                validate();
+                validate(handle.load(Ordering::Relaxed));
                 std::thread::yield_now();
             }
         });

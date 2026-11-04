@@ -3,7 +3,6 @@
 #include "adm/render_triple_balance.h"
 
 #include "capability_records.h"
-#include "render_state.h"
 #include "speaker_pcm.h"
 
 namespace mradm {
@@ -14,7 +13,7 @@ using render_common::EngineBackend;
 // The compatibility copy of the scene, its report, the input checks and the numeric plan are
 // prepared in Rust (mradm-engine `backend`, mradm-render `triple_balance`, PCM consistency 4.6)
 // from the Rust render scene; offline windows, with the size and D-mode processors, render in the
-// engine and file streaming in mradm-render `triple_balance_stream`.
+// engine and file streaming in mradm-engine `stream` (mradm-render `triple_balance_stream`).
 class TripleBalanceRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return triple_balance_capabilities(); }
@@ -34,15 +33,11 @@ class TripleBalanceRenderer final : public IRenderer {
             return make_error(ErrorCode::unsupported,
                               "Triple Balance D mode currently supports offline rendering only");
         }
-        const auto* prepared = dynamic_cast<const triple_balance::Prepared*>(&state);
+        const auto* prepared = dynamic_cast<const render_common::EnginePrepared*>(&state);
         if (prepared == nullptr) {
             return make_error(ErrorCode::internal_error, "triple-balance: incompatible prepared state");
         }
-        if (prepared->mode != TripleBalanceMode::standard) {
-            return make_error(ErrorCode::unsupported,
-                              "Triple Balance D mode currently supports offline rendering only");
-        }
-        return triple_balance::open_stream(*prepared, plan);
+        return render_common::open_engine_stream(*prepared, plan);
     }
 };
 
