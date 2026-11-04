@@ -1,6 +1,6 @@
 // Rust mradm-render (PCM consistency 4.5): the DirectSpeakers, speaker-label and LFE routing
-// rules, the file streams over a backend preparation (mradm_engine_prepare, engine_ffi.h) and the
-// Scene stream renderers. Inputs are borrowed for the call; views live until the handle's next call
+// rules, the room control of a file stream (mradm_engine_stream_*, engine_ffi.h) and the Scene
+// stream renderers. Inputs are borrowed for the call; views live until the handle's next call
 // or destroy. Error buffers: capacity in *len, bytes written out,
 // NUL-terminated. Status values follow adm::ErrorCode.
 #pragma once
@@ -12,7 +12,6 @@ extern "C" {
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmRenderMatrix MradmRenderMatrix;
 typedef struct MradmRenderPrepared MradmRenderPrepared;
-typedef struct MradmRenderStream MradmRenderStream;
 
 typedef struct MradmRenderTarget {
     MradmAdmText label;
@@ -83,8 +82,6 @@ typedef struct MradmRenderLiveOverride {
     float diffuse_scale;
     float divergence_scale;
 } MradmRenderLiveOverride;
-
-typedef struct MradmRenderTripleBalanceStream MradmRenderTripleBalanceStream;
 
 // Scene stream VBAP and Triple Balance renderers (live_scene::ILiveSceneRenderer). Roles: 0 object,
 // 1 DirectSpeakers, 2 LFE; object_id is the semantic identity's AudioObject id, empty without one. A
@@ -194,8 +191,6 @@ typedef struct MradmRenderRoomStatus {
 } MradmRenderRoomStatus;
 // IRoomControl: concurrent requests/queries; serialize status calls through copying their message.
 typedef struct MradmRenderRoomControl MradmRenderRoomControl;
-// Room file stream (4.6 E): validation may overlap worker calls; serialize others and destroy after all calls return.
-typedef struct MradmRenderRoomStream MradmRenderRoomStream;
 // The binaural HRTF state (4.7): a view of name, rates and sizes, an owned filter-bank handle
 // (mradm_dsp_hrtf_filters_destroy) and the HRIRs and directions, valid while the handle lives.
 typedef struct MradmBinauralHrtfHandle MradmBinauralHrtfHandle;
@@ -218,15 +213,6 @@ typedef struct MradmRenderLiveBinauralRequest {
     uint32_t spread;
     uint32_t smoothing_frames;
 } MradmRenderLiveBinauralRequest;
-// A binaural file stream (4.7 C); spread 0 cloud, 1 none, 2 SAF spreader.
-typedef struct MradmRenderBinauralStream MradmRenderBinauralStream;
-typedef struct MradmRenderBinauralStreamSettings {
-    size_t inputs;
-    uint64_t frames;
-    uint32_t sample_rate;
-    uint32_t smoothing_frames;
-    uint32_t spread;
-} MradmRenderBinauralStreamSettings;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -278,78 +264,8 @@ int32_t mradm_render_lfe_routing(uint32_t split_power,
                                  size_t* message_len);
 float mradm_render_lfe_gain(const MradmRenderLfeRouting* routing, uint32_t input_target, uint32_t output_target);
 
-// Standard-mode file stream. Serialize process/seek/overrides; validate/requires_preroll may run concurrently.
-// Step seeks through begin/step/finish, checking cancellation while pending. Destroy after all calls return.
-int32_t mradm_render_triple_balance_stream_open(const MradmRenderPrepared* prepared,
-                                                const uint8_t* path,
-                                                size_t path_len,
-                                                uint32_t default_interp_ms,
-                                                MradmRenderTripleBalanceStream** output,
-                                                uint32_t* location,
-                                                uint8_t* message,
-                                                size_t* message_len);
-int32_t mradm_render_triple_balance_stream_process(MradmRenderTripleBalanceStream* handle,
-                                                   float* output,
-                                                   size_t output_len,
-                                                   size_t frames,
-                                                   size_t* produced,
-                                                   uint32_t* location,
-                                                   uint8_t* message,
-                                                   size_t* message_len);
-int32_t mradm_render_triple_balance_stream_seek_begin(MradmRenderTripleBalanceStream* handle,
-                                                      uint64_t frame,
-                                                      uint32_t* pending,
-                                                      uint32_t* location,
-                                                      uint8_t* message,
-                                                      size_t* message_len);
-int32_t mradm_render_triple_balance_stream_seek_step(MradmRenderTripleBalanceStream* handle,
-                                                     uint32_t* pending,
-                                                     uint32_t* location,
-                                                     uint8_t* message,
-                                                     size_t* message_len);
-int32_t mradm_render_triple_balance_stream_seek_finish(MradmRenderTripleBalanceStream* handle,
-                                                       uint32_t* location,
-                                                       uint8_t* message,
-                                                       size_t* message_len);
-int32_t mradm_render_triple_balance_stream_validate(const MradmRenderTripleBalanceStream* handle,
-                                                    const MradmRenderLiveOverride* values,
-                                                    size_t values_len,
-                                                    uint8_t* message,
-                                                    size_t* message_len,
-                                                    uint8_t* context,
-                                                    size_t* context_len);
-int32_t mradm_render_triple_balance_stream_overrides(MradmRenderTripleBalanceStream* handle,
-                                                     const MradmRenderLiveOverride* values,
-                                                     size_t values_len);
-// 1 when size tracks make a seek render from an earlier block.
-uint32_t mradm_render_triple_balance_stream_requires_preroll(const MradmRenderTripleBalanceStream* handle);
-void mradm_render_triple_balance_stream_destroy(MradmRenderTripleBalanceStream* handle);
 // A backend preparation (mradm_engine_prepare, engine_ffi.h).
 void mradm_render_prepared_destroy(MradmRenderPrepared* handle);
-// Stream errors set *location: 0 none, 1 path=<input>, 2 input=<input>, 3 meter, 4 HOA DSP,
-// 5 Triple Balance DSP, 6 room-binaural.
-int32_t mradm_render_stream_open(const MradmRenderPrepared* prepared,
-                                 const uint8_t* path,
-                                 size_t path_len,
-                                 uint32_t default_interp_ms,
-                                 uint64_t smoothing_frames,
-                                 MradmRenderStream** output,
-                                 uint32_t* location,
-                                 uint8_t* message,
-                                 size_t* message_len);
-int32_t mradm_render_stream_process(MradmRenderStream* handle,
-                                    float* output,
-                                    size_t output_len,
-                                    size_t frames,
-                                    size_t* produced,
-                                    uint32_t* location,
-                                    uint8_t* message,
-                                    size_t* message_len);
-int32_t mradm_render_stream_seek(
-    MradmRenderStream* handle, uint64_t frame, uint32_t* location, uint8_t* message, size_t* message_len);
-int32_t mradm_render_stream_overrides(MradmRenderStream* handle, const MradmRenderOverride* values, size_t values_len);
-void mradm_render_stream_destroy(MradmRenderStream* handle);
-
 int32_t mradm_room_control_request(const MradmRenderRoomControl* handle,
                                    const MradmRenderRoomConfig* config,
                                    uint64_t* revision,
@@ -360,46 +276,6 @@ int32_t mradm_room_control_request(const MradmRenderRoomControl* handle,
 void mradm_room_control_status(MradmRenderRoomControl* handle, MradmRenderRoomStatus* out);
 void mradm_room_control_source(const MradmRenderRoomControl* handle, uint64_t id, MradmRoomSourceInfo* out);
 void mradm_room_control_destroy(MradmRenderRoomControl* handle);
-
-// Opens the file stream of a room preparation, seeked to 0; pose is yaw, pitch, roll.
-int32_t mradm_render_room_stream_open(const MradmRenderPrepared* prepared,
-                                      const uint8_t* path,
-                                      size_t path_len,
-                                      const float* pose,
-                                      MradmRenderRoomStream** output,
-                                      uint32_t* location,
-                                      uint8_t* message,
-                                      size_t* message_len);
-int32_t mradm_render_room_stream_process(MradmRenderRoomStream* handle,
-                                         float* output,
-                                         size_t output_len,
-                                         size_t frames,
-                                         size_t* produced,
-                                         uint32_t* location,
-                                         uint8_t* message,
-                                         size_t* message_len);
-// *pending (set unless the call fails) is whether a history block remains to be stepped.
-int32_t mradm_render_room_stream_seek_begin(MradmRenderRoomStream* handle,
-                                            uint64_t frame,
-                                            uint32_t* pending,
-                                            uint32_t* location,
-                                            uint8_t* message,
-                                            size_t* message_len);
-int32_t mradm_render_room_stream_seek_step(
-    MradmRenderRoomStream* handle, uint32_t* pending, uint32_t* location, uint8_t* message, size_t* message_len);
-int32_t mradm_render_room_validate_overrides(const MradmRenderLiveOverride* values,
-                                             size_t values_len,
-                                             uint8_t* message,
-                                             size_t* message_len);
-// Latches a rejected update or orientation for the next process.
-int32_t mradm_render_room_stream_overrides(MradmRenderRoomStream* handle,
-                                           const MradmRenderLiveOverride* values,
-                                           size_t values_len);
-void mradm_render_room_stream_pose(MradmRenderRoomStream* handle, float yaw, float pitch, float roll);
-uint64_t mradm_render_room_stream_tail(const MradmRenderRoomStream* handle);
-// A new control handle; null for a null stream.
-MradmRenderRoomControl* mradm_render_room_stream_control(const MradmRenderRoomStream* handle);
-void mradm_render_room_stream_destroy(MradmRenderRoomStream* handle);
 
 int32_t mradm_render_live_vbap_create(const MradmRenderLiveVbapRequest* request,
                                       MradmRenderLive** output,
@@ -493,38 +369,6 @@ int32_t mradm_render_live_binaural_create(const MradmBinauralHrtfHandle* hrtf,
                                           MradmRenderLive** output,
                                           uint8_t* message,
                                           size_t* message_len);
-
-// Stream errors set *location as above. Every call but destroy runs on the worker;
-// *pending is whether a pre-roll block remains before the seek target.
-int32_t mradm_render_binaural_stream_open(const MradmRenderPrepared* prepared,
-                                          const uint8_t* path,
-                                          size_t path_len,
-                                          const MradmRenderBinauralStreamSettings* settings,
-                                          MradmRenderBinauralStream** output,
-                                          uint32_t* location,
-                                          uint8_t* message,
-                                          size_t* message_len);
-int32_t mradm_render_binaural_stream_process(MradmRenderBinauralStream* handle,
-                                             float* output,
-                                             size_t output_len,
-                                             size_t frames,
-                                             size_t* produced,
-                                             uint32_t* location,
-                                             uint8_t* message,
-                                             size_t* message_len);
-int32_t mradm_render_binaural_stream_seek_begin(MradmRenderBinauralStream* handle,
-                                                uint64_t frame,
-                                                uint32_t* pending,
-                                                uint32_t* location,
-                                                uint8_t* message,
-                                                size_t* message_len);
-int32_t mradm_render_binaural_stream_seek_step(
-    MradmRenderBinauralStream* handle, uint32_t* pending, uint32_t* location, uint8_t* message, size_t* message_len);
-int32_t mradm_render_binaural_stream_overrides(MradmRenderBinauralStream* handle,
-                                               const MradmRenderLiveOverride* values,
-                                               size_t values_len);
-void mradm_render_binaural_stream_pose(MradmRenderBinauralStream* handle, float yaw, float pitch, float roll);
-void mradm_render_binaural_stream_destroy(MradmRenderBinauralStream* handle);
 
 #ifdef __cplusplus
 }

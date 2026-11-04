@@ -6,7 +6,7 @@
 use crate::adm::Text;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
 use mradm_render::{
-    live, live_binaural, live_triple_balance, live_vbap, offline, stream, triple_balance_stream,
+    live, live_binaural, live_triple_balance, live_vbap, offline, triple_balance_stream,
 };
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -637,35 +637,6 @@ pub struct RenderLiveOverride {
     divergence_scale: f32,
 }
 
-/// Triple Balance file streaming: immutable control metadata and worker-owned DSP state.
-/// Only the worker may access `stream`; control queries borrow `source` independently.
-pub struct RenderTripleBalanceStream {
-    source: triple_balance_stream::Source,
-    stream: triple_balance_stream::Stream,
-}
-
-unsafe fn tb_stream<'a>(
-    handle: *mut RenderTripleBalanceStream,
-) -> offline::Result<&'a mut triple_balance_stream::Stream> {
-    if handle.is_null() {
-        return Err(driver_error("无效 Triple Balance 流句柄"));
-    }
-    // SAFETY: Mutating calls are serialized on the worker. Borrow only its field:
-    // an enclosing &mut handle would alias the control thread's immutable source.
-    Ok(unsafe { &mut (*handle).stream })
-}
-
-unsafe fn tb_stream_source<'a>(
-    handle: *const RenderTripleBalanceStream,
-) -> offline::Result<&'a triple_balance_stream::Source> {
-    if handle.is_null() {
-        return Err(driver_error("无效 Triple Balance 流句柄"));
-    }
-    // SAFETY: Source is immutable for the handle's lifetime. Do not borrow the enclosing
-    // handle, which also contains the stream the worker may currently be mutating.
-    Ok(unsafe { &(*handle).source })
-}
-
 unsafe fn live_overrides<'a>(
     values: *const RenderLiveOverride,
     values_len: usize,
@@ -690,267 +661,6 @@ unsafe fn live_overrides<'a>(
         .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))
 }
 
-/// Opens the input (UTF-8 path) for streaming a standard-mode Triple Balance preparation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_open(
-    prepared: *const RenderPrepared,
-    path: *const u8,
-    path_len: usize,
-    default_interp_ms: u32,
-    output: *mut *mut RenderTripleBalanceStream,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let (Some(out), Some(p)) = (
-            unsafe { output.as_mut() },
-            unsafe { prepared.as_ref() }.and_then(RenderPrepared::plan),
-        ) else {
-            return Err(driver_error("无效流式渲染参数"));
-        };
-        *out = ptr::null_mut();
-        let (Some(offline::Kernel::TripleBalance(plan)), Some(data)) =
-            (p.kernel.as_ref(), p.triple_balance.as_ref())
-        else {
-            return Err(driver_error("无效流式渲染参数"));
-        };
-        let (mix, session) = triple_balance_stream::Source::of(plan)
-            .ok_or_else(|| driver_error("无效流式渲染参数"))?;
-        let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
-            code: e.code,
-            message: e.message,
-            location: offline::Location::Path,
-        })?;
-        let (inputs, outputs, frames, sample_rate) = (p.inputs, p.outputs, p.frames, p.sample_rate);
-        let source = triple_balance_stream::Source {
-            mix,
-            session,
-            bindings: Arc::clone(&p.bindings),
-            size_tracks: Arc::clone(&data.sizes),
-            spread_none: data.spread_none,
-            inputs,
-            outputs,
-            frames,
-            sample_rate,
-        };
-        let s = triple_balance_stream::Stream::open(
-            path,
-            source.clone(),
-            default_interp_ms,
-            triple_balance_stream::DEFAULT_CHECKPOINT_BUDGET,
-        )?;
-        *out = Box::into_raw(Box::new(RenderTripleBalanceStream { source, stream: s }));
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_process(
-    handle: *mut RenderTripleBalanceStream,
-    output: *mut f32,
-    output_len: usize,
-    frames: usize,
-    produced: *mut usize,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let out = unsafe { produced.as_mut() }.ok_or_else(|| driver_error("无效流式渲染输出"))?;
-        *out = 0;
-        let s = unsafe { tb_stream(handle)? };
-        let buffer = unsafe { checked_output(output, output_len) }
-            .ok_or_else(|| driver_error("无效流式渲染输出"))?;
-        *out = s.process(buffer, frames)?;
-        Ok(())
-    })
-}
-
-/// `*pending` (set unless the call fails) is whether a block remains before `seek_finish`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_seek_begin(
-    handle: *mut RenderTripleBalanceStream,
-    frame: u64,
-    pending: *mut u32,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let more = unsafe { tb_stream(handle)? }.seek_begin(frame)?;
-        if let Some(p) = unsafe { pending.as_mut() } {
-            *p = u32::from(more);
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_seek_step(
-    handle: *mut RenderTripleBalanceStream,
-    pending: *mut u32,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let more = unsafe { tb_stream(handle)? }.seek_step()?;
-        if let Some(p) = unsafe { pending.as_mut() } {
-            *p = u32::from(more);
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_seek_finish(
-    handle: *mut RenderTripleBalanceStream,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        unsafe { tb_stream(handle)? }.seek_finish()
-    })
-}
-
-/// A rejection fills `message` and `context` (the object id) like the other boundaries.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_validate(
-    handle: *const RenderTripleBalanceStream,
-    values: *const RenderLiveOverride,
-    values_len: usize,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let source = unsafe { tb_stream_source(handle) }.map_err(|e| bad(&e.message))?;
-        let o = unsafe { live_overrides(values, values_len) }.map_err(|e| bad(&e.message))?;
-        source
-            .validate_overrides(&o)
-            .map_err(|(code, message, context)| Error {
-                code,
-                message: message.into_bytes(),
-                context,
-            })
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_overrides(
-    handle: *mut RenderTripleBalanceStream,
-    values: *const RenderLiveOverride,
-    values_len: usize,
-) -> i32 {
-    driver_boundary(ptr::null_mut(), ptr::null_mut(), ptr::null_mut(), || {
-        let o = unsafe { live_overrides(values, values_len)? };
-        unsafe { tb_stream(handle)? }.set_overrides(&o)
-    })
-}
-
-/// 1 when size tracks make a seek render from an earlier block.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_requires_preroll(
-    handle: *const RenderTripleBalanceStream,
-) -> u32 {
-    unsafe { tb_stream_source(handle) }.map_or(0, |s| u32::from(s.requires_preroll()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_triple_balance_stream_destroy(
-    handle: *mut RenderTripleBalanceStream,
-) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-/// File streaming over a prepared plan.
-pub struct RenderStream(stream::FileStream);
-
-/// Opens the input (UTF-8 path) for streaming the prepared plan.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_stream_open(
-    prepared: *const RenderPrepared,
-    path: *const u8,
-    path_len: usize,
-    default_interp_ms: u32,
-    smoothing_frames: u64,
-    output: *mut *mut RenderStream,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let (Some(out), Some(p)) = (
-            unsafe { output.as_mut() },
-            unsafe { prepared.as_ref() }.and_then(RenderPrepared::plan),
-        ) else {
-            return Err(driver_error("无效流式渲染参数"));
-        };
-        *out = ptr::null_mut();
-        let kernel = p
-            .kernel
-            .as_ref()
-            .ok_or_else(|| driver_error("无效流式渲染参数"))?;
-        let path = unsafe { crate::wav::path(path, path_len) }.map_err(|e| offline::Error {
-            code: e.code,
-            message: e.message,
-            location: offline::Location::Path,
-        })?;
-        let (inputs, outputs, frames, sample_rate) = (p.inputs, p.outputs, p.frames, p.sample_rate);
-        let s = stream::FileStream::open(
-            path,
-            kernel,
-            Arc::clone(&p.bindings),
-            stream::Settings {
-                inputs,
-                outputs,
-                frames,
-                sample_rate,
-                default_interp_ms,
-                smoothing_frames,
-            },
-        )?;
-        *out = Box::into_raw(Box::new(RenderStream(s)));
-        Ok(())
-    })
-}
-
-unsafe fn file_stream<'a>(
-    handle: *mut RenderStream,
-) -> offline::Result<&'a mut stream::FileStream> {
-    unsafe { handle.as_mut() }
-        .map(|h| &mut h.0)
-        .ok_or_else(|| driver_error("无效流式渲染句柄"))
-}
-
-/// Fills up to `frames` interleaved frames of `output`; `*produced` is less only at the end.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_stream_process(
-    handle: *mut RenderStream,
-    output: *mut f32,
-    output_len: usize,
-    frames: usize,
-    produced: *mut usize,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        let out = unsafe { produced.as_mut() }.ok_or_else(|| driver_error("无效流式渲染输出"))?;
-        *out = 0;
-        let s = unsafe { file_stream(handle)? };
-        let buffer = unsafe { checked_output(output, output_len) }
-            .ok_or_else(|| driver_error("无效流式渲染输出"))?;
-        *out = s.process(buffer, frames)?;
-        Ok(())
-    })
-}
-
 unsafe fn checked_output<'a>(data: *mut f32, len: usize) -> Option<&'a mut [f32]> {
     if len == 0 {
         return Some(&mut []);
@@ -962,46 +672,6 @@ unsafe fn checked_output<'a>(data: *mut f32, len: usize) -> Option<&'a mut [f32]
         return None;
     }
     Some(unsafe { slice::from_raw_parts_mut(data, len) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_stream_seek(
-    handle: *mut RenderStream,
-    frame: u64,
-    location: *mut u32,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    driver_boundary(location, message, message_len, || {
-        unsafe { file_stream(handle)? }.seek(frame)
-    })
-}
-
-/// Replaces the live overrides; nonzero for invalid input or a nonfinite gain.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_stream_overrides(
-    handle: *mut RenderStream,
-    values: *const RenderOverride,
-    values_len: usize,
-) -> i32 {
-    driver_boundary(ptr::null_mut(), ptr::null_mut(), ptr::null_mut(), || {
-        let o = unsafe { input(values, values_len) }
-            .and_then(|values| {
-                values
-                    .iter()
-                    .map(|o| unsafe { override_value(o) })
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .map_err(|e| driver_error(&String::from_utf8_lossy(&e.message)))?;
-        unsafe { file_stream(handle)? }.set_overrides(&o)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_stream_destroy(handle: *mut RenderStream) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
 }
 
 /// The Scene stream VBAP renderer's configuration (`live_scene::RendererConfig`).
@@ -1598,6 +1268,9 @@ pub(crate) mod room_ffi;
 
 #[path = "render_binaural.rs"]
 mod binaural_ffi;
+
+#[path = "render_stream.rs"]
+mod stream_ffi;
 
 #[cfg(test)]
 #[path = "../../mradm-render/tests/common/mod.rs"]

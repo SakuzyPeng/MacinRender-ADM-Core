@@ -15,7 +15,7 @@ using render_common::EnginePrepared;
 
 // The layout lookup, routing, gain plan and live-control bindings are prepared in Rust
 // (mradm-engine `backend`, mradm-render `vbap`); offline windows render in the engine and file
-// streaming in mradm-render `stream`.
+// streaming in mradm-engine `stream`.
 class VbapRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return vbap_capabilities(); }
@@ -36,7 +36,7 @@ class VbapRenderer final : public IRenderer {
             return make_error(
                 ErrorCode::internal_error, "saf-vbap: open_stream received an incompatible prepared state", {});
         }
-        return render_common::open_file_stream(*prepared, plan);
+        return render_common::open_engine_stream(*prepared, plan);
     }
 };
 

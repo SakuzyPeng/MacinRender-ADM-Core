@@ -14,8 +14,8 @@ using render_common::EngineBackend;
 using render_common::EnginePrepared;
 
 // The encoder plan and its live-control bindings are prepared in Rust (mradm-engine `backend`,
-// mradm-render `hoa`); offline windows render in the engine and file streaming in mradm-render
-// `stream`. The prepared plan keeps the input format it was prepared for.
+// mradm-render `hoa`); offline windows render in the engine and file streaming in mradm-engine
+// `stream`, which checks the input format the plan was prepared for.
 class HoaRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return hoa_capabilities(); }
@@ -39,10 +39,7 @@ class HoaRenderer final : public IRenderer {
             return make_error(
                 ErrorCode::internal_error, "hoa-encode: open_stream received an incompatible prepared state", {});
         }
-        if (plan.scene.info.num_channels != prepared->inputs || plan.scene.info.sample_rate != prepared->sample_rate) {
-            return make_error(ErrorCode::invalid_argument, "HOA prepared/input format mismatch");
-        }
-        return render_common::open_file_stream(*prepared, plan);
+        return render_common::open_engine_stream(*prepared, plan);
     }
 };
 
