@@ -48,16 +48,11 @@ struct MatrixRecords {
 };
 
 // A Rust backend preparation (mradm-engine `backend`, PCM consistency 5.2 C1): immutable and reused
-// across offline windows and file streams (PreviewSession scrubbing). It keeps the plan's input
-// format and the Triple Balance mode for the stream checks.
+// across offline windows and file streams (PreviewSession scrubbing). The Rust preparation keeps
+// the input format the stream checks compare (5.3 A).
 struct EnginePrepared final : IPreparedRender {
     std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
         nullptr, &mradm_render_prepared_destroy};
-    uint16_t outputs{0};
-    uint16_t inputs{0};
-    uint32_t sample_rate{0};
-    uint64_t frames{0};
-    TripleBalanceMode mode{TripleBalanceMode::standard};
 };
 
 // A screen as the Rust room record.
@@ -75,11 +70,13 @@ prepare_backend(EngineBackend backend, const RenderPlan& plan, LogSink& logs, co
 [[nodiscard]] Result<RenderMetrics>
 render_offline(const IPreparedRender& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs);
 
-// File streaming over a loudspeaker preparation (mradm-render `stream`): the offline block size and
-// renderer into a FIFO, so a gap-free run from frame 0 is bit-identical to the offline render. Live
-// gain pre-scales each input channel by its object's (or speaker label's) override; topology
-// scales (diffuse / extent / divergence) are ignored.
-[[nodiscard]] Result<std::unique_ptr<IRenderStream>> open_file_stream(const EnginePrepared& prepared,
-                                                                      const RenderPlan& plan);
+// Adopts a room control handle (the room backend's IRoomControl shell).
+using RoomControlAdopter = std::shared_ptr<IRoomControl> (*)(MradmRenderRoomControl*);
+
+// The file stream of a Rust backend preparation (mradm-engine `stream`, PCM consistency 5.3 A):
+// the backend's open checks, the FIFO, seek steps and their cancellation, live edits and their
+// validation run in Rust. `room_control` adopts a room stream's control handle.
+[[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomControlAdopter room_control = nullptr);
 
 } // namespace mradm::render_common

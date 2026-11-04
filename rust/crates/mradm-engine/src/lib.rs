@@ -12,4 +12,5 @@ pub mod offline;
 pub mod render;
 pub mod request;
 pub mod scene_json;
+pub mod stream;
 pub mod tables;

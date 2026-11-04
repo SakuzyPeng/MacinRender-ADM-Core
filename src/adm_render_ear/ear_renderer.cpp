@@ -15,7 +15,7 @@ using render_common::EnginePrepared;
 
 // The EAR layout, gain plan, decorrelation filters and live-control bindings are prepared in Rust
 // (mradm-engine `backend`, mradm-render `ear`); offline windows render in the engine and file
-// streaming in mradm-render `stream`.
+// streaming in mradm-engine `stream`.
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return ear_capabilities(); }
@@ -38,7 +38,7 @@ class EarRenderer final : public IRenderer {
             return make_error(
                 ErrorCode::internal_error, "ear: open_stream received an incompatible prepared state", {});
         }
-        return render_common::open_file_stream(*prepared, plan);
+        return render_common::open_engine_stream(*prepared, plan);
     }
 };
 

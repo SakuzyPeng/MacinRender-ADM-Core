@@ -249,6 +249,77 @@ int32_t mradm_engine_offline_next(MradmEngineOffline* handle,
                                   MradmEngineStatus* status);
 void mradm_engine_offline_destroy(MradmEngineOffline* handle);
 
+// ── File streaming (5.3 A) ─────────────────────────────────────────────────────────────────────
+// One stream for every Rust backend. validate may overlap the worker; serialize the other calls
+// and destroy after all return. Errors set *location: 0 none, 1 path=<input>, 2 input=<input>,
+// 3 meter, 4 HOA DSP, 5 Triple Balance DSP, 6 room-binaural.
+typedef struct MradmEngineStream MradmEngineStream;
+
+// RenderPlan's input format and controls; spread 0 cloud, 1 none, 2 SAF spreader.
+typedef struct MradmEngineStreamSettings {
+    size_t channels;
+    uint64_t frames;
+    uint32_t sample_rate;
+    uint32_t default_interp_ms;
+    uint32_t smoothing_frames;
+    uint32_t spread;
+    float pose[3];
+} MradmEngineStreamSettings;
+
+// binaural: the output layout is "binaural" rather than the plan's.
+typedef struct MradmEngineStreamInfo {
+    size_t outputs;
+    uint32_t sample_rate;
+    uint32_t binaural;
+    uint32_t requires_preroll;
+} MradmEngineStreamInfo;
+
+int32_t mradm_engine_stream_open(const MradmRenderPrepared* prepared,
+                                 const uint8_t* path,
+                                 size_t path_len,
+                                 const MradmEngineStreamSettings* settings,
+                                 MradmEngineStream** output,
+                                 MradmEngineStreamInfo* info,
+                                 uint32_t* location,
+                                 uint8_t* message,
+                                 size_t* message_len);
+int32_t mradm_engine_stream_process(MradmEngineStream* handle,
+                                    float* output,
+                                    size_t output_len,
+                                    size_t frames,
+                                    size_t* produced,
+                                    uint32_t* location,
+                                    uint8_t* message,
+                                    size_t* message_len);
+// cancelled is the stop token sampled before the call; *pending asks for another seek_step.
+int32_t mradm_engine_stream_seek_begin(MradmEngineStream* handle,
+                                       uint64_t frame,
+                                       uint32_t cancelled,
+                                       uint32_t* pending,
+                                       uint32_t* location,
+                                       uint8_t* message,
+                                       size_t* message_len);
+int32_t mradm_engine_stream_seek_step(MradmEngineStream* handle,
+                                      uint32_t cancelled,
+                                      uint32_t* pending,
+                                      uint32_t* location,
+                                      uint8_t* message,
+                                      size_t* message_len);
+int32_t mradm_engine_stream_validate(const MradmEngineStream* handle,
+                                     const MradmRenderLiveOverride* values,
+                                     size_t values_len,
+                                     uint8_t* message,
+                                     size_t* message_len,
+                                     uint8_t* context,
+                                     size_t* context_len);
+int32_t
+mradm_engine_stream_overrides(MradmEngineStream* handle, const MradmRenderLiveOverride* values, size_t values_len);
+void mradm_engine_stream_pose(MradmEngineStream* handle, float yaw, float pitch, float roll);
+uint64_t mradm_engine_stream_tail(const MradmEngineStream* handle);
+// A new room control handle; null for another backend.
+MradmRenderRoomControl* mradm_engine_stream_control(const MradmEngineStream* handle);
+void mradm_engine_stream_destroy(MradmEngineStream* handle);
+
 // ── The offline render service (5.2 C2) ───────────────────────────────────────────────────────
 
 // A path's UTF-8 text and its spelling in messages.
