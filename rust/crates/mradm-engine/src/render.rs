@@ -834,7 +834,78 @@ fn channel_count(caps: &Backend, layout: &str) -> Option<u16> {
         .map(|l| l.channel_count)
 }
 
-fn kind_of(backend: Selection) -> Option<Kind> {
+/// A resolved DirectSpeakers matrix as the backends' borrowed routing records.
+pub(crate) fn matrix_routes(
+    matrix: Option<&direct_matrix::Matrix>,
+) -> Vec<mradm_render::routing::MatrixRoute<'_>> {
+    matrix
+        .map(|m| {
+            m.routes
+                .iter()
+                .map(|r| mradm_render::routing::MatrixRoute {
+                    source_label: r.source_label.as_bytes(),
+                    mute: r.mute,
+                    targets: r
+                        .targets
+                        .iter()
+                        .map(|t| (t.label.as_bytes(), t.gain))
+                        .collect(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The backend preparation request of `r` (`RenderPlan`) for the resolved backend and layout.
+pub(crate) fn backend_request<'a>(
+    r: &'a Request,
+    kind: Kind,
+    layout: &'a str,
+    matrix: Option<&'a [mradm_render::routing::MatrixRoute<'a>]>,
+) -> backend::Request<'a> {
+    let sofa = r.sofa.as_ref().map(|s| backend::Sofa {
+        path: s.path.utf8.as_bytes(),
+        file_name: &s.file_name,
+    });
+    backend::Request {
+        kind,
+        layout_id: layout.as_bytes(),
+        apple_geometry: r.apple_geometry,
+        routing: match r.routing {
+            1 => Routing::Label,
+            2 => Routing::Position,
+            3 => Routing::Matrix,
+            _ => Routing::Automatic,
+        },
+        matrix,
+        speaker_spread: match r.speaker_spread {
+            1 => SpeakerSpread::None,
+            2 => SpeakerSpread::Mdap,
+            _ => SpeakerSpread::Automatic,
+        },
+        binaural_spread: match r.binaural_spread {
+            1 => BinauralSpreadMode::None,
+            2 => BinauralSpreadMode::Cloud,
+            3 => BinauralSpreadMode::SafSpreader,
+            _ => BinauralSpreadMode::Automatic,
+        },
+        triple_balance_d: r.triple_balance_mode == 1,
+        split_power: r.split_power,
+        smoothing_frames: r.object_smoothing_frames,
+        default_interp_ms: r.default_interp_ms,
+        input_path: r.input.display.as_bytes(),
+        sofa,
+        screens: r.screens,
+        room: backend::RoomRequest {
+            package: r.room.package.clone(),
+            hrir: &r.room.hrir,
+            metres: r.room.metres,
+            quality: r.room.quality,
+        },
+    }
+}
+
+pub(crate) fn kind_of(backend: Selection) -> Option<Kind> {
     Some(match backend {
         Selection::Ear => Kind::Ear,
         Selection::Saf => Kind::Vbap,
@@ -1754,65 +1825,9 @@ impl Render {
         let Some(kind) = kind_of(self.backend) else {
             return self.fail(Error::new(6, "unknown backend", ""), Level::Error);
         };
-        let routes: Vec<mradm_render::routing::MatrixRoute> = self
-            .matrix
-            .as_ref()
-            .map(|m| {
-                m.routes
-                    .iter()
-                    .map(|r| mradm_render::routing::MatrixRoute {
-                        source_label: r.source_label.as_bytes(),
-                        mute: r.mute,
-                        targets: r
-                            .targets
-                            .iter()
-                            .map(|t| (t.label.as_bytes(), t.gain))
-                            .collect(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let r = &self.r;
-        let sofa = r.sofa.as_ref().map(|s| backend::Sofa {
-            path: s.path.utf8.as_bytes(),
-            file_name: &s.file_name,
-        });
-        let request = backend::Request {
-            kind,
-            layout_id: self.layout.as_bytes(),
-            apple_geometry: r.apple_geometry,
-            routing: match r.routing {
-                1 => Routing::Label,
-                2 => Routing::Position,
-                3 => Routing::Matrix,
-                _ => Routing::Automatic,
-            },
-            matrix: self.matrix.as_ref().map(|_| &routes[..]),
-            speaker_spread: match r.speaker_spread {
-                1 => SpeakerSpread::None,
-                2 => SpeakerSpread::Mdap,
-                _ => SpeakerSpread::Automatic,
-            },
-            binaural_spread: match r.binaural_spread {
-                1 => BinauralSpreadMode::None,
-                2 => BinauralSpreadMode::Cloud,
-                3 => BinauralSpreadMode::SafSpreader,
-                _ => BinauralSpreadMode::Automatic,
-            },
-            triple_balance_d: r.triple_balance_mode == 1,
-            split_power: r.split_power,
-            smoothing_frames: r.object_smoothing_frames,
-            default_interp_ms: r.default_interp_ms,
-            input_path: r.input.display.as_bytes(),
-            sofa,
-            screens: r.screens,
-            room: backend::RoomRequest {
-                package: r.room.package.clone(),
-                hrir: &r.room.hrir,
-                metres: r.room.metres,
-                quality: r.room.quality,
-            },
-        };
+        let routes = matrix_routes(self.matrix.as_ref());
+        let matrix = self.matrix.as_ref().map(|_| &routes[..]);
+        let request = backend_request(&self.r, kind, &self.layout, matrix);
         let preparation = backend::prepare(self.scene.as_ref().expect("imported"), &request, host);
         self.push_logs(preparation.outcome.logs, kind.module());
         match preparation.outcome.result {

@@ -12,7 +12,6 @@
 #include "adm/scene.h"
 
 #include "render_common.h"
-#include "renderer_factory.h"
 
 namespace {
 
@@ -243,46 +242,11 @@ bool verify_target_and_source_resolution() {
     return ok;
 }
 
-bool verify_renderer_scope() {
-    using mradm::DirectSpeakersRoutingMode;
-    using mradm::RendererSelection;
-
-    bool ok = true;
-    for (const auto backend : {RendererSelection::ear, RendererSelection::saf, RendererSelection::apple}) {
-        const auto accepted =
-            mradm::validate_direct_speakers_routing(backend, "0+5+0", DirectSpeakersRoutingMode::matrix);
-        ok &= check(accepted.has_value(), "matrix is accepted on a speaker backend in scope");
-    }
-    for (const auto backend : {RendererSelection::ear, RendererSelection::saf}) {
-        const auto accepted =
-            mradm::validate_direct_speakers_routing(backend, "0+2+0", DirectSpeakersRoutingMode::matrix);
-        ok &= check(accepted.has_value(), "matrix accepts the internal two-channel EAR/SAF speaker layout");
-    }
-    for (const auto backend : {RendererSelection::hoa, RendererSelection::saf_binaural}) {
-        const auto rejected =
-            mradm::validate_direct_speakers_routing(backend, "binaural", DirectSpeakersRoutingMode::matrix);
-        ok &= check_error(rejected, "supported only", "matrix is rejected on binaural/HOA backend");
-    }
-    const auto apple_binaural = mradm::validate_direct_speakers_routing(
-        RendererSelection::apple, "binaural", DirectSpeakersRoutingMode::matrix);
-    ok &= check_error(apple_binaural, "supported only", "matrix is rejected on Apple binaural output");
-
-    auto automatic = mradm::resolve_renderer(RendererSelection::automatic, "0+5+0", false);
-    ok &= check(automatic.has_value() && automatic->backend == RendererSelection::ear,
-                "automatic speaker rendering resolves to the EAR backend");
-    if (automatic) {
-        const auto accepted = mradm::validate_direct_speakers_routing(
-            automatic->backend, automatic->effective_output_layout, DirectSpeakersRoutingMode::matrix);
-        ok &= check(accepted.has_value(), "matrix is accepted after automatic selection resolves to EAR");
-    }
-    return ok;
-}
-
 } // namespace
 
 int main() {
-    const bool ok = verify_parser_and_coefficients() && verify_strict_schema_errors() &&
-                    verify_target_and_source_resolution() && verify_renderer_scope();
+    const bool ok =
+        verify_parser_and_coefficients() && verify_strict_schema_errors() && verify_target_and_source_resolution();
     if (ok) {
         std::cout << "DirectSpeakers matrix test passed\n";
         return EXIT_SUCCESS;

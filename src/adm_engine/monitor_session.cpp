@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -14,10 +15,15 @@
 #include "adm/monitor.h"
 #include "adm/render.h"
 
+#include "../adm_core/direct_matrix_records.h"
+#include "../adm_render_room/room_internal.h"
 #include "audio_output_device.h"
+#include "catalog.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 #include "renderer_factory.h"
+#include "request_record.h"
+#include "scene_handle.h"
 #include "timeline.h"
 
 namespace mradm {
@@ -70,11 +76,12 @@ class BufferingLogSink final : public LogSink {
     std::vector<Entry> entries_;
 };
 
-// Production stream factory: resolve the backend, build a RenderPlan from the scene +
-// options, prepare it, and open a realtime stream. Retains every backend's renderer +
-// prepared state for the session's lifetime: streams borrow the prepared state by
-// reference, and during a hot-switch crossfade two streams (outgoing + incoming) are live
-// at once, so neither prepared may be freed while a stream still references it.
+// Production stream factory. The opening rules (renderer resolution, DirectSpeakers routing and
+// matrix, the screen check, the backend preparation and the file stream) are Rust mradm-engine
+// `stream::open_monitor` (PCM consistency 5.3 B); this side forwards its log lines and opens the
+// Apple island. Retains every backend for the session's lifetime (an Apple stream borrows its
+// prepared state, and during a hot-switch crossfade two streams are live at once); a Rust stream
+// owns its preparation and keeps an empty slot so forget_last_backend() pops the matching entry.
 class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
   public:
     RealtimeStreamFactory(std::string input_path, std::shared_ptr<const detail::RenderSceneHandle> scene_handle)
@@ -82,72 +89,43 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
 
     Result<std::unique_ptr<IRenderStream>>
     open(const AdmScene& scene, const RenderOptions& options, LogSink& logs) override {
-        if (options.triple_balance_mode != TripleBalanceMode::standard) {
-            return make_error(ErrorCode::unsupported,
-                              "Triple Balance D mode currently supports offline rendering only");
+        const RenderRequest request{input_path_, std::nullopt, options};
+        const engine::RequestTexts texts(request);
+        const auto record = texts.record(request);
+        const engine::RenderPlatform platform;
+        MradmEngineMonitor* raw = nullptr;
+        MradmEngineMonitorView view{};
+        if (mradm_engine_monitor_open(&record,
+                                      platform.get(),
+                                      scene_handle_ != nullptr ? scene_handle_->raw : nullptr,
+                                      options.monitor_system_spatial ? 1U : 0U,
+                                      &raw,
+                                      &view) != 0) {
+            return make_error(ErrorCode::invalid_argument,
+                              "invalid monitor request (UTF-8 paths without NUL required)");
         }
-        const std::string requested_layout =
-            normalize_output_layout(options.output_layout.empty() ? std::string{"0+2+0"} : options.output_layout);
-        auto resolved = resolve_renderer(options.renderer, requested_layout, options.internal_allow_speaker_stereo);
-        if (!resolved) {
-            return tl::unexpected{resolved.error()};
+        const std::unique_ptr<MradmEngineMonitor, decltype(&mradm_engine_monitor_destroy)> opened(
+            raw, &mradm_engine_monitor_destroy);
+        using render_common::engine_text;
+        for (const auto& line : std::span{view.status.logs, view.status.logs_len}) {
+            logs.log(static_cast<LogLevel>(line.level), engine_text(line.module), engine_text(line.message));
         }
-        auto routing_validation = validate_direct_speakers_routing(
-            resolved->backend, resolved->effective_output_layout, options.direct_speakers_routing_mode);
-        if (!routing_validation) {
-            return tl::unexpected{routing_validation.error()};
+        if (view.kind == 1U) {
+            auto stream = render_common::adopt_engine_stream(mradm_engine_monitor_take_stream(raw),
+                                                             view.info,
+                                                             input_path_,
+                                                             engine_text(view.layout),
+                                                             &room_internal::control);
+            keepalive_.emplace_back();
+            return stream;
         }
-        if (scene_handle_ == nullptr) {
-            return make_error(ErrorCode::internal_error, "monitor requires the Rust render scene");
+        if (view.kind == 2U) {
+            return open_apple(scene, options, view, logs);
         }
-        auto matrix = resolve_direct_speakers_matrix(options, *scene_handle_, resolved->effective_output_layout, logs);
-        if (!matrix) {
-            return tl::unexpected{matrix.error()};
-        }
-        for (const auto& [level, message] : resolved->diagnostics) {
-            logs.log(level, "monitor", message);
-        }
-        std::unique_ptr<IRenderer> renderer = std::move(resolved->renderer);
-
-        RenderPlan plan;
-        plan.input_path = input_path_;
-        plan.output_layout = resolved->effective_output_layout;
-        plan.scene = scene;
-        plan.scene_handle = scene_handle_;
-        plan.sofa_path = options.sofa_path;
-        plan.room = options.room;
-        plan.screens = options.screens;
-        if ((plan.screens.reference || plan.screens.reproduction) &&
-            resolved->backend != RendererSelection::room_binaural) {
-            return make_error(ErrorCode::unsupported, "屏幕配置当前仅支持 room-binaural");
-        }
-        plan.default_interp_ms = options.default_interp_ms;
-        plan.object_smoothing_frames = options.object_smoothing_frames;
-        plan.speaker_geometry = options.speaker_geometry;
-        plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
-        plan.direct_speakers_matrix = std::move(*matrix);
-        plan.speaker_spread_mode = options.speaker_spread_mode;
-        plan.triple_balance_mode = options.triple_balance_mode;
-        plan.binaural_spread_mode = options.binaural_spread_mode;
-        plan.lfe_routing_mode = options.lfe_routing_mode;
-        plan.apple_spatial_preset = options.apple_spatial_preset;
-        plan.apple_speaker_rendering_flags = options.apple_speaker_rendering_flags;
-        // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
-        // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
-        plan.listener_orientation =
-            options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
-
-        auto prepared = renderer->prepare(plan, logs);
-        if (!prepared) {
-            return tl::unexpected{prepared.error()};
-        }
-        std::shared_ptr<IPreparedRender> prepared_state = std::move(*prepared);
-        auto stream = renderer->open_stream(*prepared_state, plan, logs);
-        if (!stream) {
-            return tl::unexpected{stream.error()};
-        }
-        keepalive_.push_back({std::move(renderer), std::move(prepared_state)});
-        return std::move(*stream);
+        const auto code = view.status.code;
+        return make_error(code > 0 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error,
+                          engine_text(view.status.message),
+                          engine_text(view.status.context));
     }
 
     // Drop the most-recently retained backend. The caller MUST have already destroyed the
@@ -161,6 +139,52 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
     }
 
   private:
+    // The Apple island over the engine's resolved layout and DirectSpeakers matrix.
+    Result<std::unique_ptr<IRenderStream>>
+    open_apple(const AdmScene& scene, const RenderOptions& options, const MradmEngineMonitorView& view, LogSink& logs) {
+        auto renderer = engine::apple_renderer();
+        if (!renderer) {
+            return tl::unexpected{renderer.error()};
+        }
+        RenderPlan plan;
+        plan.input_path = input_path_;
+        plan.output_layout = render_common::engine_text(view.layout);
+        plan.scene = scene;
+        plan.scene_handle = scene_handle_;
+        plan.sofa_path = options.sofa_path;
+        plan.room = options.room;
+        plan.screens = options.screens;
+        plan.default_interp_ms = options.default_interp_ms;
+        plan.object_smoothing_frames = options.object_smoothing_frames;
+        plan.speaker_geometry = options.speaker_geometry;
+        plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
+        if (view.has_matrix != 0U) {
+            plan.direct_speakers_matrix =
+                std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(view.matrix));
+        }
+        plan.speaker_spread_mode = options.speaker_spread_mode;
+        plan.triple_balance_mode = options.triple_balance_mode;
+        plan.binaural_spread_mode = options.binaural_spread_mode;
+        plan.lfe_routing_mode = options.lfe_routing_mode;
+        plan.apple_spatial_preset = options.apple_spatial_preset;
+        plan.apple_speaker_rendering_flags = options.apple_speaker_rendering_flags;
+        // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
+        // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
+        plan.listener_orientation =
+            options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
+        auto prepared = (*renderer)->prepare(plan, logs);
+        if (!prepared) {
+            return tl::unexpected{prepared.error()};
+        }
+        std::shared_ptr<IPreparedRender> prepared_state = std::move(*prepared);
+        auto stream = (*renderer)->open_stream(*prepared_state, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        keepalive_.push_back({std::move(*renderer), std::move(prepared_state)});
+        return std::move(*stream);
+    }
+
     struct BackendKeepAlive {
         std::unique_ptr<IRenderer> renderer;
         // Held purely to keep the prepared render alive for the session's lifetime.

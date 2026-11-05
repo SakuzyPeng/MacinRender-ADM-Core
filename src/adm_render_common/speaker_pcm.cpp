@@ -99,10 +99,11 @@ class EngineStream final : public IRenderStream {
   public:
     EngineStream(MradmEngineStream* raw,
                  const MradmEngineStreamInfo& info,
-                 const RenderPlan& plan,
+                 std::string input_path,
+                 std::string_view output_layout,
                  std::shared_ptr<IRoomControl> control)
-        : handle_(raw, &mradm_engine_stream_destroy), control_(std::move(control)), input_path_(plan.input_path),
-          output_layout_(info.binaural != 0U ? std::string{"binaural"} : plan.output_layout),
+        : handle_(raw, &mradm_engine_stream_destroy), control_(std::move(control)), input_path_(std::move(input_path)),
+          output_layout_(info.binaural != 0U ? std::string_view{"binaural"} : output_layout),
           outputs_(static_cast<uint32_t>(info.outputs)), sample_rate_(info.sample_rate),
           requires_preroll_(info.requires_preroll != 0U) {}
 
@@ -235,13 +236,21 @@ open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomC
         code != 0) {
         return error.error(code, plan.input_path);
     }
+    return adopt_engine_stream(raw, stream_info, plan.input_path, plan.output_layout, room_control);
+}
+
+std::unique_ptr<IRenderStream> adopt_engine_stream(MradmEngineStream* raw,
+                                                   const MradmEngineStreamInfo& info,
+                                                   const std::string& input_path,
+                                                   std::string_view output_layout,
+                                                   RoomControlAdopter room_control) {
     std::shared_ptr<IRoomControl> control;
     if (room_control != nullptr) {
         if (auto* handle = mradm_engine_stream_control(raw); handle != nullptr) {
             control = room_control(handle);
         }
     }
-    return std::unique_ptr<IRenderStream>{std::make_unique<EngineStream>(raw, stream_info, plan, std::move(control))};
+    return std::make_unique<EngineStream>(raw, info, input_path, output_layout, std::move(control));
 }
 
 namespace {

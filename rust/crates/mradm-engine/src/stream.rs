@@ -4,12 +4,15 @@
 //! seek finish runs in its last step, the room checks only between steps, and the binaural seek
 //! checks again after its last step. Control-thread validation borrows only [`Validator`], never
 //! the worker-owned [`Body`].
-use crate::backend::{Host, Kind, Prepared};
+use crate::backend::{self, Host, Kind, Prepared};
+use crate::render;
+use crate::request::{self, DsRouting, Log, Outcome, Selection, code};
 use mradm_render::binaural::Spread;
 use mradm_render::offline::{Error, Kernel, Location, Result};
 use mradm_render::room_runtime::{Control, Scope};
 use mradm_render::routing::LiveOverride;
 use mradm_render::{binaural_stream, room_stream, stream, triple_balance_stream};
+use mradm_scene::{RenderScene, direct_matrix};
 use std::sync::Arc;
 
 /// The plan's input format and stream controls (`RenderPlan`).
@@ -327,3 +330,157 @@ impl Body {
 }
 
 const BINAURAL_CANCELLED: &str = "双耳文件流式跳转已取消";
+
+/// What [`open_monitor`] opens: a Rust stream, or the Apple backend the caller prepares and
+/// opens itself over the resolved layout and DirectSpeakers matrix.
+pub enum Monitor {
+    /// `layout` is the plan's (resolved) output layout; `info.binaural` overrides it.
+    Stream {
+        validator: Validator,
+        body: Body,
+        info: Info,
+        layout: String,
+    },
+    Apple {
+        layout: String,
+        matrix: Option<direct_matrix::Matrix>,
+    },
+}
+
+/// The monitor's stream opening (the C++ `RealtimeStreamFactory::open`, PCM consistency 5.3 B):
+/// the renderer resolution, DirectSpeakers routing and matrix rules, the screen check, the backend
+/// preparation and the file stream, with the factory's order, texts and log modules. `scene` is
+/// the session's policy-applied scene; with `system_spatial` the stream opens orientation-neutral
+/// because the system tracks the head.
+pub fn open_monitor(
+    r: &render::Request,
+    system_spatial: bool,
+    scene: Option<&RenderScene>,
+    apple: bool,
+    host: &dyn Host,
+) -> Outcome<Monitor> {
+    let mut logs = Vec::new();
+    let result = monitor(r, system_spatial, scene, apple, host, &mut logs);
+    Outcome { logs, result }
+}
+
+fn monitor(
+    r: &render::Request,
+    system_spatial: bool,
+    scene: Option<&RenderScene>,
+    apple: bool,
+    host: &dyn Host,
+    logs: &mut Vec<Log>,
+) -> std::result::Result<Monitor, request::Error> {
+    if r.triple_balance_mode != 0 {
+        return Err(request::Error::new(
+            code::UNSUPPORTED,
+            "Triple Balance D mode currently supports offline rendering only",
+            "",
+        ));
+    }
+    let requested = request::normalize_output_layout(if r.output_layout.is_empty() {
+        "0+2+0"
+    } else {
+        &r.output_layout
+    });
+    let selection = Selection::from_u32(r.renderer)
+        .ok_or_else(|| request::Error::new(6, "invalid renderer selection", ""))?;
+    let resolved = request::resolve_renderer(
+        selection,
+        &requested,
+        r.internal_allow_speaker_stereo,
+        apple,
+    )?;
+    let routing = DsRouting::from_u32(r.routing).unwrap_or(DsRouting::Automatic);
+    request::validate_direct_speakers_routing(
+        resolved.backend,
+        &resolved.effective_output_layout,
+        routing,
+    )?;
+    let Some(scene) = scene else {
+        return Err(request::Error::new(
+            6,
+            "monitor requires the Rust render scene",
+            "",
+        ));
+    };
+    let label = r
+        .matrix_path
+        .as_ref()
+        .map_or(String::new(), |p| p.display.clone());
+    let source = request::MatrixSource {
+        json: r.matrix_json.as_deref(),
+        path: r.matrix_path.as_ref().map(|p| p.utf8.as_str()),
+        path_label: &label,
+    };
+    let matrix = request::resolve_direct_speakers_matrix(
+        routing,
+        source,
+        scene,
+        &resolved.effective_output_layout,
+    );
+    logs.extend(matrix.logs.into_iter().map(|mut l| {
+        l.module = "direct-speakers-matrix";
+        l
+    }));
+    let matrix = matrix.result?;
+    logs.extend(
+        resolved
+            .diagnostics
+            .into_iter()
+            .map(|(level, message)| Log {
+                level,
+                module: "monitor",
+                message,
+            }),
+    );
+    let layout = resolved.effective_output_layout;
+    let screens = r.screens.has_reference || r.screens.has_reproduction;
+    if screens && resolved.backend != Selection::RoomBinaural {
+        return Err(request::Error::new(
+            code::UNSUPPORTED,
+            "屏幕配置当前仅支持 room-binaural",
+            "",
+        ));
+    }
+    if resolved.backend == Selection::Apple {
+        return Ok(Monitor::Apple { layout, matrix });
+    }
+    let kind = render::kind_of(resolved.backend)
+        .ok_or_else(|| request::Error::new(6, "unknown backend", ""))?;
+    let routes = render::matrix_routes(matrix.as_ref());
+    let request = render::backend_request(r, kind, &layout, matrix.as_ref().map(|_| &routes[..]));
+    let preparation = backend::prepare(scene, &request, host);
+    logs.extend(preparation.outcome.logs);
+    let prepared = preparation.outcome.result?;
+    let info = &scene.info;
+    let pose = if system_spatial {
+        [0.; 3]
+    } else {
+        r.listener_orientation
+    };
+    let settings = Settings {
+        path: &r.input.utf8,
+        channels: usize::from(info.channels),
+        frames: info.frames,
+        sample_rate: info.sample_rate,
+        default_interp_ms: r.default_interp_ms,
+        smoothing_frames: r.object_smoothing_frames,
+        // `numerical_spread` of the plan's mode: none 1, SAF spreader 2, otherwise the cloud.
+        spread: match r.binaural_spread {
+            1 => Spread::None,
+            3 => Spread::SafSpreader,
+            _ => Spread::Cloud,
+        },
+        pose,
+    };
+    let (validator, body, info) = open(&prepared, &settings, host)
+        .map_err(|e| crate::offline::located(e, &r.input.display))?;
+    Ok(Monitor::Stream {
+        validator,
+        body,
+        info,
+        layout,
+    })
+}
