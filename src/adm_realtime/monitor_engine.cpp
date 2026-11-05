@@ -640,8 +640,8 @@ void MonitorEngine::worker_loop() {
         if (output_stage_) {
             drain_meter_ring();
             if (stream_->render_failed() && !failed_.load(std::memory_order_relaxed)) {
-                failed_.store(true, std::memory_order_relaxed);
                 logs_.log(LogLevel::error, "monitor", "apple 输出级渲染失败(AudioUnit 错误),已静音并停止");
+                failed_.store(true, std::memory_order_release);
             }
         }
         // Produce ahead of the playhead without holding the lock.
@@ -672,8 +672,8 @@ bool MonitorEngine::top_up_ring_output_stage() {
         }
         auto result = stream_->produce_intermediate(std::span<float>(scratch_.data(), frames * ring_channels_), frames);
         if (!result) {
-            failed_.store(true, std::memory_order_relaxed);
             logs_.log(LogLevel::error, "monitor", result.error().message);
+            failed_.store(true, std::memory_order_release);
             return produced;
         }
         const std::size_t got = *result;
@@ -693,7 +693,7 @@ bool MonitorEngine::top_up_ring_output_stage() {
             // playout reaches the boundary (pull_output_stage → loop_render_reset).
             if (auto rep = stream_->reposition_source(loop_start); !rep) {
                 logs_.log(LogLevel::error, "monitor", rep.error().message);
-                failed_.store(true, std::memory_order_relaxed);
+                failed_.store(true, std::memory_order_release);
                 return produced;
             }
             producer_pos_ = loop_start;
@@ -723,7 +723,7 @@ bool MonitorEngine::restore_loop(uint64_t loop_start) {
     }
     if (!seek_res) {
         logs_.log(LogLevel::error, "monitor", seek_res.error().message);
-        failed_.store(true, std::memory_order_relaxed);
+        failed_.store(true, std::memory_order_release);
         return false;
     }
     producer_pos_ = loop_start;
@@ -763,8 +763,8 @@ bool MonitorEngine::top_up_ring() {
 
         auto result = stream_->process(std::span<float>(scratch_.data(), frames * channels_), frames);
         if (!result) {
-            failed_.store(true, std::memory_order_relaxed); // render error: stop producing
             logs_.log(LogLevel::error, "monitor", result.error().message);
+            failed_.store(true, std::memory_order_release); // render error: stop producing
             return produced;
         }
         std::size_t got = *result;
@@ -776,8 +776,8 @@ bool MonitorEngine::top_up_ring() {
             // Render the incoming stream over the same frames and linearly blend old→new.
             auto in_res = xfade_stream_->process(std::span<float>(scratch_b_.data(), frames * channels_), frames);
             if (!in_res) {
-                failed_.store(true, std::memory_order_relaxed);
                 logs_.log(LogLevel::error, "monitor", in_res.error().message);
+                failed_.store(true, std::memory_order_release);
                 return produced;
             }
             if (*in_res > frames) {
@@ -1007,7 +1007,7 @@ bool MonitorEngine::apply_seek_locked(uint64_t frame, std::unique_lock<std::mute
         // Don't fake a repositioned playhead: the stream is still wherever it was. Surface
         // the failure instead of silently claiming the seek landed.
         logs_.log(LogLevel::error, "monitor", seek_res.error().message);
-        failed_.store(true, std::memory_order_relaxed);
+        failed_.store(true, std::memory_order_release);
     }
     // A running device must drop stale pre-seek output now. While paused, keep its frozen queue
     // untouched: a destructive system-queue flush can be audible even with the playback clock at
@@ -1042,7 +1042,8 @@ MonitorStatus MonitorEngine::status() const {
     s.buffered_frames = ring_channels_ > 0 ? buffered_floats / ring_channels_ : 0;
     s.ring_fill = cap > 0 ? static_cast<float>(buffered_floats) / static_cast<float>(cap) : 0.0F;
     s.ended = ended_.load(std::memory_order_relaxed);
-    s.failed = failed_.load(std::memory_order_relaxed);
+    // Acquire pairs with the producer's release: a reported failure's log line is already written.
+    s.failed = failed_.load(std::memory_order_acquire);
     s.override_revision = applied_override_revision_.load(std::memory_order_relaxed);
     return s;
 }

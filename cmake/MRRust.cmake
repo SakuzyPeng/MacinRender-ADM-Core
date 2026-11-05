@@ -74,9 +74,10 @@ if(_mr_phase2_features)
     list(JOIN _mr_phase2_features "," _mr_phase2_feature_string)
     set(_mr_phase2_feature_args --features "${_mr_phase2_feature_string}")
 endif()
-# Rust consistency tools (`mradm-ffi` examples): the kernel probe and, from 5.2 D, the offline
-# same-process repeat render (formerly tests/tools/phase2_render.cpp).
-foreach(_mr_phase2_example IN ITEMS kernels render)
+# Rust consistency tools (`mradm-ffi` examples): the kernel probe, from 5.2 D the offline
+# same-process repeat render (formerly tests/tools/phase2_render.cpp) and from 5.3 B the
+# file-streaming replay (formerly tests/tools/phase2_stream.cpp).
+foreach(_mr_phase2_example IN ITEMS kernels render stream)
     add_custom_target(mr_adm_phase2_${_mr_phase2_example}
         COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
             "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release

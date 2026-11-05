@@ -79,4 +79,12 @@ using RoomControlAdopter = std::shared_ptr<IRoomControl> (*)(MradmRenderRoomCont
 [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
 open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomControlAdopter room_control = nullptr);
 
+// Takes over an opened engine stream (the monitor's stream opening, 5.3 B). `input_path` locates
+// its errors; `output_layout` is the plan's layout unless the stream reports binaural output.
+[[nodiscard]] std::unique_ptr<IRenderStream> adopt_engine_stream(MradmEngineStream* raw,
+                                                                 const MradmEngineStreamInfo& info,
+                                                                 const std::string& input_path,
+                                                                 std::string_view output_layout,
+                                                                 RoomControlAdopter room_control);
+
 } // namespace mradm::render_common

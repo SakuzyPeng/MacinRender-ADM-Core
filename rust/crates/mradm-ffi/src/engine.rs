@@ -383,12 +383,11 @@ pub struct EngineStatus {
     pub(crate) logs_len: usize,
 }
 
-/// The status and log lines of one resolution, plus a validated DirectSpeakers matrix.
+/// The status and log lines of one engine call.
 pub struct EngineResult {
     error: Option<request::Error>,
     logs: Vec<request::Log>,
     log_views: Vec<EngineLog>,
-    matrix: Option<Box<crate::scene::DirectMatrix>>,
 }
 
 pub(crate) fn finish<T>(
@@ -404,7 +403,6 @@ pub(crate) fn finish<T>(
         error,
         logs: outcome.logs,
         log_views: Vec::new(),
-        matrix: None,
     });
     result.log_views = result
         .logs
@@ -476,178 +474,6 @@ pub unsafe extern "C" fn mradm_engine_normalize_layout(
     0
 }
 
-#[repr(C)]
-pub struct EngineRenderer {
-    selected: u32,
-    backend: u32,
-    /// Borrows the caller's layout or static text.
-    effective_layout: Text,
-}
-
-/// Resolves a renderer for a normalized layout; diagnostics are the status log lines (no module).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_resolve_renderer(
-    selection: u32,
-    layout: *const u8,
-    layout_len: usize,
-    allow_speaker_stereo: u32,
-    apple: u32,
-    renderer: *mut EngineRenderer,
-    out: *mut *mut EngineResult,
-    status: *mut EngineStatus,
-) -> i32 {
-    guarded(out, status, || {
-        let (Some(selection), Some(bytes), false) = (
-            request::Selection::from_u32(selection),
-            unsafe { input(layout, layout_len) },
-            renderer.is_null(),
-        ) else {
-            return 1;
-        };
-        let layout = String::from_utf8_lossy(bytes);
-        let outcome = match request::resolve_renderer(
-            selection,
-            &layout,
-            allow_speaker_stereo != 0,
-            apple != 0,
-        ) {
-            Ok(resolved) => {
-                let logs = resolved
-                    .diagnostics
-                    .iter()
-                    .map(|(level, message)| request::Log {
-                        level: *level,
-                        module: "",
-                        message: message.clone(),
-                    })
-                    .collect();
-                request::Outcome {
-                    logs,
-                    result: Ok(resolved),
-                }
-            }
-            Err(error) => request::Outcome {
-                logs: Vec::new(),
-                result: Err(error),
-            },
-        };
-        if let Some(resolved) = finish(outcome, out, status) {
-            let effective = if resolved.effective_output_layout == *layout {
-                Text::bytes(bytes)
-            } else {
-                Text::new("binaural")
-            };
-            unsafe {
-                *renderer = EngineRenderer {
-                    selected: resolved.selected as u32,
-                    backend: resolved.backend as u32,
-                    effective_layout: effective,
-                };
-            }
-        }
-        0
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_validate_routing(
-    backend: u32,
-    layout: *const u8,
-    layout_len: usize,
-    mode: u32,
-    out: *mut *mut EngineResult,
-    status: *mut EngineStatus,
-) -> i32 {
-    guarded(out, status, || {
-        let (Some(backend), Some(mode), Some(bytes)) = (
-            request::Selection::from_u32(backend),
-            request::DsRouting::from_u32(mode),
-            unsafe { input(layout, layout_len) },
-        ) else {
-            return 1;
-        };
-        let result = request::validate_direct_speakers_routing(
-            backend,
-            &String::from_utf8_lossy(bytes),
-            mode,
-        );
-        finish(
-            request::Outcome {
-                logs: Vec::new(),
-                result,
-            },
-            out,
-            status,
-        );
-        0
-    })
-}
-
-/// A matrix request: `has_json` / `has_path` select the sources; `path` is UTF-8 and
-/// `path_label` the spelling quoted in an I/O error context.
-#[repr(C)]
-pub struct EngineMatrixRequest {
-    mode: u32,
-    has_json: u32,
-    json: Text,
-    has_path: u32,
-    path: Text,
-    path_label: Text,
-}
-
-/// Validates the DirectSpeakers matrix against the scene; `has_matrix` 0 means none requested.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_resolve_matrix(
-    scene: *const crate::scene::SceneHandle,
-    request_record: *const EngineMatrixRequest,
-    layout: *const u8,
-    layout_len: usize,
-    has_matrix: *mut u32,
-    matrix: *mut crate::scene::DirectMatrixView,
-    out: *mut *mut EngineResult,
-    status: *mut EngineStatus,
-) -> i32 {
-    guarded(out, status, || {
-        if scene.is_null() || request_record.is_null() || has_matrix.is_null() || matrix.is_null() {
-            return 1;
-        }
-        let r = unsafe { &*request_record };
-        let (Some(mode), Some(layout), Some(json), Some(path), Some(label)) = (
-            request::DsRouting::from_u32(r.mode),
-            unsafe { input(layout, layout_len) },
-            unsafe { input(r.json.data, r.json.len) },
-            unsafe { input(r.path.data, r.path.len) },
-            unsafe { input(r.path_label.data, r.path_label.len) },
-        ) else {
-            return 1;
-        };
-        let path = String::from_utf8_lossy(path);
-        let label = String::from_utf8_lossy(label);
-        let source = request::MatrixSource {
-            json: (r.has_json != 0).then_some(json),
-            path: (r.has_path != 0).then_some(&*path),
-            path_label: &label,
-        };
-        let scene = unsafe { &(*scene).scene };
-        let outcome = request::resolve_direct_speakers_matrix(
-            mode,
-            source,
-            scene,
-            &String::from_utf8_lossy(layout),
-        );
-        unsafe { *has_matrix = 0 };
-        if let Some(Some(validated)) = finish(outcome, out, status) {
-            let handle = crate::scene::DirectMatrix::new(validated);
-            unsafe {
-                *matrix = handle.view();
-                *has_matrix = 1;
-                (**out).matrix = Some(handle);
-            }
-        }
-        0
-    })
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_result_destroy(result: *mut EngineResult) {
     if !result.is_null() {
@@ -679,7 +505,7 @@ mod tests {
     }
 
     #[test]
-    fn request_resolution_views() {
+    fn layout_normalization_views() {
         let mut out = Text::new("");
         let raw = b"Bogus";
         assert_eq!(
@@ -697,37 +523,6 @@ mod tests {
             0
         );
         assert_eq!(text_of(out), "4+7+0");
-
-        let mut result = ptr::null_mut();
-        let mut status = EngineStatus {
-            code: -1,
-            message: Text::new(""),
-            context: Text::new(""),
-            logs: ptr::null(),
-            logs_len: 0,
-        };
-        let mut renderer = EngineRenderer {
-            selected: 0,
-            backend: 0,
-            effective_layout: Text::new(""),
-        };
-        let layout = b"0+2+0";
-        let code = unsafe {
-            mradm_engine_resolve_renderer(
-                5,
-                layout.as_ptr(),
-                layout.len(),
-                0,
-                0,
-                &mut renderer,
-                &mut result,
-                &mut status,
-            )
-        };
-        assert_eq!((code, status.code, renderer.backend), (0, 0, 6));
-        assert_eq!(text_of(renderer.effective_layout), "binaural");
-        assert_eq!(status.logs_len, 1, "the legacy alias warning");
-        unsafe { mradm_engine_result_destroy(result) };
     }
 
     #[test]
