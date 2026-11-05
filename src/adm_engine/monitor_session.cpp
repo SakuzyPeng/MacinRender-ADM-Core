@@ -186,6 +186,8 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
     }
 
     struct BackendKeepAlive {
+        // Keeps the renderer alive for the session alongside its prepared state.
+        // cppcheck-suppress unusedStructMember
         std::unique_ptr<IRenderer> renderer;
         // Held purely to keep the prepared render alive for the session's lifetime.
         // cppcheck-suppress unusedStructMember
