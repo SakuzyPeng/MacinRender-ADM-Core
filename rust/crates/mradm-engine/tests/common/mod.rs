@@ -1,6 +1,7 @@
 //! Test inputs shared by the engine tests: ADM BW64 scenes and plain WAVE channel beds.
 #![allow(dead_code)]
 pub mod backend;
+pub mod monitor;
 use mradm_json::Value;
 use mradm_wav::{Chna, ChnaEntry, Format, SampleFormat, Writer, WriterOptions};
 use std::fs::File;
@@ -18,6 +19,18 @@ pub fn fixed<const N: usize>(text: &str) -> [u8; N] {
 
 /// A 480-frame PCM24 BW64 file with the scene's AXML and CHNA from `<dir>/<name>.xml` and `.json` (as `mradm-scene`'s tests write it).
 pub fn adm_wav(dir: &Path, name: &str, path: &Path, sample_format: SampleFormat) {
+    adm_wav_with(dir, name, path, sample_format, None, 480);
+}
+
+/// [`adm_wav`] with `frames` silent frames, at `rate` instead of the scene's own rate if given.
+pub fn adm_wav_with(
+    dir: &Path,
+    name: &str,
+    path: &Path,
+    sample_format: SampleFormat,
+    rate: Option<u32>,
+    frames: usize,
+) {
     let meta =
         mradm_json::parse(&std::fs::read(dir.join(format!("{name}.json"))).unwrap()).unwrap();
     let channels = field(&meta, "channels").as_f64().unwrap() as u16;
@@ -38,7 +51,7 @@ pub fn adm_wav(dir: &Path, name: &str, path: &Path, sample_format: SampleFormat)
         .collect::<Vec<_>>();
     let format = Format {
         channels,
-        sample_rate: field(&meta, "sample_rate").as_f64().unwrap() as u32,
+        sample_rate: rate.unwrap_or(field(&meta, "sample_rate").as_f64().unwrap() as u32),
         sample_format,
         channel_mask: None,
     };
@@ -52,7 +65,7 @@ pub fn adm_wav(dir: &Path, name: &str, path: &Path, sample_format: SampleFormat)
     };
     let mut writer = Writer::new(File::create(path).unwrap(), format, options).unwrap();
     writer
-        .write_frames(&vec![0.0; usize::from(channels) * 480])
+        .write_frames(&vec![0.0; usize::from(channels) * frames])
         .unwrap();
     writer.finish().unwrap();
 }

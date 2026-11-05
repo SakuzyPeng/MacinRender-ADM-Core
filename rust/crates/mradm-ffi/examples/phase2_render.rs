@@ -12,15 +12,13 @@ use mradm_ffi::FfiHost;
 use mradm_wav::{Reader, SampleFormat, caf};
 use serde_json::Value;
 use std::fs::{self, File};
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-type Failure = String;
-
-fn require(ok: bool, message: &str) -> Result<(), Failure> {
-    if ok { Ok(()) } else { Err(message.to_owned()) }
-}
+#[path = "phase2/io.rs"]
+mod phase2_io;
+use phase2_io::{Failure, pcm, require};
 
 // The same locale-independent, correctly rounded parser as the mradm command line (3.5).
 fn f64_of(text: &str) -> Result<f64, Failure> {
@@ -279,27 +277,6 @@ fn base_platform() -> mradm_engine::catalog::Platform {
         sofa: cfg!(feature = "sofa"),
         ..Default::default()
     }
-}
-
-/// `phase2::pcm` (tests/tools/phase2_io.h): measurement-only canonical wire data.
-fn pcm(path: &Path, channels: u32, rate: u32, values: &[f32]) -> Result<(), Failure> {
-    require(
-        channels != 0 && rate != 0 && values.len().is_multiple_of(channels as usize),
-        "invalid PCM shape",
-    )?;
-    let io = |e: std::io::Error| e.to_string();
-    let mut out = BufWriter::new(File::create(path).map_err(io)?);
-    out.write_all(b"MRPB").map_err(io)?;
-    out.write_all(&1u32.to_le_bytes()).map_err(io)?;
-    out.write_all(&channels.to_le_bytes()).map_err(io)?;
-    out.write_all(&rate.to_le_bytes()).map_err(io)?;
-    out.write_all(&((values.len() / channels as usize) as u64).to_le_bytes())
-        .map_err(io)?;
-    for value in values {
-        require(value.is_finite(), "non-finite replay PCM")?;
-        out.write_all(&value.to_bits().to_le_bytes()).map_err(io)?;
-    }
-    out.flush().map_err(io)
 }
 
 // The final file's samples as float32. Integer WAV must keep the requested depth; 16- and 24-bit

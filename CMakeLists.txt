@@ -515,12 +515,8 @@ target_sources(mr_adm_renderer_factory PRIVATE src/adm_renderer_factory/renderer
 target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_renderer_factory)
 target_link_libraries(mr_adm_renderer_factory
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
-            MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMRenderCommon
 )
-if(APPLE)
-    target_link_libraries(mr_adm_renderer_factory PRIVATE MacinRender::ADMRenderApple)
-endif()
 mr_adm_core_apply_warnings(mr_adm_renderer_factory)
 mr_adm_core_apply_static_analysis(mr_adm_renderer_factory)
 
@@ -1022,18 +1018,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_compile_definitions(mr_adm_fft_benchmark PRIVATE MR_ADM_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>)
     mr_adm_core_apply_warnings(mr_adm_fft_benchmark)
 
-    foreach(_probe IN ITEMS scene stream)
-        add_executable(mr_adm_phase2_${_probe} EXCLUDE_FROM_ALL tests/tools/phase2_${_probe}.cpp)
-        target_link_libraries(mr_adm_phase2_${_probe} PRIVATE MacinRender::ADMEngine
-            MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio
-            MacinRender::ADMRenderRoom MacinRender::ADMDsp nlohmann_json::nlohmann_json)
-        target_include_directories(mr_adm_phase2_${_probe} PRIVATE src/adm_engine)
-        mr_adm_core_apply_warnings(mr_adm_phase2_${_probe})
-    endforeach()
-
-    target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMRenderBinaural)
-    target_link_libraries(mr_adm_phase2_stream PRIVATE MacinRender::ADMRendererFactory MacinRender::ADMIo)
-    target_include_directories(mr_adm_phase2_stream PRIVATE src/adm_io)
+    add_executable(mr_adm_phase2_scene EXCLUDE_FROM_ALL tests/tools/phase2_scene.cpp)
+    target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMEngine
+        MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio
+        MacinRender::ADMRenderRoom MacinRender::ADMDsp MacinRender::ADMRenderBinaural nlohmann_json::nlohmann_json)
+    target_include_directories(mr_adm_phase2_scene PRIVATE src/adm_engine)
+    mr_adm_core_apply_warnings(mr_adm_phase2_scene)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
     add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp src/adm_render_common/live_scene_trace.cpp)
     target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
@@ -1423,11 +1413,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_config_json_compat_tests COMMAND mr_adm_config_json_compat_tests)
 
     add_executable(mr_adm_direct_speakers_matrix_tests tests/unit/direct_speakers_matrix_test.cpp)
-    target_link_libraries(mr_adm_direct_speakers_matrix_tests
-        PRIVATE
-            MacinRender::ADMRendererFactory
-            MacinRender::ADMRenderCommon
-    )
+    target_link_libraries(mr_adm_direct_speakers_matrix_tests PRIVATE MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_tests)
     mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_tests)
     add_test(NAME mr_adm_direct_speakers_matrix_tests COMMAND mr_adm_direct_speakers_matrix_tests)
