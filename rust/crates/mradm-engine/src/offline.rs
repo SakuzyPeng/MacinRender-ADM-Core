@@ -89,7 +89,7 @@ fn cut(message: &str, capacity: usize) -> String {
 }
 
 /// A driver or stream error with the locator its kind names (the C++ `DriverError`).
-fn located(e: offline::Error, input: &str) -> Error {
+pub(crate) fn located(e: offline::Error, input: &str) -> Error {
     let context = match e.location {
         Location::None => String::new(),
         Location::Path => format!("path={input}"),

@@ -99,47 +99,8 @@ typedef struct MradmEngineStatus {
     size_t logs_len;
 } MradmEngineStatus;
 
-typedef struct MradmEngineRenderer {
-    uint32_t selected;
-    uint32_t backend;
-    MradmAdmText effective_layout;
-} MradmEngineRenderer;
-
-typedef struct MradmEngineMatrixRequest {
-    uint32_t mode;
-    uint32_t has_json;
-    MradmAdmText json;
-    uint32_t has_path;
-    MradmAdmText path;
-    MradmAdmText path_label;
-} MradmEngineMatrixRequest;
-
 // The canonical layout id (static text) or the input itself.
 int32_t mradm_engine_normalize_layout(const uint8_t* layout, size_t len, MradmAdmText* out);
-// Values follow RendererSelection; diagnostics are the status log lines (empty module).
-int32_t mradm_engine_resolve_renderer(uint32_t selection,
-                                      const uint8_t* layout,
-                                      size_t layout_len,
-                                      uint32_t allow_speaker_stereo,
-                                      uint32_t apple,
-                                      MradmEngineRenderer* renderer,
-                                      MradmEngineResult** out,
-                                      MradmEngineStatus* status);
-int32_t mradm_engine_validate_routing(uint32_t backend,
-                                      const uint8_t* layout,
-                                      size_t layout_len,
-                                      uint32_t mode,
-                                      MradmEngineResult** out,
-                                      MradmEngineStatus* status);
-// has_matrix 0: no matrix was requested; the matrix view belongs to the result.
-int32_t mradm_engine_resolve_matrix(const MradmSceneHandle* scene,
-                                    const MradmEngineMatrixRequest* request,
-                                    const uint8_t* layout,
-                                    size_t layout_len,
-                                    uint32_t* has_matrix,
-                                    MradmDirectMatrixView* matrix,
-                                    MradmEngineResult** out,
-                                    MradmEngineStatus* status);
 void mradm_engine_result_destroy(MradmEngineResult* result);
 
 // ── Backend preparation and the offline render step (5.2 C1) ──────────────────────────────────
@@ -499,6 +460,32 @@ int32_t mradm_engine_apply_policy(MradmSceneHandle* scene,
                                   MradmAdmText input_display,
                                   MradmEngineResult** result,
                                   MradmEngineStatus* status);
+
+// ── The monitor's stream opening (5.3 B) ───────────────────────────────────────────────────────
+typedef struct MradmEngineMonitor MradmEngineMonitor;
+
+// kind 0 a rejection (status), 1 a stream (info and the plan's layout), 2 the Apple backend over
+// layout and the matrix; the status logs come first either way. Texts live until destroy.
+typedef struct MradmEngineMonitorView {
+    MradmEngineStatus status;
+    uint32_t kind;
+    MradmEngineStreamInfo info;
+    MradmAdmText layout;
+    uint32_t has_matrix;
+    MradmDirectMatrixView matrix;
+} MradmEngineMonitorView;
+
+// scene is the session's policy-applied scene (may be null). Returns 1 for invalid arguments
+// (including paths not encoded as UTF-8 or containing NUL), 6 for a panic, otherwise 0.
+int32_t mradm_engine_monitor_open(const MradmEngineRenderRequest* request,
+                                  const MradmEnginePlatform* platform,
+                                  const MradmSceneHandle* scene,
+                                  uint32_t system_spatial,
+                                  MradmEngineMonitor** output,
+                                  MradmEngineMonitorView* view);
+// The opened stream (kind 1, once), or null; destroy with mradm_engine_stream_destroy.
+MradmEngineStream* mradm_engine_monitor_take_stream(MradmEngineMonitor* handle);
+void mradm_engine_monitor_destroy(MradmEngineMonitor* handle);
 
 #ifdef __cplusplus
 }

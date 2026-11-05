@@ -232,7 +232,7 @@ unsafe fn strings(data: *const Text, len: usize) -> Option<Vec<String>> {
         .collect()
 }
 
-unsafe fn request_of(r: &EngineRenderRequest) -> Option<Request> {
+pub(crate) unsafe fn request_of(r: &EngineRenderRequest) -> Option<Request> {
     let flag = |v: u32| v != 0;
     let opt_path = |has: u32, p: &EnginePath| -> Option<Option<PathText>> {
         if has == 0 {
