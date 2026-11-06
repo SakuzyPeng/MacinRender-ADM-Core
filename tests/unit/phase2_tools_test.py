@@ -202,7 +202,9 @@ class EvidenceTests(unittest.TestCase):
     def test_stream_frame_counts_follow_input_and_seek_timeline(self):
         channels = {'binaural': 2, '7.1.4': 12, '9.1.6': 16, '22.2': 24, 'hoa3': 16}
         for case in common.stream_cases():
-            shape = (channels[case['output_layout']], 48000, 74200 + case.get('tail_frames', 0))
+            # The same events on 1 s of material: 48000 input frames, or 96000 for the 96 kHz room (5.7).
+            frames = {48000: 74200, 96000: 122200}[case['sample_rate']]
+            shape = (channels[case['output_layout']], case['sample_rate'], frames + case.get('tail_frames', 0))
             self.assertEqual(common.stream_output_shape(case), shape)
             common.validate_stream_shape(case, shape)
             with self.assertRaisesRegex(ValueError, 'frame count differs'):
@@ -239,6 +241,7 @@ class EvidenceTests(unittest.TestCase):
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': [], 'scene': [], 'stream': [case], 'sofa': common.SOFA_FIXTURES,
                     'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
+                    'room_96k': common.ROOM_96K_FIXTURES,
                     'outputs': {case['id']: {'path': pcm.relative_to(root).as_posix(),
                                              'shape': [channels, rate, frames], 'sha256': common.digest(bits)}},
                 })
@@ -253,12 +256,20 @@ class EvidenceTests(unittest.TestCase):
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 79)
-        self.assertEqual(len({r['id'] for r in offline}), 79)
+        self.assertEqual(len(offline), 80)
+        self.assertEqual(len({r['id'] for r in offline}), 80)
         self.assertEqual(len(scene), 88)
         streams = common.stream_cases()
-        self.assertEqual(len(streams), 36)
-        self.assertEqual(len(common.case_ids()), 291)
+        self.assertEqual(len(streams), 38)
+        self.assertEqual(len(common.case_ids()), 294)
+        # PCM consistency 5.7: the 96 kHz room pack under default ramps, offline and streamed.
+        self.assertEqual([r['id'] for r in offline + streams if r.get('sample_rate') == 96000 or '96k' in r['fixture']],
+                         ['room-exact-96k', 'stream-room-96k-fixed', 'stream-room-96k-fragmented'])
+        self.assertEqual(common.ROOM_96K_FIXTURES.keys(), common.ROOM_FIXTURES.keys())
+        self.assertEqual({n for n in common.ROOM_FIXTURES
+                          if common.ROOM_96K_FIXTURES[n] != common.ROOM_FIXTURES[n]}, {'room.json', 'hrir.json'})
+        for directory, pins in common.ROOM_PACKS.values():
+            common.validate_room_fixtures(ROOT / directory, pins)
         self.assertEqual({r['renderer'] for r in streams},
                          {'saf', 'saf-binaural', 'ear', 'hoa', 'triple-balance', 'room-binaural'})
         # PCM consistency 4.9: smoothed replays for every backend that smooths objects.
@@ -834,6 +845,7 @@ class RenderSceneCheckpointTests(unittest.TestCase):
                 'source': {'files': {}, 'sha256': common.json_digest({})},
                 'offline': [case], 'scene': [], 'stream': [], 'sofa': common.SOFA_FIXTURES,
                 'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
+                'room_96k': common.ROOM_96K_FIXTURES,
                 'outputs': {'case': {'path': 'pcm/case.pcmbits', 'shape': [2, 48000, 1],
                                      'sha256': common.digest(samples)}},
                 'fixtures': {'input.bin': common.digest(b'input')},
@@ -992,12 +1004,12 @@ class ToolSubstitutionTests(unittest.TestCase):
         self.offline = [{'id': 'case'}]
         self.scene = [{'id': 'scene-case', 'input_rate': 48000, 'output_rate': 48000,
                        'epochs': [{'epoch': 1, 'target': 0, 'end': 2}, {'epoch': 2, 'target': 0, 'end': 1}]}]
-        # Keep real file/provenance validation, with a small catalog instead of 291 production outputs.
+        # Keep real file/provenance validation, with a small catalog instead of 294 production outputs.
         for name, value in (('offline_cases', self.offline), ('scene_cases', self.scene),
                             ('stream_cases', []), ('kernel_outputs', ['k.f32'])):
             mocked = patch.object(common, name, return_value=value)
             mocked.start(); self.addCleanup(mocked.stop)
-        for name in ('SOFA_FIXTURES', 'JSON_FIXTURES', 'ROOM_FIXTURES'):
+        for name in ('SOFA_FIXTURES', 'JSON_FIXTURES', 'ROOM_FIXTURES', 'ROOM_96K_FIXTURES'):
             mocked = patch.object(common, name, {})
             mocked.start(); self.addCleanup(mocked.stop)
 
@@ -1054,7 +1066,7 @@ class ToolSubstitutionTests(unittest.TestCase):
         manifest = {'schema': 'mradm.phase2.v1', 'complete': True, 'config': 'a', 'diagnostics': False,
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': self.offline, 'scene': self.scene, 'stream': [], 'sofa': {}, 'json_fixtures': {}, 'room': {},
-                    'build': {'platform.system': platform.system(), 'platform.machine': platform.machine(),
+                    'room_96k': {}, 'build': {'platform.system': platform.system(), 'platform.machine': platform.machine(),
                               'cmake.CMAKE_BUILD_TYPE': 'Release', 'cmake.CMAKE_CXX_FLAGS': '-O2',
                               'cmake.MR_ADM_ENABLE_SOFA': 'ON',
                               'rust.compiler_verbose': 'release: 1.98.0\ncommit-hash: test\nLLVM version: test',
