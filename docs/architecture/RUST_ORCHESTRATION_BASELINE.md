@@ -25,7 +25,7 @@
 | --- | --- | --- | --- |
 | `mradm render`（CLI） | 离线 PCM | `RenderService::render` | CLI 仍是 C++ 壳（六期迁），5.2 起经它调用 Rust 编排；不可替换 |
 | `mr_adm_phase2_render` | 离线同进程重复 | `RenderService` | 5.2 改为 Rust（5.2 D 已完成，见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)） |
-| `mr_adm_phase2_stream` | 文件流式重放 | `io::RenderScene::import`、内部 `resolve_renderer`、`IRenderStream`、`live_override` | 5.3 改为 Rust |
+| `mr_adm_phase2_stream` | 文件流式重放 | `io::RenderScene::import`、内部 `resolve_renderer`、`IRenderStream`、`live_override` | 5.3 改为 Rust（5.3 B 已完成，见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md)） |
 | `mr_adm_phase2_scene` | Scene 重放 | `SceneStreamEngine`（时钟缝）、`SceneOutputSession`（捕获设备） | 5.4 改为 Rust |
 | `mr_adm_phase2_kernels` | 内核测量 | 已是 Rust（`mradm-ffi` example） | 不变 |
 | `mr_adm_make_fixture` / `mr_adm_pcm_bits` / `mr_adm_repeat_render` | 夹具、PCM 抽取、重复渲染 | 测试工具 | 随所驱动的接口迁移 |
