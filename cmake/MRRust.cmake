@@ -33,8 +33,10 @@ function(mr_adm_import_rust)
     )
 endfunction()
 mr_adm_import_rust()
-# The FLAC validation boundary reuses the provider selected for the encoder.
-target_link_libraries(mradm_ffi INTERFACE FLAC::FLAC)
+# The FLAC validation boundary reuses the provider selected for the encoder. The dependency sits on
+# the imported staticlib itself, so single-pass linkers (GNU ld) see libFLAC after libmradm_ffi.a;
+# on the INTERFACE wrapper CMake may order an earlier FLAC::FLAC (from ADMAudio) first.
+target_link_libraries(mradm_ffi-static INTERFACE FLAC::FLAC)
 if(MR_ADM_ENABLE_ROOM_CUDA)
     add_dependencies(mradm_ffi-static mr_adm_room_cuda)
 endif()
