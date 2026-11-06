@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -16,13 +17,19 @@
 #include "../support/adm_fixture.h"
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <process.h>
+#include <windows.h>
 #else
+#include <fcntl.h>
 #include <unistd.h>
 #endif
 
 #include <FLAC/callback.h>
 #include <FLAC/metadata.h>
+#include <FLAC/stream_decoder.h>
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
@@ -30,6 +37,10 @@
 #include "../support/wav_fixture.h"
 
 namespace {
+
+// Layout borrowed by the Rust libFLAC callback boundary.
+static_assert(sizeof(FLAC__FrameHeader) == 40 && offsetof(FLAC__FrameHeader, number) == 24 &&
+              offsetof(FLAC__FrameHeader, crc) == 32);
 
 class FileGuard {
   public:
@@ -282,7 +293,12 @@ bool verify_flac_roundtrip() {
     }
 
     std::vector<float> back(sample_count(k_ch, k_frames));
-    rd->read(back.data(), k_frames);
+    if (!check(rd->read(back.data(), k_frames) == k_frames, "read complete FLAC")) {
+        return false;
+    }
+    if (!check(rd->read(back.data(), 1) == 0U && rd->read(nullptr, 0) == 0U, "clean EOF and zero-frame read")) {
+        return false;
+    }
 
     for (std::size_t i = 0; i < orig.size(); ++i) {
         if (std::abs(orig[i] - back[i]) > k_tol) {
@@ -290,7 +306,35 @@ bool verify_flac_roundtrip() {
             return false;
         }
     }
-    return true;
+    const auto handles = []() -> uint64_t {
+#ifdef _WIN32
+        DWORD count = 0;
+        return GetProcessHandleCount(GetCurrentProcess(), &count) != 0 ? count : 0;
+#else
+        uint64_t count = 0;
+        for (int fd = 0; fd < 1024; ++fd) {
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg): POSIX descriptor query takes no optional argument.
+            count += fcntl(fd, F_GETFD) != -1 ? 1U : 0U;
+        }
+        return count;
+#endif
+    };
+    const auto before = handles();
+    for (int iteration = 0; iteration < 64; ++iteration) {
+        auto replacement = mradm::audio::FloatFlacReader::open(path);
+        if (!check(replacement.has_value(), "reopen FLAC before move assignment")) {
+            return false;
+        }
+        *rd = std::move(*replacement);
+    }
+    if (!check(before > 0 && handles() == before, "move assignment releases old FLAC handles")) {
+        return false;
+    }
+    // The replacement must retain its own decoder, including after a rejected read.
+    const auto invalid = rd->read(nullptr, 1);
+    return check(!invalid && invalid.error().code == mradm::ErrorCode::invalid_argument, "reject null FLAC output") &&
+           check(rd->read(back.data(), 7) == 7U && rd->read(back.data() + 14, k_frames - 7) == k_frames - 7,
+                 "read moved decoder in short blocks");
 }
 
 // ── apply_gain_to_file on FLAC ────────────────────────────────────────────────

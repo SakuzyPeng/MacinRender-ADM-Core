@@ -178,7 +178,7 @@ class FloatFlacWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-// Streaming reader for FLAC files. Decodes any integer FLAC to float32.
+// Validates the complete FLAC stream on open; dr_flac supplies the float32 PCM.
 class FloatFlacReader {
   public:
     static Result<FloatFlacReader> open(const std::string& path);
@@ -191,7 +191,7 @@ class FloatFlacReader {
     uint32_t channels() const;
     uint32_t sample_rate() const;
     uint64_t frame_count() const;
-    uint64_t read(float* out, uint64_t frames);
+    Result<uint64_t> read(float* out, uint64_t frames);
 
   private:
     FloatFlacReader() = default;
@@ -253,28 +253,6 @@ class WriterHandle {
     explicit WriterHandle(FloatCafWriter w) : impl_(std::move(w)) {}
     explicit WriterHandle(FloatFlacWriter w) : impl_(std::move(w)) {}
     std::variant<FloatWavWriter, FloatCafWriter, FloatFlacWriter> impl_;
-};
-
-// Type-erased audio file reader. Selects WAV, CAF, or FLAC from the path extension.
-class ReaderHandle {
-  public:
-    static Result<ReaderHandle> open(const std::string& path);
-
-    ReaderHandle(ReaderHandle&&) noexcept = default;
-    ReaderHandle& operator=(ReaderHandle&&) noexcept = default;
-    ReaderHandle(const ReaderHandle&) = delete;
-    ReaderHandle& operator=(const ReaderHandle&) = delete;
-
-    uint32_t channels() const;
-    uint32_t sample_rate() const;
-    uint64_t frame_count() const;
-    uint64_t read(float* out, uint64_t frames);
-
-  private:
-    explicit ReaderHandle(FloatWavReader r) : impl_(std::move(r)) {}
-    explicit ReaderHandle(FloatCafReader r) : impl_(std::move(r)) {}
-    explicit ReaderHandle(FloatFlacReader r) : impl_(std::move(r)) {}
-    std::variant<FloatWavReader, FloatCafReader, FloatFlacReader> impl_;
 };
 
 // Apply a linear gain to all samples in path, rewriting the file in-place via a

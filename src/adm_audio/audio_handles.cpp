@@ -1,6 +1,4 @@
-#include <algorithm>
 #include <cstdint>
-#include <filesystem>
 #include <stop_token>
 #include <string>
 
@@ -46,47 +44,6 @@ Result<uint64_t> RenderInputReader::read(float* out, uint64_t frames) {
 Result<void> RenderInputReader::seek_frame(uint64_t frame) {
     // The Rust reader clamps targets past the end to the final frame boundary.
     return impl_->reader->seek_frame(frame);
-}
-
-// ── ReaderHandle ──────────────────────────────────────────────────────────────
-
-Result<ReaderHandle> ReaderHandle::open(const std::string& path) {
-    auto ext = std::filesystem::path(path).extension().string();
-    std::ranges::transform(
-        ext, ext.begin(), [](char c) { return (c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c); });
-
-    if (ext == ".caf") {
-        auto res = FloatCafReader::open(path);
-        if (!res) {
-            return tl::unexpected{res.error()};
-        }
-        return ReaderHandle{std::move(*res)};
-    }
-    if (ext == ".flac") {
-        auto res = FloatFlacReader::open(path);
-        if (!res) {
-            return tl::unexpected{res.error()};
-        }
-        return ReaderHandle{std::move(*res)};
-    }
-    auto res = FloatWavReader::open(path);
-    if (!res) {
-        return tl::unexpected{res.error()};
-    }
-    return ReaderHandle{std::move(*res)};
-}
-
-uint32_t ReaderHandle::channels() const {
-    return std::visit([](const auto& r) { return r.channels(); }, impl_);
-}
-uint32_t ReaderHandle::sample_rate() const {
-    return std::visit([](const auto& r) { return r.sample_rate(); }, impl_);
-}
-uint64_t ReaderHandle::frame_count() const {
-    return std::visit([](const auto& r) { return r.frame_count(); }, impl_);
-}
-uint64_t ReaderHandle::read(float* out, uint64_t frames) {
-    return std::visit([&](auto& r) { return r.read(out, frames); }, impl_);
 }
 
 // ── apply_gain_to_file / trim_file_frames ───────────────────────────────────

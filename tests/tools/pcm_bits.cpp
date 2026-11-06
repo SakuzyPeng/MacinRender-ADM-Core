@@ -37,6 +37,8 @@
 
 #include "adm/audio_io.h"
 
+#include "audio_reader.h"
+
 namespace {
 
 // Canonical image header: magic, version, channels, sample_rate, frame_count. All little-endian.
@@ -127,7 +129,12 @@ void put_u64_le(std::vector<uint8_t>& out, uint64_t v) {
     uint64_t done = 0;
     while (done < img.frames) {
         const uint64_t want = std::min<uint64_t>(k_chunk_frames, img.frames - done);
-        const uint64_t got = reader.read(chunk.data(), want);
+        const auto result = reader.read(chunk.data(), want);
+        if (!result) {
+            std::cerr << "error: cannot decode " << path << ": " << result.error().message << "\n";
+            return false;
+        }
+        const uint64_t got = *result;
         if (got == 0U) {
             break;
         }
