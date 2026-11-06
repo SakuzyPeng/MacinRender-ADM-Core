@@ -24,18 +24,18 @@ pub struct WriteHandle {
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Info {
-    frames: u64,
-    channels: u32,
-    rate: u32,
+    pub(crate) frames: u64,
+    pub(crate) channels: u32,
+    pub(crate) rate: u32,
     /// WAVE_FORMAT_EXTENSIBLE speaker mask; 0 for plain WAVEFORMAT headers.
-    channel_mask: u32,
+    pub(crate) channel_mask: u32,
     /// Container bits per sample (fmt `wBitsPerSample`).
-    bits: u16,
+    pub(crate) bits: u16,
     /// Format tag after resolving the extensible sub-format: 1 = PCM, 3 = IEEE float.
-    format: u16,
+    pub(crate) format: u16,
 }
 
-fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -> i32 {
+pub(crate) fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -> i32 {
     let error = match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(())) => None,
         Ok(Err(error)) => Some(error),
@@ -57,7 +57,7 @@ fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -
     }
     error.map_or(0, |error| error.code)
 }
-fn valid<T>(pointer: *const T, len: usize) -> Result<()> {
+pub(crate) fn valid<T>(pointer: *const T, len: usize) -> Result<()> {
     if len != 0
         && (pointer.is_null()
             || !(pointer as usize).is_multiple_of(align_of::<T>())

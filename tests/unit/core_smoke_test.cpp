@@ -18,6 +18,8 @@
 #include "adm/render.h"
 #include "adm/version.h"
 
+#include "audio_reader.h"
+
 namespace {
 
 [[nodiscard]] uint32_t read_be32(const std::vector<unsigned char>& bytes, std::size_t offset) {

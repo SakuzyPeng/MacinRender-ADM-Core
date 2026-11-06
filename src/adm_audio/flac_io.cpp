@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <dr_flac.h>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <stop_token>
 #include <string>
@@ -33,6 +34,7 @@
 #include "adm/errors.h"
 
 #include "audio_io_internal.h"
+#include "wav_backend.h"
 
 namespace mradm::audio {
 
@@ -317,28 +319,40 @@ uint64_t FloatFlacWriter::write(const float* samples, uint64_t frame_count) {
 // Decodes any integer FLAC file to float32 via dr_flac.
 
 struct FloatFlacReader::Impl {
-    drflac* flac{nullptr};
+    std::unique_ptr<drflac, decltype(&drflac_close)> flac{nullptr, drflac_close};
+    uint64_t frames{}, position{};
+    std::string path;
+    bool failed{false};
 };
 
 Result<FloatFlacReader> FloatFlacReader::open(const std::string& path) {
-    // dr_flac owns any internal stream state after a successful open and releases
-    // it in drflac_close(); clang's stream analyzer cannot see that handoff.
-    // NOLINTNEXTLINE(clang-analyzer-unix.Stream)
-    drflac* f = drflac_open_file(path.c_str(), nullptr);
-    if (f == nullptr) {
-        return make_error(ErrorCode::io_error, "failed to open FLAC file for reading", "path=" + path);
+    const auto utf8_path = wav_path_utf8(path);
+    MradmWavInfo info{};
+    std::array<uint8_t, 512> message{};
+    if (const auto code = mradm_flac_validate(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                              utf8_path.size(),
+                                              &info,
+                                              message.data(),
+                                              message.size());
+        code != 0) {
+        return tl::unexpected{wav_error(code, message, path)};
     }
     FloatFlacReader r;
     r.impl_ = std::make_unique<Impl>();
-    r.impl_->flac = f;
+    r.impl_->path = path;
+    r.impl_->frames = info.frames;
+#ifdef _WIN32
+    r.impl_->flac.reset(drflac_open_file_w(std::filesystem::path(path).c_str(), nullptr));
+#else
+    r.impl_->flac.reset(drflac_open_file(path.c_str(), nullptr));
+#endif
+    if (!r.impl_->flac || r.impl_->flac->channels != info.channels || r.impl_->flac->sampleRate != info.rate) {
+        return make_error(ErrorCode::io_error, "failed to open validated FLAC file for reading", "path=" + path);
+    }
     return r;
 }
 
-FloatFlacReader::~FloatFlacReader() {
-    if (impl_ && impl_->flac != nullptr) {
-        drflac_close(impl_->flac);
-    }
-}
+FloatFlacReader::~FloatFlacReader() = default;
 
 FloatFlacReader::FloatFlacReader(FloatFlacReader&&) noexcept = default;
 FloatFlacReader& FloatFlacReader::operator=(FloatFlacReader&&) noexcept = default;
@@ -350,10 +364,22 @@ uint32_t FloatFlacReader::sample_rate() const {
     return impl_->flac->sampleRate;
 }
 uint64_t FloatFlacReader::frame_count() const {
-    return impl_->flac->totalPCMFrameCount;
+    return impl_->frames;
 }
-uint64_t FloatFlacReader::read(float* out, uint64_t frames) {
-    return drflac_read_pcm_frames_f32(impl_->flac, frames, out);
+Result<uint64_t> FloatFlacReader::read(float* out, uint64_t frames) {
+    if (frames != 0 && (out == nullptr || frames > std::numeric_limits<std::size_t>::max() / channels())) {
+        return make_error(ErrorCode::invalid_argument, "invalid FLAC read buffer", "path=" + impl_->path);
+    }
+    if (!impl_->failed) {
+        const auto wanted = std::min(frames, impl_->frames - impl_->position);
+        const auto got = drflac_read_pcm_frames_f32(impl_->flac.get(), wanted, out);
+        impl_->failed = got != wanted;
+        if (!impl_->failed) {
+            impl_->position += got;
+            return got;
+        }
+    }
+    return make_error(ErrorCode::io_error, "short read or decode error in FLAC", "path=" + impl_->path);
 }
 
 

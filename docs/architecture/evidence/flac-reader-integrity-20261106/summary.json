@@ -1,0 +1,81 @@
+{
+  "schema": "mradm.flac-reader-integrity.v1",
+  "date": "2026-11-06",
+  "status": "three-reader-issues-fixed",
+  "macos": {
+    "base": "10b6b63eeb0a3afcef6b92d36e99a87409583fc4",
+    "architecture": "arm64",
+    "debug_ctest": 5,
+    "release_cpp_ctest": 4,
+    "release_reader_cases": 71,
+    "ogg_rust_tests": 2,
+    "c_api_exports": 164,
+    "rust_offline_tool_link": "passed"
+  },
+  "windows": {
+    "base": "547c7db53451a832f9e7ff589417452d3d041b6b",
+    "architecture": "x64",
+    "build": "canonical MSVC/Ninja Release, vendored FLAC/Opus, SOFA/IAMF off",
+    "release_cpp_ctest": 4,
+    "release_reader_cases": 71,
+    "ogg_rust_tests": 2,
+    "c_api_exports": 164,
+    "source_restored": true,
+    "final_head": "547c7db53451a832f9e7ff589417452d3d041b6b",
+    "final_status": "",
+    "source_sha256_lf": {
+      "CMakeLists.txt": "8236f2b19eff4f0be36bcdc5c1d902efda0dc23233da5a34ad953e4f65efe073",
+      "cmake/MRRust.cmake": "4caae762dd2b0202c764cbc33ea5e19f926a94af48cc687cd60ff40f5c77743d",
+      "include/adm/audio_io.h": "91a4c789a0eb9e291fdb89056aeacc419ae428ef35ef2b767c105ec95085f58a",
+      "rust/crates/mradm-ffi/src/lib.rs": "89235a1b677153f4f095c2d776de5e34cf38e1208c663f0ec3433d9f27c016b6",
+      "rust/crates/mradm-ffi/src/wav.rs": "0ee658637be9d64ce1b57b83b299d763e3c254e36a733cc53aba779bb062f9c2",
+      "rust/crates/mradm-ffi/src/flac.rs": "e0bb4ca94b94a445dfaeb43539d7cb14f72c34b82651e1d113cee9298733261a",
+      "rust/crates/mradm-wav/src/lib.rs": "f04c382e261b7ad3b58d676535165bc1b0405ac03b45fdadcceffdf3ad808d90",
+      "rust/crates/mradm-wav/src/flac.rs": "56c4233be2bf26b24fbcab1fe32b04fe1982a7955891c5cce809b5ff04dd12ee",
+      "src/adm_audio/audio_handles.cpp": "a67badffbd74ad8dda51fa200810777ffdf1a23910801ba06693cd6790d611df",
+      "src/adm_audio/flac_io.cpp": "198b2c0181df5f51399e97de30139eb7863b2009390701f61618c40d09faf728",
+      "src/adm_audio/wav_ffi.h": "1e78a17f5575c341f4bd8cfdb27e8b9b40659757590d185effeb953642bab18a",
+      "tests/tools/pcm_bits.cpp": "7c7a1da878d69ddda03784607935e1c1cdc24ce53fbe4dca75193514425608ce",
+      "tests/unit/core_smoke_test.cpp": "688bf597638bb23daebcf0adf714c5eba831169a3632e7154eaf6cdd986741ad",
+      "tests/unit/flac_io_smoke_test.cpp": "a12e9d605eb71944bf061db3aa9cda30dc62da7595aad0877eb584d413ba91d0",
+      "tests/support/audio_reader.cpp": "a5b53be09ff26874df2f697e1a871dcff69c5ac628f710692be0f1c27c199612",
+      "tests/support/audio_reader.h": "c325e470440079f15923ad22fa8f8b2c3671f56a75b42e7cb32b291d94657e1a",
+      "tests/unit/flac_reader_test.py": "60e83095f0d7644b186be39327271a96c19e763f0145d83ceec72da4a550fa7d"
+    }
+  },
+  "matching_fixture_identities": 71,
+  "move_assignments_per_platform": 64,
+  "production_cpp_lines": {
+    "before": 29408,
+    "after": 29371
+  },
+  "macos_source_sha256": {
+    "CMakeLists.txt": "18bea4d3689d1d4664c3a3390e9f1a7c0632f3dc4f1d80d80fd26bd8765d166d",
+    "cmake/MRRust.cmake": "95df5f24b8cd1d6d4cf85ab2aeb09f94cca900049999075f8970ac69051b14e7",
+    "include/adm/audio_io.h": "91a4c789a0eb9e291fdb89056aeacc419ae428ef35ef2b767c105ec95085f58a",
+    "rust/crates/mradm-ffi/src/lib.rs": "89235a1b677153f4f095c2d776de5e34cf38e1208c663f0ec3433d9f27c016b6",
+    "rust/crates/mradm-ffi/src/wav.rs": "0ee658637be9d64ce1b57b83b299d763e3c254e36a733cc53aba779bb062f9c2",
+    "rust/crates/mradm-ffi/src/flac.rs": "e0bb4ca94b94a445dfaeb43539d7cb14f72c34b82651e1d113cee9298733261a",
+    "rust/crates/mradm-wav/src/lib.rs": "f04c382e261b7ad3b58d676535165bc1b0405ac03b45fdadcceffdf3ad808d90",
+    "rust/crates/mradm-wav/src/flac.rs": "56c4233be2bf26b24fbcab1fe32b04fe1982a7955891c5cce809b5ff04dd12ee",
+    "scripts/quality/language-surface-baseline.json": "29783c214b18f415ef7ae99b1e7a1ea0149e1ce5ff316c30b295eb545136a2c7",
+    "src/adm_audio/audio_handles.cpp": "a67badffbd74ad8dda51fa200810777ffdf1a23910801ba06693cd6790d611df",
+    "src/adm_audio/flac_io.cpp": "198b2c0181df5f51399e97de30139eb7863b2009390701f61618c40d09faf728",
+    "src/adm_audio/wav_ffi.h": "1e78a17f5575c341f4bd8cfdb27e8b9b40659757590d185effeb953642bab18a",
+    "tests/tools/pcm_bits.cpp": "7c7a1da878d69ddda03784607935e1c1cdc24ce53fbe4dca75193514425608ce",
+    "tests/unit/core_smoke_test.cpp": "688bf597638bb23daebcf0adf714c5eba831169a3632e7154eaf6cdd986741ad",
+    "tests/unit/flac_io_smoke_test.cpp": "a12e9d605eb71944bf061db3aa9cda30dc62da7595aad0877eb584d413ba91d0",
+    "tests/support/audio_reader.cpp": "a5b53be09ff26874df2f697e1a871dcff69c5ac628f710692be0f1c27c199612",
+    "tests/support/audio_reader.h": "c325e470440079f15923ad22fa8f8b2c3671f56a75b42e7cb32b291d94657e1a",
+    "tests/unit/flac_reader_test.py": "60e83095f0d7644b186be39327271a96c19e763f0145d83ceec72da4a550fa7d"
+  },
+  "scope": "Targeted correctness checks; no full consistency matrix or performance acceptance.",
+  "main_integration": {
+    "base": "547c7db53451a832f9e7ff589417452d3d041b6b",
+    "production_cpp_lines": {
+      "before": 29297,
+      "after": 29260
+    },
+    "source_matches_windows_validation": true
+  }
+}

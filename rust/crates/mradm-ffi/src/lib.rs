@@ -17,6 +17,7 @@ mod ear_post;
 mod engine;
 mod engine_render;
 mod engine_service;
+mod flac;
 mod hoa;
 mod hptf;
 mod hrtf;

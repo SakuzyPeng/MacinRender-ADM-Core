@@ -24,6 +24,8 @@ typedef struct MradmWavInfo {
 } MradmWavInfo;
 // cppcheck-suppress-end unusedStructMember
 int32_t mradm_wav_reader_open(const uint8_t*, size_t, MradmWavReader**, MradmWavInfo*, uint8_t*, size_t);
+// Validate native/Ogg FLAC completely and count samples, including unknown-length streams.
+int32_t mradm_flac_validate(const uint8_t*, size_t, MradmWavInfo*, uint8_t*, size_t);
 void mradm_wav_reader_destroy(MradmWavReader*);
 int32_t mradm_wav_reader_read(MradmWavReader*, float*, size_t, uint64_t*, uint8_t*, size_t);
 int32_t mradm_wav_reader_seek(MradmWavReader*, uint64_t, uint8_t*, size_t);

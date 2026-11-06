@@ -765,9 +765,16 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_drwav_reference_tests COMMAND mr_adm_drwav_reference_tests)
     endif()
 
+    # The format-erased reader is used only by test/consistency tools.
+    add_library(mr_adm_audio_test_support STATIC tests/support/audio_reader.cpp)
+    target_include_directories(mr_adm_audio_test_support PUBLIC tests/support)
+    target_link_libraries(mr_adm_audio_test_support PUBLIC MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_audio_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_audio_test_support)
+
     # core_smoke_test exercises RenderService (empty-input validation); link engine.
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMEngine mr_adm_audio_test_support)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
@@ -978,7 +985,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Extracts the final float32 PCM as a canonical little-endian bit image and bit-compares two
     # such images. Built by default so the CLI/protocol regression test can run through CTest.
     add_executable(mr_adm_pcm_bits tests/tools/pcm_bits.cpp)
-    target_link_libraries(mr_adm_pcm_bits PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_pcm_bits PRIVATE mr_adm_audio_test_support)
     mr_adm_core_apply_warnings(mr_adm_pcm_bits)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
 
@@ -1033,6 +1040,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_live_scene_trace_tests COMMAND mr_adm_live_scene_trace_tests)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME mr_adm_flac_reader_tests
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
+                --pcm-tool $<TARGET_FILE:mr_adm_pcm_bits>)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
         target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
             MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json)

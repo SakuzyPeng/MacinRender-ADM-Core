@@ -5,6 +5,7 @@
 pub mod caf;
 mod chna;
 mod edit;
+pub mod flac;
 mod reader;
 mod writer;
 
