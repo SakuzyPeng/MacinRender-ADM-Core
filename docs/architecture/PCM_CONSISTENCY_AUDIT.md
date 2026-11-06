@@ -536,6 +536,20 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 生产 C/C++ 32,551 → 29,805 行。见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)。
 
+**5.3 状态**：文件流式与监听的打开在 Rust `mradm-engine` `stream`，分两批完成：
+- A：四个 C++ 流式壳（扬声器、Triple Balance、room、双耳）合为一个 `render_common::EngineStream`，打开检查、分步 seek 与各后端的取消点、覆盖、朝向与 room 的尾声和控制在 Rust；
+- B：监听工厂 `RealtimeStreamFactory::open` 的打开规则移入 `stream::open_monitor`，Apple 后端作为岛由 C++ 打开；`renderer_factory` 只剩 `normalize_output_layout`；`mr_adm_phase2_stream` 改为 `mradm-ffi` example。
+
+`PreviewSession` 按用户决定（2026-11-03）保持 C++ 外壳：它只缓存场景与准备句柄，每个窗口调用一次 Rust 渲染状态机。
+
+除 [5.3 发布说明](RUST_ORCHESTRATION_STREAM.md#发布说明) 列出的例外外，文字、context、日志、取消点与输出逐项不变。
+例外包括 Windows 上监听的矩阵标签与准备 context 改为 UTF-8、监听请求里非 UTF-8 或含 NUL 的路径被拒绝，以及一致性工具检查 room 夹具名的写法。MonitorEngine 改为先写失败日志再发布失败状态，可观察行为不变。
+
+本机对照都是 0 差异：A 的 36 个文件流式行（plain 与 diag）与 918 个流式变体；B 的新旧监听工厂 2,960 例（含 282 条流的 PCM），以及同一构建上 C++ 工具与 Rust 工具的 plain、diag 两次 `compare-collections`。
+三次合并后的三平台 Consistency 都通过，最后一次 41994125083（`d543bc0`）的四份报告都是 291 个 PCM id 相同、门禁失败 0。
+
+生产 C/C++ 29,805 → 29,297 行。见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
