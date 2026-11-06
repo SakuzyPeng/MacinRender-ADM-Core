@@ -339,8 +339,7 @@ fn states(p: &Prepared, priority: u32) -> Vec<(u64, State, u32)> {
         .collect()
 }
 
-#[test]
-fn object_events_ramp_truncate_and_order_like_the_cpp_renderer() {
+fn ramp_scene() -> RenderScene {
     let mut second = cartesian(3000, u64::MAX, [-0.8, 1.3, 0.]);
     second.interpolation_present = 1;
     second.interpolation = 3317;
@@ -367,13 +366,19 @@ fn object_events_ramp_truncate_and_order_like_the_cpp_renderer() {
         FRAMES,
     );
     scene.snapshot.object_blocks[3].gain = 0.25;
+    scene
+}
+
+#[test]
+fn object_events_ramp_truncate_and_order_like_the_cpp_renderer() {
+    let mut scene = ramp_scene();
     let (p, logs) = ok(&request(&scene));
     assert_eq!(logs, vec![(Level::Info, room::PREPARED_INFO.to_owned())]);
     let ramps: Vec<(u64, u32)> = states(&p, 2).iter().map(|s| (s.0, s.2)).collect();
     assert_eq!(
         ramps,
         vec![(0, 0), (3000, 2000), (5000, 0), (7000, 5 * 48)],
-        "first and jump blocks cut; the authored ramp is capped by the block; the default is ms × 48"
+        "first and jump blocks cut; the authored ramp is capped by the block; the default is the ms at 48 kHz"
     );
     let ends: Vec<u64> = states(&p, 0).iter().skip(1).map(|s| s.0).collect();
     assert_eq!(
@@ -402,11 +407,30 @@ fn object_events_ramp_truncate_and_order_like_the_cpp_renderer() {
     assert!(states(&muted, 2).iter().all(|s| s.1.gain == 0.));
     let mut faster = request(&scene);
     faster.default_interp_ms = 20;
-    assert_eq!(
-        states(&ok(&faster).0, 2)[3].2,
-        20 * 48,
-        "the 96 kHz known issue stays"
-    );
+    assert_eq!(states(&ok(&faster).0, 2)[3].2, 20 * 48);
+}
+
+#[test]
+fn default_ramps_follow_the_room_sample_rate() {
+    // PCM consistency 5.7: `default_interp_ms` at the room's own rate (the C++ shell used × 48).
+    // Blocks with their own interpolation length or a jump keep it.
+    let base = ramp_scene();
+    for (rate, ms, expected) in [
+        (44100, 5, 220),
+        (48000, 5, 240),
+        (96000, 5, 480),
+        (96000, 7, 672),
+        (44100, 3, 132),
+    ] {
+        let mut scene = base.clone();
+        scene.info.sample_rate = rate;
+        let mut r = request(&scene);
+        r.sample_rate = rate;
+        r.default_interp_ms = ms;
+        let rows = states(&ok(&r).0, 2);
+        assert_eq!(rows[0].2, 0, "the first block starts without a ramp");
+        assert_eq!(rows[3].2, expected, "{rate} Hz, {ms} ms");
+    }
 }
 
 fn ds_scene(blocks: Vec<(Vec<&'static str>, mradm_adm::records::DirectBlock)>) -> RenderScene {

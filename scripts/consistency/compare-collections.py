@@ -25,7 +25,7 @@ import sys
 import phase2_common as common
 
 PRECONDITION_KEYS = ('schema', 'source', 'config', 'diagnostics', 'offline', 'scene', 'stream', 'sofa',
-                     'json_fixtures', 'room')
+                     'json_fixtures', 'room', 'room_96k')
 COMPARED = ('outputs', 'fixtures', 'comparisons', 'replay_status', 'artifacts', 'logs')
 PLATFORM_KEYS = ('platform.system', 'platform.machine')
 CHECKPOINT_SUFFIXES = ('.f32', '.c32', '.f64', '.i32')

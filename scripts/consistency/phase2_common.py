@@ -13,7 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 FORMATS = {'.f32': (4, 'f'), '.f64': (8, 'd'), '.c32': (4, 'f'), '.i32': (4, 'i')}
 SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support', 'tests/fixtures/sofa',
-               'tests/fixtures/room/phase2', 'scripts/consistency')
+               'tests/fixtures/room', 'scripts/consistency')
 BINARY_SUFFIXES = {'.bin', '.sofa', '.f32le', '.f32', '.f64', '.u32'}
 TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml', '.dat'}
 REPLAY_TOOLS = ('mr_adm_phase2_render', 'mr_adm_phase2_stream', 'mr_adm_phase2_scene')
@@ -52,7 +52,7 @@ def source_fingerprint(root=ROOT):
     for p in source_files(root):
         data = p.read_bytes()
         # The room pack's manifests are pinned bytes (.gitattributes -text), like its assets.
-        if p.suffix in TEXT_SUFFIXES and not p.is_relative_to(root / ROOM_FIXTURE_DIR):
+        if p.suffix in TEXT_SUFFIXES and not p.is_relative_to(root / ROOM_FIXTURE_ROOT):
             data = data.replace(b'\r\n', b'\n')
         rows[p.relative_to(root).as_posix()] = digest(data)
     return {'sha256': json_digest(rows), 'files': rows}
@@ -170,6 +170,7 @@ JSON_FIXTURES = {
 
 # The synthetic room pack (tests/tools/make_room_phase2_fixtures.py). Its phase table came from the
 # platform libm, so these committed bytes are the input on every platform, never regenerated.
+ROOM_FIXTURE_ROOT = 'tests/fixtures/room'
 ROOM_FIXTURE_DIR = 'tests/fixtures/room/phase2'
 ROOM_FIXTURES = {
     'bands.f64': '65c5345153d2f48b057ce282be27f774447677c4afb9cde391a88c6bd1acdb29',
@@ -186,15 +187,29 @@ ROOM_FIXTURES = {
 }
 
 
-# Frames the pinned room appends after the end of the material (late reverberation and alignment).
+# PCM consistency 5.7: the same pack at 96 kHz (make_room_phase2_fixtures.py --derive-96k), whose
+# objects without an interpolation length ramp over default_interp_ms at the room's own rate.
+ROOM_96K_FIXTURE_DIR = 'tests/fixtures/room/phase2-96k'
+ROOM_96K_FIXTURES = dict(ROOM_FIXTURES, **{
+    'hrir.json': '9a601f5c48145f246d2621bd78dd90e23bfc8c10114b0ee36046baa9cb9d1bf9',
+    'room.json': '8b1e6739485ea19ae47c8a6d18d8317094c937b4fadfb7f448fa6c7443e9c15f',
+})
+# The pinned packs and where the collector copies them under fixtures/.
+ROOM_PACKS = {'room': (ROOM_FIXTURE_DIR, ROOM_FIXTURES), 'room-96k': (ROOM_96K_FIXTURE_DIR, ROOM_96K_FIXTURES)}
+
+
+# Frames the pinned rooms append after the end of the material (late reverberation and alignment);
+# measured from the offline render of each pack.
 ROOM_TAIL_FRAMES = 4441
+ROOM_96K_TAIL_FRAMES = 6012
 
 
-def validate_room_fixtures(directory):
+def validate_room_fixtures(directory, pins=None):
+    pins = ROOM_FIXTURES if pins is None else pins
     names = {p.name for p in directory.iterdir()} if directory.is_dir() else set()
-    if names != set(ROOM_FIXTURES):
+    if names != set(pins):
         raise ValueError('room fixture inventory differs from the pinned pack')
-    for name, expected in ROOM_FIXTURES.items():
+    for name, expected in pins.items():
         if digest((directory / name).read_bytes()) != expected:
             raise ValueError('modified pinned room fixture: ' + name)
 
@@ -370,6 +385,11 @@ def offline_cases():
         {'id': 'room-exact-screen', 'fixture': 'policy-objects', 'slice': '4.2',
          'files': {'--room': 'room/room.json', '--screen-config': 'screen-config.json'},
          'args': ['--no-peak-limit', '--renderer', 'room-binaural', '--output-layout', 'binaural', '--room-quality', 'exact']},
+        # PCM consistency 5.7: the 96 kHz room pack under the four moving objects-room blocks, which
+        # have no interpolation length, so each ramps over default_interp_ms at 96 kHz.
+        {'id': 'room-exact-96k', 'fixture': 'objects-room-96k', 'slice': '5.7',
+         'files': {'--room': 'room-96k/room.json'},
+         'args': ['--no-peak-limit', '--renderer', 'room-binaural', '--output-layout', 'binaural', '--room-quality', 'exact']},
     ]
     return result
 
@@ -475,6 +495,12 @@ def stream_cases():
                            'renderer': 'room-binaural', 'output_layout': 'binaural', 'channels': 2, 'spread': spread,
                            'room': 'room/room.json', 'tail_frames': ROOM_TAIL_FRAMES, 'partition': partition,
                            'input_frames': 48000, 'sample_rate': 48000, 'frames': 96000, 'events': binaural_events})
+    # PCM consistency 5.7: the same replay on the 96 kHz room pack and objects-room-96k.
+    for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+        result.append({'id': f'stream-room-96k-{partition_name}', 'version': 4, 'fixture': 'objects-room-96k',
+                       'renderer': 'room-binaural', 'output_layout': 'binaural', 'channels': 2, 'spread': 'cloud',
+                       'room': 'room-96k/room.json', 'tail_frames': ROOM_96K_TAIL_FRAMES, 'partition': partition,
+                       'input_frames': 96000, 'sample_rate': 96000, 'frames': 192000, 'events': binaural_events})
     return result
 
 

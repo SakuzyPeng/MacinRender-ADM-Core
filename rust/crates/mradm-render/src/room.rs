@@ -2,8 +2,9 @@
 //! `RoomRenderer::prepare` with the same checks, order, arithmetic and texts: one source per
 //! track with blocks, the in-effect Objects and DirectSpeakers blocks as activation, state and
 //! deactivation events, the reference screen of screen-referenced objects, and the stable
-//! `(sample, priority, element)` order. Object ramps keep the C++ `default_interp_ms × 48`
-//! (half length at 96 kHz; a known issue, PCM consistency 4.6).
+//! `(sample, priority, element)` order. A block without its own interpolation length ramps over
+//! `default_interp_ms` at the room's sample rate, as the other backends do (PCM consistency 5.7;
+//! the C++ shell had `default_interp_ms × 48`, half the length at 96 kHz).
 use crate::routing::{self, Error, Level};
 use crate::scene::{self, Log, in_effect, labels, span};
 use mradm_adm::records::{AdmPosition, AdmScreen, Object};
@@ -390,7 +391,7 @@ pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Pre
                 } else if block.interpolation_present != 0 {
                     block.interpolation
                 } else {
-                    u64::from(r.default_interp_ms) * 48
+                    u64::from(r.sample_rate) * u64::from(r.default_interp_ms) / 1000
                 };
                 add_block(&mut p, source, block.start, end, ramp, &state);
             }
