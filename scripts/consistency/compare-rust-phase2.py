@@ -134,6 +134,9 @@ def validate(root, *, allow_tool_overrides=False):
     if manifest.get('room') != common.ROOM_FIXTURES:
         raise ValueError('baseline does not cover the pinned room pack')
     common.validate_room_fixtures(root / 'fixtures/room')
+    if manifest.get('room_96k') != common.ROOM_96K_FIXTURES:
+        raise ValueError('baseline does not cover the pinned 96 kHz room pack')
+    common.validate_room_fixtures(root / 'fixtures/room-96k', common.ROOM_96K_FIXTURES)
     expected = ([c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
                 + [c['id'] for c in manifest['stream']])
     if not expected or len(set(expected)) != len(expected) or set(expected) != set(manifest['outputs']):
@@ -247,7 +250,7 @@ def compare(directories, require_platforms=True, gates=()):
     first = manifests[0]
     for manifest in manifests[1:]:
         for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'json_fixtures', 'room',
-                      'fixtures'):
+                      'room_96k', 'fixtures'):
             if manifest[field] != first[field]:
                 raise ValueError('incompatible baseline: ' + field)
         if compiler_identity(manifest['build']) != compiler_identity(first['build']):
