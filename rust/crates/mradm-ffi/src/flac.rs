@@ -296,3 +296,21 @@ pub unsafe extern "C" fn mradm_flac_validate(
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cargo_tests_link_the_selected_native_decoder() {
+        // Keep a native call reachable even when a platform's linker discards
+        // every unused file-validation path from the other Rust tests.
+        let pointer = unsafe { FLAC__stream_decoder_new() };
+        assert!(!pointer.is_null());
+        let decoder = Owner(pointer);
+        assert_ne!(
+            unsafe { FLAC__stream_decoder_set_md5_checking(decoder.0, 1) },
+            0
+        );
+    }
+}

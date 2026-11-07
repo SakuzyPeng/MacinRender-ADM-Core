@@ -37,6 +37,12 @@ mr_adm_import_rust()
 # the imported staticlib itself, so single-pass linkers (GNU ld) see libFLAC after libmradm_ffi.a;
 # on the INTERFACE wrapper CMake may order an earlier FLAC::FLAC (from ADMAudio) first.
 target_link_libraries(mradm_ffi-static INTERFACE FLAC::FLAC)
+# Cargo links its own examples and tests without CMake's target link interface.
+# Pass the selected provider's linker file (the import library for a Windows DLL)
+# to mradm-ffi/build.rs. A build-script link argument preserves paths with spaces
+# and leaves dependency crates' Rust flags and the shared Cargo cache unchanged.
+set(MR_ADM_RUST_NATIVE_ENV "MR_ADM_FLAC_LINK_FILE=$<TARGET_LINKER_FILE:FLAC::FLAC>")
+add_dependencies(cargo-build_mradm_ffi FLAC::FLAC)
 if(MR_ADM_ENABLE_ROOM_CUDA)
     add_dependencies(mradm_ffi-static mr_adm_room_cuda)
 endif()
@@ -45,6 +51,7 @@ mr_adm_rust_use_platform_sdk(mradm_ffi-static)
 corrosion_set_env_vars(mradm_ffi
     "CARGO_TARGET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/build/rust"
     "CARGO_INCREMENTAL=0"
+    "${MR_ADM_RUST_NATIVE_ENV}"
 )
 corrosion_add_target_rustflags(mradm_ffi "-Crelocation-model=pic")
 
@@ -84,6 +91,7 @@ endif()
 foreach(_mr_phase2_example IN ITEMS kernels render stream)
     add_custom_target(mr_adm_phase2_${_mr_phase2_example}
         COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+            "${MR_ADM_RUST_NATIVE_ENV}"
             "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
             --example phase2_${_mr_phase2_example} --no-default-features ${_mr_phase2_feature_args}
@@ -91,7 +99,9 @@ foreach(_mr_phase2_example IN ITEMS kernels render stream)
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/phase2_${_mr_phase2_example}${CMAKE_EXECUTABLE_SUFFIX}"
             "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_${_mr_phase2_example}${CMAKE_EXECUTABLE_SUFFIX}"
+        DEPENDS FLAC::FLAC
         USES_TERMINAL
+        VERBATIM
     )
 endforeach()
 
@@ -115,11 +125,14 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/rust-dependencies.json" "${_mr_cargo_met
 add_custom_target(mr_adm_rust_quality
     COMMAND "${Rust_CARGO_CACHED}" fmt --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" --all -- --check
     COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+        "${MR_ADM_RUST_NATIVE_ENV}"
         "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" clippy --locked --workspace --all-targets
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" -- -D warnings
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"
+    DEPENDS FLAC::FLAC
     USES_TERMINAL
+    VERBATIM
 )
 
 # Hand-written private FFI headers vs. the Rust exports, via a throwaway cbindgen header.
