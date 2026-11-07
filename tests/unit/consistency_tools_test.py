@@ -81,6 +81,16 @@ class ToolTests(Harness):
         self.assert_status(self.invoke('validate', out), 0)
         self.assert_status(self.invoke('validate', wav), 2)
 
+    def test_unicode_input_and_output_paths(self):
+        # Non-BMP characters also expose lossy argv conversion on Chinese Windows.
+        bits = [0, 0x80000000, 0x3F800000]
+        wav = self.write('输入 中文 \U0001f3a7.wav', wav_bytes(bits))
+        out = self.root / '输出 \U0001f3b5.pcmbits'
+        self.assert_status(self.invoke('extract', wav, out), 0)
+        self.assertEqual(out.read_bytes(), image_bytes(bits))
+        self.assert_status(self.invoke('validate', out), 0)
+        self.assert_status(self.invoke('compare', out, wav), 0)
+
     def test_nonfinite_rejected_in_both_input_forms(self):
         for bits in [0x7FC00000, 0xFFC00000, 0x7F800000, 0xFF800000]:
             with self.subTest(bits=bits):

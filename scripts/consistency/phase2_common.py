@@ -15,7 +15,8 @@ FORMATS = {'.f32': (4, 'f'), '.f64': (8, 'd'), '.c32': (4, 'f'), '.i32': (4, 'i'
 SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support', 'tests/fixtures/sofa',
                'tests/fixtures/room', 'scripts/consistency')
 BINARY_SUFFIXES = {'.bin', '.sofa', '.f32le', '.f32', '.f64', '.u32'}
-TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml', '.dat'}
+TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml',
+                 '.dat', '.manifest'}
 REPLAY_TOOLS = ('mr_adm_phase2_render', 'mr_adm_phase2_stream', 'mr_adm_phase2_scene')
 BUILD_TOOLS = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', *REPLAY_TOOLS,
                'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
