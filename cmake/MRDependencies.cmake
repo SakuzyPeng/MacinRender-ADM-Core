@@ -281,6 +281,14 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(FLAC)
+        if(MSVC AND TARGET FLAC)
+            # FLAC 1.5.0's win_utf8_io.c omits stdlib.h. MSVC's implicit-int
+            # malloc declaration truncates pointers on x64; Debug decoder
+            # diagnostics reach this path on corrupt input. Keep upstream bytes
+            # intact and reject any remaining undeclared C functions.
+            set_property(SOURCE "${flac_SOURCE_DIR}/src/share/win_utf8_io/win_utf8_io.c"
+                TARGET_DIRECTORY FLAC APPEND PROPERTY COMPILE_OPTIONS /FIstdlib.h /we4013)
+        endif()
         if(MR_ADM_STRICT_FP AND TARGET FLAC)
             # FLAC 1.5.0 adds these target-level options after CMAKE_C_FLAGS. Remove them
             # only in the controlled configuration; changing a cache preference would leak
