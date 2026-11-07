@@ -130,6 +130,7 @@ def main():
         check('empty', fixture(frames=0)[0], b'', frames=0)
         check('complete-short-prefix', unknown(header + blocks[0], True), expected[:1024 * 8], frames=1024)
         check('中文 空格', data, expected)
+        check('unicode-\U0001f3a7', data, expected)
         pages = ogg(header, blocks)
         check('ogg', b''.join(pages), expected)
         check('ogg-unknown', b''.join(ogg(unknown(header, True), blocks)), expected)

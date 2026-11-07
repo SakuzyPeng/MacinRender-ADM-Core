@@ -985,6 +985,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Extracts the final float32 PCM as a canonical little-endian bit image and bit-compares two
     # such images. Built by default so the CLI/protocol regression test can run through CTest.
     add_executable(mr_adm_pcm_bits tests/tools/pcm_bits.cpp)
+    if(MSVC)
+        # Keep narrow argv and file APIs lossless on non-UTF-8 Windows hosts.
+        target_sources(mr_adm_pcm_bits PRIVATE tests/tools/pcm_bits.manifest)
+    endif()
     target_link_libraries(mr_adm_pcm_bits PRIVATE mr_adm_audio_test_support)
     mr_adm_core_apply_warnings(mr_adm_pcm_bits)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
