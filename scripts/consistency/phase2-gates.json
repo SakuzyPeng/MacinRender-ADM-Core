@@ -1740,6 +1740,12 @@
     },
     {
       "kind": "case",
+      "pattern": "room-exact-96k",
+      "reason": "room-binaural exact tier on the 96 kHz pinned room pack; blocks without an interpolation length ramp over default_interp_ms at 96 kHz (PCM consistency 5.7)",
+      "reference": "docs/architecture/RUST_ROOM_DEFAULT_RAMP.md"
+    },
+    {
+      "kind": "case",
       "pattern": "stream-room-extent-fixed",
       "reason": "room-binaural exact-tier file stream with live overrides, a head orientation, a seek and the room tail; partition-invariant (PCM consistency 4.2)",
       "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
@@ -1761,6 +1767,18 @@
       "pattern": "stream-room-cartesian-fragmented",
       "reason": "room-binaural exact-tier file stream with live overrides, a head orientation, a seek and the room tail; partition-invariant (PCM consistency 4.2)",
       "reference": "docs/architecture/RUST_INVERSION_COVERAGE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-room-96k-fixed",
+      "reason": "room-binaural exact-tier file stream on the 96 kHz pinned room pack with live overrides, a head orientation, a seek, the room tail and default ramps at 96 kHz; partition-invariant (PCM consistency 5.7)",
+      "reference": "docs/architecture/RUST_ROOM_DEFAULT_RAMP.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "stream-room-96k-fragmented",
+      "reason": "room-binaural exact-tier file stream on the 96 kHz pinned room pack with live overrides, a head orientation, a seek, the room tail and default ramps at 96 kHz; partition-invariant (PCM consistency 5.7)",
+      "reference": "docs/architecture/RUST_ROOM_DEFAULT_RAMP.md"
     },
     {
       "kind": "case",

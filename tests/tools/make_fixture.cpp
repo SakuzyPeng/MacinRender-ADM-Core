@@ -24,6 +24,8 @@
 //   hoa              HOA1 (4 channels) — HOA-typed input path
 //   objects-room     1 Cartesian Objects channel with equal-size extent moving over four blocks —
 //                    the Triple Balance size path (PCM consistency 3.4)
+//   objects-room-96k objects-room at 96 kHz (1 s, 96000 frames) for the 96 kHz room pack: its blocks
+//                    have no interpolation length, so the room's default ramp applies (5.7)
 //   params           40 same-start Objects blocks and a Cartesian DirectSpeakers channel, both with
 //                    dB gains — block order and import projections (PCM consistency 3.5)
 //   hoa3             HOA3 (16 channels) — higher-order decoding, whose AllRAD products once took
@@ -57,6 +59,7 @@ namespace {
 
 constexpr uint32_t k_sample_rate = 48000;
 constexpr uint32_t k_frames = 48000; // 1 s — keep CI artifacts small
+constexpr uint32_t k_high_rate = 96000;
 constexpr uint16_t k_bit_depth = 24;
 
 // Numerical Recipes LCG. Chosen for being trivially reproducible, not for statistical quality:
@@ -483,7 +486,7 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
     return {doc, uid_strs};
 }
 
-void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t seed) {
+void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t seed, uint32_t rate, uint32_t frames) {
     const auto channels = static_cast<uint16_t>(built.uids.size());
 
     std::ostringstream xml_buf;
@@ -497,16 +500,16 @@ void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t 
     auto chna = std::make_shared<fixture::WaveChna>(ids);
     auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
-    auto writer = fixture::write_wave(out_path, channels, k_sample_rate, k_bit_depth, chna, axml);
-    const auto samples = make_signal(channels, k_frames, seed);
-    writer->write(samples.data(), k_frames);
+    auto writer = fixture::write_wave(out_path, channels, rate, k_bit_depth, chna, axml);
+    const auto samples = make_signal(channels, frames, seed);
+    writer->write(samples.data(), frames);
 }
 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
               << "kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n"
-              << "     | objects-room | params | directspeakers | directspeakers-lfe | hoa | hoa3\n"
-              << "     | policy-objects\n";
+              << "     | objects-room | objects-room-96k | params | directspeakers | directspeakers-lfe\n"
+              << "     | hoa | hoa3 | policy-objects\n";
 }
 
 } // namespace
@@ -541,7 +544,7 @@ int main(int argc, char** argv) try {
     } else if (kind == "hoa") {
         built = build_hoa(1);
         seed = 0x44444444U;
-    } else if (kind == "objects-room") {
+    } else if (kind == "objects-room" || kind == "objects-room-96k") {
         built = build_objects_room();
         seed = 0x88888888U;
     } else if (kind == "params") {
@@ -561,9 +564,12 @@ int main(int argc, char** argv) try {
         return 2;
     }
 
-    write_fixture(built, out_path, seed);
-    std::cout << "wrote " << out_path << " kind=" << kind << " channels=" << built.uids.size() << " frames=" << k_frames
-              << " rate=" << k_sample_rate << "\n";
+    // The 96 kHz kind keeps the 1 s duration, so its block times are those of objects-room.
+    const auto rate = kind == "objects-room-96k" ? k_high_rate : k_sample_rate;
+    const auto frames = kind == "objects-room-96k" ? k_high_rate : k_frames;
+    write_fixture(built, out_path, seed, rate, frames);
+    std::cout << "wrote " << out_path << " kind=" << kind << " channels=" << built.uids.size() << " frames=" << frames
+              << " rate=" << rate << "\n";
     return 0;
 } catch (const std::exception& error) {
     std::cerr << "fixture setup failed: " << error.what() << '\n';

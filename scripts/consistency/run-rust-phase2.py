@@ -101,13 +101,15 @@ def main():
     stream_by_id = {row['id']: row for row in streams}
     sofa_root = common.ROOT / 'tests/fixtures/sofa'
     common.validate_sofa_fixtures(sofa_root)
-    common.validate_room_fixtures(common.ROOT / common.ROOM_FIXTURE_DIR)
+    for directory, pins in common.ROOM_PACKS.values():
+        common.validate_room_fixtures(common.ROOT / directory, pins)
     build_record, build_errors = collect(build)
     if build_errors:
         raise ValueError('invalid build provenance: ' + '; '.join(build_errors))
     manifest = {'schema': 'mradm.phase2.v1', 'complete': False, 'config': args.config, 'diagnostics': diagnostics,
                 'source': source, 'offline': offline, 'scene': scenes, 'stream': streams, 'sofa': common.SOFA_FIXTURES,
-                'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES, 'build': build_record,
+                'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
+                'room_96k': common.ROOM_96K_FIXTURES, 'build': build_record,
                 'build_identity': build_identity, 'collection_root': str(out),
                 'binaries': {k: common.digest(v.read_bytes()) for k, v in binaries.items()},
                 'tool_overrides': {k: {'path': str(v), 'sha256': common.digest(v.read_bytes())}
@@ -131,9 +133,10 @@ def main():
         for name in common.SOFA_FIXTURES:
             shutil.copyfile(sofa_root / name, out / 'fixtures' / name)
         common.write_json_fixtures(out / 'fixtures')
-        (out / 'fixtures/room').mkdir()
-        for name in common.ROOM_FIXTURES:
-            shutil.copyfile(common.ROOT / common.ROOM_FIXTURE_DIR / name, out / 'fixtures/room' / name)
+        for folder, (directory, pins) in common.ROOM_PACKS.items():
+            (out / 'fixtures' / folder).mkdir()
+            for name in pins:
+                shutil.copyfile(common.ROOT / directory / name, out / 'fixtures' / folder / name)
         for fixture in sorted({c['fixture'] for c in offline + streams}):
             run([binaries['mr_adm_make_fixture'], fixture, out / 'fixtures' / (fixture + '.wav')], out / 'logs' / (fixture + '.log'))
         for row in offline:
@@ -263,7 +266,8 @@ def main():
                     raise ValueError('kernel diagnostic noninterference failed: ' + path.name)
             manifest['noninterference'] = {'passed': True, 'baseline_manifest_sha256': common.digest((args.baseline / 'manifest.json').read_bytes())}
         common.validate_sofa_fixtures(out / 'fixtures')
-        common.validate_room_fixtures(out / 'fixtures/room')
+        for folder, (_, pins) in common.ROOM_PACKS.items():
+            common.validate_room_fixtures(out / 'fixtures' / folder, pins)
         manifest['fixtures'] = {p.relative_to(out / 'fixtures').as_posix(): common.digest(p.read_bytes())
                                 for p in sorted((out / 'fixtures').rglob('*')) if p.is_file()}
         manifest['artifacts'] = {p.relative_to(out).as_posix(): common.digest(p.read_bytes())
