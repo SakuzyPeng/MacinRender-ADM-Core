@@ -1561,6 +1561,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
     set(_mr_rust_unit_test_command
         "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+        "${MR_ADM_RUST_NATIVE_ENV}"
         "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked --workspace
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" ${_mr_rust_test_features})
@@ -1579,7 +1580,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         COMMAND ${_mr_rust_unit_test_command} --no-run
         COMMAND ${_mr_room_trace_test_command} --no-run
         DEPENDS mradm_ffi-static
-        USES_TERMINAL)
+        USES_TERMINAL VERBATIM)
 
     add_test(NAME mr_adm_rust_unit_tests COMMAND ${_mr_rust_unit_test_command})
     set_tests_properties(mr_adm_rust_unit_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
