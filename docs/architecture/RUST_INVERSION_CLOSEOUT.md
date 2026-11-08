@@ -83,7 +83,7 @@ libsamplerate、libebur128、dr_wav 在 Linux）。两者四期之前最后一�
 
 - **room 离线默认 ramp（4.6 已知问题）。** 对象块没有 `interpolationLength` 时，room 的离线与文件流式渲染用 `default_interp_ms × 48`
   帧作 ramp，96 kHz 下只有应有长度的一半。修复会改变 96 kHz room 的 PCM，按有意的数值变化单独成片（审计五期 5.7）。
-  见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
+  见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。已在五期 5.7 修正（提前到 5.4 之前），见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)。
 - **BINAURAL-001。** Windows cloud 离线端到端耗时回退，只涉及性能，作为独立任务跟踪。
   见 [4.7 记录的 B 合并审查](RUST_INVERSION_BINAURAL.md#b-合并审查2026-10-27)。
 

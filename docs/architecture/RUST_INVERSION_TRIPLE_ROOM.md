@@ -45,13 +45,13 @@ C++ 侧只剩适配：
 - 4.6 分 A–F 六批，每批单独提交，维护者本机全量对照通过后再开始下一批。
 - room 拆为两批：D 只迁资源准备与事件表（C++ `RoomStream` 暂经过渡视图读 Rust 事件表），E 迁运行时状态机、文件流式与 Scene room，并删除过渡视图。
 - Scene 流式 Triple Balance 的 spread=none 警告按 generation 的元素顺序发出（发布说明第 1 项）。
-- room 离线默认 ramp `default_interp_ms × 48` 照原样迁移，记为已知问题（发布说明第 2 项）。
+- room 离线默认 ramp `default_interp_ms × 48` 照原样迁移，记为已知问题（发布说明第 2 项；已在五期 5.7 修正，见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)）。
 
 ## 发布说明
 
 都不改变锁定矩阵的 PCM：
 1. **Scene Triple Balance 的警告顺序。** 同一帧有多个元素首次触发 spread=none 警告时，现在按 generation 中的元素顺序发出；C++ 按 `unordered_set` 的遍历顺序，与平台有关。警告的内容、条数与“每个 generation 每元素一次”不变。锁定矩阵中观测不到：Scene 重放不记录警告，矩阵里都是 spread=auto。
-2. **已知问题：room 离线默认 ramp。** 对象块没有 `interpolationLength` 时，room 的离线与文件流式渲染用 `default_interp_ms × 48` 帧作 ramp，96 kHz 下只有应有长度的一半。本切片照原样迁移，另开批次修复；修复会改变 96 kHz room 的 PCM。
+2. **已知问题：room 离线默认 ramp。** 对象块没有 `interpolationLength` 时，room 的离线与文件流式渲染用 `default_interp_ms × 48` 帧作 ramp，96 kHz 下只有应有长度的一半。本切片照原样迁移，另开批次修复；修复会改变 96 kHz room 的 PCM。已在五期 5.7 修正，见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)。
 3. **删除 `resolve_reference_screen`。** 它随 room 事件表迁入 Rust 后已无调用者，从 `include/adm/screen.h` 与 `src/adm_core/screen.cpp` 删除（`include/adm` 除 `c_api.h` 外已不是对外接口，ADR 0021 §4）。C ABI 不受影响。
 4. **删除的私有导出。** `mradm_dsp_live_tb_*`（C）、`mradm_room_session_*`、`mradm_room_instance_*` 与 `mradm_room_validate_overrides`（E），以及 D 的过渡视图；它们只在 `mradm-ffi` 与 C++ 之间使用，C ABI bundle 本来就不导出。
 5. **维护者补充的修正。**
