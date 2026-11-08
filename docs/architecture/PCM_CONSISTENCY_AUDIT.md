@@ -470,7 +470,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **4.5 状态**：扬声器后端（VBAP、HOA、EAR）、Scene 流式的 VBAP 渲染器，以及它们共用的 DirectSpeakers / 标签 / LFE 路由、对象块预处理、离线驱动与文件流式渲染迁入新 crate `mradm-render`，Rust 后端只读策略后的 Rust 场景句柄；C++ 只剩适配壳、能力表、离线驱动的写出 / 取消 / 进度，以及给 4.6、4.7 后端用的薄包装。EAR 的 channelLock / divergence 预处理与 22.2 LFE 策略随之迁入。`speaker/s*`、`vbap.0*`、`hoa.0*`、`ear.*` 与 `.30-vbap*` 检查点改由 Rust 写出。路由规则以删除前 C++ 生成的 4,550 条黄金数据验收；各批的新旧 CLI / Scene 对照（saf 1,148 例、hoa 886 例、ear 2,096 例、88 个 Scene 重放）全部逐字节相同。生产 C/C++ 由 42,406 行降到 39,747 行。三平台 Consistency 39933972829（`16e14dc`）、39959813760（`08350d9`）、39987342040（`dd3f82b`）与 40004502957（`763d637`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.5 记录](RUST_INVERSION_SPEAKERS.md)。
 
-**4.6 状态**：Triple Balance 后端（场景规范化、床、报告、离线 TB 内核、文件流式与 Scene 流式渲染器）和 room 后端（资源与 HRIR 加载、事件表、准备线程状态机、文件流式与 Scene 流式渲染器）迁入 `mradm-render` 与 `mradm-dsp` `room::loading`。C++ 只剩适配壳、能力表、`render_window` 的写出 / 计量 / 取消，以及 `IRoomControl` 薄壳；只剩测试使用的 Triple Balance C++ 移到 `tests/support/triple_balance`。`.30-triple-*` 检查点改由 Rust 写出，room 原有的浮点环境边界由 FFI 作用域保留。Triple Balance 报告以删除前 C++ 生成的 1,300 例黄金数据验收；各批新旧对照（Triple Balance 离线 992 例、文件流式 650 例，room CLI 1,014 例，88 个 Scene 重放的普通与诊断构建）全部逐字节相同。行为差别只有 Scene Triple Balance 警告的顺序；room 离线默认 ramp 的 `×48` 照原样迁移，记为已知问题。生产 C/C++ 由 39,747 行降到 36,931 行。三平台 Consistency 40099269643（`6940df9`）、40122405263（`a072146`）、40166924313（`305159f`）、40176869018（`72c188b`）与 40186174718（`ea07aa9`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
+**4.6 状态**：Triple Balance 后端（场景规范化、床、报告、离线 TB 内核、文件流式与 Scene 流式渲染器）和 room 后端（资源与 HRIR 加载、事件表、准备线程状态机、文件流式与 Scene 流式渲染器）迁入 `mradm-render` 与 `mradm-dsp` `room::loading`。C++ 只剩适配壳、能力表、`render_window` 的写出 / 计量 / 取消，以及 `IRoomControl` 薄壳；只剩测试使用的 Triple Balance C++ 移到 `tests/support/triple_balance`。`.30-triple-*` 检查点改由 Rust 写出，room 原有的浮点环境边界由 FFI 作用域保留。Triple Balance 报告以删除前 C++ 生成的 1,300 例黄金数据验收；各批新旧对照（Triple Balance 离线 992 例、文件流式 650 例，room CLI 1,014 例，88 个 Scene 重放的普通与诊断构建）全部逐字节相同。行为差别只有 Scene Triple Balance 警告的顺序；room 离线默认 ramp 的 `×48` 照原样迁移，记为已知问题（五期 5.7 已修正）。生产 C/C++ 由 39,747 行降到 36,931 行。三平台 Consistency 40099269643（`6940df9`）、40122405263（`a072146`）、40166924313（`305159f`）、40176869018（`72c188b`）与 40186174718（`ea07aa9`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
 
 **4.7 B 本机对照（2026-10-27）**：`c967d840` 与 `1c52d999` 在无诊断插桩 Release 下，macOS arm64 的 83 例、Windows x64 的 77 例全部与基线逐位相同，77 个共用候选输出跨平台也相同。Windows 复测仍有 cloud 离线端到端耗时 +10.02%、带拓扑编辑的文件流式渲染峰值内存 +21.04% 两项开放回退。维护者要求记录问题后合并；性能验收尚未完成，本轮未继续 macOS 性能矩阵或长测。范围、隔离观察和原始轮次见 [4.7 记录的 B 合并审查](RUST_INVERSION_BINAURAL.md#b-合并审查2026-10-27)。
 
@@ -484,7 +484,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 **4.9 状态**：4.5 之后扬声器文件流式（VBAP、HOA、EAR）已按固定块渲染进 FIFO，与请求分块无关、从第 0 帧起与离线相同；剩下的偏差在 seek：块不在离线的绝对网格上（开平滑时插值端点不同），HOA / EAR 也不预滚。4.9 让 seek 从离线窗口的起点（`offline::window_start`，离线与流共用）渲染并丢弃目标之前的帧，seek 时重启 live gain 去拉链，seek 之后与同一位置的离线窗口逐位相同；离线输出不变。新增 8 个开平滑（2048 帧）的文件流式重放并设门禁，PCM id 由 283 增至 291，文件流式重放由 28 增至 36。有意变化的是 12 个 EAR / HOA 文件流式重放 seek 之后的 PCM；全部 79 个离线行与其余 16 个基线文件流式行在普通与诊断构建中相同，8 个新增文件流式行仅候选支持，候选 36 个重放都与分块无关。Scene 流式的双耳卷积与分数比率重采样仍依赖分块，S03 的这一部分不变。三平台 Consistency 41159930885（`ecb2fb5`）在 config A、B 的普通与诊断四份报告中均为 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。见 [4.9 记录](RUST_INVERSION_SMOOTHING.md)。
 
-**4.10 状态（四期结项）**：结项提交 main `221ce28`。Consistency 41166081362 在 config A、B 的普通与诊断四份报告中都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0；诊断报告中每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。CI 41166081382 与 Quality 41166081381 通过；Release Build 41183519975（5 个打包 job）与 Reference tests 41183521970（7 个参考单元）通过。生产 C/C++ 由 4.1 的 45,090 行降到 32,551 行（−12,539 行，27.8%），岛与 CUDA 边界不变。四期目标逐条完成；room 离线默认 ramp 的 `×48` 与 BINAURAL-001 移交五期。见 [四期结项](RUST_INVERSION_CLOSEOUT.md)。
+**4.10 状态（四期结项）**：结项提交 main `221ce28`。Consistency 41166081362 在 config A、B 的普通与诊断四份报告中都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0；诊断报告中每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。CI 41166081382 与 Quality 41166081381 通过；Release Build 41183519975（5 个打包 job）与 Reference tests 41183521970（7 个参考单元）通过。生产 C/C++ 由 4.1 的 45,090 行降到 32,551 行（−12,539 行，27.8%），岛与 CUDA 边界不变。四期目标逐条完成；room 离线默认 ramp 的 `×48` 与 BINAURAL-001 移交五期（`×48` 已在 5.7 修正）。见 [四期结项](RUST_INVERSION_CLOSEOUT.md)。
 
 ## 五期：编排与实时调度迁入 Rust
 
@@ -500,7 +500,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 | 5.4 | Scene 流式引擎 | `SceneStreamEngine`（generation、事件、时钟缝、epoch、preroll、EOS）与 `SceneOutputSession`（捕获设备、设备侧 DSP）迁入 Rust；`mr_adm_phase2_scene` 改为 Rust。 |
 | 5.5 | Monitor 与实时调度 | `MonitorEngine`、`monitor_session`、ring buffer、downmix、立体声峰值保护、OSC 头追踪的 UDP 收发与快照、设备调度与 Windows room worker 等待迁入 Rust；miniaudio 留作 C 岛，Apple / Windows 系统空间 sink 经窄 C 接口。设备回调的分配计数约束保留。 |
 | 5.6 | 删除适配壳 | 删除 C++ `AdmScene`、`IRenderer` / `IRenderStream` / `ILiveSceneRenderer` 适配壳、`src/adm_render_common` 的剩余薄包装与失去调用者的私有 FFI 头；Apple 岛改经窄 C 接口取用 Rust 的路由与预处理。 |
-| 5.7 | room 默认 ramp | 有意的数值变化：room 离线与文件流式的默认 ramp 由 `default_interp_ms × 48` 改为按采样率换算，96 kHz room 的 PCM 改变，单独成片。 |
+| 5.7 | room 默认 ramp | 有意的数值变化：room 离线与文件流式的默认 ramp 由 `default_interp_ms × 48` 改为按采样率换算，96 kHz room 的 PCM 改变，单独成片；加 96 kHz room 用例并设门禁。已完成，提前到 5.4 之前（用户 2026-11-06 决定：当期问题当期处理）。 |
 | 5.8 | 一致性工具与命名清理 | 把按迁移期次或实现语言命名的部分改为按功能命名：一致性采集脚本与工具（`run-rust-phase2.py`、`phase2_common.py`、`compare-rust-phase2.py`、`phase2-gates.json`、build stamp、`mr_adm_phase2_{render,scene,stream,kernels}`、`examples/phase2/`、`tests/tools/phase2_*`、`phase2_tools_test.py`、`tests/fixtures/room/phase2/`，以及对应的 CMake 目标与 CI 步骤）统一改用 consistency 命名；C++ 剩余的 `Rust*` 包装（`RustWavReader`、`RustOutputWriter`、`live_rust_renderer` 等）与 `*_rust_tests` 测试目标按功能改名；生产源码注释中的切片编号（如“PCM consistency 5.2 C1”）改写为功能描述，追溯留在迁移记录与 git 历史；过时的阶段注释（`include/adm/render.h` 的 Phase 2a / 2b、GUI 头追踪的 Phase 2）删除。PCM、检查点名、错误文字与日志不变；已有记录、`RUST_PHASE2_*.md` 与 `evidence/` 保持原名，只在新文档里写新名字；改名前后在同一构建上采集，逐项相同后才删除旧名，维护者本机脚本同步更新。放在 5.6 删除适配壳之后，多数 `Rust*` 包装届时已随壳删除。 |
 | 5.9 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收、Release Build 与 Reference tests，记录规模变化，准备六期；保留已有 Linux 证据，不再安排 Linux 主机验证。 |
 
@@ -549,6 +549,11 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 三次合并后的三平台 Consistency 都通过，最后一次 41994125083（`d543bc0`）的四份报告都是 291 个 PCM id 相同、门禁失败 0。
 
 生产 C/C++ 29,805 → 29,297 行。见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md)。
+
+**5.7 状态**：按用户决定（2026-11-06）提前到 5.4 之前完成。room 离线与文件流式渲染中没有 `interpolationLength` 的对象块，默认 ramp 由 `default_interp_ms × 48` 改为 `sample_rate × default_interp_ms / 1000`，48 kHz 下不变。
+新增 96 kHz 房间包 `tests/fixtures/room/phase2-96k`、夹具 `objects-room-96k` 与 3 个门禁 id（`room-exact-96k`、`stream-room-96k-fixed` / `-fragmented`），PCM id 291 → 294。
+本机对照中现有 115 个离线与文件流式行 plain / diag 逐字节相同，3 个新 id 与旧 ramp 的差异从第二个块的起点加传播延迟开始。同批修正了 libFLAC 在 GNU ld 上的链接顺序，维护者补全了 Cargo 链接的工具与 Windows 部分。
+Consistency 42381474098（`5bb28ce`）的四份报告都是 294 个 PCM id 相同、门禁失败 0。生产 C/C++ 不变。见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)。
 
 ## 每个迁移切片的验证
 
