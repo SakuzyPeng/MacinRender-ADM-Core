@@ -23,12 +23,14 @@
 #else
 #include <unistd.h>
 #endif
+#include <utility>
+
 #include <nlohmann/json.hpp>
 
 #include "adm/head_tracking.h"
 #include "adm/room.h"
 
-#include "live_room_renderer.h"
+#include "live_renderer.h"
 #include "room_ffi.h"
 #include "room_probe_metrics.h"
 #include "room_worker_wait.h"
@@ -40,6 +42,13 @@ using namespace mradm;
 using namespace mradm::live_scene;
 using namespace mradm::realtime;
 using Clock = std::chrono::steady_clock;
+
+// The Scene stream renderer of `room_binaural` (renderer creation is Rust mradm-engine `scene::renderer`).
+[[nodiscard]] mradm::Result<std::unique_ptr<mradm::live_scene::ILiveSceneRenderer>>
+create_live_room_renderer(mradm::live_scene::RendererConfig config, mradm::live_scene::DiagnosticSink diagnostics) {
+    config.renderer = mradm::RendererSelection::room_binaural;
+    return mradm::live_scene::create_live_renderer(config, std::move(diagnostics));
+}
 template <class T> T take(Result<T> result) {
     if (!result) {
         throw std::runtime_error(result.error().message);

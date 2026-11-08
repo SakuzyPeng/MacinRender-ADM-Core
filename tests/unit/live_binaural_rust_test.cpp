@@ -3,12 +3,20 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <utility>
 
 #include "../reference/scene_numeric/live_binaural.h"
-#include "live_binaural_renderer.h"
+#include "live_renderer.h"
 namespace {
 using namespace mradm;
 using namespace mradm::live_scene;
+
+// The Scene stream renderer of `saf_binaural` (renderer creation is Rust mradm-engine `scene::renderer`).
+[[nodiscard]] mradm::Result<std::unique_ptr<mradm::live_scene::ILiveSceneRenderer>>
+create_live_binaural_renderer(mradm::live_scene::RendererConfig config, mradm::live_scene::DiagnosticSink diagnostics) {
+    config.renderer = mradm::RendererSelection::saf_binaural;
+    return mradm::live_scene::create_live_renderer(config, std::move(diagnostics));
+}
 class LiveBinauralChecks {
     size_t compared = 0;
     double maximum = 0;

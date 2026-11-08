@@ -21,9 +21,10 @@
 // clang-format on
 #else
 #include <unistd.h>
+#include <utility>
 #endif
 
-#include "live_triple_balance_renderer.h"
+#include "live_renderer.h"
 #include "scene_output_session.h"
 #include "scene_stream_engine.h"
 
@@ -32,6 +33,14 @@ using namespace mradm;
 using namespace mradm::live_scene;
 using namespace mradm::realtime;
 using Clock = std::chrono::steady_clock;
+
+// The Scene stream renderer of `triple_balance` (renderer creation is Rust mradm-engine `scene::renderer`).
+[[nodiscard]] mradm::Result<std::unique_ptr<mradm::live_scene::ILiveSceneRenderer>>
+create_live_triple_balance_renderer(mradm::live_scene::RendererConfig config,
+                                    mradm::live_scene::DiagnosticSink diagnostics) {
+    config.renderer = mradm::RendererSelection::triple_balance;
+    return mradm::live_scene::create_live_renderer(config, std::move(diagnostics));
+}
 template <typename T> T take(Result<T> value) {
     if (!value) {
         throw std::runtime_error(value.error().message);

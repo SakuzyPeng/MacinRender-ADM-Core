@@ -5,6 +5,7 @@ use super::super::stream_ffi::{
     EngineStream, body, mradm_engine_stream_destroy, mradm_engine_stream_validate,
 };
 use super::*;
+use crate::room::scope;
 use mradm_dsp::room::loading;
 use mradm_engine::stream::{Body, Validator};
 use mradm_render::room;

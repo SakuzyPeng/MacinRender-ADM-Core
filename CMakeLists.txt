@@ -275,7 +275,6 @@ target_sources(
     mr_adm_render_vbap
     PRIVATE
         src/adm_render_vbap/vbap_renderer.cpp
-        src/adm_render_vbap/live_vbap_renderer.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include
@@ -297,7 +296,6 @@ add_library(mr_adm_render_triple_balance)
 add_library(MacinRender::ADMRenderTripleBalance ALIAS mr_adm_render_triple_balance)
 target_sources(mr_adm_render_triple_balance
     PRIVATE
-        src/adm_render_triple_balance/live_triple_balance_renderer.cpp
         src/adm_render_triple_balance/triple_balance_renderer.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
 )
@@ -340,7 +338,7 @@ add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
 target_sources(mr_adm_render_room PRIVATE
     src/adm_render_room/room.cpp
     src/adm_render_room/room_renderer.cpp
-    src/adm_render_room/live_room_renderer.cpp
+    src/adm_render_room/live_renderer.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h include/adm/render_room.h)
 target_include_directories(mr_adm_render_room PRIVATE src/adm_render_room)
 target_link_libraries(mr_adm_render_room PUBLIC MacinRender::ADMCore
@@ -359,7 +357,6 @@ target_sources(
     PRIVATE
         src/adm_render_binaural/binaural_renderer.cpp
         src/adm_render_binaural/hrtf_state.cpp
-        src/adm_render_binaural/live_binaural_renderer.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include
@@ -900,9 +897,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_test_support)
 
     add_executable(mr_adm_live_binaural_rust_tests tests/unit/live_binaural_rust_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp
-        mr_adm_binaural_test_support)
-    target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural)
+    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
+        MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_binaural_test_support)
+    # The frozen reference includes the former creation header (tests/support/frozen_includes).
+    target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural src/adm_render_room
+        tests/support/frozen_includes)
     mr_adm_core_apply_warnings(mr_adm_live_binaural_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_live_binaural_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_binaural_rust_tests)
@@ -923,9 +922,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
             "-DMR_ADM_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_executable(mr_adm_live_vbap_rust_tests tests/unit/live_vbap_rust_test.cpp)
-    target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE MacinRender::ADMRenderVBAP
+    target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE MacinRender::ADMRenderVBAP MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt)
-    target_include_directories(mr_adm_live_vbap_rust_tests PRIVATE src/adm_render_vbap src/adm_render_common tests/unit)
+    # The frozen reference includes the former creation header (tests/support/frozen_includes).
+    target_include_directories(mr_adm_live_vbap_rust_tests PRIVATE src/adm_render_vbap src/adm_render_room src/adm_render_common
+        tests/unit tests/support/frozen_includes)
     mr_adm_core_apply_warnings(mr_adm_live_vbap_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_live_vbap_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_vbap_rust_tests)
@@ -1251,8 +1252,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_scene_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
-        MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderCommon)
-    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine src/adm_render_triple_balance)
+        MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderRoom
+        MacinRender::ADMRenderCommon)
+    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine src/adm_render_triple_balance
+        src/adm_render_room)
     if(WIN32)
         target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE Psapi)
     endif()
@@ -1307,9 +1310,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_triple_balance_rust_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
-    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderCommon
-        mr_adm_triple_balance_test_support)
-    target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderRoom
+        MacinRender::ADMRenderCommon mr_adm_triple_balance_test_support)
+    target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_triple_balance src/adm_render_room)
     mr_adm_core_apply_warnings(mr_adm_live_triple_balance_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_triple_balance_tests)
     add_test(NAME mr_adm_live_triple_balance_tests COMMAND mr_adm_live_triple_balance_tests)
@@ -1606,10 +1609,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_hrtf_interpolation_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp
-        mr_adm_binaural_test_support)
+    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
+        MacinRender::ADMDsp mr_adm_binaural_test_support)
     target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_room"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
 
     mr_adm_core_apply_warnings(mr_adm_live_binaural_continuity_tests)

@@ -31,12 +31,9 @@
 
 #include "../adm_render_common/consistency_trace.h"
 #include "../adm_render_common/live_scene_trace.h"
-#include "live_binaural_renderer.h"
 #include "live_policy_ffi.h"
-#include "live_room_renderer.h"
+#include "live_renderer.h"
 #include "live_scene_state.h"
-#include "live_triple_balance_renderer.h"
-#include "live_vbap_renderer.h"
 #include "resampler.h"
 #include "ring_buffer.h"
 #include "room_worker_wait.h"
@@ -97,24 +94,6 @@ class DiagnosticStore {
     std::vector<live_scene::Diagnostic> entries_;
     std::atomic<std::uint64_t> semantic_degradations_{0U};
 };
-
-[[nodiscard]] Result<std::unique_ptr<live_scene::ILiveSceneRenderer>>
-create_live_renderer(const live_scene::RendererConfig& config, const live_scene::DiagnosticSink& diagnostics) {
-    if (config.renderer == RendererSelection::room_binaural) {
-        return live_scene::create_live_room_renderer(config, diagnostics);
-    }
-    if (config.renderer == RendererSelection::saf) {
-        return live_scene::create_live_vbap_renderer(config, diagnostics);
-    }
-    if (config.renderer == RendererSelection::saf_binaural) {
-        return live_scene::create_live_binaural_renderer(config, diagnostics);
-    }
-    if (config.renderer == RendererSelection::triple_balance) {
-        return live_scene::create_live_triple_balance_renderer(config, diagnostics);
-    }
-    return make_error(ErrorCode::unsupported,
-                      "Scene streams support SAF VBAP, SAF binaural, room-binaural and Triple Balance");
-}
 
 [[nodiscard]] bool object_state_equal(const live_scene::ObjectState& lhs, const live_scene::ObjectState& rhs) noexcept {
     return lhs.valid_fields == rhs.valid_fields && lhs.active == rhs.active && lhs.linear_gain == rhs.linear_gain &&
@@ -1729,7 +1708,7 @@ Result<std::unique_ptr<SceneStreamEngine>> SceneStreamEngine::create(SceneStream
     const live_scene::DiagnosticSink sink = [diagnostics](live_scene::Diagnostic diagnostic) {
         diagnostics->push(std::move(diagnostic));
     };
-    auto renderer = create_live_renderer(config.renderer, sink);
+    auto renderer = live_scene::create_live_renderer(config.renderer, sink);
     if (!renderer) {
         return tl::unexpected{renderer.error()};
     }
@@ -1792,7 +1771,7 @@ Result<void> SceneStreamEngine::switch_backend(live_scene::RendererConfig config
     const live_scene::DiagnosticSink sink = [diagnostics](live_scene::Diagnostic diagnostic) {
         diagnostics->push(std::move(diagnostic));
     };
-    auto prepared = create_live_renderer(config, sink);
+    auto prepared = live_scene::create_live_renderer(config, sink);
     if (!prepared) {
         return tl::unexpected{prepared.error()};
     }

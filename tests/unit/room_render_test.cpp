@@ -18,11 +18,18 @@
 #include "adm/render_room.h"
 
 #include "../adm_io/scene_import_internal.h"
-#include "live_room_renderer.h"
+#include "live_renderer.h"
 #include "speaker_pcm.h"
 #include "wav_fixture.h"
 
 namespace {
+
+// The Scene stream renderer of `room_binaural` (renderer creation is Rust mradm-engine `scene::renderer`).
+[[nodiscard]] mradm::Result<std::unique_ptr<mradm::live_scene::ILiveSceneRenderer>>
+create_live_room_renderer(mradm::live_scene::RendererConfig config, mradm::live_scene::DiagnosticSink diagnostics) {
+    config.renderer = mradm::RendererSelection::room_binaural;
+    return mradm::live_scene::create_live_renderer(config, std::move(diagnostics));
+}
 constexpr const char* k_screen_json = R"({"schema":"mradm.screen-config","version":1,
     "reproduction":{"coordinates":"polar","centre":[0,0,1],"width":90,"aspect_ratio":1.78}})";
 void require(bool condition, const char* message) {
@@ -253,7 +260,7 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
     rendering.renderer = mradm::RendererSelection::room_binaural;
     rendering.output_layout = "binaural";
     rendering.room = config;
-    auto renderer = take(live::create_live_room_renderer(rendering, {}));
+    auto renderer = take(create_live_room_renderer(rendering, {}));
     const std::array elements{live::ElementDescriptor{.element_id = 7, .has_position = true}};
     ok(renderer->configure_generation(1, elements));
     auto control = renderer->room_control();
@@ -309,7 +316,7 @@ void switching_test(const std::filesystem::path& root, const mradm::RoomConfig& 
     ok(renderer->configure_generation(2, elements));
     rendering.room = other;
     rendering.room.hrir_manifest = config.hrir_manifest;
-    auto fresh = take(live::create_live_room_renderer(rendering, {}));
+    auto fresh = take(create_live_room_renderer(rendering, {}));
     ok(fresh->configure_generation(2, elements));
     frame.generation_id = 2;
     frame.media_sample_start = 0;
@@ -331,7 +338,7 @@ void preparation_capacity_test(const std::filesystem::path& root, const mradm::R
     rendering.renderer = mradm::RendererSelection::room_binaural;
     rendering.output_layout = "binaural";
     rendering.room = config;
-    auto renderer = take(live::create_live_room_renderer(rendering, {}));
+    auto renderer = take(create_live_room_renderer(rendering, {}));
     auto control = renderer->room_control();
     const mradm::RoomConfig other{take(mradm::RoomProfile::load(root / "second.json")), {}, 1.5, config.quality};
     std::vector<live::ElementDescriptor> elements;
@@ -368,10 +375,10 @@ void quality_isolation_test(const mradm::RoomConfig& config) {
     exact.renderer = mradm::RendererSelection::room_binaural;
     exact.output_layout = "binaural";
     exact.room = config;
-    auto exact_renderer = take(live::create_live_room_renderer(exact, {}));
+    auto exact_renderer = take(create_live_room_renderer(exact, {}));
     auto fast = exact;
     fast.room.quality = mradm::RoomQuality::realtime;
-    auto fast_renderer = take(live::create_live_room_renderer(fast, {}));
+    auto fast_renderer = take(create_live_room_renderer(fast, {}));
     const auto a = nlohmann::json::parse(take(mradm::inspect_room(exact.room)));
     const auto b = nlohmann::json::parse(take(mradm::inspect_room(fast.room)));
     require(a.at("quality") == "exact" && b.at("quality") == "realtime",
@@ -593,7 +600,7 @@ int main(int argc, char** argv) {
         conflicting.output_layout = "binaural";
         conflicting.sofa_path = sofa;
         conflicting.room = {room, root / "stored-hrir.json", 1.5};
-        require(!mradm::live_scene::create_live_room_renderer(conflicting, {}),
+        require(!create_live_room_renderer(conflicting, {}),
                 "explicit prepared bank must still authenticate an accompanying SOFA");
         return 0;
     } catch (const std::exception& error) {

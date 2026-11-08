@@ -9,40 +9,41 @@ struct Renderer(*mut RenderLive);
 impl Renderer {
     fn new(triple_balance: bool, layout: &[u8]) -> Self {
         let mut handle = ptr::null_mut();
-        let code = if triple_balance {
-            let request = RenderLiveTripleBalanceRequest {
-                layout_id: Text::bytes(layout),
-                geometry: 0,
-                spread: 0,
-                has_sofa: 0,
-                sample_rate: 48000,
-                split_power: 0,
-                smoothing_frames: 0,
-            };
-            unsafe {
-                mradm_render_live_triple_balance_create(
-                    &request,
-                    &mut handle,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                )
-            }
-        } else {
-            let request = RenderLiveVbapRequest {
-                layout_id: Text::bytes(layout),
-                geometry: 0,
-                spread: 0,
-                split_power: 0,
-                smoothing_frames: 0,
-            };
-            unsafe {
-                mradm_render_live_vbap_create(
-                    &request,
-                    &mut handle,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                )
-            }
+        let request = EngineSceneRendererRequest {
+            selection: if triple_balance { 7 } else { 2 },
+            layout_id: Text::bytes(layout),
+            apple_geometry: 0,
+            // VBAP without MDAP spread; Triple Balance automatic.
+            speaker_spread: if triple_balance { 0 } else { 1 },
+            binaural_spread: 0,
+            split_power: 0,
+            smoothing_frames: 0,
+            sample_rate: 48000,
+            has_sofa: 0,
+            sofa_path: Text::bytes(b""),
+            sofa_file_name: Text::bytes(b""),
+            has_reference: 0,
+            reference: Default::default(),
+            has_reproduction: 0,
+            reproduction: Default::default(),
+            room_profile: ptr::null(),
+            room_hrir: Text::bytes(b""),
+            room_metres: 0.,
+            room_quality: 0,
+            sink: 0,
+        };
+        let (mut rate, mut suffix) = (0, Text::bytes(b""));
+        let code = unsafe {
+            mradm_engine_scene_renderer_create(
+                &request,
+                &mut handle,
+                &mut rate,
+                &mut suffix,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
         };
         assert_eq!(code, 0, "{triple_balance} {layout:?}");
         let elements = [1, 2].map(|element_id| RenderLiveElement {

@@ -4,10 +4,9 @@
 //! and its view lives until `mradm_render_matrix_destroy`. Errors fill the caller's message and
 //! context buffers (capacity in, length written out, NUL-terminated) with the C++ bytes.
 use crate::adm::Text;
+pub(crate) use mradm_engine::scene::renderer::Renderer as LiveRenderer;
 use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
-use mradm_render::{
-    live, live_binaural, live_triple_balance, live_vbap, offline, triple_balance_stream,
-};
+use mradm_render::{live, offline, triple_balance_stream};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
@@ -674,18 +673,6 @@ unsafe fn checked_output<'a>(data: *mut f32, len: usize) -> Option<&'a mut [f32]
     Some(unsafe { slice::from_raw_parts_mut(data, len) })
 }
 
-/// The Scene stream VBAP renderer's configuration (`live_scene::RendererConfig`).
-#[repr(C)]
-pub struct RenderLiveVbapRequest {
-    layout_id: Text,
-    /// 1 for the Apple speaker geometry.
-    geometry: u32,
-    /// `speaker_spread_mode != none`.
-    spread: u32,
-    split_power: u32,
-    smoothing_frames: u32,
-}
-
 /// `live_scene::ElementDescriptor`; role 0 object, 1 DirectSpeakers, 2 LFE. `object_id` is the
 /// semantic identity's AudioObject id, empty without one.
 #[repr(C)]
@@ -802,113 +789,12 @@ pub struct RenderLiveDiagnostic {
     message: Text,
 }
 
-/// The Scene stream Triple Balance renderer's configuration (`live_scene::RendererConfig`).
-#[repr(C)]
-pub struct RenderLiveTripleBalanceRequest {
-    layout_id: Text,
-    /// 0 for the standard speaker geometry.
-    geometry: u32,
-    /// `speaker_spread_mode`: 0 automatic, 1 none, 2 MDAP.
-    spread: u32,
-    has_sofa: u32,
-    sample_rate: u32,
-    split_power: u32,
-    smoothing_frames: u32,
-}
-
-enum LiveRenderer {
-    Vbap(Box<live_vbap::Renderer>),
-    TripleBalance(Box<live_triple_balance::Renderer>),
-    Room(Box<mradm_render::room_stream::Live>),
-    Binaural(Box<live_binaural::Renderer>),
-}
-
-impl LiveRenderer {
-    /// The name in boundary texts and the mixer context of rejected buffers.
-    fn names(&self) -> (&'static str, &'static [u8]) {
-        match self {
-            Self::Vbap(_) => ("Live VBAP", b"Live VBAP DSP"),
-            Self::TripleBalance(_) => ("Live Triple Balance", b"Live Triple Balance DSP"),
-            Self::Room(_) => ("room-binaural", b"room-binaural"),
-            Self::Binaural(_) => ("Live binaural", b"Live binaural DSP"),
-        }
-    }
-    fn output_channels(&self) -> u32 {
-        match self {
-            Self::Vbap(r) => r.output_channels(),
-            Self::TripleBalance(r) => r.output_channels(),
-            Self::Room(_) => 2,
-            Self::Binaural(r) => r.output_channels(),
-        }
-    }
-    fn configure(&mut self, generation: u64, elements: &[live::Element]) -> Result<(), Error> {
-        match self {
-            Self::Vbap(r) => r.configure(generation, elements),
-            Self::TripleBalance(r) => r.configure(generation, elements),
-            Self::Room(r) => r.configure(generation, elements),
-            Self::Binaural(r) => r.configure(generation, elements),
-        }
-    }
-    fn reset(&mut self) {
-        match self {
-            Self::Vbap(r) => r.reset(),
-            Self::TripleBalance(r) => r.reset(),
-            Self::Room(r) => r.reset(),
-            Self::Binaural(r) => r.reset(),
-        }
-    }
-    fn render<P: live::PlaneSource + ?Sized>(
-        &mut self,
-        frame: &live::FrameView<'_, P>,
-        output: &mut [f32],
-    ) -> Result<(), Error> {
-        match self {
-            Self::Vbap(r) => r.render(frame, output),
-            Self::TripleBalance(r) => r.render(frame, output),
-            Self::Room(r) => r.render(frame, output),
-            Self::Binaural(r) => r.render(frame, output),
-        }
-    }
-    fn diagnostics(&self) -> &[live::Diagnostic] {
-        match self {
-            Self::Vbap(r) => r.diagnostics(),
-            Self::TripleBalance(r) => r.diagnostics(),
-            Self::Room(r) => r.diagnostics(),
-            Self::Binaural(r) => r.diagnostics(),
-        }
-    }
-    /// The warnings of the last configure: only room raises any.
-    fn configured(&self) -> &[live::Diagnostic] {
-        match self {
-            Self::Room(r) => r.diagnostics(),
-            _ => &[],
-        }
-    }
-    fn end_input(&mut self) -> Result<u64, Error> {
-        match self {
-            Self::Room(r) => r.end_input(),
-            _ => Ok(0),
-        }
-    }
-    fn tail(&self) -> u64 {
-        match self {
-            Self::Room(r) => r.tail_frames(),
-            Self::Binaural(r) => r.tail_frames(),
-            _ => 0,
-        }
-    }
-    fn pose(&mut self, pose: [f32; 3]) {
-        match self {
-            Self::Room(r) => r.set_pose(pose),
-            Self::Binaural(r) => r.set_pose(pose),
-            _ => {}
-        }
-    }
-}
-
-/// A Scene stream speaker renderer (`live_scene::ILiveSceneRenderer`).
+/// A Scene stream renderer (`live_scene::ILiveSceneRenderer`): `mradm-engine`'s renderer, with the
+/// record buffers of this boundary.
 pub struct RenderLive {
-    renderer: LiveRenderer,
+    pub(crate) renderer: LiveRenderer,
+    /// The checkpoint name suffix (`mradm_engine_scene_renderer_create`'s view points at it).
+    pub(crate) suffix: String,
     initial: Vec<live::Entry>,
     updates: Vec<live::Update>,
     diagnostics: Vec<RenderLiveDiagnostic>,
@@ -943,8 +829,9 @@ impl RenderLive {
         *count = self.diagnostics.len();
     }
 
-    fn new(renderer: LiveRenderer) -> Self {
+    pub(crate) fn new(renderer: LiveRenderer) -> Self {
         Self {
+            suffix: renderer.trace_suffix(),
             renderer,
             initial: Vec::new(),
             updates: Vec::new(),
@@ -977,80 +864,109 @@ unsafe fn live_renderer<'a>(handle: *mut RenderLive) -> Result<&'a mut RenderLiv
     unsafe { handle.as_mut() }.ok_or_else(|| bad("无效 Scene 流式渲染句柄"))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_vbap_create(
-    request: *const RenderLiveVbapRequest,
-    output: *mut *mut RenderLive,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    boundary(
-        message,
-        message_len,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(r)) = (unsafe { output.as_mut() }, unsafe { request.as_ref() })
-            else {
-                return Err(bad("无效 Live VBAP 参数"));
-            };
-            *out = ptr::null_mut();
-            let renderer = live_vbap::Renderer::new(&live_vbap::Config {
-                layout_id: unsafe { bytes(&r.layout_id)? },
-                geometry: if r.geometry == 1 {
-                    mradm_scene::layouts::Geometry::Apple
-                } else {
-                    mradm_scene::layouts::Geometry::Standard
-                },
-                spread: r.spread != 0,
-                split_power: r.split_power != 0,
-                smoothing_frames: r.smoothing_frames,
-            })?;
-            *out = Box::into_raw(Box::new(RenderLive::new(LiveRenderer::Vbap(Box::new(
-                renderer,
-            )))));
-            Ok(())
-        },
-    )
+/// `live_scene::RendererConfig` (PCM consistency 5.4 A). `selection` is the `RendererSelection`
+/// value; `speaker_spread` / `binaural_spread` the C++ enum values; `has_sofa` marks a non-empty
+/// SOFA path (UTF-8); `reference` holds the default geometry when absent; `room_profile` may be
+/// null; `sink` is whether the caller publishes diagnostics.
+#[repr(C)]
+pub struct EngineSceneRendererRequest {
+    selection: u32,
+    layout_id: Text,
+    apple_geometry: u32,
+    speaker_spread: u32,
+    binaural_spread: u32,
+    split_power: u32,
+    smoothing_frames: u32,
+    sample_rate: u32,
+    has_sofa: u32,
+    sofa_path: Text,
+    sofa_file_name: Text,
+    has_reference: u32,
+    reference: mradm_dsp::room::screen::RoomScreenGeometry,
+    has_reproduction: u32,
+    reproduction: mradm_dsp::room::screen::RoomScreenGeometry,
+    room_profile: *const crate::room::RoomProfileHandle,
+    room_hrir: Text,
+    room_metres: f64,
+    room_quality: u32,
+    sink: u32,
 }
 
+/// Creates the Scene stream renderer of the configuration (`mradm-engine` `scene::renderer`):
+/// `*sample_rate` is the rate it renders at, `*suffix` its checkpoint name suffix (valid while the
+/// handle lives).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_triple_balance_create(
-    request: *const RenderLiveTripleBalanceRequest,
+pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
+    request: *const EngineSceneRendererRequest,
     output: *mut *mut RenderLive,
+    sample_rate: *mut u32,
+    suffix: *mut Text,
     message: *mut u8,
     message_len: *mut usize,
+    context: *mut u8,
+    context_len: *mut usize,
 ) -> i32 {
-    boundary(
-        message,
-        message_len,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(r)) = (unsafe { output.as_mut() }, unsafe { request.as_ref() })
-            else {
-                return Err(bad("无效 Live Triple Balance 参数"));
-            };
-            *out = ptr::null_mut();
-            let renderer = live_triple_balance::Renderer::new(&live_triple_balance::Config {
-                layout_id: unsafe { bytes(&r.layout_id)? },
-                standard_geometry: r.geometry == 0,
-                spread: match r.spread {
-                    0 => live_triple_balance::Spread::Automatic,
-                    1 => live_triple_balance::Spread::None,
-                    _ => live_triple_balance::Spread::Mdap,
-                },
-                has_sofa: r.has_sofa != 0,
-                sample_rate: r.sample_rate,
-                split_power: r.split_power != 0,
-                smoothing_frames: r.smoothing_frames,
-            })?;
-            *out = Box::into_raw(Box::new(RenderLive::new(LiveRenderer::TripleBalance(
-                Box::new(renderer),
-            ))));
-            Ok(())
-        },
-    )
+    use crate::engine_render::{FfiHost, binaural_spread_of, speaker_spread_of};
+    use mradm_engine::backend::{RoomRequest, Screens, Sofa};
+    use mradm_engine::scene::renderer;
+    boundary(message, message_len, context, context_len, || {
+        let (Some(out), Some(rate), Some(suffix), Some(r)) = (
+            unsafe { output.as_mut() },
+            unsafe { sample_rate.as_mut() },
+            unsafe { suffix.as_mut() },
+            unsafe { request.as_ref() },
+        ) else {
+            return Err(bad("无效 Scene 流式渲染参数"));
+        };
+        *out = ptr::null_mut();
+        let (Some(selection), Some(speaker_spread), Some(binaural_spread)) = (
+            mradm_engine::request::Selection::from_u32(r.selection),
+            speaker_spread_of(r.speaker_spread),
+            binaural_spread_of(r.binaural_spread),
+        ) else {
+            return Err(bad("无效 Scene 流式渲染参数"));
+        };
+        let config = renderer::Config {
+            selection,
+            layout_id: unsafe { bytes(&r.layout_id)? },
+            apple_geometry: r.apple_geometry != 0,
+            speaker_spread,
+            binaural_spread,
+            split_power: r.split_power != 0,
+            smoothing_frames: r.smoothing_frames,
+            sample_rate: r.sample_rate,
+            sofa: if r.has_sofa != 0 {
+                Some(Sofa {
+                    path: unsafe { bytes(&r.sofa_path)? },
+                    file_name: unsafe { bytes(&r.sofa_file_name)? },
+                })
+            } else {
+                None
+            },
+            screens: Screens {
+                has_reference: r.has_reference != 0,
+                reference: r.reference,
+                has_reproduction: r.has_reproduction != 0,
+                reproduction: r.reproduction,
+            },
+            room: RoomRequest {
+                package: unsafe { crate::room::package(r.room_profile) },
+                hrir: unsafe { bytes(&r.room_hrir)? },
+                metres: r.room_metres,
+                quality: r.room_quality,
+            },
+            sink: r.sink != 0,
+        };
+        let created = renderer::create(&config, &FfiHost)?;
+        let handle = Box::new(RenderLive::new(created.renderer));
+        *rate = created.sample_rate;
+        *suffix = Text {
+            data: handle.suffix.as_ptr(),
+            len: handle.suffix.len(),
+        };
+        *out = Box::into_raw(handle);
+        Ok(())
+    })
 }
 
 #[unsafe(no_mangle)]

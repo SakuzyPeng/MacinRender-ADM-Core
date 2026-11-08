@@ -247,7 +247,7 @@ fn routing_of(value: u32) -> Option<Routing> {
     })
 }
 
-fn speaker_spread_of(value: u32) -> Option<SpeakerSpread> {
+pub(crate) fn speaker_spread_of(value: u32) -> Option<SpeakerSpread> {
     Some(match value {
         0 => SpeakerSpread::Automatic,
         1 => SpeakerSpread::None,
@@ -256,7 +256,7 @@ fn speaker_spread_of(value: u32) -> Option<SpeakerSpread> {
     })
 }
 
-fn binaural_spread_of(value: u32) -> Option<BinauralSpreadMode> {
+pub(crate) fn binaural_spread_of(value: u32) -> Option<BinauralSpreadMode> {
     Some(match value {
         0 => BinauralSpreadMode::Automatic,
         1 => BinauralSpreadMode::None,
