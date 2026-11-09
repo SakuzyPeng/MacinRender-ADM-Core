@@ -2,7 +2,7 @@
   "schema": "mradm.room-per-source-grid",
   "version": 1,
   "adr": "docs/adr/0019-room-per-source-update-grid.md",
-  "base_commit": "ec02592736f32e42a6ad14b21fadb2ca7ea6af8d",
+  "base_commit": "62529760937316869da87dcf1fe60e244c84cb5b",
   "change": "Each room voice and head-locked dry path segments at session update points (block start, pose changes, configure, end_input; head-locked without pose) plus its own geometry events, initial command and live override changes. Other sources' events no longer resample a ramp.",
   "source_sha256": {
     "base": {

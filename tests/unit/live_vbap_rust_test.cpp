@@ -377,7 +377,7 @@ void overlapping_renderer_pcm(Stats& pcm) {
         require(!result && result.error().code == ErrorCode::invalid_argument, "overlapping renderer PCM was accepted");
         require(result.error().message == "Invalid Live VBAP FFI arguments" &&
                     result.error().context == "Live VBAP DSP",
-                "overlapping renderer PCM error differs from main dd3f82b6");
+                "overlapping renderer PCM error differs from main 9a5dd78c");
         require(invalid.pcm.front().samples == original, "rejected overlap changed input/output PCM");
         // The rejected call must neither apply its update nor advance the pending ramp.
         const auto next = frame(0, 3, elements);
@@ -415,7 +415,7 @@ int main(int argc, char** argv) {
         if (argc > 1) {
             std::ofstream out(argv[1]);
             require(out.good(), "cannot open report");
-            out << std::setprecision(17) << R"({"baseline":"577fe2d","passed":true,"numerical_pcm":)";
+            out << std::setprecision(17) << R"({"baseline":"d43e376","passed":true,"numerical_pcm":)";
             print_stats(out, numerical);
             out << R"(,"exact_state":)";
             print_stats(out, states);

@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-direct-workers.summary.v1",
   "recorded_utc": "2026-10-13T17:37:33.023729+00:00",
-  "base_revision": "e5803f608f70f02f7abda26616052048b918711b",
+  "base_revision": "16e9cba3b6212f2ac590392d34bef5f25412247e",
   "candidate_source_digest": "ec6771ef683b0e9799314555ff6dacefec6f8d29f0126b405d46ec5f055d2338",
   "method": {
     "build": "Rust 1.98.0 Release; default target CPU; profile and trace off; same binary compared across worker counts; all builds precede timing on each host",
@@ -5365,7 +5365,7 @@
     "debug_rust": "28 targeted tests per candidate on each platform: 21 room + 6 quality + 1 zero-allocation; both direct and grain4 candidates",
     "macos_cpp": "Debug mr_adm_room_tests passed; Debug and Release CLI/room libraries rebuilt",
     "clippy": "mradm-dsp all targets passed with warnings denied",
-    "numerical": "full Release replay manifests bit-identical to e5803f6 baseline for exact and realtime; dense realtime replay verified across every tested worker count and grain4 candidate",
+    "numerical": "full Release replay manifests bit-identical to 16e9cba baseline for exact and realtime; dense realtime replay verified across every tested worker count and grain4 candidate",
     "source_and_cache": "reused existing Cargo targets; restored original remote source bytes and Windows Git status; no independent dependency cache"
   }
 }

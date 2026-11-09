@@ -1,6 +1,6 @@
 # ROOM CUDA V2 超时归因
 
-日期：2026-10-20。基于 `05b297ab84f8e449472c9c6eab6ae17aad9ab0de` 的保留 V2。
+日期：2026-10-20。基于 `d09494813646e5434f4ab5097c8366d386fc6ef6` 的保留 V2。
 本次只做诊断；生产算法、默认 CPU 路径、exact、公共 C ABI 和延迟均未改变。
 
 已确认一类大幅超时与测试机的电源状态异常、显卡调度暂停有关。调用既会卡在 GPU 提交中的
@@ -236,7 +236,7 @@ wevtutil qe System "/q:$Query" /f:xml /e:Events
 ```
 
 临时源码以修改前的 SHA-256 为保护，逐文件恢复原始字节，移除新增辅助模块；
-没有整仓 reset 或覆盖其他工作。Windows 已恢复为干净的 `05b297ab`，
+没有整仓 reset 或覆盖其他工作。Windows 已恢复为干净的 `d0949481`，
 原 CMakeCache 不变，canonical Release CLI／C API 及无插桩 benchmark／replay 示例重新构建，
 backends 烟测和四项定向 CTest 通过。
 见 [restoration.json](evidence/room-cuda-tail-diagnosis/restoration.json) 与

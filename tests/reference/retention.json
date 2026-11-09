@@ -12,7 +12,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_EAR_POST_MIGRATION.md",
       "accepted": "2026-10-04",
-      "baseline_commit": "e12332b",
+      "baseline_commit": "862408f",
       "provenance": null,
       "cmake_option": null,
       "tests": [
@@ -26,7 +26,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/ear_post_legacy.h": "334ab4ffed3b0c321b94e4ca59c504ed1e513429a7b98a38c95c603bfc47d00e"
+        "tests/reference/ear_post_legacy.h": "5f2680cbade4a5d8b3a116c291993d11bb596852083e1b267e75ddb6e4ada692"
       }
     },
     {
@@ -34,7 +34,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_OUTPUT_DSP_MIGRATION.md",
       "accepted": "2026-10-04",
-      "baseline_commit": "53cc36e",
+      "baseline_commit": "0668393",
       "provenance": null,
       "cmake_option": null,
       "tests": [
@@ -48,7 +48,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/output_dsp_legacy.h": "5c7aa022f6e0e41f859b075dbfdcf2f7abd28351dcefd66901f69ce19d19d843"
+        "tests/reference/output_dsp_legacy.h": "76a4e741a61c3106bd900ee5531f7a15a4b8f19241eecb7a9ee899839faea8f9"
       }
     },
     {
@@ -56,7 +56,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_PCM_MIX_MIGRATION.md",
       "accepted": "2026-10-04",
-      "baseline_commit": "4286f3e",
+      "baseline_commit": "de621ca",
       "provenance": null,
       "cmake_option": null,
       "tests": [
@@ -70,7 +70,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/pcm_mix_legacy.h": "315408ae047bd449bab3fc44df17adfbb76962f66e50aa91d373dca6ba838389"
+        "tests/reference/pcm_mix_legacy.h": "49c3d0defd69f310bf04cb9c92a633c49f08ada58453cdbb20db1fba97b4b9cf"
       }
     },
     {
@@ -78,7 +78,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_SCENE_NUMERIC_MIGRATION.md",
       "accepted": "2026-10-06",
-      "baseline_commit": "726db31277f450cfa9c0cb5f6e40bdb539f42154",
+      "baseline_commit": "bd2ea96904a94b3397f2d30f7001dbd11cfac8cb",
       "provenance": "tests/reference/scene_numeric/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -93,10 +93,10 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/scene_numeric/live_binaural.h": "ed2504fdcceb52ce63588b4295dd500df0abaf71f986931e64809c6875f4ef45",
-        "tests/reference/scene_numeric/provenance.json": "7d99d93e3122d5f36b1ebb35c060ed65a3285e014c3987a7df06abbaec0286fd",
-        "tests/reference/scene_numeric/spatial.h": "cb524128112bad622c36052d66a572c9c0e5d12a24e56e6cb88d3003a77cd5ad",
-        "tests/reference/scene_numeric/transitions.h": "a731229aae869b6a981bdea8d366b8fa0a8700d4bbac9ca5861f41b2153fbedf"
+        "tests/reference/scene_numeric/live_binaural.h": "c4e66dd1baff11c86ec8eb74b72ca9447d6ada16ed1d68b23a79e06455f5661b",
+        "tests/reference/scene_numeric/provenance.json": "1c37b8a1635bb0b33d365952cae45c25367126e0da946575affa047bda3d0004",
+        "tests/reference/scene_numeric/spatial.h": "b18141b43d485ecff21aac801fcb2e2004cce7e88c00194934b37073b1a11ff6",
+        "tests/reference/scene_numeric/transitions.h": "3aebd55309166be17b27f7a32c2e6c6ba1bdd935d48cd5f82c94e75eb2c39b8b"
       }
     },
     {
@@ -104,7 +104,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_HOA_MIGRATION.md",
       "accepted": "2026-10-05",
-      "baseline_commit": "ba96baca607d32e336727976669b06f83c426355",
+      "baseline_commit": "920864a4406ec677089d7fa89185352de96da6d5",
       "provenance": "tests/reference/hoa/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -120,8 +120,8 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/hoa/legacy.h": "01f278b0cb01f7c9442f0583f4f62b14f48f839e34d845a831973ca62ac0eedc",
-        "tests/reference/hoa/provenance.json": "85997660bed9dadc539e7afb3da60a3db78a1dccbec6a934add01c5e71bf9644"
+        "tests/reference/hoa/legacy.h": "18c64eda423f32d8d4c59ae6ca49aa3295c0d37cfa1cb7be2819211820fdd6ca",
+        "tests/reference/hoa/provenance.json": "d7213dc456795b8e61c5eed678b0324916a59c57a5b437e95f510090cca2b55c"
       }
     },
     {
@@ -129,7 +129,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_LIVE_VBAP_MIGRATION.md",
       "accepted": "2026-10-05",
-      "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
+      "baseline_commit": "d43e376d01b66f258a13366b6cdedfeabe2c9974",
       "provenance": "tests/reference/live_vbap/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -145,9 +145,9 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/live_vbap/legacy.h": "0774e3ba4867b51c95e9db7f600d5c89a97b452ca60159d2a26765ee27f3eeae",
-        "tests/reference/live_vbap/provenance.json": "b1b67e4fc140165150049e75b07088d7982eda9784fe0c5e9556c4d9dbe27cc2",
-        "tests/reference/live_vbap/ramps.h": "80bad4f99cfa886ff1de00863b20f245e656796316526165a7a2d5ef217a06fc"
+        "tests/reference/live_vbap/legacy.h": "5853d927b66b0233de39f61eb033f83eb7fdae92b7538b1172e100a30c77227d",
+        "tests/reference/live_vbap/provenance.json": "0358076f6ac6779812764ad78d4dc9e01ec5b72236c59543ce99844fc37d4f0f",
+        "tests/reference/live_vbap/ramps.h": "00d34b1992715fbaf2c225ed27e72cae64e4aeef3ce741fbaa12a5e33496bac9"
       }
     },
     {
@@ -155,7 +155,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_MONITOR_DSP_MIGRATION.md",
       "accepted": "2026-10-05",
-      "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+      "baseline_commit": "e570501f6d5252aaf970ebaf0d9a543f03244429",
       "provenance": "tests/reference/monitor/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -169,8 +169,8 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/monitor/legacy.h": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764",
-        "tests/reference/monitor/provenance.json": "f2f9a521b40da3541d9923115a5b05c49c1ae9c096d7964af47db4ce9445ec1f"
+        "tests/reference/monitor/legacy.h": "4826e2c404710bbf5b4b441132e941e5646ab60a6f1a5e6f0cb4dd4ad842c3ed",
+        "tests/reference/monitor/provenance.json": "5a0e0a698ba1f3f7f8d4414833f449a5c5b8c7c2281bdd47b400d5c97311f054"
       }
     },
     {
@@ -178,7 +178,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md",
       "accepted": "2026-10-05",
-      "baseline_commit": "19728179608c4cfe550dc11ff2b3b4425db37963",
+      "baseline_commit": "7fecf3329712b68fb9cbe38cb1a977d0561d76f9",
       "provenance": "tests/reference/triple_balance/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -192,18 +192,18 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/triple_balance/layout_222.cpp": "463962fa1f189c82e32e108f87b96aeb188f4cae1578c8318aee538d7119e0bb",
-        "tests/reference/triple_balance/layout_222.h": "8b2ef0246cabd0fbef895328e0893f12cc26a330cc5f1668c6c32da762a38d54",
+        "tests/reference/triple_balance/layout_222.cpp": "8c2661a6e3af912db58b5eef2aea1f6346791eb28ec37bd440435533769e01a3",
+        "tests/reference/triple_balance/layout_222.h": "6d7c92bbe036a8cadadec5fcde12fc263461a8bfc560d678ce283c850a24020a",
         "tests/reference/triple_balance/motion.h": "ef63fdd02c922ee3b60dc54e4e5c4e235118c66f7e91f67b6a86e8043da818a4",
-        "tests/reference/triple_balance/panner.cpp": "70aeb68bd338351bb0820713c070c327a81cea3010d1b27f725b03cdeebd01b0",
-        "tests/reference/triple_balance/panner.h": "e3ca69fb0dcaf67ae92e0851457aa57cae03404596f72e382dec31330d7f511b",
-        "tests/reference/triple_balance/provenance.json": "f71cf8966415e1203f5535e63c6e3aebe4a1826b4929b36819a4f5b616981bf3",
-        "tests/reference/triple_balance/render_state.cpp": "5489d2ebec86bca6779c114f31cd7c85e4ed5a6d5eb468559a3769ccfd253e36",
-        "tests/reference/triple_balance/render_state.h": "3e78caee5cec4d47b2d04d755e06a5a1ef39f72a86f47eb0fad82511fb441afa",
-        "tests/reference/triple_balance/size_panner.cpp": "3fe883eafa1e1532ba11ead8cb0932d6b52b22afb1c7d48613306ccdd95153c6",
-        "tests/reference/triple_balance/size_panner.h": "6227a8a52d894285cb60483c582ef7bcbcd06f6c67461600bc5e69a75d5a1747",
-        "tests/reference/triple_balance/size_processor.cpp": "b6c36d4e37bd702bf86d279d099339b4d7c19d022f3658c1c62752e7906699b5",
-        "tests/reference/triple_balance/size_processor.h": "676b22f86a383a03044fc2123d09cd1f87531044d04aec890bda07297945b262"
+        "tests/reference/triple_balance/panner.cpp": "2f002a7f41a0d9eb897f852f686361db6f292db671ee9a30be702797e7720bbe",
+        "tests/reference/triple_balance/panner.h": "243c7634163cc52a6daac0add14a39b1faf41c38596901e2b4ad563d60b97641",
+        "tests/reference/triple_balance/provenance.json": "8bd4bd7ebf0b32e051d345b5710d006969dca62368ab07fe0d7c57fd4fc78468",
+        "tests/reference/triple_balance/render_state.cpp": "ac11886bd6c7595281e89c16fcbc33028946fac1396fe4a89dcb71d812713742",
+        "tests/reference/triple_balance/render_state.h": "d25710ea4888eb8c0121d24c3c2441c158e3359fe21dead816dead46901024ac",
+        "tests/reference/triple_balance/size_panner.cpp": "35f12b5dd60d9310c42f3bc75c78e8f19f0214bd38c82adea0d457d34d3bf3d7",
+        "tests/reference/triple_balance/size_panner.h": "895f0e192920837ad2961750b83f3022a6e198f8dd1580b504822cad87b6a9e8",
+        "tests/reference/triple_balance/size_processor.cpp": "fe1f569c005149b2b1147a8638949ae18fa751bf3b28511070d4d8a0a7ae9779",
+        "tests/reference/triple_balance/size_processor.h": "69bf5d404309b6eeb5f095550ee05bd625a9695550afd12e695b1fce4726aa29"
       }
     },
     {
@@ -211,7 +211,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_WAV_CONTAINER_MIGRATION.md",
       "accepted": "2026-10-06",
-      "baseline_commit": "fae56067f41ad24dc0b500629d964e844ba654da",
+      "baseline_commit": "9797481710366124d003340c437b29298807af34",
       "provenance": null,
       "cmake_option": null,
       "tests": [
@@ -260,7 +260,7 @@
       "kind": "third-party",
       "migration_doc": "docs/architecture/RUST_ADM_MIGRATION.md",
       "accepted": "2026-10-05",
-      "baseline_commit": "577fe2d",
+      "baseline_commit": "d43e376",
       "provenance": "tests/reference/libadm/provenance.json",
       "cmake_option": "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS",
       "tests": [
@@ -275,10 +275,10 @@
       ],
       "files": {
         "tests/reference/libadm/make_fixture.cpp": "224d8e30da3b27ea6f93459c82c5b149198903c75975eab410f95d9d6a640130",
-        "tests/reference/libadm/provenance.json": "56974758cd472d51184bb4c265f797305af16ea497ec560503ebf2ab33d74d76",
+        "tests/reference/libadm/provenance.json": "8bcf4d0884c42312476803daa7b9f81543346a972dcdb73cf6e6fe08ea472616",
         "tests/reference/libadm/reference_test.cpp": "d0574f7d2b23943fe9438280395e1f4bb2ca09c22ca820c467ed5506a0677b2e",
         "tests/reference/libadm/run.py": "7ed1f5059f298301bf69e6d8f67af38241ed8cc3544046e3037689837bca8763",
-        "tests/reference/libadm/scene_importer.cpp": "6f7e8d3356ae7c58a371f09518959e58dadb19e6e64442b7a079a8ef69fd6ce6"
+        "tests/reference/libadm/scene_importer.cpp": "cc30cc6a39a42e528b2de754f374f1b41ff5361fb79a4955351ba489c1d98cea"
       }
     },
     {
@@ -286,7 +286,7 @@
       "kind": "third-party",
       "migration_doc": "docs/architecture/RUST_BW64_MIGRATION.md",
       "accepted": "2026-10-05",
-      "baseline_commit": "b3de01d09838c27498847a568e6d21bb713a011d",
+      "baseline_commit": "1b682c7bf69c09b73a2b5bbaf76425c5b4038e02",
       "provenance": "tests/reference/libbw64/provenance.json",
       "cmake_option": "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS",
       "tests": [
@@ -300,7 +300,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/libbw64/acceptance.json": "0507fb904bed4548c2db2e25391869cf7e627dea5b651043baecbe826b2a25b9",
+        "tests/reference/libbw64/acceptance.json": "1ac215081910024d132be06d63e63c7af0469645b21833b0073596f345bce327",
         "tests/reference/libbw64/provenance.json": "714eb856cacafaec7ec5a39e99cbf38a986660cd7e3a53cce008ae7303de3ddf",
         "tests/reference/libbw64/reference_test.cpp": "b87a431e6a4b43149f6a426a94dd26fca93e0a33296d7dd87fae10476f72d2fa"
       }
@@ -354,7 +354,7 @@
       "kind": "third-party",
       "migration_doc": "docs/architecture/RUST_DR_WAV_MIGRATION.md",
       "accepted": "2026-10-06",
-      "baseline_commit": "5dd0378a0b7f73a1c548a178b3528b5c376b9387",
+      "baseline_commit": "5a008fbacb32f233eadf4c3dc1a32e5ead25cd22",
       "provenance": null,
       "cmake_option": "MR_ADM_BUILD_DRWAV_REFERENCE_TESTS",
       "tests": [
@@ -376,7 +376,7 @@
       "kind": "third-party",
       "migration_doc": "docs/architecture/RUST_EAR_MIGRATION.md",
       "accepted": "2026-10-06",
-      "baseline_commit": "5dd0378",
+      "baseline_commit": "5a008fb",
       "provenance": null,
       "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS",
       "tests": [
@@ -399,7 +399,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_OSC_PROTOCOL_MIGRATION.md",
       "accepted": "2026-10-08",
-      "baseline_commit": "a125ab7d1fcb2527f46265088fdf4b5c2aa3645b",
+      "baseline_commit": "754c7e34197ee9ba123487a7089a43ad2ffa7847",
       "provenance": "tests/reference/osc_protocol/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -413,8 +413,8 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/osc_protocol/legacy.h": "e8d55bc7f7fef6632f9560d26c0c8a325fd885dcbd315a44f6da6fc8d65eb815",
-        "tests/reference/osc_protocol/provenance.json": "95d01cdd8942e9bdb64c7a3a48bcddabb8070d0457bb3b9b38bf653e66918e7e"
+        "tests/reference/osc_protocol/legacy.h": "7f7a7f19939a367768c1f598c97bcfaf638e7f1ffab309f022f4d1bbde65da5d",
+        "tests/reference/osc_protocol/provenance.json": "966a03517a591429b4ca2be73042f8ba78d4ecbe1dad35b7f927ba81ba137c15"
       }
     },
     {
@@ -422,7 +422,7 @@
       "kind": "frozen",
       "migration_doc": "docs/architecture/RUST_HPTF_PARSE_MIGRATION.md",
       "accepted": "2026-10-08",
-      "baseline_commit": "1094e51f544356757ea3e9f2c86970f9e7ee0a47",
+      "baseline_commit": "2a5b6b5ecc0509d45252a8a16afa4046372bbe12",
       "provenance": "tests/reference/hptf_parse/provenance.json",
       "cmake_option": null,
       "tests": [
@@ -437,7 +437,7 @@
       ],
       "files": {
         "tests/reference/hptf_parse/legacy.h": "f21ccef99b7f97fc88e043576ce4074a8be6f4bc3bcfe275360499de2d89d986",
-        "tests/reference/hptf_parse/provenance.json": "b078f4931c67ece554674007342317bcd379ce6388b54c3b3c6f5571815cf301"
+        "tests/reference/hptf_parse/provenance.json": "237087bfd3ca25ebab1429b218dd3b7faf9b984ef61cffb11fdb0baa05c64be7"
       }
     }
   ]

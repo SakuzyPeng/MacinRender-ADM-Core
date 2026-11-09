@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-ear-post-migration.v1",
   "date": "2026-10-04",
-  "baseline_commit": "e12332bd8b60d2c9ad3de797454218e7c90dd70b",
+  "baseline_commit": "862408fb3c3215edf1a22280aa630e083a509629",
   "scope": [
     "Rust-owned immutable shared raw FIR bank",
     "Per-instance FFT spectra, overlap, direct delay and scratch",
@@ -54,7 +54,7 @@
     "canonical_tolerance": "2e-6 + 2e-6 * abs(reference)",
     "time_domain_tolerance": "2e-5 + 2e-5 * abs(reference)",
     "macos": {
-      "baseline_commit": "e12332b",
+      "baseline_commit": "862408f",
       "canonical_samples": 4520868,
       "differing_samples": 0,
       "max_absolute_error": 0,
@@ -72,7 +72,7 @@
       ]
     },
     "windows": {
-      "baseline_commit": "e12332b",
+      "baseline_commit": "862408f",
       "canonical_samples": 4520868,
       "differing_samples": 0,
       "max_absolute_error": 0,
@@ -136,8 +136,8 @@
   },
   "ci": {
     "run_id": 37267613687,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37267613687",
-    "commit": "e5836e9cfbd752599b227b3007ca2e6b0f9ee913",
+    "url": "historical Actions run 37267613687",
+    "commit": "bf5b524f30090b1ee4f2bf07942c0c8be1397d93",
     "conclusion": "success",
     "attempt": 1,
     "jobs": [

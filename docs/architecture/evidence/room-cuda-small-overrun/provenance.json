@@ -1,5 +1,5 @@
 {
-  "base": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+  "base": "d09494813646e5434f4ab5097c8366d386fc6ef6",
   "production_sources_changed": false,
   "native_cuda_dll_changed": false,
   "prior_archive": {
@@ -25,7 +25,7 @@
     "prior_archive_sha256": "af9213dc2507af52568cc29cf3008332e892316c42d0a1c2fcab80b54a4841db"
   },
   "windows_source_state": {
-    "head": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+    "head": "d09494813646e5434f4ab5097c8366d386fc6ef6",
     "source_clean": true,
     "cmake_cache_unchanged": true,
     "no_owned_trace_sessions": true,

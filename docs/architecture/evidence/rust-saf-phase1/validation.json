@@ -1,7 +1,7 @@
 {
   "date": "2026-10-04",
-  "tested_code_commit": "6ae10d5302aeeeb5dcef65c9048aff94e935176f",
-  "ci": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37194085996",
+  "tested_code_commit": "b76348e38cfd9de8bb9cf42acb07fad094d1c1c5",
+  "ci": "historical Actions run 37194085996",
   "ci_conclusion": "success",
   "platforms": {
     "macos_arm64": {

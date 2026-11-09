@@ -2,7 +2,7 @@
   "schema": "mradm.room-v1-validation",
   "version": 1,
   "verified_utc": "2026-10-11T00:44:00.340413+00:00",
-  "repository_base": "ffa66afbf71ffbe4ec46007dae125dc9155e16d6",
+  "repository_base": "10ad6c72b745f8f2458e6b20b418523855d4940c",
   "rust_version": "1.98.0",
   "room_core_sources_sha256": "4a3f73edbbd66ea005955940f44bf48ae857a985c3a5ee6f894277f5782549f7",
   "source_files": {
@@ -1227,7 +1227,7 @@
   },
   "follow_up": {
     "report": "ROOM_LINUX_PERFORMANCE.json",
-    "base_commit": "606cc40107bce203fea4aee868638a42b5d8dae0",
+    "base_commit": "fcb6912999529cfa40f09cf3cfb651a3cb099092",
     "note": "Original measurements and source hashes above are historical; see the follow-up for current source hashes, control-query optimization, and repeated Linux capacity results."
   }
 }

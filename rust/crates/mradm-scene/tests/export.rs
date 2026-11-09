@@ -1,5 +1,5 @@
 //! Export writeback goldens (PCM consistency 4.4). `export-v1/expected.jsonl` was produced once by
-//! the C++ implementation this module replaced (`metadata::patch_axml` at `c0a3720`) for every
+//! the C++ implementation this module replaced (`metadata::patch_axml` at `bc85077`) for every
 //! scene without a policy and every case of `policy-v1/policies.jsonl` and
 //! `export-v1/policies.jsonl`: the patched AXML's length and FNV-1a 64, or the error code and
 //! message. Policies the parser rejects never reach the export. The 11 records marked

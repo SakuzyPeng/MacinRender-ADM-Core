@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-eq-motion-validation",
   "version": 1,
   "date_local": "2026-10-18",
-  "base_commit": "e7ace2a",
+  "base_commit": "e6d50f3",
   "outcome": {
     "short_passed": true,
     "motion_long_passed": false,
@@ -41,7 +41,7 @@
     "baseline_archive_source_differences_from_committed_snapshot": [
       "rust/crates/mradm-dsp/src/room/session.rs"
     ],
-    "baseline_snapshot_note": "The combined experiment binaries were frozen before commit e7ace2a excluded inactive HOA research. Historical timing remains tied to these archived binaries; see room-gpu-combined/commit-checks.json.",
+    "baseline_snapshot_note": "The combined experiment binaries were frozen before commit e6d50f3 excluded inactive HOA research. Historical timing remains tied to these archived binaries; see room-gpu-combined/commit-checks.json.",
     "runtime_rollback_equals_head": true,
     "rollback_verified_paths": 14
   },

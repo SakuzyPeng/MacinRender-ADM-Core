@@ -42,7 +42,7 @@ macOS arm64 与 x64 的频谱/逆变换有位差，Linux 与 Windows x64 相同�
 ## Linux x64 本地验收（2026-10-07）
 
 GCC 13 Release，配置 A（`MR_ADM_STRICT_FP=OFF`，IAMF/SOFA OFF，vendored FLAC/Opus），
-同一台机器分别采集 `e29389f`（自动 SIMD）与本改动：
+同一台机器分别采集 `43a76c4`（自动 SIMD）与本改动：
 
 - 两次采集均通过输入完整性、同进程/新进程重复性、Scene 健康和帧数门禁；本改动的
   `rust.fft_features` 为 `{"realfft": [], "rustfft": []}`。
@@ -75,7 +75,7 @@ FFT 单独测量（Linux x64，AVX2/FMA/AVX-512 CPU，rustfft 6.4.1 复数正变
 对应 1024/2048 复数长度。端到端：把 `mr_adm_make_fixture` 生成的 1 秒 ADM fixture 的 PCM 重复为
 60 秒（元数据为静态块），Release `mradm render` 输出 WAV，各 5 次取中位数：
 
-| 用例 | 渲染器 | `e29389f` (s) | 本改动 (s) | 倍数 |
+| 用例 | 渲染器 | `43a76c4` (s) | 本改动 (s) | 倍数 |
 |---|---|---:|---:|---:|
 | vbap-point（对照，不用 FFT） | VBAP 5.1.4 | 0.834 | 0.833 | 1.00 |
 | ear-extent | EAR 5.1 | 0.632 | 0.733 | 1.16 |
@@ -91,11 +91,11 @@ FFT 单独测量（Linux x64，AVX2/FMA/AVX-512 CPU，rustfft 6.4.1 复数正变
 
 ## 三平台验收
 
-[Consistency run 37557152120](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37557152120)
-在 `6ec2dc6` 上完成三平台 A/B 及诊断采集；同一提交的 CI 与 Quality 均通过。四份报告（A、B 及各自诊断版）
+Consistency run 37557152120 (historical Actions run 37557152120)
+在 `8e25ce8` 上完成三平台 A/B 及诊断采集；同一提交的 CI 与 Quality 均通过。四份报告（A、B 及各自诊断版）
 结果一致，摘要、报告哈希与逐对首个分歧点见 [FFT 验收记录](evidence/rust-phase2/fft-validation.json)。
 
-| 比较范围 | 基线 `00a70e4` | 本切片 `6ec2dc6` |
+| 比较范围 | 基线 `b5f398a` | 本切片 `8e25ce8` |
 |---|---:|---:|
 | 三平台共同逐位相同的 PCM | 29/78 | 52/78 |
 | Linux x64 对 Windows x64 | 52/78 | 52/78 |

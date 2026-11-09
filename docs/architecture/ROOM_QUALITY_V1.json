@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-quality-v1.validation-summary",
   "recorded_utc": "2026-10-13T11:37:13.364359+00:00",
-  "base_revision": "009e8ad",
+  "base_revision": "65fd7e4",
   "source_digest": "d16e6221d37012f8ed5b9a95370f6a5ae03a6b85ea77def880859edc7c8834b9",
   "method": {
     "build": "Rust 1.98.0 Release, profiling disabled, default worker count, shared existing caches",

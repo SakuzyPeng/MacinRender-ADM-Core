@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
         if (argc > 1) {
             std::ofstream out(argv[1]);
             require(out.good(), "cannot open numerical report");
-            out << std::setprecision(17) << R"({"baseline":"a54fdc3","passed":true,"crossfade":)";
+            out << std::setprecision(17) << R"({"baseline":"e570501","passed":true,"crossfade":)";
             json_summary(out, fade);
             out << ",\"seek_pcm\":";
             json_summary(out, pcm);

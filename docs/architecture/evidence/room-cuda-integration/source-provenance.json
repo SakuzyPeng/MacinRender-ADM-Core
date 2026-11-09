@@ -1,6 +1,6 @@
 {
-  "base": "1a214bd359cee129f640401c9a981ec402123ad6",
-  "initial_base": "e0a9f2870297c12ffe67f3fff23fead506f81dde",
+  "base": "de1837f87cda6d8291cb5f823eedd06f3c11985d",
+  "initial_base": "2d25a4ca92053de0b622b1fb505574b8769d8798",
   "source_sha256": {
     "CMakeLists.txt": "b3930037a18ba2901c0a576e7f8964a196985be0dbaadc4754260923fccae335",
     "cmake/MRRust.cmake": "c47d133a2ab2e3515ef55a6f5a8f4f8d9126ae23b5f616d96ca1d0d189c3fecd",

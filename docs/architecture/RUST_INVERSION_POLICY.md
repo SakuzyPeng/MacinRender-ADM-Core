@@ -81,9 +81,9 @@ C++ 侧只剩适配：
    - 启用 extent 缩放但没写 `max` 时，原来一律钳到 1；极坐标的 width 与 height 以度为单位，所以 `{"extent":{"scale":0.5}}` 会把 30° 压到 1°。现在按 ADM 取值范围钳制：极坐标 width、height ≤ 360，depth ≤ 1；Cartesian 三项 ≤ 1，与原来相同。
    - 显式写的 `max` 照旧生效，单位与块的坐标系一致。
    - 中性模板不再写 `"max": 1`，套用后严格恒等。
-   - GUI 语义编辑器从来不写 `max`，此前同样受影响。离线、Scene 流式与导出共用这条规则；GUI 预览与双耳监听的实时 extent 覆盖已按同一范围对齐（`7ea6580`）。
+   - GUI 语义编辑器从来不写 `max`，此前同样受影响。离线、Scene 流式与导出共用这条规则；GUI 预览与双耳监听的实时 extent 覆盖已按同一范围对齐（`11b29f5`）。
 2. **JSON 语法错误。** 策略、DirectSpeakers 矩阵与屏幕配置的语法错误正文改为 `JSON 语法错误（第 N 行第 M 列）：…`，前缀与错误码不变。
-3. **报告修正（A，`97597a8`）。**
+3. **报告修正（A，`dc9871e`）。**
    - `policy` 写成字符串或 `null`，原来是 `["path"]`；
    - HOA 无界块的 `end_sample` 写 `null`，原来是 `[null]`；
    - `1e400` 这类数值溢出现在返回 invalid_argument。原来 406 异常会逃出策略解析。
@@ -100,10 +100,10 @@ C++ 侧只剩适配：
 | --- | --- | --- | --- |
 | `mradm-json/tests/golden/` | nlohmann 3.12.0，输入是同一套 splitmix64 流 | 400 万个随机 double 与扩展后的 f32 位模式、十进制边界邻值、约 95 条手写的接受边界、20 万份变异文档、30 万段随机数字文本 | 全部一致；移动定点阈值会让四个测试中的三个失败 |
 | `mradm-scene/tests/policy-v1/` | C 之前的 C++（含 A 的修正）与 C++ `06-policy` 编码器 | 14 个 ADM 场景上的 714 例：五份一致性策略与固定种子的随机策略（554 例应用、160 例拒绝），外加 14 个模板 | 06 字流、报告字节、警告、模板与错误文本一致；植入的两处缺陷被抓到 |
-| `mradm-scene/tests/export-v1/` | `c0a3720` 的 C++ `patch_axml` | 14 个无策略场景、714 例 policy-v1，以及两个导出专用场景（common definitions、共享块）上的 12 例，共 742 条 | 283 份 AXML 有改动、20 例报错、160 例策略被拒，逐字节复现；植入的字段交换被抓到 |
-| `mradm-scene/tests/config-v1/` | `5db7fd4` 的 C++ 矩阵与屏幕配置解析器 | 958 条输入：合法文档的逐处变异、数值边界、version 各种写法、非法几何、1 MiB 边界 | 227 条成功、731 条报错，逐条一致；植入的两处缺陷被抓到（为此补了 centre 中多个非法元素同时出现的用例） |
+| `mradm-scene/tests/export-v1/` | `bc85077` 的 C++ `patch_axml` | 14 个无策略场景、714 例 policy-v1，以及两个导出专用场景（common definitions、共享块）上的 12 例，共 742 条 | 283 份 AXML 有改动、20 例报错、160 例策略被拒，逐字节复现；植入的字段交换被抓到 |
+| `mradm-scene/tests/config-v1/` | `39039f5` 的 C++ 矩阵与屏幕配置解析器 | 958 条输入：合法文档的逐处变异、数值边界、version 各种写法、非法几何、1 MiB 边界 | 227 条成功、731 条报错，逐条一致；植入的两处缺陷被抓到（为此补了 centre 中多个非法元素同时出现的用例） |
 
-语法错误只比较错误码与前缀。policy-v1 中有两个 NaN 字，测试先断言它们是 NaN 再规范化，与 NaN 的符号位无关（`04e04ca`）。
+语法错误只比较错误码与前缀。policy-v1 中有两个 NaN 字，测试先断言它们是 NaN 再规范化，与 NaN 的符号位无关（`347ba80`）。
 
 extent 缺省上限修复后，下面这些记录改由 Rust 重算，并标记为 `"regenerated":"extent-adm-range"`：
 - policy-v1 的 12 例与 14 个模板；
@@ -121,7 +121,7 @@ extent 缺省上限修复后，下面这些记录改由 Rust 重算，并标记�
 - 变更 C++ 的 clang-format 与 clang-tidy；
 - `check-reference-retention.py`、`version_metadata.py --check`、`language-surface.py`。
 
-本机没有 cppcheck，由 CI 运行；维护者补的头路径修正 `5db7fd4` 就来自它。
+本机没有 cppcheck，由 CI 运行；维护者补的头路径修正 `39039f5` 就来自它。
 
 **新旧路径对照（D，临时程序，不提交）。** 旧的 C++ Scene 流式策略与新的 Rust 路径同时运行：
 - 540 份可解析策略、14,872 个随机生成与 247,016 个生产者状态逐位相同；
@@ -129,17 +129,17 @@ extent 缺省上限修复后，下面这些记录改由 Rust 重算，并标记�
 - 植入的探测缺陷被抓到。
 
 **本机全量对照（维护者，每批合入前）。** 每批推送后，由维护者在本机对照候选与基线。
-- E 的合并提交 `8fff2a8` 记录了 macOS arm64 与 Windows x64 上的结果：
+- E 的合并提交 `cfcd850` 记录了 macOS arm64 与 Windows x64 上的结果：
   - 16 次 Release 采集的 PCM、内核与检查点，在两个版本、两种配置、两个平台之间都相同；
   - 742 个导出用例在四种模式下共 11,872 次调用，结果一致。
 - A–C、D、F 与 extent 修复同样经维护者对照通过后合入。extent 修复预期只改变用到极坐标度数 extent 且未写 `max` 的用例。
 
 **维护者补充的修正。**
-- `04e04ca`：策略黄金数据与 NaN 符号无关；
-- `f42749f`：用 `.gitattributes` 保护黄金字节，并修正 cppcheck 发现；
-- `5db7fd4`：Scene 流式策略头改为自包含；
-- `9472a74`：配置 JSON 的错误消息按长度传递、保留 NUL，根值之后的 NUL 按 nlohmann 的规则视为输入结束；
-- `7ea6580`：GUI 预览与双耳监听的 extent 范围与策略一致。
+- `347ba80`：策略黄金数据与 NaN 符号无关；
+- `0797314`：用 `.gitattributes` 保护黄金字节，并修正 cppcheck 发现；
+- `39039f5`：Scene 流式策略头改为自包含；
+- `b348efb`：配置 JSON 的错误消息按长度传递、保留 NUL，根值之后的 NUL 按 nlohmann 的规则视为输入结束；
+- `11b29f5`：GUI 预览与双耳监听的 extent 范围与策略一致。
 
 **规模。** 生产 C/C++ 由 44,632 行降到 42,406 行：
 
@@ -148,14 +148,14 @@ extent 缺省上限修复后，下面这些记录改由 Rust 重算，并标记�
 | C | 44,632 → 44,213 |
 | D | 44,208 → 42,748（合入前 `main` 另有改动） |
 | E | 42,748 → 42,512 |
-| F | 42,512 → 42,409，`9472a74` 后为 42,406 |
+| F | 42,512 → 42,409，`b348efb` 后为 42,406 |
 | A、B 与 extent 修复 | 不变 |
 
 **三平台。** 每次合入 `main` 后，Consistency 由 push 触发，在 macOS arm64、Linux x64、Windows x64 上采集 config A、B 的普通与诊断结果。
 
 | 运行 | 提交 | 内容 | 结果 |
 | --- | --- | --- | --- |
-| [39031059419](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39031059419) | `294415d` | A–C | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
-| [39824671399](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39824671399) | `8fff2a8` | D、E | 同上 |
-| [39891455786](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39891455786) | `cdc23c8` | F | 同上 |
-| [39908037480](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39908037480) | `6ed2255` | extent 修复 | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
+| 39031059419 (historical Actions run 39031059419) | `5472f18` | A–C | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
+| 39824671399 (historical Actions run 39824671399) | `cfcd850` | D、E | 同上 |
+| 39891455786 (historical Actions run 39891455786) | `b842e57` | F | 同上 |
+| 39908037480 (historical Actions run 39908037480) | `7b43a6d` | extent 修复 | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |

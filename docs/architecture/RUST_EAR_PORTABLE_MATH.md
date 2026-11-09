@@ -80,7 +80,7 @@ macOS arm64 与 Windows x64 的平台数学库此前可能在其他输入上与 
 单独 −12 dB 时为 0.253，`M-110` 静音后降至 0.018）。比较器自检 208 个 PCM id、223 项门禁无失败。ctest 79 项全部通过；
 Rust fmt / clippy、`tests/portable_math.rs`、许可证校验（`NOTICE.txt` 已同步到 bundle）、clang-format 与 clang-tidy 无告警。
 
-**三平台验收。** `c931750` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过：
+**三平台验收。** `4de1de0` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过：
 
 - A/B 两种配置下 208 个 PCM id 三平台相同，包括 12 个文件流式重放（6 个 EAR）；223 项门禁无失败；
 - 220 个内核文件全部三平台相同，包括 3 个 `ear-gains` 文件；

@@ -19,7 +19,7 @@ Triple Balance 后端的场景改写、床、离线与文件流式渲染、Scene
 数值内核原本就在 Rust（`mradm-dsp` 的 `triple_balance` 计划、size 混音、D 模式与 live mixer，`room` 的 session、实例与卷积），本切片迁走的是它们外面的场景改写、计划构建、块时间线、状态机与流式胶水。
 
 room 的边界有两处特别处理：
-- **浮点环境。** 迁移前每个 C++→Rust 的 room 调用都在 FFI 边界内进入规范的浮点环境（RNE、无 FTZ/DAZ），并捕获 panic。迁移后由 `mradm-ffi` 把这一边界作为作用域（`room_runtime::Scope`）交给 Rust 运行时，原来经过边界的每个调用仍在其中执行，原来在 C++ 侧的算术（如 extent 比例乘积）仍在调用方环境中。`checked()` 的默认文字 “房间 DSP 操作失败” 与 context `room-binaural` 照原样保留。D 的极坐标换算也按这一方式补回了边界（维护者 `1b8463c`）。
+- **浮点环境。** 迁移前每个 C++→Rust 的 room 调用都在 FFI 边界内进入规范的浮点环境（RNE、无 FTZ/DAZ），并捕获 panic。迁移后由 `mradm-ffi` 把这一边界作为作用域（`room_runtime::Scope`）交给 Rust 运行时，原来经过边界的每个调用仍在其中执行，原来在 C++ 侧的算术（如 extent 比例乘积）仍在调用方环境中。`checked()` 的默认文字 “房间 DSP 操作失败” 与 context `room-binaural` 照原样保留。D 的极坐标换算也按这一方式补回了边界（维护者 `ff20490`）。
 - **房间切换的准备。** 新房间的准备（含 CUDA 的选择与实时绑定）留在 `mradm-ffi`，作为闭包交给运行时，切换走的路径与原来相同。
 
 C++ 侧只剩适配：
@@ -55,17 +55,17 @@ C++ 侧只剩适配：
 3. **删除 `resolve_reference_screen`。** 它随 room 事件表迁入 Rust 后已无调用者，从 `include/adm/screen.h` 与 `src/adm_core/screen.cpp` 删除（`include/adm` 除 `c_api.h` 外已不是对外接口，ADR 0021 §4）。C ABI 不受影响。
 4. **删除的私有导出。** `mradm_dsp_live_tb_*`（C）、`mradm_room_session_*`、`mradm_room_instance_*` 与 `mradm_room_validate_overrides`（E），以及 D 的过渡视图；它们只在 `mradm-ffi` 与 C++ 之间使用，C ABI bundle 本来就不导出。
 5. **维护者补充的修正。**
-   - `5d69eeb`：手动基准 `triple_balance_monitor_benchmark` 改为导入场景（A 漏改的 `EXCLUDE_FROM_ALL` 目标）；
-   - `65a9621`、`ae3d8b6`：Triple Balance 文件流式的覆盖校验与 worker 状态隔离，满足控制线程校验与 worker 处理并发的契约；
-   - `89f828d`：两个 Scene 扬声器渲染器直接借用已校验的 PCM 记录，不再逐块分配；
-   - `1b8463c`：room 事件表的极坐标换算补回 room 浮点环境（迁移后在非默认舍入模式下有 1 ulp 差别）；
-   - `158fc3e`：room 覆盖校验不再借用整个流，状态查询只借用 message 字段，待回收队列改为 8 槽固定数组，worker 上不再分配。
+   - `21cb22a`：手动基准 `triple_balance_monitor_benchmark` 改为导入场景（A 漏改的 `EXCLUDE_FROM_ALL` 目标）；
+   - `abc3294`、`5692337`：Triple Balance 文件流式的覆盖校验与 worker 状态隔离，满足控制线程校验与 worker 处理并发的契约；
+   - `b722be8`：两个 Scene 扬声器渲染器直接借用已校验的 PCM 记录，不再逐块分配；
+   - `ff20490`：room 事件表的极坐标换算补回 room 浮点环境（迁移后在非默认舍入模式下有 1 ulp 差别）；
+   - `0598a36`：room 覆盖校验不再借用整个流，状态查询只借用 message 字段，待回收队列改为 8 槽固定数组，worker 上不再分配。
 
 ## 黄金数据
 
 | 语料 | 生成方 | 规模 | 结果 |
 | --- | --- | --- | --- |
-| `mradm-render/tests/triple-balance-v1/` | main `8c406e9` 的 C++ `triple_balance_renderer` / `semantics` / `bed`，经 CLI（`mradm render --renderer triple-balance --write-semantic-report -v`）一次性采集，生成器在 scratchpad（不提交） | 58 个场景（56 个 AXML，2 个普通 WAVE）、1,300 例：三种布局、两种模式、两种 spread、两种 22.2 LFE 路由、六种策略，加后端拒绝的选项；记录退出码、错误、准备日志与规范化报告的 FNV-1a，另有 12 份完整报告 | Rust 重放进入后端的 1,294 例全部一致（470 例准备成功；另 6 例在 CLI 层被拒） |
+| `mradm-render/tests/triple-balance-v1/` | main `bdc0a30` 的 C++ `triple_balance_renderer` / `semantics` / `bed`，经 CLI（`mradm render --renderer triple-balance --write-semantic-report -v`）一次性采集，生成器在 scratchpad（不提交） | 58 个场景（56 个 AXML，2 个普通 WAVE）、1,300 例：三种布局、两种模式、两种 spread、两种 22.2 LFE 路由、六种策略，加后端拒绝的选项；记录退出码、错误、准备日志与规范化报告的 FNV-1a，另有 12 份完整报告 | Rust 重放进入后端的 1,294 例全部一致（470 例准备成功；另 6 例在 CLI 层被拒） |
 
 room 没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新旧对照验收。手工构造或改写场景的 C++ 用例移到 Rust：
 - Triple Balance：`tests/triple_balance.rs`（5 个，含截获参考的床增益与点运动）、`triple_balance_stream.rs`（8 个）、`live_triple_balance.rs`（8 个）；
@@ -97,18 +97,18 @@ room 没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新
 
 | 批次 | 基线 | 用例 | 结果 |
 | --- | --- | --- | --- |
-| A | `8c406e9` | `--renderer triple-balance` 992 例（343 例渲染），比较输出字节与语义报告字节；VBAP 1,148 例、HOA 886 例、EAR 2,096 例重跑；6 个 `stream-triple-*` 重放 | 全部相同 |
-| B | `6940df9` | `mr_adm_phase2_stream` 650 例（195 例渲染，含 6 个矩阵重放及其他夹具、seek 目标、extent 比例、静音与碎片分块的变体）；离线 992 例重跑 | 全部相同 |
-| C | `a072146` | 全部 88 个 Scene 重放，普通与诊断构建 | 普通 704 个文件相同；诊断 22,588 个文件相同（396 个 `.30-triple`、534 个 `.30-vbap`），唯一差别是一个设备回放的最后一次回调把相同样本合进一个文件（基线为两个） |
-| D | `305159f` | `--renderer room-binaural` 1,014 例（632 例渲染，含 96 kHz 包副本、SOFA 与屏幕配置）；16 个 room 文件流式重放；4 个 Scene room 用例；3 个离线 room 矩阵用例 | 全部相同 |
-| E | `72c188b` | room CLI 1,014 例（632 例渲染）；16 个 room 文件流式重放；3 个离线 room 矩阵用例；全部 88 个 Scene 重放（普通与诊断） | 全部相同；诊断构建拼接设备 trace（`canonicalize_device_trace`）后 21,756 个文件相同，其中 room 880 个 |
+| A | `bdc0a30` | `--renderer triple-balance` 992 例（343 例渲染），比较输出字节与语义报告字节；VBAP 1,148 例、HOA 886 例、EAR 2,096 例重跑；6 个 `stream-triple-*` 重放 | 全部相同 |
+| B | `01cb5b1` | `mr_adm_phase2_stream` 650 例（195 例渲染，含 6 个矩阵重放及其他夹具、seek 目标、extent 比例、静音与碎片分块的变体）；离线 992 例重跑 | 全部相同 |
+| C | `3cd30e3` | 全部 88 个 Scene 重放，普通与诊断构建 | 普通 704 个文件相同；诊断 22,588 个文件相同（396 个 `.30-triple`、534 个 `.30-vbap`），唯一差别是一个设备回放的最后一次回调把相同样本合进一个文件（基线为两个） |
+| D | `972cc04` | `--renderer room-binaural` 1,014 例（632 例渲染，含 96 kHz 包副本、SOFA 与屏幕配置）；16 个 room 文件流式重放；4 个 Scene room 用例；3 个离线 room 矩阵用例 | 全部相同 |
+| E | `9b12dce` | room CLI 1,014 例（632 例渲染）；16 个 room 文件流式重放；3 个离线 room 矩阵用例；全部 88 个 Scene 重放（普通与诊断） | 全部相同；诊断构建拼接设备 trace（`canonicalize_device_trace`）后 21,756 个文件相同，其中 room 880 个 |
 
 **维护者本机验证。** 逐批验证的范围以各自记录为准。D、E 的两平台 Release 对照均关闭一致性诊断插桩；
 以下记录列出其素材、用例与输出覆盖。合入后 config A/B 的普通与诊断三平台结果见本节末的 CI 记录。
 
-- [ROOM 准备迁移审查与对照](RUST_ROOM_PREPARATION_REVIEW.md)：`1b8463c` 的修正，以及 macOS arm64 与 Windows x64 上 57 份最终 PCM 与 `305159f` 逐位相同（离线 9、文件流式 16、Scene 4 例的 8 个 epoch、非默认浮点环境 24），两平台之间也相同；
-- [ROOM 运行时迁移审查与对照](RUST_ROOM_RUNTIME_REVIEW.md)：`158fc3e` 的修正，以及两平台各 197 份最终 PCM 与 `72c188b` 逐位相同（离线 9、文件流式 16、Scene 74 例的 148 个 epoch、非默认浮点环境 24），两平台之间也相同；
-- C 的 `89f828d`：macOS arm64 上全部 88 个 Scene 用例、704 个输出文件与 `a072146` 相同，重复性与分块检查记录在 evidence JSON。
+- [ROOM 准备迁移审查与对照](RUST_ROOM_PREPARATION_REVIEW.md)：`ff20490` 的修正，以及 macOS arm64 与 Windows x64 上 57 份最终 PCM 与 `972cc04` 逐位相同（离线 9、文件流式 16、Scene 4 例的 8 个 epoch、非默认浮点环境 24），两平台之间也相同；
+- [ROOM 运行时迁移审查与对照](RUST_ROOM_RUNTIME_REVIEW.md)：`0598a36` 的修正，以及两平台各 197 份最终 PCM 与 `9b12dce` 逐位相同（离线 9、文件流式 16、Scene 74 例的 148 个 epoch、非默认浮点环境 24），两平台之间也相同；
+- C 的 `b722be8`：macOS arm64 上全部 88 个 Scene 用例、704 个输出文件与 `3cd30e3` 相同，重复性与分块检查记录在 evidence JSON。
 
 **规模。** 生产 C/C++ 由 39,747 行降到 36,931 行（−2,816）：
 
@@ -116,9 +116,9 @@ room 没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新
 | --- | --- |
 | A | 39,747 → 38,755 |
 | B | 38,755 → 38,392 |
-| C | 38,392 → 37,683（`89f828d` 未改变总行数） |
+| C | 38,392 → 37,683（`b722be8` 未改变总行数） |
 | D | 37,683 → 37,520 |
-| E | 37,520 → 36,932，`158fc3e` 后为 36,931 |
+| E | 37,520 → 36,932，`0598a36` 后为 36,931 |
 
 `src/adm_render_common` 由 2,979 行增到 3,306 行：两个 Scene 扬声器渲染器的共用适配 `live_rust_renderer` 移入这里（`src/adm_render_vbap` 随之由 421 行降到 257 行），私有 FFI 头 `routing_ffi.h` 增加了 Triple Balance 与 room 的声明（609 行）。`src/adm_dsp` 由 2,844 行降到 2,399 行。
 
@@ -126,8 +126,8 @@ room 没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新
 
 | 运行 | 提交 | 内容 | 结果 |
 | --- | --- | --- | --- |
-| [40099269643](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40099269643) | `6940df9` | A | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
-| [40122405263](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40122405263) | `a072146` | B | 同上 |
-| [40166924313](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40166924313) | `305159f` | C | 同上 |
-| [40176869018](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40176869018) | `72c188b` | D | 同上 |
-| [40186174718](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40186174718) | `ea07aa9` | E | 同上 |
+| 40099269643 (historical Actions run 40099269643) | `01cb5b1` | A | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
+| 40122405263 (historical Actions run 40122405263) | `3cd30e3` | B | 同上 |
+| 40166924313 (historical Actions run 40166924313) | `972cc04` | C | 同上 |
+| 40176869018 (historical Actions run 40176869018) | `9b12dce` | D | 同上 |
+| 40186174718 (historical Actions run 40186174718) | `7f32fab` | E | 同上 |

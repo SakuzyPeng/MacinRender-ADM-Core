@@ -1,6 +1,6 @@
 # Windows 实时房间 v2：设备长测
 
-日期：2026-10-13。生产代码为 `0583399`，处理策略为 `room-realtime-v2`。
+日期：2026-10-13。生产代码为 `a9707f5`，处理策略为 `room-realtime-v2`。
 本轮补充真实 Windows 音频端点和文件播放链路，不能用先前无设备内核短测的零超时替代。
 结构化记录见 [JSON](ROOM_WINDOWS_DEVICE_V2.json)。
 

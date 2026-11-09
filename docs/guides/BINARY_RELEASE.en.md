@@ -1,5 +1,7 @@
 # Release Packages
 
+The public repository currently provides source archives and version tags. Binary packages will follow in a later release. The instructions below apply to future binary releases.
+
 `.github/workflows/release.yml` builds auditable release packages when a `v*` tag is pushed or the workflow is run
 manually. Tag builds upload the CLI and GUI packages to the matching
 [GitHub Release](https://github.com/SakuzyPeng/MacinRender-ADM-Core/releases). See the

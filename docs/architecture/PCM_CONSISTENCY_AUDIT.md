@@ -1,13 +1,13 @@
 # PCM 一致性审计与 Rust 迁移路线
 
-统计日期：2026-10-09。源码与门禁基准：`456a3baaa338c8b7cc3da74951f28a8d5dfe5cc8`。
-四期自 2026-10-16 起，基准为 `0a3b362`（三期结项），方向见 [ADR 0021](../adr/0021-rust-primary-project.md)。
+统计日期：2026-10-09。源码与门禁基准：`6f5eb813aae24c516476ae990ee554ba03a9bf6d`。
+四期自 2026-10-16 起，基准为 `a792c1c`（三期结项），方向见 [ADR 0021](../adr/0021-rust-primary-project.md)。
 
 从 ADM / 参数输入到最终 PCM，项目自有渲染链路仍有 **18 组数值实现依赖、8 组状态或环境条件**需要纳入一致性管理。
 这些是按生产入口和影响机制归并的 26 个审计条目，不代表发现了 26 个已复现的跨平台 PCM 缺陷。
 平台数学函数尚未统一的路径很多；已有用例逐位相同，只约束这些用例及其构建条件。
 
-本文件统一维护剩余数值运算清单与本轮分期路线，吸收 `d42e294` 中的 C++ 审计和性能检查。
+本文件统一维护剩余数值运算清单与本轮分期路线，吸收 `593d96d` 中的 C++ 审计和性能检查。
 原分支的审计内容保留在 Git 提交历史中；各 ADR、迁移验收记录和原始证据继续作为独立历史记录引用。
 N/S 条目表描述基准提交时的机制，保留原文以便追溯；一期结项后的处理情况见[条目状态](#条目状态)。
 
@@ -68,7 +68,7 @@ Windows SpatialAudioClient 等设备端空间化发生在应用提交床或对�
 
 [SOFA 扩展记录](RUST_SOFA_CONSISTENCY.md)已增加 30 个 PCM id、27 个内核文件，并记录 macOS arm64 Release A
 的重复性、完整性及诊断无扰动验证；该记录尚未给出新增范围的三平台 A/B 验收结果。
-`bc506fb` 随后增加 VBAP Scene 22.2 的 48/96 kHz 和两种分块，共 8 个 epoch 输出，清单由 180 扩到 188。
+`c4fc9ae` 随后增加 VBAP Scene 22.2 的 48/96 kHz 和两种分块，共 8 个 epoch 输出，清单由 180 扩到 188。
 本记录核对清单与源码，不替代这些新增范围各自的三平台验收报告。
 
 ## 输入与空间控制的数值依赖
@@ -128,7 +128,7 @@ S01 和 N13 描述同一计量模块的不同机制；N08 和 N09 也存在上�
 
 ## 条目状态
 
-一期结项（`d288d3c`）后各条目的处理情况。“已处理”指 Scene 链路上的该机制已统一并有门禁；
+一期结项（`f42533c`）后各条目的处理情况。“已处理”指 Scene 链路上的该机制已统一并有门禁；
 共享实现随之改变的离线与文件流式路径一并受益，但这些路径的完整覆盖仍按二期、三期验收。
 
 | 条目 | 状态 | 处理与剩余 |
@@ -230,7 +230,7 @@ Apple 后端和后续编码继续排除。
 | 1.5 | 验证状态与控制时序 | 参数更新、头追有效期、generation、epoch、切换、seek/preroll、短尾、EOS 和欠载规则。按固定样本位置重放事件；对宣称分块无关的内核增加跨分块精确测试，其余路径明确最大块长和分块条件。 |
 | 1.6 | 三平台验收 | macOS arm64、Windows x64、Linux x64 的 Release 候选在相同配置和事件下逐位相同；覆盖内置 HRTF、固定外部 SOFA、变采样、HpTF 切换、峰值保护和多声道输出。回归准备后的处理分配、锁和 I/O 约束，保留公开 ABI。 |
 
-**1.1 状态**：检查点与规则草案已提交（`7cc09ab`、`a7b6dd7`；规则见 [ADR 0018](../adr/0018-scene-numeric-replay-rules.md)，2026-10-14 接受）。
+**1.1 状态**：检查点与规则草案已提交（`d544366`、`39a766a`；规则见 [ADR 0018](../adr/0018-scene-numeric-replay-rules.md)，2026-10-14 接受）。
 Consistency 运行 38034179850 在 A/B 两种配置下完成三平台诊断采集：
 
 - 188 个 PCM id 全部逐位相同，197 项数值门禁无失败，诊断构建与普通构建输出相同（无扰动）。
@@ -247,7 +247,7 @@ Consistency 运行 38034179850 在 A/B 两种配置下完成三平台诊断采�
 
   这些属于三期或观察列，不进入一期范围。
 
-上述结果对应 `a7b6dd7` 的实际观测范围。同类型后端切换可能复用命令检查点名称，原收集器也未逐组强制所有配套字段流；
+上述结果对应 `39a766a` 的实际观测范围。同类型后端切换可能复用命令检查点名称，原收集器也未逐组强制所有配套字段流；
 结果不能证明这些未完整记录的边界相同。修订将渲染器 current/outgoing/incoming 分开、为 lane 系数保留 epoch，
 并校验每个已记录边界的配套文件和形状；新报告的 `scene_checkpoints` 汇总按 Scene 用例目录计算。
 这些诊断修正的验证单独记录，不追溯改写运行 38034179850 的文件或数量。
@@ -262,35 +262,35 @@ Consistency 运行 38034179850 在 A/B 两种配置下完成三平台诊断采�
 
 以上是本机修订验证；修订后的三平台检查点结果需由新的 Consistency 运行确认，不能沿用 38034179850 的记录。
 
-**1.2 状态**：语义策略数值求值、Live VBAP 源增益合成和 Triple Balance 床系数已迁入 Rust（`8a73dc9`、`4d01d0e`、`1ad7641`）；
-策略 dB 换算改用 `libm::powf`（`d476f1a`）；Scene 回放的策略更新加入 `gain_db`、extent、diffuse 和 divergence（`4bede24`）。
-结构迁移在 Linux x64 上对普通与诊断运行逐文件位相同，`1ad7641` 的三平台 Consistency/CI/Quality 通过。
+**1.2 状态**：语义策略数值求值、Live VBAP 源增益合成和 Triple Balance 床系数已迁入 Rust（`2bb1a3c`、`5cda825`、`cf66b36`）；
+策略 dB 换算改用 `libm::powf`（`8963852`）；Scene 回放的策略更新加入 `gain_db`、extent、diffuse 和 divergence（`200eec3`）。
+结构迁移在 Linux x64 上对普通与诊断运行逐文件位相同，`cf66b36` 的三平台 Consistency/CI/Quality 通过。
 验证、性能与剩余项见 [Scene C++ 数值残留迁移](RUST_SCENE_RESIDUAL_MIGRATION.md)；回放变更后的三平台结果以新的 Consistency 运行为准。
 
-**1.3 状态**：channelLock 与 divergence 阈值移入 Rust（`c1a9c51`）；Scene 空间数学、VBAP spread、HRTF 幅度、
-live 双耳 divergence 与 SOFA 坐标转换改用 `libm`（`8d260b8`）；RustFFT 与纳入仓库的 RealFFT 的 twiddle 改用 `libm`（`e432729`）。
+**1.3 状态**：channelLock 与 divergence 阈值移入 Rust（`09b689a`）；Scene 空间数学、VBAP spread、HRTF 幅度、
+live 双耳 divergence 与 SOFA 坐标转换改用 `libm`（`bc816ac`）；RustFFT 与纳入仓库的 RealFFT 的 twiddle 改用 `libm`（`30a2a9f`）。
 三平台 Consistency 38545398947 与 38548940341 通过，全部 160 个内核文件三平台相同，f64 twiddle 列设为门禁。
 Scene 空间与卷积准备链路上不再调用平台数学库；HpTF 设计与峰值保护属于 1.4。见 [1.3 记录](RUST_SCENE_PORTABLE_MATH.md)。
 
-**1.4 状态**：无峰值保护输出的音量乘法移入 Rust（`caf6859`）；HpTF 极小尾音清理改为自 reset 起每 1024 帧的固定网格，
-淡化在第 2048 帧精确结束（`8ee8f82`，S02）；HpTF 设计与 `StereoPeakGuard` 释放系数改用 `libm`（`877a383`，N16、N17）。
+**1.4 状态**：无峰值保护输出的音量乘法移入 Rust（`e020aa1`）；HpTF 极小尾音清理改为自 reset 起每 1024 帧的固定网格，
+淡化在第 2048 帧精确结束（`b681869`，S02）；HpTF 设计与 `StereoPeakGuard` 释放系数改用 `libm`（`caea1a1`，N16、N17）。
 Linux x64 上锁定矩阵的普通与诊断运行全部不变；Consistency 38570610669 中 188 个 PCM id、160 个内核文件和 44 个设备/HpTF 检查点三平台相同，
 HpTF 设计内核设为门禁（共 155 份）。`SceneOutputSession` 中不再有决定样本值的 C++ 浮点运算。
 见 [1.4 记录](RUST_SCENE_OUTPUT_DSP.md)。
 
 **1.5 状态**：ADR 0018 §4、§5 的每条规则都已对应到实现与测试。HpTF 淡化期间发布的目标改为在当前淡化结束的那一帧开始，
-设备输出不再随回调分块变化（`f94d28e`，S04）。逐阶段比较固定与碎片分块后：
+设备输出不再随回调分块变化（`6b605a9`，S04）。逐阶段比较固定与碎片分块后：
 - VBAP、Triple Balance、2 的整数次幂比率重采样、后端过渡和设备侧 DSP 与分块无关，
-  对应的 11 个同采样率 VBAP/Triple Balance 回放用例在每个平台上要求两种分块逐位相同（`07030f5`）；
+  对应的 11 个同采样率 VBAP/Triple Balance 回放用例在每个平台上要求两种分块逐位相同（`5711a7f`）；
 - 双耳卷积与分数比率重采样依赖分块（S03），继续作为分块配置分别门禁；
 - 设备欠载补零不推进 HpTF 与峰值保护历史（S05）。
 
-锁定矩阵输出不变；`07030f5` 的 Consistency 38598585257 中 188 个 PCM id 与 160 个内核文件三平台相同，12 个采集作业的分块无关检查全部通过。见 [1.5 记录](RUST_SCENE_TIMING.md)。
+锁定矩阵输出不变；`5711a7f` 的 Consistency 38598585257 中 188 个 PCM id 与 160 个内核文件三平台相同，12 个采集作业的分块无关检查全部通过。见 [1.5 记录](RUST_SCENE_TIMING.md)。
 
 **1.6 状态**：一致性 config A 改用发布构建的选项（C ABI bundle，全部目标位置无关编译），`ReleaseParityTests` 防止两者漂移；
-Windows 发布构建不再使用已安装依赖（`eedf2fe`）。设备侧 HpTF、峰值保护与音量新增变采样后接外部 SOFA 和 VBAP 立体声馈送的回放，
-PCM 门禁增至 196 个（`d85bc79`）；设备回调由 C++ 分配计数测试约束，回调路径只用原子量（`ad4ef3c`、`0512770`）。
-`0512770` 的 Consistency 38677291567 中 196 个 PCM id、160 个内核文件三平台相同，207 项门禁无失败；CI、Quality 与 Release Build 通过。
+Windows 发布构建不再使用已安装依赖（`b76aa2a`）。设备侧 HpTF、峰值保护与音量新增变采样后接外部 SOFA 和 VBAP 立体声馈送的回放，
+PCM 门禁增至 196 个（`20d7c57`）；设备回调由 C++ 分配计数测试约束，回调路径只用原子量（`2faabf0`、`3f7b5df`）。
+`3f7b5df` 的 Consistency 38677291567 中 196 个 PCM id、160 个内核文件三平台相同，207 项门禁无失败；CI、Quality 与 Release Build 通过。
 C++ 中剩余的 Scene 运算已登记，**一期结项**。见 [1.6 记录](RUST_SCENE_RELEASE_ACCEPTANCE.md)。
 
 相关审计项：N04、N05、N09—N11、N16、N17，以及 N01/N03/S03—S07 中服务于 Scene 的部分和 S02。
@@ -312,20 +312,20 @@ C++ 中剩余的 Scene 运算已登记，**一期结项**。见 [1.6 记录](RUS
 
 **2.1 状态**：ebur128 0.1.10 纳入 `rust/vendor/ebur128`，True Peak 插值滤波器的窗与 sinc 改用 `libm`；
 内核探针新增 4 种采样率 × 2 种声道数的生产计量结果，True Peak 设为门禁，响度作为观察项留给 2.2。
-Linux x64 上 glibc 与 `libm` 的系数逐位相同，锁定矩阵输出不变。`bcb6c3f` 的 Consistency 38718937064 中 196 个 PCM id 与全部 True Peak 门禁三平台相同；
+Linux x64 上 glibc 与 `libm` 的系数逐位相同，锁定矩阵输出不变。`6b13a8f` 的 Consistency 38718937064 中 196 个 PCM id 与全部 True Peak 门禁三平台相同；
 响度观察项在 192 kHz 三平台两两不同（macOS 与 x86 最大 8.3e-11 LU，Linux 与 Windows 1 ulp），由 2.2 定位和统一。见 [2.1 记录](RUST_METER_TRUE_PEAK.md)。
 
 **2.2 状态**：vendored ebur128 的 K-weighting `tan`/`pow`、门控系数 `pow` 与 LUFS `log10` 改用 `libm`；
 x86 不再打开 FTZ，所有架构统一在每次调用后清零低于 `f64::EPSILON` 的滤波器状态（S01）。内核探针新增 K-weighting 系数，
 末段改为让状态停在阈值以下的 2^-80 直流，计量文件全部设为门禁（188 个内核文件中 183 个）。Linux x64 上锁定矩阵的 PCM 不变；
-`56f1ded` 的 Consistency 38742360010 中 196 个 PCM id 与全部 188 个内核文件三平台相同。修复前的检查点运行把 2.1 的分歧定位到
+`6319c49` 的 Consistency 38742360010 中 196 个 PCM id 与全部 188 个内核文件三平台相同。修复前的检查点运行把 2.1 的分歧定位到
 macOS 上 192 kHz K-weighting 分母的 1 ulp 差异（经接近 1 的极点放大），Linux 与 Windows 之间的 1 ulp 来自 `log10`，
 S01 使末段读数在 macOS 与 x86 之间相差 120–168 LU。见 [2.2 记录](RUST_METER_LOUDNESS.md)。
 
 **2.3 状态**：`mradm-dsp` 新增 `post_gain`：各后端的峰值转 dB、`RenderService` 的响度目标 / 峰值补偿 / 峰值上限 / 最终增益判定、
 公开 `apply_loudness_norm` 与 `apply_peak_limit` 的增益，以及三处整段重写的逐样本乘法都移入 Rust，dB 换算使用 `libm`；
 判定顺序、容差与 NaN / −0 的取值保持不变。内核探针新增 5 个 `post-gain` 文件并设为门禁（193 个内核文件中 188 个）。
-Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`d836744` 的 Consistency 38757362457、CI 38757366795 与 Quality 38757371551 通过，
+Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`fbe5286` 的 Consistency 38757362457、CI 38757366795 与 Quality 38757371551 通过，
 196 个 PCM id 与全部 193 个内核文件三平台相同，209 项门禁无失败。见 [2.3 记录](RUST_POST_GAIN.md)。
 
 **2.4 状态**：以测试内独立实现的 BS.1770-4 参考（标准表格的 48 kHz K-weighting、400 ms 块、绝对与相对门限）和 EBU Tech 3341
@@ -334,10 +334,10 @@ Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`d836744` 的 Consistency 38
 验收发现 2.2 的极小状态清零发生在每次调用结束时，使静音段的 momentary 与 short-term 依赖分块；vendored ebur128 改为每完成一个
 100 ms 块时清零，6 种分块与 reset 后的读数逐位相同，长静音后 integrated 与 True Peak 不变。内核探针新增 20 个 `meter-acceptance`
 文件（213 个内核文件中 208 个设为门禁）；`mr_adm_normalization_acceptance_tests` 重新测量归一化后的最终 PCM，与目标相差不超过 1.6e-6。
-`a347a32` 的 Consistency 38769696216 中 196 个 PCM id 与全部 213 个内核文件三平台相同，209 项门禁无失败；
-`418986d` 的 CI 38773742902 与 Quality 38773737452 通过。N13—N15 与 S01 全部处理，**二期结项**。见 [2.4 记录](RUST_METER_ACCEPTANCE.md)。
+`15956dd` 的 Consistency 38769696216 中 196 个 PCM id 与全部 213 个内核文件三平台相同，209 项门禁无失败；
+`db23383` 的 CI 38773742902 与 Quality 38773737452 通过。N13—N15 与 S01 全部处理，**二期结项**。见 [2.4 记录](RUST_METER_ACCEPTANCE.md)。
 合并审查随后修正了相对门限样例，并为 reset 增加全新实例基准与采集期断言；修订后的验证与上述三平台基线分开记录。
-修订后 `0c3504b` 的 Consistency 38837774849、CI 38837774791 与 Quality 38837774975 通过，196 个 PCM id 与全部 213 个内核文件三平台相同。
+修订后 `005ba5f` 的 Consistency 38837774849、CI 38837774791 与 Quality 38837774975 通过，196 个 PCM id 与全部 213 个内核文件三平台相同。
 
 保持既有声道权重、LFE 处理、完整积分历史、worker 归属和错误语义；声道映射修正或计量算法变更另行评估。
 对 ebur128 使用可追踪的小范围补丁，不以更换语言或更新依赖版本代替数值规则和标准测试。
@@ -367,27 +367,27 @@ Linux x64 上 196 个 PCM id 与 2.2 逐位相同；`d836744` 的 Consistency 38
 Monitor 立体声折叠矩阵改用 `libm::sinf/cosf`，实时覆盖增益的 dB 换算（EAR、VBAP、Triple Balance、HOA、双耳与两处溢出检查）
 统一为 `libm::powf`。一致性采集新增 `mr_adm_phase2_stream` 与 6 个双耳文件流式重放（实时增益、静音、拓扑、头部朝向与 seek，
 固定与碎片请求分块），PCM 门禁增至 202 个；内核探针新增 4 个 `stream-dsp` 文件（217 个内核文件中 212 个设为门禁）。
-Linux x64 上原有 196 个 PCM id 不变；`b20a365` 的 Consistency 38844929927、CI 38844932172 与 Quality 38844933977 通过，
+Linux x64 上原有 196 个 PCM id 不变；`fba5754` 的 Consistency 38844929927、CI 38844932172 与 Quality 38844933977 通过，
 202 个 PCM id 与全部 217 个内核文件三平台相同，216 项门禁无失败。合并审查补上的用例版本 2（独立帧数校验）
-输出与版本 1 逐位相同，`e7accaa` 的 Consistency 38857339402 重新验收通过。见 [3.1 记录](RUST_FILE_STREAM_BINAURAL.md)。
+输出与版本 1 逐位相同，`f96bdae` 的 Consistency 38857339402 重新验收通过。见 [3.1 记录](RUST_FILE_STREAM_BINAURAL.md)。
 
 **3.2 状态**：`mradm-ear` 的几何、extent 权重、立体声 panner 与去相关随机相位改用 `libm`（N06、N08），EAR 在 C++ 中剩下的增益运算
 经核对只有单独的加法与乘法。内核探针新增 3 个 `ear-gains` 文件，文件流式重放经共享渲染器工厂新增 6 个 EAR 用例（含按扬声器标签的覆盖），
 PCM 门禁增至 208 个，内核文件 220 个中 215 个设为门禁。Linux x64 上只有 3 个使用 extent 的 EAR 离线用例在最后几位改变；
-`c931750` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过，208 个 PCM id 与 220 个内核文件三平台相同，
+`4de1de0` 的 Consistency 38865168292、CI 38865171453 与 Quality 38865174302 通过，208 个 PCM id 与 220 个内核文件三平台相同，
 223 项门禁无失败。见 [3.2 记录](RUST_EAR_PORTABLE_MATH.md)。
 
 **3.3 状态**：HOA 编码与 EAR HOA 解码改用 `libm`（N07）；AllRAD 解码器原先经 nalgebra 动态矩阵调用 matrixmultiply，二阶及以上输入在多于
 5 个扬声器的布局上随主机选择 AVX/FMA 或 NEON 内核，现改为与 nalgebra 标量循环同序的固定乘积，一阶解码器逐位不变。HOA 文件流式的
 实时覆盖改用共用的按声道解析。新增三阶 HOA 夹具、`ear-hoa3` / `hoa-loudness-minus23` 离线用例、6 个 HOA 文件流式重放与 4 个 HOA 内核文件，
 PCM 门禁增至 216 个，内核文件 224 个中 219 个设为门禁。Linux x64 上只有 2 个 HOA extent 用例在最后几位改变；
-`5c00c47` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过，216 个 PCM id 与 224 个内核文件三平台相同，
+`c3e10ec` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过，216 个 PCM id 与 224 个内核文件三平台相同，
 233 项门禁无失败，诊断检查点全部相同。见 [3.3 记录](RUST_HOA_PORTABLE_MATH.md)。
 
 **3.4 状态**：去掉 Triple Balance 的 `PORTABLE` 泛型，标准模式的离线、文件流式与 Scene 入口共用同一份 `libm` 实现与 size 积分格点，
 平滑常量改用 `libm::expf`（N12）；D 模式自引入起即用 `libm`，本切片为它建立独立门禁。新增 `objects-room` 夹具、6 个 size / D 模式离线用例、
 6 个 Triple Balance 文件流式重放与 4 个 `triple-balance` 内核文件，PCM 门禁增至 228 个，内核文件 228 个中 223 个设为门禁。
-Linux x64 上原有 216 个 PCM id 不变；`e0ef382` 的 Consistency 38874020588、CI 38874023487 与 Quality 38874026573 通过，
+Linux x64 上原有 216 个 PCM id 不变；`c5eb9a3` 的 Consistency 38874020588、CI 38874023487 与 Quality 38874026573 通过，
 228 个 PCM id 与 228 个内核文件三平台相同，246 项门禁无失败，诊断检查点全部相同。见 [3.4 记录](RUST_TRIPLE_BALANCE_PORTABLE_MATH.md)。
 
 **3.5 状态**：ADM 导入的 dB 增益与 Cartesian DirectSpeakers 投影改用 `libm`（N02），各 Rust crate 的生产代码不再调用平台初等函数；
@@ -395,15 +395,15 @@ CLI 浮点选项与 HOA 标签改用 Rust 正确舍入、与 locale 无关的十
 增益入口；同起点块在各后端建立增益、总线或路由前只保留 ADM 文档顺序中的最后一块（S08，在 libstdc++ 上复现了旧实现的错误生效块；
 合并后又修正了双耳取到同起点第一块、EAR / VBAP / HOA 从被覆盖块插值、Apple LFE 总线与 22.2 LFE 路由残留被覆盖块的问题）。新增 `params` 夹具、
 5 个 `params-*` 离线用例与 3 个 `adm-import` / `decimal` 内核文件，PCM 门禁增至 233 个，内核文件 231 个中 226 个设为门禁。
-Linux x64 上原有 228 个 PCM id 不变；`75e38ae` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过，
-233 个 PCM id 与 231 个内核文件三平台相同，253 项门禁无失败，诊断检查点全部相同；同起点块修正后，`c89e81a` 的 Consistency 38907550214
+Linux x64 上原有 228 个 PCM id 不变；`65d3d45` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过，
+233 个 PCM id 与 231 个内核文件三平台相同，253 项门禁无失败，诊断检查点全部相同；同起点块修正后，`b721bc0` 的 Consistency 38907550214
 与 CI 38907555184 再次确认 233 个 PCM id（含新的 `params-*` 结果）与 231 个内核文件三平台相同。见 [3.5 记录](RUST_PARAMETER_ENTRY.md)。
 
 **3.6 状态**：输出裁剪、预览窗口与 Monitor 定位 / 循环共用 Rust `timeline::seconds_to_frame`（最近帧，半帧远离零），Monitor 由截断改为
 最近帧（S06）；CAF float32 显式按小端序列化。增益重写与整数量化原已在 Rust 且确定，本切片补边界覆盖：新增 9 个 `final-*` 离线用例
 （16 / 24 位整数 WAVE、满幅钳位、7.1.4 置换与 ADM BW64、float32 CAF、半帧边界裁剪）与 4 个 `timeline` / `wav-quantize` 内核文件，
 PCM 门禁增至 242 个，内核文件 235 个中 230 个设为门禁。Linux x64 上原有 233 个 PCM id 与 231 个内核文件不变；合并审查补上非法裁剪时间的校验与 CAF 诊断
-检查点后，`4ea3665` 的 Consistency 38937703621、CI 38937703580 与 Quality 38937703595 通过，242 个 PCM id 与 235 个内核文件三平台相同，
+检查点后，`9149edc` 的 Consistency 38937703621、CI 38937703580 与 Quality 38937703595 通过，242 个 PCM id 与 235 个内核文件三平台相同，
 264 项门禁无失败，诊断检查点全部相同。见 [3.6 记录](RUST_FINAL_PCM.md)。
 
 **三期结项**：六个切片完成，N01—N18 全部处理，S01、S02、S06、S08 已处理；S03 保留为分块条件（文件流式对象平滑依赖请求分块，无门禁），
@@ -460,31 +460,31 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 - 双耳卷积与分数比率重采样的分块依赖仍按分块配置分别门禁；S04、S05 的运行时条件不变。
 - 4.5–4.7 删除被冻结参考引用的生产 C++ 时，把旧实现连同参考冻结进 `tests/reference/` 并登记哈希（维护者 2026-10-16 决定），见[逆转路线](RUST_INVERSION_ROADMAP.md#c-删除与冻结参考)。
 
-**4.1 状态**：ADR 0021、逆转路线、C/C++ 规模棘轮（生产 45,090 行、岛 3,213 行起算）、Rust 生产路径检查点写出器与离线场景检查点已提交。Linux x64 本机上，候选的 242 个 PCM id、全部内核文件与既有 26,358 个诊断检查点都与 `0a3b362` 逐字节相同，新增 124 个场景检查点；三平台 Consistency 38990075874（`7950cfb`）在 config A、B 上 242 个 PCM id 相同、门禁失败 0，诊断报告中场景检查点与全部既有检查点三平台相同。见 [4.1 记录](RUST_INVERSION_BASELINE.md)。
+**4.1 状态**：ADR 0021、逆转路线、C/C++ 规模棘轮（生产 45,090 行、岛 3,213 行起算）、Rust 生产路径检查点写出器与离线场景检查点已提交。Linux x64 本机上，候选的 242 个 PCM id、全部内核文件与既有 26,358 个诊断检查点都与 `a792c1c` 逐字节相同，新增 124 个场景检查点；三平台 Consistency 38990075874（`eda15a6`）在 config A、B 上 242 个 PCM id 相同、门禁失败 0，诊断报告中场景检查点与全部既有检查点三平台相同。见 [4.1 记录](RUST_INVERSION_BASELINE.md)。
 
-**4.2 状态**：覆盖用例、门禁与一致性工具扩展已合入，不改既有 PCM。Linux x64 本机上既有 242 个 PCM id、235 份内核测量与全部既有诊断检查点都与 4.1 候选逐字节相同，5 个策略用例的 `06-policy` 场景检查点与 `05-import` 不同。三平台 Consistency 39012071641（`45ab448`）在 config A、B 上 283 个 PCM id 相同、308 条门禁失败 0，诊断报告中 237 份内核、201 个内核检查点、31,100 条用例检查点与 21,380 项 Scene 检查点比较三平台相同。见 [4.2 记录](RUST_INVERSION_COVERAGE.md)。
+**4.2 状态**：覆盖用例、门禁与一致性工具扩展已合入，不改既有 PCM。Linux x64 本机上既有 242 个 PCM id、235 份内核测量与全部既有诊断检查点都与 4.1 候选逐字节相同，5 个策略用例的 `06-policy` 场景检查点与 `05-import` 不同。三平台 Consistency 39012071641（`456e05b`）在 config A、B 上 283 个 PCM id 相同、308 条门禁失败 0，诊断报告中 237 份内核、201 个内核检查点、31,100 条用例检查点与 21,380 项 Scene 检查点比较三平台相同。见 [4.2 记录](RUST_INVERSION_COVERAGE.md)。
 
-**4.3 状态**：扬声器布局表、输入导入（WAVE、CHNA 映射、ADM 投影调用）与声道床迁入 `mradm-scene`，`05-import` 场景检查点改由 Rust 写出，`RenderPlan` 的 Rust 场景句柄推迟到 4.4。Linux x64 本机上 283 个 PCM id、237 份内核测量、201 个内核检查点与 30,772 个诊断检查点都与 `main`（`f277b64`）逐字节相同；生产 C/C++ 由 45,026 行降到 44,632 行。三平台 Consistency 39022845303（`3e7a806`）在 config A、B 上 283 个 PCM id 相同、门禁失败 0，诊断报告中 237 份内核、201 个内核检查点、31,100 条用例检查点与 21,380 项 Scene 检查点比较三平台相同。见 [4.3 记录](RUST_INVERSION_SCENE.md)。
+**4.3 状态**：扬声器布局表、输入导入（WAVE、CHNA 映射、ADM 投影调用）与声道床迁入 `mradm-scene`，`05-import` 场景检查点改由 Rust 写出，`RenderPlan` 的 Rust 场景句柄推迟到 4.4。Linux x64 本机上 283 个 PCM id、237 份内核测量、201 个内核检查点与 30,772 个诊断检查点都与 `main`（`cba55f3`）逐字节相同；生产 C/C++ 由 45,026 行降到 44,632 行。三平台 Consistency 39022845303（`21b60dd`）在 config A、B 上 283 个 PCM id 相同、门禁失败 0，诊断报告中 237 份内核、201 个内核检查点、31,100 条用例检查点与 21,380 项 Scene 检查点比较三平台相同。见 [4.3 记录](RUST_INVERSION_SCENE.md)。
 
-**4.4 状态**：语义策略（解析、匹配、合并、应用、报告与模板）、Scene 流式的逐更新应用、导出回写，以及 DirectSpeakers 矩阵与屏幕配置的 JSON 迁入 `mradm-scene`，JSON 读写改用新 crate `mradm-json`，N01 的 JSON 残留随之消除。`06-policy` 由 Rust 写出，`RenderPlan` 携带策略后的 Rust 场景句柄。报告、模板、导出与错误消息与 C++ 逐字节相同，只有维护者同意的几项有意变化：语法错误正文、两处报告修正、LF、身份冲突的报错顺序，以及 extent 缺省上限改为 ADM 取值范围（唯一改变 PCM 的一项）。黄金数据分别来自 nlohmann 与删除前的 C++：JSON 格式化与解析语料、714 例策略、742 条导出、958 条配置。生产 C/C++ 由 44,632 行降到 42,406 行。三平台 Consistency 39031059419（`294415d`）、39824671399（`8fff2a8`）与 39891455786（`cdc23c8`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.4 记录](RUST_INVERSION_POLICY.md)。
+**4.4 状态**：语义策略（解析、匹配、合并、应用、报告与模板）、Scene 流式的逐更新应用、导出回写，以及 DirectSpeakers 矩阵与屏幕配置的 JSON 迁入 `mradm-scene`，JSON 读写改用新 crate `mradm-json`，N01 的 JSON 残留随之消除。`06-policy` 由 Rust 写出，`RenderPlan` 携带策略后的 Rust 场景句柄。报告、模板、导出与错误消息与 C++ 逐字节相同，只有维护者同意的几项有意变化：语法错误正文、两处报告修正、LF、身份冲突的报错顺序，以及 extent 缺省上限改为 ADM 取值范围（唯一改变 PCM 的一项）。黄金数据分别来自 nlohmann 与删除前的 C++：JSON 格式化与解析语料、714 例策略、742 条导出、958 条配置。生产 C/C++ 由 44,632 行降到 42,406 行。三平台 Consistency 39031059419（`5472f18`）、39824671399（`cfcd850`）与 39891455786（`b842e57`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.4 记录](RUST_INVERSION_POLICY.md)。
 
-**4.5 状态**：扬声器后端（VBAP、HOA、EAR）、Scene 流式的 VBAP 渲染器，以及它们共用的 DirectSpeakers / 标签 / LFE 路由、对象块预处理、离线驱动与文件流式渲染迁入新 crate `mradm-render`，Rust 后端只读策略后的 Rust 场景句柄；C++ 只剩适配壳、能力表、离线驱动的写出 / 取消 / 进度，以及给 4.6、4.7 后端用的薄包装。EAR 的 channelLock / divergence 预处理与 22.2 LFE 策略随之迁入。`speaker/s*`、`vbap.0*`、`hoa.0*`、`ear.*` 与 `.30-vbap*` 检查点改由 Rust 写出。路由规则以删除前 C++ 生成的 4,550 条黄金数据验收；各批的新旧 CLI / Scene 对照（saf 1,148 例、hoa 886 例、ear 2,096 例、88 个 Scene 重放）全部逐字节相同。生产 C/C++ 由 42,406 行降到 39,747 行。三平台 Consistency 39933972829（`16e14dc`）、39959813760（`08350d9`）、39987342040（`dd3f82b`）与 40004502957（`763d637`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.5 记录](RUST_INVERSION_SPEAKERS.md)。
+**4.5 状态**：扬声器后端（VBAP、HOA、EAR）、Scene 流式的 VBAP 渲染器，以及它们共用的 DirectSpeakers / 标签 / LFE 路由、对象块预处理、离线驱动与文件流式渲染迁入新 crate `mradm-render`，Rust 后端只读策略后的 Rust 场景句柄；C++ 只剩适配壳、能力表、离线驱动的写出 / 取消 / 进度，以及给 4.6、4.7 后端用的薄包装。EAR 的 channelLock / divergence 预处理与 22.2 LFE 策略随之迁入。`speaker/s*`、`vbap.0*`、`hoa.0*`、`ear.*` 与 `.30-vbap*` 检查点改由 Rust 写出。路由规则以删除前 C++ 生成的 4,550 条黄金数据验收；各批的新旧 CLI / Scene 对照（saf 1,148 例、hoa 886 例、ear 2,096 例、88 个 Scene 重放）全部逐字节相同。生产 C/C++ 由 42,406 行降到 39,747 行。三平台 Consistency 39933972829（`2d78af4`）、39959813760（`5b0a791`）、39987342040（`9a5dd78`）与 40004502957（`61d1c44`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.5 记录](RUST_INVERSION_SPEAKERS.md)。
 
-**4.6 状态**：Triple Balance 后端（场景规范化、床、报告、离线 TB 内核、文件流式与 Scene 流式渲染器）和 room 后端（资源与 HRIR 加载、事件表、准备线程状态机、文件流式与 Scene 流式渲染器）迁入 `mradm-render` 与 `mradm-dsp` `room::loading`。C++ 只剩适配壳、能力表、`render_window` 的写出 / 计量 / 取消，以及 `IRoomControl` 薄壳；只剩测试使用的 Triple Balance C++ 移到 `tests/support/triple_balance`。`.30-triple-*` 检查点改由 Rust 写出，room 原有的浮点环境边界由 FFI 作用域保留。Triple Balance 报告以删除前 C++ 生成的 1,300 例黄金数据验收；各批新旧对照（Triple Balance 离线 992 例、文件流式 650 例，room CLI 1,014 例，88 个 Scene 重放的普通与诊断构建）全部逐字节相同。行为差别只有 Scene Triple Balance 警告的顺序；room 离线默认 ramp 的 `×48` 照原样迁移，记为已知问题（五期 5.7 已修正）。生产 C/C++ 由 39,747 行降到 36,931 行。三平台 Consistency 40099269643（`6940df9`）、40122405263（`a072146`）、40166924313（`305159f`）、40176869018（`72c188b`）与 40186174718（`ea07aa9`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
+**4.6 状态**：Triple Balance 后端（场景规范化、床、报告、离线 TB 内核、文件流式与 Scene 流式渲染器）和 room 后端（资源与 HRIR 加载、事件表、准备线程状态机、文件流式与 Scene 流式渲染器）迁入 `mradm-render` 与 `mradm-dsp` `room::loading`。C++ 只剩适配壳、能力表、`render_window` 的写出 / 计量 / 取消，以及 `IRoomControl` 薄壳；只剩测试使用的 Triple Balance C++ 移到 `tests/support/triple_balance`。`.30-triple-*` 检查点改由 Rust 写出，room 原有的浮点环境边界由 FFI 作用域保留。Triple Balance 报告以删除前 C++ 生成的 1,300 例黄金数据验收；各批新旧对照（Triple Balance 离线 992 例、文件流式 650 例，room CLI 1,014 例，88 个 Scene 重放的普通与诊断构建）全部逐字节相同。行为差别只有 Scene Triple Balance 警告的顺序；room 离线默认 ramp 的 `×48` 照原样迁移，记为已知问题（五期 5.7 已修正）。生产 C/C++ 由 39,747 行降到 36,931 行。三平台 Consistency 40099269643（`01cb5b1`）、40122405263（`3cd30e3`）、40166924313（`972cc04`）、40176869018（`9b12dce`）与 40186174718（`7f32fab`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。见 [4.6 记录](RUST_INVERSION_TRIPLE_ROOM.md)。
 
-**4.7 B 本机对照（2026-10-27）**：`c967d840` 与 `1c52d999` 在无诊断插桩 Release 下，macOS arm64 的 83 例、Windows x64 的 77 例全部与基线逐位相同，77 个共用候选输出跨平台也相同。Windows 复测仍有 cloud 离线端到端耗时 +10.02%、带拓扑编辑的文件流式渲染峰值内存 +21.04% 两项开放回退。维护者要求记录问题后合并；性能验收尚未完成，本轮未继续 macOS 性能矩阵或长测。范围、隔离观察和原始轮次见 [4.7 记录的 B 合并审查](RUST_INVERSION_BINAURAL.md#b-合并审查2026-10-27)。
+**4.7 B 本机对照（2026-10-27）**：`c1722289` 与 `20ec6f9f` 在无诊断插桩 Release 下，macOS arm64 的 83 例、Windows x64 的 77 例全部与基线逐位相同，77 个共用候选输出跨平台也相同。Windows 复测仍有 cloud 离线端到端耗时 +10.02%、带拓扑编辑的文件流式渲染峰值内存 +21.04% 两项开放回退。维护者要求记录问题后合并；性能验收尚未完成，本轮未继续 macOS 性能矩阵或长测。范围、隔离观察和原始轮次见 [4.7 记录的 B 合并审查](RUST_INVERSION_BINAURAL.md#b-合并审查2026-10-27)。
 
 **4.7 B 性能续查（同日）**：原端到端计时受约 15.55 ms 的退出轮询粒度影响；直接等待进程退出的两轮无插桩 cloud 对照为 +3.21% / +1.39%，不删除原始历史记录。拓扑重建的新旧卷积 bank 重叠解释了内存回退，提前释放的归因实验将峰值从 52.11 MiB 降到 43.28 MiB（参考 43.15 MiB）。内部工作池提交与输出归约有已测优化方向；未合入生产修复，问题仍开放。见[性能调查](RUST_BINAURAL_PERFORMANCE_REVIEW.md)。
 
 **4.7 B 内存修复（2026-10-28）**：文件流式拓扑重建复用 bank、工作池及卷积工作区，增长时只补足差额。完整控制重放的峰值在 Windows 由 52.31 降至 43.02 MiB，macOS 直接 Rust 对照由 58.30 降至 48.45 MiB；静态对照未见本次改动新增开销。Windows 77 项、macOS 83 项 PCM 对照和 77 个共用候选输出全部逐位一致。BINAURAL-002 已修复，其他耗时问题仍开放。见[内存修复](RUST_BINAURAL_MEMORY_FIX.md)。
 
-**4.7 状态**：双耳后端的 HRTF 状态与缓存（A）、声源计划、逐源 OLA、spreader 适配器、工作池与离线驱动（B）、文件流式渲染（C）和 Scene 流式渲染器（D）迁入 `mradm-render`（`binaural_hrtf`、`binaural`、`binaural_render`、`binaural_stream`、`live_binaural`），源索引与组索引的归约顺序不变，线程数不影响输出。C++ 只剩适配壳、能力表、`HrtfState` 视图、写出 / 取消 / 进度与创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural` 与 `tests/support/head_rotation.h`。`binaural.01–05`、`hrtf-grid-*`、`cloud.*`、`spreader/*` 与 `.30-binaural-*` 检查点改由 Rust 写出。声源计划以删除前 C++ 生成的 2,511 例黄金数据与 54 个 CLI 渲染指纹验收；各批新旧对照（离线 CLI 948 例、文件流式 574 例、88 个 Scene 重放的普通与诊断构建、矩阵子集的普通与诊断构建）中，成功渲染用例的 PCM 逐位相同。离线文件比较时将 bext 的墙钟日期时间置零；逐字节对照仍有三类例外：A 中 1 例两版均中止但 stderr 不同，B 中 10 例由中止改为报错，D 中 1 个 VBAP 设备回放的 24 个设备回调 trace 切分不同（按样本顺序拼接后 36 条流全部相同）。行为差别：线程数取法、worker 中止改为返回错误、文件流式检查输出缓冲、Scene 双耳 session 创建失败改为返回错误。生产 C/C++ 由 36,931 行降到 33,732 行。三平台 Consistency 40300248787（`c967d84`）、40484741776（`c34f937`）、40653088266（`0f49c1b`）、40808829856（`f6c697e`）与 40931990370（`31bb6dc`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。BINAURAL-001（Windows cloud 离线端到端耗时）仍开放。见 [4.7 记录](RUST_INVERSION_BINAURAL.md)。
+**4.7 状态**：双耳后端的 HRTF 状态与缓存（A）、声源计划、逐源 OLA、spreader 适配器、工作池与离线驱动（B）、文件流式渲染（C）和 Scene 流式渲染器（D）迁入 `mradm-render`（`binaural_hrtf`、`binaural`、`binaural_render`、`binaural_stream`、`live_binaural`），源索引与组索引的归约顺序不变，线程数不影响输出。C++ 只剩适配壳、能力表、`HrtfState` 视图、写出 / 取消 / 进度与创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural` 与 `tests/support/head_rotation.h`。`binaural.01–05`、`hrtf-grid-*`、`cloud.*`、`spreader/*` 与 `.30-binaural-*` 检查点改由 Rust 写出。声源计划以删除前 C++ 生成的 2,511 例黄金数据与 54 个 CLI 渲染指纹验收；各批新旧对照（离线 CLI 948 例、文件流式 574 例、88 个 Scene 重放的普通与诊断构建、矩阵子集的普通与诊断构建）中，成功渲染用例的 PCM 逐位相同。离线文件比较时将 bext 的墙钟日期时间置零；逐字节对照仍有三类例外：A 中 1 例两版均中止但 stderr 不同，B 中 10 例由中止改为报错，D 中 1 个 VBAP 设备回放的 24 个设备回调 trace 切分不同（按样本顺序拼接后 36 条流全部相同）。行为差别：线程数取法、worker 中止改为返回错误、文件流式检查输出缓冲、Scene 双耳 session 创建失败改为返回错误。生产 C/C++ 由 36,931 行降到 33,732 行。三平台 Consistency 40300248787（`c172228`）、40484741776（`ab6de5c`）、40653088266（`7099893`）、40808829856（`b9cf6d9`）与 40931990370（`5beaa82`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、门禁失败 0。BINAURAL-001（Windows cloud 离线端到端耗时）仍开放。见 [4.7 记录](RUST_INVERSION_BINAURAL.md)。
 
-**4.8 状态**：没有生产调用者的 peak / loudness 公共 API 删除（A）；CAF 容器、最终 float 写出端、进程级 writer 编号与 `writer/pass*` 检查点迁入 `mradm-wav::caf` 与 `mradm-render::output`（B）；增益改写、trim、整数降位、WAV 布局收尾与 AXML 替换，连同 sidecar 命名、安装与备份恢复，迁入 `mradm-render::postprocess`（C）。C++ 只剩 `audio_io.h` 的薄包装、检查取消与发进度的分步循环壳 `run_output_pass`，以及留在 C 岛的编码器（FLAC、Opus MKA、IAMF、APAC 与 MP4 udta）。错误码、文字、context、进度与取消点、sidecar 命名与 writer 编号顺序不变。维护者决定的四处修正：写出端报告 `finish()` 失败、改写保留受支持且声道数匹配的源 CAF 布局标签、`.caf` 拒绝 i16 / i24、`trim_file_smoke_test` 的断言；另有增益与 trim 不再接受 FLAC 输入。CAF 以删除前 C++ 生成的 376 例 `caf-v1` 黄金数据验收；新旧对照中 B 的 460 例 CLI 0 差异，C 的 CLI 460 例与直接 API 373 个操作只在上述有意变化处不同，矩阵子集普通与诊断 0 个问题。逐字节对照的例外：bext 与 CAF `info` 的日期置零、上述有意变化，以及 Windows 上的安装语义、OS 错误文字与路径编码。生产 C/C++ 由 33,718 行降到 32,551 行。三平台 Consistency 41037527666（`4207627`）、41074793418（`e9a9541`）与 41152970680（`8278a4b`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。见 [4.8 记录](RUST_INVERSION_OUTPUT.md)。
+**4.8 状态**：没有生产调用者的 peak / loudness 公共 API 删除（A）；CAF 容器、最终 float 写出端、进程级 writer 编号与 `writer/pass*` 检查点迁入 `mradm-wav::caf` 与 `mradm-render::output`（B）；增益改写、trim、整数降位、WAV 布局收尾与 AXML 替换，连同 sidecar 命名、安装与备份恢复，迁入 `mradm-render::postprocess`（C）。C++ 只剩 `audio_io.h` 的薄包装、检查取消与发进度的分步循环壳 `run_output_pass`，以及留在 C 岛的编码器（FLAC、Opus MKA、IAMF、APAC 与 MP4 udta）。错误码、文字、context、进度与取消点、sidecar 命名与 writer 编号顺序不变。维护者决定的四处修正：写出端报告 `finish()` 失败、改写保留受支持且声道数匹配的源 CAF 布局标签、`.caf` 拒绝 i16 / i24、`trim_file_smoke_test` 的断言；另有增益与 trim 不再接受 FLAC 输入。CAF 以删除前 C++ 生成的 376 例 `caf-v1` 黄金数据验收；新旧对照中 B 的 460 例 CLI 0 差异，C 的 CLI 460 例与直接 API 373 个操作只在上述有意变化处不同，矩阵子集普通与诊断 0 个问题。逐字节对照的例外：bext 与 CAF `info` 的日期置零、上述有意变化，以及 Windows 上的安装语义、OS 错误文字与路径编码。生产 C/C++ 由 33,718 行降到 32,551 行。三平台 Consistency 41037527666（`e840fd9`）、41074793418（`4b07e2f`）与 41152970680（`eeb7113`）在 config A、B 的普通与诊断报告中都是 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。见 [4.8 记录](RUST_INVERSION_OUTPUT.md)。
 
-**4.9 状态**：4.5 之后扬声器文件流式（VBAP、HOA、EAR）已按固定块渲染进 FIFO，与请求分块无关、从第 0 帧起与离线相同；剩下的偏差在 seek：块不在离线的绝对网格上（开平滑时插值端点不同），HOA / EAR 也不预滚。4.9 让 seek 从离线窗口的起点（`offline::window_start`，离线与流共用）渲染并丢弃目标之前的帧，seek 时重启 live gain 去拉链，seek 之后与同一位置的离线窗口逐位相同；离线输出不变。新增 8 个开平滑（2048 帧）的文件流式重放并设门禁，PCM id 由 283 增至 291，文件流式重放由 28 增至 36。有意变化的是 12 个 EAR / HOA 文件流式重放 seek 之后的 PCM；全部 79 个离线行与其余 16 个基线文件流式行在普通与诊断构建中相同，8 个新增文件流式行仅候选支持，候选 36 个重放都与分块无关。Scene 流式的双耳卷积与分数比率重采样仍依赖分块，S03 的这一部分不变。三平台 Consistency 41159930885（`ecb2fb5`）在 config A、B 的普通与诊断四份报告中均为 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。见 [4.9 记录](RUST_INVERSION_SMOOTHING.md)。
+**4.9 状态**：4.5 之后扬声器文件流式（VBAP、HOA、EAR）已按固定块渲染进 FIFO，与请求分块无关、从第 0 帧起与离线相同；剩下的偏差在 seek：块不在离线的绝对网格上（开平滑时插值端点不同），HOA / EAR 也不预滚。4.9 让 seek 从离线窗口的起点（`offline::window_start`，离线与流共用）渲染并丢弃目标之前的帧，seek 时重启 live gain 去拉链，seek 之后与同一位置的离线窗口逐位相同；离线输出不变。新增 8 个开平滑（2048 帧）的文件流式重放并设门禁，PCM id 由 283 增至 291，文件流式重放由 28 增至 36。有意变化的是 12 个 EAR / HOA 文件流式重放 seek 之后的 PCM；全部 79 个离线行与其余 16 个基线文件流式行在普通与诊断构建中相同，8 个新增文件流式行仅候选支持，候选 36 个重放都与分块无关。Scene 流式的双耳卷积与分数比率重采样仍依赖分块，S03 的这一部分不变。三平台 Consistency 41159930885（`5bb1dc7`）在 config A、B 的普通与诊断四份报告中均为 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。见 [4.9 记录](RUST_INVERSION_SMOOTHING.md)。
 
-**4.10 状态（四期结项）**：结项提交 main `221ce28`。Consistency 41166081362 在 config A、B 的普通与诊断四份报告中都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0；诊断报告中每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。CI 41166081382 与 Quality 41166081381 通过；Release Build 41183519975（5 个打包 job）与 Reference tests 41183521970（7 个参考单元）通过。生产 C/C++ 由 4.1 的 45,090 行降到 32,551 行（−12,539 行，27.8%），岛与 CUDA 边界不变。四期目标逐条完成；room 离线默认 ramp 的 `×48` 与 BINAURAL-001 移交五期（`×48` 已在 5.7 修正）。见 [四期结项](RUST_INVERSION_CLOSEOUT.md)。
+**4.10 状态（四期结项）**：结项提交 main `6f1c963`。Consistency 41166081362 在 config A、B 的普通与诊断四份报告中都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0；诊断报告中每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。CI 41166081382 与 Quality 41166081381 通过；Release Build 41183519975（5 个打包 job）与 Reference tests 41183521970（7 个参考单元）通过。生产 C/C++ 由 4.1 的 45,090 行降到 32,551 行（−12,539 行，27.8%），岛与 CUDA 边界不变。四期目标逐条完成；room 离线默认 ramp 的 `×48` 与 BINAURAL-001 移交五期（`×48` 已在 5.7 修正）。见 [四期结项](RUST_INVERSION_CLOSEOUT.md)。
 
 ## 五期：编排与实时调度迁入 Rust
 
@@ -516,7 +516,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 
 数值与规模要求沿用四期：结构迁移逐位不变（锁定矩阵的 PCM、内核与诊断检查点）、迁出即删除、生产 C/C++ 棘轮只减不增。主机验收按当前 AGENTS.md，集中完成 macOS arm64 + Windows x64 的适用验证；保留历史 Linux 证据，缺少 Linux 结果不阻塞验收。BINAURAL-001 作为性能任务另行跟踪，不阻塞五期。
 
-**5.1 状态**：驱动面清单（4 个一致性工具、7 个 CLI 子命令、164 个 C ABI 导出按家族归入 5.2–5.5 与六期）、岛接口清单与五期规模基线（`8ef7017`，生产 C/C++ 32,551 行）记录在 5.1 记录。新增新旧工具的对照手段：`run-rust-phase2.py --tool` 替换回放工具并在 manifest 记录 `tool_overrides`，`compare-rust-phase2.py` 拒绝这类采集，`compare-collections.py` 对同一构建、同一平台的两份采集逐字节比较 PCM、夹具、比较记录、回放状态、内核与检查点和日志。本机以同一批工具替换采集的自对照为 0 差异，植入的 PCM 与日志差异都被报出。PCM 与生产代码不变。见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)。
+**5.1 状态**：驱动面清单（4 个一致性工具、7 个 CLI 子命令、164 个 C ABI 导出按家族归入 5.2–5.5 与六期）、岛接口清单与五期规模基线（`3060d78`，生产 C/C++ 32,551 行）记录在 5.1 记录。新增新旧工具的对照手段：`run-rust-phase2.py --tool` 替换回放工具并在 manifest 记录 `tool_overrides`，`compare-rust-phase2.py` 拒绝这类采集，`compare-collections.py` 对同一构建、同一平台的两份采集逐字节比较 PCM、夹具、比较记录、回放状态、内核与检查点和日志。本机以同一批工具替换采集的自对照为 0 差异，植入的 PCM 与日志差异都被报出。PCM 与生产代码不变。见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)。
 
 **5.2 状态**：离线编排在 Rust `mradm-engine`，分五批完成：
 - A：能力表与发现文档、inspect 场景 JSON（`catalog`）；
@@ -532,7 +532,7 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 - C2：进度探针 2,997 例与 10 组 CLI 对照；
 - D：在同一构建上，`compare-collections` 比较 C++ 工具与 Rust 工具的两份采集，291 个输出与 656 份日志相同。
 
-六次合并后的三平台 Consistency 都通过。最后一次是 41455133059（`af322c5`），config A、B 的普通与诊断四份报告都是 291 个 PCM id 相同、门禁失败 0。
+六次合并后的三平台 Consistency 都通过。最后一次是 41455133059（`2b43087`），config A、B 的普通与诊断四份报告都是 291 个 PCM id 相同、门禁失败 0。
 
 生产 C/C++ 32,551 → 29,805 行。见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)。
 
@@ -546,14 +546,14 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 例外包括 Windows 上监听的矩阵标签与准备 context 改为 UTF-8、监听请求里非 UTF-8 或含 NUL 的路径被拒绝，以及一致性工具检查 room 夹具名的写法。MonitorEngine 改为先写失败日志再发布失败状态，可观察行为不变。
 
 本机对照都是 0 差异：A 的 36 个文件流式行（plain 与 diag）与 918 个流式变体；B 的新旧监听工厂 2,960 例（含 282 条流的 PCM），以及同一构建上 C++ 工具与 Rust 工具的 plain、diag 两次 `compare-collections`。
-三次合并后的三平台 Consistency 都通过，最后一次 41994125083（`d543bc0`）的四份报告都是 291 个 PCM id 相同、门禁失败 0。
+三次合并后的三平台 Consistency 都通过，最后一次 41994125083（`61b9fac`）的四份报告都是 291 个 PCM id 相同、门禁失败 0。
 
 生产 C/C++ 29,805 → 29,297 行。见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md)。
 
 **5.7 状态**：按用户决定（2026-11-06）提前到 5.4 之前完成。room 离线与文件流式渲染中没有 `interpolationLength` 的对象块，默认 ramp 由 `default_interp_ms × 48` 改为 `sample_rate × default_interp_ms / 1000`，48 kHz 下不变。
 新增 96 kHz 房间包 `tests/fixtures/room/phase2-96k`、夹具 `objects-room-96k` 与 3 个门禁 id（`room-exact-96k`、`stream-room-96k-fixed` / `-fragmented`），PCM id 291 → 294。
 本机对照中现有 115 个离线与文件流式行 plain / diag 逐字节相同，3 个新 id 与旧 ramp 的差异从第二个块的起点加传播延迟开始。同批修正了 libFLAC 在 GNU ld 上的链接顺序，维护者补全了 Cargo 链接的工具与 Windows 部分。
-Consistency 42381474098（`5bb28ce`）的四份报告都是 294 个 PCM id 相同、门禁失败 0。生产 C/C++ 不变。见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)。
+Consistency 42381474098（`f117738`）的四份报告都是 294 个 PCM id 相同、门禁失败 0。生产 C/C++ 不变。见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)。
 
 ## 每个迁移切片的验证
 

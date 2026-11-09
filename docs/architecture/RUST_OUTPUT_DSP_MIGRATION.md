@@ -36,7 +36,7 @@ Scene/Monitor 的线程、队列、设备生命周期、元数据解析和控制
 
 ## 验证
 
-测试专用 `output_dsp_legacy.h` 冻结 `53cc36e` 的原 C++ 算法，只参与比较可执行文件。
+测试专用 `output_dsp_legacy.h` 冻结 `0668393` 的原 C++ 算法，只参与比较可执行文件。
 Release 比较覆盖 1/2/12/64 通道、1/8/44.1/48/96/192 kHz 增益、0/4/20 ms 渐变、
 首次目标、重复目标、中途重定向、缺省目标、重置及移动所有权。
 峰值对照覆盖 8/44.1/48/96/192 kHz、1/37/512/4096 帧输入与短输出缓冲、
@@ -57,9 +57,9 @@ Rust 独立断言另检查渐变端点、连续性、分块一致性、双耳比
 - 测试探针增加重定向覆盖及整理后，两端分别定向复查该 Release 对照，macOS 同时复查 Debug 对照。
 - Rust fmt、Clippy `-D warnings`，C++ 改动检查、许可证/SBOM 检查通过；Apple 既有静态检查建议保留。
 - 两端保留同一组 139 个公开 `adm_*` 入口，私有 Rust 入口不外泄。Windows 仍有附带的 C++ 导出。
-- 基线 `53cc36e` 的 [CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37226615086)
-  已通过 macOS/Linux/Windows Debug。实现提交 `496e108` 的
-  [最终 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37228025183)
+- 基线 `0668393` 的 CI (historical Actions run 37226615086)
+  已通过 macOS/Linux/Windows Debug。实现提交 `fca074b` 的
+  最终 CI (historical Actions run 37228025183)
   通过 macOS 57/57、Linux 56/56、Windows 56/56。Windows 首次在测试程序链接/依赖部署时
   遇到文件占用，仅重跑失败任务后通过，期间没有修改源代码。
 
@@ -77,7 +77,7 @@ Windows 使用既有 canonical 工作树，并保留其原有修改；本次同�
 cmake --build --preset debug
 ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base 53cc36e --build-dir build/debug
+scripts/quality/check-changed.sh --base 0668393 --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 
 cmake --build --preset release

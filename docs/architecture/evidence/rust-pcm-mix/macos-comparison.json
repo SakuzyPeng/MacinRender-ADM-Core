@@ -1,5 +1,5 @@
 {
-  "baseline_commit": "4286f3e",
+  "baseline_commit": "de621ca",
   "tolerance": "2e-6 + 2e-6 * abs(reference)",
   "cases": [
     {

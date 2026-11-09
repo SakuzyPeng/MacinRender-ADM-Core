@@ -34,13 +34,13 @@ RealFFT 3.5.0 为这一处改动纳入 `rust/vendor/realfft`，做法与 RustFFT
 
 | 提交 | 内容 | Linux x64 config A 相对前一提交 |
 | --- | --- | --- |
-| `c1a9c51` | channelLock 与 divergence 阈值移入 Rust | 普通 431 个文件、诊断 23946 个文件逐位相同 |
-| `8d260b8` | Scene 空间数学改用 `libm` | 262 份 PCM 中 98 份改变（见下），另有 14 份 HRTF/SOFA 内核文件改变 |
-| `e432729` | FFT twiddle 改用 `libm`，纳入 RealFFT | 全部 PCM 与 f32 内核不变；只有 f64 值改变（twiddle 观察列及 42 份 EAR f64 逆变换检查点） |
-| `4343c60` | 冻结参考测试中，旋转后的极点按方向比较 | 仅测试 |
-| `860abbf` | VBAP 与双耳 Scene 回放的策略更新加入极坐标位置偏移 | 58 个 VBAP/双耳 Scene epoch-1 PCM 因输入改变；其余不变 |
+| `09b689a` | channelLock 与 divergence 阈值移入 Rust | 普通 431 个文件、诊断 23946 个文件逐位相同 |
+| `bc816ac` | Scene 空间数学改用 `libm` | 262 份 PCM 中 98 份改变（见下），另有 14 份 HRTF/SOFA 内核文件改变 |
+| `30a2a9f` | FFT twiddle 改用 `libm`，纳入 RealFFT | 全部 PCM 与 f32 内核不变；只有 f64 值改变（twiddle 观察列及 42 份 EAR f64 逆变换检查点） |
+| `6f40118` | 冻结参考测试中，旋转后的极点按方向比较 | 仅测试 |
+| `5830fc1` | VBAP 与双耳 Scene 回放的策略更新加入极坐标位置偏移 | 58 个 VBAP/双耳 Scene epoch-1 PCM 因输入改变；其余不变 |
 
-**`8d260b8` 改变的 PCM**
+**`bc816ac` 改变的 PCM**
 
 - 改变：双耳与 SOFA 用例、Scene 双耳/SOFA/设备用例、12 个 Scene VBAP extent 云用例，以及两个离线双耳 extent 用例。
 - 不变：EAR、HOA 和 Triple Balance 的输出。
@@ -56,29 +56,29 @@ Linux 上 glibc 与 `libm` 的 f64 三角函数结果并不总是相同，因此
 因此 extent 云点和旋转后的极点改为按单位方向的夹角比较，上限 2e-5°，约为单位向量的几个 f32 ulp。
 
 - Linux 实测最大夹角 1.5e-5°。
-- Windows CI 上该测试曾因 MSVC 数学库在极点给出不同但等价的方位角而失败（`8d260b8`），已由 `4343c60` 修复。
+- Windows CI 上该测试曾因 MSVC 数学库在极点给出不同但等价的方位角而失败（`bc816ac`），已由 `6f40118` 修复。
 
 **三平台验收**
 
-- `8d260b8`：Consistency 运行 38545398947 通过，即改用 `libm` 后三平台逐位相同。
-- `4343c60`（含 FFT twiddle）：Consistency 运行 38548940341 与 CI 38548943485 通过。A/B 两种配置下：
+- `bc816ac`：Consistency 运行 38545398947 通过，即改用 `libm` 后三平台逐位相同。
+- `6f40118`（含 FFT twiddle）：Consistency 运行 38548940341 与 CI 38548943485 通过。A/B 两种配置下：
   - 188 个 PCM id 三平台相同，197 项门禁无失败；
   - 全部 160 个内核文件三平台相同，原先唯一不同的 f64 twiddle 观察列也已一致，因此设为门禁（第 151 份）。
 - 仍不同的只有离线 EAR 的检查点：f64 去相关 FIR 频谱/逆变换和 HOA 解码行。twiddle 统一后它们仍不同，
   差异来自 `mradm-ear` 自身的数学函数，属于三期；最终 FIR 与 PCM 早已逐位相同。
 
-**回放覆盖。** `scene_math` 可移植后，`860abbf` 让 VBAP 与双耳回放在样本 6144 的策略更新加入
+**回放覆盖。** `scene_math` 可移植后，`5830fc1` 让 VBAP 与双耳回放在样本 6144 的策略更新加入
 `position.offset`（方位 12.5°、仰角 −4°），三平台门禁随之覆盖策略中的 Cartesian→极坐标→Cartesian 换算。
 Triple Balance 只接受房间立方体内的 Cartesian 位置：极坐标偏移会把距离大于 1 的回放位置移出立方体，
 渲染器按设计拒绝，因此不加该项。
 
-最终头 `71a8a5f`（含位置偏移回放与新增的 f64 twiddle 门禁）的 Consistency 运行 38552344508 与 CI 38552348665 通过：
+最终头 `b94be72`（含位置偏移回放与新增的 f64 twiddle 门禁）的 Consistency 运行 38552344508 与 CI 38552348665 通过：
 188 个 PCM id 与 151 份内核门禁三平台逐位相同。同一头的 Quality 指出 `apply_channel_lock` 中一处可改用
 `std::ranges::transform` 的循环（cppcheck `useStlAlgorithm`），随后修正，不影响数值。
 
 ## 性能
 
-在共享 4 核 Linux 虚拟机上比较切片前（`528a0d5`）与 `e432729` 的 Release 构建。离线交替运行 7 轮。
+在共享 4 核 Linux 虚拟机上比较切片前（`a6f5b90`）与 `30a2a9f` 的 Release 构建。离线交替运行 7 轮。
 
 | 用例 | 耗时比 | RSS 比 | PCM |
 | --- | --- | --- | --- |

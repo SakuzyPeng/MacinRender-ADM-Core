@@ -1,8 +1,8 @@
 {
   "schema": "mradm.rust-monitor-migration.v1",
   "date": "2026-10-05",
-  "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
-  "implementation_commit": "d70ac2e1c2b45ce71595e30b621cde1dcba5ae62",
+  "baseline_commit": "e570501f6d5252aaf970ebaf0d9a543f03244429",
+  "implementation_commit": "8c296772b5383b7716336ccc5169a751ec489b6d",
   "scope": [
     "Worker-owned backend crossfade position and PCM blend",
     "Callback-owned seek anchors, generation and transition state",
@@ -69,7 +69,7 @@
     "identical_input_peak_rms": "bit identical; nonfinite classification compared",
     "exact_cases": "Representable endpoints, passthrough, simple blends, untouched tails",
     "macos": {
-      "baseline": "a54fdc3",
+      "baseline": "e570501",
       "passed": true,
       "crossfade": {
         "samples": 9365825,
@@ -97,7 +97,7 @@
       }
     },
     "windows": {
-      "baseline": "a54fdc3",
+      "baseline": "e570501",
       "passed": true,
       "crossfade": {
         "samples": 9365825,
@@ -141,7 +141,7 @@
     "windows": {
       "profile": "canonical Release",
       "compiler": "MSVC 19.51.36257 x64",
-      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "git_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
       "MR_ADM_STRICT_FP": false,
       "MR_ADM_ENABLE_SOFA": true,
       "legacy_reference_switches": false,
@@ -151,7 +151,7 @@
         "src/adm_realtime/monitor_engine.cpp",
         "tests/unit/realtime_stream_fixture_test.cpp"
       ],
-      "source_overlay_commit": "04e4e81016eb28bd83ea2d682e39bee6afe4ae29"
+      "source_overlay_commit": "d6a9f4c98792124ce5961617d30cfebb9615e7c1"
     }
   },
   "abi": {
@@ -164,8 +164,8 @@
   },
   "ci": {
     "run_id": 37309535034,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37309535034",
-    "commit": "04e4e81016eb28bd83ea2d682e39bee6afe4ae29",
+    "url": "historical Actions run 37309535034",
+    "commit": "d6a9f4c98792124ce5961617d30cfebb9615e7c1",
     "status": "completed",
     "conclusion": "success",
     "attempt": 1,
@@ -200,7 +200,7 @@
     "superseded_runs": [
       {
         "run_id": 37309114936,
-        "commit": "d70ac2e1c2b45ce71595e30b621cde1dcba5ae62",
+        "commit": "8c296772b5383b7716336ccc5169a751ec489b6d",
         "reason": "Cancelled before completion to validate the final comparator parenthesization and source fingerprints"
       }
     ]
@@ -240,7 +240,7 @@
     "tests/unit/realtime_stream_fixture_test.cpp": "aa01e235b01a65eaa4a202edc96056961ef8c9ddaa52c8e47f7e920295995c75"
   },
   "reference_provenance": {
-    "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+    "baseline_commit": "e570501f6d5252aaf970ebaf0d9a543f03244429",
     "source_sha256": {
       "src/adm_realtime/monitor_engine.cpp": "403c8eb6edf8160e951c9d8c2ac6b79d481930fa7e20a33303dda066dacf14fb",
       "src/adm_realtime/monitor_engine.h": "1a2766eaeab34eef177c80f7b6d6560e5b5bf9523d43e89f3639d8caf91e1146"
@@ -259,5 +259,5 @@
     "No performance or RSS claim",
     "No whole-renderer allocation guarantee"
   ],
-  "final_source_commit": "04e4e81016eb28bd83ea2d682e39bee6afe4ae29"
+  "final_source_commit": "d6a9f4c98792124ce5961617d30cfebb9615e7c1"
 }

@@ -1,6 +1,6 @@
 # request-v1
 
-Frozen output of the C++ renderer factory and engine at main `47615fe`, before PCM consistency
+Frozen output of the C++ renderer factory and engine at main `6c406de`, before PCM consistency
 5.2 B moved the request resolution to `mradm-engine` `request`. A scratchpad generator (not
 committed) linked the C++ `ADMRendererFactory` and `ADMIo` of a Linux x64 config A Release build:
 

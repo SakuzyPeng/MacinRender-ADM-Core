@@ -4,7 +4,7 @@
   "date": "2026-10-14",
   "functional_validation_passed": true,
   "implementation": {
-    "base_commit": "a368b6215355a3299b4ab5acbf67699ca9f6e0db",
+    "base_commit": "1662c5c5290224b3952203513fc27615a957a685",
     "working_tree_change": true,
     "flows": [
       "offline rendering",
@@ -316,7 +316,7 @@
         "peak": 0.28897857666015625,
         "hrir_guard_frames": 96,
         "output_sha256": "cdbc3a2ddbff637130ae3c654828605664ccbe687ea231026c598850279ff39a",
-        "head": "a368b6215355a3299b4ab5acbf67699ca9f6e0db",
+        "head": "1662c5c5290224b3952203513fc27615a957a685",
         "release_artifact_sha256": {
           "mradm": "9e954f658c13fa33f32fc15fe320f7aa2a6e573fadd67e917dbcbd813ff2c012",
           "libmr_adm_render_room.dylib": "c8acfde7a4f8ea3e8007d2588f1a7a295afb62e0978ea6a1f9c777d86d15ac50"
@@ -329,7 +329,7 @@
         "peak": 0.28847426176071167,
         "hrir_guard_frames": 96,
         "output_sha256": "5be28a043a821c38a4870d3027dfa807f451267ccefec06b9cf81cca342e0dee",
-        "head": "a368b6215355a3299b4ab5acbf67699ca9f6e0db",
+        "head": "1662c5c5290224b3952203513fc27615a957a685",
         "release_artifact_sha256": {
           "mradm": "9e954f658c13fa33f32fc15fe320f7aa2a6e573fadd67e917dbcbd813ff2c012",
           "libmr_adm_render_room.dylib": "c8acfde7a4f8ea3e8007d2588f1a7a295afb62e0978ea6a1f9c777d86d15ac50"

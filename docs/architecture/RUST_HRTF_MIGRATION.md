@@ -34,7 +34,7 @@ cloud/head-locked、失败回滚及多会话，也覆盖两种 bank 布局的规
 
 2026-10-09 的 macOS M4 Pro Release 对照使用内置 KEMAR、48 kHz、512 帧块，22 个动态
 对象加 2 个世界坐标静态对象，均跟随头追。每组预热 32 块，测量 1280 块，交替运行三轮；
-下表是各轮统计量的中位数。基线 `c7b5cf1` 包含旧版约 8 MiB 缓存，候选包含本次容量、
+下表是各轮统计量的中位数。基线 `8efa1f5` 包含旧版约 8 MiB 缓存，候选包含本次容量、
 索引、布局、角点内核和重放的全部改动，因此数据反映联合效果。
 
 | 场景 | 基线均值 ms/块 | 候选均值 ms/块 | 候选 P95 / P99 ms |
@@ -134,4 +134,4 @@ ctest --test-dir build/release --parallel 6 --output-on-failure
 ```
 
 CLI 前后对照使用已有 `scripts/consistency/compare-binaural-dsp.py`，参考二进制为迁移前
-`ee21dc3` 的 Release CLI。检查新增且尚未跟踪的 C++ 文件时，另显式传给格式及静态检查工具。
+`0705607` 的 Release CLI。检查新增且尚未跟踪的 C++ 文件时，另显式传给格式及静态检查工具。

@@ -1,8 +1,8 @@
 {
   "schema": "mradm.rust-triple-balance-migration.v1",
   "date": "2026-10-05",
-  "baseline_commit": "19728179608c4cfe550dc11ff2b3b4425db37963",
-  "implementation_commit": "31ec95cf64df98276930305875f51a218a08f52c",
+  "baseline_commit": "7fecf3329712b68fb9cbe38cb1a977d0561d76f9",
+  "implementation_commit": "957769895a536ce3993e68c0c255cab454be19e5",
   "scope": [
     "Rust immutable shared numeric preparation and point timeline compilation",
     "Fixed point, size and 22.2 geometry",
@@ -57,7 +57,7 @@
   "numerical_comparison": {
     "tolerance": "2e-6 + 2e-6 * abs(reference)",
     "macos": {
-      "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+      "baseline": "7fecf3329712b68fb9cbe38cb1a977d0561d76f9",
       "control_blocks_with_exact_decisions": 480,
       "motion_and_mix": {
         "differing_samples": 91559,
@@ -80,7 +80,7 @@
       }
     },
     "windows": {
-      "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+      "baseline": "7fecf3329712b68fb9cbe38cb1a977d0561d76f9",
       "control_blocks_with_exact_decisions": 480,
       "motion_and_mix": {
         "differing_samples": 0,
@@ -133,8 +133,8 @@
       "original_bytes_backed_up": true,
       "synchronized_source_files": 36,
       "synchronized_source_hashes_match_local": true,
-      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
-      "source_overlay_commit": "28a607c93a6e0b30249b1ae43990b216c993e38d",
+      "git_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
+      "source_overlay_commit": "cf6465ab902cfb394bdac611266f8c00e83c0604",
       "unrelated_differences_retained": true
     }
   },
@@ -148,12 +148,12 @@
   },
   "ci": {
     "run_id": 37278478106,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37278478106",
-    "commit": "28a607c93a6e0b30249b1ae43990b216c993e38d",
+    "url": "historical Actions run 37278478106",
+    "commit": "cf6465ab902cfb394bdac611266f8c00e83c0604",
     "status": "completed",
     "prior_implementation_run": {
       "id": 37277169476,
-      "commit": "31ec95cf64df98276930305875f51a218a08f52c",
+      "commit": "957769895a536ce3993e68c0c255cab454be19e5",
       "conclusion": "success"
     },
     "conclusion": "success",
@@ -304,5 +304,5 @@
     "Allocation-free whole renderer",
     "Subjective listening equivalence"
   ],
-  "tested_source_commit": "28a607c93a6e0b30249b1ae43990b216c993e38d"
+  "tested_source_commit": "cf6465ab902cfb394bdac611266f8c00e83c0604"
 }

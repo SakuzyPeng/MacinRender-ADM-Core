@@ -1,4 +1,4 @@
-// Test-only C++ reference from 53cc36e. Keep arithmetic and state order frozen.
+// Test-only C++ reference from 0668393. Keep arithmetic and state order frozen.
 #pragma once
 #include <algorithm>
 #include <cassert>

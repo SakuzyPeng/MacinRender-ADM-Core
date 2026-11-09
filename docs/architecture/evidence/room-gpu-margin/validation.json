@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-gpu-margin",
   "version": 1,
-  "base_commit": "e7ace2a",
+  "base_commit": "e6d50f3",
   "period_local": [
     "2026-10-18T23:54:50-07:00",
     "2026-10-19T00:30:22-07:00"

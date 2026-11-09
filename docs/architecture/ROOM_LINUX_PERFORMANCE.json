@@ -2,7 +2,7 @@
   "schema": "mradm.room-linux-performance",
   "version": 1,
   "verified_utc": "2026-10-11T05:31:54.445510+00:00",
-  "base_commit": "606cc40107bce203fea4aee868638a42b5d8dae0",
+  "base_commit": "fcb6912999529cfa40f09cf3cfb651a3cb099092",
   "source_files": {
     "rust/Cargo.lock": "004ed333ebb8e36c457f6f7b8cafcc95e9a65f42891831bdf0155b19674d4ff8",
     "rust/crates/mradm-dsp/Cargo.toml": "73e4c41e7a11af9c405b0e504243e3e372c69e9d5ec04c98a0aceffa54c68baf",
@@ -3631,7 +3631,7 @@
     "Stage wall times are nested and may overlap across workers; do not add them as CPU time.",
     "rusage covers preparation and warmup as well as timed DSP. System/cgroup snapshots may include other processes.",
     "Switch instance allocation/queueing occurs outside timed DSP and is separately reported; process CPU includes it.",
-    "Desktop historical comparisons also include the independent 606cc40 fixes; short Linux before/after isolates the Control optimization.",
+    "Desktop historical comparisons also include the independent fcb6912 fixes; short Linux before/after isolates the Control optimization.",
     "No change to default worker count, buffering, FFT, source/path order, acoustic quality, or room resource format.",
     "Physical sensor-to-headphone latency remains unmeasured."
   ]

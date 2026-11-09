@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-ear-migration.v1",
   "date": "2026-10-06",
-  "baseline_commit": "5dd0378a0b7f73a1c548a178b3528b5c376b9387",
+  "baseline_commit": "5a008fbacb32f233eadf4c3dc1a32e5ead25cd22",
   "upstream_libear": "2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
   "implementation": "working-tree; see source_sha256",
   "numeric_thresholds": {

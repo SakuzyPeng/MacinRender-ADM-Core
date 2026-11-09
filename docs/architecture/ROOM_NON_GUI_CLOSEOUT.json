@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-non-gui-closeout",
   "version": 1,
-  "implementation_commit": "9f74c46460cdc5fa7862d2fb5523a5a2b0bdc673",
+  "implementation_commit": "f3915cb6fed2de5bd2970ca0f58a2d18b3ec160a",
   "overall_acceptance_passed": false,
   "unmet": [
     "Linux 32 sources / 512 frames does not meet zero deadline misses in the required 3 x 120-second scenarios.",

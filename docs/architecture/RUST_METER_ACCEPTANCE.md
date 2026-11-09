@@ -129,8 +129,8 @@ short-term，以及离线模式的 integrated 与两声道 True Peak（−inf �
 新增 20 个 `meter-acceptance` 文件；ctest 79/79 通过（新增 `mr_adm_normalization_acceptance_tests`）；
 Rust fmt / clippy 与 consistency 工具测试通过。
 
-**三平台验收（门限样例及 reset 断言修订前的基线）。** `a347a32` 的 Consistency 38769696216 与 CI 通过；同一提交的 Quality 38769704409 因 cppcheck 报告新测试
-`main` 可能抛出异常并有两个成员未初始化而失败，`418986d` 修正测试后 CI 38773742902 与 Quality 38773737452 通过
+**三平台验收（门限样例及 reset 断言修订前的基线）。** `15956dd` 的 Consistency 38769696216 与 CI 通过；同一提交的 Quality 38769704409 因 cppcheck 报告新测试
+`main` 可能抛出异常并有两个成员未初始化而失败，`db23383` 修正测试后 CI 38773742902 与 Quality 38773737452 通过
 （修正只涉及 `tests/unit`，不在一致性采集的源码指纹内，三平台采集结果不受影响）：
 
 - A/B 两种配置下 196 个 PCM id 三平台相同，209 项门禁无失败；
@@ -142,11 +142,11 @@ clippy `--all-targets -D warnings` 通过，`phase2_tools_test.py` 的工具测�
 分别把生产相对门限临时改为 −11 LU、−9 LU，以及把 `Meter::reset` 临时替换为空操作，相关验收测试都明确失败；
 撤回三种故障注入后全部正常测试再次通过。此前这类错误可被原验收用例漏过。
 
-使用 Release 内核探针对照 `1c9c273`：213 个文件通过同进程与新进程重复性检查，采集期的分块与 reset 断言通过；
+使用 Release 内核探针对照 `27a628a`：213 个文件通过同进程与新进程重复性检查，采集期的分块与 reset 断言通过；
 只有四种采样率的 `meter-acceptance-*.10-gates.f64` 因修正输入而改变，其余 209 个文件逐位不变。
 该结果是 macOS 本机验证；修订后的门限输入由合并提交触发的三平台 Consistency 工作流重新验收，不能沿用上述旧输入的报告。
 
-**修订后的三平台验收。** 合并提交 `0c3504b`（含上述修正 `5fc9da7`）的 Consistency 38837774849、CI 38837774791 与
+**修订后的三平台验收。** 合并提交 `005ba5f`（含上述修正 `9b5e483`）的 Consistency 38837774849、CI 38837774791 与
 Quality 38837774975 通过：A/B 两种配置下 196 个 PCM id 三平台相同，209 项门禁无失败；213 个内核文件全部三平台相同，
 包括修正输入后的四个 `meter-acceptance-*.10-gates.f64`；采集期的分块与 reset 断言在三平台通过；诊断检查点的相同 / 不同分布与修订前一致。
 Linux x64 本机复核：修订后计量验收 7/7 通过；Release 内核探针与修订前的本机采集相比只有四个 `10-gates.f64` 改变，两遍输出相同；

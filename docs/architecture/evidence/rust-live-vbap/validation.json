@@ -1,8 +1,8 @@
 {
   "schema": "mradm.rust-live-vbap-migration.v1",
   "date": "2026-10-05",
-  "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
-  "implementation_commit": "41cf469b64e8c90e8f79ac07953115d35974033d",
+  "baseline_commit": "d43e376d01b66f258a13366b6cdedfeabe2c9974",
+  "implementation_commit": "d647331a8d696da3e20fe7c31b2555c69063d896",
   "scope": [
     "Rust-owned spatial and level ramp state in generation order",
     "One batched render call over borrowed PCM planes and ordered numerical commands",
@@ -70,7 +70,7 @@
     "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
     "states_and_representable_routes": "bit identical",
     "macos": {
-      "baseline": "577fe2d",
+      "baseline": "d43e376",
       "passed": true,
       "numerical_pcm": {
         "values": 3493448,
@@ -90,7 +90,7 @@
       "exact_counters": 6760
     },
     "windows": {
-      "baseline": "577fe2d",
+      "baseline": "d43e376",
       "passed": true,
       "numerical_pcm": {
         "values": 3493448,
@@ -122,14 +122,14 @@
       "MR_ADM_STRICT_FP": false,
       "MR_ADM_ENABLE_SOFA": true,
       "legacy_reference_switches": false,
-      "build_method": "Standard existing CMake Debug/Release builds after libadm commit 283c54d; no source overlays or manual artifact replay",
+      "build_method": "Standard existing CMake Debug/Release builds after libadm commit fea85bf; no source overlays or manual artifact replay",
       "shared_workspace_validated_after_libadm_completion": true
     },
     "windows": {
       "profile": "canonical Release",
       "platform": "Windows-10-10.0.26100-SP0",
       "compiler": "MSVC 19.51.36257 x64",
-      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "git_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
       "MR_ADM_ENABLE_SOFA": false,
       "MR_ADM_ENABLE_IAMF": false,
       "MR_ADM_STRICT_FP": false,
@@ -137,7 +137,7 @@
       "workspace": "Existing dirty checkout retained; fresh shared-source inspection matched all relevant files; no resynchronization needed",
       "source_hashes_verified_before_and_after_build": 42,
       "sources_match_shared_workspace": true,
-      "source_overlay_commit": "de573007c3c3beb0459493a1c16b4154b2886920"
+      "source_overlay_commit": "3eee0f66da1ca5825af86332abd96de4b7aa582b"
     },
     "cargo_lock_sha256": "d9a1297de208cfd794e64299a3ca95cc8b966d9e085effec1b770702973560a6"
   },
@@ -151,8 +151,8 @@
   },
   "ci": {
     "run_id": 37342603203,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37342603203",
-    "commit": "de573007c3c3beb0459493a1c16b4154b2886920",
+    "url": "historical Actions run 37342603203",
+    "commit": "3eee0f66da1ca5825af86332abd96de4b7aa582b",
     "status": "completed",
     "conclusion": "success",
     "attempt": 1,
@@ -187,7 +187,7 @@
     "previous_runs": [
       {
         "run_id": 37341099280,
-        "commit": "41cf469b64e8c90e8f79ac07953115d35974033d",
+        "commit": "d647331a8d696da3e20fe7c31b2555c69063d896",
         "linux_failure": "C API fixture relied on a transitive <cmath> include removed by the ADM migration; added the direct include"
       }
     ]
@@ -211,7 +211,7 @@
     "tests/unit/c_api_fixture_test.cpp": "97a93c4c42a211207c9b47bc09cf44c686b9c76cf04637be8ad831fbde0bb8f3"
   },
   "reference_provenance": {
-    "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
+    "baseline_commit": "d43e376d01b66f258a13366b6cdedfeabe2c9974",
     "source_sha256": {
       "src/adm_render_vbap/live_vbap_renderer.cpp": "8d36741c667bfedfe4002e8fa794931e7c4ed5605da17a3ba395498cb246153b"
     },
@@ -231,7 +231,7 @@
     "C++ semantic preparation can allocate; OOM/panic rollback not promised"
   ],
   "phase": "accepted",
-  "integration_base_commit": "283c54dda9714ef0c053845086740bd0ca44e6d9",
+  "integration_base_commit": "fea85bf0d9d5396486a71437c2f24235abf23439",
   "integration_source_sha256": {
     "cmake/MRDependencies.cmake": "971841145a64d9c7c02aac618e819b2360362214856b9a03adf826fa689fe308",
     "cmake/MRDependencyRecord.cmake": "c10197e74b097c3d6dd593f2b4bb3eab76cfd46ee1bd3e63808ee700aba1dbd1",
@@ -285,5 +285,5 @@
     "c-api-include-windows.log": "b13b477a890233f6847bd4b5d0903d5f08c754f0c2829c373af4b01dc5e366c7",
     "c-api-include-quality.log": "7a51e7bf90f98ed1d7f76058554344fe9f0ff0f229dd13bcb48ba6b5802ef702"
   },
-  "final_source_commit": "de573007c3c3beb0459493a1c16b4154b2886920"
+  "final_source_commit": "3eee0f66da1ca5825af86332abd96de4b7aa582b"
 }

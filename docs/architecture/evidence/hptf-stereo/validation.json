@@ -1,7 +1,7 @@
 {
   "schema": "mradm.hptf-stereo.validation.v1",
   "date": "2026-10-29",
-  "reference_commit": "31bb6dca4673af92f5f3f3d86cac239dc0a76af8",
+  "reference_commit": "5beaa8263eeb0f18b87d41fa90ea91154408773e",
   "abi": {
     "major": 1,
     "minor": 50,

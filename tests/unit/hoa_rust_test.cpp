@@ -413,7 +413,7 @@ int main(int argc, char** argv) {
         Stats lfe;
         spatial(coefficients);
         pcm_and_meter(pcm, decoded, lfe);
-        const auto result = nlohmann::json{{"baseline", "ba96bac"},
+        const auto result = nlohmann::json{{"baseline", "920864a"},
                                            {"coefficients", coefficients.json()},
                                            {"encoded_pcm", pcm.json()},
                                            {"decoded_pcm", decoded.json()},

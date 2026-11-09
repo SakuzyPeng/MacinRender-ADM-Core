@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-feasibility-summary",
   "version": 1,
   "date": "2026-10-18",
-  "git_base": "6bd4937a780879e7779aba6a92c65444e0ce1fed",
+  "git_base": "861d07ae2cec8dbe8ea113a6af784ffa5a6a70ac",
   "hardware": {
     "cpu": "Intel Core i7-11800H, 8 physical cores / 16 logical processors",
     "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",

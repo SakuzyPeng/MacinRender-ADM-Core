@@ -78,7 +78,7 @@ EAR、VBAP 与 HOA 的文件流式渲染也从这组生效块中绑定声道级�
 
 房间双耳渲染器（`room-binaural`，不在一致性矩阵内）有同样的残留。它按场景顺序遍历块，用 `ds_blocks[0]` 决定 DirectSpeakers 声源的 LFE 角色与实时标签，
 并让 screenRef 检查统计全部块。被覆盖的 LFE 块与生效的全频块同起点时，旧实现会报“同一房间声源不能在全频与 LFE 角色间切换”。
-现在角色、标签、screenRef 判断与事件表都改用 `last_blocks_at_each_start` 的结果。`5b1c9a8` 的 CI 38922601411 与 Quality 38922605025 通过。
+现在角色、标签、screenRef 判断与事件表都改用 `last_blocks_at_each_start` 的结果。`2309d38` 的 CI 38922601411 与 Quality 38922605025 通过。
 
 `room_render_test` 的同起点回归（两个起点、每个起点 5 个先写入的被覆盖块，获胜块只持续被覆盖块区间的一半）要求离线渲染与碎片分块的
 文件流式渲染都与只含获胜块、按时间顺序排列的场景逐位相同：
@@ -90,7 +90,7 @@ EAR、VBAP 与 HOA 的文件流式渲染也从这组生效块中绑定声道级�
 - **短获胜块：** 获胜块结束后被覆盖块不得恢复。
 
 逐项恢复旧行为时各自失败：screenRef 检查报 Programme 屏幕冲突，LFE 角色报角色切换错误，标签取自第一个块时实时覆盖结果不同，
-按场景顺序遍历时 Objects 输出不同。`7867c2f` 的 CI 38927548606 与 Quality 38927552673 通过。
+按场景顺序遍历时 Objects 输出不同。`6be92bc` 的 CI 38927548606 与 Quality 38927552673 通过。
 
 Triple Balance 不改动。它的块时间按 rtime 计算，要求时间戳不减，并在每个 512 帧控制周期内依次应用全部事件，所以同起点的最后一个事件生效。
 床声道要求每个块的标签声道、包与用户增益相同，因此读取第一个块不影响增益。被覆盖的对象块仍参与可用性检查与 size 统计（是否含 diffuse、最小 diffuse 尺寸、最大尺寸），
@@ -127,7 +127,7 @@ EAR、VBAP、HOA 与双耳的输出都因生效块不同而明显改变（S08）
 Rust fmt / clippy、`decimal` 单元测试（含一次舍入与二次舍入结果不同的例子）、源码扫描测试、FFI 头校验（271 个函数）、许可证校验、
 clang-format 与 clang-tidy 无告警；命令行越界与非数字的取值仍被拒绝。
 
-**三平台验收。** `75e38ae` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过：
+**三平台验收。** `65d3d45` 的 Consistency 38879296864、CI 38879300366 与 Quality 38879303103 通过：
 
 - A/B 两种配置下 233 个 PCM id 三平台相同，包括 5 个 `params-*` 用例（含经命令行解析听者朝向的 `params-binaural-rotated`）；253 项门禁无失败；
 - 231 个内核文件全部三平台相同，包括 `adm-import.10-gain.f32`、`adm-import.20-cartesian.f32` 与 `decimal.10-parse.f64`；
@@ -140,12 +140,12 @@ clang-format 与 clang-tidy 无告警；命令行越界与非数字的取值仍�
 
 比较器自检 233 个 PCM id、253 项门禁无失败。ctest 80 项全部通过（新增 `mr_adm_same_start_blocks_tests`）。
 `lfe_routing_test` 原先把 LFE1 与 LFE2 块放在同一轨道的同一起点上；按本规则 LFE2 会覆盖 LFE1。因此“两个语义 LFE”的用例改为把
-LFE2 放在另一条轨道上，重复的 LFE1 块改用不同起点。clang-format 与 clang-tidy 无告警。上面的三平台结果对应修正前的 `75e38ae`。
+LFE2 放在另一条轨道上，重复的 LFE1 块改用不同起点。clang-format 与 clang-tidy 无告警。上面的三平台结果对应修正前的 `65d3d45`。
 
-**同起点块修正后的三平台验收。** `c89e81a` 的 Consistency 38907550214 与 CI 38907555184 通过：
+**同起点块修正后的三平台验收。** `b721bc0` 的 Consistency 38907550214 与 CI 38907555184 通过：
 - A/B 两种配置下 233 个 PCM id 三平台相同。5 个 `params-*` 用例的新结果与本机采集逐位相同；253 项门禁无失败。
 - 231 个内核文件全部三平台相同。
 - 诊断检查点 78,459 个全部三平台相同。
 
-同一提交的 Quality 38907559281 因 cppcheck（`uninitMemberVarNoCtor`）报告新测试的后端表成员没有默认初始化而失败；`5686243` 补上初始化，
-只改动这一个测试文件。`5686243` 的 Quality 38911391642 与 CI 38911395592 通过。
+同一提交的 Quality 38907559281 因 cppcheck（`uninitMemberVarNoCtor`）报告新测试的后端表成员没有默认初始化而失败；`491505d` 补上初始化，
+只改动这一个测试文件。`491505d` 的 Quality 38911391642 与 CI 38911395592 通过。

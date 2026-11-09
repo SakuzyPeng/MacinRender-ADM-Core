@@ -3,24 +3,24 @@
   "ci": {
     "consistency": {
       "conclusion": "success",
-      "headSha": "77b796738f437110501bdbfe4cd20aac0b98f674",
+      "headSha": "283ab7204079b59c90519acf7f15c1db793a7e01",
       "run": 37602151191,
-      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602151191"
+      "url": "historical Actions run 37602151191"
     },
     "correctness": {
       "conclusion": "success",
-      "headSha": "77b796738f437110501bdbfe4cd20aac0b98f674",
+      "headSha": "283ab7204079b59c90519acf7f15c1db793a7e01",
       "run": 37602159351,
-      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602159351"
+      "url": "historical Actions run 37602159351"
     },
     "quality": {
       "conclusion": "success",
-      "headSha": "77b796738f437110501bdbfe4cd20aac0b98f674",
+      "headSha": "283ab7204079b59c90519acf7f15c1db793a7e01",
       "run": 37602180003,
-      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602180003"
+      "url": "historical Actions run 37602180003"
     }
   },
-  "commit": "77b796738f437110501bdbfe4cd20aac0b98f674",
+  "commit": "283ab7204079b59c90519acf7f15c1db793a7e01",
   "dr_flac": "deferred by user; existing decoder retained",
   "evidence_sha256": {
     "kernel-summary.json": "0f4f64073befd84549ea52b16193311d6b1063b5942b05a082b69ed10d912e9b",

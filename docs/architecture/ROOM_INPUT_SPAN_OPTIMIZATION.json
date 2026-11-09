@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-input-span-optimization",
   "version": 1,
-  "base_commit": "d2db9716fa7f7297106e6c3a80b3cbee651d6aa4",
+  "base_commit": "1455107453a65c77f0452bfcf4573bd11ff37f9b",
   "source_sha256": {
     "rust/crates/mradm-dsp/src/room/control.rs": "289e4a9bd25f109c62a3dfe8118d6389d9bc40a22bf983af96f8a21a2ce09ca8",
     "rust/crates/mradm-dsp/src/room/session.rs": "d821e3652cbc075f4621c0d8199cba78e2717f6b8082d84761185c82e39e7354",

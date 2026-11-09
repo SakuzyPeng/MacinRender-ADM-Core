@@ -25,7 +25,7 @@ def main():
     status = common.main()
     output = Path(sys.argv[sys.argv.index('--output') + 1])
     report = json.loads(output.read_text(encoding='utf-8'))
-    report['baseline_commit'] = 'ba96bac'
+    report['baseline_commit'] = '920864a'
     output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     return status
 

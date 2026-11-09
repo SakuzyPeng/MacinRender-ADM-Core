@@ -1,12 +1,12 @@
 {
   "status": "accepted",
-  "baseline_commit": "726db31277f450cfa9c0cb5f6e40bdb539f42154",
+  "baseline_commit": "bd2ea96904a94b3397f2d30f7001dbd11cfac8cb",
   "implementation_commits": [
-    "08113fd",
-    "a1b2e01",
-    "f7f38de30ccc41b7bda7abf3cbc7c68ccc62e34a"
+    "c1720fa",
+    "4a08dcb",
+    "c94d67af13e4f8c780dcd9b6d2b4a235b4aa574b"
   ],
-  "validated_source_commit": "f7f38de30ccc41b7bda7abf3cbc7c68ccc62e34a",
+  "validated_source_commit": "c94d67af13e4f8c780dcd9b6d2b4a235b4aa574b",
   "contract": {
     "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
     "cross_platform_bit_identity": false,
@@ -99,7 +99,7 @@
         "strict_fp": false
       },
       "clean_checkout": false,
-      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "git_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
       "comparisons": {
         "scene": {
           "spatial": {
@@ -162,8 +162,8 @@
   },
   "ci": {
     "run_id": 37434454445,
-    "commit": "f7f38de30ccc41b7bda7abf3cbc7c68ccc62e34a",
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37434454445",
+    "commit": "c94d67af13e4f8c780dcd9b6d2b4a235b4aa574b",
+    "url": "historical Actions run 37434454445",
     "status": "success",
     "jobs": [
       {
@@ -248,7 +248,7 @@
     "tests/unit/scene_numeric_rust_test.cpp": "4d6a0c6145feadd88e173e813ce3c339e9faa293640835205c62e2293d574673"
   },
   "preserved_parallel_commit": {
-    "commit": "a7d0e7412deecb40c1c057941bcde09a4f207a9f",
+    "commit": "7489af317f76789308aa1f7364bdac8ed52d46f1",
     "change": "Triple Balance -> ADMAudio link addition, independently committed during shared-workspace migration"
   },
   "toolchain": {

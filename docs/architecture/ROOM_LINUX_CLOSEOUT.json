@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-linux-closeout",
   "version": 1,
-  "base_commit": "a6ac874",
+  "base_commit": "d3c6e16",
   "source_sha256": {
     "rust/crates/mradm-dsp/src/room/hrir.rs": "dac2c617349f60d6d34a72012c92d73d39ed8c6e063982c03c8700160d1d03e2",
     "rust/crates/mradm-dsp/src/room/partition.rs": "b2efc31889916e25f0b2423ef589935bf63b0d81683efac9bdf67b46bb1accae",

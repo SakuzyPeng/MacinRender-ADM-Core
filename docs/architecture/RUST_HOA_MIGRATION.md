@@ -1,6 +1,6 @@
 # Rust HOA 编码、状态与计量前处理迁移
 
-> 基线 `ba96bac`。三阶 ACN/SN3D 编码与计量前处理由 Rust 接管，输出仍为 16 声道 `hoa3`。
+> 基线 `920864a`。三阶 ACN/SN3D 编码与计量前处理由 Rust 接管，输出仍为 16 声道 `hoa3`。
 
 ## 所有权与接入
 
@@ -93,8 +93,8 @@ Rust Release workspace 共 98 项测试通过，其中 HOA 6 项、分配探针 
 Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、冻结参考及许可证/SBOM 检查通过。
 两个原生平台均保留原有 139 个公开 `adm_*` 入口，没有私有 Rust 入口外泄。
 
-[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37295043944)
-验证实现提交 `52bf106`：macOS Debug 61/61、Linux Debug 60/60、Windows Debug 60/60，
+最终三平台 CI (historical Actions run 37295043944)
+验证实现提交 `db69d07`：macOS Debug 61/61、Linux Debug 60/60、Windows Debug 60/60，
 首轮全部通过。最终验收提交只更新文档及证据。
 
 ```sh
@@ -103,10 +103,10 @@ ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failu
 cmake --build --preset release
 build/release/mr_adm_hoa_rust_tests comparison.json
 python3 scripts/consistency/compare-hoa.py \
-  --reference /path/to/ba96bac-release/mradm --candidate build/release/mradm \
+  --reference /path/to/920864a-release/mradm --candidate build/release/mradm \
   --pcm-bits build/release/mr_adm_pcm_bits --fixtures /path/to/fixtures --output audio.json
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base ba96bac --build-dir build/debug
+scripts/quality/check-changed.sh --base 920864a --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 ```
 

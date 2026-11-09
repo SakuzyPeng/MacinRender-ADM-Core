@@ -1,6 +1,6 @@
 # Rust Live VBAP 混音与独立渐变迁移
 
-> 算法基线 `577fe2d`，共享集成基线 `283c54d`。Live Scene VBAP 数值状态与混音由 Rust 接管。
+> 算法基线 `d43e376`，共享集成基线 `fea85bf`。Live Scene VBAP 数值状态与混音由 Rust 接管。
 
 ## 所有权与接口
 
@@ -66,10 +66,10 @@ channel lock、active、head_locked、诊断去重、移动所有权及整帧失
 
 libadm 更新完成后，重新使用标准构建验证共享工作区：macOS Debug 全套 63/63、Release 定向
 9/9、Rust Release workspace 128 项，Windows canonical Release 全套 62/62。
-[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37342603203)
-验证源码提交 `de57300`：macOS Debug 63/63、Linux Debug 62/62、Windows Debug 62/62。
-实现提交为 `41cf469`；首次 Linux 构建发现 C API fixture 依赖已移除的间接 `<cmath>`，
-`de57300` 补齐直接包含，并在两端原生配置复查 C API 后重新通过三平台 CI。
+最终三平台 CI (historical Actions run 37342603203)
+验证源码提交 `3eee0f6`：macOS Debug 63/63、Linux Debug 62/62、Windows Debug 62/62。
+实现提交为 `d647331`；首次 Linux 构建发现 C API fixture 依赖已移除的间接 `<cmath>`，
+`3eee0f6` 补齐直接包含，并在两端原生配置复查 C API 后重新通过三平台 CI。
 最终验收提交只更新文档和证据。源码/测试指纹、配置及完整结果见
 [机器可读验收记录](evidence/rust-live-vbap/validation.json)。
 C++ 质量检查保留 Scene 测试中未修改函数的两条既有可读性建议。
@@ -83,14 +83,14 @@ cmake --build --preset release
 build/release/mr_adm_live_vbap_rust_tests comparison.json
 ctest --test-dir build/release -R '(live_vbap|scene_.*c_api|vbap|realtime|direct_speakers_matrix|lfe_routing|semantic_policy)' --parallel 8 --output-on-failure
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base 577fe2d --build-dir build/debug
+scripts/quality/check-changed.sh --base d43e376 --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 ```
 
 复用既有构建及共享 Cargo 缓存。Windows 原工作树的修改保留，相关文件同步前核对指纹并
 备份；验收不把该目录描述为干净检出。
 
-本地开发期间曾与 libadm 迁移交叉。按用户选择，等待其 `283c54d` 完成后重新核验共享
+本地开发期间曾与 libadm 迁移交叉。按用户选择，等待其 `fea85bf` 完成后重新核验共享
 工作区，并执行完整的标准 Debug/Release 构建、回归、数值对照、质量与许可证检查。
 最终结果替代此前阶段性记录，不依赖旧的源码覆盖或手动编译产物。Windows 重新核对的
 42 个相关源码指纹全部匹配，无需再次覆盖文件；保留其当时的 SOFA/IAMF OFF 配置。

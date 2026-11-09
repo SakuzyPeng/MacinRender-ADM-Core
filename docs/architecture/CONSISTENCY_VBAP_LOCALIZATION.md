@@ -4,7 +4,7 @@
 
 ## 证据来源与校验
 
-- 完整三平台运行：[34322676035](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34322676035)，提交 `ac43df9` 的完整 SHA 见机器报告 `run.headSha`。六个 Release A/B job 及 Compare platforms 全部成功，A 为 **5/16**、B 为 **8/16**，既有门禁全部通过。
+- 完整三平台运行：34322676035 (historical Actions run 34322676035)，提交 `3c69caa` 的完整 SHA 见机器报告 `run.headSha`。六个 Release A/B job 及 Compare platforms 全部成功，A 为 **5/16**、B 为 **8/16**，既有门禁全部通过。
 - B 组共八个诊断变体：各平台的原生 RNG / 统一 RNG，以及 macOS 的 OpenBLAS / OpenBLAS + 统一 RNG。两种输入 fixture 在八个变体中 SHA-256 一致。
 - 三个平台的 native 诊断 PCM 均与各自未插桩的 B 基线逐位相同。这样，中间检查点能够对应最初发现的两个 PCM 分歧。
 - `mr_adm_vbap_probe` 从真实渲染读取源位置、spread、布局与增益。分步调用 SAF 与完整 `generateVBAPgainTable3D_srcs` 比较，再将拆开的 spread / gain 算术逐位对照 SAF 原函数。八变体、两测例、四次 seed 运行共 **64 次探针校验通过**；seed 1 另与真实渲染增益比较，seed 1 重复结果一致。

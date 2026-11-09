@@ -335,7 +335,7 @@ int main(int argc, char** argv) {
         state_decisions();
         objects(object_stats);
         curves_and_mix(mix_stats);
-        nlohmann::json result{{"baseline", "19728179608c4cfe550dc11ff2b3b4425db37963"},
+        nlohmann::json result{{"baseline", "7fecf3329712b68fb9cbe38cb1a977d0561d76f9"},
                               {"spatial", spatial_stats.json()},
                               {"objects_and_filter", object_stats.json()},
                               {"motion_and_mix", mix_stats.json()},

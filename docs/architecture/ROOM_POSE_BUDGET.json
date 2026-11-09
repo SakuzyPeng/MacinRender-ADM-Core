@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-pose-budget.summary.v1",
   "recorded_utc": "2026-10-13T19:50:08.442079+00:00",
-  "baseline": "e5803f6 plus retained direct-path optimization; realtime-v1 scheduling",
+  "baseline": "16e9cba plus retained direct-path optimization; realtime-v1 scheduling",
   "decision": {
     "retained_policy": "room-realtime-v2",
     "degrees": 0.5,

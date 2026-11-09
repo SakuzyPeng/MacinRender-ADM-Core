@@ -1,5 +1,5 @@
 //! caf-v1: the CAF writer, reader and `info` append replayed against records of the C++
-//! `caf_io.cpp` (main `4207627`, before PCM consistency 4.8 B moved CAF to Rust). The generator
+//! `caf_io.cpp` (main `e840fd9`, before PCM consistency 4.8 B moved CAF to Rust). The generator
 //! was a scratchpad program, not committed: `cases.jsonl` holds the inputs, `expected.jsonl`
 //! the C++ results (nlohmann `dump()`), `samples/` complete files for some cases. Error
 //! contexts are `path=` plus the path, added by the C++ wrapper.

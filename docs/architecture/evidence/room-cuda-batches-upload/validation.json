@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-cuda-batches-upload-validation",
   "version": 1,
-  "base": "5926c7b0976a902a1524363b1370cb4b107569af",
+  "base": "a5c18e1b44accdbdcaa2d083b85755afb0b5f73b",
   "outcome": "no-candidate-adopted",
   "implementation": {
     "tight_batches": "16 additional bounded graph capacities; original fallback capacities retained; preparation sorts by estimated FFT work",
@@ -69,7 +69,7 @@
       "task_directory_removed": true
     },
     "local": {
-      "base_preserved": "5926c7b0976a902a1524363b1370cb4b107569af",
+      "base_preserved": "a5c18e1b44accdbdcaa2d083b85755afb0b5f73b",
       "restored_tracked_files": 18,
       "removed_archived_new_files": 16,
       "original_cmake_preserved": true

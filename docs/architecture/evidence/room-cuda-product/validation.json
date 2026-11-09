@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-cuda-product-trial",
   "version": 1,
-  "base_commit": "05b297ab84f8e449472c9c6eab6ae17aad9ab0de",
+  "base_commit": "d09494813646e5434f4ab5097c8366d386fc6ef6",
   "status": "explicit trial integration; formal realtime acceptance not passed",
   "public_c_abi_exports": 157,
   "runtime_default": "cpu",
@@ -5707,7 +5707,7 @@
     "tests/manual/room_cuda_portable.py": "365c9d8ae2fd5de6b16cbfadb66d840927de6c8eeebd3914cc101fa33159e7ca"
   },
   "final_package": {
-    "name": "MacinRender-Gui-1.9.1-dev.05b297ab84f8-windows-x64-cuda-trial.zip",
+    "name": "MacinRender-Gui-1.9.1-dev.d09494813646-windows-x64-cuda-trial.zip",
     "bytes": 136152314,
     "sha256": "15aaa4e2ca780c44dc98dab2e160a4d5d9b0b2e12aecfbef2a8af9ee3cbef64b",
     "manifest": {

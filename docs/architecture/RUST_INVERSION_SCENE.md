@@ -56,7 +56,7 @@ C++ 侧只剩适配：
 
 ## 验证
 
-**本机对照（Linux x64，config A）。** 基线为 `main` 的 `f277b64`，候选为 `a602277`（含布局表与导入迁移，生产代码与本记录提交相同）。
+**本机对照（Linux x64，config A）。** 基线为 `main` 的 `cba55f3`，候选为 `cbb1a0d`（含布局表与导入迁移，生产代码与本记录提交相同）。
 两者各做一次普通采集与诊断采集，采集自带的重复性与分块检查均通过：
 
 - 283 个 PCM id、237 份内核测量逐字节相同；
@@ -89,8 +89,8 @@ C++ 侧只剩适配：
 
 **规模。** 生产 C/C++ 由 45,026 行降到 44,632 行（布局表 −174，导入与声道床 −220）。
 
-**三平台。** [Consistency 39022845303](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39022845303)
-在 `main` 的 `3e7a806` 上运行，macOS arm64 / Linux x64 / Windows x64 各采集 config A、B 的普通与诊断结果，全部成功。
+**三平台。** Consistency 39022845303 (historical Actions run 39022845303)
+在 `main` 的 `21b60dd` 上运行，macOS arm64 / Linux x64 / Windows x64 各采集 config A、B 的普通与诊断结果，全部成功。
 
 - 四份比较报告（A、A 诊断、B、B 诊断）都是 283 个 PCM id 三平台相同、0 个不同、平台集完整，门禁失败 0。
 - 两种配置的诊断报告中，三个平台对各有 237 份内核、201 个内核检查点、31,100 条用例检查点全部相同，

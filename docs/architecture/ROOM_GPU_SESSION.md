@@ -2,7 +2,7 @@
 
 后续批次缩紧和异步晚场的结果见 [第二轮报告](ROOM_GPU_SESSION_LATE.md)：两项短测通过，长测仍未通过。以下保留首版记录。
 
-日期：2026-10-18。基线 `6bd4937`。原型只由 `room-gpu-experiment` 和显式命令行参数启用，
+日期：2026-10-18。基线 `861d07a`。原型只由 `room-gpu-experiment` 和显式命令行参数启用，
 默认质量选档仍为 CPU `room-realtime-v2`，exact 不使用 GPU。
 
 **结论：完整 Session 的数值检查通过，Windows 位置运动短测失败，该候选已停止。**

@@ -1,4 +1,4 @@
-// Frozen test-only EAR post-processing arithmetic from e12332b.
+// Frozen test-only EAR post-processing arithmetic from 862408f.
 #pragma once
 #include <algorithm>
 #include <cstddef>

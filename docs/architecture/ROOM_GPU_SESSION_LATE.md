@@ -1,6 +1,6 @@
 # ROOM GPU 完整 Session：缩紧批次与异步晚场
 
-日期：2026-10-18。基线 `6bd4937`，延续未提交的 `room-gpu-experiment` 原型。
+日期：2026-10-18。基线 `861d07a`，延续未提交的 `room-gpu-experiment` 原型。
 本页记录第二个完整 Session 候选；[首版报告](ROOM_GPU_SESSION.md) 的失败记录继续保留。
 默认 realtime 策略仍为 `room-realtime-v2`，exact 和公共 C ABI 不选择 GPU。
 

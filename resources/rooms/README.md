@@ -14,7 +14,7 @@ git lfs pull --include="resources/rooms/**" --exclude=""
 ```
 
 `git lfs pull` 下载真实数值组件。只取得 LFS 指针文件时，房间加载的大小/哈希检查会失败。
-使用包含原生房间 SOFA 导入的构建（`c03af5f` 或后续版本）：
+使用包含原生房间 SOFA 导入的构建（`26e62cb` 或后续版本）：
 
 ```sh
 build/release/mradm room-check \

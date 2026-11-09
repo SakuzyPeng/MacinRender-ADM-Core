@@ -1,11 +1,11 @@
 # Cases confirmed bit-identical across macOS arm64, Linux x64 and Windows x64.
 # Configuration B; first complete baseline recorded 2026-09-08.
-# Tested source: 3a0636e1a15d46a37100b2dc86ed3751fc95f919
-# Run: https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813
-# HOA point confirmed by 9025d39e2b053e78d9976569db2944169a67a4cf (B only):
-# https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405
-# HOA cartesian confirmed by 45f0019eecbf2ff00010a92066c9f962c57d9477 (B only):
-# https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546
+# Tested source: 6f177c81fe5d5a04af955883297daf2d2ca6bb5b
+# Run: historical Actions run 34185456813
+# HOA point confirmed by 1dfdf49ee619ab08d1d6f6e5e305e4175e7d52db (B only):
+# historical Actions run 34213036405
+# HOA cartesian confirmed by ebe35c61ec1ecb6a9a7e827a48b5d82ce8e216db (B only):
+# historical Actions run 34250832546
 # Other numerical differences remain measurements; missing/invalid data always fails.
 # One case name per line; # starts a comment.
 

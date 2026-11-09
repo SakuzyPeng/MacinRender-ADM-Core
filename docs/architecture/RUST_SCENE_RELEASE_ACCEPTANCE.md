@@ -14,10 +14,10 @@
 
 | 提交 | 内容 | Linux x64 config A |
 | --- | --- | --- |
-| `ad4ef3c` | 设备回调 C++ 分配测试；Rust HpTF 分配测试加入排队目标 | 无输出变化 |
-| `eedf2fe` | config A 采用发布配置，构建并校验 C ABI bundle；Windows 发布构建不再使用已安装依赖 | 原有 431 个普通文件逐位不变 |
-| `d85bc79` | 新增 4 个设备 DSP 回放配置（8 个 PCM id），全部设为门禁 | 新增 12 个文件，其余不变 |
-| `0512770` | 分配测试也统计对齐分配与 nothrow 形式，并先自检计数器 | 无输出变化 |
+| `2faabf0` | 设备回调 C++ 分配测试；Rust HpTF 分配测试加入排队目标 | 无输出变化 |
+| `b76aa2a` | config A 采用发布配置，构建并校验 C ABI bundle；Windows 发布构建不再使用已安装依赖 | 原有 431 个普通文件逐位不变 |
+| `20d7c57` | 新增 4 个设备 DSP 回放配置（8 个 PCM id），全部设为门禁 | 新增 12 个文件，其余不变 |
+| `3f7b5df` | 分配测试也统计对齐分配与 nothrow 形式，并先自检计数器 | 无输出变化 |
 
 ## 发布配置
 
@@ -55,7 +55,7 @@ config B 仍只在 config A 之上打开严格浮点选项。
 | 峰值保护与音量 | 6 个 | 信号幅度 4.0 使保护持续工作；音量 0.875 → 0.5 |
 | 多声道输出 | 24 个 | VBAP `4+7+0`、22.2（`9+10+3`），Triple Balance 7.1.4、9.1.6、22.2 |
 
-1.5 之前，设备 DSP 只在内置 KEMAR、48 kHz 输入输出下回放。`d85bc79` 由 `scene-device-dsp-fixed` 派生出 version 4 配置，
+1.5 之前，设备 DSP 只在内置 KEMAR、48 kHz 输入输出下回放。`20d7c57` 由 `scene-device-dsp-fixed` 派生出 version 4 配置，
 控制与输出事件不变，分块各有固定和碎片两种：
 
 - `scene-device-dsp-sofa-simple-48000-44100`：`simple.sofa`，48 → 44.1 kHz，第 8192 帧切换到内置 KEMAR；
@@ -79,7 +79,7 @@ config B 仍只在 config A 之上打开严格浮点选项。
 诊断构建在回调中写检查点，测试在该配置下跳过。
 
 **Rust 分配。** Rust 通过 `malloc` 分配，不经过 C++ `operator new`，由 `mradm-dsp` 的 `realtime_allocations.rs` 约束。
-HpTF 用例在 `ad4ef3c` 起也覆盖排队目标和 reset 的两种形式。
+HpTF 用例在 `2faabf0` 起也覆盖排队目标和 reset 的两种形式。
 
 **锁与 I/O。** 回调路径为 `SceneOutputSession::pull` / `pull_stereo` → `SceneStreamEngine::pull` → 环形缓冲与 Rust DSP：
 
@@ -115,7 +115,7 @@ HpTF 用例在 `ad4ef3c` 起也覆盖排队目标和 reset 的两种形式。
 
 ## 三平台验收
 
-`0512770` 的 Consistency 38677291567、CI 38677293973、Quality 38677296369 与 Release Build 38677316398 全部通过。
+`3f7b5df` 的 Consistency 38677291567、CI 38677293973、Quality 38677296369 与 Release Build 38677316398 全部通过。
 
 **Consistency。** macOS arm64、Linux x64、Windows x64 在 A/B 两种配置下：
 

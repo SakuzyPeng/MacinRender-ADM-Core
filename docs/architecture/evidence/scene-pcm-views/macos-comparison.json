@@ -18,15 +18,15 @@
     "parent_result": {
       "allocations": 16,
       "calls": 16,
-      "commit": "b384362e0e0e07e001d2b10ef7dd374492d1cc80",
+      "commit": "17f9363ef0bcc47c6150b1b769a3a048c0138b4a",
       "result": "failed as expected"
     },
     "test": "render::live_tests::warmed_scene_ffi_pcm_views_and_reset_do_not_allocate"
   },
   "baseline_binary_sha256": "7dcdfda200e5925e2770dcc0d236f337cf5a5b9b9f62745a70b3a49045e81156",
   "baseline_build_type": "Release",
-  "baseline_commit": "a072146c1950f9348f9ef57fdefbbbbe9c955557",
-  "branch_parent": "b384362e0e0e07e001d2b10ef7dd374492d1cc80",
+  "baseline_commit": "3cd30e3f26b1a5a3c02693d8134fe12ee2ee6cab",
+  "branch_parent": "17f9363ef0bcc47c6150b1b769a3a048c0138b4a",
   "candidate_binary_sha256": "c49ff4c14e4c61c6e118b46fd9a580b05fd8277a3de4b97d0fb73dcb16a17c6e",
   "candidate_source_sha256": "cbc9ab2fbdfea09632d1b02cbd99fb73b7a402056eb8df4ffe6d8a3a52f26b9c",
   "case_count": 88,

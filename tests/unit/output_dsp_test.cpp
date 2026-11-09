@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
         }
         const auto report = [&](std::ostream& out) {
             out << std::setprecision(17)
-                << "{\n  \"baseline_commit\": \"53cc36e\",\n  \"gain_samples\": " << result.gain_samples
+                << "{\n  \"baseline_commit\": \"0668393\",\n  \"gain_samples\": " << result.gain_samples
                 << ",\n  \"gain_bit_mismatches\": 0,\n  \"peak_samples\": " << result.peak_samples
                 << ",\n  \"peak_max_absolute_error\": " << result.peak_max_error
                 << ",\n  \"peak_tolerance\": 0.00002\n}\n";

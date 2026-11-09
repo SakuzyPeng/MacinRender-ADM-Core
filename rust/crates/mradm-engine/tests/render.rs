@@ -1036,7 +1036,7 @@ fn utc_dates_follow_gmtime() {
 }
 
 /// `render-v1/fixed.txt`: fmt 11.2 `{:.1f}` `{:.2f}` `{:+.2f}` `{:.4f}` of doubles and `{:.4f}`
-/// `{:.2f}` of floats, generated with the C++ engine's fmt at main `13643c2`.
+/// `{:.2f}` of floats, generated with the C++ engine's fmt at main `e722daa`.
 #[test]
 fn fixed_matches_fmt() {
     let text = std::fs::read_to_string(

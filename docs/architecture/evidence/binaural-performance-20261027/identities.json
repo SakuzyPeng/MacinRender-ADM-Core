@@ -1,6 +1,6 @@
 {
   "baseline-probe": {
-    "ref": "c967d840b64f4fb46b4f43a00f89739d646a0610",
+    "ref": "c17222899d540a971a85e3f732e37dd12918bc39",
     "overlays": {
       "src/adm_engine/render_service.cpp": "3410de90de382cf727f4356be8032488863fdd667a02d06d482332d0705f4833",
       "src/adm_render_binaural/binaural_renderer.cpp": "d5b516e319dfb49458fd33cfbb0f012363b63fe03d7bf482f49ff7fe6441974e"
@@ -12,7 +12,7 @@
     }
   },
   "candidate-probe": {
-    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "ref": "20ec6f9fa5b61ed2d99d41ecd392b057a7dba23f",
     "overlays": {
       "rust/crates/mradm-ffi/src/render_binaural.rs": "a07dd3990228017456e86b7913047c1242f898e73afe4248fc7c2559971d5b45",
       "rust/crates/mradm-render/src/binaural_render.rs": "06721e6771dd3a022c277c07b1dfca469954ae9b47c30363e1c60b7e3b254684",
@@ -25,7 +25,7 @@
     }
   },
   "candidate-stage2": {
-    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "ref": "20ec6f9fa5b61ed2d99d41ecd392b057a7dba23f",
     "overlays": {
       "rust/crates/mradm-ffi/src/render_binaural.rs": "a07dd3990228017456e86b7913047c1242f898e73afe4248fc7c2559971d5b45",
       "rust/crates/mradm-render/src/binaural_render.rs": "69ecf303a936f8d34ab63d2955dad23f3f84f1f09c008b679d16c03dbf86a811",
@@ -38,7 +38,7 @@
     }
   },
   "candidate-stage2-iter": {
-    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "ref": "20ec6f9fa5b61ed2d99d41ecd392b057a7dba23f",
     "overlays": {
       "rust/crates/mradm-ffi/src/render_binaural.rs": "a07dd3990228017456e86b7913047c1242f898e73afe4248fc7c2559971d5b45",
       "rust/crates/mradm-render/src/binaural_render.rs": "9bcb9ebc3571a1fc2ce3628a3146ce3327154ad624bc30a127f7be6923ec6c1c",
@@ -51,7 +51,7 @@
     }
   },
   "release-before-rebuild": {
-    "ref": "1c52d999fe9dbd31f74ad9f810991c09306b10d8",
+    "ref": "20ec6f9fa5b61ed2d99d41ecd392b057a7dba23f",
     "overlays": {
       "src/adm_render_binaural/binaural_renderer.cpp": "11006df1056df0acedc863d7913eed8876af0bb73cfdef32a2d844c8a10b8027"
     },

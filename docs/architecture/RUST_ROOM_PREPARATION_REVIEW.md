@@ -1,12 +1,12 @@
 # ROOM 准备迁移审查与对照
 
-记录日期：2026-10-25。审查对象是 `4899f9c1`（4.6 D：资源加载与文件渲染事件表迁入 Rust），
-参考实现为主线 `305159fc` 的 C++ `RoomRenderer::prepare`，修复提交为 `1b8463c9`。
+记录日期：2026-10-25。审查对象是 `f721f9e8`（4.6 D：资源加载与文件渲染事件表迁入 Rust），
+参考实现为主线 `972cc046` 的 C++ `RoomRenderer::prepare`，修复提交为 `ff20490a`。
 
 ## 修复
 
 迁移前，极坐标转换经过私有 `mradm_room_polar`，临时建立 RNE / 渐进下溢环境，返回时恢复调用方。
-`4899f9c1` 的事件表准备直接调用 Rust `loading::polar`，丢失了这层保护。新增入口测试先在未修复版本
+`f721f9e8` 的事件表准备直接调用 Rust `loading::polar`，丢失了这层保护。新增入口测试先在未修复版本
 失败：macOS arm64 的向上舍入模式下，`M+030` 声源的 Y 分量从 `0x3f5db3d7` 变成 `0x3f5db3d8`。
 该复现只检查元数据，不产生听音或 PCM 对照音频。
 
@@ -16,7 +16,7 @@
 
 ## Release 对照
 
-macOS arm64 与 Windows x64 均比较 `305159fc` 和 `1b8463c9`，复用既有 Release、Cargo 和
+macOS arm64 与 Windows x64 均比较 `972cc046` 和 `ff20490a`，复用既有 Release、Cargo 和
 FetchContent 缓存。Windows 使用 canonical MSVC / Ninja 构建树。两者均关闭一致性插桩及 ROOM CUDA，
 使用 48 kHz、exact 质量和固定合成资源。Windows 的通用 SOFA feature 关闭，ROOM 原生 SOFA 加载仍由
 `room-exact-sofa` 用例实际覆盖。

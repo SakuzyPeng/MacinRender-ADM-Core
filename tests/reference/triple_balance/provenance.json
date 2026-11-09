@@ -1,5 +1,5 @@
 {
-  "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+  "baseline": "7fecf3329712b68fb9cbe38cb1a977d0561d76f9",
   "sources": {
     "src/adm_render_triple_balance/panner.h": "5c5e7bc1a860896191a25d5309fc7b81788ed63f1fa0f28eaccbd12920fc8dc9",
     "src/adm_render_triple_balance/panner.cpp": "0dd53fc951c1e280c0584712670cf0bfea90a7b85fed51b4fbf6b9fcfc3ae475",

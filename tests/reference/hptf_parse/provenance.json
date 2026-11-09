@@ -1,5 +1,5 @@
 {
-  "baseline_commit": "1094e51f544356757ea3e9f2c86970f9e7ee0a47",
+  "baseline_commit": "2a5b6b5ecc0509d45252a8a16afa4046372bbe12",
   "source_sha256": {
     "src/adm_render_common/hptf_eq.cpp": "cbc527b31308981529fa06489b33867626d024a73591399852c01d8764052f18"
   },

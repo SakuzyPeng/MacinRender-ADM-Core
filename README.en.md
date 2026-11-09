@@ -55,9 +55,7 @@ C/C++ dependencies are fetched by CMake `FetchContent` by default, and Rust depe
 `Cargo.lock`; production builds need no Boost, vcpkg, SAF, or OpenBLAS. APAC encoding and the Apple backend are
 available only on macOS.
 
-Prebuilt CLI and GUI packages for macOS arm64 and Windows x64 are available from
-[GitHub Releases](https://github.com/SakuzyPeng/MacinRender-ADM-Core/releases); see
-[release packages](docs/guides/BINARY_RELEASE.en.md) for artifacts and SHA-256 verification.
+Source archives and version tags are available. Binary releases will follow in a later publication.
 
 ### Build and Test
 

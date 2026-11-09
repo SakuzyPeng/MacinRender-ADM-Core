@@ -1,7 +1,7 @@
 {
   "tool": "mr_adm_scene_stream_stress --seconds 0 --latency-iterations 2000",
-  "legacy": "22e6a3b",
-  "candidate": "4bede24 (Release, diagnostics OFF)",
+  "legacy": "6583699",
+  "candidate": "200eec3 (Release, diagnostics OFF)",
   "platform": "Linux x64 (shared 4-core VM)",
   "alternating_rounds": 5,
   "runs": [

@@ -1,5 +1,7 @@
 # 发行包
 
+当前公开仓库提供源码与版本标签，二进制发行包将在后续版本中发布。以下说明供后续发行使用。
+
 `.github/workflows/release.yml` 在推送 `v*` tag 或手动触发时构建可审计的发行包。tag 构建会把 CLI 与 GUI 包
 上传到对应的 [GitHub Release](https://github.com/SakuzyPeng/MacinRender-ADM-Core/releases)。项目概览见
 [README](../../README.md)。

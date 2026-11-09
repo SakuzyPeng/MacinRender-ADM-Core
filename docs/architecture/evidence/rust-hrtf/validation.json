@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-hrtf-migration.v1",
   "date": "2026-10-04",
-  "baseline_commit": "ee21dc3e0b754bf8c2d294c3403c97a58aa29e83",
+  "baseline_commit": "07056079be16f53779e9308da6a11f3959f6989e",
   "scope": [
     "Immutable shared HRTF geometry ownership",
     "HRIR FFT preparation and spectral ownership",

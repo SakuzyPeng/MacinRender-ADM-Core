@@ -1,6 +1,6 @@
 # ROOM GPU 输入流水与 CPU 位置控制实验
 
-日期：2026-10-18。基于 `6bd4937` 上保留的 GPU 直达／早反射及异步晚场原型。
+日期：2026-10-18。基于 `861d07a` 上保留的 GPU 直达／早反射及异步晚场原型。
 本轮组合测试 CPU 位置控制优化和跨 canonical block 的输入流水，仍只由 `room-gpu-experiment`
 及显式 GPU 参数启用。默认 realtime、exact 和公共 C ABI 不选择这条实验路径。
 

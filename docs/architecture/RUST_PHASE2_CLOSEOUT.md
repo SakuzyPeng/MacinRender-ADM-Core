@@ -11,11 +11,11 @@
 二期完成了基线与分歧定位、Scene 算术统一、FFT/重采样/OM spreader 收敛，以及保持位模式的
 首批性能回收。本范围内没有未解决的 PCM 分歧或失败门禁。公开 C ABI、产品 CLI 与格式保持兼容。
 
-最终实现提交为 `666fe49fd4da0a2b6f454e3c19220f4978adee62`，源码/资源指纹为
+最终实现提交为 `3abfbc329501daaac78af8ee22f22fa32ec06494`，源码/资源指纹为
 `aef16671d84baf9a5a2561e9d6ec41cb13d5b9d04c26dbcb05db81210e111b31`。
-[Consistency](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588314154)、
-[CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588322470)及
-[Quality](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588335394)均通过。
+Consistency (historical Actions run 37588314154)、
+CI (historical Actions run 37588322470)及
+Quality (historical Actions run 37588335394)均通过。
 本次收尾只整理状态、范围和证据，保持该实现指纹与现有门禁不变。
 
 | 切片 | 三平台共同逐位相同的 PCM | 记录 |

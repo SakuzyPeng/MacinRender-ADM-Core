@@ -87,3 +87,10 @@ When validating ADM semantic behavior, prefer the built-in semantic policy path 
 `--write-semantic-report`) over editing source ADM BWF/WAV files. For example, to force direct extent/spreader coverage
 on material whose extent blocks are fully diffuse, use a temporary policy that disables diffuse while preserving extent,
 then verify the effective metadata in the semantic report.
+
+## Publication boundaries
+
+Personal machine paths must use generic examples in tracked files and commit messages.
+Private implementation research, process captures, research tools and raw media evidence belong under
+`local/research/<topic>/`, which is ignored by Git. Public synthetic regression fixtures retain
+the numerical expectations and source attribution needed to reproduce the tests.

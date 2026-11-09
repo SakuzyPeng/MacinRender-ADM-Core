@@ -1,6 +1,6 @@
 # 房间精确／实时档位第一版验证
 
-日期：2026-10-13。实现基于 `009e8ad`，策略见 [ADR 0020](../adr/0020-room-quality-tiers.md)。
+日期：2026-10-13。实现基于 `65fd7e4`，策略见 [ADR 0020](../adr/0020-room-quality-tiers.md)。
 完整数字、源码摘要、资源哈希与验证命令结果见 [JSON 记录](ROOM_QUALITY_V1.json)。
 
 ## 已实现
@@ -93,7 +93,7 @@ Windows 与 Linux 的实时档位平均耗时已低于期限，但 p99 仍超限
 `room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens] [--dense] --quality exact|realtime`。
 所有波形及性能证据都来自 Release；Debug 仅用于正确性回归。
 
-后续在 `e5803f6` 基线上进行的直达路径与 worker 数量／任务粒度试验，见
+后续在 `16e9cba` 基线上进行的直达路径与 worker 数量／任务粒度试验，见
 [独立对照记录](ROOM_DIRECT_WORKERS.md)。其中含平衡顺序复测与未保留的调度候选。
 
 当前实时策略已扩展到 `room-realtime-v2`，只对几何已跟上的小幅头姿更新使用有限预算；

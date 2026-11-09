@@ -1,11 +1,11 @@
 {
   "schema": "mradm.phase2.validation.v1",
   "date": "2026-10-06",
-  "implementation_commit": "00a70e4f2a698015a4cf23ec3122644c06960231",
+  "implementation_commit": "b5f398aefd7b06ba2983719c47c7b304ee65f69c",
   "source_sha256": "bc9b53f6c2c2f4d654dfee75466f4aae10385d8127ca17665f941a84e417a087",
   "ci": {
     "run_id": 37530745999,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37530745999",
+    "url": "historical Actions run 37530745999",
     "conclusion": "success",
     "native_platforms": [
       "macOS arm64",

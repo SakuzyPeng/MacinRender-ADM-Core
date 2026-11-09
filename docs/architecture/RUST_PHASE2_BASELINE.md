@@ -98,8 +98,8 @@ Consistency CI 保留三平台 A/B，各自顺序构建诊断版本。输入完�
 
 ## 本轮验收
 
-[三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37530745999) 在
-`00a70e4` 上完成六组 Release 采集及全部汇总。源码/资源指纹、测试范围和结果见
+三平台 CI (historical Actions run 37530745999) 在
+`b5f398a` 上完成六组 Release 采集及全部汇总。源码/资源指纹、测试范围和结果见
 [验收记录](evidence/rust-phase2/validation.json)，逐用例首次观测点见
 [A 组](evidence/rust-phase2/comparison-a.json)及 [B 组](evidence/rust-phase2/comparison-b.json)。
 

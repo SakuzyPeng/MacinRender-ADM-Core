@@ -26,7 +26,7 @@ ISLANDS = ("src/adm_apple", "src/adm_windows")
 CUDA_ISLAND = "src/adm_render_room/cuda"
 RATCHETED = ("production", "islands", "cuda")
 # Legacy snapshots did not separate this SDK boundary. Its existing V2 trial
-# implementation at 3558e88d is the one-time ceiling, not a general allowance.
+# implementation at 1cb04b3e is the one-time ceiling, not a general allowance.
 LEGACY_CUDA_LIMIT = 512
 
 

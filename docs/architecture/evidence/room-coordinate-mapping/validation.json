@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-coordinate-mapping-validation.v1",
   "date": "2026-10-19",
-  "base_commit": "e0a9f2870297c12ffe67f3fff23fead506f81dde",
+  "base_commit": "2d25a4ca92053de0b622b1fb505574b8769d8798",
   "functional_passed": true,
   "realtime_zero_deadline_passed": false,
   "macos": {

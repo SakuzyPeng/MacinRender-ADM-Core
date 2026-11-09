@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-cuda-fft-fusion-validation",
   "version": 1,
-  "base": "a08245a654fde05cfd3a459b2820a68f2f4b91c0",
+  "base": "26f83e949de5d12fbebc8a3bfc2fe38c33b485e0",
   "outcome": "no-fusion-candidate-adopted",
   "implementation": {
     "target": "FP32 bucket gather, zero padding, 512-point R2C and filter-slot install in one kernel",
@@ -58,7 +58,7 @@
   ],
   "restoration": {
     "local": {
-      "base_preserved": "a08245a654fde05cfd3a459b2820a68f2f4b91c0",
+      "base_preserved": "26f83e949de5d12fbebc8a3bfc2fe38c33b485e0",
       "restored_tracked_files": 19,
       "removed_archived_new_files": 14,
       "kept_validated_tools": [

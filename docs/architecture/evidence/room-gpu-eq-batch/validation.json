@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-eq-batch",
   "version": 1,
   "date_local": "2026-10-18",
-  "base_commit": "e7ace2a",
+  "base_commit": "e6d50f3",
   "outcome": {
     "short_passed": true,
     "full_numerical_passed": true,

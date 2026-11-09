@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-session-late-evaluation",
   "version": 1,
   "date": "2026-10-18",
-  "base_commit": "6bd4937",
+  "base_commit": "861d07a",
   "selected_candidate": "compact-batches-and-gpu-late",
   "passed": false,
   "status": "short_and_numerical_passed_long_failed",

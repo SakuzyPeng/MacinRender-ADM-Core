@@ -35,16 +35,16 @@
 跨分块差异仍单独记录；新增输入上的首个观测分歧不自动归因为某个数学函数或 SVD 内核。
 
 本机已通过 118 份 PCM 的回放契约与重复性、133 份内核的清单及重复性、诊断无扰动，且原 78 份
-PCM / 67 份内核逐位不变。首轮 [Consistency 37599500795](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37599500795)
-在 `36cb2b6` 上完成三平台 A/B 及诊断采集，四份报告均为 118/118 PCM 相同；新增 66 个内核文件
+PCM / 67 份内核逐位不变。首轮 Consistency 37599500795 (historical Actions run 37599500795)
+在 `b1f4d9d` 上完成三平台 A/B 及诊断采集，四份报告均为 118/118 PCM 相同；新增 66 个内核文件
 全部相同，据此加入 HRTF 门禁。
 
 ## 最终验收
 
-最终实现 `77b796738f437110501bdbfe4cd20aac0b98f674` 的
-[Consistency 37602151191](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602151191)、
-[CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602159351)及
-[Quality](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602180003)全部通过。
+最终实现 `283ab7204079b59c90519acf7f15c1db793a7e01` 的
+Consistency 37602151191 (historical Actions run 37602151191)、
+CI (historical Actions run 37602159351)及
+Quality (historical Actions run 37602180003)全部通过。
 源码/资源指纹为 `cee14021136a9d4e519b84de9d19adf752cc357b4c11286eaf32b0f129b3fa55`。
 
 | 项目 | 原二期矩阵 | 本次扩展 |

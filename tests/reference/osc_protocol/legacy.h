@@ -1,4 +1,4 @@
-// Frozen test-only PoseBridge OSC decoder from a125ab7; see provenance.json.
+// Frozen test-only PoseBridge OSC decoder from 754c7e3; see provenance.json.
 #pragma once
 #include <algorithm>
 #include <array>

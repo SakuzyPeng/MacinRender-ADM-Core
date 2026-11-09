@@ -1,5 +1,5 @@
 #include "../scene_numeric/spatial.h"
-// Frozen test-only implementation from 577fe2d; see provenance.json.
+// Frozen test-only implementation from d43e376; see provenance.json.
 #pragma once
 #include <algorithm>
 #include <cmath>

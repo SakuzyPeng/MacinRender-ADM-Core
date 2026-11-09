@@ -2,7 +2,7 @@
   "schema_version": 1,
   "stage": "selection-only",
   "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
-  "source_revision": "cceed19c3215ddc60cc90b75f33eb245caf6b750",
+  "source_revision": "aa07079200c50e9f4e6d83fa89756db91159bdad",
   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
   "cxx": "Homebrew clang version 21.1.8",
   "flac_cli": "flac 1.5.0",

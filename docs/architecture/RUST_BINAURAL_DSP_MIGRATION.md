@@ -66,7 +66,7 @@ OLA crossfade、静音推进、diffuse 及 reset 均无 alloc/realloc；这不�
 移动所有权、长度/非有限值错误和失败不污染历史。既有 renderer fixture 覆盖真实 KEMAR 的运动、
 headLocked、窗口、离线渲染与文件流式渲染的一致性及 Scene C API。SOFA fixture 继续验证原始数据与渲染接入。
 
-CLI 对照以迁移前 `56f4b56` 的 Release 程序为基线，覆盖点声源、固定头部姿态、cloud/diffuse、
+CLI 对照以迁移前 `d3e4e13` 的 Release 程序为基线，覆盖点声源、固定头部姿态、cloud/diffuse、
 多声源、spreader/diffuse、Cartesian、DirectSpeakers 和裁剪窗口。这些是合成、固定姿态用例，
 不能据此承诺所有节目或跨平台逐位相同；动态过渡由上述独立内核和 renderer 测试验证。
 

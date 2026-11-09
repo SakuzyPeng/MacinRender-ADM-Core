@@ -1,6 +1,6 @@
 {
   "date": "2026-10-04",
-  "baseline_commit": "8aa50401c7d108a75b76938fcf7eafb404fc760b",
+  "baseline_commit": "c59cd5624892aa57d97598f72db79e1f60049b07",
   "rust_version": "1.98.0",
   "resampler": "rubato 5.0.1",
   "default_features": false,
@@ -59,7 +59,7 @@
         "source_hashes_verified": 49
       },
       "clean_checkout": false,
-      "worktree_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "worktree_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
       "synchronized_files": 49,
       "before_and_after_hashes_checked": true,
       "original_bytes_backed_up": true,

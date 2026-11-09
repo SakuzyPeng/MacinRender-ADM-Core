@@ -1,6 +1,6 @@
 # ROOM CUDA 小超时：CPU 执行降速与独立的 GPU 完成等待
 
-日期：2026-10-20。基于保留候选 `05b297ab`，生产源码和 CUDA DLL 均未改变。
+日期：2026-10-20。基于保留候选 `d0949481`，生产源码和 CUDA DLL 均未改变。
 
 按维护者最新要求，已确认的硬件异常长停顿时段单列排除，保留原始记录，
 本轮调查窗口外的普通小超时。排除依据是已关联的系统事件和时间线，不是简单删除所有较大的耗时。
@@ -194,7 +194,7 @@ V2 的完整数值验收和正式长测仍待完成。
 
 本轮原始跟踪压缩归档为 364,936,539 字节，58 个成员的 SHA-256 和 ZIP CRC 均已验证；
 见 [归档验证](evidence/room-cuda-small-overrun/archive-verification.json)。
-Windows 工作区仍为干净的 `05b297ab`，CMakeCache、canonical／Cargo／FetchContent 缓存保留，
+Windows 工作区仍为干净的 `d0949481`，CMakeCache、canonical／Cargo／FetchContent 缓存保留，
 自建 trace session 已停止，临时资源和 SDK 已清理。
 见 [清理记录](evidence/room-cuda-small-overrun/cleanup.json) 与
 [检查记录](evidence/room-cuda-small-overrun/checks.json)。

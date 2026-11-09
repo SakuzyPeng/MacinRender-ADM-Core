@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "date": "2026-10-05",
-  "baseline_commit": "b3de01d09838c27498847a568e6d21bb713a011d",
+  "baseline_commit": "1b682c7bf69c09b73a2b5bbaf76425c5b4038e02",
   "rust_toolchain": "1.98.0",
   "legacy_libbw64": "0.10.0",
   "macos": {

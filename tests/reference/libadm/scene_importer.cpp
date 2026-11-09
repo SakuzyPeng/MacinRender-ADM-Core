@@ -1,4 +1,4 @@
-// Frozen libadm 0.14.0 importer/exporter from 577fe2d; optional reference only.
+// Frozen libadm 0.14.0 importer/exporter from d43e376; optional reference only.
 #include <algorithm>
 #include <array>
 #include <cctype>

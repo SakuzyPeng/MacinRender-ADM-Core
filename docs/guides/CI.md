@@ -85,7 +85,7 @@ config A 使用与 `release.yml` 相同的构建选项（含 `MR_ADM_BUILD_CAPI_
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
 `scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计、生产计量、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化、EAR 布局、Scene 空间数学与 `room-binaural` 准备内核及全部 294 个 PCM 用例）必须三平台逐位相同；
 新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。四期 4.2 起 25 个内核模式覆盖全部内核
-文件（`3ca0d2c` 加入左右独立 HpTF 后为 255 个），不再有观察项。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
+文件（`6a62513` 加入左右独立 HpTF 后为 255 个），不再有观察项。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
 f64 twiddle 列三平台相同并设为门禁；1.4 起 HpTF 设计也取自 `libm`，其 4 个内核文件设为门禁。
 二期 2.1 起 ebur128 的 True Peak 插值系数也取自 `libm`，生产计量的 True Peak 设为门禁；
 2.2 起 K-weighting、门控系数与 LUFS 换算也取自 `libm`，x86 不再打开 FTZ，计量的系数与响度同样设为门禁，全部内核文件三平台相同；

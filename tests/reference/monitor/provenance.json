@@ -1,5 +1,5 @@
 {
-  "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+  "baseline_commit": "e570501f6d5252aaf970ebaf0d9a543f03244429",
   "source_sha256": {
     "src/adm_realtime/monitor_engine.cpp": "403c8eb6edf8160e951c9d8c2ac6b79d481930fa7e20a33303dda066dacf14fb",
     "src/adm_realtime/monitor_engine.h": "1a2766eaeab34eef177c80f7b6d6560e5b5bf9523d43e89f3639d8caf91e1146"

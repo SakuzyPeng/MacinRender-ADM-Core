@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-adm-audio.v1",
   "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
-  "baseline_context_head": "577fe2d",
+  "baseline_context_head": "d43e376",
   "maximum_absolute_tolerance": 2e-06,
   "binary_sha256": {
     "reference": "3c316684791d066a174f8752fbb36ffc45f0454cc455142ed5050eb0de5f355c",

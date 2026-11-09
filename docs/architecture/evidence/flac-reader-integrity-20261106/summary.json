@@ -13,7 +13,7 @@
     "rust_offline_tool_link": "passed"
   },
   "windows": {
-    "base": "547c7db53451a832f9e7ff589417452d3d041b6b",
+    "base": "152b1bc63022284ff1e4b787aa7ee3a70fcd5644",
     "architecture": "x64",
     "build": "canonical MSVC/Ninja Release, vendored FLAC/Opus, SOFA/IAMF off",
     "release_cpp_ctest": 4,
@@ -21,7 +21,7 @@
     "ogg_rust_tests": 2,
     "c_api_exports": 164,
     "source_restored": true,
-    "final_head": "547c7db53451a832f9e7ff589417452d3d041b6b",
+    "final_head": "152b1bc63022284ff1e4b787aa7ee3a70fcd5644",
     "final_status": "",
     "source_sha256_lf": {
       "CMakeLists.txt": "8236f2b19eff4f0be36bcdc5c1d902efda0dc23233da5a34ad953e4f65efe073",
@@ -71,7 +71,7 @@
   },
   "scope": "Targeted correctness checks; no full consistency matrix or performance acceptance.",
   "main_integration": {
-    "base": "547c7db53451a832f9e7ff589417452d3d041b6b",
+    "base": "152b1bc63022284ff1e4b787aa7ee3a70fcd5644",
     "production_cpp_lines": {
       "before": 29297,
       "after": 29260

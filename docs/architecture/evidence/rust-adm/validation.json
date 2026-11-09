@@ -1,8 +1,8 @@
 {
   "schema": "mradm.rust-adm-migration.v1",
   "date": "2026-10-05",
-  "code_commit": "7e3cfe44211c4f4088119cee4a0d6d98505f979e",
-  "baseline_context_head": "577fe2d107b7004933597484aec1a6696b9a5da4",
+  "code_commit": "6173e69e99ee2bbaba588e6dcee9bc81d5d82a07",
+  "baseline_context_head": "d43e376d01b66f258a13366b6cdedfeabe2c9974",
   "scope": [
     "ADM XML parsing and reference resolution",
     "common definitions",
@@ -46,12 +46,12 @@
     "full_ctest": {
       "passed": 62,
       "failed": 0,
-      "code_commit": "1fc72e673f0474ac41b088467535f207b3666fe6"
+      "code_commit": "3e0db9d3adc810041dec879277b8c7dccfafd4d7"
     },
     "final_focused_ctest": {
       "passed": 9,
       "failed": 0,
-      "code_commit": "7e3cfe44211c4f4088119cee4a0d6d98505f979e"
+      "code_commit": "6173e69e99ee2bbaba588e6dcee9bc81d5d82a07"
     },
     "private_adm_exports": [],
     "libadm_default_dependency": false

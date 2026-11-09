@@ -1,6 +1,6 @@
 # ROOM GPU 换房调查：声源 EQ 刷新热点
 
-日期：2026-10-18（本地时区）。先将已验证的组合版本提交为 `e7ace2a`
+日期：2026-10-18（本地时区）。先将已验证的组合版本提交为 `e6d50f3`
 （`perf: retain validated room GPU pipeline experiment`），再进行本轮调查。
 HOA、子带、DVF 等其他工作区研究改动保留，未加入该提交。
 
@@ -91,7 +91,7 @@ python scripts/research/room_gpu/empty_graph_test.py --baseline $BASELINE_DLL `
   --gpu-dll $CANDIDATE_DLL --gpu-fixture $PRIVATE_FIXTURE --gpu-kernels $GPU_KERNELS
 ```
 
-诊断补丁基于 `e7ace2a`，只增加计时，需单独输出诊断二进制。Cargo 使用
+诊断补丁基于 `e6d50f3`，只增加计时，需单独输出诊断二进制。Cargo 使用
 `--features room-gpu-experiment,room-profile`，DLL 使用 `/DROOM_GPU_TRACE`，然后运行
 `512 512 32 --scenario switch` 并在参数末尾追加 `--trace`。不得把该结果当作无插桩性能。
 

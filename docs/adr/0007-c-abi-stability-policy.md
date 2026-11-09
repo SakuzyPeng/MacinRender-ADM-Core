@@ -552,7 +552,7 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **线程模型**：同一 handle 允许 producer、audio-pull、status/log 轮询，以及 backend/policy/pose
   control 调用并发；控制值由 worker 在 slice 边界合并，连续更新采用最新值。create/destroy 不得与
   其它调用并发。播放器仍独占设备、播放状态、A/V 同步与主时钟。
-- **兼容性**：`42302dc`、`8ff675e` 中的早期 Scene 形状从未发布，因此直接收口为上述 v1.35 表面，
+- **兼容性**：`a1c774a`、`a6b90f3` 中的早期 Scene 形状从未发布，因此直接收口为上述 v1.35 表面，
   不增加 v1.36 兼容层或 `_ex` 入口。相对已发布 v1.34 仍只新增 enum、POD、opaque handle 与 symbol；
   没有改动 v1.34 或更早的布局、signature、enum 数值和 callback，`SOVERSION` 继续为 1。
 

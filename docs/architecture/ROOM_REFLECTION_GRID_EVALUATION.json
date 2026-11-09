@@ -2,7 +2,7 @@
   "schema": "mradm.room-reflection-grid-evaluation",
   "version": 1,
   "adr": "docs/adr/0020-room-reflection-grid-during-ramps.md (proposed)",
-  "base_commit": "7d92315",
+  "base_commit": "01d28dc",
   "switch": "MR_ADM_ROOM_REFLECTION_GRID read at session preparation; unset or 0 keeps the ADR 0019 output.",
   "host": "Linux x64 cloud VM, 4 vCPU; Rust 1.98.0 Release",
   "resources": {

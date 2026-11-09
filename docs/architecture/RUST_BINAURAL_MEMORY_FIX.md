@@ -1,7 +1,7 @@
 # 双耳文件流式拓扑重建的内存修复
 
 2026-10-28。修复 [BINAURAL-002](RUST_INVERSION_BINAURAL.md#开放问题)。
-基于 `949e14e4` 的修复，源码身份见 [source.json](evidence/binaural-memory-fix-20261028/source.json)。
+基于 `86ba8d91` 的修复，源码身份见 [source.json](evidence/binaural-memory-fix-20261028/source.json)。
 Windows 与 macOS 的无插桩 Release 对照确认，完整控制重放的峰值内存分别减少约 17.8% 和 16.9%，
 最终 PCM 保持逐位一致。BINAURAL-001 的其他耗时问题继续保留。
 
@@ -28,8 +28,8 @@ Windows 与 macOS 的无插桩 Release 对照确认，完整控制重放的峰�
 macOS 使用同一 KEMAR 性能用例，正确性另覆盖外部 SOFA。
 
 主线程直接等待进程退出，Windows 的内存采样独立运行；macOS 由 `/usr/bin/time -l` 收集峰值 RSS。
-预热一次后交替运行，每轮反转版本顺序。Windows 的“修复前”是冻结 Rust `1c52d999`，其生产实现
-与 `949e14e4` 相同；macOS 的直接 Rust 参考由 `949e14e4` 无修改生产源码重新构建。
+预热一次后交替运行，每轮反转版本顺序。Windows 的“修复前”是冻结 Rust `20ec6f9f`，其生产实现
+与 `86ba8d91` 相同；macOS 的直接 Rust 参考由 `86ba8d91` 无修改生产源码重新构建。
 
 | 平台与用例 | 轮数／版本 | 修复前峰值 | 修复后峰值 | 修复前耗时 | 修复后耗时 |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -45,7 +45,7 @@ macOS 使用同一 KEMAR 性能用例，正确性另覆盖外部 SOFA。
 
 Windows 首轮短测以峰值至少减少 10%、耗时不增加超过 5% 为进入后续验证的条件，结果分别为
 -17.76% / -16.31%。后续静态、增益／头追／seek、碎片拉取、拓扑收缩／扩展及较长重放均逐位一致。
-与迁移前 C++ `c967d840` 参考相比，Windows 完整控制重放的峰值为 43.12 → 42.97 MiB，
+与迁移前 C++ `c1722289` 参考相比，Windows 完整控制重放的峰值为 43.12 → 42.97 MiB，
 macOS 为 48.08 → 48.89 MiB，均在 1.10 的内存调查阈值内。
 
 macOS 对 C++ 参考的静态短测曾得到 72.95 → 76.73 ms（+5.19%），该记录保留在
@@ -71,7 +71,7 @@ macOS 对 C++ 参考的静态短测曾得到 72.95 → 76.73 ms（+5.19%），�
 
 [汇总](evidence/binaural-memory-fix-20261028/summary.json)关联原始轮次、平台与供电／负载记录、
 二进制 SHA-256、PCM、请求参数和源码身份。[source.patch](evidence/binaural-memory-fix-20261028/source.patch)
-采用零上下文格式，基于 `949e14e4` 使用 `git apply --unidiff-zero`；已验证应用后每份源码的 SHA-256
+采用零上下文格式，基于 `86ba8d91` 使用 `git apply --unidiff-zero`；已验证应用后每份源码的 SHA-256
 与清单一致。历史调查和失败证据见[性能调查](RUST_BINAURAL_PERFORMANCE_REVIEW.md)。
 
 `collect-windows.py` 与 `collect-macos.py` 以原比较集合和两个程序目录为输入，不创建构建缓存。

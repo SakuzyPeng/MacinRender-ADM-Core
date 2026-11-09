@@ -57,7 +57,7 @@ Linux x64 上 glibc 与 `libm` 对锁定矩阵用到的换算给出相同结果�
 **本机（Linux x64，config A）。** 196 个 PCM id 与 2.2 逐位相同，原有 188 个内核文件不变；ctest 78/78 通过；
 Rust fmt / clippy 与 FFI 头校验通过；改动的 C++ 文件 clang-format 与 clang-tidy 无告警。
 
-**三平台验收。** `d836744` 的 Consistency 38757362457、CI 38757366795 与 Quality 38757371551 通过：
+**三平台验收。** `fbe5286` 的 Consistency 38757362457、CI 38757366795 与 Quality 38757371551 通过：
 
 - A/B 两种配置下 196 个 PCM id 三平台相同，209 项门禁无失败；
 - 193 个内核文件全部三平台相同，包括 5 个 `post-gain` 文件和 5 个观察项；

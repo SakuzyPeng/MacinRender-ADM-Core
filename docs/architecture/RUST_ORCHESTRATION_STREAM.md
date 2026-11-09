@@ -51,13 +51,13 @@
    - `direct_speakers_matrix_test` 中调用这三个函数的路由范围检查删除，由 request-v1 黄金数据覆盖；
    - 工具检查 room 夹具名时按路径组件判断，写法与 C++ 工具略有不同，锁定矩阵中观察不到；
    - MonitorEngine 的 worker 先写失败日志、再以 release 置位 `failed_`，`status()` 以 acquire 读取，所以调用方看到失败状态时日志一定已写入。可观察的行为不变，只消除了测试偶发先于日志读取的竞态。
-4. **维护者修正**：`cb3b2db` 为监听工厂的 `BackendKeepAlive` 成员加 cppcheck `unusedStructMember` 注释，`d543bc0` 把注释压回棘轮上限内（净行数不变）。
+4. **维护者修正**：`ab66752` 为监听工厂的 `BackendKeepAlive` 成员加 cppcheck `unusedStructMember` 注释，`61b9fac` 把注释压回棘轮上限内（净行数不变）。
 
 ## 黄金数据
 
 | 数据 | 源提交 | 内容 | 植入并被抓到的缺陷 |
 | --- | --- | --- | --- |
-| `mradm-engine/tests/monitor-v1` | `5af83cc` | 2,960 例监听打开（渲染器 × 布局 × 路由 × 矩阵、D 模式、屏幕、系统空间、平滑、spread、SOFA、room、LFE、几何），记录日志与错误或打开的流 | `open_monitor`：4 处（缺省布局、屏幕检查顺序、诊断模块名、系统空间朝向） |
+| `mradm-engine/tests/monitor-v1` | `297c7da` | 2,960 例监听打开（渲染器 × 布局 × 路由 × 矩阵、D 模式、屏幕、系统空间、平滑、spread、SOFA、room、LFE、几何），记录日志与错误或打开的流 | `open_monitor`：4 处（缺省布局、屏幕检查顺序、诊断模块名、系统空间朝向） |
 
 - 生成器在 scratchpad 中，按行号抽出当时的 `RealtimeStreamFactory::open`，不提交。SOFA 用例在不带 `sofa` feature 的构建中跳过。
 - A 的 `tests/stream.rs` 有 4 个测试（各后端的打开错误与取消点），植入 4 处缺陷都被抓到：Triple Balance 少一处步内检查、room 在开始前多查一次、双耳最后不查、HOA 格式检查漏掉采样率。
@@ -69,20 +69,20 @@
 
 | 批次 | 对照 | 结果 |
 | --- | --- | --- |
-| A（`7e9a7ec`，基线 `2efaeaa`） | 矩阵的 36 个文件流式行，plain 与 diag；918 个流式变体（事件、seek 目标、编辑与比例、被拒的编辑、朝向、分块、平滑，711 例渲染），与旧 `mr_adm_phase2_stream` 对照 | 相同（2,486 个检查点）；退出码、stderr 与两遍 PCM 逐字节相同 |
-| B（`56bfe0e`，基线 `5af83cc`） | 新旧 C++ 监听工厂各驱动 2,960 例，打开的 282 条流在非静音输入上渲染、seek、再渲染；同一构建上 C++ 工具与 `--tool mr_adm_phase2_stream=<Rust>` 各采集 plain 与 diag（`--baseline`），用 `compare-collections` 比较；918 个流式变体 | 全部相同，含 282 条流的 PCM；plain 的 outputs 291、comparisons 979、replay_status 176、artifacts 256、日志 656 相同，diag 的 artifacts 31,229、日志 665 相同；0 差异 |
+| A（`9d6ce93`，基线 `3945b16`） | 矩阵的 36 个文件流式行，plain 与 diag；918 个流式变体（事件、seek 目标、编辑与比例、被拒的编辑、朝向、分块、平滑，711 例渲染），与旧 `mr_adm_phase2_stream` 对照 | 相同（2,486 个检查点）；退出码、stderr 与两遍 PCM 逐字节相同 |
+| B（`3aa9e22`，基线 `297c7da`） | 新旧 C++ 监听工厂各驱动 2,960 例，打开的 282 条流在非静音输入上渲染、seek、再渲染；同一构建上 C++ 工具与 `--tool mr_adm_phase2_stream=<Rust>` 各采集 plain 与 diag（`--baseline`），用 `compare-collections` 比较；918 个流式变体 | 全部相同，含 282 条流的 PCM；plain 的 outputs 291、comparisons 979、replay_status 176、artifacts 256、日志 656 相同，diag 的 artifacts 31,229、日志 665 相同；0 差异 |
 
 - **常规检查**：两批 ctest 都是 82/82 连跑 3 次，B 另把 `mr_adm_realtime_tests` 重复 50 次；clippy、fmt、FFI 头校验（B 后 341 个函数、145 个结构体）、clang-format / tidy、许可、retention、version 与 manual 目标都通过。
-- **维护者合入**：A 随 5.8 规划一并合入（`5af83cc`），B 合入为 `43c2467`，之后是上节的两个 cppcheck 修正。
+- **维护者合入**：A 随 5.8 规划一并合入（`297c7da`），B 合入为 `79a176f`，之后是上节的两个 cppcheck 修正。
 - **三平台 Consistency**：每次合并后都通过，各次运行的 Compare platforms 均成功。
 
   | 合并点 | 运行 |
   | --- | --- |
-  | A（`5af83cc`） | 41794387787 |
-  | B（`43c2467`） | 41987602401 |
-  | B 修正（`d543bc0`） | 41994125083 |
+  | A（`297c7da`） | 41794387787 |
+  | B（`79a176f`） | 41987602401 |
+  | B 修正（`61b9fac`） | 41994125083 |
 
-  `cb3b2db` 的运行 41993504034 被取消，由 `d543bc0` 那次覆盖。最后一次运行在 config A、B 的普通与诊断四份报告中，都是 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。
+  `ab66752` 的运行 41993504034 被取消，由 `61b9fac` 那次覆盖。最后一次运行在 config A、B 的普通与诊断四份报告中，都是 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。
 - **待你本地验证**：macOS 上的 Apple 后端监听与系统空间监听，Windows 上监听的路径文字。
 
 ## 规模
@@ -91,10 +91,10 @@ C/C++（`language-surface.py`）：
 
 | 合并点 | 生产 | 测试 | `src/adm_engine` | `src/adm_render_common` | `src/adm_renderer_factory` | 说明 |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 5.2（`2efaeaa`） | 29,805 | 49,008 | 1,981 | 3,802 | 230 | 5.3 基线 |
-| A（`5af83cc`） | 29,408 | 49,008 | 1,981 | 3,802 | 230 | 四个流式壳合为 `EngineStream`；后端 `open_stream` 缩为一行 |
-| B（`43c2467`） | 29,297 | 48,741 | 2,049 | 3,806 | 46 | 监听打开规则移出；`RequestTexts` 移入 `request_record.h`；C++ 工具删除 |
-| B 修正（`d543bc0`） | 29,297 | 48,741 | 2,049 | 3,806 | 46 | 只改注释 |
+| 5.2（`3945b16`） | 29,805 | 49,008 | 1,981 | 3,802 | 230 | 5.3 基线 |
+| A（`297c7da`） | 29,408 | 49,008 | 1,981 | 3,802 | 230 | 四个流式壳合为 `EngineStream`；后端 `open_stream` 缩为一行 |
+| B（`79a176f`） | 29,297 | 48,741 | 2,049 | 3,806 | 46 | 监听打开规则移出；`RequestTexts` 移入 `request_record.h`；C++ 工具删除 |
+| B 修正（`61b9fac`） | 29,297 | 48,741 | 2,049 | 3,806 | 46 | 只改注释 |
 
 - **累计**：5.3 共减少生产 C/C++ 508 行，五期至今 32,551 → 29,297（10.0%）。
 - **按后端**：A 中 `src/adm_render_triple_balance` 257 → 101、`src/adm_render_room` 417 → 305、`src/adm_render_binaural` 404 → 278、`src/adm_render_hoa` 59 → 56。

@@ -9,7 +9,7 @@
     "scope": "Local macOS validation; no Windows or Linux native execution in this change"
   },
   "implementation": {
-    "base_commit": "78ef34a70b4af15151e099dcce6ac350de62c434",
+    "base_commit": "07c2787f9e3adf2db420398f5a7492df6bb3c050",
     "working_tree_change": true,
     "flows": [
       "offline rendering",

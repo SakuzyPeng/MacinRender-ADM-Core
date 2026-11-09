@@ -6,15 +6,15 @@
 
 ## 验收结论
 
-结项提交为 main `221ce28`（4.9 文档合入后）。三平台运行：
+结项提交为 main `6f1c963`（4.9 文档合入后）。三平台运行：
 
 | 工作流 | 运行 | 结果 |
 | --- | --- | --- |
-| Consistency | [41166081362](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41166081362) | 通过；config A、B 的普通与诊断四份报告都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0 |
-| CI | [41166081382](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41166081382) | 通过 |
-| Quality | [41166081381](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41166081381) | 通过 |
-| Release Build | [41183519975](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41183519975) | 通过；macOS / Windows CLI、Linux AppImage、macOS / Windows GUI 五个打包 job 成功（Publish 只在 tag push 时运行，已跳过） |
-| Reference tests | [41183521970](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41183521970) | 通过；7 个单元全部成功 |
+| Consistency | 41166081362 (historical Actions run 41166081362) | 通过；config A、B 的普通与诊断四份报告都是 291 个 PCM id 相同、0 个不同、平台集完整，316 条门禁失败 0 |
+| CI | 41166081382 (historical Actions run 41166081382) | 通过 |
+| Quality | 41166081381 (historical Actions run 41166081381) | 通过 |
+| Release Build | 41183519975 (historical Actions run 41183519975) | 通过；macOS / Windows CLI、Linux AppImage、macOS / Windows GUI 五个打包 job 成功（Publish 只在 tag push 时运行，已跳过） |
+| Reference tests | 41183521970 (historical Actions run 41183521970) | 通过；7 个单元全部成功 |
 
 诊断报告中，每对平台的 255 份内核、201 个内核检查点、31,100 个用例检查点与 21,380 项 Scene 检查点比较全部相同。
 Release Build 在三个平台上构建发布配置，跑许可证全量校验、C ABI 导出校验、CLI 与打包 smoke，并打包 macOS / Windows
@@ -35,8 +35,8 @@ libsamplerate、libebur128、dr_wav 在 Linux）。两者四期之前最后一�
 | 4.8 | PCM 写出与后处理 IO | 283 | 32,551 | [4.8](RUST_INVERSION_OUTPUT.md) |
 | 4.9 | S03：文件流式 seek 按离线窗口，开平滑的文件流式重放 | 291 | 32,551 | [4.9](RUST_INVERSION_SMOOTHING.md) |
 
-内核测量 4.1 为 235 份（230 份门禁），4.2 起 237 份全部设为门禁，`3ca0d2c`（左右独立 HpTF）加到 255 份，仍全部设为门禁。
-行数是各切片最后一次合并后 `language-surface-baseline.json` 的值；4.7 与 4.8 之间的 14 行来自维护者的 `3ca0d2c`。
+内核测量 4.1 为 235 份（230 份门禁），4.2 起 237 份全部设为门禁，`6a62513`（左右独立 HpTF）加到 255 份，仍全部设为门禁。
+行数是各切片最后一次合并后 `language-surface-baseline.json` 的值；4.7 与 4.8 之间的 14 行来自维护者的 `6a62513`。
 每个结构迁移切片都以删除前的 C++ 生成的黄金数据和 Linux x64 本机新旧对照（普通与诊断构建）验收，有意的数值变化只有
 4.4 的 extent 缺省上限与 4.9 的文件流式 seek，各自单独记录。
 

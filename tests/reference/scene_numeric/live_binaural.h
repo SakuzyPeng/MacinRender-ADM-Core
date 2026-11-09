@@ -1,4 +1,4 @@
-// Frozen from 726db31. Test only.
+// Frozen from bd2ea96. Test only.
 #include <algorithm>
 #include <array>
 #include <cmath>

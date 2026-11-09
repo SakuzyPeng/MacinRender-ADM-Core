@@ -1,6 +1,6 @@
 # catalog-v1
 
-Frozen output of the C++ engine at main `28eac3f`, before PCM consistency 5.2 A moved the
+Frozen output of the C++ engine at main `11b9349`, before PCM consistency 5.2 A moved the
 discovery documents and the scene inspect JSON to `mradm-engine`. A scratchpad generator (not
 committed) called the C ABI of a Linux x64 config A Release build through ctypes:
 

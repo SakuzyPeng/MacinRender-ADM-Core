@@ -128,15 +128,15 @@ Release 使用 config A（额外开启共享库）完成非诊断采集：79 个
 源码指纹为 `5b31e7c167bba07171c39e8a684b7894a11052861a55ab2d81880e821580e2f8`。
 此次复核未执行诊断无扰动采集或三平台比较。
 
-**本机复核（Linux x64，config A，诊断）。** 候选 `e8c461e` 与生产代码相同的 4.1 候选各做一次普通采集与诊断采集：
+**本机复核（Linux x64，config A，诊断）。** 候选 `81bbccc` 与生产代码相同的 4.1 候选各做一次普通采集与诊断采集：
 
 - 既有 242 个 PCM id 与 235 份内核测量逐字节相同，新增 41 个 PCM id 与 `room.*` 2 份内核；
 - 201 份内核检查点、既有 26,482 个场景与渲染检查点全部相同，新增 4,290 个，均属新用例；诊断无扰动通过；
 - 79 个离线用例中，恰好 5 个策略用例的 `render-scene/offline.06-policy.i32` 与 `05-import` 不同，其余 74 个相同
   （DS 矩阵是路由选项，不经语义策略）。
 
-**三平台。** [Consistency 39012071641](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39012071641)
-在 `main` 的 `45ab448` 上运行，macOS arm64 / Linux x64 / Windows x64 各采集 config A、B 的普通与诊断结果，全部成功。
+**三平台。** Consistency 39012071641 (historical Actions run 39012071641)
+在 `main` 的 `456e05b` 上运行，macOS arm64 / Linux x64 / Windows x64 各采集 config A、B 的普通与诊断结果，全部成功。
 该提交包含上述比较器与 JSON 字节的修正，以及双声道输出只走双耳的收紧。
 
 - 四份比较报告（A、A 诊断、B、B 诊断）都是 283 个 PCM id 三平台相同、0 个不同、平台集完整，308 条门禁失败 0。

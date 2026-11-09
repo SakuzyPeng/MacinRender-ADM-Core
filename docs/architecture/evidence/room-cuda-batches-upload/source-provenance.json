@@ -1,5 +1,5 @@
 {
-  "base": "5926c7b0976a902a1524363b1370cb4b107569af",
+  "base": "a5c18e1b44accdbdcaa2d083b85755afb0b5f73b",
   "prerequisite": "../room-cuda-integration/candidate.patch",
   "optimizations_patch_sha256": "c297369d89d3740ad7de88b62e7c9767230c3843b2a7fc15c2c9a686e38b3363",
   "unexecuted_regression_sha256": "a4176e7173c379d752605337c01428a74ff6d9d9f9d7e15763e007ec12eb0a31",

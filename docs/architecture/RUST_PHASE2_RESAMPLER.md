@@ -40,7 +40,7 @@ FFT 切片后剩余 26 个三平台 PCM 差异中，24 个是变采样 Scene 用
   许可证与冻结参考校验通过。
 - Release `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS=ON`：`mr_adm_resampler_reference_tests` 对
   libsamplerate 的通带、阻带、短 HRIR 与多声道对照仍在原阈值内。
-- 二期 A 组采集（GCC 13 Release，SOFA/IAMF OFF，vendored FLAC/Opus），对比 `2baaf94`：
+- 二期 A 组采集（GCC 13 Release，SOFA/IAMF OFF，vendored FLAC/Opus），对比 `09fec09`：
   - 内核只有 `resampler-48000-44100` 与 `resampler-44100-48000` 输出改变（最大绝对差 3.6e-7），
     其余 60 项不变；新增 3 个 `trig.*` 内核。
   - PCM 只有 24 个变采样 Scene 用例改变（最大绝对差 6.0e-8），其余 54 个逐位不变。
@@ -62,15 +62,15 @@ cubic、截止 0.94，48→44.1 kHz 为 280 taps、44.1→48 kHz 为 256 taps）
 
 ## 三平台验收
 
-[Consistency run 37562888092](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37562888092)
-在 `0f6c187` 上完成三平台 A/B 及诊断采集，同一提交的 CI 与 Quality 均通过。四份报告结果一致，摘要、
+Consistency run 37562888092 (historical Actions run 37562888092)
+在 `b652cdb` 上完成三平台 A/B 及诊断采集，同一提交的 CI 与 Quality 均通过。四份报告结果一致，摘要、
 报告哈希与剩余用例的首个分歧点见 [重采样验收记录](evidence/rust-phase2/resampler-validation.json)。
 
 | 三平台共同逐位相同的 PCM | 用例数 |
 |---|---:|
-| 二期基线 `00a70e4` | 29/78 |
-| FFT 切片 `6ec2dc6` | 52/78 |
-| 本切片 `0f6c187` | 76/78 |
+| 二期基线 `b5f398a` | 29/78 |
+| FFT 切片 `8e25ce8` | 52/78 |
+| 本切片 `b652cdb` | 76/78 |
 
 - 门禁 0 失败：`trig.*` 可移植三角函数、两个变采样 `resampler-*` 内核及此前的 FFT/EAR FIR 门禁在
   三个平台对上均逐位相同。63 个内核中只剩平台 libm 计算的 `fft-twiddles.10-libm.f64` 仍有 1 ULP

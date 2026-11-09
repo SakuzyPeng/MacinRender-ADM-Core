@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-output-dsp-migration.v1",
   "date": "2026-10-04",
-  "baseline_commit": "53cc36e226ae7ec1494327a8c167278454e003bc",
+  "baseline_commit": "0668393d9e9f5e02ff427107ee0ee27886a21a78",
   "scope": [
     "Stereo sample-peak protection",
     "Single-channel live gain ramps",
@@ -47,7 +47,7 @@
   },
   "release_comparison": {
     "macos": {
-      "baseline_commit": "53cc36e",
+      "baseline_commit": "0668393",
       "gain_samples": 11642376,
       "gain_bit_mismatches": 0,
       "peak_samples": 440120,
@@ -55,7 +55,7 @@
       "peak_tolerance": 2e-05
     },
     "windows": {
-      "baseline_commit": "53cc36e",
+      "baseline_commit": "0668393",
       "gain_samples": 11642376,
       "gain_bit_mismatches": 0,
       "peak_samples": 440120,
@@ -96,8 +96,8 @@
   "ci": {
     "baseline": {
       "run_id": 37226615086,
-      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37226615086",
-      "commit": "53cc36e226ae7ec1494327a8c167278454e003bc",
+      "url": "historical Actions run 37226615086",
+      "commit": "0668393d9e9f5e02ff427107ee0ee27886a21a78",
       "conclusion": "success",
       "platforms": [
         "macOS debug",
@@ -107,8 +107,8 @@
     },
     "migration": {
       "run_id": 37228025183,
-      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37228025183",
-      "commit": "496e108550db9b8ec7b2d7091b8bc0348de32713",
+      "url": "historical Actions run 37228025183",
+      "commit": "fca074b25eff0d2747f7d5635ae928b3f410f221",
       "conclusion": "success",
       "attempt": 2,
       "jobs": [

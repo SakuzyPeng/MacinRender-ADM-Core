@@ -2,11 +2,11 @@
   "schema": "mradm.room-cuda-v2-retention",
   "version": 1,
   "date": "2026-10-19",
-  "parent": "a35034f1a12b7c427d600965562ef4f96ca77c2e",
+  "parent": "d54476e7e9eaf9a8a10b062da77d5788c49d6db5",
   "status": "Retain V2 frequency-major as an explicit opt-in candidate; full Windows numerical and long acceptance pending",
   "decision": "The 1 ms reduction is an optimization goal, not a hard retention gate. Meaningful paired full-session gains justify preserving V2 for remaining validation.",
   "restoration": {
-    "archived_base": "28f3dc0b4df3ef8166ac2fb60bba39417fe54245",
+    "archived_base": "5669a70cbc4e7edd94ac676959fc6d354bc1c0c9",
     "patch_chain": [
       "../room-cuda-integration/candidate.patch",
       "combined-v2.patch",
@@ -56,7 +56,7 @@
       "tests/manual/room_scene_benchmark.cpp": "97afc15a16b5be8d48f0ee2877694803777e08ba57bd2d749419a0f900b0e7be"
     },
     "cmake_hash_note": "Committed candidate content; unrelated working-tree DVF test registration excluded.",
-    "integer_changes_already_committed": "15c61583",
+    "integer_changes_already_committed": "e054e011",
     "excluded": [
       "decoder-v3.patch",
       "diagnostic.patch",
@@ -300,7 +300,7 @@
     "windows_six_round_long": "pending",
     "new_windows_performance_runs": 0,
     "macos_performance_matrix": "pending after Windows passes",
-    "new_exact_718a804_full_certification": false
+    "new_exact_a7d2aab_full_certification": false
   },
   "scope": "Restore the tested candidate and document it. No Windows-host changes, device tests, packaging, publishing, or unrelated research edits in this retention step.",
   "historical_evidence": "validation.json and source-provenance.json preserve the original stopping/rollback decision; their bytes are unchanged."

@@ -1,6 +1,6 @@
 # Rust Triple Balance 数值状态迁移
 
-> 基线 `1972817`；算法、共享准备数据、独立渲染历史和数值快照由 Rust 接管。
+> 基线 `7fecf33`；算法、共享准备数据、独立渲染历史和数值快照由 Rust 接管。
 
 ## 所有权与接口
 
@@ -92,9 +92,9 @@ Rust Release workspace 共 90 项测试通过，其中 Triple Balance 7 项、�
 diffuse 为零且 extent 实际参与渲染。不是主观试听或跨平台位一致结果。
 Rust fmt/Clippy、改动 C++ clang-format/clang-tidy/cppcheck、冻结参考检查和许可证/SBOM 检查通过。
 
-实现提交 `31ec95c`，数值探针的逐帧访问修订为 `28a607c`。
-[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37278478106)
-验证 `28a607c`：macOS Debug 60/60、Linux Debug 59/59、Windows Debug 59/59，全部通过。
+实现提交 `9577698`，数值探针的逐帧访问修订为 `cf6465a`。
+最终三平台 CI (historical Actions run 37278478106)
+验证 `cf6465a`：macOS Debug 60/60、Linux Debug 59/59、Windows Debug 59/59，全部通过。
 此前实现提交的首轮三平台 CI 也全部通过。最终验收提交只更新文档与证据。
 
 ```sh
@@ -103,10 +103,10 @@ ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failu
 cmake --build --preset release
 build/release/mr_adm_triple_balance_rust_tests comparison.json
 python3 scripts/consistency/compare-triple-balance.py \
-  --reference /path/to/1972817-release/mradm --candidate build/release/mradm \
+  --reference /path/to/7fecf33-release/mradm --candidate build/release/mradm \
   --pcm-bits build/release/mr_adm_pcm_bits --fixtures /path/to/fixtures --output audio.json
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base 1972817 --build-dir build/debug
+scripts/quality/check-changed.sh --base 7fecf33 --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 ```
 

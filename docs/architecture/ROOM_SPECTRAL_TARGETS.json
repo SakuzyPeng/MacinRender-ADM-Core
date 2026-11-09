@@ -3,7 +3,7 @@
   "recorded_utc": "2026-10-13T18:16:55.396122+00:00",
   "decision": "Do not retain the wide-FFT spectral target consumer. Production sources remain byte-identical to the input working tree, including the retained direct-path optimization.",
   "source_digest": "b4f0a2d8f05f219f3ea08784d7b48d40f12d198090eb9686cb8d0eae6d28ab9d",
-  "baseline": "e5803f6 plus the retained branch-local direct-path optimization from the 1+2 experiment",
+  "baseline": "16e9cba plus the retained branch-local direct-path optimization from the 1+2 experiment",
   "scope": "Single-source short-response preparation and dynamic direct/early convolution; this is not a 32-source Session benchmark. EQ, late field, workers and devices are excluded.",
   "method": {
     "build": "Rust 1.98.0 Release, native FFT policy, no profiling",

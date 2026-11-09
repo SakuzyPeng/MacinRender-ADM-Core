@@ -3,12 +3,12 @@
 > 二期已按锁定矩阵结项，当前范围和维护规则见[结项记录](RUST_PHASE2_CLOSEOUT.md)。
 > 本文保留本切片当时的测量、门禁状态和阶段边界。
 
-2026-10-07，`666fe49` 在统一标量 FFT 的基础上回收了一部分性能：常用的 1024–4096 点
+2026-10-07，`3abfbc3` 在统一标量 FFT 的基础上回收了一部分性能：常用的 1024–4096 点
 实数 FFT 在本机 M4 Pro 上耗时下降约 26%–31%，Linux CI 上约 29%–33%，Windows CI 上
 约 22%–25%。双耳 cloud 的本机端到端耗时下降约 7%–8%。全部 78 个 PCM 用例继续保持
 三平台逐位一致；本机优化前后的 78 份 PCM、67 份内核结果也逐位不变。
 
-基准是本轮开始时的统一标量实现 `c182872`。这些数据表示本批的增益，不表示已经追回
+基准是本轮开始时的统一标量实现 `ea9cbdb`。这些数据表示本批的增益，不表示已经追回
 相对早期自动 SIMD 后端的全部性能。前序数值决策继续按 [ADR 0015](../adr/0015-rust-fft-scalar-path.md)
 执行，当前 RustFFT/RealFFT 的 SIMD features 仍为空。
 
@@ -71,8 +71,8 @@ RSS 比值在 0.997–1.006 之间，未观察到明显增长。VBAP 对照也�
 
 ## 验收与复现
 
-[Consistency 37588314154](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588314154)
-在 `666fe49fd4da0a2b6f454e3c19220f4978adee62` 上通过。A、B 及其诊断版四份报告均为
+Consistency 37588314154 (historical Actions run 37588314154)
+在 `3abfbc329501daaac78af8ee22f22fa32ec06494` 上通过。A、B 及其诊断版四份报告均为
 78/78 PCM 三平台逐位相同，数值门禁零失败。B 仍仅是 C/C++ 严格浮点实验。源指纹：
 `aef16671d84baf9a5a2561e9d6ec41cb13d5b9d04c26dbcb05db81210e111b31`。
 
@@ -81,8 +81,8 @@ f64 twiddle 观察列仍有原有差异，不在位相等门禁内。本机对�
 67 份内核结果均做了完整原始位比较。
 
 - 本机 Debug CTest 71/71；新增列计算的 f32/f64 对照在 Debug、Release 都通过。
-- [常规 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588322470)和
-  [Quality](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588335394)通过；
+- 常规 CI (historical Actions run 37588322470)和
+  Quality (historical Actions run 37588335394)通过；
   本地 Rust fmt/Clippy（含全部 features）、C++ 质量、许可证及冻结参考校验通过。
 - 公开 C ABI 保持 139 个导出；私有 FFI 209 个函数 / 65 个结构体一致；16 个历史参考单元的
   45 个文件哈希保持不变。

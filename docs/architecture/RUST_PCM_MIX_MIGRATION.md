@@ -1,6 +1,6 @@
 # Rust 共享 PCM 混音与状态迁移
 
-> 2026-10-04：通用扬声器时间线、EAR 双总线累加及监听固定矩阵使用 Rust，基线为 `4286f3e`。
+> 2026-10-04：通用扬声器时间线、EAR 双总线累加及监听固定矩阵使用 Rust，基线为 `de621ca`。
 
 ## 所有权与接入
 
@@ -73,10 +73,10 @@ Triple Balance 点声源使用 `--speaker-spread-mode none`；专有 bed/size、
 - Windows canonical Release：57/57，SOFA ON，三个旧库参考开关 OFF。
 - Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、参考头检查及许可证/SBOM 检查通过。
 - 两端保留同一组 139 个公开 `adm_*` 导出；私有 Rust 入口不外泄。Windows 附带 C++ 导出不属于稳定 ABI。
-- [最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37260335033)
-  验证实现提交 `4970ed4`：macOS Debug 58/58、Linux Debug 57/57、Windows Debug 57/57，首轮全部通过。
+- 最终三平台 CI (historical Actions run 37260335033)
+  验证实现提交 `57eaa09`：macOS Debug 58/58、Linux Debug 57/57、Windows Debug 57/57，首轮全部通过。
 
-Windows 原工作区的改动和原始字节保留。同步时额外合入 `4286f3e` 的增益发布修复，
+Windows 原工作区的改动和原始字节保留。同步时额外合入 `de621ca` 的增益发布修复，
 Monitor 和 realtime fixture 的两份既有 Windows 差异通过三方合并保留；测试源码与本地并非完全相同的干净检出。
 没有新增独立工作区。本地恢复标准 Debug/Release 目录，复用现有 FetchContent 源码和共享 Cargo 产物根目录。
 
@@ -90,12 +90,12 @@ Monitor 和 realtime fixture 的两份既有 Windows 差异通过三方合并保
 cmake --build --preset debug
 ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base 4286f3e --build-dir build/debug
+scripts/quality/check-changed.sh --base de621ca --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 cmake --build --preset release
 build/release/mr_adm_pcm_mix_tests comparison.json
 python3 scripts/consistency/compare-pcm-mix.py \
-  --reference /path/to/4286f3e-release/mradm --candidate build/release/mradm \
+  --reference /path/to/de621ca-release/mradm --candidate build/release/mradm \
   --pcm-bits build/release/mr_adm_pcm_bits --fixtures /path/to/fixtures --output comparison-cli.json
 ```
 

@@ -1,6 +1,6 @@
 # Rust EAR 后处理与连续短块尾音修复
 
-> 2026-10-04：去相关 FIR 卷积、直接声补偿延迟、双总线求和及历史迁入 Rust；基线为 `e12332b`。
+> 2026-10-04：去相关 FIR 卷积、直接声补偿延迟、双总线求和及历史迁入 Rust；基线为 `862408f`。
 
 ## 2026-10-06 后续更新
 
@@ -74,11 +74,11 @@ Rust 测试另覆盖最大容量 1/37/1024/2048、单帧及不规则分块、255
   既有窗口/整段切片逐位检查、seek、C API 和时长裁剪块回归继续通过。
 - Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、冻结参考检查及许可证/SBOM 校验通过。
 - macOS/Windows 保留同一组 139 个公开 `adm_*` 导出，无私有 Rust 入口外泄；Windows 附带 C++ 导出不属于稳定 ABI。
-- [最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37267613687)
-  验证实现提交 `e5836e9`：macOS Debug 59/59、Linux Debug 58/58、Windows Debug 58/58，首轮全部通过。
+- 最终三平台 CI (historical Actions run 37267613687)
+  验证实现提交 `bf5b524`：macOS Debug 59/59、Linux Debug 58/58、Windows Debug 58/58，首轮全部通过。
 
 Windows 继续使用既有 canonical 工作区，原有修改和原始字节均保留。
-本轮同步包含 `e12332b` 的时长裁剪修复；涉及文件在同步前核对基线，之后核验源码指纹。
+本轮同步包含 `862408f` 的时长裁剪修复；涉及文件在同步前核对基线，之后核验源码指纹。
 其他 Windows 工作区差异不属于本轮，原生验证不描述为干净的 Git 检出。
 
 证据：[validation.json](evidence/rust-ear-post/validation.json)、
@@ -91,12 +91,12 @@ Windows 继续使用既有 canonical 工作区，原有修改和原始字节均�
 cmake --build --preset debug
 ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base e12332b --build-dir build/debug
+scripts/quality/check-changed.sh --base 862408f --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 cmake --build --preset release
 build/release/mr_adm_ear_post_tests comparison.json
 python3 scripts/consistency/compare-pcm-mix.py \
-  --reference /path/to/e12332b-release/mradm --candidate build/release/mradm \
+  --reference /path/to/862408f-release/mradm --candidate build/release/mradm \
   --pcm-bits build/release/mr_adm_pcm_bits --fixtures /path/to/fixtures --output comparison-cli.json
 ```
 

@@ -1,6 +1,6 @@
 #include "../scene_numeric/spatial.h"
 #pragma once
-// Frozen ba96bac numerical reference; tests only.
+// Frozen 920864a numerical reference; tests only.
 #include <algorithm>
 #include <array>
 #include <cmath>

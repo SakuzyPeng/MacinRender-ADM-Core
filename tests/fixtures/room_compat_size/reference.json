@@ -1,6 +1,5 @@
 {
   "source_adm_sha256": "09e266d8ea3c4037294e5c5a85361e298101137c8c0059980c60e9f532d39602",
-  "module_uuid": "F11646CF-9535-3815-8184-524335D4CC3A",
   "filter": {
     "input_start": 47616,
     "input_frames": 2048,

@@ -1,13 +1,13 @@
 {
   "schema": "mradm.room-preparation-review.v1",
-  "baseline": "305159fc2956026b292db83f86552845ed820fa0",
-  "reviewed": "4899f9c129bcf4050622c61541bc47ca4df9942c",
-  "fixed": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+  "baseline": "972cc0467278967f954f5c93a818b208e205e85b",
+  "reviewed": "f721f9e8aab112c2772444fb5100923152afd7ff",
+  "fixed": "ff20490a23993ae09720e2f9d8050db3b7ce2fbd",
   "platform_comparisons": {
     "macos": {
       "passed": true,
-      "baseline": "305159fc2956026b292db83f86552845ed820fa0",
-      "candidate": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+      "baseline": "972cc0467278967f954f5c93a818b208e205e85b",
+      "candidate": "ff20490a23993ae09720e2f9d8050db3b7ce2fbd",
       "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
       "checks": {
         "catalog_sha256": true,
@@ -26,8 +26,8 @@
     },
     "windows": {
       "passed": true,
-      "baseline": "305159fc2956026b292db83f86552845ed820fa0",
-      "candidate": "1b8463c9deee954be5d35661f65e64a18029c7d6",
+      "baseline": "972cc0467278967f954f5c93a818b208e205e85b",
+      "candidate": "ff20490a23993ae09720e2f9d8050db3b7ce2fbd",
       "platform": "Windows-10-10.0.26200-SP0",
       "checks": {
         "catalog_sha256": true,
@@ -72,7 +72,7 @@
   },
   "regression": {
     "profile": "dev",
-    "unfixed": "4899f9c129bcf4050622c61541bc47ca4df9942c",
+    "unfixed": "f721f9e8aab112c2772444fb5100923152afd7ff",
     "failed_on_macos": true,
     "upward_y_expected": "3f5db3d7",
     "upward_y_actual": "3f5db3d8",

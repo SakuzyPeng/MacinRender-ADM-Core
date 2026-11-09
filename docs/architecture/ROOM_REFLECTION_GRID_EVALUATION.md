@@ -1,7 +1,7 @@
 # 房间反射网格实验记录（2026-10-13）
 
 > 状态：历史实验，原 ADR 0020 草案由[房间精确与实时档位](../adr/0020-room-quality-tiers.md)取代。
-> 来源：`claude/nice-thompson-ogju1h` 的 `2a44566`、`01306ca`；实验基线为 `7d92315`。
+> 来源：`claude/nice-thompson-ogju1h` 的 `1b09eb8`、`142cb24`；实验基线为 `01d28dc`。
 > 范围：`room-binaural` 的 Rust 会话（`mradm-dsp` `room::session` / `signal` / `prepared`）。离线渲染、
 > 文件流式渲染和 Scene 流式渲染共用该会话；下文数值只对应当时的二进制、资源和测量场景。
 > 前提：[ADR 0019](../adr/0019-room-per-source-update-grid.md)（按声源自身的事件网格更新）。
@@ -75,7 +75,7 @@ G 为 256 的整数倍，所以网格点总是块起点，也总是每个声源�
 
 ## 本机测量
 
-基线为 `7d92315`，机器、预设和 HRIR 与 ADR 0019 的验证相同（Linux x64 云主机 4 vCPU，
+基线为 `01d28dc`，机器、预设和 HRIR 与 ADR 0019 的验证相同（Linux x64 云主机 4 vCPU，
 `reference-7x6x3.2-corrected-v1`，公开的 SADIE II D2）。
 
 - **开关关闭。** 11 个会话场景和 `room_replay` 同一调度（有无屏幕，固定与碎片分块）与 ADR 0019

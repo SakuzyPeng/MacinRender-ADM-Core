@@ -1,6 +1,6 @@
 {
   "scope": "Suitability evaluation only; production integration and EBU certification not performed",
-  "base_commit": "20e9df87fa50c375a0c1a98add834748489af190",
+  "base_commit": "81f62572e593bbe189e21426df12e9c80699b736",
   "system": "Darwin",
   "system_release": "27.0.0",
   "architecture": "arm64",

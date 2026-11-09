@@ -37,26 +37,26 @@
 - 默认 Debug CTest 69/69；`mr_adm_rust_quality`、FFI 头校验（209 函数 / 65 结构体）、许可证与冻结参考校验通过。
 - Release `MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS=ON`：`mr_adm_libear_reference_tests`、EAR fixture/post 测试，
   以及 SAF、重采样、ebur128、libbw64 参考对照仍在原阈值内。
-- 二期 A 组采集（GCC 13 Release，SOFA/IAMF OFF，vendored FLAC/Opus），对比 `a01b285`：
+- 二期 A 组采集（GCC 13 Release，SOFA/IAMF OFF，vendored FLAC/Opus），对比 `3824eec`：
   - 内核：原有 63 项逐位不变（包括 `om-*` 与全部 EAR FIR），新增 4 个 `spreader.*`；
   - PCM：只有两个 spreader 用例改变（最大绝对差 0.0068 和 0.0147），其余 76 个逐位不变，EAR/HOA
     用例不受 `libm-force` 影响；
   - 同进程/新进程重复性、Scene 健康与帧数门禁通过。
-- 端到端（60 秒 fixture，Release `mradm render`，5 次中位数，`a01b285` 对本改动）：VBAP 0.97×、EAR extent 1.03×、
+- 端到端（60 秒 fixture，Release `mradm render`，5 次中位数，`3824eec` 对本改动）：VBAP 0.97×、EAR extent 1.03×、
   双耳 point 1.06×、双耳 cloud 1.02×、双耳 OM spreader（3 轨）0.99×，均在噪声范围内。
 
 ## 三平台验收
 
-[Consistency run 37569897598](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37569897598)
-在 `0d62eeb` 上完成三平台 A/B 及诊断采集，同一提交的 CI 通过。四份报告结果一致，摘要与报告哈希见
+Consistency run 37569897598 (historical Actions run 37569897598)
+在 `8ef510b` 上完成三平台 A/B 及诊断采集，同一提交的 CI 通过。四份报告结果一致，摘要与报告哈希见
 [OM spreader 验收记录](evidence/rust-phase2/spreader-validation.json)。
 
 | 三平台共同逐位相同的 PCM | 用例数 |
 |---|---:|
-| 二期基线 `00a70e4` | 29/78 |
-| FFT 切片 `6ec2dc6` | 52/78 |
-| 重采样切片 `0f6c187` | 76/78 |
-| 本切片 `0d62eeb` | 78/78 |
+| 二期基线 `b5f398a` | 29/78 |
+| FFT 切片 `8e25ce8` | 52/78 |
+| 重采样切片 `b652cdb` | 76/78 |
+| 本切片 `8ef510b` | 78/78 |
 
 - 门禁 0 失败：新增的 `om-*`、`spreader.*` 内核及此前全部门禁在三个平台对上逐位相同。
   67 个内核中只剩平台 libm 计算的 `fft-twiddles.10-libm.f64` 有 1 ULP 差异（4240–6677 个字，不设门禁）。

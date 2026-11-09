@@ -1,5 +1,5 @@
 {
- "source": "Linux x64 config A diagnostic collection at f94d28e (bit-identical to 7e52d72)",
+ "source": "Linux x64 config A diagnostic collection at 6b605a9 (bit-identical to 7d59049)",
  "method": "Per case, each Scene checkpoint stage is concatenated in slice order per epoch (scene/e*-g*-s*.<stage> and e*-out*.<stage>; device/e*.<stage>) and the fixed (512) and fragmented (1,7,127,511,1024) partitions are compared word by word. A value is the index of the first differing 32-bit word in the concatenated stream (interleaved across channels).",
  "cases": [
   {

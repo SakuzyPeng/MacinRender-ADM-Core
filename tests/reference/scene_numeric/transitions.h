@@ -1,5 +1,5 @@
 #pragma once
-// Frozen scalar loops from 726db31. Thread/queue scheduling is tested through the public API.
+// Frozen scalar loops from bd2ea96. Thread/queue scheduling is tested through the public API.
 #include <algorithm>
 #include <cstdint>
 #include <span>

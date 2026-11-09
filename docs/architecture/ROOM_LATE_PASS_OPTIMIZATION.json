@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-late-pass-optimization",
   "version": 1,
-  "base_commit": "45c134d547d8f35d78edb80b74843b238584d45f",
+  "base_commit": "f28b415daa9b80053c2010cfa38876bd4308975b",
   "change": "One pose-segmented late pass per block (both room fields, drain merge and HRIR decoder per world direction); decoder split only at head-pose changes; one room-pool handoff per block for any source count.",
   "source_sha256": {
     "base": {

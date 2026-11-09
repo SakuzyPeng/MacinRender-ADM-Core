@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-windows-device-v2.validation.v1",
   "date": "2026-10-13",
-  "production_commit": "058339986288b032686b9140ef771b4c694bff1e",
+  "production_commit": "a9707f5e3f401583ecbc48c26705c571a1d82060",
   "processing_policy": "room-realtime-v2",
   "host": {
     "cpu": "Intel Core i7-11800H",
@@ -34,7 +34,7 @@
     "scope": "native device-backed playback; GUI and physical sensor-to-headphone latency are not measured"
   },
   "build": {
-    "commit": "0583399",
+    "commit": "a9707f5",
     "probe_changes": true,
     "source_archive_sha256": "2cf64c9f5c1983127d41aa12fa9a7c58b5588b31c4add79b90cc78bc19c43bec",
     "commands": [

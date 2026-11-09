@@ -1,6 +1,6 @@
 # ROOM CUDA：延后等待至 FIFO 消费
 
-日期：2026-10-19，源码基线 `e14fe43c` 加归档的内存资源绑定候选。
+日期：2026-10-19，源码基线 `10113f1d` 加归档的内存资源绑定候选。
 **第 4 项未通过 Windows 短测：距离运动 1024 次调用出现 1 次超时，最大 5.6600 ms。**
 位置运动短测零超时；两项候选累计 2048 次、1 次超时。剩余对照及六轮长测停止，没有重跑替换结果。
 运行时改动回退，保留经过原生验证的回归工具扩展。
@@ -81,7 +81,7 @@ i7-11800H／RTX 3060 Laptop 6 GiB，驱动 610.88、CUDA 12.0；8 个 Audio MMCS
 ## 复现
 
 这些步骤用于检查归档实现或形成新候选，不应重跑未修改的失败候选以挑选通过轮次。
-在匹配 `e14fe43c` 的源码上依次应用两个补丁；无需 MathDx／cuFFTDx：
+在匹配 `10113f1d` 的源码上依次应用两个补丁；无需 MathDx／cuFFTDx：
 
 ```sh
 git apply --check docs/architecture/evidence/room-cuda-integration/candidate.patch

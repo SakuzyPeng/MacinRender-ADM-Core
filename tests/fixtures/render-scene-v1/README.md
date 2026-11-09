@@ -2,7 +2,7 @@
 
 These are frozen little-endian word streams from the production C++
 `mradm::scene_checkpoint::encode` in commit
-`cb6e9a11486a2323f74c05e34e13f09ca6986039`, emitted by a temporary standalone
+`46b3ed806d9a2d39275e3e3f36a39fb084d1627b`, emitted by a temporary standalone
 Apple Clang 21 C++20 Debug probe with `MR_ADM_CONSISTENCY_DIAGNOSTICS` enabled.
 The probe only serializes metadata; it does not render audio. The Python validator
 did not generate these fixtures. SHA-256 values are pinned in `phase2_tools_test.py`.

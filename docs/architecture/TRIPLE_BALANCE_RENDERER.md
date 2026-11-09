@@ -165,7 +165,7 @@ RSS 在预热后未持续增长。此合成基准不替代物理设备或更高�
 FFI 回归另覆盖空帧、静音 plane、空指针、未对齐／溢出长度、重叠缓冲区和失败后的状态恢复。
 
 macOS arm64 的 72 项 Rust 测试、两个 C++ 定向回归、clippy、FFI 头校验和规模棘轮通过。
-无诊断插桩 Release 对照主线 `a072146c`：全部 88 个 Scene 重放的 704 个文件逐字节相同，
+无诊断插桩 Release 对照主线 `3cd30e3f`：全部 88 个 Scene 重放的 704 个文件逐字节相同，
 其中 352 份为 PCM；另通过 352 项同进程重复性检查和 26 项适用的固定／碎片分块检查。
 候选复用主线未改动的原生库，以相同 Release 参数重编三个 Scene 适配源并链接修正后的 Rust 库。
 未执行 Windows、诊断矩阵或性能计时。详见[逐例哈希与验证范围](evidence/scene-pcm-views/macos-comparison.json)。

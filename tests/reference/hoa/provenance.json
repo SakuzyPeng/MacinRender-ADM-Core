@@ -1,5 +1,5 @@
 {
-  "baseline": "ba96baca607d32e336727976669b06f83c426355",
+  "baseline": "920864a4406ec677089d7fa89185352de96da6d5",
   "source_sha256": {
     "src/adm_render_hoa/hoa_renderer.cpp": "196680c19e392229068ded2d93a972c9fc087b62f56c93e524430a446a5bf84a",
     "src/adm_render_common/render_common.h": "b2ee09363c406be5616bead1b5f020bc4df20c436ba582a4b057bf33bcb2b840",
@@ -7,7 +7,7 @@
     "include/adm/scene.h": "513dd6d645bc5e1d067620221d29d7608fb1c48cea7f99a52cfdc6d4bc98e8cd"
   },
   "adaptations": [
-    "Scene numeric migration: use independently frozen 726db31 spatial helpers; preserve the original renderer algorithm baseline."
+    "Scene numeric migration: use independently frozen bd2ea96 spatial helpers; preserve the original renderer algorithm baseline."
   ],
   "reference_sha256": {
     "legacy.h": "01f278b0cb01f7c9442f0583f4f62b14f48f839e34d845a831973ca62ac0eedc"

@@ -58,12 +58,12 @@
    - 离线驱动不接受 `.flac` 渲染目标（RenderService 不会这样调用）。
 4. **C2 的路径**：
    - **Windows**：消息与 context 里的非 ASCII 路径改为 UTF-8，包括 C1 的 `render_offline`。这归入 4.8 已记录的 Windows 路径例外类别。
-   - **严格校验**：请求里的文件系统路径必须是不含 NUL 的 UTF-8，否则报 invalid_argument “invalid render request (UTF-8 paths without NUL required)”；预览与导出的策略路径报 “semantic policy path must use UTF-8 without NUL”。在 Linux 上，非 UTF-8 路径原本就不受支持，只是报错的时机和文字变了（维护者修正 `cc718b5`）。
+   - **严格校验**：请求里的文件系统路径必须是不含 NUL 的 UTF-8，否则报 invalid_argument “invalid render request (UTF-8 paths without NUL required)”；预览与导出的策略路径报 “semantic policy path must use UTF-8 without NUL”。在 Linux 上，非 UTF-8 路径原本就不受支持，只是报错的时机和文字变了（维护者修正 `121a0a9`）。
 5. **C2 的其他变化**：
    - 策略文件按二进制读取，Windows 上 CRLF 不再转换。只可能影响语法错误正文里的位置，正文的变化在 4.4 已经允许。
    - 预览与导出里的策略错误作为结果返回。
-   - 准备缓存不再依赖预导入场景（`cc718b5`）。
-   - “preparing backend” 进度在后端开始工作之前发出（`cc718b5`）。
+   - 准备缓存不再依赖预导入场景（`121a0a9`）。
+   - “preparing backend” 进度在后端开始工作之前发出（`121a0a9`）。
 6. **删除的私有导出**：
    - B 的 `mradm_engine_trim_window` / `_output_target`；
    - `mradm_scene_apply_policy` / `_policy_warnings` / `_report` 与 `SceneReportOptions`；
@@ -73,11 +73,11 @@
    - `--object-smoothing-frames` 只接受纯整数（`std::stoul` 曾容忍前导空白与尾随字符）；
    - 含 `.` 路径段的夹具名先规范化再使用（原来拒绝）。
 9. **维护者修正**：
-   - `dff4563`：覆盖文档对齐 VBAP 内置布局；
-   - `a97958e`：`tests/support/scene_json` 加入 clang-tidy、cppcheck 与 check-changed 的排除表；系统空间布局只在 capabilities 文档里构建；
-   - `47615fe`：清理 cppcheck 诊断；
-   - `b8fc9dd`：矩阵黄金测试与宿主路径分隔符无关；`engine_ffi.h` 的 cppcheck 抑制；`resolve_renderer` 改为接收 `const std::string&`；
-   - `cc718b5`：严格路径校验、准备缓存与预导入场景无关、准备进度先于后端工作；`render_service_test` 增加回归用例。
+   - `acf685b`：覆盖文档对齐 VBAP 内置布局；
+   - `9b94d8e`：`tests/support/scene_json` 加入 clang-tidy、cppcheck 与 check-changed 的排除表；系统空间布局只在 capabilities 文档里构建；
+   - `6c406de`：清理 cppcheck 诊断；
+   - `c7aa97e`：矩阵黄金测试与宿主路径分隔符无关；`engine_ffi.h` 的 cppcheck 抑制；`resolve_renderer` 改为接收 `const std::string&`；
+   - `121a0a9`：严格路径校验、准备缓存与预导入场景无关、准备进度先于后端工作；`render_service_test` 增加回归用例。
 
 ## 黄金数据
 
@@ -85,8 +85,8 @@
 
 | 数据 | 源提交 | 内容 | 植入并被抓到的缺陷 |
 | --- | --- | --- | --- |
-| `mradm-engine/tests/catalog-v1` | `28eac3f` | 经 C ABI 取得的 5 份发现文档，以及 30 个 inspect 输入（24 份 JSON、6 个拒收） | A：7 处 |
-| `mradm-engine/tests/request-v1` | `47615fe` | 布局写法 49、渲染器解析 432、路由 864、矩阵解析 4,550（25 个场景 × 13 份矩阵）、`{:.6g}` 8,045 个值 | B：8 处 |
+| `mradm-engine/tests/catalog-v1` | `11b9349` | 经 C ABI 取得的 5 份发现文档，以及 30 个 inspect 输入（24 份 JSON、6 个拒收） | A：7 处 |
+| `mradm-engine/tests/request-v1` | `6c406de` | 布局写法 49、渲染器解析 432、路由 864、矩阵解析 4,550（25 个场景 × 13 份矩阵）、`{:.6g}` 8,045 个值 | B：8 处 |
 | `mradm-engine/tests/render-v1/fixed.txt` | fmt 11.2 | `{:.1f}` / `{:.2f}` / `{:+.2f}` / `{:.4f}` 共 8,363 行（随机位模式、中点进位、±0、nan / ±inf、次正规数） | 与 C2 的 4 处共用 |
 
 C1、C2 用模拟岛驱动 `tests/offline.rs`、`tests/backend.rs`、`tests/render.rs`，各植入 4 处缺陷，都被抓到。D 植入 4 处缺陷，都被对照报出。
@@ -97,11 +97,11 @@ C1、C2 用模拟岛驱动 `tests/offline.rs`、`tests/backend.rs`、`tests/rend
 
 | 批次 | 对照 | 结果 |
 | --- | --- | --- |
-| A（`65d6233`，基线 `28eac3f`） | 4 个目录子命令的全部过滤组合，共 155 个 CLI 变体 | 逐字节相同 |
-| B（`62e737c`，基线 `47615fe`） | request 对照 1,364 例（渲染器 × 布局 × 路由 × 矩阵、trim 边界、扩展名 × 容器 × 位深 × IAMF 分层；349 例渲染）；矩阵子集 79 个离线 + 36 个文件流式行 | 0 差异；0 个问题 |
-| C1（`4234262`，基线 `b6733c7`） | 经 C ABI 的进度与日志探针 1,218 例（含逐点取消）；request、VBAP、HOA、EAR、Triple Balance、room、双耳与输出的 CLI 对照；矩阵子集 plain 与 diag | 事件、日志、结果与输出相同；0 差异；0 个问题 |
-| C2（`08596b2`，基线 `13643c2`） | 进度探针 2,997 例（872 例渲染，67,794 个进度事件）；CLI 对照 request 1,364、output 460、VBAP 1,148、HOA 886、EAR 2,096、Triple Balance 992、room 1,014、双耳 948、export 176、模板 17；矩阵子集 plain 与 diag | 全部相同（唯一的差别是一个 MKA 的大小差 1 字节，基线自身重复运行也会出现，来自现有的随机 TrackUID 长度）；0 个问题 |
-| D（`7c72a70`，基线 `5723c86`） | 同一构建上，C++ 工具与 `--tool mr_adm_phase2_render=<Rust>` 各采集一份，用 `compare-collections` 比较；diag 构建 79 个离线用例直接对照（含 `MR_ADM_TRACE_DIR`）；切换后再与保存下来的 C++ 工具对照 | outputs 291、fixtures 208、comparisons 979、replay_status 176、artifacts 256、日志 656 全部相同；退出码、stdout、stderr、两遍 pcmbits 与 13,252 个检查点相同；79 例相同 |
+| A（`9526816`，基线 `11b9349`） | 4 个目录子命令的全部过滤组合，共 155 个 CLI 变体 | 逐字节相同 |
+| B（`af9b2ad`，基线 `6c406de`） | request 对照 1,364 例（渲染器 × 布局 × 路由 × 矩阵、trim 边界、扩展名 × 容器 × 位深 × IAMF 分层；349 例渲染）；矩阵子集 79 个离线 + 36 个文件流式行 | 0 差异；0 个问题 |
+| C1（`900b8ab`，基线 `9caca30`） | 经 C ABI 的进度与日志探针 1,218 例（含逐点取消）；request、VBAP、HOA、EAR、Triple Balance、room、双耳与输出的 CLI 对照；矩阵子集 plain 与 diag | 事件、日志、结果与输出相同；0 差异；0 个问题 |
+| C2（`3def81a`，基线 `e722daa`） | 进度探针 2,997 例（872 例渲染，67,794 个进度事件）；CLI 对照 request 1,364、output 460、VBAP 1,148、HOA 886、EAR 2,096、Triple Balance 992、room 1,014、双耳 948、export 176、模板 17；矩阵子集 plain 与 diag | 全部相同（唯一的差别是一个 MKA 的大小差 1 字节，基线自身重复运行也会出现，来自现有的随机 TrackUID 长度）；0 个问题 |
+| D（`c47fd21`，基线 `642eec4`） | 同一构建上，C++ 工具与 `--tool mr_adm_phase2_render=<Rust>` 各采集一份，用 `compare-collections` 比较；diag 构建 79 个离线用例直接对照（含 `MR_ADM_TRACE_DIR`）；切换后再与保存下来的 C++ 工具对照 | outputs 291、fixtures 208、comparisons 979、replay_status 176、artifacts 256、日志 656 全部相同；退出码、stdout、stderr、两遍 pcmbits 与 13,252 个检查点相同；79 例相同 |
 
 - **常规检查**：每批 ctest 全部通过（C1、C2 连跑 3 次），clippy、fmt、FFI 头校验、clang-format / tidy、许可、retention、version 与 manual 目标都通过。
 - **D 的 diag 对照**：本机的 diag 树使用已安装的依赖，采集脚本拒绝这种构建，所以改为直接对照。
@@ -112,12 +112,12 @@ C1、C2 用模拟岛驱动 `tests/offline.rs`、`tests/backend.rs`、`tests/rend
 
   | 合并点 | 运行 |
   | --- | --- |
-  | A（`a8c40b2`） | 41270746703 |
-  | A 修正（`47615fe`） | 41273031688 |
-  | B（`b6733c7`） | 41320988064 |
-  | C1（`13643c2`） | 41380202595 |
-  | C2（`5723c86`） | 41416834273 |
-  | D（`af322c5`） | 41455133059 |
+  | A（`2108da2`） | 41270746703 |
+  | A 修正（`6c406de`） | 41273031688 |
+  | B（`9caca30`） | 41320988064 |
+  | C1（`e722daa`） | 41380202595 |
+  | C2（`642eec4`） | 41416834273 |
+  | D（`2b43087`） | 41455133059 |
 
   最后一次运行在 config A、B 的普通与诊断四份报告中，都是 291 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0。
 
@@ -127,13 +127,13 @@ C1、C2 用模拟岛驱动 `tests/offline.rs`、`tests/backend.rs`、`tests/rend
 
 | 合并点 | 生产 | `src/adm_engine` | `src/adm_renderer_factory` | 说明 |
 | --- | ---: | ---: | ---: | --- |
-| 5.1（`28eac3f`） | 32,551 | 3,934 | 387 | 五期基线 |
-| A（`a8c40b2`） | 31,360 | 2,744 | 387 | 目录与 JSON 移出 |
-| A 修正（`47615fe`） | 31,353 | 2,736 | 387 | |
-| B（`b6733c7`） | 31,174 | 2,558 | 230 | 请求判定移出 |
-| C1（`13643c2`） | 30,517 | 2,563 | 230 | 6 个 `render_window` 与 `render_speaker_pcm` 删除 |
-| C2（`5723c86`） | 29,805 | 1,981 | 230 | `RenderService::render` 改为循环壳 |
-| D（`af322c5`） | 29,805 | 1,981 | 230 | 只改测试工具（测试 C/C++ 49,221 → 49,008） |
+| 5.1（`11b9349`） | 32,551 | 3,934 | 387 | 五期基线 |
+| A（`2108da2`） | 31,360 | 2,744 | 387 | 目录与 JSON 移出 |
+| A 修正（`6c406de`） | 31,353 | 2,736 | 387 | |
+| B（`9caca30`） | 31,174 | 2,558 | 230 | 请求判定移出 |
+| C1（`e722daa`） | 30,517 | 2,563 | 230 | 6 个 `render_window` 与 `render_speaker_pcm` 删除 |
+| C2（`642eec4`） | 29,805 | 1,981 | 230 | `RenderService::render` 改为循环壳 |
+| D（`2b43087`） | 29,805 | 1,981 | 230 | 只改测试工具（测试 C/C++ 49,221 → 49,008） |
 
 - **累计**：5.2 共减少生产 C/C++ 2,746 行（8.4%）。
 - **`src/adm_render_common` 3,490 → 3,802**：私有 FFI 头 `engine_ffi.h`（434 行）声明了引擎的记录与函数，后端适配壳在 5.6 删除时随之缩小。

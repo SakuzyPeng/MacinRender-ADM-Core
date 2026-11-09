@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-combined",
   "version": 1,
   "date_local": "2026-10-18",
-  "base_commit": "6bd4937",
+  "base_commit": "861d07a",
   "implementation": "CPU position control/input pipeline plus packed valid target FFT rows, on retained GPU main and asynchronous late-partition backend.",
   "outcome": {
     "fixed_motion_short_passed": true,

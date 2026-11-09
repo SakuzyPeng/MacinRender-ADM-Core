@@ -3,7 +3,7 @@
   "version": 1,
   "date": "2026-10-11",
   "baseline": {
-    "commit": "d2db9716fa7f7297106e6c3a80b3cbee651d6aa4",
+    "commit": "1455107453a65c77f0452bfcf4573bd11ff37f9b",
     "additional_changes": "Previously retained input-span optimization and optional profiling; the same version-2 room_stages probe is used for both variants.",
     "source_sha256": {
       "rust/crates/mradm-dsp/src/fft.rs": "8fec72144636c498133a138c36c346223c86a2e5775e2447fd6bfa1b11b80d8e",
@@ -1611,11 +1611,11 @@
     "binary_identity": {
       "macos": {
         "baseline": {
-          "path": "/path/to/code/cpp/MacinRender-ADM-Core/local/room-v1/filter-target-20261011/baseline-room_bench",
+          "path": "local/filter-target/baseline-room_bench",
           "sha256": "0b5905f98d01ef839d7aa01ab264e4a65afbbc88d65918c329fdb1137644856b"
         },
         "padded": {
-          "path": "/path/to/code/cpp/MacinRender-ADM-Core/local/room-v1/filter-target-20261011/padded-room_bench",
+          "path": "local/filter-target/padded-room_bench",
           "sha256": "3a69ff821d4f4bc645a5657c96a9e48e9d870ab7045a56897748b21c01d878cc"
         }
       },

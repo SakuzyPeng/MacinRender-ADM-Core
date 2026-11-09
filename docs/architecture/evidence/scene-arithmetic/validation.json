@@ -1,7 +1,7 @@
 {
   "schema": "mradm.scene-arithmetic.v1",
   "date": "2026-10-06",
-  "source_base_commit": "5b1a2985720e8a310f33ade1f677bc2dd1f1c570",
+  "source_base_commit": "bf0babf35c397e3c4f3c3e7511445c49813b812c",
   "implementation": "working tree; source fingerprints below",
   "arithmetic": "scene-separate-v1",
   "global_strict_fp": false,

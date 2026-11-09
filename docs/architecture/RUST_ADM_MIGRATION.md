@@ -50,7 +50,7 @@ interpolationLength/headLocked、DirectSpeakers 块 gain/headLocked，以及 HOA
 全套测试后补充的空视图保护和参数范围校验均经过最终定向测试。角度、diffuse、divergence、
 channelLock 等参数沿用旧库已有的取值范围，避免异常有限角度进入渲染阶段。
 
-代码验收提交为 `7e3cfe44211c4f4088119cee4a0d6d98505f979e`。预迁移 Release CLI 在任务开始时归档，
+代码验收提交为 `6173e69e99ee2bbaba588e6dcee9bc81d5d82a07`。预迁移 Release CLI 在任务开始时归档，
 其实际身份以音频记录中的二进制 SHA-256 为准，不将归档时 HEAD 当作重新构建的证明。
 C++ 质量门仍显示既有长函数等告警；没有将其描述为零告警。参考探针的单次耗时只作观察，
 不作为性能提升结论。

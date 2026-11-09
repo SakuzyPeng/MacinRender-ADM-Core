@@ -1,6 +1,6 @@
 {
   "date": "2026-10-04",
-  "base_commit": "20e9df87fa50c375a0c1a98add834748489af190",
+  "base_commit": "81f62572e593bbe189e21426df12e9c80699b736",
   "implementation": "Rust ebur128 0.1.10 through project Meter and private FFI; production C library removed",
   "rust_version": "1.98.0",
   "cargo_lock_sha256": "5066cc9281772403a3d31e919982b11498e57466165a755b9bc3b2ea81c6d32a",

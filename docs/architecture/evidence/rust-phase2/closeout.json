@@ -3,13 +3,13 @@
   "status": "complete",
   "closed_on": "2026-10-07",
   "scope": "Pinned Release evidence matrix; not an all-input or all-toolchain guarantee",
-  "implementation_commit": "666fe49fd4da0a2b6f454e3c19220f4978adee62",
+  "implementation_commit": "3abfbc329501daaac78af8ee22f22fa32ec06494",
   "source_sha256": "aef16671d84baf9a5a2561e9d6ec41cb13d5b9d04c26dbcb05db81210e111b31",
   "ci": {
     "consistency": {
       "run": 37588314154,
       "conclusion": "success",
-      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588314154"
+      "url": "historical Actions run 37588314154"
     },
     "correctness": {
       "run": 37588322470,
@@ -240,35 +240,35 @@
   "observed_differing_kernel": "fft-twiddles.10-libm.f64",
   "milestones": [
     {
-      "commit": "00a70e4",
+      "commit": "b5f398a",
       "identical_pcm": 29,
       "total_pcm": 78,
       "evidence": "docs/architecture/evidence/rust-phase2/validation.json",
       "sha256": "23b12d0192c80d53b93f3ab5f72a6b5c659e09b2df9aa056598e35d6f16fbbe1"
     },
     {
-      "commit": "6ec2dc6",
+      "commit": "8e25ce8",
       "identical_pcm": 52,
       "total_pcm": 78,
       "evidence": "docs/architecture/evidence/rust-phase2/fft-validation.json",
       "sha256": "e768911cafa3165ab2031890d0eea39d6a91b8679a04e9a3a6cafb4203095e04"
     },
     {
-      "commit": "0f6c187",
+      "commit": "b652cdb",
       "identical_pcm": 76,
       "total_pcm": 78,
       "evidence": "docs/architecture/evidence/rust-phase2/resampler-validation.json",
       "sha256": "3fb5eacaeaf44d394b76af443d25e24f2a8f2c485f3784060278a193ffdbc414"
     },
     {
-      "commit": "0d62eeb",
+      "commit": "8ef510b",
       "identical_pcm": 78,
       "total_pcm": 78,
       "evidence": "docs/architecture/evidence/rust-phase2/spreader-validation.json",
       "sha256": "4806003e0d1febc87b4e17b4bc58ed703f1acf73769823d7a40234520d110e28"
     },
     {
-      "commit": "666fe49",
+      "commit": "3abfbc3",
       "identical_pcm": 78,
       "total_pcm": 78,
       "evidence": "docs/architecture/evidence/rust-phase2/performance/validation.json",

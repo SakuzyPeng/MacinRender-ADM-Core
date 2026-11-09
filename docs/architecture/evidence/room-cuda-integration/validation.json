@@ -2,8 +2,8 @@
   "schema": "mradm.room-cuda-integration-validation",
   "version": 1,
   "outcome": "rejected-runtime-gate",
-  "previously_accepted_commit": "e0a9f2870297c12ffe67f3fff23fead506f81dde",
-  "preserved_current_base": "1a214bd359cee129f640401c9a981ec402123ad6",
+  "previously_accepted_commit": "2d25a4ca92053de0b622b1fb505574b8769d8798",
+  "preserved_current_base": "de1837f87cda6d8291cb5f823eedd06f3c11985d",
   "runtime": {
     "calls": 135000,
     "deadline_misses": 1,
@@ -55,7 +55,7 @@
         "task_directory_removed": true
       },
       "local": {
-        "head_preserved": "1a214bd359cee129f640401c9a981ec402123ad6",
+        "head_preserved": "de1837f87cda6d8291cb5f823eedd06f3c11985d",
         "restored_tracked": 20,
         "removed_archived_new_sources": 15,
         "user_cmake_preserved": true

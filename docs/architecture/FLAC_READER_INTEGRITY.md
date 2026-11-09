@@ -20,7 +20,7 @@
 
 `ReaderHandle` 已经只供 PCM 校验工具和 core 测试调用，因此其声明和实现移至
 `tests/support/audio_reader.*`。这是内部 C++ 接口调整（ADR 0021 §4），不增加公开 C ABI。
-主线 `547c7db5` 上的生产 C/C++ 由 29,297 行降至 29,260 行，减少 37 行。
+主线 `152b1bc6` 上的生产 C/C++ 由 29,297 行降至 29,260 行，减少 37 行。
 原研究分支验证时为 29,408 → 29,371 行，历史计数保留在证据中。
 
 ## 实现边界
@@ -65,6 +65,6 @@ gain／trim 仍按 4.8 的决定拒绝 FLAC 输入。
 
 以上为本批定向正确性验证，不是一次全仓库 Consistency 或性能验收。
 源码身份与结果见[汇总](evidence/flac-reader-integrity-20261106/summary.json)，两平台 71 个输入的指纹逐项一致。
-Mac 工作区基于 `10b6b63e`；修复补丁也在 Windows `547c7db5` main 上重新通过验证。
-Windows 临时修改已恢复，回到干净的 `547c7db5` main 并重建、通过原有定向 smoke；验证时使用临时补丁，未发布二进制。
+Mac 工作区基于 `10b6b63e`；修复补丁也在 Windows `152b1bc6` main 上重新通过验证。
+Windows 临时修改已恢复，回到干净的 `152b1bc6` main 并重建、通过原有定向 smoke；验证时使用临时补丁，未发布二进制。
 本机详细记录位于未跟踪的 `local/flac-reader-fix-20261106/`。

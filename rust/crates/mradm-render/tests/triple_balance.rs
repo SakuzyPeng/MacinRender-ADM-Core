@@ -1,6 +1,6 @@
 //! Triple Balance preparation goldens (PCM consistency 4.6). `triple-balance-v1/expected.jsonl`
 //! was produced once by the C++ `triple_balance_renderer` / `semantics` / `bed` this module
-//! replaced (main `8c406e9`), through `mradm render --renderer triple-balance
+//! replaced (main `bdc0a30`), through `mradm render --renderer triple-balance
 //! --write-semantic-report -v`, for every case of `cases.jsonl`: each scene of `scenes/` under
 //! the three layouts, both modes, both spread modes, both 22.2 LFE routings and six policies,
 //! plus options the backend rejects. A record keeps the exit code, the error line, the backend's

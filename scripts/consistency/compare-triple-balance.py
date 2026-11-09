@@ -36,7 +36,7 @@ def main():
                 if argument in policies:
                     case['semantic_policy'] = policies[argument]
                     case['arguments'][index] = '<generated-semantic-policy>'
-        report['baseline_commit'] = '19728179608c4cfe550dc11ff2b3b4425db37963'
+        report['baseline_commit'] = '7fecf3329712b68fb9cbe38cb1a977d0561d76f9'
         output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
         return status
 

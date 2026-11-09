@@ -54,15 +54,15 @@ C++ 侧只剩适配与编码器：
 9. **删除与改变的私有 FFI。** 删除 `mradm_wav_layout_*` 与 `MradmWavLayout`（C，显式选项改用 `WavLayoutOptions` 经 `mradm_output_finalize_begin` 传入）；`mradm_wav_replace_axml` 改为自己完成安装并返回 context；新增 `mradm_output_writer_*`、`mradm_caf_reader_*`、`mradm_caf_append_info`（B）与 `mradm_output_{gain,trim,bitdepth,finalize}_begin`、`mradm_output_post_{step,finish,destroy}`（C）。这些只在 `mradm-ffi` 与 C++ 之间使用，C ABI bundle 本来就不导出。
 10. **其他。** `metadata::generate` 此后只有 libadm 参考测试（`tests/reference/libadm/reference_test.cpp`）调用，生产的 ADM 元数据由 Rust 直接调 `mradm_adm::generate`；按参考保留规则，它随该参考一起退役。
 11. **维护者补充的修正（C 合并时）。**
-    - `c04ca18`：`run_output_pass` 在第一次进度回调之前就接管 pass 句柄，回调抛出异常时不再泄漏句柄与临时文件，并补了异常清理的测试；Rust 中会创建 writer 的测试共用 `output::TEST_WRITER_LOCK`，避免并行测试交错取号；
-    - `e2c171b`：被拒绝的 FLAC 改写逐字节核对文件不变；
-    - `f929084`：sidecar 测试按原生路径比较。
+    - `7893854`：`run_output_pass` 在第一次进度回调之前就接管 pass 句柄，回调抛出异常时不再泄漏句柄与临时文件，并补了异常清理的测试；Rust 中会创建 writer 的测试共用 `output::TEST_WRITER_LOCK`，避免并行测试交错取号；
+    - `88bbff4`：被拒绝的 FLAC 改写逐字节核对文件不变；
+    - `94d1468`：sidecar 测试按原生路径比较。
 
 ## 黄金数据
 
 | 语料 | 生成方 | 规模 | 结果 |
 | --- | --- | --- | --- |
-| `mradm-wav/tests/caf-v1/`（`cases.jsonl`、`expected.jsonl`、`samples/`） | main `4207627` 的 C++ `caf_io.cpp`，由 scratchpad 里的临时生成器（不提交）链接当时的 ADMAudio 一次性采集 | 376 例：写出（10 种布局 × 帧数 0 / 1 / 4095 / 4097 × 位模式与特殊值 NaN、±Inf、−0、次正规数 × 分块 × 采样率）、拒绝（未知布局、声道数不符）、`info` 追加（空、ASCII、UTF-8 的组合，非 CAF 与文件不存在）、畸形输入的读取（截断、坏 magic、缺 `desc` / `data`、非 lpcm、位深与标志、data size −1、未知块 size −1、重复块、`frame_count` 超出实际字节等）；记录错误码 / 文字 / context、读出的位 FNV 与每次读到的帧数，另有 23 份完整样例文件 | Rust 全部一致，样例文件逐字节相同 |
+| `mradm-wav/tests/caf-v1/`（`cases.jsonl`、`expected.jsonl`、`samples/`） | main `e840fd9` 的 C++ `caf_io.cpp`，由 scratchpad 里的临时生成器（不提交）链接当时的 ADMAudio 一次性采集 | 376 例：写出（10 种布局 × 帧数 0 / 1 / 4095 / 4097 × 位模式与特殊值 NaN、±Inf、−0、次正规数 × 分块 × 采样率）、拒绝（未知布局、声道数不符）、`info` 追加（空、ASCII、UTF-8 的组合，非 CAF 与文件不存在）、畸形输入的读取（截断、坏 magic、缺 `desc` / `data`、非 lpcm、位深与标志、data size −1、未知块 size −1、重复块、`frame_count` 超出实际字节等）；记录错误码 / 文字 / context、读出的位 FNV 与每次读到的帧数，另有 23 份完整样例文件 | Rust 全部一致，样例文件逐字节相同 |
 
 C 的遍历没有另冻结黄金数据：它们的输出字节由已有的 C++ 测试（`trim_file_smoke_test`、`core_smoke_test`、`wav_rust_test`、`wav_container_test` 对照冻结的 legacy、`render_trim_fixture_test`、`c_api_fixture_test` 的取消与残留文件、`normalization_acceptance_test`、`binaural_render_fixture_test`）与下面的新旧直接 API 对照覆盖。`mradm-render::postprocess` 的模块测试覆盖 sidecar 命名（含 dotfile 与结尾的 “.”）、任一步放弃后只剩原文件、安装失败的回退与恢复文字、掩码表 / 7.1.4 置换 / 两种 profile、CAF 标签保留与单位增益跳过、trim 钳制，以及 OS 文字去掉后缀。
 
@@ -89,9 +89,9 @@ C 的遍历没有另冻结黄金数据：它们的输出字节由已有的 C++ �
 
 | 批次 | 基线 | 用例 | 结果 |
 | --- | --- | --- | --- |
-| A | `a89d4fb` | ctest 与 ebur128 参考对照（被删的 API 没有生产调用者，PCM 路径不变） | 通过 |
-| B | `4207627` | CLI 460 例：`.wav` / `.caf` × 扬声器、HOA、双耳、EAR 布局 × 窗口 × 响度目标 / 增益 / 峰值选项 × 位深，比较退出码、`-v` 日志与输出字节；矩阵子集 79 个离线行与 28 个文件流式行，普通与诊断（含 Rust 写出的 `writer/pass*` 检查点） | CLI 0 差异；矩阵 0 个问题 |
-| C | `e9a9541` | 同一 CLI 460 例，另存 stderr 核对新报错的文字；直接 API 373 个操作（scratchpad 探针在新旧两份构建中各编译一次，经 `audio_io.h` 调用：WAV / CAF × 增益 1、1+5e-7、0.5、NaN，trim 越界 / 整个文件 / 0 帧，位深 16 / 24 / 32 / 8 含 NaN 输入，布局收尾的全部布局 × 两种 profile 与未知布局，AXML 同路径 / 异路径 / 目标为目录，并逐一中途取消），比较码、文字、context（sidecar 名按规则规范化）、进度序列、残留文件与输出字节；矩阵子集普通与诊断 | CLI 51 例不同，全部是 `.caf` + i16 / i24 由成功改为报错（发布说明第 5 项）；直接 API 36 个操作不同，全部是 CAF 输入（修正 2：保留标签，原来报布局不符）或 FLAC 输入（第 7 项）；全部 WAVE 操作的结果、进度、取消与残留文件相同；矩阵 79 + 28 行 0 个问题 |
+| A | `befac63` | ctest 与 ebur128 参考对照（被删的 API 没有生产调用者，PCM 路径不变） | 通过 |
+| B | `e840fd9` | CLI 460 例：`.wav` / `.caf` × 扬声器、HOA、双耳、EAR 布局 × 窗口 × 响度目标 / 增益 / 峰值选项 × 位深，比较退出码、`-v` 日志与输出字节；矩阵子集 79 个离线行与 28 个文件流式行，普通与诊断（含 Rust 写出的 `writer/pass*` 检查点） | CLI 0 差异；矩阵 0 个问题 |
+| C | `4b07e2f` | 同一 CLI 460 例，另存 stderr 核对新报错的文字；直接 API 373 个操作（scratchpad 探针在新旧两份构建中各编译一次，经 `audio_io.h` 调用：WAV / CAF × 增益 1、1+5e-7、0.5、NaN，trim 越界 / 整个文件 / 0 帧，位深 16 / 24 / 32 / 8 含 NaN 输入，布局收尾的全部布局 × 两种 profile 与未知布局，AXML 同路径 / 异路径 / 目标为目录，并逐一中途取消），比较码、文字、context（sidecar 名按规则规范化）、进度序列、残留文件与输出字节；矩阵子集普通与诊断 | CLI 51 例不同，全部是 `.caf` + i16 / i24 由成功改为报错（发布说明第 5 项）；直接 API 36 个操作不同，全部是 CAF 输入（修正 2：保留标签，原来报布局不符）或 FLAC 输入（第 7 项）；全部 WAVE 操作的结果、进度、取消与残留文件相同；矩阵 79 + 28 行 0 个问题 |
 
 逐字节对照的例外按类列出：
 - 离线文件比较时把 bext 的墙钟日期时间与 CAF `info` 的 date 置零；
@@ -99,8 +99,8 @@ C 的遍历没有另冻结黄金数据：它们的输出字节由已有的 C++ �
 - Windows 上的安装语义、OS 错误文字与 context 路径编码（发布说明第 8 项），本机无法对照，由维护者在 Windows 上确认。
 
 **维护者本机验证。**
-- C：macOS arm64 Debug CTest 82/82（`f929084`）；Windows x64 规范 Release CTest 8/8，Rust render 单元测试 22/22；写出端与后处理的并发检查 8 线程 30/30 通过；变更 C/C++ 的质量门禁、Rust fmt / clippy、FFI 头与棘轮检查通过。
-- A、B 由维护者本机全量对照后合入（`4207627`、`e9a9541`）。
+- C：macOS arm64 Debug CTest 82/82（`94d1468`）；Windows x64 规范 Release CTest 8/8，Rust render 单元测试 22/22；写出端与后处理的并发检查 8 线程 30/30 通过；变更 C/C++ 的质量门禁、Rust fmt / clippy、FFI 头与棘轮检查通过。
+- A、B 由维护者本机全量对照后合入（`e840fd9`、`4b07e2f`）。
 
 **规模。** 生产 C/C++ 由 33,718 行降到 32,551 行（−1,167），平台岛行数不变：
 
@@ -114,6 +114,6 @@ C 的遍历没有另冻结黄金数据：它们的输出字节由已有的 C++ �
 
 | 运行 | 提交 | 内容 | 结果 |
 | --- | --- | --- | --- |
-| [41037527666](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41037527666) | `4207627` | A | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
-| [41074793418](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41074793418) | `e9a9541` | B | 同上 |
-| [41152970680](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/41152970680) | `8278a4b` | C | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
+| 41037527666 (historical Actions run 41037527666) | `e840fd9` | A | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
+| 41074793418 (historical Actions run 41074793418) | `4b07e2f` | B | 同上 |
+| 41152970680 (historical Actions run 41152970680) | `eeb7113` | C | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |

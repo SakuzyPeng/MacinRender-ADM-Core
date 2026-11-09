@@ -1,6 +1,6 @@
 {
-  "run_url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34199241959",
-  "tested_commit": "dd4775397dc63580222ced3475c2699bec1ed103",
+  "run_url": "historical Actions run 34199241959",
+  "tested_commit": "a0e6497ac411089c2a8004de30db31d368aae80e",
   "baseline_identical": {
     "a": 5,
     "b": 6,

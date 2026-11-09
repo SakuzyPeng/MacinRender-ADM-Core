@@ -286,7 +286,7 @@ int main(int argc, char** argv) {
         compare_matrix(matrix);
         const auto report = [&](std::ostream& out) {
             out << std::setprecision(17)
-                << R"json({"baseline_commit":"4286f3e","tolerance":"2e-6 + 2e-6 * abs(reference)","cases":[)json"
+                << R"json({"baseline_commit":"de621ca","tolerance":"2e-6 + 2e-6 * abs(reference)","cases":[)json"
                 << '\n';
             const std::array names{"speaker", "ear", "dynamic", "matrix"};
             const std::array cases{speaker, ear, dynamic, matrix};

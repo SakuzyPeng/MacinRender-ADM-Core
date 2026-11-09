@@ -51,8 +51,7 @@ rustup toolchain install 1.98.0 --profile minimal --component rustfmt --componen
 C/C++ 依赖默认由 CMake `FetchContent` 获取，Rust 依赖使用提交的 `Cargo.lock`；生产构建不需要 Boost、vcpkg、SAF 或
 OpenBLAS。APAC 编码与 Apple 后端只在 macOS 上可用。
 
-也可以从 [GitHub Release](https://github.com/SakuzyPeng/MacinRender-ADM-Core/releases) 下载预编译的 CLI 与 GUI：
-macOS arm64 与 Windows x64，产物与 SHA-256 校验见[发行包](docs/guides/BINARY_RELEASE.md)。
+当前公开交付提供源码与版本标签。二进制发行包将在后续版本中发布。
 
 ### 构建与测试
 

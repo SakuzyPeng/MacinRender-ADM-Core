@@ -80,7 +80,7 @@ PCM：208 个原有 PCM id 中只有 2 个改变，均来自 extent 的 `tanf`�
 按方向分别改变）。比较器自检 216 个 PCM id、233 项门禁无失败。ctest 79 项全部通过（含新增的 HOA 按声道覆盖回归）；
 Rust fmt / clippy、两项源码扫描测试、许可证校验（`NOTICE.txt` 已同步）、clang-format 与 clang-tidy 无告警。
 
-**三平台验收。** `5c00c47` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过：
+**三平台验收。** `c3e10ec` 的 Consistency 38868898890、CI 38868901777 与 Quality 38868905213 通过：
 
 - A/B 两种配置下 216 个 PCM id 三平台相同，包括 18 个文件流式重放（6 个 HOA）、`ear-hoa3` 与 `hoa-loudness-minus23`；233 项门禁无失败；
 - 224 个内核文件全部三平台相同，包括 4 个 HOA 内核文件；

@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-packed-target-evaluation",
   "version": 1,
   "date": "2026-10-18",
-  "base_commit": "6bd4937",
+  "base_commit": "861d07a",
   "status": "reverted_after_long_failure",
   "passed": false,
   "default_policy": "room-realtime-v2",

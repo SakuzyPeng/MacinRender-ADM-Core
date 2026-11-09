@@ -7,7 +7,7 @@
   "reference_outputs": [
     {
       "layout": "9.1.6",
-      "path": "/path/to/code/cpp/MacinRender-ADM-Core/local/dar-object-semantics/verified/block_start_s0p25/reference/input-dar-916_re-render 02.wav",
+      "path": "reference-9.1.6.wav",
       "bytes": 11520738,
       "sha256": "b8dd5ceeb0d269c16c2fb2f0b1a8abaa62e9eb00ebbf7112ae675dbee4aea64b",
       "codec": "pcm_s24le",
@@ -17,7 +17,7 @@
     },
     {
       "layout": "7.1.4",
-      "path": "/path/to/code/cpp/MacinRender-ADM-Core/local/dar-object-semantics/verified/block_start_s0p25/reference/input-dar-714_re-render 02.wav",
+      "path": "reference-7.1.4.wav",
       "bytes": 8640738,
       "sha256": "a28fcb95cc39ac1230bfbcbb0d0005d0303e727361d2c0b16465dab3967ebf64",
       "codec": "pcm_s24le",

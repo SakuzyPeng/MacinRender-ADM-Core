@@ -101,7 +101,7 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 这些是包含初始化的小型合成 fixture 数据，不代表长节目吞吐或主观听感结论。Windows canonical Release 在 SOFA ON/OFF 下各通过 51 项测试；Linux CI 通过 51 项，macOS/Windows Debug CI 同样通过。两台原生验证主机均保留全部 139 个公开 C ABI 入口，Rust 私有符号不外泄。
 
-[完整 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37194085996)验证代码提交 `6ae10d5`；[机器可读验收记录](evidence/rust-saf-phase1/validation.json)、[五轮性能明细](evidence/rust-saf-phase1/macos-release-performance.json)和[音频差异记录](evidence/rust-saf-phase1/macos-release-audio-comparison.json)保留测量范围。实时双耳/VBAP 各运行 10 秒均无欠载，worker p99 分别约 181/39 微秒，块预算为 10 毫秒。
+完整 CI (historical Actions run 37194085996)验证代码提交 `b76348e`；[机器可读验收记录](evidence/rust-saf-phase1/validation.json)、[五轮性能明细](evidence/rust-saf-phase1/macos-release-performance.json)和[音频差异记录](evidence/rust-saf-phase1/macos-release-audio-comparison.json)保留测量范围。实时双耳/VBAP 各运行 10 秒均无欠载，worker p99 分别约 181/39 微秒，块预算为 10 毫秒。
 
 重复全量验证还复现了原 SceneStream 空闲关闭丢唤醒：析构更新 quit 时未持有 queue_mutex。现已在同一锁内发布退出谓词，并增加并发反复创建/销毁及超时回归。
 

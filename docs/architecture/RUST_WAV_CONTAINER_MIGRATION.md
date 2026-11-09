@@ -1,6 +1,6 @@
 # Rust WAVE 容器元数据迁移
 
-> 基线：`fae5606`（另含 `cf3208c` 的无关清理）。前序批次：[Rust BW64 迁移](RUST_BW64_MIGRATION.md)、
+> 基线：`9797481`（另含 `a950c4f` 的无关清理）。前序批次：[Rust BW64 迁移](RUST_BW64_MIGRATION.md)、
 > [Rust 浮点 WAVE 迁移](RUST_DR_WAV_MIGRATION.md)。
 
 前两轮把 WAVE 样本读写迁入 `mradm-wav` 后，C++ 仍保留五处手写的 RIFF chunk 扫描与改写。本轮把它们的字节布局与
@@ -94,12 +94,12 @@ Rust 返回的错误消息为中文，措辞与旧英文消息不同。
 
 ## 验收记录
 
-初版 `46a235e`，2026-10-06，Linux x86_64（GCC 13）：
+初版 `885ade0`，2026-10-06，Linux x86_64（GCC 13）：
 
 - 默认 Debug CTest 68/68 通过（新增 `mr_adm_wav_container_tests`）。
 - `mr_adm_rust_quality`（rustfmt + clippy `-D warnings`）通过；`mr_adm_ffi_header_check` 通过，共 207 个函数、
   65 个结构体。
-- Release 端到端比较：分别用 `cf3208c`（C++ 容器代码）与本改动构建 `mradm`，对同一批输入运行，共 210 组全部一致。
+- Release 端到端比较：分别用 `a950c4f`（C++ 容器代码）与本改动构建 `mradm`，对同一批输入运行，共 210 组全部一致。
   - 输入 12 个：`mr_adm_make_fixture` 生成的 4 种 24-bit ADM（objects-point、objects-extent-multi、directspeakers、hoa）
     及其 float32 RF64 版本、一份 float32 BW64 ADM，以及 5.1 float32、5.1 int16、7.1.4 float32 三个 channel-bed。
   - render 到 WAV 14 种：7.1.4（f32/i24，含置换与掩码）、5.1（f32/i16）、0+2+0、双耳（f32/i24，ADM Binaural）、

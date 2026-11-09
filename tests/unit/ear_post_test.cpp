@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
         }
         const auto [before, after] = short_tail_regression();
         const auto report = [&](std::ostream& out) {
-            out << std::setprecision(17) << R"json({"baseline_commit":"e12332b","canonical_samples":)json"
+            out << std::setprecision(17) << R"json({"baseline_commit":"862408f","canonical_samples":)json"
                 << stats.samples << R"json(,"differing_samples":)json" << stats.differing
                 << R"json(,"max_absolute_error":)json" << stats.absolute << R"json(,"max_normalized_error":)json"
                 << stats.normalized << R"json(,"time_domain_max_error":)json" << fir_error

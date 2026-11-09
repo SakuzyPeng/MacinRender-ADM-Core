@@ -1,6 +1,6 @@
 {
   "date": "2026-10-09",
-  "baseline_commit": "c7b5cf1e00dd0aa869e0c768f25576748cc4f1ea",
+  "baseline_commit": "8efa1f553a2e6299799d0a1c1aa732faab1b52c4",
   "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
   "cpu": "Apple M4 Pro",
   "configuration": "Release",

@@ -1,7 +1,7 @@
 # Cases confirmed bit-identical across macOS arm64, Linux x64 and Windows x64.
 # Configuration A; first complete baseline recorded 2026-09-08.
-# Tested source: 3a0636e1a15d46a37100b2dc86ed3751fc95f919
-# Run: https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813
+# Tested source: 6f177c81fe5d5a04af955883297daf2d2ca6bb5b
+# Run: historical Actions run 34185456813
 # Other numerical differences remain measurements; missing/invalid data always fails.
 # One case name per line; # starts a comment.
 

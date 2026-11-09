@@ -1,5 +1,5 @@
 #pragma once
-// Frozen from 726db31; test-only, independent numerical reference.
+// Frozen from bd2ea96; test-only, independent numerical reference.
 #include <algorithm>
 #include <array>
 #include <cmath>

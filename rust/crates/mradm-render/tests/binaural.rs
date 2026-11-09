@@ -1,6 +1,6 @@
 //! Binaural source plan goldens and rules (PCM consistency 4.7 B). `binaural-v1/expected.jsonl`
 //! was produced once by the C++ `build_sources`, `build_spreader_tracks` and
-//! `build_spreader_groups` this module replaced (main `c967d84`), with a temporary generator that
+//! `build_spreader_groups` this module replaced (main `c172228`), with a temporary generator that
 //! compiled `binaural_renderer.cpp` into itself: for every case of `cases.jsonl` (each scene of
 //! `scenes/` under the three spread modes, the policy-v1 policies, live topology scales and
 //! spreader group budgets) it kept the import or policy error, the warnings, the counts and the

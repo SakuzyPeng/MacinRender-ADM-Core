@@ -1,6 +1,6 @@
 # Rust Scene 流式渲染的过渡、空间数学与双耳迁移
 
-算法基线为 `726db31`。共享空间计算、Scene worker 过渡和 Scene 流式双耳数值状态由 Rust 接管。
+算法基线为 `bd2ea96`。共享空间计算、Scene worker 过渡和 Scene 流式双耳数值状态由 Rust 接管。
 公开 C ABI、`ILiveSceneRenderer`、支持范围和外层渲染网格保持不变，没有新增依赖或构建开关。
 
 ## 2026-10-06 数值一致性阶段更新
@@ -74,8 +74,8 @@ Scene 标量循环和完整 Scene 流式双耳 renderer。既有 HOA、Scene 流
 简单路由、端点、canonical length 和明确的恒等结果逐位检查；计数、有效位、槽位、路由和
 诊断顺序单独检查。输出拉取长度一致、离线渲染与文件流式渲染的一致性、窗口、实时控制等既有回归保留。
 
-初次验收的源码提交为 `f7f38de`；共享数学与过渡实现分别提交为 `08113fd`、`a1b2e01`。
-[三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37434454445)
+初次验收的源码提交为 `c94d67a`；共享数学与过渡实现分别提交为 `c1720fa`、`4a08dcb`。
+三平台 CI (historical Actions run 37434454445)
 在该源码提交通过 macOS Debug 66/66、Linux Debug 65/65、Windows Debug 65/65。
 本机 macOS Debug 66/66、Release 定向 19/19；Windows canonical Release 65/65。
 Rust Release workspace 164 项通过，既有物理 >4 GiB WAVE 测试按默认配置忽略。
@@ -104,12 +104,12 @@ cmake --build --preset release
 build/release/mr_adm_scene_numeric_rust_tests scene-comparison.json
 build/release/mr_adm_live_binaural_rust_tests binaural-comparison.json
 cmake --build build/debug --target mr_adm_rust_quality
-scripts/quality/check-changed.sh --base 726db31 --build-dir build/debug
+scripts/quality/check-changed.sh --base bd2ea96 --build-dir build/debug
 scripts/quality/check-licenses.sh --build-dir build/debug
 ```
 
 复用现有工作区、标准构建目录和共享 Cargo 缓存。Windows 保留原有未提交修改，同步前检查
-源文件指纹并备份原字节。原有 Triple Balance 链接修改由并行提交 `a7d0e74` 独立保存，本批保留该祖先提交。最终记录见 [机器可读证据](evidence/rust-scene-numeric/validation.json)。跨平台逐位一致
+源文件指纹并备份原字节。原有 Triple Balance 链接修改由并行提交 `7489af3` 独立保存，本批保留该祖先提交。最终记录见 [机器可读证据](evidence/rust-scene-numeric/validation.json)。跨平台逐位一致
 继续留到二期，本轮不据迁移推断性能提升。
 
 ## 复查修正

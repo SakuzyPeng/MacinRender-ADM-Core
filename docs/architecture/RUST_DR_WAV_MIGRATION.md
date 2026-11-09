@@ -88,7 +88,7 @@ C++ 包装 `RustWavWriter` 统一承担整数和浮点输出，`IntegerWavWriter
 
 - 默认 Debug CTest 67/67 通过。其中 `mr_adm_scene_export_tests` 的 BW64 fixture 写入的 ds64 `sampleCount` 与实际帧数不一致，正是这个用例暴露了上述 Rust 检查过严的问题。
 - Release 下 `mr_adm_drwav_reference_tests` 通过（24 组解码，加双向写读往返）。故意把 PCM16 换算系数改为 /32767 后，测试能够报出差异。
-- Release 端到端比较：分别用 `origin/main`（`5dd0378`，dr_wav）和本分支渲染同一批输入，共 81 组，全部一致。
+- Release 端到端比较：分别用 `origin/main`（`5a008fb`，dr_wav）和本分支渲染同一批输入，共 81 组，全部一致。
   - 输入共 12 个：`mr_adm_make_fixture` 生成的 4 种 24-bit ADM（objects-point、objects-extent-multi、directspeakers、hoa），把它们转成 float32 RF64 的版本，一份 float32 BW64 ADM，以及 5.1 float32、5.1 int16、7.1.4 float32 三个 channel-bed。
   - 输出用例共 7 个：7.1.4 WAV、双耳 FLAC、5.1 i24 加响度归一化、HOA3 WAV、5.1 trim、7.1.4 Opus MKA、i16 双耳加峰值限制。
   - 63 组输出逐字节相同。其余 18 组的样本一致，差异只在以下几处：

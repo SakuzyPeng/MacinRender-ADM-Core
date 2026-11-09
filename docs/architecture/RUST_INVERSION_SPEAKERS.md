@@ -51,11 +51,11 @@ B 让 Rust 场景句柄贯通所有渲染入口：`RenderService::prepare_previe
 ## 发布说明
 
 都不改变锁定矩阵的 PCM：
-1. **EAR 的超长窗口。** 窗口长度接近 u64 上限时，旧 EAR 计算窗口终点会整数溢出，结果什么都不渲染；现在与 VBAP、HOA 一样截到文件末尾。CLI 的窗口参数碰不到这种情况。维护者另补了 `5efc517`：完成日志里的窗口终点同样先钳到剩余帧数。
+1. **EAR 的超长窗口。** 窗口长度接近 u64 上限时，旧 EAR 计算窗口终点会整数溢出，结果什么都不渲染；现在与 VBAP、HOA 一样截到文件末尾。CLI 的窗口参数碰不到这种情况。维护者另补了 `7181e07`：完成日志里的窗口终点同样先钳到剩余帧数。
 2. **EAR 文件流式的内部错误。** 旧 C++ 的异常会从 `process` 抛出，没有被捕获；现在作为错误返回。
 3. **Scene VBAP 的 panner 缓存。** 原来是 C++ 进程级缓存（最多 32 项），现在每个渲染器第一次需要时创建并保留。数值相同。
-4. **Scene VBAP 的缓冲区检查（`a992c13`）。** 帧记录与 PCM 缓冲区重叠时拒绝该帧，错误文字与 context 与原来的 invalid-argument 相同；失败帧不留下上一帧的诊断。
-5. **实时覆盖（`e13a01a`）。** 覆盖查询借用记录、不分配内存，双耳文件流式一并改用（`routing::try_live_override`、C++ `LiveOverrideView`）。
+4. **Scene VBAP 的缓冲区检查（`b49007b`）。** 帧记录与 PCM 缓冲区重叠时拒绝该帧，错误文字与 context 与原来的 invalid-argument 相同；失败帧不留下上一帧的诊断。
+5. **实时覆盖（`289c6a1`）。** 覆盖查询借用记录、不分配内存，双耳文件流式一并改用（`routing::try_live_override`、C++ `LiveOverrideView`）。
 6. **测试构建。** `direct_speakers_matrix_render_test` 只剩 Apple 部分，改为只在 macOS 构建，Linux ctest 少一项。
 
 ## 黄金数据
@@ -64,7 +64,7 @@ B 让 Rust 场景句柄贯通所有渲染入口：`RenderService::prepare_previe
 | --- | --- | --- | --- |
 | `mradm-render/tests/routing-v1/` | 4.5 A 之前的 C++ `render_common` 规则，经 scratchpad 临时程序生成（不提交） | 4,550 条：标签键、标准布局与合成表上的目标索引、标签位置、LFE 目标、DS 矩阵与按块路由、实时覆盖、22.2 LFE 路由及其日志 | Rust 与改为薄包装后的 C++ 都逐字节一致；植入的 3 处缺陷被抓到 |
 
-后端本身没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新旧 CLI / Scene 对照验收。手工构造场景的 C++ 用例移到 Rust 后，`tests/vbap.rs`（5 个）、`tests/hoa.rs`（8 个）、`tests/ear.rs`（10 个）、`tests/live_vbap.rs`（13 个，含 `a992c13` 补的回归）覆盖导入走不到的情形，例如没有位置的 DS 块、提前结束的输入、重叠缓冲区。每批都植入 2–3 处缺陷，确认测试会报错：
+后端本身没有另做黄金数据，由锁定矩阵、诊断检查点和下面的新旧 CLI / Scene 对照验收。手工构造场景的 C++ 用例移到 Rust 后，`tests/vbap.rs`（5 个）、`tests/hoa.rs`（8 个）、`tests/ear.rs`（10 个）、`tests/live_vbap.rs`（13 个，含 `b49007b` 补的回归）覆盖导入走不到的情形，例如没有位置的 DS 块、提前结束的输入、重叠缓冲区。每批都植入 2–3 处缺陷，确认测试会报错：
 
 | 批次 | 植入的缺陷 | 结果 |
 | --- | --- | --- |
@@ -88,34 +88,34 @@ B 让 Rust 场景句柄贯通所有渲染入口：`RenderService::prepare_previe
 
 | 批次 | 基线 | 用例 | 结果 |
 | --- | --- | --- | --- |
-| A–D | `340ef59` | `--renderer saf` 1,148 例：policy-v1 的 14 个场景与全部策略，轮换布局、DS 路由、几何、spread、LFE、平滑与窗口 | 全部相同 |
-| E | `16e14dc` | `--renderer hoa` 886 例（689 例渲染成功），含 label / position 路由与其他布局的拒绝用例；VBAP 的 1,148 例重跑 | 全部相同 |
-| F | `08350d9` | `--renderer ear` 2,096 例（1,128 例渲染成功），布局含 wav71、4+5+4、9.1.6、22.2，两种几何，auto / matrix / 被拒绝的路由，加 5.1、7.1.4、22.2 声道床输入；HOA 与 VBAP 重跑 | 全部相同；未渲染的都是两边一致的预期拒绝 |
-| G | `dd3f82b` | 全部 88 个 phase2 Scene 重放（`mr_adm_phase2_scene`），普通构建与诊断构建各一次 | 普通构建 704 个文件（PCM、回放状态、事件清单）相同；诊断构建按采集器的方式拼接设备 trace（`canonicalize_device_trace`）后 21,756 个检查点文件相同，其中 534 个 `.30-vbap*` |
+| A–D | `ec67cad` | `--renderer saf` 1,148 例：policy-v1 的 14 个场景与全部策略，轮换布局、DS 路由、几何、spread、LFE、平滑与窗口 | 全部相同 |
+| E | `2d78af4` | `--renderer hoa` 886 例（689 例渲染成功），含 label / position 路由与其他布局的拒绝用例；VBAP 的 1,148 例重跑 | 全部相同 |
+| F | `5b0a791` | `--renderer ear` 2,096 例（1,128 例渲染成功），布局含 wav71、4+5+4、9.1.6、22.2，两种几何，auto / matrix / 被拒绝的路由，加 5.1、7.1.4、22.2 声道床输入；HOA 与 VBAP 重跑 | 全部相同；未渲染的都是两边一致的预期拒绝 |
+| G | `9a5dd78` | 全部 88 个 phase2 Scene 重放（`mr_adm_phase2_scene`），普通构建与诊断构建各一次 | 普通构建 704 个文件（PCM、回放状态、事件清单）相同；诊断构建按采集器的方式拼接设备 trace（`canonicalize_device_trace`）后 21,756 个检查点文件相同，其中 534 个 `.30-vbap*` |
 
 G 的诊断构建在拼接之前有 30 个文件不同，都在 3 个 fragmented 设备回放的 `device/` trace 下（其中一个是双耳用例）：这类 trace 按设备回调分段，采集器本来就要先拼接再比较。
 
 **维护者本机验证（按实际范围记录）。** 各批的构建配置、覆盖范围与验证时点如下；不把未执行的诊断矩阵记为已通过：
-- A–D（`16e14dc`）：macOS Debug 与 Windows 规范 Release 构建 ctest 83/83，Rust clippy、FFI 头校验、变更文件的 C++ 分析与分配回归探针；
-- E（`08350d9`）：合入后在 macOS arm64 对照 `16e14dc` 与 `08350d9`，使用 Release、config A、诊断关闭。覆盖 79 个离线用例、88 个 Scene 流式用例、28 个文件流式用例及 48 个 HOA 补充渲染，共 331 份 PCM 逐位一致，238 个内核文件相同。未执行 Windows、config B 或诊断矩阵；
-- F（合入为 `dd3f82b`）：合入前在 macOS arm64 与 Windows x64 分别对照 `08350d9` 与 `c7b5a0f`，使用无诊断插桩 Release。每个平台覆盖 2,258 个离线用例和 76 个文件流式用例，其中 1,834 对成功 PCM 输出逐位一致、500 对拒绝用例的退出码与诊断一致。未执行 Scene 流式矩阵、诊断插桩矩阵或性能验收；
-- G（`970b706`）：Release Scene 重放 macOS arm64 88 例、Windows x64 74 例，含诊断与重复性；PCM、状态、事件与检查点都相同，两平台共有的 74 例跨平台也相同。
+- A–D（`2d78af4`）：macOS Debug 与 Windows 规范 Release 构建 ctest 83/83，Rust clippy、FFI 头校验、变更文件的 C++ 分析与分配回归探针；
+- E（`5b0a791`）：合入后在 macOS arm64 对照 `2d78af4` 与 `5b0a791`，使用 Release、config A、诊断关闭。覆盖 79 个离线用例、88 个 Scene 流式用例、28 个文件流式用例及 48 个 HOA 补充渲染，共 331 份 PCM 逐位一致，238 个内核文件相同。未执行 Windows、config B 或诊断矩阵；
+- F（合入为 `9a5dd78`）：合入前在 macOS arm64 与 Windows x64 分别对照 `5b0a791` 与 `ea72650`，使用无诊断插桩 Release。每个平台覆盖 2,258 个离线用例和 76 个文件流式用例，其中 1,834 对成功 PCM 输出逐位一致、500 对拒绝用例的退出码与诊断一致。未执行 Scene 流式矩阵、诊断插桩矩阵或性能验收；
+- G（`d47887d`）：Release Scene 重放 macOS arm64 88 例、Windows x64 74 例，含诊断与重复性；PCM、状态、事件与检查点都相同，两平台共有的 74 例跨平台也相同。
 
 **维护者补充的修正。**
-- `e13a01a`：实时覆盖查询借用记录、不分配内存；
-- `aff8ec8`：cppcheck 识别跨编译单元的语义报告字段；
-- `5efc517`：窗口完成日志防溢出，`render_speaker_pcm` 改为接收 `const SpeakerMix&`；
-- `a992c13`：Scene VBAP 拒绝重叠缓冲区，失败帧清空诊断；
-- `763d637`：清理测试中失效的 Backend 元数据，Scene VBAP 的帧记录改用 `ranges::transform`。
+- `289c6a1`：实时覆盖查询借用记录、不分配内存；
+- `fa95d1f`：cppcheck 识别跨编译单元的语义报告字段；
+- `7181e07`：窗口完成日志防溢出，`render_speaker_pcm` 改为接收 `const SpeakerMix&`；
+- `b49007b`：Scene VBAP 拒绝重叠缓冲区，失败帧清空诊断；
+- `61d1c44`：清理测试中失效的 Backend 元数据，Scene VBAP 的帧记录改用 `ranges::transform`。
 
 **规模。** 生产 C/C++ 由 42,406 行降到 39,747 行（−2,659）：
 
 | 批次 | 行数 |
 | --- | --- |
-| A–D | 42,406 → 42,108，`e13a01a` 后为 42,107 |
-| E | 42,107 → 41,306，`5efc517` 后为 41,305 |
+| A–D | 42,406 → 42,108，`289c6a1` 后为 42,107 |
+| E | 42,107 → 41,306，`7181e07` 后为 41,305 |
 | F | 41,305 → 40,109 |
-| G | 40,109 → 39,748，`763d637` 后为 39,747 |
+| G | 40,109 → 39,748，`61d1c44` 后为 39,747 |
 
 `src/adm_render_vbap` / `ear` / `hoa` 由 1,236 / 1,039 / 770 行降到 421 / 115 / 111 行，`src/adm_dsp` 由 3,475 行降到 2,844 行。`src/adm_render_common` 为 2,979 行，比 4.1 基线的 2,777 行多：逻辑已迁出，但新增了 384 行的私有 FFI 头，Apple、Triple Balance、room 与双耳用到的薄包装也要留到 4.6、4.7。
 
@@ -123,9 +123,9 @@ G 的诊断构建在拼接之前有 30 个文件不同，都在 3 个 fragmented
 
 | 运行 | 提交 | 内容 | 结果 |
 | --- | --- | --- | --- |
-| [39933972829](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39933972829) | `16e14dc` | A–D | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
-| [39959813760](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39959813760) | `08350d9` | E | 同上 |
-| [39987342040](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/39987342040) | `dd3f82b` | F | 同上 |
-| [40004502957](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/40004502957) | `763d637` | G 与维护者修正 | 同上 |
+| 39933972829 (historical Actions run 39933972829) | `2d78af4` | A–D | 四份比较报告均为 283 个 PCM id 相同、0 个不同、平台集完整、门禁失败 0 |
+| 39959813760 (historical Actions run 39959813760) | `5b0a791` | E | 同上 |
+| 39987342040 (historical Actions run 39987342040) | `9a5dd78` | F | 同上 |
+| 40004502957 (historical Actions run 40004502957) | `61d1c44` | G 与维护者修正 | 同上 |
 
-`970b706` 的运行 40001144880 被后续提交取消，由 40004502957 覆盖。
+`d47887d` 的运行 40001144880 被后续提交取消，由 40004502957 覆盖。

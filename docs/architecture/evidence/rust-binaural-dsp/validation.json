@@ -1,6 +1,6 @@
 {
   "date": "2026-10-04",
-  "baseline_commit": "56f4b56b548281e40a2eab851a25b05b49c10b69",
+  "baseline_commit": "d3e4e13b6ea1fd035dc6731518d501223fbfd3ce",
   "scope": [
     "Scene streaming overlap-save and input history",
     "offline rendering/file streaming overlap-add and crossfades",
@@ -31,7 +31,7 @@
       "sofa_enabled": true,
       "saf_reference_enabled": false,
       "ebur128_reference_enabled": false,
-      "worktree_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "worktree_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
       "clean_checkout": false,
       "synchronized_files": 15,
       "before_and_after_sha256_checked": true,

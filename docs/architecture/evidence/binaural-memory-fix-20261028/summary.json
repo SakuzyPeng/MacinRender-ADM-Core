@@ -1,7 +1,7 @@
 {
   "schema": "mradm.binaural-memory-fix.v1",
   "date": "2026-10-28",
-  "base_commit": "949e14e4fa46d10d6393894cf4626b5780488c28",
+  "base_commit": "86ba8d91e5327991bb6b0332c045f00fd6a66b2d",
   "candidate_source_manifest_sha256": "22eaf45eb02cd42604ee551ef5817631d61f6909b81dfe61edc55f219b931d18",
   "public_c_abi_changed": false,
   "cpp_production_lines": {

@@ -1,9 +1,9 @@
 {
   "schema": "mradm.room-runtime-review.v1",
   "date": "2026-10-25",
-  "reference_commit": "72c188b1cfb733dc383014d6af2a7fe2d1b3801a",
-  "reviewed_commit": "8510d15f8407fe8e69a6fc09ed3a4a9984ad07c6",
-  "fixed_commit": "158fc3e5ac98be3cbf0a87a5b2d8ad4156c39abf",
+  "reference_commit": "9b12dcebfe0adade278689f8ea21d22b6d6b056f",
+  "reviewed_commit": "c4e0fa6de380d988d7a251a42a168260ea9779f5",
+  "fixed_commit": "0598a36a5754e53325981b04c18d1d60b7da5ade",
   "scope": "Correctness and Release PCM consistency; no performance or zero-deadline acceptance claim.",
   "comparisons": {
     "macos": {

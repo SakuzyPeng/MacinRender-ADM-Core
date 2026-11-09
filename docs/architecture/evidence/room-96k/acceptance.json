@@ -8,7 +8,7 @@
     "windows-x64"
   ],
   "platform_policy": "Maintainer validation is macOS and Windows; Linux host permanently retired.",
-  "base_git_commit": "f42749fce175da5fcc7ffccbfd3047e195361b3a",
+  "base_git_commit": "07973140fa11090c8e66f3ceb3d088a7a41b6c07",
   "cpp_surface_lines": 44208,
   "private_ffi": {
     "functions": 285,

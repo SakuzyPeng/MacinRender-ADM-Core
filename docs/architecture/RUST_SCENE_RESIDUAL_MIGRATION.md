@@ -19,13 +19,13 @@
 
 | 提交 | 内容 | 性质 |
 | --- | --- | --- |
-| `8a73dc9` | 语义策略数值求值迁入 Rust | 结构迁移，位不变 |
-| `4d01d0e` | Live VBAP 源增益合成迁入 Rust | 结构迁移，位不变 |
-| `1ad7641` | Triple Balance 床路由迁入 Rust | 结构迁移，位不变 |
-| `d476f1a` | 策略 dB 换算改用 `libm` 0.2.16 `powf` | 数值规则变更（ADR 0018 §3） |
-| `4bede24` | Scene 回放的策略更新加入 `gain_db`、extent、diffuse 和 divergence | 回放输入变更 |
+| `2bb1a3c` | 语义策略数值求值迁入 Rust | 结构迁移，位不变 |
+| `5cda825` | Live VBAP 源增益合成迁入 Rust | 结构迁移，位不变 |
+| `cf66b36` | Triple Balance 床路由迁入 Rust | 结构迁移，位不变 |
+| `8963852` | 策略 dB 换算改用 `libm` 0.2.16 `powf` | 数值规则变更（ADR 0018 §3） |
+| `200eec3` | Scene 回放的策略更新加入 `gain_db`、extent、diffuse 和 divergence | 回放输入变更 |
 
-**结构迁移。** 以 Linux x64 Release、config A 在切片前（`22e6a3b`）和切片后各采集一次普通运行与诊断运行，逐文件比较：
+**结构迁移。** 以 Linux x64 Release、config A 在切片前（`6583699`）和切片后各采集一次普通运行与诊断运行，逐文件比较：
 
 - 普通运行 431 个文件全部相同，包括 262 份 PCM；
 - 诊断运行 23946 个文件全部相同，包括全部 Scene 检查点和 PCM；
@@ -38,16 +38,16 @@
 
 离线 CLI 用一份不含 `gain_db` 的完整策略渲染三个夹具（objects-extent → 5.1.4、directspeakers → 双耳、objects-cartesian → 7.1.4）。该策略包含位置偏移、extent、divergence、插值上限，以及 DirectSpeakers 的 scale 与重新定向。新旧二进制输出的 PCM 逐位相同。
 
-三平台：结构迁移头 `1ad7641` 的 Consistency 38529813819、CI 38529817649、Quality 38529821931 均通过。
+三平台：结构迁移头 `cf66b36` 的 Consistency 38529813819、CI 38529817649、Quality 38529821931 均通过。
 
 **dB 规则。** 平台 `powf` 与 `libm::powf` 并不总是相同。在 Linux x64 上，以 0.001 dB 步长扫描 −144 至 +24 dB，共 168001 个值，其中 16451 个相差 1 ulp（例如 −29.845 dB、−4.6 dB）。
 
 - 改用 `libm` 后，所有平台得到同一结果，代价是带 `gain_db` 的策略在每个平台上都可能改变最低位。
 - Rust 和 C++ 测试固定了 `libm` 的位模式。
-- 锁定矩阵此前没有 `gain_db`，`d476f1a` 前后的 config A 普通与诊断运行仍逐位相同。
+- 锁定矩阵此前没有 `gain_db`，`8963852` 前后的 config A 普通与诊断运行仍逐位相同。
 - 文件流式与监听中的其他 dB 入口（`resolve_live_channel_gain`、HOA override）不在 Scene 链路上，留在三期。
 
-**回放覆盖。** `4bede24` 把 6144 样本处的策略更新改为：
+**回放覆盖。** `200eec3` 把 6144 样本处的策略更新改为：
 
 ```json
 {"global":{"gain":{"scale":0.5,"gain_db":-4.6},"extent":{"scale":1.5,"max":0.6},
@@ -60,7 +60,7 @@
 
 ## 性能
 
-在共享 4 核 Linux 虚拟机上比较切片前（`22e6a3b`）和切片后的 Release 构建。离线比较交替运行、带预热；中位数比超过 1.05 时复测。
+在共享 4 核 Linux 虚拟机上比较切片前（`6583699`）和切片后的 Release 构建。离线比较交替运行、带预热；中位数比超过 1.05 时复测。
 
 | 用例 | 耗时比 | RSS 比 | PCM |
 | --- | --- | --- | --- |

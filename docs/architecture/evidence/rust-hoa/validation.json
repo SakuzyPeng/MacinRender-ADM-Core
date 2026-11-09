@@ -1,8 +1,8 @@
 {
   "schema": "mradm.rust-hoa-migration.v1",
   "date": "2026-10-05",
-  "baseline_commit": "ba96baca607d32e336727976669b06f83c426355",
-  "implementation_commit": "52bf10626a01c587eb1fb445c52a98a8840119e5",
+  "baseline_commit": "920864a4406ec677089d7fa89185352de96da6d5",
+  "implementation_commit": "db69d07c8a32141cf15eb90d038c7d5291c7c086",
   "scope": [
     "Rust-owned immutable HOA coefficients and timeline tables",
     "Per-instance interpolation, encoding and three-slot diffuse state",
@@ -65,7 +65,7 @@
     "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
     "metric_tolerance_lu_db": 0.0001,
     "macos": {
-      "baseline": "ba96bac",
+      "baseline": "920864a",
       "coefficients": {
         "differing_samples": 9174,
         "max_absolute_error": 2.980232238769531e-07,
@@ -98,7 +98,7 @@
       "passed": true
     },
     "windows": {
-      "baseline": "ba96bac",
+      "baseline": "920864a",
       "coefficients": {
         "differing_samples": 0,
         "max_absolute_error": 0.0,
@@ -157,13 +157,13 @@
       "profile": "canonical Release",
       "MR_ADM_ENABLE_SOFA": true,
       "legacy_reference_switches": false,
-      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "git_head": "ca8ca9b07ee4c46cb820e5427a126d257b2896af",
       "workspace": "Existing dirty checkout retained; only verified relevant sources synchronized",
       "original_bytes_backed_up": true,
       "synchronized_files": 17,
       "synchronized_source_hashes_match_local": true,
       "unrelated_differences_retained": true,
-      "source_overlay_commit": "52bf10626a01c587eb1fb445c52a98a8840119e5"
+      "source_overlay_commit": "db69d07c8a32141cf15eb90d038c7d5291c7c086"
     }
   },
   "abi": {
@@ -176,8 +176,8 @@
   },
   "ci": {
     "run_id": 37295043944,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37295043944",
-    "commit": "52bf10626a01c587eb1fb445c52a98a8840119e5",
+    "url": "historical Actions run 37295043944",
+    "commit": "db69d07c8a32141cf15eb90d038c7d5291c7c086",
     "status": "completed",
     "conclusion": "success",
     "attempt": 1,

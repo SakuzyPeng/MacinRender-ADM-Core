@@ -1,6 +1,6 @@
 # monitor-v1
 
-Frozen output of the C++ monitor stream factory at main `5af83cc`, before PCM consistency 5.3 B
+Frozen output of the C++ monitor stream factory at main `297c7da`, before PCM consistency 5.3 B
 moved its opening rules to `mradm-engine` `stream::open_monitor`. A scratchpad generator (not
 committed) compiled `RealtimeStreamFactory` cut verbatim from `src/adm_engine/monitor_session.cpp`
 against the `ADMEngine` of a Linux x64 config A Release build (Apple unavailable) and opened one

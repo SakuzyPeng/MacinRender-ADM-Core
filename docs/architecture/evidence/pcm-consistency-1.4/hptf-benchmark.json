@@ -3,11 +3,11 @@
   "machine": "x86_64",
   "method": "Release cargo test binary pinned with taskset to one CPU, baseline and candidate alternating for 8 rounds. Each round reports the median of 21 repeats: design() of a fixed 10-band profile at 48 kHz with auto trim (200 calls averaged), and Processor::process over 20 s of 48 kHz stereo in 511-frame calls.",
   "baseline": {
-    "commit": "528a0d5",
-    "note": "HpTF and peak guard sources identical to 0ef1a01"
+    "commit": "a6f5b90",
+    "note": "HpTF and peak guard sources identical to 5fa0c35"
   },
   "candidate": {
-    "commit": "5c0edf1"
+    "commit": "34c526d"
   },
   "binaries": {
     "baseline": "dd32d18761b178264b971afd118856829eed44545e318ce338212af38e9edff3",

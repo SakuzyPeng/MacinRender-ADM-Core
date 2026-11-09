@@ -81,7 +81,7 @@ FFI 头校验（272 个函数）、一致性工具测试、clang-format 与 clan
 有限的极大终点仍按饱和换算后钳位到素材长度。`render_trim_fixture_test` 对两个入口覆盖 9 组非法窗口，并覆盖
 有限终点乘以采样率溢出的情况；新增测试在修正前失败，修正后 12 项 fixture 检查全部通过。
 
-`d07f4cd` 的 [Consistency 38932508634](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38932508634)
+`3f49f67` 的 Consistency 38932508634 (historical Actions run 38932508634)
 在六个平台 / 配置组合中均因 `final-caf-ear-714-trim-gain` 缺少 writer 检查点而失败：普通采集完成，但 CAF writer
 尚未像 WAVE writer 一样记录诊断 PCM。CAF 现在在诊断构建中记录每次成功写出的完整帧，按 writer pass 与帧位置命名；
 WAVE / CAF 共用 pass ID，避免同一进程混用容器时覆盖检查点。普通构建不包含这些诊断操作。
@@ -90,8 +90,8 @@ macOS 的 Release 定向验证复用已有依赖、重编译音频读写模块�
 检查点，最后一轮检查点拼接后与最终文件 PCM 逐位相同，诊断开关前后 PCM 不变。另验证混用 WAVE / CAF 的 pass ID、
 分块帧位置、零长度写入及带符号零 / 次正规数位模式；此项本机验证不替代完整三平台矩阵。
 
-**三平台验收。** 合并后的 `4ea3665`（含上述裁剪校验与 CAF 诊断检查点修正）的
-[Consistency 38937703621](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/38937703621)、
+**三平台验收。** 合并后的 `9149edc`（含上述裁剪校验与 CAF 诊断检查点修正）的
+Consistency 38937703621 (historical Actions run 38937703621)、
 CI 38937703580 与 Quality 38937703595 通过：
 
 - A/B 两种配置下 242 个 PCM id 三平台相同，包括 9 个 `final-*` 用例（16 / 24 位整数 WAVE 与两个 float32 CAF）；264 项门禁无失败；

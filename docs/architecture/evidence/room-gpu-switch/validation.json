@@ -2,7 +2,7 @@
   "schema": "mradm.room-gpu-switch-investigation",
   "version": 1,
   "date_local": "2026-10-18",
-  "committed_baseline": "e7ace2ae2b2fe90ee5b265b17b285af495b44014",
+  "committed_baseline": "e6d50f34e50154d370e8070d065baf2d79011ad5",
   "scope": "Commit the previously retained GPU combination, then investigate 32-source room switching.",
   "empty_graph_candidate": {
     "changes": "Five prepared history/convolution-only Graph variants; skip response/target FFTs without updates, preserve input/reset work, return silence without D2H when no tasks.",
@@ -518,7 +518,7 @@
       "private_fixture_removed": true,
       "verified_removed_payload_bytes": 644253669,
       "temporary_commit_snapshot_removed": true,
-      "native_candidate_reverted_to_commit": "e7ace2a",
+      "native_candidate_reverted_to_commit": "e6d50f3",
       "native_lifecycle_test_retained": true,
       "production_code_unchanged_by_investigation": true
     }

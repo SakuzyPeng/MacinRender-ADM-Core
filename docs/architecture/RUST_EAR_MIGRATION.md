@@ -1,6 +1,6 @@
 # Rust EAR 算法迁移
 
-> 基线：`5dd0378`；上游 libear：`2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15`。
+> 基线：`5a008fb`；上游 libear：`2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15`。
 > 决议：[ADR 0013](../adr/0013-rust-ear.md)。
 
 ## 所有权与实现

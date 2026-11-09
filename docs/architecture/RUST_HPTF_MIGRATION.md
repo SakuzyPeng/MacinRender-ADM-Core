@@ -58,7 +58,7 @@ Rust 检查空句柄、长度溢出、不完整交错帧、参数和模式、系
 - Rust fmt、Clippy `-D warnings`，修改及新增 C++ 的格式、clang-tidy、cppcheck 通过；许可证与 SBOM 校验通过。
 - 两个平台均保留 139 个公开 `adm_*` 导出，无私有 Rust 入口外泄。Windows 仍有 1,984 个附带 C++ 导出。
 
-迁移前后的 Release `mr_adm_hptf_dsp_tests` 分别保存数值基线，参考代码为 `18da74f`。
+迁移前后的 Release `mr_adm_hptf_dsp_tests` 分别保存数值基线，参考代码为 `f2f63df`。
 覆盖 7 种滤波器 × 6 个采样率 × 2 种前级模式，共 84 组设计、频响和分块处理；
 另有 5 组热切换、排队更新与 seek PCM。
 
@@ -94,6 +94,6 @@ python3 scripts/consistency/compare-hptf-dsp.py \
   --reference before.txt --candidate after.txt --output comparison.json
 ```
 
-`before.txt` 必须由旧 C++ 实现的 Release 构建运行同一测试探针产生：先在 `18da74f` 应用测试探针
+`before.txt` 必须由旧 C++ 实现的 Release 构建运行同一测试探针产生：先在 `f2f63df` 应用测试探针
 及其 CMake 注册，保持生产源文件不变，再生成基线。文本捕获是数值记录，
 比较器拒绝缺失、重复、不等长或非有限记录。新增且尚未跟踪的 C++ 文件需另显式传给静态检查工具。

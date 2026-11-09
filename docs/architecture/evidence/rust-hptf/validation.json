@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-hptf-migration.v1",
   "date": "2026-10-04",
-  "baseline_commit": "18da74fd7c73531def04dce7ad0160192518d312",
+  "baseline_commit": "f2f63df8d37800c6db6f6b95693e9344adf06140",
   "scope": [
     "RBJ coefficient design and quantized stability checks",
     "Frequency response and bounded audible-band auto-trim",

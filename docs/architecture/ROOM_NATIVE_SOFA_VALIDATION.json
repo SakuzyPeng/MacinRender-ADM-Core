@@ -1,7 +1,7 @@
 {
   "schema": "mradm.room-native-sofa-validation",
   "version": 1,
-  "base_commit": "a966043",
+  "base_commit": "bc89456",
   "runtime_conversion": "Native Rust/HDF5, before processing; no Python process or generated HRIR package required",
   "entry_points": [
     "CLI --sofa",

@@ -5,8 +5,8 @@
   "ci": {
     "workflow": "Consistency",
     "run_id": 37569897598,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37569897598",
-    "commit": "0d62eeb8917bd07a1eed4e472982536eda1bd36e",
+    "url": "historical Actions run 37569897598",
+    "commit": "8ef510b5ba459cdbba06e63bdb36f10b32d2567e",
     "other_runs": {
       "CI": 37569903513,
       "Quality": 37569905700

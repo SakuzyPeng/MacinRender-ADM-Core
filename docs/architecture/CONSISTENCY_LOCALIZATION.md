@@ -4,11 +4,11 @@
 
 ## 2026-09-08 定位结论
 
-完整三平台诊断运行：[34199241959](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34199241959)，测试提交 `dd47753`。六个 A/B job 及 Compare platforms 均成功；原基线仍为 A **5/12**、B **6/12** 三平台逐位一致，既有门禁全部通过。macOS 的四个诊断变体、Linux/Windows 的两个变体分别保留构建记录及实验结果。
+完整三平台诊断运行：34199241959 (historical Actions run 34199241959)，测试提交 `a0e6497`。六个 A/B job 及 Compare platforms 均成功；原基线仍为 A **5/12**、B **6/12** 三平台逐位一致，既有门禁全部通过。macOS 的四个诊断变体、Linux/Windows 的两个变体分别保留构建记录及实验结果。
 
 可机读的输入 SHA-256、8 组实验结果、主要检查点及 PCM 比较摘要保存于 [consistency-localization-2026-09-08.json](consistency-localization-2026-09-08.json)。三种 fixture 在全部 8 个变体中均按文件字节验证一致。
 
-前一次运行 [34197749008](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34197749008) 在 macOS 的“统一 RNG 后重复应相同”假设处中断。后续完整运行保留这些不相等结果，并继续采集所有变体。成功表示测量完整有效，不表示所有假设成立或所有 PCM 相同。
+前一次运行 34197749008 (historical Actions run 34197749008) 在 macOS 的“统一 RNG 后重复应相同”假设处中断。后续完整运行保留这些不相等结果，并继续采集所有变体。成功表示测量完整有效，不表示所有假设成立或所有 PCM 相同。
 
 | 原始分歧 | 定位到的阶段 | 控制实验与实际含义 |
 |---|---|---|
@@ -21,7 +21,7 @@
 | `saf-5_1_4-extent`，新覆盖发现 | Linux/Windows 的 PCM 差异由 `tanf` 重放复现；macOS 另有 BLAS 差异 | B 组三对全不同；Linux 对 Windows 有 94,150/480,000 个采样不同（`max_ulp=4`）。spread 饱和为 180° 后，SAF 的 `tanf` 输入接近 π/2；只替换 tangent 返回值即可复原 Windows 的全部 PCM，单独替换几何数据无效。 |
 | 两种 `binaural-extent-spreader` | 去相关延迟 RNG、几何 RNG；叠加 FFT/矩阵数学及分组拓扑 | 同平台连续重复即不同。统一 RNG 后延迟表收敛，仍不能推定全部 PCM 收敛；macOS 的剩余重复差异已在 HRIR → HRTF 阶段复现。 |
 
-两个新增的 3D VBAP 测例最初在运行 [34250832546](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546) 中只比较了最终 PCM。后续完整三平台运行 [34322676035](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34322676035) 已补入真实输入、几何、spread、逆矩阵与增益检查点，并逐位验证分步重放。具体控制实验、完整 PCM 因子替换与范围说明见 [3D VBAP 数值差异定位](CONSISTENCY_VBAP_LOCALIZATION.md)。求逆确有差异，但 SGEMM、SDOT 和接近 π/2 的 `tanf` 是独立边界；既有双耳 cloud 的求逆定位不能替代这些测例自身的证据。
+两个新增的 3D VBAP 测例最初在运行 34250832546 (historical Actions run 34250832546) 中只比较了最终 PCM。后续完整三平台运行 34322676035 (historical Actions run 34322676035) 已补入真实输入、几何、spread、逆矩阵与增益检查点，并逐位验证分步重放。具体控制实验、完整 PCM 因子替换与范围说明见 [3D VBAP 数值差异定位](CONSISTENCY_VBAP_LOCALIZATION.md)。求逆确有差异，但 SGEMM、SDOT 和接近 π/2 的 `tanf` 是独立边界；既有双耳 cloud 的求逆定位不能替代这些测例自身的证据。
 
 ### 已落地的修复：向量归一化的长度计算
 
@@ -33,7 +33,7 @@
 
 本机（Linux、GCC 13.3、Release）改前 / 改后的完整矩阵对照：**12 个 case 里只有 `hoa-hoa3-point` 变化**，277,692 / 768,000 个采样不同——与基线里 macOS 对 Linux/Windows 的差异数完全相同；首个不同样本从 `0x3d8e14b1` 变成 `0x3d8e14b0`，正是基线中 macOS 那一侧的位模式。两组门禁清单里的 case 全部逐位未变。
 
-提交 `9025d39e2b053e78d9976569db2944169a67a4cf` 的三平台运行 [34213036405](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405) 已完成：B 的 `hoa-hoa3-point` 三平台逐位相同，总数从 6/12 提升到 **7/12**。A 仍为 **5/12**；该测例在 macOS 对 Linux/Windows 仍有 129,018 / 768,000 个采样不同，最大绝对差为 `5.96046e-8`。因此只把该测例加入 `expected-identical-controlled.txt`，A 的清单保持不变。
+提交 `1dfdf49ee619ab08d1d6f6e5e305e4175e7d52db` 的三平台运行 34213036405 (historical Actions run 34213036405) 已完成：B 的 `hoa-hoa3-point` 三平台逐位相同，总数从 6/12 提升到 **7/12**。A 仍为 **5/12**；该测例在 macOS 对 Linux/Windows 仍有 129,018 / 768,000 个采样不同，最大绝对差为 `5.96046e-8`。因此只把该测例加入 `expected-identical-controlled.txt`，A 的清单保持不变。
 
 `tests/unit/render_common_numeric_test.cpp` 在本地 CTest 和三平台 consistency 的 Release A/B job 中执行。输入和期望值均为字面位模式，输入经过 volatile 读取以防 Release 常量折叠替代实际计算。用例包括三个非零分量的精确长度、三项求和的舍入边界、极大和次正规分量；最终 PCM 的验收仍由对应配置的门禁负责。
 
@@ -60,7 +60,7 @@
 | `render_common.cpp:599` | 否 | `extent_disk_cloud` 未被现有 fixture 触及 |
 | `live_vbap_renderer.cpp:360` | 否 | 实时监听路径，不在离线矩阵内 |
 
-三平台运行 [34248046673](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34248046673) 证实了这一点：B 仍为 7/12，7 个门禁测例全部 ok，无回归也无收敛。
+三平台运行 34248046673 (historical Actions run 34248046673) 证实了这一点：B 仍为 7/12，7 个门禁测例全部 ok，无回归也无收敛。
 
 ### 关闭覆盖缺口：`objects-cartesian` 与 5.1.4 测例
 
@@ -82,7 +82,7 @@
 
 `saf-5_1_4-extent` 不敏感的原因值得单独记：极坐标 fixture 的 `Width` 是 30（BS.2076 对极坐标对象以度为单位），而 `mdap_spread_degrees` 计算 `width * 60`，得 1800，`std::min(180.0F, ...)` **恒定饱和**。也就是说对极坐标 extent 内容，该函数的数值是惰性的。这条只作记录：`* 60` 对笛卡尔的归一化 width 是对的，对极坐标的度数不对，但改动它会改变既有渲染行为，不属于本轮范围。
 
-三平台运行 [34250832546](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546)（16 测例）的结果：
+三平台运行 34250832546 (historical Actions run 34250832546)（16 测例）的结果：
 
 - 新 fixture `objects-cartesian.wav` 三平台**输入字节一致**，与其余五个一样。
 - **`hoa-hoa3-cartesian` 三平台逐位相同**，已加入 `expected-identical-controlled.txt`。这是对 `hoa:159` 那处替换的首次跨平台验证——该测例是四个新测例里唯一对 1 ULP 敏感的，若不修 `distance_from_position`，它必然分歧。
@@ -122,7 +122,7 @@ cmake --build build/consistency-b --target mr_adm_fft_lifecycle_probe
 build/consistency-b/mr_adm_fft_lifecycle_probe /path/to/checkpoints/binaural-point/binaural.01-hrir.f32
 ```
 
-这个独立 probe、四组合 EAR 实验和更细的 EAR HOA 检查点是完整 CI 之后补充的本地 Release 证据；不要误记为提交 `dd47753` 的 CI 已执行这些新增工具。
+这个独立 probe、四组合 EAR 实验和更细的 EAR HOA 检查点是完整 CI 之后补充的本地 Release 证据；不要误记为提交 `a0e6497` 的 CI 已执行这些新增工具。
 
 ### Cloud 的剩余矩阵差异
 
@@ -149,7 +149,7 @@ build/consistency-b/mr_adm_fft_lifecycle_probe /path/to/checkpoints/binaural-poi
 - 三平台完整 workflow：六个 A/B job、Compare platforms、8 个诊断变体完成；原 A/B 门禁通过。
 - Python 回归：工具 18 项、构建/记录 11 项、检查点比较器 4 项，共 33 项通过。
 - Debug：EAR、HOA encode、双耳 fixture 和三组 consistency CTest 均通过；最后新增的 probe 在 Debug/Release 编译验证。
-- `scripts/quality/check-changed.sh --base 306ec45 --build-dir build/debug` 通过；保留既有 EAR/HOA clang-tidy 告警。C 状态结构被脚本按 C++ 解析产生的构造函数误报，有局部说明和抑制。
+- `scripts/quality/check-changed.sh --base 965abca --build-dir build/debug` 通过；保留既有 EAR/HOA clang-tidy 告警。C 状态结构被脚本按 C++ 解析产生的构造函数误报，有局部说明和抑制。
 - 独立 FFT 生命周期及四组合 FP/SIMD 实验使用 Release；诊断结束后，本地常用 Debug/B 构建已关闭实验 RNG 与插桩选项并恢复 Accelerate 配置。
 
 ## 复现

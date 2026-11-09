@@ -1,7 +1,7 @@
 {
   "schema": "mradm.rust-pcm-mix-migration.v1",
   "date": "2026-10-04",
-  "baseline_commit": "4286f3ed1e5c8beb022168fece90d337957f1157",
+  "baseline_commit": "de621ca9d7a6cfbea8b96f82650ca65685ed33b7",
   "scope": [
     "Immutable Rust-owned speaker f32 / EAR f64 tables shared with Arc",
     "Independent per-instance cursors and scratch",
@@ -51,7 +51,7 @@
   "release_comparison": {
     "tolerance": "abs(new-old) <= 2e-6 + 2e-6 * abs(old)",
     "macos": {
-      "baseline_commit": "4286f3e",
+      "baseline_commit": "de621ca",
       "tolerance": "2e-6 + 2e-6 * abs(reference)",
       "cases": [
         {
@@ -85,7 +85,7 @@
       ]
     },
     "windows": {
-      "baseline_commit": "4286f3e",
+      "baseline_commit": "de621ca",
       "tolerance": "2e-6 + 2e-6 * abs(reference)",
       "cases": [
         {
@@ -177,8 +177,8 @@
   },
   "ci": {
     "run_id": 37260335033,
-    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37260335033",
-    "commit": "4970ed4f6a4de084e88cb428617a8dd83fea6345",
+    "url": "historical Actions run 37260335033",
+    "commit": "57eaa09a540ccde516f07d02b356360fd11053a7",
     "conclusion": "success",
     "attempt": 1,
     "jobs": [

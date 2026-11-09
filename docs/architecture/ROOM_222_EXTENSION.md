@@ -104,7 +104,7 @@ Release CLI 套件：
 
 ```sh
 cmake --build --preset release --target mradm mr_adm_room_222_tests
-python3 scripts/research/dar_layouts/verify_room_222.py \
+python3 local/research/dar_layouts/verify_room_222.py \
   --template local/dar-bed-semantics/template.wav --output-dir local/room-222/cli
 ```
 
@@ -118,7 +118,7 @@ python3 scripts/research/dar_layouts/verify_room_222.py \
 的最大误差约 `2.93e-8 dB`，归一化互谱矩阵相对误差约 `3.20e-9`；显式静音开始后 1024 帧之外全零。
 这些验证滤波复用、声道分配与模型内部的一致性，不是拿 Dolby 22.2 扬声器输出作比较。
 
-真实音乐 `/path/to/Downloads/local-music-fixture.wav/local-music-fixture.wav`
+真实音乐验收使用本地素材，素材标识与路径保存在本地研究记录中。
 已完成全片 76.660146 秒、3,679,687 帧、24 声道的 Release 渲染。22 个非 LFE 输出都有信号，三个下层声道
 RMS 约 -48.18／-40.78／-40.67 dBFS；LFE1 逐样本等于源 LFE，默认 direct 下 LFE2 为零。
 这验证完整输出和路由，不构成 Dolby 22.2 数值验收或听感结论。
