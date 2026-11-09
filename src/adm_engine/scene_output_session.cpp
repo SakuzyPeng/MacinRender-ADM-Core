@@ -193,7 +193,7 @@ SceneOutputSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMo
     return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
 }
 Result<void> SceneOutputSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
-    const std::lock_guard lock(control_);
+    // Rust designs for the fixed stream rate and serialises publication independently of the output control lock.
     RustError error;
     if (const auto code = mradm_engine_scene_output_set_hptf_settings(handle_->rust.get(),
                                                                       settings.handle.get(),

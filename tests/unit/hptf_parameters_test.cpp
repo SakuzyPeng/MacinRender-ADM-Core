@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -317,6 +318,70 @@ class CaptureDevice final : public mradm::realtime::IAudioOutputDevice {
     PullFn pull_;
 };
 
+class BlockingProgressDevice final : public mradm::realtime::IAudioOutputDevice {
+  public:
+    BlockingProgressDevice(std::promise<void>& entered, std::shared_future<void> release)
+        : entered_(entered), release_(std::move(release)) {}
+
+    mradm::Result<void> start(uint32_t /*channels*/, uint32_t rate, PullFn /*callback*/) override {
+        rate_ = rate;
+        return {};
+    }
+    void stop() override {}
+    [[nodiscard]] uint32_t actual_sample_rate() const override { return rate_; }
+    [[nodiscard]] mradm::realtime::AudioDeviceProgress progress() const override {
+        entered_.set_value();
+        release_.wait();
+        return {};
+    }
+
+  private:
+    std::promise<void>& entered_;
+    std::shared_future<void> release_;
+    uint32_t rate_{0};
+};
+
+void test_prepared_hptf_does_not_wait_for_output_control() {
+    using namespace mradm::realtime;
+    for (const bool stereo : {false, true}) {
+        SceneStreamConfig config;
+        config.renderer.renderer = mradm::RendererSelection::saf_binaural;
+        config.renderer.output_layout = "binaural";
+        auto stream = std::shared_ptr<SceneStreamEngine>(unwrap(SceneStreamEngine::create(config)));
+        std::promise<void> entered;
+        auto entered_future = entered.get_future();
+        std::promise<void> release;
+        auto device = std::make_unique<BlockingProgressDevice>(entered, release.get_future().share());
+        auto output = unwrap(SceneOutputSession::create_with_device(stream, std::move(device), true));
+
+        const auto filter = band();
+        const auto shared = parameters(std::span{&filter, 1U}, 81);
+        const adm_hptf_stereo_parameters_t independent{
+            sizeof(adm_hptf_stereo_parameters_t), ADM_HPTF_PREAMP_WARN_ONLY, 1, 0, &filter, nullptr, -3.0, -9.0, 82};
+        const auto settings = stereo ? unwrap(mradm::render_common::prepare_hptf(&independent, 3))
+                                     : unwrap(mradm::render_common::prepare_hptf(&shared, 1));
+
+        // Hold control_ in the device's status query. The setter must finish its Rust design
+        // and mailbox publication while this control operation is still waiting.
+        auto status = std::async(std::launch::async, [&] { return output->status(); });
+        const bool in_progress = entered_future.wait_for(std::chrono::seconds{5}) == std::future_status::ready;
+        auto setter = std::async(std::launch::async, [&] { return output->set_hptf_prepared(settings); });
+        const bool published = setter.wait_for(std::chrono::seconds{5}) == std::future_status::ready;
+        release.set_value();
+        static_cast<void>(status.get());
+        require_ok(setter.get());
+        require(in_progress, "status query holds the output control lock");
+        require(published, "HpTF preparation and publication remain independent of output control");
+
+        require_ok(output->begin_epoch(1, 0));
+        const auto info = output->hptf_stereo_info();
+        require(info.left.applied_revision == (stereo ? 82U : 81U) &&
+                    info.right.applied_revision == info.left.applied_revision &&
+                    info.left.preamp_db == (stereo ? -3.0F : -6.0F) && info.right.preamp_db == (stereo ? -9.0F : -6.0F),
+                "epoch reset adopts the complete shared or independent target");
+    }
+}
+
 std::vector<float> render_profile(const mradm::HptfProfile& profile, const std::string& path = {}) {
     using namespace mradm::realtime;
     SceneStreamConfig config;
@@ -441,6 +506,7 @@ int main() {
         test_parser_buffers();
         test_future_layouts_and_validation();
         test_owned_snapshots_and_rapid_updates();
+        test_prepared_hptf_does_not_wait_for_output_control();
         test_file_text_and_memory_equivalence();
         test_concurrent_file_api_owns_errors();
         std::cout << "HpTF memory parameter tests passed\n";
