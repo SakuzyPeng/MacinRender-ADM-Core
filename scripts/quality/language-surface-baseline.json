@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 137,
-      "lines": 26673
+      "lines": 26672
     },
     "islands": {
       "files": 5,
@@ -59,12 +59,12 @@
     "src/adm_engine": 2049,
     "src/adm_io": 381,
     "src/adm_metadata": 744,
-    "src/adm_realtime": 3418,
+    "src/adm_realtime": 3415,
     "src/adm_render_binaural": 231,
     "src/adm_render_common": 3499,
     "src/adm_render_ear": 55,
     "src/adm_render_hoa": 56,
-    "src/adm_render_room": 324,
+    "src/adm_render_room": 326,
     "src/adm_render_room/cuda": 512,
     "src/adm_render_triple_balance": 54,
     "src/adm_render_vbap": 53,

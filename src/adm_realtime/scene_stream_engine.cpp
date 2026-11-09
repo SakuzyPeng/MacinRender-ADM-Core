@@ -1,5 +1,6 @@
 #include "scene_stream_engine.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -169,28 +170,24 @@ Result<void> SceneStreamEngine::configure_generation(std::uint64_t epoch_id,
 
 Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& view,
                                                           std::chrono::milliseconds timeout) {
-    std::vector<MradmEngineScenePlane> planes;
-    planes.reserve(view.pcm.size());
-    for (const auto& plane : view.pcm) {
-        planes.push_back(
-            {plane.element_id, plane.samples, plane.sample_count, plane.stride, plane.has_signal ? 1U : 0U});
-    }
-    std::vector<MradmRenderLiveEntry> initial;
-    initial.reserve(view.initial_states.size());
-    for (const auto& entry : view.initial_states) {
-        initial.push_back({entry.element_id, state_record(entry.state)});
-    }
-    std::vector<MradmRenderLiveUpdate> updates;
-    updates.reserve(view.updates.size());
-    for (const auto& update : view.updates) {
-        updates.push_back({update.element_id,
-                           update.offset_samples,
-                           update.ramp_duration_samples,
-                           update.jump_position ? 1U : 0U,
-                           update.changed_fields,
-                           update.cleared_fields,
-                           state_record(update.state)});
-    }
+    std::vector<MradmEngineScenePlane> planes(view.pcm.size());
+    std::ranges::transform(view.pcm, planes.begin(), [](const auto& plane) -> MradmEngineScenePlane {
+        return {plane.element_id, plane.samples, plane.sample_count, plane.stride, plane.has_signal ? 1U : 0U};
+    });
+    std::vector<MradmRenderLiveEntry> initial(view.initial_states.size());
+    std::ranges::transform(view.initial_states, initial.begin(), [](const auto& entry) -> MradmRenderLiveEntry {
+        return {entry.element_id, state_record(entry.state)};
+    });
+    std::vector<MradmRenderLiveUpdate> updates(view.updates.size());
+    std::ranges::transform(view.updates, updates.begin(), [](const auto& update) -> MradmRenderLiveUpdate {
+        return {update.element_id,
+                update.offset_samples,
+                update.ramp_duration_samples,
+                update.jump_position ? 1U : 0U,
+                update.changed_fields,
+                update.cleared_fields,
+                state_record(update.state)};
+    });
     const MradmEngineSceneFrame frame{view.epoch_id,
                                       view.generation_id,
                                       view.media_sample_start,
@@ -203,11 +200,11 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
                                       updates.data(),
                                       updates.size()};
     RustError error;
-    uint32_t status = 0U;
+    uint32_t submit_status = 0U;
     if (const auto code = mradm_engine_scene_submit(impl_->handle.get(),
                                                     &frame,
                                                     timeout.count(),
-                                                    &status,
+                                                    &submit_status,
                                                     error.message(),
                                                     error.message_len(),
                                                     error.context(),
@@ -215,7 +212,7 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
         code != 0) {
         return error.error(code);
     }
-    return static_cast<SceneSubmitStatus>(status);
+    return static_cast<SceneSubmitStatus>(submit_status);
 }
 
 Result<void> SceneStreamEngine::signal_end(std::uint64_t epoch_id, std::int64_t end_sample) {

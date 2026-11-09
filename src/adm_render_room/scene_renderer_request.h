@@ -29,6 +29,8 @@ class SceneRendererRequest {
 
   private:
     std::string sofa_;
+    // The constructor uses this storage to keep the FFI file-name view alive.
+    // cppcheck-suppress unusedStructMember
     std::string sofa_name_;
     std::string hrir_;
     std::size_t layout_{0};
