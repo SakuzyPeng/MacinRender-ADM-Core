@@ -8,7 +8,8 @@ use mradm_engine::backend::{BinauralSpreadMode, RoomRequest, Screens, SpeakerSpr
 use mradm_engine::request::Selection;
 use mradm_engine::scene::renderer;
 use mradm_engine::scene::stream::{
-    Config, Descriptor, FrameInput, PlaneView, State, Stream, Submit, frame_flag, pull_flag,
+    Config, DIAGNOSTICS_PER_EPOCH, Descriptor, FrameInput, PlaneView, State, Stream, Submit,
+    frame_flag, pull_flag,
 };
 use mradm_render::live::{self, field};
 use mradm_render::routing::Error;
@@ -540,4 +541,104 @@ fn recent_head_tracking_caps_the_lookahead_on_the_manual_clock() {
     // 750 ms later tracking has expired: the whole ring is the lookahead again.
     s.set_clock(1_750_000_000);
     assert_eq!(settled(&s), 4096);
+}
+
+#[test]
+fn the_end_marker_is_not_undone_by_readiness_or_the_end_of_stream() {
+    // The worker waits at a full ring after the end marker; its readiness must not restore
+    // running, and the end of stream stays ended.
+    let s = stream(48000, &config(48000, 64));
+    open(&s, 0);
+    feed(&s, 0, 512, 512);
+    assert_eq!(settled(&s), 64);
+    let status = s.status();
+    assert_eq!(status.state, State::Draining);
+    assert!(!status.production_complete);
+    assert_eq!(drain(&s), 512);
+    std::thread::sleep(Duration::from_millis(20));
+    assert_eq!(s.status().state, State::Ended);
+}
+
+fn unmatched_rules(count: usize) -> Vec<u8> {
+    let rules: Vec<String> = (0..count)
+        .map(|i| format!(r#"{{"name_glob":"*nothing{i}*","gain":{{"mute":true}}}}"#))
+        .collect();
+    format!(
+        r#"{{"schema":"mradm.semantic-policy.v1","objects":[{}]}}"#,
+        rules.join(",")
+    )
+    .into_bytes()
+}
+
+#[test]
+fn the_diagnostic_log_holds_one_bounded_epoch() {
+    let s = stream(48000, &config(48000, 1024));
+    let rules = DIAGNOSTICS_PER_EPOCH + 5;
+    s.set_semantic_policy_json(&unmatched_rules(rules), 1)
+        .unwrap();
+    open(&s, 0);
+    feed(&s, 0, 1024, 1024);
+    assert_eq!(drain(&s), 1024);
+    assert_eq!(s.diagnostic_count(), DIAGNOSTICS_PER_EPOCH);
+    assert_eq!(s.status().semantic_degradations, rules as u64);
+    let last = s.diagnostic(DIAGNOSTICS_PER_EPOCH - 1).unwrap();
+    assert_eq!(
+        String::from_utf8(last.message).unwrap(),
+        format!(
+            "semantic policy objects[{}] did not match this Scene generation",
+            DIAGNOSTICS_PER_EPOCH - 1
+        )
+    );
+    assert!(s.diagnostic(DIAGNOSTICS_PER_EPOCH).is_none());
+
+    s.begin_epoch(2, 0).unwrap();
+    assert_eq!(s.diagnostic_count(), 0);
+    assert_eq!(s.status().semantic_degradations, rules as u64);
+    s.set_semantic_policy_json(&unmatched_rules(1), 2).unwrap();
+    s.configure_generation(2, 1, &[object(1)]).unwrap();
+    let samples = [0.25f32; 64];
+    let planes = plane(&samples);
+    let initial = [live::Entry {
+        element_id: 1,
+        state: complete_state(),
+    }];
+    let mut view = frame(&planes, 0, 64, &initial, &[]);
+    view.epoch = 2;
+    assert_eq!(s.submit_frame(&view, 5000).unwrap(), Submit::Accepted);
+    s.wait_idle(5000).unwrap();
+    assert_eq!(s.diagnostic_count(), 1);
+    assert_eq!(s.diagnostic(0).unwrap().epoch, 2);
+}
+
+#[test]
+fn a_new_epoch_cancels_the_fences_it_discards() {
+    let s = Arc::new(stream(48000, &config(48000, 16)));
+    open(&s, 0);
+    let samples = [0.125f32; 64];
+    let planes = plane(&samples);
+    let initial = [live::Entry {
+        element_id: 1,
+        state: complete_state(),
+    }];
+    assert_eq!(
+        s.submit_frame(&frame(&planes, 0, 64, &initial, &[]), 0)
+            .unwrap(),
+        Submit::Accepted
+    );
+    let (sender, receiver) = mpsc::channel();
+    let fenced = Arc::clone(&s);
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        let result = fenced.wait_idle(60_000).map_err(|e| text(&e));
+        let _ = sender.send((result, started.elapsed()));
+    });
+    std::thread::sleep(Duration::from_millis(50));
+    s.begin_epoch(2, 0).unwrap();
+    let (result, waited) = receiver.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(
+        result,
+        Err("Scene replay fence was cancelled by a new epoch".to_owned())
+    );
+    assert!(waited < Duration::from_secs(10));
+    s.wait_idle(5000).unwrap();
 }

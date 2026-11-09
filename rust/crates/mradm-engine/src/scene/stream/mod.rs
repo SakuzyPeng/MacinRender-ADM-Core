@@ -425,23 +425,49 @@ struct Control {
     reset_ack: u64,
     issued_fence: u64,
     completed_fence: u64,
+    /// Fences up to this id were issued before the latest begin_epoch.
+    cancelled_fence: u64,
+}
+
+/// The entries one epoch keeps; later ones are counted (as degradations) but not stored.
+pub const DIAGNOSTICS_PER_EPOCH: usize = 4096;
+
+/// The current epoch's entries. Configure warnings carry epoch 0 and belong to the epoch in
+/// which they are published.
+#[derive(Default)]
+struct Log {
+    entries: Vec<Diagnostic>,
+    epoch: u64,
 }
 
 #[derive(Default)]
 struct Diagnostics {
-    entries: Mutex<Vec<Diagnostic>>,
+    log: Mutex<Log>,
     degradations: AtomicU64,
 }
 
 impl Diagnostics {
+    fn lock(&self) -> MutexGuard<'_, Log> {
+        self.log.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn push(&self, d: Diagnostic) {
         if (diagnostic::SEMANTIC_DEGRADED..=diagnostic::INCOMPLETE_STATE).contains(&d.code) {
             self.degradations.fetch_add(1, Ordering::Relaxed);
         }
-        self.entries
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(d);
+        let mut log = self.lock();
+        // A worker step of the previous epoch can finish after begin_epoch cleared the log.
+        let stale = d.epoch != 0 && d.epoch < log.epoch;
+        if !stale && log.entries.len() < DIAGNOSTICS_PER_EPOCH {
+            log.entries.push(d);
+        }
+    }
+
+    /// begin_epoch: the log restarts for `epoch`.
+    fn restart(&self, epoch: u64) {
+        let mut log = self.lock();
+        log.entries.clear();
+        log.epoch = epoch;
     }
 
     /// The renderer warnings of one call, as the C++ adapter published them.
@@ -511,6 +537,16 @@ impl Shared {
         self.state.store(state as u8, order);
     }
 
+    /// Moves to `to` only from one of `from`: readiness, the end marker and EOS never undo a
+    /// later state (a reset and a failure store theirs unconditionally).
+    fn advance(&self, from: &[State], to: State) {
+        let _ = self
+            .state
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                from.contains(&State::of(current)).then_some(to as u8)
+            });
+    }
+
     /// Nanoseconds on the stream clock; the monotonic clock never reads 0 ("never updated").
     fn now(&self) -> i64 {
         match &self.clock {
@@ -546,7 +582,7 @@ impl Shared {
     fn publish_readiness(&self, buffered: usize, lookahead: usize) {
         if buffered >= (self.watermark as usize).min(lookahead) {
             self.output_ready.store(true, Ordering::Release);
-            self.set_state(State::Running, Ordering::Release);
+            self.advance(&[State::Buffering], State::Running);
         }
     }
 
@@ -899,6 +935,8 @@ impl Stream {
         }
         let serial = s.reset_serial.load(Ordering::Relaxed) + 1;
         s.reset_serial.store(serial, Ordering::Release);
+        s.diagnostics.restart(epoch);
+        c.cancelled_fence = c.issued_fence;
         c.queue.clear();
         c.generations.clear();
         c.reserved_samples = 0;
@@ -1224,14 +1262,16 @@ impl Stream {
         c.queue.push_back(WorkItem {
             kind: Kind::End,
             serial: s.reset_serial.load(Ordering::Relaxed),
+            // The tail's slices continue the timeline at the end sample.
             frame: OwnedFrame {
                 epoch,
+                start: end,
                 ..OwnedFrame::default()
             },
             ..WorkItem::default()
         });
         c.producer_closed = true;
-        s.set_state(State::Draining, Ordering::Release);
+        s.advance(&[State::Buffering, State::Running], State::Draining);
         drop(c);
         s.cv.notify_one();
         Ok(())
@@ -1286,14 +1326,23 @@ impl Stream {
             ..WorkItem::default()
         });
         s.cv.notify_all();
-        let (_c, done) = wait_for(s, c, timeout_ms, |c| {
+        let (c, done) = wait_for(s, c, timeout_ms, |c| {
             c.completed_fence >= id
+                || c.cancelled_fence >= id
                 || s.failed.load(Ordering::SeqCst)
                 || s.quit.load(Ordering::SeqCst)
         });
         if !done {
             return Err(error(code::RENDER_FAILED, "Scene replay fence timed out"));
         }
+        // A new epoch discarded the fenced work.
+        if c.completed_fence < id && c.cancelled_fence >= id {
+            return Err(error(
+                code::RENDER_FAILED,
+                "Scene replay fence was cancelled by a new epoch",
+            ));
+        }
+        drop(c);
         if s.failed.load(Ordering::SeqCst) || s.quit.load(Ordering::SeqCst) {
             return Err(error(
                 code::RENDER_FAILED,
@@ -1392,7 +1441,10 @@ impl Stream {
             if result.media_frames < frames {
                 if done && s.ring.available_read() == 0 && !s.failed.load(Ordering::Acquire) {
                     result.flags |= pull_flag::EOS;
-                    s.set_state(State::Ended, Ordering::Release);
+                    s.advance(
+                        &[State::Buffering, State::Running, State::Draining],
+                        State::Ended,
+                    );
                 } else if !s.failed.load(Ordering::Acquire) {
                     result.flags |= pull_flag::UNDERRUN;
                     s.underruns.fetch_add(1, Ordering::Relaxed);
@@ -1443,23 +1495,13 @@ impl Stream {
         }
     }
 
+    /// The entries of the current epoch (at most [`DIAGNOSTICS_PER_EPOCH`]).
     pub fn diagnostic_count(&self) -> usize {
-        self.shared
-            .diagnostics
-            .entries
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .len()
+        self.shared.diagnostics.lock().entries.len()
     }
 
     pub fn diagnostic(&self, index: usize) -> Option<Diagnostic> {
-        self.shared
-            .diagnostics
-            .entries
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(index)
-            .cloned()
+        self.shared.diagnostics.lock().entries.get(index).cloned()
     }
 
     /// The manual replay clock's time in nanoseconds; ignored on the monotonic clock.
