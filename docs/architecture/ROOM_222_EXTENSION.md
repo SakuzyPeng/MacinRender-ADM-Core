@@ -100,12 +100,10 @@ WAV 沿用项目的 ADM AXML／CHNA 布局封装，不使用 7.1.4／9.1.6 的 D
 最大绝对功率差约 `3.67e-4`，是与有限分辨率数值求积的差值，不是 Dolby 参考误差。
 1、31、32、257、511、512、513、1024 帧分块与 reset 得到逐样本一致结果；不同对象交错处理无共享状态。
 
-Release CLI 套件：
+历史 Release CLI 验证由本地研究套件执行。公开的 22.2 回归可运行以下命令。
 
 ```sh
-cmake --build --preset release --target mradm mr_adm_room_222_tests
-python3 local/research/dar_layouts/verify_room_222.py \
-  --template local/dar-bed-semantics/template.wav --output-dir local/room-222/cli
+ctest --preset debug -R "mr_adm_(room|triple_balance)_222_tests" --output-on-failure
 ```
 
 22 个逐节点脉冲、7.1.2 bed 映射、两种 LFE 路由、负 Z 尺寸运动、重复渲染、跨事件裁剪、
