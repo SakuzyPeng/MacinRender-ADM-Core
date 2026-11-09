@@ -299,7 +299,7 @@ def require_scene_checkpoints(root, row):
                                                     '.21-effective.f32', '.21-effective-fields.i32', '.40-render.f32')]
         patterns += [prefix + '-current' + suffix for suffix in backend_patterns[row['backend']]]
     # The replay switches backend only for stereo outputs and Triple Balance, never for a room
-    # (phase2_scene.cpp).
+    # (mr_adm_phase2_scene, rust/crates/mradm-ffi/examples/phase2_scene.rs).
     if row['backend'] != 'room-binaural' and (row['backend'] == 'triple-balance' or row['layout'] in ('0+2+0', 'binaural')):
         patterns += ['scene/e1-*.35-outgoing.f32', 'scene/e1-*.36-incoming.f32']
         incoming = 'binaural' if row['backend'] == 'vbap' or 'sofa' in row else 'vbap'

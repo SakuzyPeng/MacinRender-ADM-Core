@@ -320,6 +320,7 @@ dependencies = [
  "mradm-dsp",
  "mradm-ear",
  "mradm-engine",
+ "mradm-json",
  "mradm-math",
  "mradm-osc",
  "mradm-render",

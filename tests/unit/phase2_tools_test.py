@@ -914,6 +914,8 @@ class ReplayTests(unittest.TestCase):
                     # The incoming renderer has an initial snapshot as well as the gain event;
                     # the outgoing renderer has only the event. Neither may overwrite the other.
                     self.assertNotEqual(outgoing.read_bytes(), incoming.read_bytes())
+                return [common.digest((tmp / 'out' / f'pass-1-epoch-{epoch}.pcmbits').read_bytes())
+                        for epoch in (1, 2)]
             else:
                 self.assertIn('SOFA' if corrupt_sofa else 'replay', result.stderr)
                 if no_artifacts:
@@ -945,6 +947,51 @@ class ReplayTests(unittest.TestCase):
         for case in common.scene_cases():
             with self.subTest(case=case['id']):
                 self.run_probe(case, True)
+
+    def test_null_metadata_replays_as_an_empty_event_list(self):
+        case = common.scene_cases()[0]
+        self.assertEqual(self.run_probe(dict(case, metadata=None), True),
+                         self.run_probe(dict(case, metadata=[]), True))
+
+    def test_null_semantic_collections_replay_as_empty_lists(self):
+        template = next(row for row in common.scene_cases() if 'semantic' in row)
+        for field in ('contents', 'programmes'):
+            with self.subTest(field=field):
+                case = copy.deepcopy(template)
+                case['semantic']['identity'][field] = None
+                null_pcm = self.run_probe(case, True)
+                case['semantic']['identity'][field] = []
+                self.assertEqual(null_pcm, self.run_probe(case, True))
+
+    def test_boolean_metadata_matches_cpp_float_conversions(self):
+        speaker = next(row for row in common.scene_cases() if row['layout'] == '4+7+0')
+        sized = next(row for row in common.scene_cases() if row['backend'] == 'triple-balance' and row['cloud'])
+        for template, index, boolean_value, numeric_value in (
+                (speaker, 0, True, 1.0), (speaker, 0, False, 0.0),
+                (speaker, 1, [False, 0.75, 0.125], [0.0, 0.75, 0.125]),
+                (sized, 3, True, 1.0)):
+            with self.subTest(field=template['metadata'][index]['field'], value=boolean_value):
+                case = copy.deepcopy(template)
+                case['metadata'][index]['value'] = boolean_value
+                boolean_pcm = self.run_probe(case, True)
+                case['metadata'][index]['value'] = numeric_value
+                self.assertEqual(boolean_pcm, self.run_probe(case, True))
+
+    def test_room_fixture_path_normalization_matches_cpp(self):
+        template = next(row for row in common.scene_cases() if 'room' in row)
+        expected_pcm = self.run_probe(template, True)
+        valid = ['room//room.json', 'room///room.json']
+        invalid = ['./room/room.json', 'room/./room.json', 'room/../room/room.json',
+                   '../fixtures/room/room.json', '/room/room.json']
+        if os.name == 'nt':
+            valid += [r'room\\room.json', 'room/\\room.json']
+            invalid += [r'.\room\room.json', r'room\.\room.json', r'room\..\room\room.json']
+        for name in valid:
+            with self.subTest(path=name):
+                self.assertEqual(expected_pcm, self.run_probe(dict(template, room=name), True))
+        for name in invalid:
+            with self.subTest(path=name):
+                self.run_probe(dict(template, room=name), False, no_artifacts=True)
 
     def test_missing_sofa_and_unexecuted_switch_are_rejected(self):
         case = next(row for row in common.scene_cases() if 'sofa' in row)
