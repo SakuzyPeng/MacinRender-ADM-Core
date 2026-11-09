@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "../../src/adm_engine/scene_output_session.h"
-#include "../../src/adm_render_common/hptf_eq.h"
+#include "hptf_cascade.h"
 #include "stereo_peak_guard.h"
 
 namespace {

@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-#include "hptf_eq.h"
+#include "hptf_cascade.h"
 
 namespace {
 using namespace mradm::render_common;
@@ -158,38 +158,6 @@ void test_narrow_peak_trim() {
     require(std::abs(response) <= 1.0002 && std::abs(response) > 0.99, "actual narrow-band gain is trimmed accurately");
 }
 
-void test_mailbox_publication() {
-    HptfMailbox mailbox;
-    constexpr std::uint64_t k_updates = 20000;
-    std::thread writer([&] {
-        for (std::uint64_t revision = 1; revision <= k_updates; ++revision) {
-            HptfSnapshot snapshot;
-            snapshot.revision = revision;
-            snapshot.coefficients.sample_rate = static_cast<std::uint32_t>(revision);
-            for (auto& section : snapshot.coefficients.sections) {
-                section.b0 = static_cast<float>(revision);
-                section.a2 = -static_cast<float>(revision);
-            }
-            mailbox.publish(snapshot);
-        }
-    });
-    std::uint64_t seen = 0;
-    bool coherent = true;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-    while (seen != k_updates && std::chrono::steady_clock::now() < deadline) {
-        if (const auto snapshot = mailbox.consume()) {
-            coherent &= snapshot->revision > seen && snapshot->coefficients.sample_rate == snapshot->revision;
-            for (const auto& section : snapshot->coefficients.sections) {
-                coherent &= section.b0 == static_cast<float>(snapshot->revision) &&
-                            section.a2 == -static_cast<float>(snapshot->revision);
-            }
-            seen = snapshot->revision;
-        }
-    }
-    writer.join();
-    require(coherent && seen == k_updates, "publication never tears a snapshot and retains the final update");
-}
-
 void test_quantised_low_frequency_peaks() {
     for (const double fc : {20.1, 30.7, 46.3, 98.73, 999.13, 17777.77}) {
         for (const double q : {0.37, 8.0, 80.0, 300.0}) {
@@ -262,7 +230,6 @@ int main() {
         test_invalid_parameters();
         test_narrow_peak_trim();
         test_quantised_low_frequency_peaks();
-        test_mailbox_publication();
         test_concurrent_processing_and_queries();
         std::cout << "HpTF regression tests passed\n";
         return 0;

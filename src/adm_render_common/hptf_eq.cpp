@@ -10,7 +10,6 @@
 
 #include "adm/c_api.h"
 
-#include "consistency_trace.h"
 #include "dsp.h"
 
 namespace mradm::render_common {
@@ -55,22 +54,11 @@ HptfCoefficients from_rust(const MradmDspHptfCoefficients& c) noexcept {
     }
     return result;
 }
-std::optional<MradmDspHptfSnapshot> to_rust(const std::optional<HptfSnapshot>& value) noexcept {
-    if (!value) {
-        return std::nullopt;
-    }
-    return MradmDspHptfSnapshot{
-        to_rust(value->coefficients), value->revision, to_rust(value->right), value->independent ? 1U : 0U};
+MradmDspHptfSnapshot to_rust(const HptfSnapshot& value) noexcept {
+    return {to_rust(value.coefficients), value.revision, to_rust(value.right), value.independent ? 1U : 0U};
 }
 HptfSnapshot from_rust(const MradmDspHptfSnapshot& value) noexcept {
     return {from_rust(value.coefficients), value.revision, from_rust(value.right), value.independent != 0U};
-}
-// Targets have already been designed on the control thread. An internal
-// contract failure during a noexcept callback is a programming error (ADR 0005).
-void check_realtime(int status) noexcept {
-    if (status != 0) {
-        std::terminate();
-    }
 }
 std::size_t audio_length(std::size_t frames, std::uint32_t channels) noexcept {
     if (channels == 0U || frames > std::numeric_limits<std::size_t>::max() / channels) {
@@ -80,6 +68,13 @@ std::size_t audio_length(std::size_t frames, std::uint32_t channels) noexcept {
 }
 
 } // namespace
+
+MradmDspHptfCoefficients hptf_record(const HptfCoefficients& coefficients) noexcept {
+    return to_rust(coefficients);
+}
+HptfSnapshot hptf_snapshot(const MradmDspHptfSnapshot& record) noexcept {
+    return from_rust(record);
+}
 
 // ── 解析 ──────────────────────────────────────────────────────────────────────
 
@@ -203,118 +198,10 @@ HptfStereoInfo hptf_snapshot_info(const HptfSnapshot& snapshot) {
     return {info(snapshot.coefficients), info(right), right == snapshot.coefficients};
 }
 
-// ── 设计 ──────────────────────────────────────────────────────────────────────
-
-double cascade_magnitude_db(const HptfCoefficients& coeffs, double hz) {
-    const auto packed_coefficients = to_rust(coeffs);
-    double result = 0.0;
-    std::array<char, 256> message{};
-    dsp::check(mradm_dsp_hptf_magnitude(&packed_coefficients, hz, &result, message.data(), message.size()),
-               message.data());
-    return result;
-}
-
-Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_t sample_rate, HptfPreampMode mode) {
-    if (sample_rate == 0U) {
-        return make_error(ErrorCode::invalid_argument, "HpTF:采样率必须为正");
-    }
-    std::vector<MradmDspHptfBand> bands;
-    bands.reserve(profile.bands.size());
-    std::ranges::transform(profile.bands, std::back_inserter(bands), [](const HptfBand& band) {
-        return MradmDspHptfBand{
-            static_cast<std::uint32_t>(band.type), band.enabled ? 1U : 0U, band.fc_hz, band.gain_db, band.q};
-    });
-    MradmDspHptfCoefficients result{};
-    std::array<char, 256> message{};
-    const auto status = mradm_dsp_hptf_design(bands.data(),
-                                              bands.size(),
-                                              profile.preamp_db,
-                                              sample_rate,
-                                              static_cast<std::uint32_t>(mode),
-                                              &result,
-                                              message.data(),
-                                              message.size());
-    if (status != 0) {
-        return make_error(static_cast<ErrorCode>(status), message.data(), "HpTF design");
-    }
-    return from_rust(result);
-}
-
-// ── HptfCascade ───────────────────────────────────────────────────────────────
-
-struct HptfCascade::State {
-    std::unique_ptr<void, decltype(&mradm_dsp_hptf_cascade_destroy)> handle{nullptr, mradm_dsp_hptf_cascade_destroy};
-};
-HptfCascade::HptfCascade() = default;
-HptfCascade::~HptfCascade() = default;
-HptfCascade::HptfCascade(HptfCascade&& other) noexcept = default;
-HptfCascade& HptfCascade::operator=(HptfCascade&& other) noexcept = default;
-HptfCascade::HptfCascade(const HptfCascade& other) : coeffs_(other.coeffs_), channels_(other.channels_) {
-    if (other.state_) {
-        state_ = std::make_unique<State>();
-        void* raw = nullptr;
-        std::array<char, 256> message{};
-        dsp::check(mradm_dsp_hptf_cascade_clone(other.state_->handle.get(), &raw, message.data(), message.size()),
-                   message.data());
-        state_->handle.reset(raw);
-    }
-}
-HptfCascade& HptfCascade::operator=(const HptfCascade& other) {
-    if (this != &other) {
-        HptfCascade copied(other);
-        *this = std::move(copied);
-    }
-    return *this;
-}
-void HptfCascade::prepare(std::uint32_t channel_count) {
-    auto prepared = std::make_unique<State>();
-    void* raw = nullptr;
-    std::array<char, 256> message{};
-    dsp::check(mradm_dsp_hptf_cascade_create(channel_count, &raw, message.data(), message.size()), message.data());
-    prepared->handle.reset(raw);
-    const auto packed_coefficients = to_rust(coeffs_);
-    dsp::check(mradm_dsp_hptf_cascade_set(raw, &packed_coefficients, message.data(), message.size()), message.data());
-    state_ = std::move(prepared);
-    channels_ = channel_count;
-}
-void HptfCascade::set_coefficients(const HptfCoefficients& coeffs) noexcept {
-    const auto packed_coefficients = to_rust(coeffs);
-    if (state_) {
-        check_realtime(mradm_dsp_hptf_cascade_set(state_->handle.get(), &packed_coefficients, nullptr, 0U));
-    }
-    coeffs_ = coeffs;
-}
-void HptfCascade::reset() noexcept {
-    if (state_) {
-        check_realtime(mradm_dsp_hptf_cascade_reset(state_->handle.get(), nullptr, 0U));
-    }
-}
-void HptfCascade::process(float* interleaved, std::size_t frames) noexcept {
-    if (frames == 0U || channels_ == 0U || !state_ || is_bypass() || interleaved == nullptr) {
-        return;
-    }
-    check_realtime(mradm_dsp_hptf_cascade_process(
-        state_->handle.get(), interleaved, audio_length(frames, channels_), nullptr, 0U));
-}
-
 // ── HptfProcessor ─────────────────────────────────────────────────────────────
 
-void HptfMailbox::publish(const HptfSnapshot& snapshot) noexcept {
-    slots_.at(write_slot_) = snapshot;
-    write_slot_ = middle_.exchange(write_slot_ | k_dirty, std::memory_order_acq_rel) & k_index_mask;
-}
-
-std::optional<HptfSnapshot> HptfMailbox::consume() noexcept {
-    if ((middle_.load(std::memory_order_acquire) & k_dirty) == 0U) {
-        return std::nullopt;
-    }
-    read_slot_ = middle_.exchange(read_slot_, std::memory_order_acq_rel) & k_index_mask;
-    return slots_.at(read_slot_);
-}
-
 struct HptfProcessor::State {
-    std::unique_ptr<void, decltype(&mradm_dsp_hptf_processor_destroy)> handle{nullptr,
-                                                                              mradm_dsp_hptf_processor_destroy};
+    std::unique_ptr<void, decltype(&mradm_dsp_hptf_live_destroy)> handle{nullptr, mradm_dsp_hptf_live_destroy};
 };
 HptfProcessor::HptfProcessor() = default;
 HptfProcessor::~HptfProcessor() = default;
@@ -323,65 +210,48 @@ void HptfProcessor::prepare(std::uint32_t channel_count, std::uint32_t rate) {
     auto prepared = std::make_unique<State>();
     void* raw = nullptr;
     std::array<char, 256> message{};
-    dsp::check(mradm_dsp_hptf_processor_create(channel_count, rate, &raw, message.data(), message.size()),
-               message.data());
+    dsp::check(mradm_dsp_hptf_live_create(channel_count, rate, &raw, message.data(), message.size()), message.data());
     prepared->handle.reset(raw);
     state_ = std::move(prepared);
     channels_ = channel_count;
     sample_rate_ = rate;
-    HptfCoefficients bypass;
-    bypass.sample_rate = rate;
-    status_.publish({bypass, 0});
 }
 
 void HptfProcessor::publish(const HptfCoefficients& coeffs, std::uint64_t revision) {
     publish(HptfSnapshot{coeffs, revision});
 }
 void HptfProcessor::publish(const HptfSnapshot& snapshot) {
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    const auto dump = [&](const HptfCoefficients& coeffs, const std::string& side) {
-        std::vector<float> values{coeffs.preamp_gain, coeffs.max_response_db, coeffs.auto_trim_db, coeffs.preamp_db};
-        for (const auto& section : std::span{coeffs.sections}.first(coeffs.band_count)) {
-            values.insert(values.end(), {section.b0, section.b1, section.b2, section.a1, section.a2});
-        }
-        const auto key = "hptf/r" + std::to_string(snapshot.revision) + ".10-" + side + "coefficients";
-        consistency::dump(key + ".f32", values);
-        consistency::dump(key + "-shape.i32",
-                          {static_cast<int>(coeffs.sample_rate), static_cast<int>(coeffs.band_count)});
-    };
-    dump(snapshot.coefficients, snapshot.independent ? "left-" : "");
-    if (snapshot.independent) {
-        dump(snapshot.right, "right-");
-    }
-#endif
-    const std::lock_guard lock(publication_mutex_);
-    pending_.publish(snapshot);
-}
-
-void HptfProcessor::publish_bypass(std::uint64_t revision) {
-    HptfCoefficients bypass;
-    bypass.sample_rate = sample_rate_;
-    bypass.band_count = 0;
-    publish(bypass, revision);
-}
-
-void HptfProcessor::reset_state() noexcept {
     if (!state_) {
         return;
     }
-    const auto target = to_rust(pending_.consume());
-    MradmDspHptfUpdate update{};
-    check_realtime(
-        mradm_dsp_hptf_processor_reset(state_->handle.get(), target ? &*target : nullptr, &update, nullptr, 0U));
-    status_.publish(from_rust(update.snapshot));
+    const auto target = to_rust(snapshot);
+    std::array<char, 256> message{};
+    dsp::check(mradm_dsp_hptf_live_publish(state_->handle.get(), &target, message.data(), message.size()),
+               message.data());
+}
+
+void HptfProcessor::publish_bypass(std::uint64_t revision) {
+    if (!state_) {
+        return;
+    }
+    std::array<char, 256> message{};
+    dsp::check(mradm_dsp_hptf_live_bypass(state_->handle.get(), revision, message.data(), message.size()),
+               message.data());
+}
+
+void HptfProcessor::reset_state() noexcept {
+    if (state_) {
+        mradm_dsp_hptf_live_reset(state_->handle.get());
+    }
 }
 
 HptfSnapshot HptfProcessor::active_snapshot() const {
-    const std::lock_guard lock(status_mutex_);
-    if (const auto latest = status_.consume()) {
-        observed_ = *latest;
+    if (!state_) {
+        return {};
     }
-    return observed_;
+    MradmDspHptfSnapshot snapshot{};
+    mradm_dsp_hptf_live_snapshot(state_->handle.get(), &snapshot);
+    return from_rust(snapshot);
 }
 
 std::uint64_t HptfProcessor::applied_revision() const {
@@ -396,20 +266,7 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
     if (frames == 0U || channels_ == 0U || !state_ || interleaved == nullptr) {
         return;
     }
-    // A target published during a fade replaces any target Rust has queued and
-    // starts at the frame where that fade ends, independent of call sizes.
-    const auto target = to_rust(pending_.consume());
-    MradmDspHptfUpdate update{};
-    check_realtime(mradm_dsp_hptf_processor_process(state_->handle.get(),
-                                                    interleaved,
-                                                    audio_length(frames, channels_),
-                                                    target ? &*target : nullptr,
-                                                    &update,
-                                                    nullptr,
-                                                    0U));
-    if (update.applied != 0U) {
-        status_.publish(from_rust(update.snapshot));
-    }
+    mradm_dsp_hptf_live_process(state_->handle.get(), interleaved, audio_length(frames, channels_));
 }
 
 } // namespace mradm::render_common

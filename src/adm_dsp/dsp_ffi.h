@@ -178,11 +178,6 @@ typedef struct MradmDspHptfSnapshot {
     MradmDspHptfCoefficients right;
     uint32_t independent;
 } MradmDspHptfSnapshot;
-typedef struct MradmDspHptfUpdate {
-    MradmDspHptfSnapshot snapshot;
-    uint32_t blending;
-    uint32_t applied;
-} MradmDspHptfUpdate;
 // AutoEq text import. error: 0 parsed, 1 Preamp value, 2 Fc value, 3 Gain/Q value, 4 nothing usable;
 // line_offset/line_len index the offending trimmed line of the caller's text.
 typedef struct MradmDspHptfParseResult {
@@ -218,19 +213,18 @@ int32_t
 mradm_dsp_hptf_cascade_set(void* handle, const MradmDspHptfCoefficients* coefficients, char* message, size_t capacity);
 int32_t mradm_dsp_hptf_cascade_reset(void* handle, char* message, size_t capacity);
 int32_t mradm_dsp_hptf_cascade_process(void* handle, float* samples, size_t length, char* message, size_t capacity);
-int32_t mradm_dsp_hptf_processor_create(size_t channels, uint32_t rate, void** output, char* message, size_t capacity);
-void mradm_dsp_hptf_processor_destroy(void* handle);
-// Targets during a fade replace the queued pair; reset accepts the newest whole pair.
-// Failure preserves audio, kernel state and the output update.
-int32_t mradm_dsp_hptf_processor_reset(
-    void* handle, const MradmDspHptfSnapshot* target, MradmDspHptfUpdate* output, char* message, size_t capacity);
-int32_t mradm_dsp_hptf_processor_process(void* handle,
-                                         float* samples,
-                                         size_t length,
-                                         const MradmDspHptfSnapshot* target,
-                                         MradmDspHptfUpdate* output,
-                                         char* message,
-                                         size_t capacity);
+// The shared HpTF processor (MonitorEngine's insert; the Scene output owns its own): control
+// threads publish designed targets, the audio callback processes and reports what it applied.
+// A target the processor would reject fails on publication. Reset only while the callback is
+// parked; snapshot reports the newest applied target.
+int32_t mradm_dsp_hptf_live_create(size_t channels, uint32_t rate, void** output, char* message, size_t capacity);
+void mradm_dsp_hptf_live_destroy(void* handle);
+int32_t
+mradm_dsp_hptf_live_publish(const void* handle, const MradmDspHptfSnapshot* target, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_live_bypass(const void* handle, uint64_t revision, char* message, size_t capacity);
+void mradm_dsp_hptf_live_reset(const void* handle);
+void mradm_dsp_hptf_live_process(const void* handle, float* samples, size_t length);
+void mradm_dsp_hptf_live_snapshot(const void* handle, MradmDspHptfSnapshot* output);
 
 // Owned, sample-rate-independent profiles. source_kind matches the four public configs:
 // 0 shared file, 1 shared parameters, 2 stereo files, 3 stereo parameters.

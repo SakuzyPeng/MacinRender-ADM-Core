@@ -4,6 +4,7 @@
 // or destroy. Error buffers: capacity in *len, bytes written out,
 // NUL-terminated. Status values follow adm::ErrorCode.
 #pragma once
+#include "../adm_dsp/dsp_ffi.h"
 #include "../adm_dsp/room_ffi.h"
 #include "../adm_metadata/scene_ffi.h"
 #ifdef __cplusplus
@@ -289,6 +290,34 @@ typedef struct MradmEngineSceneStatus {
     uint32_t failed;
     uint32_t production_complete;
 } MradmEngineSceneStatus;
+typedef struct MradmEngineSceneOutput MradmEngineSceneOutput;
+// One device callback; while active the shell marks the device's end (when eos), then releases.
+typedef struct MradmEngineSceneOutputPull {
+    size_t frames;
+    uint32_t eos;
+    uint32_t active;
+} MradmEngineSceneOutputPull;
+// AudioDeviceProgress.
+typedef struct MradmEngineSceneDeviceProgress {
+    uint64_t presented_frames;
+    uint32_t media_clock;
+    uint32_t failed;
+    uint32_t recovering;
+    uint64_t underruns;
+} MradmEngineSceneDeviceProgress;
+// SceneDeviceStatus; state is the SceneOutputState value.
+typedef struct MradmEngineSceneOutputStatus {
+    uint32_t state;
+    uint64_t epoch;
+    uint64_t consumed_frames;
+    uint64_t presented_frames;
+    uint64_t queued_frames;
+    uint64_t underruns;
+    uint32_t media_clock;
+    uint32_t recovering;
+    uint32_t failed;
+    uint32_t ended;
+} MradmEngineSceneOutputStatus;
 // live_scene::Diagnostic without its text; message_len is the full text length.
 typedef struct MradmEngineSceneDiagnostic {
     uint32_t level;
@@ -514,6 +543,65 @@ int32_t mradm_engine_scene_diagnostic(const MradmEngineSceneStream* handle,
                                       uint8_t* message,
                                       size_t capacity);
 void mradm_engine_scene_set_clock(const MradmEngineSceneStream* handle, int64_t ns);
+
+// The Scene output session without its device (the C++ shell keeps it). pull runs on the device
+// callback (no blocking, no allocation); park waits until no pull is inside. Errors write code,
+// message and context.
+int32_t mradm_engine_scene_output_create(const MradmEngineSceneStream* stream,
+                                         uint32_t protect_stereo,
+                                         uint32_t device_volume,
+                                         MradmEngineSceneOutput** output,
+                                         uint8_t* message,
+                                         size_t* message_len,
+                                         uint8_t* context,
+                                         size_t* context_len);
+void mradm_engine_scene_output_destroy(MradmEngineSceneOutput* handle);
+void mradm_engine_scene_output_pull(const MradmEngineSceneOutput* handle,
+                                    float* output,
+                                    size_t output_len,
+                                    size_t frames,
+                                    MradmEngineSceneOutputPull* result);
+void mradm_engine_scene_output_release(const MradmEngineSceneOutput* handle);
+void mradm_engine_scene_output_park(const MradmEngineSceneOutput* handle);
+void mradm_engine_scene_output_play(const MradmEngineSceneOutput* handle);
+int32_t mradm_engine_scene_output_check_epoch(const MradmEngineSceneOutput* handle,
+                                              uint64_t epoch,
+                                              uint8_t* message,
+                                              size_t* message_len,
+                                              uint8_t* context,
+                                              size_t* context_len);
+int32_t mradm_engine_scene_output_reset_epoch(const MradmEngineSceneOutput* handle,
+                                              uint64_t epoch,
+                                              int64_t target,
+                                              uint8_t* message,
+                                              size_t* message_len,
+                                              uint8_t* context,
+                                              size_t* context_len);
+int32_t mradm_engine_scene_output_set_volume(const MradmEngineSceneOutput* handle,
+                                             float gain,
+                                             uint8_t* message,
+                                             size_t* message_len,
+                                             uint8_t* context,
+                                             size_t* context_len);
+// A null coefficients pointer publishes the bypass.
+int32_t mradm_engine_scene_output_set_hptf(const MradmEngineSceneOutput* handle,
+                                           const MradmDspHptfCoefficients* coefficients,
+                                           uint64_t revision,
+                                           uint8_t* message,
+                                           size_t* message_len,
+                                           uint8_t* context,
+                                           size_t* context_len);
+// settings is a mradm_dsp_hptf_settings_create handle, designed for the stream's rate.
+int32_t mradm_engine_scene_output_set_hptf_settings(const MradmEngineSceneOutput* handle,
+                                                    const void* settings,
+                                                    uint8_t* message,
+                                                    size_t* message_len,
+                                                    uint8_t* context,
+                                                    size_t* context_len);
+void mradm_engine_scene_output_hptf_snapshot(const MradmEngineSceneOutput* handle, MradmDspHptfSnapshot* out);
+void mradm_engine_scene_output_status(const MradmEngineSceneOutput* handle,
+                                      const MradmEngineSceneDeviceProgress* device,
+                                      MradmEngineSceneOutputStatus* out);
 
 // The file renderer's HRTF state outside a render (the engine prepares its own); sofa 0 selects the
 // built-in set; path is UTF-8, display and file_name the caller's text of it.

@@ -565,7 +565,6 @@ target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
     src/adm_realtime/room_worker_wait.cpp
-    src/adm_realtime/stereo_peak_guard.cpp
     src/adm_realtime/osc_head_tracking.cpp
     src/adm_realtime/osc_head_tracking_protocol.cpp
 )
@@ -855,6 +854,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
     add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
 
+    # Test-only output DSP helpers (tests/support/dsp): the stand-alone stereo peak guard and the
+    # HpTF design / cascade wrappers. Production uses the Rust Scene output and HptfProcessor.
+    add_library(mr_adm_output_dsp_test_support STATIC
+        tests/support/dsp/stereo_peak_guard.cpp tests/support/dsp/hptf_cascade.cpp)
+    target_include_directories(mr_adm_output_dsp_test_support PUBLIC tests/support/dsp src/adm_render_common)
+    target_link_libraries(mr_adm_output_dsp_test_support PUBLIC MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_output_dsp_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_output_dsp_test_support)
+
     add_executable(mr_adm_scene_output_c_api_tests tests/unit/scene_output_c_api_test.cpp)
     target_link_libraries(mr_adm_scene_output_c_api_tests PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_scene_output_c_api_tests)
@@ -864,6 +872,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(
         mr_adm_stereo_peak_guard_tests
         PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
+        mr_adm_output_dsp_test_support
     )
     mr_adm_core_apply_warnings(mr_adm_stereo_peak_guard_tests)
     mr_adm_core_apply_static_analysis(mr_adm_stereo_peak_guard_tests)
@@ -875,6 +884,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(
         mr_adm_scene_callback_alloc_tests
         PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
+        mr_adm_output_dsp_test_support
     )
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
         target_compile_definitions(mr_adm_scene_callback_alloc_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
@@ -955,7 +965,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_monitor_dsp_tests PROPERTIES TIMEOUT 60)
 
     add_executable(mr_adm_output_dsp_tests tests/unit/output_dsp_test.cpp)
-    target_link_libraries(mr_adm_output_dsp_tests PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_output_dsp_tests
+        PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_output_dsp_tests)
     mr_adm_core_apply_static_analysis(mr_adm_output_dsp_tests)
     add_test(NAME mr_adm_output_dsp_tests COMMAND mr_adm_output_dsp_tests)
@@ -1246,6 +1257,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(
         mr_adm_realtime_tests
         PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon Threads::Threads
+        mr_adm_output_dsp_test_support
     )
     mr_adm_core_apply_warnings(mr_adm_realtime_tests)
     mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
@@ -1396,13 +1408,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_render_common_numeric_tests COMMAND mr_adm_render_common_numeric_tests)
 
     add_executable(mr_adm_hptf_tests tests/unit/hptf_eq_test.cpp)
-    target_link_libraries(mr_adm_hptf_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_hptf_tests PRIVATE MacinRender::ADMRenderCommon mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_tests)
     add_test(NAME mr_adm_hptf_tests COMMAND mr_adm_hptf_tests)
 
     add_executable(mr_adm_hptf_regression_tests tests/unit/hptf_eq_regression_test.cpp)
-    target_link_libraries(mr_adm_hptf_regression_tests PRIVATE MacinRender::ADMRenderCommon Threads::Threads)
+    target_link_libraries(mr_adm_hptf_regression_tests
+        PRIVATE MacinRender::ADMRenderCommon Threads::Threads mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_regression_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_regression_tests)
     add_test(NAME mr_adm_hptf_regression_tests COMMAND mr_adm_hptf_regression_tests)
@@ -1415,7 +1428,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_hptf_parse_reference_tests COMMAND mr_adm_hptf_parse_reference_tests)
 
     add_executable(mr_adm_hptf_dsp_tests tests/unit/hptf_dsp_test.cpp)
-    target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE MacinRender::ADMRenderCommon mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_dsp_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_dsp_tests)
     add_test(NAME mr_adm_hptf_dsp_tests COMMAND mr_adm_hptf_dsp_tests)

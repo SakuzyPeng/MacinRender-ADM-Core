@@ -285,7 +285,7 @@ impl Settings {
             independent: kind >= 2,
         })
     }
-    fn design(&self, rate: u32) -> Result<dsp::StereoSnapshot> {
+    pub(crate) fn design(&self, rate: u32) -> Result<dsp::StereoSnapshot> {
         let p = &self.profiles;
         let coefficients = if self.independent {
             dsp::design_stereo(

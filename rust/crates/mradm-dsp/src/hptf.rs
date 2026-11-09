@@ -1,9 +1,11 @@
 //! Headphone compensation: quantized biquads, double state and linear swaps.
-//! Control publication and applied-state mailboxes belong to the C++ adapter.
+//! [`Live`] adds the control publication and applied-state mailboxes around a [`Processor`].
 mod design;
+mod live;
 mod parametric_eq;
 use crate::{Error, Result};
 pub use design::{design, design_stereo};
+pub use live::{Live, Mailbox};
 pub use parametric_eq::{ParseError, ParseErrorKind, Profile, parse as parse_parametric_eq};
 
 pub const MAX_BANDS: usize = 32;
@@ -406,16 +408,20 @@ impl Processor {
         }
     }
     fn validate_target(&self, target: &StereoSnapshot) -> Result<()> {
+        Self::check_target(self.channels(), self.sample_rate, target)
+    }
+    /// Whether a processor of this width and rate accepts `target`.
+    pub fn check_target(channels: usize, sample_rate: u32, target: &StereoSnapshot) -> Result<()> {
         for c in target.coefficients {
             c.validate()?;
         }
-        if target.independent && self.channels() != 2 {
+        if target.independent && channels != 2 {
             return Err(Error::InvalidArgument("HpTF:独立双耳配置只适用于双声道"));
         }
         if target
             .coefficients
             .iter()
-            .any(|c| c.sample_rate != self.sample_rate)
+            .any(|c| c.sample_rate != sample_rate)
         {
             return Err(Error::InvalidArgument("HpTF: target sample rate mismatch"));
         }

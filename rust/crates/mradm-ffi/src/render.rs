@@ -978,6 +978,8 @@ pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
 
 #[path = "engine_scene.rs"]
 mod engine_scene;
+#[path = "engine_scene_output.rs"]
+mod engine_scene_output;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_destroy(handle: *mut RenderLive) {
