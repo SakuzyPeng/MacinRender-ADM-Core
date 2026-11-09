@@ -164,32 +164,6 @@ struct Diagnostic {
 };
 
 using DiagnosticSink = std::function<void(Diagnostic)>;
-
-// Scene streaming renderer: consumes PCM and metadata in caller-submitted frames.
-class ILiveSceneRenderer {
-  public:
-    virtual ~ILiveSceneRenderer() = default;
-    ILiveSceneRenderer(const ILiveSceneRenderer&) = delete;
-    ILiveSceneRenderer& operator=(const ILiveSceneRenderer&) = delete;
-    ILiveSceneRenderer(ILiveSceneRenderer&&) = delete;
-    ILiveSceneRenderer& operator=(ILiveSceneRenderer&&) = delete;
-
-    [[nodiscard]] virtual Result<void> configure_generation(std::uint64_t generation_id,
-                                                            std::span<const ElementDescriptor> elements) = 0;
-    virtual void reset() = 0;
-    [[nodiscard]] virtual Result<void> render(const Frame& frame, std::span<float> interleaved_output) = 0;
-    virtual void set_listener_orientation(const ListenerOrientation& orientation) { (void) orientation; }
-    [[nodiscard]] virtual std::shared_ptr<IRoomControl> room_control() const { return {}; }
-    // Called once before EOS flushing. Existing renderers retain their established quota.
-    [[nodiscard]] virtual Result<std::uint64_t> end_input() { return std::uint64_t{0}; }
-
-    [[nodiscard]] virtual std::uint32_t output_channels() const noexcept = 0;
-    [[nodiscard]] virtual std::uint32_t sample_rate() const noexcept = 0;
-    [[nodiscard]] virtual std::uint32_t tail_input_frames() const noexcept = 0;
-
-  protected:
-    ILiveSceneRenderer() = default;
-};
 // cppcheck-suppress-end unusedStructMember
 
 } // namespace mradm::live_scene

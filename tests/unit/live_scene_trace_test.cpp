@@ -10,7 +10,7 @@
 #include <system_error>
 #include <vector>
 
-#include "../../src/adm_render_common/live_scene_trace.h"
+#include "live_scene_trace.h"
 
 namespace {
 void require(bool condition, const char* message) {

@@ -37,6 +37,8 @@ mod room_environment;
 mod scene;
 mod scene_math;
 mod scene_transition;
+#[cfg(windows)]
+mod scene_worker;
 mod semantic_policy;
 mod spatial;
 mod spreader;

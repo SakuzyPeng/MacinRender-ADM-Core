@@ -228,8 +228,6 @@ target_sources(
     PRIVATE
         src/adm_render_common/capability_records.cpp
         src/adm_render_common/hptf_eq.cpp
-        src/adm_render_common/live_rust_renderer.cpp
-        src/adm_render_common/live_scene_trace.cpp
         src/adm_render_common/render_common.cpp
         src/adm_render_common/speaker_layouts.cpp
         src/adm_render_common/speaker_pcm.cpp
@@ -338,7 +336,7 @@ add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
 target_sources(mr_adm_render_room PRIVATE
     src/adm_render_room/room.cpp
     src/adm_render_room/room_renderer.cpp
-    src/adm_render_room/live_renderer.cpp
+    src/adm_render_room/scene_renderer_request.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h include/adm/render_room.h)
 target_include_directories(mr_adm_render_room PRIVATE src/adm_render_room)
 target_link_libraries(mr_adm_render_room PUBLIC MacinRender::ADMCore
@@ -586,7 +584,7 @@ target_link_libraries(mr_adm_realtime
         MacinRender::ADMRenderRoom
         MacinRender::ADMRenderTripleBalance
 )
-# src/adm_metadata only for the plain C adm_ffi.h that live_policy_ffi.h builds on.
+# src/adm_metadata only for the plain C adm_ffi.h the private FFI headers build on.
 target_include_directories(mr_adm_realtime PRIVATE
     src/adm_metadata
     src/adm_render_vbap
@@ -896,12 +894,28 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_binaural_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_test_support)
 
+    # One Scene stream renderer behind the C++ interface, outside the stream engine (Rust since PCM
+    # consistency 5.4 B): the live renderer tests, the frozen references and the manual benchmarks.
+    add_library(mr_adm_live_scene_test_support STATIC
+        tests/support/live_scene/live_renderer.cpp
+        tests/support/live_scene/live_rust_renderer.cpp
+        tests/support/live_scene/live_scene_trace.cpp)
+    target_include_directories(mr_adm_live_scene_test_support PUBLIC tests/support/live_scene src/adm_render_room)
+    target_link_libraries(mr_adm_live_scene_test_support PUBLIC MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon
+        MacinRender::ADMDsp)
+    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        target_compile_definitions(mr_adm_live_scene_test_support PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_live_scene_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_live_scene_test_support)
+
     add_executable(mr_adm_live_binaural_rust_tests tests/unit/live_binaural_rust_test.cpp)
     target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_binaural_test_support)
-    # The frozen reference includes the former creation header (tests/support/frozen_includes).
+        MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
+    # The frozen reference includes the former creation header (tests/support/frozen_includes) and the
+    # resampler wrapper (tests/support/dsp).
     target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural src/adm_render_room
-        tests/support/frozen_includes)
+        tests/support/frozen_includes tests/support/dsp)
     mr_adm_core_apply_warnings(mr_adm_live_binaural_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_live_binaural_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_binaural_rust_tests)
@@ -909,7 +923,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_scene_numeric_rust_tests tests/unit/scene_numeric_rust_test.cpp)
     target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    target_include_directories(mr_adm_scene_numeric_rust_tests PRIVATE tests/support)
+    target_include_directories(mr_adm_scene_numeric_rust_tests PRIVATE tests/support tests/support/dsp)
     mr_adm_core_apply_warnings(mr_adm_scene_numeric_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_scene_numeric_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_rust_tests)
@@ -923,7 +937,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_live_vbap_rust_tests tests/unit/live_vbap_rust_test.cpp)
     target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE MacinRender::ADMRenderVBAP MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt)
+        MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt mr_adm_live_scene_test_support)
     # The frozen reference includes the former creation header (tests/support/frozen_includes).
     target_include_directories(mr_adm_live_vbap_rust_tests PRIVATE src/adm_render_vbap src/adm_render_room src/adm_render_common
         tests/unit tests/support/frozen_includes)
@@ -1037,8 +1051,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_phase2_scene PRIVATE src/adm_engine)
     mr_adm_core_apply_warnings(mr_adm_phase2_scene)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
-    add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp src/adm_render_common/live_scene_trace.cpp)
+    add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp
+        tests/support/live_scene/live_scene_trace.cpp)
     target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
+    target_include_directories(mr_adm_live_scene_trace_tests PRIVATE tests/support/live_scene src/adm_render_common)
     target_compile_definitions(mr_adm_live_scene_trace_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
     mr_adm_core_apply_warnings(mr_adm_live_scene_trace_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_scene_trace_tests)
@@ -1050,7 +1066,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 --pcm-tool $<TARGET_FILE:mr_adm_pcm_bits>)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
         target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
-            MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json)
+            MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json
+            mr_adm_live_scene_test_support)
         target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room tests/support)
         mr_adm_core_apply_warnings(mr_adm_room_tests)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
@@ -1253,7 +1270,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/manual/triple_balance_scene_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
         MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon)
+        MacinRender::ADMRenderCommon mr_adm_live_scene_test_support)
     target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine src/adm_render_triple_balance
         src/adm_render_room)
     if(WIN32)
@@ -1263,7 +1280,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp)
     target_link_libraries(mr_adm_room_scene_benchmark PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json miniaudio)
+        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json miniaudio
+        mr_adm_live_scene_test_support)
     target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room)
     if(WIN32)
         target_link_libraries(mr_adm_room_scene_benchmark PRIVATE Psapi)
@@ -1311,7 +1329,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
     target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon mr_adm_triple_balance_test_support)
+        MacinRender::ADMRenderCommon mr_adm_triple_balance_test_support mr_adm_live_scene_test_support)
     target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_triple_balance src/adm_render_room)
     mr_adm_core_apply_warnings(mr_adm_live_triple_balance_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_triple_balance_tests)
@@ -1610,7 +1628,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
     target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
-        MacinRender::ADMDsp mr_adm_binaural_test_support)
+        MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
     target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_room"
@@ -1622,6 +1640,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_resampler_tests tests/unit/resampler_test.cpp)
     target_link_libraries(mr_adm_resampler_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
+    target_include_directories(mr_adm_resampler_tests PRIVATE tests/support/dsp)
     mr_adm_core_apply_warnings(mr_adm_resampler_tests)
     mr_adm_core_apply_static_analysis(mr_adm_resampler_tests)
     add_test(NAME mr_adm_resampler_tests COMMAND mr_adm_resampler_tests)
@@ -1629,6 +1648,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS)
         add_executable(mr_adm_resampler_reference_tests tests/reference/resampler_reference_test.cpp)
         target_link_libraries(mr_adm_resampler_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp SampleRate::samplerate)
+        target_include_directories(mr_adm_resampler_reference_tests PRIVATE tests/support/dsp)
         mr_adm_core_apply_warnings(mr_adm_resampler_reference_tests)
         mr_adm_core_apply_static_analysis(mr_adm_resampler_reference_tests)
         add_test(NAME mr_adm_resampler_reference_tests COMMAND mr_adm_resampler_reference_tests)

@@ -3,7 +3,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -28,8 +27,10 @@ struct SceneStreamConfig {
     std::uint64_t input_queue_bytes{64ULL * 1024ULL * 1024ULL};
     std::uint32_t output_ring_frames{8192U};
     std::uint32_t startup_watermark_frames{4096U};
-    // Private deterministic replay seam. Empty uses the production monotonic clock.
-    std::function<std::chrono::steady_clock::time_point()> clock;
+    // Private deterministic replay seam: a manual clock starting at manual_clock_ns, then
+    // SceneStreamEngine::set_clock. Off uses the production monotonic clock.
+    bool manual_clock{false};
+    std::int64_t manual_clock_ns{0};
 };
 
 struct ScenePcmPlaneView {
@@ -99,9 +100,11 @@ struct SceneStreamStatus {
 };
 
 // Scene streaming engine: queues caller-submitted frames and exposes rendered PCM through pull().
+// The engine is Rust mradm-engine `scene::stream` (PCM consistency 5.4 B); this shell converts the
+// records.
 class SceneStreamEngine {
   public:
-    [[nodiscard]] static Result<std::unique_ptr<SceneStreamEngine>> create(SceneStreamConfig config);
+    [[nodiscard]] static Result<std::unique_ptr<SceneStreamEngine>> create(const SceneStreamConfig& config);
 
     ~SceneStreamEngine();
     SceneStreamEngine(const SceneStreamEngine&) = delete;
@@ -117,7 +120,7 @@ class SceneStreamEngine {
                                                     std::span<const live_scene::ElementDescriptor> elements);
     [[nodiscard]] Result<SceneSubmitStatus> submit_frame(const SceneFrameView& view, std::chrono::milliseconds timeout);
     [[nodiscard]] Result<void> signal_end(std::uint64_t epoch_id, std::int64_t end_sample);
-    [[nodiscard]] Result<void> switch_backend(live_scene::RendererConfig config);
+    [[nodiscard]] Result<void> switch_backend(const live_scene::RendererConfig& config);
     // Fence previously submitted work and controls. A replay consumer must drain
     // the output ring first; this does not bypass normal queue backpressure.
     [[nodiscard]] Result<void> wait_idle(std::chrono::milliseconds timeout);
@@ -133,6 +136,8 @@ class SceneStreamEngine {
 
     [[nodiscard]] std::size_t diagnostic_count() const noexcept;
     [[nodiscard]] std::optional<live_scene::Diagnostic> diagnostic(std::size_t index) const;
+    // The manual replay clock's time in nanoseconds; ignored on the monotonic clock.
+    void set_clock(std::int64_t ns) noexcept;
 
   private:
     struct Impl;

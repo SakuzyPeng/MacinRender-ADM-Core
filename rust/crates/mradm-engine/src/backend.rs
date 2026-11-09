@@ -163,6 +163,15 @@ pub trait Host {
     fn room_polar(&self) -> room::PolarConversion;
     fn room_scope(&self) -> Scope;
     fn room_switch(&self) -> Prepare;
+    /// Whether the calling Scene worker renders a room: Windows registers it with MMCSS.
+    fn room_worker(&self, active: bool) {
+        let _ = active;
+    }
+    /// The Scene worker's wait for output ring space while a room renders: Windows uses a
+    /// high-resolution waitable timer.
+    fn room_wait(&self, duration: std::time::Duration) {
+        std::thread::sleep(duration);
+    }
 }
 
 /// What the Triple Balance file stream reads besides the offline kernel.

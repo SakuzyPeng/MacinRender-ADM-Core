@@ -2,7 +2,7 @@
 
 #include <utility>
 
-#include "live_rust_renderer.h"
+#include "rust_error.h"
 
 namespace mradm::binaural_internal {
 namespace {
