@@ -181,10 +181,8 @@ class Replay {
         config.output_sample_rate = spec.at("output_rate");
         config.startup_watermark_frames = 1;
         config.output_ring_frames = 8192;
-        config.clock = [this] {
-            return Clock::time_point(
-                std::chrono::duration_cast<Clock::duration>(std::chrono::nanoseconds(time_ns.load())));
-        };
+        config.manual_clock = true;
+        config.manual_clock_ns = time_ns.load();
         stream = std::shared_ptr<SceneStreamEngine>(take(SceneStreamEngine::create(config)));
         channels = stream->output_format().channels;
         if (device_dsp) {
@@ -376,6 +374,7 @@ class Replay {
         ended = false;
         next_device_control = 2048;
         time_ns.store(static_cast<int64_t>(epoch) * 2000000000LL);
+        stream->set_clock(time_ns.load());
         if (output) {
             done(output->begin_epoch(epoch, target));
             done(output->set_hptf(std::nullopt, 0));
@@ -419,6 +418,7 @@ class Replay {
             time_ns.store((static_cast<int64_t>(epoch) * 2000000000LL) +
                           ((static_cast<int64_t>(position) * 1000000000LL) / config.renderer.sample_rate) +
                           (position >= 10240 ? 1000000000LL : 0LL));
+            stream->set_clock(time_ns.load());
             complete = controls(epoch, position, generation, element) || complete;
             done(stream->wait_idle(std::chrono::seconds(20)));
             uint32_t count = std::min(chunks.at(step++ % chunks.size()), end - position);
@@ -500,15 +500,12 @@ class Replay {
 };
 
 void verify_controls() {
-    std::atomic<unsigned> clock_reads{0};
     SceneStreamConfig config;
     config.renderer.output_layout = "0+2+0";
     config.output_ring_frames = 16;
     config.startup_watermark_frames = 1;
-    config.clock = [&clock_reads] {
-        clock_reads.fetch_add(1);
-        return Clock::time_point(std::chrono::seconds(1));
-    };
+    config.manual_clock = true;
+    config.manual_clock_ns = 1000000000LL;
     auto stream = take(SceneStreamEngine::create(config));
     done(stream->begin_epoch(1, 0));
     live_scene::ElementDescriptor element;
@@ -532,7 +529,6 @@ void verify_controls() {
     const auto timed_out = stream->wait_idle(std::chrono::milliseconds(10));
     require(!timed_out && timed_out.error().message.find("timed out") != std::string::npos && !stream->status().failed,
             "fence must time out behind full ring");
-    require(clock_reads.load() > 0, "injected clock was not used");
     done(stream->begin_epoch(2, 0));
     done(stream->wait_idle(std::chrono::seconds(5)));
     require(!stream->status().failed && stream->status().queued_input_samples == 0, "fence/reset failed to recover");

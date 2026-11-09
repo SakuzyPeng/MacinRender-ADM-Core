@@ -2691,7 +2691,7 @@ adm_error_code_t adm_create_scene_stream_with_room_quality(adm_context_t* contex
         converted.output_ring_frames = input.output_ring_frames;
         converted.startup_watermark_frames = input.startup_watermark_frames;
 
-        auto created = mradm::realtime::SceneStreamEngine::create(std::move(converted));
+        auto created = mradm::realtime::SceneStreamEngine::create(converted);
         if (!created) {
             store_last_error(context, created.error());
             return map_error(created.error().code);
@@ -2964,7 +2964,7 @@ adm_error_code_t adm_scene_stream_switch_backend(adm_scene_stream_t* stream,
             store_last_error(stream, converted.error());
             return map_error(converted.error().code);
         }
-        auto result = stream->engine->switch_backend(std::move(*converted));
+        auto result = stream->engine->switch_backend(*converted);
         if (!result) {
             store_last_error(stream, result.error());
             return map_error(result.error().code);
@@ -3020,7 +3020,7 @@ adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* st
         if (!converted) {
             return fail(converted.error());
         }
-        auto result = stream->engine->switch_backend(std::move(*converted));
+        auto result = stream->engine->switch_backend(*converted);
         return result ? ADM_ERROR_OK : fail(result.error());
     } catch (...) {
         return ADM_ERROR_INTERNAL;

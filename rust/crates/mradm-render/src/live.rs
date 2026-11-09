@@ -160,7 +160,7 @@ pub struct Diagnostic {
 
 /// `default_state`: every field but the position is valid; an object's position is too, and a
 /// producer position seeds it.
-pub(crate) fn default_state(role: Role, position: Option<[f32; 3]>) -> State {
+pub fn default_state(role: Role, position: Option<[f32; 3]>) -> State {
     let mut state = State {
         valid_fields: field::KNOWN & !field::POSITION,
         ..State::default()
@@ -174,7 +174,7 @@ pub(crate) fn default_state(role: Role, position: Option<[f32; 3]>) -> State {
     state
 }
 
-pub(crate) fn copy_state_fields(destination: &mut State, source: &State, requested: u64) {
+pub fn copy_state_fields(destination: &mut State, source: &State, requested: u64) {
     let fields = source.valid_fields & requested;
     let has = |f: u64| fields & f != 0;
     if has(field::ACTIVE) {

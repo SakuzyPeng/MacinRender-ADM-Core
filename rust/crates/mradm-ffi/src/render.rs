@@ -892,6 +892,52 @@ pub struct EngineSceneRendererRequest {
     sink: u32,
 }
 
+/// The renderer configuration of a request; also the Scene stream's (`engine_scene`).
+unsafe fn scene_renderer_config(
+    r: &EngineSceneRendererRequest,
+) -> Result<mradm_engine::scene::renderer::Config<'_>, Error> {
+    use crate::engine_render::{binaural_spread_of, speaker_spread_of};
+    use mradm_engine::backend::{RoomRequest, Screens, Sofa};
+    let (Some(selection), Some(speaker_spread), Some(binaural_spread)) = (
+        mradm_engine::request::Selection::from_u32(r.selection),
+        speaker_spread_of(r.speaker_spread),
+        binaural_spread_of(r.binaural_spread),
+    ) else {
+        return Err(bad("无效 Scene 流式渲染参数"));
+    };
+    Ok(mradm_engine::scene::renderer::Config {
+        selection,
+        layout_id: unsafe { bytes(&r.layout_id)? },
+        apple_geometry: r.apple_geometry != 0,
+        speaker_spread,
+        binaural_spread,
+        split_power: r.split_power != 0,
+        smoothing_frames: r.smoothing_frames,
+        sample_rate: r.sample_rate,
+        sofa: if r.has_sofa != 0 {
+            Some(Sofa {
+                path: unsafe { bytes(&r.sofa_path)? },
+                file_name: unsafe { bytes(&r.sofa_file_name)? },
+            })
+        } else {
+            None
+        },
+        screens: Screens {
+            has_reference: r.has_reference != 0,
+            reference: r.reference,
+            has_reproduction: r.has_reproduction != 0,
+            reproduction: r.reproduction,
+        },
+        room: RoomRequest {
+            package: unsafe { crate::room::package(r.room_profile) },
+            hrir: unsafe { bytes(&r.room_hrir)? },
+            metres: r.room_metres,
+            quality: r.room_quality,
+        },
+        sink: r.sink != 0,
+    })
+}
+
 /// Creates the Scene stream renderer of the configuration (`mradm-engine` `scene::renderer`):
 /// `*sample_rate` is the rate it renders at, `*suffix` its checkpoint name suffix (valid while the
 /// handle lives).
@@ -906,9 +952,6 @@ pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
     context: *mut u8,
     context_len: *mut usize,
 ) -> i32 {
-    use crate::engine_render::{FfiHost, binaural_spread_of, speaker_spread_of};
-    use mradm_engine::backend::{RoomRequest, Screens, Sofa};
-    use mradm_engine::scene::renderer;
     boundary(message, message_len, context, context_len, || {
         let (Some(out), Some(rate), Some(suffix), Some(r)) = (
             unsafe { output.as_mut() },
@@ -919,45 +962,9 @@ pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
             return Err(bad("无效 Scene 流式渲染参数"));
         };
         *out = ptr::null_mut();
-        let (Some(selection), Some(speaker_spread), Some(binaural_spread)) = (
-            mradm_engine::request::Selection::from_u32(r.selection),
-            speaker_spread_of(r.speaker_spread),
-            binaural_spread_of(r.binaural_spread),
-        ) else {
-            return Err(bad("无效 Scene 流式渲染参数"));
-        };
-        let config = renderer::Config {
-            selection,
-            layout_id: unsafe { bytes(&r.layout_id)? },
-            apple_geometry: r.apple_geometry != 0,
-            speaker_spread,
-            binaural_spread,
-            split_power: r.split_power != 0,
-            smoothing_frames: r.smoothing_frames,
-            sample_rate: r.sample_rate,
-            sofa: if r.has_sofa != 0 {
-                Some(Sofa {
-                    path: unsafe { bytes(&r.sofa_path)? },
-                    file_name: unsafe { bytes(&r.sofa_file_name)? },
-                })
-            } else {
-                None
-            },
-            screens: Screens {
-                has_reference: r.has_reference != 0,
-                reference: r.reference,
-                has_reproduction: r.has_reproduction != 0,
-                reproduction: r.reproduction,
-            },
-            room: RoomRequest {
-                package: unsafe { crate::room::package(r.room_profile) },
-                hrir: unsafe { bytes(&r.room_hrir)? },
-                metres: r.room_metres,
-                quality: r.room_quality,
-            },
-            sink: r.sink != 0,
-        };
-        let created = renderer::create(&config, &FfiHost)?;
+        let config = unsafe { scene_renderer_config(r)? };
+        let created =
+            mradm_engine::scene::renderer::create(&config, &crate::engine_render::FfiHost)?;
         let handle = Box::new(RenderLive::new(created.renderer));
         *rate = created.sample_rate;
         *suffix = Text {
@@ -968,6 +975,9 @@ pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
         Ok(())
     })
 }
+
+#[path = "engine_scene.rs"]
+mod engine_scene;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_destroy(handle: *mut RenderLive) {

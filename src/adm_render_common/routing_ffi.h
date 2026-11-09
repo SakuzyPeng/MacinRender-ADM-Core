@@ -83,7 +83,7 @@ typedef struct MradmRenderLiveOverride {
     float divergence_scale;
 } MradmRenderLiveOverride;
 
-// Scene stream renderers (live_scene::ILiveSceneRenderer). Roles: 0 object,
+// Scene stream renderers (the stream engine and the test-support live_scene::ILiveSceneRenderer). Roles: 0 object,
 // 1 DirectSpeakers, 2 LFE; object_id is the semantic identity's AudioObject id, empty without one. A
 // plane's samples are read only with a signal; `trace` is the checkpoint prefix.
 typedef struct MradmRenderLive MradmRenderLive;
@@ -199,6 +199,107 @@ typedef struct MradmRenderRoomStatus {
 } MradmRenderRoomStatus;
 // IRoomControl: concurrent requests/queries; serialize status calls through copying their message.
 typedef struct MradmRenderRoomControl MradmRenderRoomControl;
+// The Scene stream engine (mradm-engine scene::stream, PCM consistency 5.4 B). The configuration
+// leaves out the renderer; manual_clock selects the replay clock starting at clock_ns; the *_bytes
+// are the C++ sizeof of live_scene::Frame, PcmPlane, StateEntry and MetadataUpdate.
+typedef struct MradmEngineSceneConfig {
+    uint32_t output_sample_rate;
+    uint32_t input_queue_samples;
+    uint64_t input_queue_bytes;
+    uint32_t output_ring_frames;
+    uint32_t startup_watermark_frames;
+    uint32_t manual_clock;
+    int64_t clock_ns;
+    size_t frame_bytes;
+    size_t plane_bytes;
+    size_t entry_bytes;
+    size_t update_bytes;
+} MradmEngineSceneConfig;
+typedef struct MradmEngineSceneEntity {
+    MradmAdmText id;
+    MradmAdmText name;
+} MradmEngineSceneEntity;
+// live_scene::SemanticIdentity; present is 0 for none.
+typedef struct MradmEngineSceneIdentity {
+    uint32_t present;
+    MradmAdmText object_id;
+    MradmAdmText object_name;
+    MradmAdmText track_uid;
+    uint32_t has_importance;
+    int32_t importance;
+    uint32_t has_dialogue_id;
+    int32_t dialogue_id;
+    const MradmEngineSceneEntity* contents;
+    size_t contents_len;
+    const MradmEngineSceneEntity* programmes;
+    size_t programmes_len;
+} MradmEngineSceneIdentity;
+// live_scene::ElementDescriptor; role is the ElementRole value.
+typedef struct MradmEngineSceneElement {
+    uint64_t element_id;
+    uint32_t role;
+    MradmAdmText speaker_label;
+    uint32_t has_position;
+    float position[3];
+    uint64_t flags;
+    MradmEngineSceneIdentity identity;
+} MradmEngineSceneElement;
+// ScenePcmPlaneView: samples[k * stride] is sample k.
+typedef struct MradmEngineScenePlane {
+    uint64_t element_id;
+    const float* samples;
+    uint32_t sample_count;
+    uint32_t stride;
+    uint32_t has_signal;
+} MradmEngineScenePlane;
+typedef struct MradmEngineSceneFrame {
+    uint64_t epoch;
+    uint64_t generation;
+    int64_t start;
+    uint32_t duration;
+    uint32_t flags;
+    const MradmEngineScenePlane* planes;
+    size_t planes_len;
+    const MradmRenderLiveEntry* initial;
+    size_t initial_len;
+    const MradmRenderLiveUpdate* updates;
+    size_t updates_len;
+} MradmEngineSceneFrame;
+typedef struct MradmEngineScenePull {
+    uint32_t flags;
+    uint64_t epoch;
+    uint64_t first_media_frame;
+    uint32_t media_frames;
+    uint32_t requested_frames;
+} MradmEngineScenePull;
+// SceneStreamStatus; state is the SceneStreamState value.
+typedef struct MradmEngineSceneStatus {
+    uint32_t state;
+    uint64_t epoch;
+    uint64_t generation;
+    uint64_t queued_input_samples;
+    uint64_t queued_input_bytes;
+    uint64_t buffered_output_frames;
+    uint64_t media_frames_pulled;
+    uint64_t underruns;
+    uint64_t semantic_degradations;
+    uint64_t semantic_policy_revision;
+    float ring_fill;
+    uint32_t ended;
+    uint32_t failed;
+    uint32_t production_complete;
+} MradmEngineSceneStatus;
+// live_scene::Diagnostic without its text; message_len is the full text length.
+typedef struct MradmEngineSceneDiagnostic {
+    uint32_t level;
+    uint32_t code;
+    uint64_t epoch;
+    uint64_t generation;
+    uint64_t element;
+    uint64_t field;
+    size_t message_len;
+} MradmEngineSceneDiagnostic;
+typedef struct MradmEngineSceneStream MradmEngineSceneStream;
 // The binaural HRTF state (4.7): a view of name, rates and sizes, an owned filter-bank handle
 // (mradm_dsp_hrtf_filters_destroy) and the HRIRs and directions, valid while the handle lives.
 typedef struct MradmBinauralHrtfHandle MradmBinauralHrtfHandle;
@@ -326,6 +427,93 @@ int32_t mradm_render_live_render(MradmRenderLive* handle,
                                  size_t* message_len,
                                  uint8_t* context,
                                  size_t* context_len);
+
+// The Scene stream engine; every error call writes code, message and context. The handle's calls
+// may run on any thread, mradm_engine_scene_pull on the audio thread (no blocking, no allocation).
+int32_t mradm_engine_scene_create(const MradmEngineSceneConfig* config,
+                                  const MradmEngineSceneRendererRequest* renderer,
+                                  MradmEngineSceneStream** output,
+                                  uint8_t* message,
+                                  size_t* message_len,
+                                  uint8_t* context,
+                                  size_t* context_len);
+void mradm_engine_scene_destroy(MradmEngineSceneStream* handle);
+void mradm_engine_scene_format(const MradmEngineSceneStream* handle,
+                               uint32_t* output_rate,
+                               uint32_t* channels,
+                               uint32_t* input_rate);
+int32_t mradm_engine_scene_begin_epoch(const MradmEngineSceneStream* handle,
+                                       uint64_t epoch,
+                                       int64_t target,
+                                       uint8_t* message,
+                                       size_t* message_len,
+                                       uint8_t* context,
+                                       size_t* context_len);
+int32_t mradm_engine_scene_configure(const MradmEngineSceneStream* handle,
+                                     uint64_t epoch,
+                                     uint64_t generation,
+                                     const MradmEngineSceneElement* elements,
+                                     size_t elements_len,
+                                     uint8_t* message,
+                                     size_t* message_len,
+                                     uint8_t* context,
+                                     size_t* context_len);
+// *status is the SceneSubmitStatus value when the call succeeds.
+int32_t mradm_engine_scene_submit(const MradmEngineSceneStream* handle,
+                                  const MradmEngineSceneFrame* frame,
+                                  int64_t timeout_ms,
+                                  uint32_t* status,
+                                  uint8_t* message,
+                                  size_t* message_len,
+                                  uint8_t* context,
+                                  size_t* context_len);
+int32_t mradm_engine_scene_signal_end(const MradmEngineSceneStream* handle,
+                                      uint64_t epoch,
+                                      int64_t end,
+                                      uint8_t* message,
+                                      size_t* message_len,
+                                      uint8_t* context,
+                                      size_t* context_len);
+int32_t mradm_engine_scene_switch_backend(const MradmEngineSceneStream* handle,
+                                          const MradmEngineSceneRendererRequest* renderer,
+                                          uint8_t* message,
+                                          size_t* message_len,
+                                          uint8_t* context,
+                                          size_t* context_len);
+int32_t mradm_engine_scene_wait_idle(const MradmEngineSceneStream* handle,
+                                     int64_t timeout_ms,
+                                     uint8_t* message,
+                                     size_t* message_len,
+                                     uint8_t* context,
+                                     size_t* context_len);
+void mradm_engine_scene_orientation(const MradmEngineSceneStream* handle, float yaw, float pitch, float roll);
+// The current backend's room control; null without a room renderer.
+MradmRenderRoomControl* mradm_engine_scene_room_control(const MradmEngineSceneStream* handle);
+int32_t mradm_engine_scene_policy(const MradmEngineSceneStream* handle,
+                                  const uint8_t* json,
+                                  size_t json_len,
+                                  uint64_t revision,
+                                  uint8_t* message,
+                                  size_t* message_len,
+                                  uint8_t* context,
+                                  size_t* context_len);
+void mradm_engine_scene_pull(const MradmEngineSceneStream* handle,
+                             float* output,
+                             size_t output_len,
+                             uint32_t frames,
+                             MradmEngineScenePull* result);
+// attach 1 attaches (returns 1 when it took effect), 0 detaches.
+uint32_t mradm_engine_scene_attach(const MradmEngineSceneStream* handle, uint32_t attach);
+uint32_t mradm_engine_scene_attached(const MradmEngineSceneStream* handle);
+void mradm_engine_scene_status(const MradmEngineSceneStream* handle, MradmEngineSceneStatus* out);
+size_t mradm_engine_scene_diagnostic_count(const MradmEngineSceneStream* handle);
+// 0 when diagnostic index exists; its text is copied up to capacity bytes.
+int32_t mradm_engine_scene_diagnostic(const MradmEngineSceneStream* handle,
+                                      size_t index,
+                                      MradmEngineSceneDiagnostic* out,
+                                      uint8_t* message,
+                                      size_t capacity);
+void mradm_engine_scene_set_clock(const MradmEngineSceneStream* handle, int64_t ns);
 
 // The file renderer's HRTF state outside a render (the engine prepares its own); sofa 0 selects the
 // built-in set; path is UTF-8, display and file_name the caller's text of it.

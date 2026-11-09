@@ -63,6 +63,14 @@ impl Host for FfiHost {
     fn room_switch(&self) -> Prepare {
         crate::render::room_ffi::switch()
     }
+    #[cfg(windows)]
+    fn room_worker(&self, active: bool) {
+        crate::scene_worker::set_active(active);
+    }
+    #[cfg(windows)]
+    fn room_wait(&self, duration: std::time::Duration) {
+        crate::scene_worker::wait(duration);
+    }
 }
 
 /// `RenderPlan` as `mradm_engine::backend::Request`. `kind`: `render_common::EngineBackend`;
