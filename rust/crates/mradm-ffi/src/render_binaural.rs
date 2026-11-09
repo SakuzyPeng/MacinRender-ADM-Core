@@ -6,9 +6,9 @@ use mradm_render::binaural_hrtf::{self, Sofa, State};
 use std::path::Path;
 use std::sync::Arc;
 
-/// A prepared HRTF state.
+/// A prepared HRTF state; the handle keeps the viewed state alive.
 pub struct BinauralHrtfHandle {
-    state: Arc<State>,
+    _state: Arc<State>,
 }
 
 #[repr(C)]
@@ -80,7 +80,7 @@ unsafe fn prepare(
         directions: state.directions.as_ptr(),
         directions_len: state.directions.len(),
     };
-    *out = Box::into_raw(Box::new(BinauralHrtfHandle { state }));
+    *out = Box::into_raw(Box::new(BinauralHrtfHandle { _state: state }));
     Ok(())
 }
 
@@ -138,55 +138,6 @@ pub unsafe extern "C" fn mradm_render_binaural_hrtf_destroy(handle: *mut Binaura
     if !handle.is_null() {
         drop(unsafe { Box::from_raw(handle) });
     }
-}
-
-// ── Scene streaming ───────────────────────────────────────────────────────────
-
-/// The Scene stream binaural renderer's configuration; spread as in `RenderBinauralRequest`.
-#[repr(C)]
-pub struct RenderLiveBinauralRequest {
-    sample_rate: u32,
-    spread: u32,
-    smoothing_frames: u32,
-}
-
-/// A Scene stream binaural renderer over a live HRTF state (`mradm_render_binaural_hrtf_live`).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_binaural_create(
-    hrtf: *const BinauralHrtfHandle,
-    request: *const RenderLiveBinauralRequest,
-    output: *mut *mut RenderLive,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    boundary(
-        message,
-        message_len,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let (Some(out), Some(h), Some(r)) = (
-                unsafe { output.as_mut() },
-                unsafe { hrtf.as_ref() },
-                unsafe { request.as_ref() },
-            ) else {
-                return Err(bad("无效 Live binaural 参数"));
-            };
-            *out = ptr::null_mut();
-            let renderer = live_binaural::Renderer::new(
-                Arc::clone(&h.state),
-                &live_binaural::Config {
-                    sample_rate: r.sample_rate,
-                    spread: r.spread,
-                    smoothing_frames: r.smoothing_frames,
-                },
-            )?;
-            *out = Box::into_raw(Box::new(RenderLive::new(LiveRenderer::Binaural(Box::new(
-                renderer,
-            )))));
-            Ok(())
-        },
-    )
 }
 
 #[cfg(test)]

@@ -456,12 +456,12 @@ fn prepare_triple_balance(
 }
 
 #[cfg(unix)]
-fn native(bytes: &[u8]) -> Option<&Path> {
+pub(crate) fn native(bytes: &[u8]) -> Option<&Path> {
     use std::os::unix::ffi::OsStrExt;
     Some(Path::new(std::ffi::OsStr::from_bytes(bytes)))
 }
 #[cfg(not(unix))]
-fn native(bytes: &[u8]) -> Option<&Path> {
+pub(crate) fn native(bytes: &[u8]) -> Option<&Path> {
     std::str::from_utf8(bytes).ok().map(Path::new)
 }
 

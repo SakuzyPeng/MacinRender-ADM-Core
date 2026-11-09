@@ -4,14 +4,23 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bed.h"
-#include "live_triple_balance_renderer.h"
+#include "live_renderer.h"
 
 namespace {
 using namespace mradm;
 using namespace mradm::live_scene;
+
+// The Scene stream renderer of `triple_balance` (renderer creation is Rust mradm-engine `scene::renderer`).
+[[nodiscard]] mradm::Result<std::unique_ptr<mradm::live_scene::ILiveSceneRenderer>>
+create_live_triple_balance_renderer(mradm::live_scene::RendererConfig config,
+                                    mradm::live_scene::DiagnosticSink diagnostics) {
+    config.renderer = mradm::RendererSelection::triple_balance;
+    return mradm::live_scene::create_live_renderer(config, std::move(diagnostics));
+}
 
 void require(bool condition, const char* message) {
     if (!condition) {

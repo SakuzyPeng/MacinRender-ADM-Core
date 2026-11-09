@@ -296,16 +296,6 @@ pub(crate) fn prepare_switch(
     Ok(out.expect("prepared in scope"))
 }
 
-/// The prepared set behind a handle, shared with a runtime.
-pub(crate) unsafe fn resources(handle: *const RoomPreparedHandle) -> Option<Arc<Resources>> {
-    unsafe { handle.as_ref() }.map(|h| {
-        Arc::new(Resources {
-            set: Arc::clone(&h.prepared),
-            cuda: h.cuda,
-        })
-    })
-}
-
 /// The package behind a profile handle.
 pub(crate) unsafe fn package(handle: *const RoomProfileHandle) -> Option<Arc<Package>> {
     unsafe { handle.as_ref() }.map(|h| Arc::clone(&h.package))

@@ -83,27 +83,35 @@ typedef struct MradmRenderLiveOverride {
     float divergence_scale;
 } MradmRenderLiveOverride;
 
-// Scene stream VBAP and Triple Balance renderers (live_scene::ILiveSceneRenderer). Roles: 0 object,
+// Scene stream renderers (live_scene::ILiveSceneRenderer). Roles: 0 object,
 // 1 DirectSpeakers, 2 LFE; object_id is the semantic identity's AudioObject id, empty without one. A
 // plane's samples are read only with a signal; `trace` is the checkpoint prefix.
 typedef struct MradmRenderLive MradmRenderLive;
-typedef struct MradmRenderLiveVbapRequest {
+// live_scene::RendererConfig: selection the RendererSelection value, speaker_spread / binaural_spread the
+// C++ enum values, has_sofa a non-empty SOFA path (UTF-8), reference the default geometry when absent;
+// room_profile may be null; sink whether the caller publishes diagnostics.
+typedef struct MradmEngineSceneRendererRequest {
+    uint32_t selection;
     MradmAdmText layout_id;
-    uint32_t geometry;
-    uint32_t spread;
+    uint32_t apple_geometry;
+    uint32_t speaker_spread;
+    uint32_t binaural_spread;
     uint32_t split_power;
     uint32_t smoothing_frames;
-} MradmRenderLiveVbapRequest;
-// geometry 0 standard; spread 0 automatic, 1 none, 2 MDAP.
-typedef struct MradmRenderLiveTripleBalanceRequest {
-    MradmAdmText layout_id;
-    uint32_t geometry;
-    uint32_t spread;
-    uint32_t has_sofa;
     uint32_t sample_rate;
-    uint32_t split_power;
-    uint32_t smoothing_frames;
-} MradmRenderLiveTripleBalanceRequest;
+    uint32_t has_sofa;
+    MradmAdmText sofa_path;
+    MradmAdmText sofa_file_name;
+    uint32_t has_reference;
+    MradmRoomScreenGeometry reference;
+    uint32_t has_reproduction;
+    MradmRoomScreenGeometry reproduction;
+    const void* room_profile;
+    MradmAdmText room_hrir;
+    double room_metres;
+    uint32_t room_quality;
+    uint32_t sink;
+} MradmEngineSceneRendererRequest;
 typedef struct MradmRenderLiveElement {
     uint64_t element_id;
     uint32_t role;
@@ -207,12 +215,6 @@ typedef struct MradmRenderBinauralHrtfView {
     const float* directions;
     size_t directions_len;
 } MradmRenderBinauralHrtfView;
-// The Scene stream binaural renderer (4.7 D); spread 0 cloud, 1 none, 2 SAF spreader.
-typedef struct MradmRenderLiveBinauralRequest {
-    uint32_t sample_rate;
-    uint32_t spread;
-    uint32_t smoothing_frames;
-} MradmRenderLiveBinauralRequest;
 // cppcheck-suppress-end unusedStructMember
 
 // kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
@@ -277,26 +279,16 @@ void mradm_room_control_status(MradmRenderRoomControl* handle, MradmRenderRoomSt
 void mradm_room_control_source(const MradmRenderRoomControl* handle, uint64_t id, MradmRoomSourceInfo* out);
 void mradm_room_control_destroy(MradmRenderRoomControl* handle);
 
-int32_t mradm_render_live_vbap_create(const MradmRenderLiveVbapRequest* request,
-                                      MradmRenderLive** output,
-                                      uint8_t* message,
-                                      size_t* message_len);
-int32_t mradm_render_live_triple_balance_create(const MradmRenderLiveTripleBalanceRequest* request,
-                                                MradmRenderLive** output,
-                                                uint8_t* message,
-                                                size_t* message_len);
-// The Scene stream room renderer over a room set: spread is binaural_spread_mode != none, sink
-// whether the caller publishes diagnostics.
-int32_t mradm_render_live_room_create(const void* room,
-                                      const MradmRenderRoomConfig* config,
-                                      uint32_t spread,
-                                      const MradmRoomScreens* screens,
-                                      uint32_t sink,
-                                      MradmRenderLive** output,
-                                      uint8_t* message,
-                                      size_t* message_len,
-                                      uint8_t* context,
-                                      size_t* context_len);
+// Creates the renderer of the configuration: *sample_rate is the rate it renders at, *suffix its checkpoint
+// name suffix (valid while the handle lives).
+int32_t mradm_engine_scene_renderer_create(const MradmEngineSceneRendererRequest* request,
+                                           MradmRenderLive** output,
+                                           uint32_t* sample_rate,
+                                           MradmAdmText* suffix,
+                                           uint8_t* message,
+                                           size_t* message_len,
+                                           uint8_t* context,
+                                           size_t* context_len);
 // The room control of a Scene stream room renderer; null for another renderer.
 MradmRenderRoomControl* mradm_render_live_room_control(const MradmRenderLive* handle);
 void mradm_render_live_destroy(MradmRenderLive* handle);
@@ -363,13 +355,6 @@ int32_t mradm_render_binaural_hrtf_live(uint32_t sofa,
                                         uint8_t* context,
                                         size_t* context_len);
 void mradm_render_binaural_hrtf_destroy(MradmBinauralHrtfHandle* handle);
-// A Scene stream binaural renderer over a live HRTF state; the handle keeps the state alive.
-int32_t mradm_render_live_binaural_create(const MradmBinauralHrtfHandle* hrtf,
-                                          const MradmRenderLiveBinauralRequest* request,
-                                          MradmRenderLive** output,
-                                          uint8_t* message,
-                                          size_t* message_len);
-
 #ifdef __cplusplus
 }
 #endif

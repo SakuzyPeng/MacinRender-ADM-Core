@@ -22,7 +22,6 @@ struct Prepared {
 [[nodiscard]] Result<std::shared_ptr<const Prepared>>
 prepare(const RoomConfig& config, const std::filesystem::path& sofa = {}, const Prepared* reuse = nullptr);
 [[nodiscard]] MradmRoomScreenGeometry geometry(const ScreenGeometry& screen);
-[[nodiscard]] MradmRoomScreens screens(const ScreenConfig& config, const ScreenGeometry& reference);
 
 // A RoomConfig as a Rust record; borrows the UTF-8 HRIR path it holds.
 struct ConfigRecord {

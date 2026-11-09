@@ -15,12 +15,19 @@
 
 #include "../reference/live_vbap/legacy.h"
 #include "../reference/live_vbap/ramps.h"
+#include "live_renderer.h"
 #include "live_vbap.h"
-#include "live_vbap_renderer.h"
 
 namespace {
 using namespace mradm;
 using namespace mradm::live_scene;
+
+// The Scene stream renderer of `saf` (renderer creation is Rust mradm-engine `scene::renderer`).
+[[nodiscard]] mradm::Result<std::unique_ptr<mradm::live_scene::ILiveSceneRenderer>>
+create_live_vbap_renderer(mradm::live_scene::RendererConfig config, mradm::live_scene::DiagnosticSink diagnostics) {
+    config.renderer = mradm::RendererSelection::saf;
+    return mradm::live_scene::create_live_renderer(config, std::move(diagnostics));
+}
 void require(bool value, const char* text) {
     if (!value) {
         throw std::runtime_error(text);

@@ -1,14 +1,9 @@
 //! Private room control, file stream and Scene stream boundary (PCM consistency 4.6 E). The room
 //! runtime's session calls run through `crate::room::scope`, the boundary they used to cross.
 use super::*;
-use crate::room::{
-    RoomPreparedHandle, RoomProfileHandle, RoomSourceInfo, package, prepare_switch, resources,
-    scope,
-};
+use crate::room::{RoomProfileHandle, RoomSourceInfo, package, prepare_switch};
 use mradm_dsp::room::quality::Quality;
-use mradm_dsp::room::screen::RoomScreens;
 use mradm_render::room_runtime::{Config, Control, Prepare};
-use mradm_render::room_stream::Live;
 
 /// `RoomConfig`: a profile handle, the UTF-8 personal HRIR path (empty for none), the scale and
 /// the quality (0 exact, 1 realtime).
@@ -160,53 +155,13 @@ pub unsafe extern "C" fn mradm_room_control_destroy(handle: *mut RenderRoomContr
     }
 }
 
-/// The Scene stream room renderer: `spread` is `binaural_spread_mode != none`; `sink` whether the
-/// caller publishes diagnostics.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_room_create(
-    room: *const RoomPreparedHandle,
-    config: *const RenderRoomConfig,
-    spread: u32,
-    screens: *const RoomScreens,
-    sink: u32,
-    output: *mut *mut RenderLive,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let (Some(out), Some(resources), Some(screens)) = (
-            unsafe { output.as_mut() },
-            unsafe { resources(room) },
-            unsafe { screens.as_ref() },
-        ) else {
-            return Err(bad("无效房间参数"));
-        };
-        *out = ptr::null_mut();
-        let live = Live::new(
-            resources,
-            unsafe { room_config(config)? },
-            spread != 0,
-            *screens,
-            sink != 0,
-            scope,
-            switch(),
-        )?;
-        *out = Box::into_raw(Box::new(RenderLive::new(LiveRenderer::Room(Box::new(
-            live,
-        )))));
-        Ok(())
-    })
-}
-
 /// The room control of a Scene stream room renderer; null for another renderer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_room_control(
     handle: *const RenderLive,
 ) -> *mut RenderRoomControl {
-    match unsafe { handle.as_ref() }.map(|h| &h.renderer) {
-        Some(LiveRenderer::Room(live)) => control_handle(live.control()),
+    match unsafe { handle.as_ref() }.and_then(|h| h.renderer.control()) {
+        Some(control) => control_handle(control),
         _ => ptr::null_mut(),
     }
 }

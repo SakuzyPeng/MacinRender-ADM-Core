@@ -54,13 +54,6 @@ MradmRoomScreenGeometry geometry(const ScreenGeometry& screen) {
     out.width = screen.width;
     return out;
 }
-MradmRoomScreens screens(const ScreenConfig& config, const ScreenGeometry& reference) {
-    MradmRoomScreens result{};
-    result.enabled = config.reproduction.has_value() ? 1U : 0U;
-    result.reference = geometry(reference);
-    result.reproduction = geometry(config.reproduction.value_or(reference));
-    return result;
-}
 Result<std::shared_ptr<const Prepared>>
 prepare(const RoomConfig& config, const std::filesystem::path& sofa, const Prepared* reuse) {
     if (!config.profile) {
