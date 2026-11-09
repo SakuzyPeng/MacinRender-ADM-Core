@@ -1055,13 +1055,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_compile_definitions(mr_adm_fft_benchmark PRIVATE MR_ADM_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>)
     mr_adm_core_apply_warnings(mr_adm_fft_benchmark)
 
-    add_executable(mr_adm_phase2_scene EXCLUDE_FROM_ALL tests/tools/phase2_scene.cpp)
-    target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMEngine
-        MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio
-        MacinRender::ADMRenderRoom MacinRender::ADMDsp MacinRender::ADMRenderBinaural nlohmann_json::nlohmann_json)
-    target_include_directories(mr_adm_phase2_scene PRIVATE src/adm_engine)
-    mr_adm_core_apply_warnings(mr_adm_phase2_scene)
-    set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
     add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp
         tests/support/live_scene/live_scene_trace.cpp)
     target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
@@ -1141,7 +1134,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
         endif()
         add_test(NAME mr_adm_phase2_tool_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/phase2_tools_test.py"
-                --scene $<TARGET_FILE:mr_adm_phase2_scene> ${_mr_scene_checkpoint_args})
+                --scene "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_scene${CMAKE_EXECUTABLE_SUFFIX}"
+                ${_mr_scene_checkpoint_args})
     endif()
 
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)

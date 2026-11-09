@@ -86,10 +86,16 @@ if(_mr_phase2_features)
     set(_mr_phase2_feature_args --features "${_mr_phase2_feature_string}")
 endif()
 # Rust consistency tools (`mradm-ffi` examples): the kernel probe, from 5.2 D the offline
-# same-process repeat render (formerly tests/tools/phase2_render.cpp) and from 5.3 B the
-# file-streaming replay (formerly tests/tools/phase2_stream.cpp).
-foreach(_mr_phase2_example IN ITEMS kernels render stream)
-    add_custom_target(mr_adm_phase2_${_mr_phase2_example}
+# same-process repeat render (formerly tests/tools/phase2_render.cpp), from 5.3 B the
+# file-streaming replay (formerly tests/tools/phase2_stream.cpp) and from 5.4 D the Scene replay
+# (formerly tests/tools/phase2_scene.cpp). The Scene replay builds by default, as the C++ tool did,
+# because ctest's mr_adm_phase2_tool_tests runs it.
+foreach(_mr_phase2_example IN ITEMS kernels render stream scene)
+    set(_mr_phase2_all)
+    if(_mr_phase2_example STREQUAL "scene" AND MR_ADM_CORE_BUILD_TESTS)
+        set(_mr_phase2_all ALL)
+    endif()
+    add_custom_target(mr_adm_phase2_${_mr_phase2_example} ${_mr_phase2_all}
         COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
             "${MR_ADM_RUST_NATIVE_ENV}"
             "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release

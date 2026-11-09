@@ -22,6 +22,7 @@ serde_json.workspace = true
 libm.workspace = true
 
 [dev-dependencies]
+mradm-json = { path = "../mradm-json" }
 mradm-math = { path = "../mradm-math" }
 
 [features]
