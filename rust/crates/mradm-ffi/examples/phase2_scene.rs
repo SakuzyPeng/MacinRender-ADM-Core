@@ -84,9 +84,12 @@ fn i32_of(value: &Value) -> Result<i32, Failure> {
     number(value, |_, i| i as i32)
 }
 fn f32_of(value: &Value) -> Result<f32, Failure> {
-    value
-        .as_f32()
-        .ok_or_else(|| mradm_json::type_must_be("number", value))
+    match value {
+        Value::Bool(b) => Ok(f32::from(u8::from(*b))),
+        _ => value
+            .as_f32()
+            .ok_or_else(|| mradm_json::type_must_be("number", value)),
+    }
 }
 fn is(value: &Value, text: &str) -> bool {
     value.as_str() == Some(text)
@@ -272,6 +275,7 @@ fn identity(value: &Value) -> Result<Identity, Failure> {
     let entities = |key: &str| -> Result<Vec<Entity>, Failure> {
         let list = at(value, key)?;
         let items: Vec<&Value> = match list {
+            Value::Null => Vec::new(),
             Value::Array(items) => items.iter().collect(),
             Value::Object(map) => map.values().collect(),
             _ => vec![list],
@@ -434,6 +438,7 @@ impl<'a> Replay<'a> {
         let mut previous = 0;
         let metadata = at(spec, "metadata")?;
         let items: Vec<&Value> = match metadata {
+            Value::Null => Vec::new(),
             Value::Array(items) => items.iter().collect(),
             Value::Object(map) => map.values().collect(),
             _ => vec![metadata],
@@ -1000,9 +1005,10 @@ fn run(args: &[String]) -> Result<(), Failure> {
         require(
             path.is_relative()
                 && !name.is_empty()
-                && !name.ends_with('/')
-                && !name.contains("//")
-                && path.components().all(|c| matches!(c, Component::Normal(_))),
+                && path.components().all(|c| matches!(c, Component::Normal(_)))
+                // Components collapses repeated separators and internal dots. C++ path equality
+                // also collapses separators, but lexically_normal() removes the dot components.
+                && name.split(std::path::is_separator).all(|part| part != "."),
             "invalid replay room fixture name",
         )?;
         let room = fixtures(case).join(path);
