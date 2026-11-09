@@ -24,7 +24,7 @@
 
 #include "audio_output_device.h"
 #include "downmix_stream.h"
-#include "hptf_eq.h"
+#include "hptf_cascade.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 #include "ring_buffer.h"

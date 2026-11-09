@@ -1,4 +1,4 @@
-mod settings;
+pub(crate) mod settings;
 use crate::{boundary, ptr, slice};
 use mradm_dsp::{Error, Result, hptf as dsp};
 
@@ -37,12 +37,6 @@ pub struct Snapshot {
     revision: u64,
     right: Coefficients,
     independent: u32,
-}
-#[repr(C)]
-pub struct Update {
-    snapshot: Snapshot,
-    blending: u32,
-    applied: u32,
 }
 
 impl From<dsp::Coefficients> for Coefficients {
@@ -107,15 +101,6 @@ impl From<Snapshot> for dsp::StereoSnapshot {
             ],
             revision: s.revision,
             independent: s.independent != 0,
-        }
-    }
-}
-impl From<dsp::StereoUpdate> for Update {
-    fn from(s: dsp::StereoUpdate) -> Self {
-        Self {
-            snapshot: s.snapshot.into(),
-            blending: u32::from(s.blending),
-            applied: u32::from(s.applied),
         }
     }
 }
@@ -285,55 +270,74 @@ pub unsafe extern "C" fn mradm_dsp_hptf_cascade_process(
         mutable(value)?.process(output(samples, length)?)
     })
 }
+/// The shared processor behind the C++ `HptfProcessor` (MonitorEngine's HpTF insert).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_processor_create(
+pub unsafe extern "C" fn mradm_dsp_hptf_live_create(
     channels: usize,
     rate: u32,
-    out: *mut *mut dsp::Processor,
+    out: *mut *mut dsp::Live,
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
     boundary(message, capacity, || unsafe {
-        create(out, || dsp::Processor::new(channels, rate))
+        create(out, || dsp::Live::new(channels, rate))
     })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_processor_destroy(value: *mut dsp::Processor) {
+pub unsafe extern "C" fn mradm_dsp_hptf_live_destroy(value: *mut dsp::Live) {
     unsafe {
         destroy(value);
     }
 }
+/// Control thread: queue a designed target.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_processor_reset(
-    value: *mut dsp::Processor,
-    latest: *const Snapshot,
-    out: *mut Update,
+pub unsafe extern "C" fn mradm_dsp_hptf_live_publish(
+    value: *const dsp::Live,
+    target: *const Snapshot,
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
     boundary(message, capacity, || unsafe {
-        let out = mutable(out)?;
-        let result = mutable(value)?.reset_stereo(target(latest)?)?;
-        *out = result.into();
-        Ok(())
+        let target = self::target(target)?.ok_or(Error::InvalidArgument("HpTF: null argument"))?;
+        shared(value)?.publish(target)
     })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_processor_process(
-    value: *mut dsp::Processor,
-    samples: *mut f32,
-    length: usize,
-    latest: *const Snapshot,
-    out: *mut Update,
+pub unsafe extern "C" fn mradm_dsp_hptf_live_bypass(
+    value: *const dsp::Live,
+    revision: u64,
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
     boundary(message, capacity, || unsafe {
-        let out = mutable(out)?;
-        let result = mutable(value)?.process_stereo(output(samples, length)?, target(latest)?)?;
-        *out = result.into();
-        Ok(())
+        shared(value)?.publish_bypass(revision)
     })
+}
+/// Only while the callback is parked.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hptf_live_reset(value: *const dsp::Live) {
+    if let Some(live) = unsafe { value.as_ref() } {
+        live.reset_state();
+    }
+}
+/// Audio callback: interleaved PCM in place.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hptf_live_process(
+    value: *const dsp::Live,
+    samples: *mut f32,
+    length: usize,
+) {
+    if let (Some(live), Ok(samples)) = (unsafe { value.as_ref() }, unsafe {
+        output(samples, length)
+    }) {
+        live.process(samples);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hptf_live_snapshot(value: *const dsp::Live, out: *mut Snapshot) {
+    if let (Some(live), Some(out)) = (unsafe { value.as_ref() }, unsafe { out.as_mut() }) {
+        *out = live.active_snapshot().into();
+    }
 }
 
 /// error: 0 parsed, 1 Preamp value, 2 Fc value, 3 Gain/Q value, 4 nothing usable.
@@ -412,19 +416,6 @@ mod tests {
         }
         .into()
     }
-    fn update() -> Update {
-        Update {
-            snapshot: Snapshot {
-                coefficients: coefficients(),
-                revision: 42,
-                right: coefficients(),
-                independent: 0,
-            },
-            blending: 42,
-            applied: 42,
-        }
-    }
-
     #[test]
     fn design_and_response_validate_sizes_flags_and_preserve_outputs() {
         unsafe {
@@ -555,20 +546,14 @@ mod tests {
             assert_eq!(mradm_dsp_hptf_cascade_reset(cloned, ptr::null_mut(), 0), 0);
             mradm_dsp_hptf_cascade_destroy(cloned);
             mradm_dsp_hptf_cascade_destroy(ptr::null_mut());
-            let mut processor = ptr::dangling_mut();
+            let mut live = ptr::dangling_mut();
             assert_eq!(
-                mradm_dsp_hptf_processor_create(
-                    usize::MAX,
-                    48000,
-                    &mut processor,
-                    ptr::null_mut(),
-                    0
-                ),
+                mradm_dsp_hptf_live_create(usize::MAX, 48000, &mut live, ptr::null_mut(), 0),
                 1
             );
-            assert!(processor.is_null());
+            assert!(live.is_null());
             assert_eq!(
-                mradm_dsp_hptf_processor_create(2, 48000, &mut processor, ptr::null_mut(), 0),
+                mradm_dsp_hptf_live_create(2, 48000, &mut live, ptr::null_mut(), 0),
                 0
             );
             let mut target = Snapshot {
@@ -578,95 +563,43 @@ mod tests {
                 independent: 0,
             };
             target.coefficients.preamp_gain = 0.5;
-            let mut status = update();
-            audio.fill(42.);
-            for length in [usize::MAX, 3] {
-                assert_eq!(
-                    mradm_dsp_hptf_processor_process(
-                        processor,
-                        audio.as_mut_ptr(),
-                        length,
-                        &target,
-                        &mut status,
-                        ptr::null_mut(),
-                        0
-                    ),
-                    1
-                );
-                assert_eq!(audio, [42.; 16]);
-                assert_eq!(
-                    (status.snapshot.revision, status.blending, status.applied),
-                    (42, 42, 42)
-                );
-            }
-            assert_eq!(
-                mradm_dsp_hptf_processor_process(
-                    processor,
-                    audio.as_mut_ptr(),
-                    16,
-                    &target,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    0
-                ),
-                1
-            );
-            assert_eq!(audio, [42.; 16]);
+            let mut status = Snapshot {
+                revision: 42,
+                ..target
+            };
             target.coefficients.sample_rate = 44100;
             assert_eq!(
-                mradm_dsp_hptf_processor_reset(processor, &target, &mut status, ptr::null_mut(), 0),
+                mradm_dsp_hptf_live_publish(live, &target, ptr::null_mut(), 0),
+                1,
+                "a target the processor would reject fails on publication"
+            );
+            assert_eq!(
+                mradm_dsp_hptf_live_publish(live, ptr::null(), ptr::null_mut(), 0),
                 1
             );
-            assert_eq!(status.snapshot.revision, 42);
             target.coefficients.sample_rate = 48000;
             assert_eq!(
-                mradm_dsp_hptf_processor_process(
-                    processor,
-                    ptr::null_mut(),
-                    0,
-                    &target,
-                    &mut status,
-                    ptr::null_mut(),
-                    0
-                ),
+                mradm_dsp_hptf_live_publish(live, &target, ptr::null_mut(), 0),
                 0
             );
-            assert_eq!(
-                (status.snapshot.revision, status.blending, status.applied),
-                (0, 0, 0)
-            );
-            assert_eq!(
-                mradm_dsp_hptf_processor_process(
-                    processor,
-                    audio.as_mut_ptr(),
-                    16,
-                    &target,
-                    &mut status,
-                    ptr::null_mut(),
-                    0
-                ),
-                0
-            );
-            assert_eq!(
-                (status.snapshot.revision, status.blending, status.applied),
-                (0, 1, 0)
-            );
-            assert_eq!(
-                mradm_dsp_hptf_processor_reset(
-                    processor,
-                    ptr::null(),
-                    &mut status,
-                    ptr::null_mut(),
-                    0
-                ),
-                0
-            );
-            assert_eq!(
-                (status.snapshot.revision, status.blending, status.applied),
-                (1, 0, 1)
-            );
-            mradm_dsp_hptf_processor_destroy(processor);
-            mradm_dsp_hptf_processor_destroy(ptr::null_mut());
+            audio.fill(42.);
+            for length in [usize::MAX, 3] {
+                mradm_dsp_hptf_live_process(live, audio.as_mut_ptr(), length);
+                assert_eq!(audio, [42.; 16], "a bad buffer leaves the audio");
+            }
+            mradm_dsp_hptf_live_process(live, audio.as_mut_ptr(), 16);
+            mradm_dsp_hptf_live_snapshot(live, &mut status);
+            assert_eq!(status.revision, 0, "the fade is still running");
+            mradm_dsp_hptf_live_reset(live);
+            mradm_dsp_hptf_live_snapshot(live, &mut status);
+            assert_eq!(status.revision, 1, "the reset adopted the fading target");
+            assert_eq!(mradm_dsp_hptf_live_bypass(live, 2, ptr::null_mut(), 0), 0);
+            mradm_dsp_hptf_live_reset(live);
+            mradm_dsp_hptf_live_snapshot(live, &mut status);
+            assert_eq!(status.revision, 2);
+            mradm_dsp_hptf_live_snapshot(ptr::null(), &mut status);
+            mradm_dsp_hptf_live_destroy(live);
+            mradm_dsp_hptf_live_destroy(ptr::null_mut());
         }
     }
 }

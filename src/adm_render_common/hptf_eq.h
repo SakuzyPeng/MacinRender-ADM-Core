@@ -7,18 +7,15 @@
 // 多声道扬声器馈送、交给 OS 做 HRTF 的 system-spatial 床、以及调用方自取 PCM 的
 // 裸 pull 路径都**不施加**——那些路径上"最终耳机信号"要么不存在,要么不归我们生成。
 //
-// C++ 负责参数导入与发布；设计和处理走私有 Rust DSP 边界。
+// C++ 只转换参数记录；设计、发布交接与处理都在私有 Rust DSP 边界（mradm-dsp `hptf::Live`）。
 //
 // 数值与检查点遵循 ADR 0018；旧共享路径维持既有逐位结果。
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +24,10 @@
 #include "adm/hptf.h"
 #include "adm/monitor.h"
 #include "adm/options.h" // HptfPreampMode(公共选项枚举,GUI / C ABI 共用)
+
+// The private Rust records (dsp_ffi.h), for callers that hand coefficients to another Rust owner.
+struct MradmDspHptfCoefficients;
+struct MradmDspHptfSnapshot;
 
 namespace mradm::render_common {
 
@@ -79,24 +80,6 @@ struct HptfSnapshot {
     bool independent{false};
 };
 
-// Single producer / single consumer, with private read/write slots and one exchanged slot.
-// Neither side touches a slot owned by the other. A newer publication replaces pending data;
-// every consume is bounded and never waits. External control callers serialize their own side.
-class HptfMailbox {
-  public:
-    void publish(const HptfSnapshot& snapshot) noexcept;
-    [[nodiscard]] std::optional<HptfSnapshot> consume() noexcept;
-
-  private:
-    static constexpr std::uint32_t k_dirty = 4U;
-    static constexpr std::uint32_t k_index_mask = 3U;
-    static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
-    std::array<HptfSnapshot, 3> slots_{};
-    std::atomic<std::uint32_t> middle_{2U};
-    std::uint32_t write_slot_{0U};
-    std::uint32_t read_slot_{1U};
-};
-
 // ── 解析 ──────────────────────────────────────────────────────────────────────
 
 // 纯文本 → profile,不碰文件系统,便于直接单测。
@@ -116,54 +99,10 @@ struct HptfSettings {
 prepare_hptf(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision);
 [[nodiscard]] Result<HptfSettings> prepare_hptf(const std::string& path, HptfPreampMode mode, std::uint64_t revision);
 [[nodiscard]] HptfStereoInfo hptf_snapshot_info(const HptfSnapshot& snapshot);
-
-// ── 设计 ──────────────────────────────────────────────────────────────────────
-
-// RBJ Audio-EQ-Cookbook。搁架用 **Q 参数化**形式(不是 slope S 形式)——这才是
-// EqualizerAPO / AutoEq 的 LSC/HSC 含义。非法参数/不稳定系数返回错误;fc >= fs/2
-// 的段在设计期跳过(20 kHz 段在 48 kHz 合法、在 32 kHz 不合法)。
-[[nodiscard]] Result<HptfCoefficients>
-design_cascade(const HptfProfile& profile, std::uint32_t sample_rate, HptfPreampMode mode);
-
-// 级联在 hz 处的幅度响应(dB,含 preamp)。auto_trim 的搜索与频响测试都用这个闭式,
-// 所以测试断言的正是驱动 auto_trim 的同一份公式。
-[[nodiscard]] double cascade_magnitude_db(const HptfCoefficients& coeffs, double hz);
+[[nodiscard]] MradmDspHptfCoefficients hptf_record(const HptfCoefficients& coefficients) noexcept;
+[[nodiscard]] HptfSnapshot hptf_snapshot(const MradmDspHptfSnapshot& record) noexcept;
 
 // ── 运行 ──────────────────────────────────────────────────────────────────────
-
-// 一条多声道级联 + 其状态。转置直接 II 型(TDF2),**float 系数 + double 状态**:
-// AutoEq profile 常含 20~46 Hz 的段,48 kHz 下极点半径逼近 1,float32 状态在该区域
-// 会丢精度并可能在大正增益下累积直流;10 段 × 2 声道的 double 状态只有 320 字节。
-class HptfCascade {
-  public:
-    HptfCascade();
-    ~HptfCascade();
-    HptfCascade(const HptfCascade& other);
-    HptfCascade& operator=(const HptfCascade& other);
-    HptfCascade(HptfCascade&& other) noexcept;
-    HptfCascade& operator=(HptfCascade&& other) noexcept;
-    // 控制线程:一次性分配状态。之后 set_coefficients / process 都不再分配。
-    void prepare(std::uint32_t channel_count);
-
-    // 复制并检查已设计系数,不分配、不清滤波历史,回调安全。
-    void set_coefficients(const HptfCoefficients& coeffs) noexcept;
-
-    void reset() noexcept;
-
-    // 就地处理 interleaved PCM。严格无分配、无锁、无 I/O。
-    // 零段且单位增益时精确短路;零段的非单位前级仍生效。
-    void process(float* interleaved, std::size_t frames) noexcept;
-
-    [[nodiscard]] const HptfCoefficients& coefficients() const noexcept { return coeffs_; }
-    [[nodiscard]] bool is_bypass() const noexcept { return coeffs_.is_bypass(); }
-    [[nodiscard]] std::uint32_t channels() const noexcept { return channels_; }
-
-  private:
-    HptfCoefficients coeffs_{};
-    std::uint32_t channels_{0};
-    struct State;
-    std::unique_ptr<State> state_; // Rust owns the double state; copies clone history.
-};
 
 // 可热切换的 HpTF 处理器:控制线程发布系数,音频回调消费,切换时两条级联并行跑一段
 // 再线性混合。
@@ -179,13 +118,17 @@ class HptfProcessor {
   public:
     HptfProcessor();
     ~HptfProcessor();
+    HptfProcessor(const HptfProcessor&) = delete;
+    HptfProcessor& operator=(const HptfProcessor&) = delete;
+    HptfProcessor(HptfProcessor&&) = delete;
+    HptfProcessor& operator=(HptfProcessor&&) = delete;
     // 控制线程,构造期调用一次。channels 是**输出**宽度。
     void prepare(std::uint32_t channel_count, std::uint32_t rate);
 
     [[nodiscard]] std::uint32_t sample_rate() const noexcept { return sample_rate_; }
     [[nodiscard]] std::uint32_t channels() const noexcept { return channels_; }
 
-    // 控制线程:写私有槽后交换所有权。互斥锁只串行化控制调用,回调从不获取它。
+    // 控制线程:目标交给 Rust 的三槽交接,回调从不等待。处理器不接受的目标在发布时抛出。
     void publish(const HptfCoefficients& coeffs, std::uint64_t revision);
     void publish(const HptfSnapshot& snapshot);
 
@@ -193,7 +136,7 @@ class HptfProcessor {
     // 代码路径、同一次混合,没有"关掉时"的特例爆音。
     void publish_bypass(std::uint64_t revision);
 
-    // **仅在回调已停泊时调用**(monitor 的 apply_seek_locked / Scene 的 begin_epoch)。
+    // **仅在回调已停泊时调用**(monitor 的 apply_seek_locked)。
     // 采用最新已发布目标(或当前混合目标),再清历史;seek 不会丢失配置。
     void reset_state() noexcept;
 
@@ -208,16 +151,8 @@ class HptfProcessor {
     void process(float* interleaved, std::size_t frames) noexcept;
 
   private:
-    std::mutex publication_mutex_; // control producers only
-    HptfMailbox pending_;
-    mutable std::mutex status_mutex_; // control readers only
-    mutable HptfMailbox status_;
-    mutable HptfSnapshot observed_;
-
-    // 回调私有 Rust 双级联、淡化和 scratch；C++ 只保留 mailbox 接线。
     struct State;
     std::unique_ptr<State> state_;
-
     std::uint32_t channels_{0};
     std::uint32_t sample_rate_{0};
 };

@@ -1,13 +1,11 @@
 #pragma once
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <string>
-#include <vector>
 
 #include "adm/errors.h"
 #include "adm/monitor.h" // HptfInfo（两条实时路径共用）
@@ -16,7 +14,6 @@
 #include "../adm_render_common/hptf_eq.h"
 #include "audio_output_device.h"
 #include "scene_stream_engine.h"
-#include "stereo_peak_guard.h"
 
 namespace mradm::realtime {
 
@@ -46,6 +43,8 @@ struct SceneDeviceStatus {
     bool ended{false};
 };
 
+// The session itself (pull, the stereo feed's prefetch, HpTF and peak guard, volume, epochs,
+// status) is Rust mradm-engine `scene::output` (PCM consistency 5.4 C); this shell owns the device.
 class SceneOutputSession {
   public:
     [[nodiscard]] static Result<std::unique_ptr<SceneOutputSession>>
@@ -85,40 +84,28 @@ class SceneOutputSession {
     [[nodiscard]] HptfInfo hptf_info() const;
     [[nodiscard]] HptfStereoInfo hptf_stereo_info() const;
     [[nodiscard]] Result<void> set_hptf_prepared(const render_common::HptfSettings& settings);
-    [[nodiscard]] bool hptf_supported() const { return peak_guard_ != nullptr; }
-    [[nodiscard]] std::uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }
+    [[nodiscard]] bool hptf_supported() const { return hptf_supported_; }
+    [[nodiscard]] std::uint64_t hptf_applied_revision() const { return hptf_snapshot().revision; }
     [[nodiscard]] render_common::HptfCoefficients hptf_active_coefficients() const {
-        return hptf_.active_coefficients();
+        return hptf_snapshot().coefficients;
     }
 
     [[nodiscard]] SceneDeviceStatus status() const;
 
   private:
+    struct Handle;
     SceneOutputSession(std::shared_ptr<SceneStreamEngine> stream,
                        std::unique_ptr<IAudioOutputDevice> device,
-                       bool protect_stereo);
+                       std::unique_ptr<Handle> handle,
+                       bool hptf_supported);
     void park();
-    std::size_t pull(std::span<float> output, std::size_t frames) noexcept;
-    [[nodiscard]] ScenePullResult pull_stereo(std::span<float> output, std::uint32_t frames) noexcept;
+    [[nodiscard]] render_common::HptfSnapshot hptf_snapshot() const;
 
     std::shared_ptr<SceneStreamEngine> stream_;
     std::unique_ptr<IAudioOutputDevice> device_;
+    std::unique_ptr<Handle> handle_;
     mutable std::mutex control_;
-    std::atomic<bool> playing_{false};
-    std::atomic<std::uint32_t> pulls_{0};
-    std::atomic<float> volume_{1.0F};
-    std::atomic<std::uint64_t> consumed_{0};
-    std::atomic<std::uint64_t> presented_{0};
-    std::atomic<bool> eos_{false};
-    std::atomic<bool> failed_{false};
-    std::atomic<bool> buffering_{true};
-    std::uint32_t channels_{0};
-    std::unique_ptr<StereoPeakGuard> peak_guard_;
-    std::vector<float> peak_input_;
-    bool peak_source_ended_{false};
-    // Headphone compensation, applied to peak_input_ upstream of peak_guard_. Only prepared when
-    // this session owns a stereo feed; otherwise it stays a no-op bypass.
-    render_common::HptfProcessor hptf_;
+    bool hptf_supported_{false};
 };
 
 // cppcheck-suppress-end unusedStructMember

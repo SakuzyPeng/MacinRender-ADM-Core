@@ -138,6 +138,8 @@ class SceneStreamEngine {
     [[nodiscard]] std::optional<live_scene::Diagnostic> diagnostic(std::size_t index) const;
     // The manual replay clock's time in nanoseconds; ignored on the monotonic clock.
     void set_clock(std::int64_t ns) noexcept;
+    // The Rust stream handle (MradmEngineSceneStream) for the output session.
+    [[nodiscard]] const void* rust_handle() const noexcept;
 
   private:
     struct Impl;

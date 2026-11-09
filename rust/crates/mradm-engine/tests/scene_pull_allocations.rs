@@ -154,3 +154,112 @@ fn pulls_do_not_allocate() {
     }
     assert_eq!(flags & pull_flag::FAILED, 0);
 }
+
+#[test]
+fn output_session_pulls_do_not_allocate() {
+    use mradm_dsp::hptf::Coefficients;
+    use mradm_engine::scene::output::Session;
+    let renderer = renderer::Config {
+        selection: Selection::Saf,
+        layout_id: b"0+2+0",
+        apple_geometry: false,
+        speaker_spread: SpeakerSpread::Automatic,
+        binaural_spread: BinauralSpreadMode::Automatic,
+        split_power: false,
+        smoothing_frames: 0,
+        sample_rate: 48000,
+        sofa: None,
+        screens: Screens {
+            has_reference: false,
+            reference: RoomScreenGeometry::default(),
+            has_reproduction: false,
+            reproduction: RoomScreenGeometry::default(),
+        },
+        room: RoomRequest {
+            package: None,
+            hrir: b"",
+            metres: 0.,
+            quality: 0,
+        },
+        sink: true,
+    };
+    let config = Config {
+        output_sample_rate: 48000,
+        output_ring_frames: 1 << 15,
+        startup_watermark_frames: 1,
+        ..Config::default()
+    };
+    let s = Arc::new(Stream::create(&config, &renderer, Arc::new(TestHost)).unwrap());
+    let out = Session::new(s.clone(), true, false).unwrap();
+    out.reset_epoch(1, 0).unwrap();
+    s.configure_generation(
+        1,
+        1,
+        &[Descriptor {
+            element_id: 1,
+            role: 0,
+            speaker_label: Vec::new(),
+            has_position: false,
+            position: [0., 1., 0.],
+            flags: 0,
+            identity: None,
+        }],
+    )
+    .unwrap();
+    let samples = vec![0.5f32; 8192];
+    let planes = [PlaneView {
+        element_id: 1,
+        sample_count: 8192,
+        stride: 1,
+        has_signal: true,
+        samples: Some(&samples),
+    }];
+    let initial = [live::Entry {
+        element_id: 1,
+        state: live::State {
+            valid_fields: field::KNOWN,
+            ..live::State::default()
+        },
+    }];
+    let frame = FrameInput {
+        epoch: 1,
+        generation: 1,
+        start: 0,
+        duration: 8192,
+        flags: frame_flag::STATE_COMPLETE,
+        planes: &planes[..],
+        initial: &initial,
+        updates: &[],
+    };
+    assert_eq!(s.submit_frame(&frame, 5000).unwrap(), Submit::Accepted);
+    s.signal_end(1, 8192).unwrap();
+    s.wait_idle(10000).unwrap();
+    // A fade in progress and one queued behind it, both crossed inside the pulls.
+    let boost = Coefficients {
+        sample_rate: 48000,
+        preamp_gain: 3.0,
+        ..Coefficients::default()
+    };
+    out.set_hptf(Some(boost), 1).unwrap();
+    out.set_volume(0.75).unwrap();
+    out.play();
+    let mut buffer = vec![0f32; 2 * 300];
+    let mut eos = false;
+    for i in 0..100 {
+        if i == 3 {
+            out.set_hptf(None, 2).unwrap();
+        }
+        let (p, n) = counted(|| {
+            let p = out.pull(&mut buffer, 300);
+            out.release();
+            p
+        });
+        assert_eq!(n, 0, "an output pull allocated");
+        if p.eos {
+            eos = true;
+            break;
+        }
+    }
+    assert!(eos, "no end of stream");
+    assert_eq!(out.hptf_snapshot().revision, 2);
+}

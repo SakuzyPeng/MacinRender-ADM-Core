@@ -291,6 +291,10 @@ ScenePullResult SceneStreamEngine::pull(float* output, std::uint32_t frames) noe
     return {result.flags, result.epoch, result.first_media_frame, result.media_frames, result.requested_frames};
 }
 
+const void* SceneStreamEngine::rust_handle() const noexcept {
+    return impl_->handle.get();
+}
+
 bool SceneStreamEngine::attach_output() noexcept {
     return mradm_engine_scene_attach(impl_->handle.get(), 1U) != 0U;
 }

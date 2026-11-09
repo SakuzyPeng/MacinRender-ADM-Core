@@ -12,7 +12,7 @@
 #include <string_view>
 #include <vector>
 
-#include "hptf_eq.h"
+#include "hptf_cascade.h"
 
 namespace {
 
