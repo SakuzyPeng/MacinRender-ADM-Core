@@ -567,7 +567,7 @@ A–D 中，除 [5.4 发布说明](RUST_ORCHESTRATION_SCENE.md#发布说明) 列
 E 的尾声修正改变了 36 个 Scene 用例的 PCM：都是变采样、且最后一个渲染器是双耳的用例，长度不变，只有每个 epoch 末尾的重采样 lookahead 区间不同；同采样率的用例逐字节相同。
 
 本机对照：A–C 的 88 个 Scene 用例 plain 与 diag 相同（diag 只有 device trace 的切分差异，按样本拼接后相同）；B、C 的 C ABI 与输出会话探针逐字节相同；
-D 在同一构建上的 `compare-collections` 全部相同；E 的差异只落在上述 36 个用例。新仓库的 Consistency 42590033479、42629279543、42650805546 都通过，最后一次四份报告都是 294 个 PCM id 相同、门禁失败 0。
+D 在同一构建上的 `compare-collections` 全部相同；E 的差异只落在上述 36 个用例。新仓库的 Consistency 42590033479、42629279543、42650805546、42737302477 都通过，最后一次四份报告都是 294 个 PCM id 相同、门禁失败 0。
 
 生产 C/C++ 29,260 → 26,363 行。见 [5.4 记录](RUST_ORCHESTRATION_SCENE.md)。
 

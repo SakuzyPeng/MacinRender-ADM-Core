@@ -110,7 +110,7 @@
 | 批次 | 新测试 | 植入并被抓到的缺陷 |
 | --- | --- | --- |
 | A | `mradm-engine/tests/scene_renderer.rs`（5 个） | 3 处：room 的输出检查放到资源准备之前、Triple Balance spread 映射、VBAP 后缀不带声道数 |
-| B | `tests/scene_stream.rs`（13 个），pull 的分配计数测试 | 6 处，包括 preroll 边界不进位、retarget 漏掉 cleared 字段、pull 不计欠载、watermark 不看追踪 lookahead、释放预算时不比较 serial |
+| B | `tests/scene_stream.rs`（12 个），另有 pull 的分配计数测试，共 13 个 | 6 处，包括 preroll 边界不进位、retarget 漏掉 cleared 字段、pull 不计欠载、watermark 不看追踪 lookahead、释放预算时不比较 serial |
 | C | `tests/scene_output.rs`（8 个），输出 pull 的分配计数测试，`hptf::live` 4 个 | 5 处：预取量、HpTF 放到峰值保护之后、reset 不重置 HpTF、状态优先级、mailbox 不置 dirty 位 |
 | D | `phase2_tools_test.py` 的 Scene 用例改用 Rust 工具（69 个测试；`4adb6e5` 加了 4 个兼容回归） | 6 处：信号、分区边界、追踪时钟、设备控制帧、`events.json` 缩进、room 尾声 |
 | E | `tests/scene_stream.rs` 3 个，`tests/scene_tail_trace.rs`（只在 `--features mradm-dsp/diagnostics` 下检查），C ABI 的 draining 用例；维护者另加 `scene/stream/tests.rs` 与 `scene_stream.rs` 中的并发 fence、在途策略诊断与日志饱和后的失败等回归 | 7 处：状态写回、清空日志、日志上限、fence 取消、尾声按 `tail()` 渲染、尾声起点为 0 等 |
@@ -141,7 +141,7 @@ D 中有一处时钟比例的变体观察不到：一个 epoch 内只有追踪�
   | `6f41f95`（含 A、B） | 42590033479 | 通过 |
   | C（`8ff855a`） | 42629279543 | 通过 |
   | D（`c181824`） | 42650805546 | 通过；四份报告都是 294 个 PCM id 相同、门禁失败 0 |
-  | E（`12c823c`） | 42737302477 | 写本记录时仍在运行 |
+  | E（`12c823c`） | 42737302477 | 通过，四份报告均为 294 个 PCM id 相同、门禁失败 0 |
 
 - **待你本地验证**：macOS 上的系统空间 Scene 输出（`AVSampleBufferAudioRenderer`）；Windows 上的 `ISpatialAudioClient`、miniaudio，以及 room worker 的 MMCSS 与定时器路径。
 
