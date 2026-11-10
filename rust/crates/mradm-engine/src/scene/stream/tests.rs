@@ -4,6 +4,7 @@ use super::*;
 use crate::backend::{BinauralSpreadMode, RoomRequest, Screens, SpeakerSpread};
 use crate::test_common::backend::TestHost;
 use mradm_dsp::room::screen::RoomScreenGeometry;
+use std::sync::Barrier;
 
 fn stream() -> Arc<Stream> {
     Arc::new(
@@ -96,10 +97,10 @@ fn fill_ring(s: &Stream, epoch: u64) {
 
 #[test]
 fn new_epoch_fences_cannot_complete_cancelled_fences() {
-    const WAITERS: usize = 64;
+    const WAITERS: usize = 128;
     let s = stream();
     s.begin_epoch(1, 0).unwrap();
-    for epoch in 1..=16 {
+    for epoch in 1..=32 {
         fill_ring(&s, epoch);
         let waiters: Vec<_> = (0..WAITERS)
             .map(|_| {
@@ -123,15 +124,19 @@ fn new_epoch_fences_cannot_complete_cancelled_fences() {
             );
             std::thread::yield_now();
         }
+        let ready = Arc::new(Barrier::new(2));
+        let ready_next = Arc::clone(&ready);
         let next = Arc::clone(&s);
         let next_fence = std::thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_secs(10);
+            ready_next.wait();
             while next.status().epoch != epoch + 1 {
                 assert!(Instant::now() < deadline, "the epoch did not advance");
                 std::thread::yield_now();
             }
             next.wait_idle(10_000).unwrap();
         });
+        ready.wait();
         s.begin_epoch(epoch + 1, 0).unwrap();
         next_fence.join().unwrap();
         for waiter in waiters {
