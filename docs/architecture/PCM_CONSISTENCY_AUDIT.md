@@ -555,6 +555,22 @@ S04、S05 保留为 Monitor 的运行时调度条件，S07 保留为构建与宿
 本机对照中现有 115 个离线与文件流式行 plain / diag 逐字节相同，3 个新 id 与旧 ramp 的差异从第二个块的起点加传播延迟开始。同批修正了 libFLAC 在 GNU ld 上的链接顺序，维护者补全了 Cargo 链接的工具与 Windows 部分。
 Consistency 42381474098（`f117738`）的四份报告都是 294 个 PCM id 相同、门禁失败 0。生产 C/C++ 不变。见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)。
 
+**5.4 状态**：Scene 流式编排在 Rust `mradm-engine` `scene`，分五批完成：
+- A：渲染器的选择与创建移入 `scene::renderer`，四个 C++ 创建函数合为一个 FFI 入口；
+- B：`SceneStreamEngine` 移入 `scene::stream`（worker、有理数时间线、输出环、fence、诊断与 `scene/*` 检查点），C++ 只剩接口不变的薄壳，Windows room worker 的 MMCSS 与定时器在 FFI；
+- C：`SceneOutputSession` 的设备无关部分移入 `scene::output`，HpTF 热切换运行时移入 `mradm-dsp` `hptf::Live`，设备留在 C++ 岛；
+- D：`mr_adm_phase2_scene` 改为 `mradm-ffi` example，四个一致性工具至此都是 Rust；
+- E：修正五个照原样迁移的怪癖（状态只前进、诊断日志按 epoch 并设上限、旧 epoch 的 fence 立即取消、尾声长度取 `end_input()`、尾声片段的检查点键）。
+
+A–D 中，除 [5.4 发布说明](RUST_ORCHESTRATION_SCENE.md#发布说明) 列出的例外外，PCM、检查点、文字、context、诊断与状态逐项不变。
+例外包括：结束补零在 reset 时退出（原 C++ 会空转）、HpTF 在发布时拒绝无效目标、私有重放缝改为手动时钟，以及重放工具解析畸形用例 JSON 时的报错文字。
+E 的尾声修正改变了 36 个 Scene 用例的 PCM：都是变采样、且最后一个渲染器是双耳的用例，长度不变，只有每个 epoch 末尾的重采样 lookahead 区间不同；同采样率的用例逐字节相同。
+
+本机对照：A–C 的 88 个 Scene 用例 plain 与 diag 相同（diag 只有 device trace 的切分差异，按样本拼接后相同）；B、C 的 C ABI 与输出会话探针逐字节相同；
+D 在同一构建上的 `compare-collections` 全部相同；E 的差异只落在上述 36 个用例。新仓库的 Consistency 42590033479、42629279543、42650805546 都通过，最后一次四份报告都是 294 个 PCM id 相同、门禁失败 0。
+
+生产 C/C++ 29,260 → 26,363 行。见 [5.4 记录](RUST_ORCHESTRATION_SCENE.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

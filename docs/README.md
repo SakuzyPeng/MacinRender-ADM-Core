@@ -93,6 +93,7 @@
 - [方向与基线（五期 5.1）](architecture/RUST_ORCHESTRATION_BASELINE.md)
 - [离线编排迁入 Rust（五期 5.2）](architecture/RUST_ORCHESTRATION_OFFLINE.md)
 - [文件流式与监听的打开迁入 Rust（五期 5.3）](architecture/RUST_ORCHESTRATION_STREAM.md)
+- [Scene 流式引擎迁入 Rust（五期 5.4）](architecture/RUST_ORCHESTRATION_SCENE.md)
 - [room 默认 ramp 按采样率换算（五期 5.7）](architecture/RUST_ROOM_DEFAULT_RAMP.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
