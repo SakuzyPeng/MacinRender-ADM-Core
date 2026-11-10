@@ -5,6 +5,8 @@
 //! semantic policy, preroll and rational timeline, end of stream, diagnostics and `scene/*`
 //! checkpoints keep the C++ rules, order and texts.
 mod ring;
+#[cfg(test)]
+mod tests;
 mod trace;
 mod worker;
 
@@ -398,7 +400,7 @@ struct WorkItem {
     frame: OwnedFrame,
     reserved_samples: u64,
     reserved_bytes: u64,
-    fence_id: u64,
+    fence: Option<Arc<AtomicBool>>,
 }
 
 /// What the queue mutex guards.
@@ -423,13 +425,9 @@ struct Control {
     reset_request: u64,
     reset_target: i64,
     reset_ack: u64,
-    issued_fence: u64,
-    completed_fence: u64,
-    /// Fences up to this id were issued before the latest begin_epoch.
-    cancelled_fence: u64,
 }
 
-/// The entries one epoch keeps; later ones are counted (as degradations) but not stored.
+/// The entries one epoch keeps; at capacity the latest error replaces the last entry.
 pub const DIAGNOSTICS_PER_EPOCH: usize = 4096;
 
 /// The current epoch's entries. Configure warnings carry epoch 0 and belong to the epoch in
@@ -456,14 +454,21 @@ impl Diagnostics {
             self.degradations.fetch_add(1, Ordering::Relaxed);
         }
         let mut log = self.lock();
-        // A worker step of the previous epoch can finish after begin_epoch cleared the log.
+        // Discard diagnostics explicitly tagged for an older epoch.
         let stale = d.epoch != 0 && d.epoch < log.epoch;
-        if !stale && log.entries.len() < DIAGNOSTICS_PER_EPOCH {
-            log.entries.push(d);
+        if stale {
+            return;
         }
+        if log.entries.len() == DIAGNOSTICS_PER_EPOCH {
+            if d.level != level::ERROR {
+                return;
+            }
+            log.entries.pop();
+        }
+        log.entries.push(d);
     }
 
-    /// begin_epoch: the log restarts for `epoch`.
+    /// The worker's reset barrier restarts the log after all work of the previous epoch.
     fn restart(&self, epoch: u64) {
         let mut log = self.lock();
         log.entries.clear();
@@ -935,8 +940,6 @@ impl Stream {
         }
         let serial = s.reset_serial.load(Ordering::Relaxed) + 1;
         s.reset_serial.store(serial, Ordering::Release);
-        s.diagnostics.restart(epoch);
-        c.cancelled_fence = c.issued_fence;
         c.queue.clear();
         c.generations.clear();
         c.reserved_samples = 0;
@@ -1222,7 +1225,7 @@ impl Stream {
             frame,
             reserved_samples: u64::from(duration),
             reserved_bytes: owned,
-            fence_id: 0,
+            fence: None,
         };
         {
             let mut c = s.lock();
@@ -1317,26 +1320,26 @@ impl Stream {
     pub fn wait_idle(&self, timeout_ms: i64) -> Result<(), Error> {
         let s = &self.shared;
         let mut c = s.lock();
-        c.issued_fence += 1;
-        let id = c.issued_fence;
+        let serial = s.reset_serial.load(Ordering::SeqCst);
+        let completed = Arc::new(AtomicBool::new(false));
         c.queue.push_back(WorkItem {
             kind: Kind::Fence,
-            serial: s.reset_serial.load(Ordering::SeqCst),
-            fence_id: id,
+            serial,
+            fence: Some(Arc::clone(&completed)),
             ..WorkItem::default()
         });
         s.cv.notify_all();
-        let (c, done) = wait_for(s, c, timeout_ms, |c| {
-            c.completed_fence >= id
-                || c.cancelled_fence >= id
+        let (c, done) = wait_for(s, c, timeout_ms, |_| {
+            completed.load(Ordering::Acquire)
+                || s.reset_serial.load(Ordering::Acquire) != serial
                 || s.failed.load(Ordering::SeqCst)
                 || s.quit.load(Ordering::SeqCst)
         });
         if !done {
             return Err(error(code::RENDER_FAILED, "Scene replay fence timed out"));
         }
-        // A new epoch discarded the fenced work.
-        if c.completed_fence < id && c.cancelled_fence >= id {
+        // Completion belongs to this fence, even after later epochs finish their own fences.
+        if !completed.load(Ordering::Acquire) && s.reset_serial.load(Ordering::Acquire) != serial {
             return Err(error(
                 code::RENDER_FAILED,
                 "Scene replay fence was cancelled by a new epoch",

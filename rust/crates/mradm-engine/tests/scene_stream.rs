@@ -642,3 +642,83 @@ fn a_new_epoch_cancels_the_fences_it_discards() {
     assert!(waited < Duration::from_secs(10));
     s.wait_idle(5000).unwrap();
 }
+
+#[test]
+fn a_full_log_preserves_the_worker_failure_reason() {
+    let s = stream(48000, &config(48000, 1024));
+    s.set_semantic_policy_json(&unmatched_rules(DIAGNOSTICS_PER_EPOCH), 1)
+        .unwrap();
+    open(&s, 0);
+    let samples = [0.125f32; 64];
+    let planes = plane(&samples);
+    let initial = [live::Entry {
+        element_id: 1,
+        state: complete_state(),
+    }];
+    s.submit_frame(&frame(&planes, 0, 64, &initial, &[]), 5000)
+        .unwrap();
+    s.wait_idle(5000).unwrap();
+    assert_eq!(s.diagnostic_count(), DIAGNOSTICS_PER_EPOCH);
+    s.set_semantic_policy_json(b"", 2).unwrap();
+    s.wait_idle(5000).unwrap();
+    let mut descriptor = object(1);
+    descriptor.role = 1;
+    descriptor.speaker_label = b"UNKNOWN-LIVE-SPEAKER".to_vec();
+    s.configure_generation(1, 2, &[descriptor]).unwrap();
+    let initial = [live::Entry {
+        element_id: 1,
+        state: live::State {
+            valid_fields: field::ACTIVE | field::LINEAR_GAIN,
+            ..live::State::default()
+        },
+    }];
+    let mut view = frame(&planes, 64, 64, &initial, &[]);
+    view.generation = 2;
+    assert_eq!(s.submit_frame(&view, 5000).unwrap(), Submit::Accepted);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !s.status().failed && Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(s.status().failed, "the fixture must fail in the worker");
+    let failures = (0..s.diagnostic_count())
+        .filter_map(|i| s.diagnostic(i))
+        .filter(|d| d.code == mradm_engine::scene::stream::diagnostic::BACKEND_FAILURE)
+        .count();
+    assert_eq!(failures, 1, "the worker's failure reason was lost");
+    assert_eq!(s.diagnostic_count(), DIAGNOSTICS_PER_EPOCH);
+    let last = s.diagnostic(DIAGNOSTICS_PER_EPOCH - 1).unwrap();
+    assert_eq!(last.level, mradm_engine::scene::stream::level::ERROR);
+    assert_eq!(last.generation, 2);
+}
+
+#[test]
+fn an_epoch_reset_discards_in_progress_policy_diagnostics() {
+    let s = stream(48000, &config(48000, 1024));
+    let rules = 30_000;
+    s.set_semantic_policy_json(&unmatched_rules(rules), 1)
+        .unwrap();
+    open(&s, 0);
+    let samples = [0.125f32; 64];
+    let planes = plane(&samples);
+    let initial = [live::Entry {
+        element_id: 1,
+        state: complete_state(),
+    }];
+    s.submit_frame(&frame(&planes, 0, 64, &initial, &[]), 5000)
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while s.diagnostic_count() == 0 && Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(
+        s.diagnostic_count() > 0,
+        "no policy diagnostics were published"
+    );
+    s.begin_epoch(2, 0).unwrap();
+    assert_eq!(
+        s.diagnostic_count(),
+        0,
+        "epoch 2 has no generation or work yet"
+    );
+    assert_eq!(s.status().semantic_degradations, rules as u64);
+}

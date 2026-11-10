@@ -1488,7 +1488,7 @@ int adm_monitor_log_entry(adm_monitor_t* monitor,
  * - create/destroy must not overlap any other call on the same handle.
  * - submit deep-copies every descriptor/state/event/PCM value before returning and retains no
  *   caller pointer. pull performs no allocation, locking, I/O, logging, or error-string update.
- * - The log holds one epoch (begin_epoch clears it), at most 4096 entries; degradations count all.
+ * - The log holds this epoch, at most 4096 entries (errors replace the last when full); degradations count all.
  * Timeline values are signed samples in input_sample_rate. They identify media only and carry no
  * codec/source provenance. Canonical Cartesian axes are X=right, Y=front, Z=up. PCM remains
  * normalized float32 throughout; 1.0 is nominal full scale and legal overrange is not clipped.

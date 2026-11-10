@@ -479,6 +479,9 @@ impl Worker {
     }
 
     fn perform_reset(&mut self, serial: u64, target: i64) {
+        self.shared
+            .diagnostics
+            .restart(self.shared.epoch_status.load(Ordering::Acquire));
         let latest = self.shared.lock().pending_backend.take();
         let latest = latest.or_else(|| self.deferred.take());
         if let Some(latest) = latest {
@@ -596,8 +599,12 @@ impl Worker {
                     Kind::End => self.process_end(item),
                     Kind::Fence => {
                         {
-                            let mut c = shared.lock();
-                            c.completed_fence = c.completed_fence.max(item.fence_id);
+                            let _c = shared.lock();
+                            if !shared.reset_or_quit(item.serial)
+                                && let Some(completed) = &item.fence
+                            {
+                                completed.store(true, Ordering::Release);
+                            }
                         }
                         shared.cv.notify_all();
                         Ok(())

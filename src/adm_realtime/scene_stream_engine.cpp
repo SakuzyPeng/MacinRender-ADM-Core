@@ -343,8 +343,8 @@ std::optional<live_scene::Diagnostic> SceneStreamEngine::diagnostic(std::size_t 
     if (!read()) {
         return std::nullopt;
     }
-    if (record.message_len > message.size()) {
-        // A diagnostic never changes once recorded.
+    while (record.message_len > message.size()) {
+        // A reset or a later error can replace an entry between reads.
         message.resize(record.message_len);
         if (!read()) {
             return std::nullopt;
