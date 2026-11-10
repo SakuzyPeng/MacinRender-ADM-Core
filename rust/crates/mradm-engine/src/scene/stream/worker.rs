@@ -479,6 +479,9 @@ impl Worker {
     }
 
     fn perform_reset(&mut self, serial: u64, target: i64) {
+        self.shared
+            .diagnostics
+            .restart(self.shared.epoch_status.load(Ordering::Acquire));
         let latest = self.shared.lock().pending_backend.take();
         let latest = latest.or_else(|| self.deferred.take());
         if let Some(latest) = latest {
@@ -596,8 +599,12 @@ impl Worker {
                     Kind::End => self.process_end(item),
                     Kind::Fence => {
                         {
-                            let mut c = shared.lock();
-                            c.completed_fence = c.completed_fence.max(item.fence_id);
+                            let _c = shared.lock();
+                            if !shared.reset_or_quit(item.serial)
+                                && let Some(completed) = &item.fence
+                            {
+                                completed.store(true, Ordering::Release);
+                            }
                         }
                         shared.cv.notify_all();
                         Ok(())
@@ -1342,15 +1349,15 @@ impl Worker {
         Ok(())
     }
 
-    fn flush_backend(&mut self, item: &WorkItem) -> Result<(), Error> {
+    /// Renders the `tail` frames that the end of input counted on the timeline; tail slices
+    /// continue the timeline after the end marker.
+    fn flush_backend(&mut self, item: &WorkItem, tail: u64) -> Result<(), Error> {
         self.apply_available_controls();
         if !self.has_current_generation {
             return Ok(());
         }
-        let mut remaining = self.renderer.tail() as u32;
-        if let Some((incoming, _)) = &self.incoming {
-            remaining = remaining.max(incoming.tail() as u32);
-        }
+        let mut remaining = tail;
+        let mut start = item.frame.start;
         while remaining > 0 {
             if self.shared.reset_or_quit(item.serial) {
                 return Ok(());
@@ -1361,11 +1368,11 @@ impl Worker {
             } else {
                 WORKER_CHUNK_FRAMES
             };
-            let count = remaining.min(maximum);
+            let count = remaining.min(u64::from(maximum)) as u32;
             let mut tail = Slice {
                 epoch: item.frame.epoch,
                 generation: self.current_generation,
-                start: 0,
+                start,
                 duration: count,
                 flags: frame_flag::STATE_COMPLETE,
                 pcm: Vec::new(),
@@ -1392,7 +1399,8 @@ impl Worker {
             );
             self.render_output = output;
             fed?;
-            remaining -= count;
+            remaining -= u64::from(count);
+            start = start.saturating_add(i64::from(count));
         }
         Ok(())
     }
@@ -1409,7 +1417,7 @@ impl Worker {
             self.allowed_output_frames += 1;
             self.rational_remainder = 0;
         }
-        self.flush_backend(item)?;
+        self.flush_backend(item, tail)?;
         self.flush_resampler(item.serial)?;
         let room = self.room_active();
         while self.output_frames_pushed < self.allowed_output_frames {
@@ -1432,9 +1440,10 @@ impl Worker {
             return Ok(());
         }
         let s = &self.shared;
-        s.production_done.store(true, Ordering::Release);
+        // Draining first: a pull that sees production done may end the stream at once.
+        s.advance(&[State::Buffering, State::Running], State::Draining);
         s.output_ready.store(true, Ordering::Release);
-        s.set_state(State::Draining, Ordering::Release);
+        s.production_done.store(true, Ordering::Release);
         Ok(())
     }
 }

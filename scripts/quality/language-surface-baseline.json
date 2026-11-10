@@ -15,15 +15,15 @@
     },
     "tests": {
       "files": 153,
-      "lines": 49238
+      "lines": 49297
     },
     "reference": {
       "files": 38,
       "lines": 12022
     },
     "rust": {
-      "files": 321,
-      "lines": 118419
+      "files": 323,
+      "lines": 118968
     },
     "rust-vendor": {
       "files": 175,
@@ -35,7 +35,7 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40617,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 15726,
+    "rust/crates/mradm-engine": 16275,
     "rust/crates/mradm-ffi": 22586,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
@@ -94,6 +94,6 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 4111,
     "tests/tools": 1748,
-    "tests/unit": 40956
+    "tests/unit": 41015
   }
 }

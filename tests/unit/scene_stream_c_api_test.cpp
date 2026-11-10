@@ -1256,6 +1256,64 @@ bool test_tracking_activation_during_startup(adm_context_t* context, bool resume
     return ok;
 }
 
+bool test_end_marker_keeps_draining(adm_context_t* context) {
+    // The worker keeps publishing readiness while it waits at a full ring; once the producer has
+    // signalled the end, readiness must not turn the stream back to running.
+    StreamGuard stream;
+    auto config = stream_config();
+    config.output_ring_frames = 64U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, 1U, 0) == ADM_ERROR_OK, "begin draining epoch") &&
+              configure_object(stream.value, 1U, 1U);
+    std::vector<float> samples(512U, 0.05F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(1U, 1U, 0, samples, plane, initial);
+    int32_t submitted = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submitted) == ADM_ERROR_OK &&
+                    submitted == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit more audio than the ring holds");
+    ok &= check(adm_scene_stream_signal_end(stream.value, 1U, 512) == ADM_ERROR_OK, "signal the end behind it");
+    adm_scene_stream_status_t status{};
+    status.struct_size = sizeof(status);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < deadline) {
+        ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK, "query the full ring");
+        if (status.buffered_output_frames == 64U) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK &&
+                    status.buffered_output_frames == 64U && status.state == ADM_SCENE_STREAM_DRAINING,
+                "a stream waiting at a full ring after the end marker stays draining");
+    std::array<float, 64U * k_speaker_channels> output{};
+    adm_scene_pull_result_t pulled{};
+    pulled.struct_size = sizeof(pulled);
+    std::uint64_t frames = 0;
+    const auto drain_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < drain_deadline) {
+        ok &= check(adm_scene_stream_pull(stream.value, output.data(), 64U, &pulled) == ADM_ERROR_OK, "drain");
+        frames += pulled.media_frames;
+        if ((pulled.flags & ADM_SCENE_PULL_EOS) != 0U) {
+            break;
+        }
+        ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK &&
+                        status.state == ADM_SCENE_STREAM_DRAINING,
+                    "draining persists until the end of stream");
+        if (pulled.media_frames == 0U) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    ok &= check(frames == 512U && adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK &&
+                    status.state == ADM_SCENE_STREAM_ENDED,
+                "the drained stream ends");
+    return ok;
+}
+
 bool test_binaural_backend(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config();
@@ -2672,6 +2730,7 @@ int main() {
         ok &= test_worker_failure_pull(context);
         ok &= test_renderer_native_roles_and_events(context);
         ok &= test_binaural_backend(context);
+        ok &= test_end_marker_keeps_draining(context);
         for (int replay = 0; replay < 8; ++replay) {
             ok &= test_tracking_activation_during_startup(context, false);
             ok &= test_tracking_activation_during_startup(context, true);

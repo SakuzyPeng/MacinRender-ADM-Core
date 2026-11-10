@@ -6,6 +6,12 @@
 //! the Apple backend and the system-spatial sinks) arrive as [`catalog::Platform`] data.
 #![forbid(unsafe_code)]
 
+#[cfg(test)]
+extern crate self as mradm_engine;
+#[cfg(test)]
+#[path = "../tests/common/mod.rs"]
+mod test_common;
+
 pub mod backend;
 pub mod catalog;
 pub mod fmt;
