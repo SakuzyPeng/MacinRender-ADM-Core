@@ -3,6 +3,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <numeric>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -367,11 +368,10 @@ void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) 
 
 Result<void> MonitorSession::set_overrides(const LiveOverrides& overrides) {
     const auto records = render_common::live_override_records(overrides);
-    size_t context = 0;
-    for (const auto& item : overrides.objects) {
-        context = std::max(context, item.object_id.size() + 1);
-    }
-    Texts errors(context);
+    Texts errors(std::accumulate(
+        overrides.objects.begin(), overrides.objects.end(), size_t{0}, [](size_t capacity, const auto& item) {
+            return std::max(capacity, item.object_id.size() + 1);
+        }));
     return errors.result(mradm_engine_monitor_session_overrides(impl_->rust,
                                                                 records.data(),
                                                                 records.size(),
