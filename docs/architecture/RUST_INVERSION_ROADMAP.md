@@ -43,14 +43,14 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 
 | 模块 | 行数 | 去向 | 期次 |
 | --- | ---: | --- | --- |
-| `src/adm_realtime` | 5,402 | Scene 引擎、Monitor、ring buffer、OSC UDP、设备调度 → Rust；miniaudio 留作 C 岛 | 五期 |
+| `src/adm_realtime` | 5,402 | Scene 引擎、Monitor、ring buffer、OSC UDP、设备调度 → Rust；miniaudio 留作 C 岛（5.4 已迁 Scene 引擎，`SceneStreamEngine` 只剩薄壳，现为 3,314 行：MonitorEngine、OSC、ring buffer、room worker 等待与设备） | 五期 |
 | `src/adm_audio` | 4,909 | WAV / CAF 写出编排、增益重写、trim、降位、容器元数据 → Rust（4.8 已完成：CAF 在 `mradm-wav::caf`，写出端与后处理遍历在 `mradm-render` `output` / `postprocess`；剩 4,184 行，主要是编码器与 `audio_io.h` 薄包装）；FLAC / Opus / IAMF 编码留作 C 岛，APAC 归 Apple 岛 | 四期、七期 |
 | `include/adm` | 4,598 | `c_api.h` 保留；其余随调用方迁出而删除（4.4 删除 `semantic_policy.h` 与 `io::write_scene`，4.8 A 删除 `peak.h` 与 `loudness.h`） | 四期～六期 |
-| `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust（5.2 已迁离线编排与能力表，5.3 已迁文件流式与监听的打开规则，剩 2,049 行：`RenderService` 的循环壳与岛、`PreviewSession` 外壳、平台事实、`monitor_session` 的日志转发与 Apple 岛、`scene_output_session`） | 五期 |
+| `src/adm_engine` | 4,176 | `RenderService`、`PreviewSession`、能力表、`SceneOutputSession` → Rust（5.2 已迁离线编排与能力表，5.3 已迁文件流式与监听的打开规则，剩 2,049 行：`RenderService` 的循环壳与岛、`PreviewSession` 外壳、平台事实、`monitor_session` 的日志转发与 Apple 岛、`scene_output_session`；5.4 起 `scene_output_session` 只剩持有设备的薄壳，现为 1,967 行） | 五期 |
 | `src/adm_c_api` | 3,614 | Rust 实现同一 `c_api.h` | 六期 |
 | `src/adm_render_binaural` | 3,486 | Rust `mradm-render`（4.7 已完成，剩 596 行的适配壳、能力表、`HrtfState` 视图与 Scene 双耳的创建函数；只剩测试与冻结参考使用的 C++ 移到 `tests/support/binaural`） | 四期 |
 | `src/adm_dsp` | 3,475 | 私有 FFI 头随 C++ 调用点删除（4.5 把只剩测试使用的 HOA、EAR、Live VBAP 头移到 `tests/unit`，4.6 把 Triple Balance 头移到 `tests/support` 并删去 Live TB 与 room session 的声明，4.7 把只剩测试使用的双耳头移到 `tests/support/binaural` 并删去 `live_binaural.h`，剩 1,994 行） | 四期～六期 |
-| `src/adm_render_common` | 2,777 | Rust（4.5 已完成路由、对象预处理与扬声器离线驱动；扬声器布局表提前到 4.3）。现为 3,487 行：私有 FFI 头 `routing_ffi.h`（759 行，4.6 增加 Triple Balance 与 room 的声明，4.7 增加双耳）和 Scene 流式 VBAP、Triple Balance、room 与双耳共用的适配 `live_rust_renderer`（4.6 C 由 `src/adm_render_vbap` 移入）；4.7 之后双耳只用离线驱动的错误与文字风格、`resolve_lfe_routing` 与 `live_override_records`，其余薄包装只剩 Apple 岛在用，适配壳到五期删除；5.3 A 起四个流式壳合为 `EngineStream`，现为 3,806 行 | 四期 |
+| `src/adm_render_common` | 2,777 | Rust（4.5 已完成路由、对象预处理与扬声器离线驱动；扬声器布局表提前到 4.3）。现为 3,487 行：私有 FFI 头 `routing_ffi.h`（759 行，4.6 增加 Triple Balance 与 room 的声明，4.7 增加双耳）和 Scene 流式 VBAP、Triple Balance、room 与双耳共用的适配 `live_rust_renderer`（4.6 C 由 `src/adm_render_vbap` 移入）；4.7 之后双耳只用离线驱动的错误与文字风格、`resolve_lfe_routing` 与 `live_override_records`，其余薄包装只剩 Apple 岛在用，适配壳到五期删除；5.3 A 起四个流式壳合为 `EngineStream`；5.4 起 `live_rust_renderer` 移到 `tests/support/live_scene`，`HptfProcessor` 改为 Rust `hptf::Live` 的包装，现为 3,379 行 | 四期 |
 | `src/adm_core` | 2,225 | 语义策略、DS 矩阵、屏幕 → Rust（4.4 已完成，剩 412 行）；领域模型视图到五期删除 | 四期、五期 |
 | `src/adm_render_triple_balance` | 2,055 | Rust `mradm-render`（4.6 已完成，剩 355 行的适配壳与能力表；只剩测试使用的 C++ 移到 `tests/support/triple_balance`） | 四期 |
 | `src/adm_cli` | 1,655 | Rust CLI，行为不变 | 六期 |
@@ -68,7 +68,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | 期 | 目标 | 退出条件 |
 | --- | --- | --- |
 | 四期 | PCM 写出为止的数据链路迁入 Rust；`room-binaural` exact 档进矩阵；S03、观察内核、N01 JSON 残留与覆盖缺口收尾 | 后端与公共渲染层的 C++ 只剩适配壳；锁定矩阵三平台逐位相同；C++ 规模按切片实测下降（2026-10-31 已满足，见[四期结项](RUST_INVERSION_CLOSEOUT.md)） |
-| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)，5.1 起确定；编排代码放进新 crate `mradm-engine`；驱动面与岛接口清单见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)；离线编排 5.2 已完成，见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)；文件流式与监听的打开 5.3 已完成，见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md)；room 默认 ramp 的有意数值变化 5.7 提前完成，见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
+| 五期 | 编排与实时调度迁入 Rust：`RenderService` / `PreviewSession`、后处理编排、`SceneStreamEngine`、`MonitorEngine`、ring buffer、OSC UDP 收发与快照、设备调度（切片见[审计五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)，5.1 起确定；编排代码放进新 crate `mradm-engine`；驱动面与岛接口清单见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)；离线编排 5.2 已完成，见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md)；文件流式与监听的打开 5.3 已完成，见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md)；Scene 流式引擎 5.4 已完成，见 [5.4 记录](RUST_ORCHESTRATION_SCENE.md)；room 默认 ramp 的有意数值变化 5.7 提前完成，见 [5.7 记录](RUST_ROOM_DEFAULT_RAMP.md)） | 一致性工具改为 Rust，并在同一构建上证明新旧工具输出逐位相同；C++ 的 `AdmScene` 与适配壳删除 |
 | 六期 | 边界迁入 Rust：C ABI 由 Rust cdylib 实现（`mradm_capi`、同一 `c_api.h`、`SOVERSION 1`、只导出 `adm_*`）；CLI 改为 Rust；删除 C++ SDK 与安装规则；构建以 Cargo 为主 | ABI 导出、GUI P/Invoke、CLI 输出与退出码回归通过；CLI11、spdlog/fmt、nlohmann_json、tl-expected 移除 |
 | 七期 | 平台岛收缩：Apple / Windows sink 与编码器 C 库只留窄 C 接口，评估 objc2 / windows crate；冻结参考按条件退役；C++ 测试清退 | 生产 C/C++ 只剩岛 |
 
@@ -80,7 +80,7 @@ CI 的 `version-metadata` job 还传入 `--base-ref`，校验候选基线没有�
 | --- | --- | --- |
 | 离线 | `mradm` CLI、`mr_adm_phase2_render` | C++ `RenderService`（5.2 起为驱动 Rust 状态机的循环壳）；`mr_adm_phase2_render` 5.2 D 起为 Rust，直接驱动 `mradm-engine` |
 | 文件流式 | `mr_adm_phase2_stream` | 5.3 B 起为 Rust，直接驱动 `mradm-engine` 的准备与 `stream`（原为 `io::import_scene`、内部 `resolve_renderer`、`IRenderStream`） |
-| Scene | `mr_adm_phase2_scene` | 内部 `SceneStreamEngine` 的时钟缝、`SceneOutputSession` 的捕获设备 |
+| Scene | `mr_adm_phase2_scene` | 5.4 D 起为 Rust，直接驱动 `mradm-engine` `scene::stream` 与 `scene::output`（原为内部 `SceneStreamEngine` 的时钟缝、`SceneOutputSession` 的捕获设备） |
 | 内核 | `mr_adm_phase2_kernels` | 直接调用 Rust crate |
 
 C ABI 目前替代不了这些路径：离线没有 listener orientation；文件流式没有回放入口；Scene 不能注入时钟、
@@ -95,7 +95,8 @@ C ABI 目前替代不了这些路径：离线没有 listener orientation；文�
   `mr_adm_phase2_render` / `_stream` / `_scene` 采集一次，再用 `compare-collections.py` 与旧工具的采集逐字节比较；
   0 差异后才替换构建目录里的同名工具，旧工具随即删除。带替换的采集记录 `tool_overrides`，不能作为跨平台证据。
   `mr_adm_phase2_render` 已按此切换（5.2 D，见 [5.2 记录](RUST_ORCHESTRATION_OFFLINE.md#验证)），`mr_adm_phase2_stream` 也已切换
-  （5.3 B，见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md#验证)），只剩 `mr_adm_phase2_scene` 是 C++。
+  （5.3 B，见 [5.3 记录](RUST_ORCHESTRATION_STREAM.md#验证)），`mr_adm_phase2_scene` 最后切换（5.4 D，见 [5.4 记录](RUST_ORCHESTRATION_SCENE.md#验证)），
+  四个一致性工具都已是 Rust。
 
 ## C++ 删除与冻结参考
 
