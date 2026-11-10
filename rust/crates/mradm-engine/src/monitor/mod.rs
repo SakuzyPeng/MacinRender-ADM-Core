@@ -591,6 +591,10 @@ impl Monitor {
             shortterm: AtomicU32::new(SILENCE.to_bits()),
             integrated: AtomicU32::new(SILENCE.to_bits()),
         });
+        // macOS lazily allocates Mutex backing storage. Initialize both callback locks before
+        // the worker or device can run, including the output stage's first active pull.
+        drop(shared.callback.lock().unwrap_or_else(|e| e.into_inner()));
+        drop(shared.stage());
         let mut state = worker::Worker::new(shared.clone(), source, crossfade, meter_scratch);
         state.rebuild_meter();
         let handle = std::thread::Builder::new()

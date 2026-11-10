@@ -1,8 +1,10 @@
 //! The monitor's device callback (PCM consistency 5.5 A; the C++ engine had no allocation guard)
-//! neither allocates nor frees: while playing, across a seek's bridge, with an HpTF target blending
-//! in, on an underrun, while paused and after the end of stream.
+//! neither allocates nor frees: on the first inactive and output-stage pulls, while playing,
+//! across a seek's bridge, with repeated HpTF targets, on an underrun, while paused and after EOF.
 use mradm_dsp::hptf::{Coefficients, Snapshot};
-use mradm_engine::monitor::{Cancel, Monitor, MonitorHost, Overrides, Source, Validate};
+use mradm_engine::monitor::{
+    Cancel, Monitor, MonitorHost, OutputStage, Overrides, Source, Validate,
+};
 use mradm_render::routing::Error;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -49,6 +51,7 @@ struct Noise {
     hold: Arc<AtomicBool>,
     left: u64,
     seed: u32,
+    stage: Option<Arc<dyn OutputStage>>,
 }
 
 struct Accept;
@@ -91,6 +94,33 @@ impl Source for Noise {
     }
     fn set_overrides(&mut self, _overrides: &Overrides) {}
     fn set_orientation(&mut self, _pose: [f32; 3]) {}
+    fn output_stage(&self) -> Option<Arc<dyn OutputStage>> {
+        self.stage.clone()
+    }
+    fn intermediate_channels(&self) -> usize {
+        2
+    }
+    fn produce_intermediate(&mut self, output: &mut [f32], frames: usize) -> Result<usize, Error> {
+        self.process(output, frames)
+    }
+}
+
+struct Passthrough;
+impl OutputStage for Passthrough {
+    fn render_output(
+        &self,
+        input: &[f32],
+        output: &mut [f32],
+        frames: usize,
+        _pose: [f32; 3],
+    ) -> usize {
+        output[..frames * 2].copy_from_slice(&input[..frames * 2]);
+        frames
+    }
+    fn loop_render_reset(&self, _frame: u64) {}
+    fn render_failed(&self) -> bool {
+        false
+    }
 }
 
 struct Host;
@@ -116,6 +146,7 @@ fn pulls_do_not_allocate() {
         hold: hold.clone(),
         left: 120_000,
         seed: 1,
+        stage: None,
     };
     let Ok(m) = Monitor::create(Box::new(source), true, Arc::new(Host)) else {
         panic!("create");
@@ -128,23 +159,27 @@ fn pulls_do_not_allocate() {
         let (got, n) = pull(&m);
         assert_eq!((got.frames, n), (480, 0), "playing");
     }
-    // An HpTF target blends in over the following pulls.
-    let coefficients = Coefficients {
-        sample_rate: RATE,
-        preamp_gain: 0.5,
-        ..Coefficients::default()
-    };
-    m.hptf()
-        .publish(
-            Snapshot {
-                coefficients,
-                revision: 3,
-            }
-            .into(),
-        )
-        .unwrap();
-    for _ in 0..8 {
-        assert_eq!(pull(&m).1, 0, "hptf blend");
+    // Rotate through all pending and status mailbox slots, including slots first reached by
+    // a later publication. Status queries run on the control side, outside the counted pull.
+    for revision in 3..9 {
+        let coefficients = Coefficients {
+            sample_rate: RATE,
+            preamp_gain: if revision % 2 == 0 { 0.75 } else { 0.5 },
+            ..Coefficients::default()
+        };
+        m.hptf()
+            .publish(
+                Snapshot {
+                    coefficients,
+                    revision,
+                }
+                .into(),
+            )
+            .unwrap();
+        for _ in 0..8 {
+            assert_eq!(pull(&m).1, 0, "hptf blend");
+        }
+        assert_eq!(m.hptf().applied_revision(), revision);
     }
     // A seek's 10 ms bridge.
     m.seek(30_000);
@@ -187,5 +222,46 @@ fn pulls_do_not_allocate() {
         let (got, n) = pull(&m);
         assert!(got.mark_end);
         assert_eq!(n, 0, "ended");
+    }
+}
+
+#[test]
+fn initial_inactive_pulls_do_not_allocate() {
+    let source = Noise {
+        hold: Arc::new(AtomicBool::new(false)),
+        left: 120_000,
+        seed: 1,
+        stage: None,
+    };
+    let Ok(m) = Monitor::create(Box::new(source), true, Arc::new(Host)) else {
+        panic!("create");
+    };
+    let mut block = [1f32; 480 * 2];
+    let (got, n) = counted(|| m.pull(&mut block, 480));
+    assert_eq!((got.frames, n), (0, 0), "first stopped pull");
+    assert!(block.iter().all(|&v| v == 0.));
+    m.pause();
+    let (got, n) = counted(|| m.pull(&mut block, 480));
+    assert_eq!((got.frames, n), (0, 0), "paused before play");
+}
+
+#[test]
+fn output_stage_pulls_do_not_allocate() {
+    let source = Noise {
+        hold: Arc::new(AtomicBool::new(false)),
+        left: 120_000,
+        seed: 1,
+        stage: Some(Arc::new(Passthrough)),
+    };
+    let Ok(m) = Monitor::create(Box::new(source), true, Arc::new(Host)) else {
+        panic!("create");
+    };
+    let mut block = [0f32; 480 * 2];
+    m.play();
+    wait(|| m.status().buffered_frames >= 4096);
+    for _ in 0..8 {
+        let (got, n) = counted(|| m.pull(&mut block, 480));
+        assert_eq!((got.frames, n), (480, 0), "output-stage pull");
+        assert!(block.iter().any(|&v| v != 0.));
     }
 }
