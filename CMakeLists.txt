@@ -959,6 +959,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_monitor_dsp_tests tests/unit/monitor_dsp_test.cpp)
     target_link_libraries(mr_adm_monitor_dsp_tests PRIVATE MacinRender::ADMDsp)
+    target_include_directories(mr_adm_monitor_dsp_tests PRIVATE tests/support/dsp)
     mr_adm_core_apply_warnings(mr_adm_monitor_dsp_tests)
     mr_adm_core_apply_static_analysis(mr_adm_monitor_dsp_tests)
     add_test(NAME mr_adm_monitor_dsp_tests COMMAND mr_adm_monitor_dsp_tests)

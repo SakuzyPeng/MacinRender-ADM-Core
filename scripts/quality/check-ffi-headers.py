@@ -33,7 +33,7 @@ FFI_HEADERS = [
     "tests/support/binaural/live_binaural_ffi.h",
     "src/adm_dsp/room_ffi.h",
     "tests/unit/live_vbap_ffi.h",
-    "src/adm_dsp/monitor_ffi.h",
+    "tests/support/dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
     "tests/support/dsp/scene_transition_ffi.h",
     "tests/support/post_gain/post_gain_ffi.h",
@@ -86,8 +86,13 @@ class CType:
     # Constness of each `*` from left to right; the last one is the top-level qualifier, which is not
     # part of the ABI and is dropped.
     pointers: tuple[bool, ...]
+    # A function pointer: (return type, parameter types); base is "fn" and pointers is (False,).
+    signature: tuple["CType", tuple["CType", ...]] | None = None
 
     def __str__(self) -> str:
+        if self.signature is not None:
+            ret, params = self.signature
+            return f"{ret} (*)({', '.join(str(p) for p in params)})"
         text = ("const " if self.const else "") + self.base
         for level_const in self.pointers:
             text += "*" + (" const" if level_const else "")
@@ -113,6 +118,7 @@ STRUCT_BODY = re.compile(r"(typedef\s+)?struct\s+(\w+)\s*\{(.*?)\}\s*(\w*)\s*;",
 OPAQUE = re.compile(r"typedef\s+struct\s+(\w+)\s+(\w+)\s*;")
 ARRAY_TYPEDEF = re.compile(r"typedef\s+(\w+)\s+(\w+)\s*\[(\d+)\]\s*;")
 FUNCTION = re.compile(r"([\w\s\*]+?)\b(mradm_\w+)\s*\(([^()]*)\)\s*;", re.S)
+FUNCTION_POINTER = re.compile(r"^(.*?)\(\s*\*\s*(\w+)\s*\)\s*\((.*)\)$", re.S)
 
 
 def strip(text: str) -> str:
@@ -120,6 +126,22 @@ def strip(text: str) -> str:
     text = PREPROCESSOR.sub(" ", text)
     text = EXTERN_OPEN.sub(" ", text)
     return text.replace("std::", "")
+
+
+def parse_parameters(text: str, known: set[str]) -> tuple[CType, ...]:
+    text = text.strip()
+    if not text or text == "void":
+        return ()
+    return tuple(parse_type(part, known)[0] for part in text.split(","))
+
+
+def parse_function_pointer(text: str, known: set[str]) -> tuple[CType, str] | None:
+    """`RET (*name)(PARAMS)`: a struct field holding a C callback."""
+    match = FUNCTION_POINTER.match(text.strip())
+    if match is None:
+        return None
+    ret, _ = parse_type(match.group(1), known)
+    return CType("fn", False, (False,), (ret, parse_parameters(match.group(3), known))), match.group(2)
 
 
 def parse_type(text: str, known: set[str]) -> tuple[CType, str]:
@@ -191,6 +213,10 @@ def parse_header(text: str, origin: str, header: Header, constants: dict[str, st
             declaration = declaration.strip()
             if not declaration:
                 continue
+            callback = parse_function_pointer(declaration, known)
+            if callback is not None:
+                fields.append((callback[0], (), callback[1]))
+                continue
             head, _, rest = declaration.partition(",")
             first_type, first_name = parse_type(re.sub(r"\[\d+\]", "", head), known)
             declarators = [head] + [part.strip() for part in rest.split(",")] if rest else [head]
@@ -243,6 +269,15 @@ class Checker:
         return True
 
     def same(self, hand: CType, generated: CType, where: str) -> bool:
+        if hand.signature is not None or generated.signature is not None:
+            if hand.signature is None or generated.signature is None:
+                return False
+            (hand_ret, hand_params), (gen_ret, gen_params) = hand.signature, generated.signature
+            return (
+                self.same(hand_ret, gen_ret, where)
+                and len(hand_params) == len(gen_params)
+                and all(self.same(h, g, where) for h, g in zip(hand_params, gen_params))
+            )
         if is_handle(hand, generated, self.gen):
             return hand.pointers == generated.pointers and hand.const == generated.const
         if hand.pointers != generated.pointers or hand.const != generated.const:

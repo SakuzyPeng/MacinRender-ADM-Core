@@ -1,91 +1,233 @@
 #include "monitor_engine.h"
 
 #include <algorithm>
-#include <chrono>
-#include <cmath>
 #include <exception>
-#include <limits>
+#include <mutex>
+#include <stdexcept>
+#include <stop_token>
+#include <string>
 #include <utility>
 
-#include "meter.h"
-#include "room_worker_wait.h"
-#include "stream_dsp.h"
+#include "../adm_render_common/render_common.h"
+#include "../adm_render_common/speaker_pcm.h"
 
 namespace mradm::realtime {
 
 namespace {
-// Worker production granularity (frames per stream.process() chunk) and ring depth. The
-// ring holds ~k_ring_frames of audio ahead of the playhead so the worker's batch DSP +
-// disk reads stay off the audio callback's critical path. Both are frame counts; the ring
-// stores channels × frames floats.
-constexpr uint64_t k_chunk_frames = 1024U;
-constexpr std::size_t k_ring_frames = 8192U;
-// Push devices (e.g. AVSampleBufferAudioRenderer for system spatial) don't pull on a realtime
-// audio callback — they drain into the system media queue and tolerate latency (the system
-// spatializer already adds >150 ms). Give the worker a much deeper lead there so an occasional
-// DSP/scheduling spike can't drain the ring before the worker recovers. ~512 ms at 48 kHz.
-// The low-latency realtime devices keep the shallow ring above.
-constexpr std::size_t k_ring_frames_push = 24576U;
-// While head tracking is actively driving the listener orientation, cap the realtime worker's lead
-// to this shallow depth (~43 ms) instead of filling the whole ring. The head pose only affects
-// newly-rendered slices, so the lead time IS the head-tracking latency: a deep lead means already-
-// rendered (stale-orientation) audio has to drain before a turn is heard. Shrinking it while tracking
-// trades a little underrun cushion for a ~4× more responsive turn; non-tracked monitoring keeps the
-// deep lead. Only the low-latency realtime (callback) path honours this — the push / system-spatial
-// path tracks at the output stage and is unaffected.
-constexpr std::size_t k_tracking_lookahead_frames = 2048U;
-// While head tracking, render in smaller chunks so the worker re-reads the pending orientation (and
-// the stream re-applies it) at a finer cadence — the listener pose only updates between process()
-// calls, so the chunk size is the orientation's output granularity. 512 frames ≈ 10.7 ms (vs the
-// 21 ms default). Cheap for the binaural AU; non-tracked monitoring keeps the larger chunk.
-constexpr uint64_t k_tracking_chunk_frames = 512U;
-// Treat head tracking as active for this long after the last orientation update, so the shallow lead
-// persists across the gaps between updates (~30 Hz) yet reverts to the deep lead shortly after
-// tracking stops.
-constexpr auto k_tracking_active_window = std::chrono::milliseconds(750);
-constexpr auto k_idle_nap = std::chrono::milliseconds(1);
-// Linear crossfade length for a backend hot-switch (~43 ms at 48 kHz): long enough to mask
-// the discontinuity between two renderers, short enough to feel immediate.
-constexpr uint64_t k_crossfade_frames = 2048U;
-void finish_switch(const std::shared_ptr<StreamSwitchReceipt>& receipt, StreamSwitchState state) {
-    if (receipt) {
-        receipt->state.store(state);
+
+constexpr int32_t k_construction_failed = 100;
+
+void write(std::string_view text, uint8_t* out, size_t* len) {
+    if (len == nullptr) {
+        return;
     }
+    const auto n = (*len == 0U || out == nullptr) ? 0U : std::min(text.size(), *len - 1U);
+    if (out != nullptr && *len != 0U) {
+        std::copy_n(text.data(), n, out);
+        out[n] = 0U;
+    }
+    *len = n;
+}
+
+int32_t fail(const Error& error, const MradmEngineIslandError* e) noexcept {
+    write(error.message, e->message, e->message_len);
+    write(error.context, e->context, e->context_len);
+    return static_cast<int32_t>(error.code);
+}
+
+int32_t fail(const char* what, const MradmEngineIslandError* e) noexcept {
+    return fail(Error{ErrorCode::render_failed, what, {}}, e);
+}
+
+std::string_view view(const MradmAdmText& text) {
+    return text.data == nullptr ? std::string_view{}
+                                : std::string_view{reinterpret_cast<const char*>(text.data), text.len};
+}
+
+LiveOverrides overrides_of(const MradmRenderLiveOverride* values, size_t count, uint64_t revision) {
+    LiveOverrides result;
+    result.revision = revision;
+    result.objects.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        const auto& v = values[i];
+        LiveObjectOverride o;
+        o.object_id = std::string{view(v.base.object_id)};
+        o.speaker_label = std::string{view(v.base.speaker_label)};
+        o.mute = v.base.mute != 0U;
+        o.gain_db = v.base.gain_db;
+        if (v.base.has_head_locked != 0U) {
+            o.head_locked = v.base.head_locked != 0U;
+        }
+        o.extent_scale = v.extent_scale;
+        o.extent_width_scale = v.extent_width_scale;
+        o.extent_height_scale = v.extent_height_scale;
+        o.extent_depth_scale = v.extent_depth_scale;
+        o.diffuse_scale = v.diffuse_scale;
+        o.divergence_scale = v.divergence_scale;
+        result.objects.push_back(std::move(o));
+    }
+    return result;
+}
+
+// A C++ stream behind the island table. The stop source is replaced per cancellable seek.
+struct Island {
+    std::unique_ptr<IRenderStream> stream;
+    std::mutex cancel_mutex;
+    std::stop_source cancel;
+};
+
+Island& island(void* ctx) {
+    return *static_cast<Island*>(ctx);
+}
+
+template <class F> int32_t guarded(const MradmEngineIslandError* e, const F& f) noexcept {
+    try {
+        return f();
+    } catch (const std::exception& error) {
+        return fail(error.what(), e);
+    } catch (...) {
+        return fail("unknown exception", e);
+    }
+}
+
+int32_t produce(Result<std::size_t> r, size_t* produced, const MradmEngineIslandError* e) {
+    if (!r) {
+        return fail(r.error(), e);
+    }
+    *produced = *r;
+    return 0;
+}
+
+int32_t done(const Result<void>& r, const MradmEngineIslandError* e) {
+    return r ? 0 : fail(r.error(), e);
+}
+
+MradmEngineIslandStream island_table(std::unique_ptr<IRenderStream> stream) {
+    const bool output_stage = stream->renders_orientation_at_output() && stream->intermediate_channels() > 0U;
+    MradmEngineIslandStream t{};
+    t.out_channels = stream->out_channels();
+    t.sample_rate = stream->sample_rate();
+    t.requires_preroll = stream->seek_requires_preroll() ? 1U : 0U;
+    t.intermediate_channels = output_stage ? stream->intermediate_channels() : 0U;
+    t.ctx = new Island{std::move(stream), {}, {}};
+    t.process = [](void* ctx,
+                   float* out,
+                   size_t len,
+                   size_t frames,
+                   size_t* produced,
+                   const MradmEngineIslandError* e) noexcept {
+        return guarded(e, [&] { return produce(island(ctx).stream->process({out, len}, frames), produced, e); });
+    };
+    t.seek = [](void* ctx, uint64_t frame, const MradmEngineIslandError* e) noexcept {
+        return guarded(e, [&] { return done(island(ctx).stream->seek(frame), e); });
+    };
+    t.cancel_begin = [](void* ctx) noexcept {
+        auto& i = island(ctx);
+        const std::lock_guard lock(i.cancel_mutex);
+        i.cancel = std::stop_source{};
+    };
+    t.cancel_request = [](void* ctx) noexcept {
+        auto& i = island(ctx);
+        const std::lock_guard lock(i.cancel_mutex);
+        i.cancel.request_stop();
+    };
+    t.seek_cancellable = [](void* ctx, uint64_t frame, const MradmEngineIslandError* e) noexcept {
+        return guarded(e, [&] {
+            auto& i = island(ctx);
+            std::stop_token token;
+            {
+                const std::lock_guard lock(i.cancel_mutex);
+                token = i.cancel.get_token();
+            }
+            return done(i.stream->seek_with_cancel(frame, token), e);
+        });
+    };
+    t.validate = [](void* ctx,
+                    const MradmRenderLiveOverride* values,
+                    size_t count,
+                    uint64_t revision,
+                    const MradmEngineIslandError* e) noexcept {
+        return guarded(
+            e, [&] { return done(island(ctx).stream->validate_overrides(overrides_of(values, count, revision)), e); });
+    };
+    t.set_overrides = [](void* ctx, const MradmRenderLiveOverride* values, size_t count, uint64_t revision) noexcept {
+        island(ctx).stream->set_overrides(overrides_of(values, count, revision));
+    };
+    t.set_orientation = [](void* ctx, float yaw, float pitch, float roll) noexcept {
+        island(ctx).stream->set_listener_orientation({yaw, pitch, roll});
+    };
+    t.produce_intermediate = [](void* ctx,
+                                float* out,
+                                size_t len,
+                                size_t frames,
+                                size_t* produced,
+                                const MradmEngineIslandError* e) noexcept {
+        return guarded(
+            e, [&] { return produce(island(ctx).stream->produce_intermediate({out, len}, frames), produced, e); });
+    };
+    t.render_output = [](void* ctx,
+                         const float* in,
+                         size_t in_len,
+                         float* out,
+                         size_t out_len,
+                         size_t frames,
+                         float yaw,
+                         float pitch,
+                         float roll) noexcept -> size_t {
+        return island(ctx).stream->render_output({in, in_len}, {out, out_len}, frames, {yaw, pitch, roll});
+    };
+    t.reposition_source = [](void* ctx, uint64_t frame, const MradmEngineIslandError* e) noexcept {
+        return guarded(e, [&] { return done(island(ctx).stream->reposition_source(frame), e); });
+    };
+    t.loop_render_reset = [](void* ctx, uint64_t frame) noexcept { island(ctx).stream->loop_render_reset(frame); };
+    t.render_failed = [](void* ctx) noexcept -> uint32_t { return island(ctx).stream->render_failed() ? 1U : 0U; };
+    t.destroy = [](void* ctx) noexcept { delete static_cast<Island*>(ctx); };
+    return t;
+}
+
+// The source descriptor of a stream: a Rust handle, or an island table that `table` keeps alive
+// until the call copies it.
+MradmEngineLiveMonitorSource source_of(std::unique_ptr<IRenderStream> stream, MradmEngineIslandStream& table) {
+    MradmEngineLiveMonitorSource source{};
+    if (auto* raw = render_common::release_engine_stream(stream, source.info); raw != nullptr) {
+        source.stream = raw;
+        return source;
+    }
+    table = island_table(std::move(stream));
+    source.island = &table;
+    return source;
 }
 
 } // namespace
 
-MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
-    : stream_(std::move(stream)), device_(device), logs_(logs),
-      pull_is_realtime_playback_(device.pull_is_realtime_playback()), channels_(stream_->out_channels()),
-      sample_rate_(stream_->sample_rate()),
-      output_stage_(stream_->renders_orientation_at_output() && stream_->intermediate_channels() > 0U),
-      ring_channels_(output_stage_ ? stream_->intermediate_channels() : channels_),
-      ring_((device.pull_is_realtime_playback() ? k_ring_frames : k_ring_frames_push) * ring_channels_),
-      scratch_(static_cast<std::size_t>(k_chunk_frames) * ring_channels_, 0.0F),
-      scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
-      meter_ring_(output_stage_ ? static_cast<std::size_t>(k_ring_frames) * channels_ : 0U),
-      output_dsp_(channels_, sample_rate_, pull_is_realtime_playback_), crossfade_dsp_(channels_, k_crossfade_frames) {
-    std::atomic_store(&room_control_, stream_->room_control());
-    if (output_stage_) {
-        // pull_scratch_ holds one callback's worth of intermediate before render_output; sized for a
-        // generous max block (the callback loops if it ever asks for more). meter_scratch_ is the
-        // worker's drain buffer for the output tap.
-        pull_scratch_.assign(static_cast<std::size_t>(k_ring_frames) * ring_channels_, 0.0F);
-        meter_scratch_.assign(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F);
-    }
-    // Headphone compensation runs on the OUTPUT width (downstream of render_output), never on
-    // ring_channels_, and at the STREAM's rate — the device's actual rate can differ and its
-    // resampler sits downstream of this insert.
-    hptf_.prepare(channels_, sample_rate_);
-    rebuild_meter();
+void MonitorEngine::Destroy::operator()(MradmEngineLiveMonitor* handle) const noexcept {
+    mradm_engine_live_monitor_destroy(handle);
 }
 
-Result<std::unique_ptr<MonitorEngine>> MonitorEngine::create(IRenderStreamFactory& factory,
-                                                             IAudioOutputDevice& device,
-                                                             const AdmScene& scene,
-                                                             const RenderOptions& opts,
-                                                             LogSink& logs) {
+MonitorEngine::MonitorEngine(IAudioOutputDevice& device, LogSink& logs) : device_(device), logs_(logs) {
+    host_.ctx = this;
+    host_.log = [](void* ctx,
+                   uint32_t level,
+                   const uint8_t* module,
+                   size_t module_len,
+                   const uint8_t* text,
+                   size_t len) noexcept {
+        static_cast<MonitorEngine*>(ctx)->logs_.log(static_cast<LogLevel>(level),
+                                                    {reinterpret_cast<const char*>(module), module_len},
+                                                    {reinterpret_cast<const char*>(text), len});
+    };
+    host_.device_flush = [](void* ctx) noexcept { static_cast<MonitorEngine*>(ctx)->device_.flush(); };
+    host_.device_pause = [](void* ctx) noexcept { static_cast<MonitorEngine*>(ctx)->device_.pause(); };
+    host_.device_resume = [](void* ctx) noexcept { static_cast<MonitorEngine*>(ctx)->device_.resume(); };
+}
+
+Result<std::unique_ptr<MonitorEngine>>
+MonitorEngine::create(IRenderStreamFactory& factory,
+                      IAudioOutputDevice& device,
+                      const AdmScene& scene,
+                      const RenderOptions& opts,
+                      LogSink& logs,
+                      std::shared_ptr<IRoomControl> (*room_control)(MradmRenderRoomControl*)) {
     auto stream = factory.open(scene, opts, logs);
     if (!stream) {
         return tl::unexpected{stream.error()};
@@ -93,222 +235,103 @@ Result<std::unique_ptr<MonitorEngine>> MonitorEngine::create(IRenderStreamFactor
     if (*stream == nullptr) {
         return make_error(ErrorCode::internal_error, "render stream factory returned a null stream");
     }
-    if ((*stream)->out_channels() == 0 || (*stream)->sample_rate() == 0) {
-        return make_error(ErrorCode::internal_error,
-                          "render stream reports an invalid format (0 channels or 0 sample rate)");
+    std::unique_ptr<MonitorEngine> engine{new MonitorEngine(device, logs)};
+    engine->room_control_ = room_control;
+    MradmEngineIslandStream table{};
+    const auto source = source_of(std::move(*stream), table);
+    std::string message(1024, '\0');
+    std::string context(1024, '\0');
+    auto message_len = message.size();
+    auto context_len = context.size();
+    MradmEngineLiveMonitor* raw = nullptr;
+    if (const auto code = mradm_engine_live_monitor_create(&source,
+                                                           device.pull_is_realtime_playback() ? 1U : 0U,
+                                                           &engine->host_,
+                                                           &raw,
+                                                           reinterpret_cast<uint8_t*>(message.data()),
+                                                           &message_len,
+                                                           reinterpret_cast<uint8_t*>(context.data()),
+                                                           &context_len);
+        code != 0) {
+        message.resize(message_len);
+        context.resize(context_len);
+        if (code == k_construction_failed) {
+            throw std::runtime_error(message);
+        }
+        return make_error(static_cast<ErrorCode>(code), std::move(message), std::move(context));
     }
-
-    std::unique_ptr<MonitorEngine> engine{new MonitorEngine(std::move(*stream), device, logs)};
-
-    engine->worker_ = std::thread([engine = engine.get()] { engine->worker_loop(); });
-
-    auto started = device.start(
-        engine->channels_, engine->sample_rate_, [engine = engine.get()](std::span<float> out, std::size_t frames) {
-            return engine->pull(out, frames);
+    engine->rust_.reset(raw);
+    uint32_t output_stage = 0;
+    mradm_engine_live_monitor_format(raw, &engine->channels_, &engine->sample_rate_, &output_stage);
+    engine->output_stage_ = output_stage != 0U;
+    engine->hptf_.borrow(mradm_engine_live_monitor_hptf(raw), engine->channels_, engine->sample_rate_);
+    auto started =
+        device.start(engine->channels_, engine->sample_rate_, [raw, &device](std::span<float> out, std::size_t frames) {
+            MradmEngineLiveMonitorPull result{};
+            mradm_engine_live_monitor_pull(raw, out.data(), out.size(), frames, &result);
+            if (result.mark_end != 0U) {
+                device.mark_end();
+            }
+            return result.frames;
         });
     if (!started) {
-        engine->quit_.store(true, std::memory_order_release);
-        engine->wake_.notify_all();
-        if (engine->worker_.joinable()) {
-            engine->worker_.join();
-        }
+        mradm_engine_live_monitor_begin_shutdown(raw);
+        engine->rust_.reset();
         return tl::unexpected{started.error()};
     }
     return engine;
 }
 
 MonitorEngine::~MonitorEngine() {
-    quit_.store(true, std::memory_order_release);
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        seek_cancel_.request_stop();
-        finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
-        if (switch_warmup_) {
-            switch_warmup_->cancel.request_stop();
-            finish_switch(switch_warmup_->receipt, StreamSwitchState::rejected);
-        }
+    if (rust_) {
+        mradm_engine_live_monitor_begin_shutdown(rust_.get());
     }
     device_.stop(); // stop pulls first so no pull() runs after teardown begins
-    quit_.store(true, std::memory_order_release);
-    wake_.notify_all();
-    if (worker_.joinable()) {
-        worker_.join();
-    }
-    // Worker is joined and the device stopped, so no thread touches the meter anymore.
-    meter_.reset(nullptr);
-}
-
-void MonitorEngine::rebuild_meter() {
-    // The output format is fixed. A seek clears integration/filter state in place
-    // and retains prepared storage; construction happens before the worker starts.
-    constexpr float k_silence = -std::numeric_limits<float>::infinity();
-    momentary_lufs_.store(k_silence, std::memory_order_relaxed);
-    shortterm_lufs_.store(k_silence, std::memory_order_relaxed);
-    integrated_lufs_.store(k_silence, std::memory_order_relaxed);
-    lufs_meter_counter_ = 0;
-    integrated_throttle_ = 0;
-    if (meter_) {
-        const auto result = (*meter_).reset();
-        if (result) {
-            return;
-        }
-        logs_.log(LogLevel::warning, "meter", result.error().message);
-        meter_.reset(nullptr);
-    }
-    if (channels_ == 0 || sample_rate_ == 0) {
-        return;
-    }
-    constexpr std::array stereo_map{dsp::MeterChannel::left, dsp::MeterChannel::right};
-    const std::span<const dsp::MeterChannel> channel_map =
-        channels_ == 2U ? std::span<const dsp::MeterChannel>{stereo_map} : std::span<const dsp::MeterChannel>{};
-    auto made = dsp::Meter::create(channels_, sample_rate_, dsp::MeterMode::monitor, channel_map);
-    if (!made) {
-        logs_.log(LogLevel::warning, "meter", made.error().message);
-        return;
-    }
-    meter_ = std::make_unique<dsp::Meter>(std::move(*made));
-}
-
-void MonitorEngine::feed_meter(const float* data, std::size_t frames) {
-    // Worker-only, including the output-stage callback tap. Full-history I can
-    // allocate and scans history, so keep it off the audio callback and at ~1 Hz.
-    if (!meter_) {
-        return;
-    }
-    if (const auto result = meter_->add_frames(data, frames); !result) {
-        logs_.log(LogLevel::warning, "meter", result.error().message);
-        meter_.reset(nullptr);
-        constexpr float k_silence = -std::numeric_limits<float>::infinity();
-        momentary_lufs_.store(k_silence, std::memory_order_relaxed);
-        shortterm_lufs_.store(k_silence, std::memory_order_relaxed);
-        integrated_lufs_.store(k_silence, std::memory_order_relaxed);
-        return;
-    }
-    lufs_meter_counter_ += frames;
-    if (lufs_meter_counter_ < sample_rate_ / 10) {
-        return;
-    }
-    lufs_meter_counter_ = 0;
-    const auto to_lufs = [](double value) {
-        return std::isfinite(value) ? static_cast<float>(value) : -std::numeric_limits<float>::infinity();
-    };
-    if (const auto value = meter_->momentary(); value) {
-        momentary_lufs_.store(to_lufs(*value), std::memory_order_relaxed);
-    }
-    if (const auto value = meter_->shortterm(); value) {
-        shortterm_lufs_.store(to_lufs(*value), std::memory_order_relaxed);
-    }
-    if (++integrated_throttle_ >= 10) {
-        integrated_throttle_ = 0;
-        if (const auto value = meter_->integrated(); value) {
-            integrated_lufs_.store(to_lufs(*value), std::memory_order_relaxed);
-        }
-    }
+    rust_.reset();
 }
 
 void MonitorEngine::play() {
-    bool flush_before_play = false;
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        if (state_.load(std::memory_order_seq_cst) != MonitorState::playing && (seek_pending_ || seek_in_progress_)) {
-            // Keep the engine/device paused until the worker has actually landed the queued seek.
-            // Otherwise a rapid seek→play can briefly resume the stale device queue before the
-            // worker gets to apply (and flush) the new position.
-            play_pending_after_seek_ = true;
-            wake_.notify_all();
-            return;
-        }
-        flush_before_play = device_flush_pending_;
-        device_flush_pending_ = false;
-    }
-    // Keep the engine paused while a deferred device queue is discarded. In particular,
-    // AVSampleBufferAudioRenderer must not flush its system queue at seek time while paused: that
-    // operation can itself reach the output as a click/pop. Once this returns, neither the worker
-    // nor the device has resumed yet, so no old-position audio can escape.
-    if (flush_before_play) {
-        device_.flush();
-    }
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        state_.store(MonitorState::playing, std::memory_order_seq_cst);
-    }
-    wake_.notify_all();
-    device_.resume(); // resume a buffered sink's clock (no-op before prefill / for miniaudio)
+    mradm_engine_live_monitor_play(rust_.get());
 }
 
 void MonitorEngine::pause() {
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        play_pending_after_seek_ = false;
-        state_.store(MonitorState::paused, std::memory_order_seq_cst);
-    }
-    wake_.notify_all();
-    device_.pause(); // halt a buffered sink's clock so it can't run away during a long pause
+    mradm_engine_live_monitor_pause(rust_.get());
 }
 
 void MonitorEngine::seek(uint64_t frame) {
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        seek_cancel_.request_stop();
-        if (switch_warmup_) {
-            switch_warmup_->cancel.request_stop();
-        }
-        seek_pending_ = true;
-        seek_target_ = frame;
-    }
-    wake_.notify_all();
+    mradm_engine_live_monitor_seek(rust_.get(), frame);
+}
+
+void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
+    mradm_engine_live_monitor_set_loop(rust_.get(), start_frame, end_frame);
 }
 
 Result<void> MonitorEngine::set_overrides(const LiveOverrides& overrides) {
-    // A finite dB value can still overflow the float gain used by every backend.
-    // Reject it on the control thread before replacing a snapshot or calling noexcept DSP.
-    const auto invalid = std::ranges::find_if(overrides.objects, [](const auto& item) {
-        return !std::isfinite(item.gain_db) || (!item.mute && !std::isfinite(dsp::live_gain(item.gain_db)));
-    });
-    if (invalid != overrides.objects.end()) {
-        return make_error(
-            ErrorCode::invalid_argument, "实时增益必须为有限值,且未静音时转换为线性增益不得溢出", invalid->object_id);
+    const auto records = render_common::live_override_records(overrides);
+    std::string message(512, '\0');
+    std::string context(512, '\0');
+    for (const auto& item : overrides.objects) {
+        context.resize(std::max(context.size(), item.object_id.size() + 1));
     }
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        auto valid = stream_->validate_overrides(overrides);
-        if (valid && xfade_active_) {
-            valid = xfade_stream_->validate_overrides(overrides);
-        }
-        if (!valid) {
-            return valid;
-        }
-        if (pending_stream_) {
-            valid = pending_stream_->validate_overrides(overrides);
-        }
-        if (valid && switch_warmup_) {
-            valid = switch_warmup_->stream->validate_overrides(overrides);
-        }
-        if (!valid) {
-            return valid;
-        }
-        if (switch_warmup_) {
-            switch_warmup_->cancel.request_stop();
-        }
-        pending_overrides_ = overrides;
-        overrides_pending_ = true;
-        if (seek_in_progress_) {
-            seek_cancel_.request_stop();
-            seek_pending_ = true;
-        }
+    auto message_len = message.size();
+    auto context_len = context.size();
+    if (const auto code = mradm_engine_live_monitor_overrides(rust_.get(),
+                                                              records.data(),
+                                                              records.size(),
+                                                              overrides.revision,
+                                                              reinterpret_cast<uint8_t*>(message.data()),
+                                                              &message_len,
+                                                              reinterpret_cast<uint8_t*>(context.data()),
+                                                              &context_len);
+        code != 0) {
+        message.resize(message_len);
+        context.resize(context_len);
+        return make_error(static_cast<ErrorCode>(code), std::move(message), std::move(context));
     }
-    wake_.notify_all();
     return {};
 }
 
 void MonitorEngine::set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs, uint64_t revision) {
-    // Deliberately NOT routed through worker_loop() like set_overrides(): these coefficients are
-    // consumed by the audio callback in pull(), not by the stream, so a worker round-trip would
-    // only add ring-drain latency to what should be an immediate A/B. The correct precedent is the
-    // snap_yaw_ orientation snapshot above — publish lock-free, let the callback pick it up.
-    //
-    // Publication exchanges a preallocated private slot. Control callers are serialized inside
-    // HptfProcessor, and neither publication nor snapshot queries acquire an audio-thread lock.
     if (coeffs.has_value()) {
         hptf_.publish(*coeffs, revision);
     } else {
@@ -317,749 +340,62 @@ void MonitorEngine::set_hptf(const std::optional<render_common::HptfCoefficients
 }
 
 void MonitorEngine::set_listener_orientation(const ListenerOrientation& orientation) {
-    // Mark head tracking active so the worker switches to the shallow lead (low head-tracking
-    // latency). Reverts to the deep lead k_tracking_active_window after updates stop.
-    last_orientation_update_ns_.store(std::chrono::steady_clock::now().time_since_epoch().count(),
-                                      std::memory_order_relaxed);
-    // Output-stage mode reads this lock-free snapshot on the audio callback (render_output), so the
-    // pose enters at playout with no ring-drain delay. The worker-pending path below still runs but
-    // is a no-op there (render_output uses the snapshot, not the stream's stored orientation).
-    snap_yaw_.store(orientation.yaw_deg, std::memory_order_relaxed);
-    snap_pitch_.store(orientation.pitch_deg, std::memory_order_relaxed);
-    snap_roll_.store(orientation.roll_deg, std::memory_order_relaxed);
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        pending_orientation_ = orientation;
-        orientation_pending_ = true;
+    mradm_engine_live_monitor_orientation(
+        rust_.get(), orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg);
+}
+
+std::shared_ptr<IRoomControl> MonitorEngine::room_control() const {
+    auto* raw = mradm_engine_live_monitor_room_control(rust_.get());
+    if (raw == nullptr) {
+        return {};
     }
-    wake_.notify_all();
-}
-
-ListenerOrientation MonitorEngine::orientation_snapshot() const {
-    ListenerOrientation o;
-    o.yaw_deg = snap_yaw_.load(std::memory_order_relaxed);
-    o.pitch_deg = snap_pitch_.load(std::memory_order_relaxed);
-    o.roll_deg = snap_roll_.load(std::memory_order_relaxed);
-    return o;
-}
-
-bool MonitorEngine::head_tracking_recent() const {
-    const std::chrono::steady_clock::time_point last{
-        std::chrono::steady_clock::duration{last_orientation_update_ns_.load(std::memory_order_relaxed)}};
-    return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
+    if (room_control_ == nullptr) {
+        mradm_room_control_destroy(raw);
+        return {};
+    }
+    return room_control_(raw);
 }
 
 void MonitorEngine::switch_stream(std::unique_ptr<IRenderStream> next, std::shared_ptr<StreamSwitchReceipt> receipt) {
-    {
-        const std::lock_guard<std::mutex> lock(control_mutex_);
-        if (switch_warmup_) {
-            switch_warmup_->cancel.request_stop();
-        }
-        finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
-        pending_switch_receipt_ = std::move(receipt);
-        pending_stream_ready_ = false;
-        pending_stream_ = std::move(next);
-        switch_pending_ = true;
+    MradmEngineIslandStream table{};
+    const auto source = source_of(std::move(next), table);
+    MradmEngineLiveMonitorReceipt record{};
+    if (receipt) {
+        record.ctx = new std::shared_ptr<StreamSwitchReceipt>(std::move(receipt));
+        record.finish = [](void* ctx, uint32_t state) noexcept {
+            (*static_cast<std::shared_ptr<StreamSwitchReceipt>*>(ctx))
+                ->state.store(state == 1U ? StreamSwitchState::applied : StreamSwitchState::rejected);
+        };
+        record.release = [](void* ctx) noexcept { delete static_cast<std::shared_ptr<StreamSwitchReceipt>*>(ctx); };
     }
-    wake_.notify_all();
-}
-
-// Only the incoming stream is touched by this one background job. The playing stream
-// remains worker-owned, and the callback continues draining its normal ring.
-void MonitorEngine::launch_switch_warmup(std::unique_ptr<IRenderStream> stream,
-                                         uint64_t position,
-                                         bool positioned,
-                                         std::shared_ptr<StreamSwitchReceipt> receipt) {
-    auto job = std::make_shared<SwitchWarmup>();
-    job->stream = std::move(stream);
-    job->receipt = std::move(receipt);
-    job->overrides = current_overrides_;
-    job->orientation = current_orientation_;
-    job->target.store(output_stage_ ? frames_played_.load() : producer_pos_);
-    job->position = position;
-    job->positioned = positioned;
-    switch_warmup_ = job;
-    job->result = std::async(std::launch::async, [job = job.get()]() -> Result<void> {
-        try {
-            const auto cancel = job->cancel.get_token();
-            job->stream->set_overrides(job->overrides);
-            job->stream->set_listener_orientation(job->orientation);
-            std::vector<float> scratch(k_chunk_frames * job->stream->out_channels());
-            if (!job->positioned) {
-                const auto target = job->target.load();
-                auto status = job->stream->seek_with_cancel(target, cancel);
-                if (!status) {
-                    return status;
-                }
-                job->position = target;
-            }
-            while (!cancel.stop_requested()) {
-                const auto target = job->target.load();
-                if (job->position == target) {
-                    return {};
-                }
-                if (job->position > target) {
-                    auto status = job->stream->seek_with_cancel(target, cancel);
-                    if (!status) {
-                        return status;
-                    }
-                    job->position = target;
-                    continue;
-                }
-                const auto frames = std::min(k_chunk_frames, target - job->position);
-                auto got = job->stream->process(scratch, frames);
-                if (!got) {
-                    return tl::unexpected{got.error()};
-                }
-                if (*got == 0) {
-                    return make_error(ErrorCode::render_failed, "incoming monitor stream ended during warmup");
-                }
-                job->position += *got;
-            }
-            return make_error(ErrorCode::cancelled, "monitor backend warmup cancelled");
-        } catch (const std::exception& error) {
-            return make_error(ErrorCode::render_failed, error.what());
-        }
-    });
-}
-
-void MonitorEngine::poll_switch_locked() {
-    const auto target = output_stage_ ? frames_played_.load() : producer_pos_;
-    if (switch_warmup_) {
-        switch_warmup_->target.store(target);
-        if (switch_warmup_->result.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            return;
-        }
-        auto job = std::exchange(switch_warmup_, nullptr);
-        auto warm_result = job->result.get();
-        if (!switch_pending_) {
-            if (job->cancel.stop_requested()) {
-                pending_stream_ = std::move(job->stream);
-                pending_switch_receipt_ = std::move(job->receipt);
-                switch_pending_ = true;
-            } else if (!warm_result) {
-                finish_switch(job->receipt, StreamSwitchState::rejected);
-                logs_.log(LogLevel::error, "monitor", warm_result.error().message);
-            } else if (job->position != target) {
-                launch_switch_warmup(std::move(job->stream), job->position, true, std::move(job->receipt));
-            } else {
-                pending_stream_ = std::move(job->stream);
-                pending_switch_receipt_ = std::move(job->receipt);
-                pending_stream_ready_ = true;
-                switch_pending_ = true;
-            }
-        } else {
-            finish_switch(job->receipt, StreamSwitchState::rejected);
-        }
-    }
-    if (switch_pending_ && !pending_stream_ready_ && !switch_warmup_) {
-        if (!pending_stream_->seek_requires_preroll()) {
-            pending_stream_->set_overrides(current_overrides_);
-            auto warm_result = pending_stream_->seek(target);
-            if (!warm_result) {
-                finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
-                pending_switch_receipt_.reset();
-                logs_.log(LogLevel::error, "monitor", warm_result.error().message);
-                pending_stream_.reset();
-                switch_pending_ = false;
-                return;
-            }
-            pending_stream_ready_ = true;
-            return;
-        }
-        launch_switch_warmup(std::move(pending_stream_), 0, false, std::move(pending_switch_receipt_));
-        switch_pending_ = false;
-    }
-}
-
-void MonitorEngine::finalize_crossfade() {
-    // Snap to the incoming stream (drop the old one). Worker-side; called when a fade
-    // completes, or to settle a mid-flight fade before a seek / a new switch.
-    if (xfade_active_) {
-        stream_ = std::move(xfade_stream_);
-        std::atomic_store(&room_control_, stream_->room_control());
-        xfade_active_ = false;
-        crossfade_dsp_.reset();
-    }
-}
-
-void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
-    // Disable when the range is empty/inverted.
-    if (end_frame <= start_frame) {
-        loop_end_.store(0, std::memory_order_relaxed);
-        loop_start_.store(0, std::memory_order_relaxed);
-        return;
-    }
-    loop_start_.store(start_frame, std::memory_order_relaxed);
-    loop_end_.store(end_frame, std::memory_order_relaxed);
-}
-
-void MonitorEngine::apply_pending_seek_locked(std::unique_lock<std::mutex>& lock) {
-    if (!seek_pending_) {
-        return;
-    }
-    const auto target = seek_target_;
-    seek_pending_ = false;
-    if (!apply_seek_locked(target, lock)) {
-        return;
-    }
-    if (!play_pending_after_seek_) {
-        return;
-    }
-
-    // apply_seek_locked deliberately deferred the device flush because state_ is still paused.
-    // Consume it before publishing playing, then resume the device in the same control order.
-    if (device_flush_pending_) {
-        device_.flush();
-        device_flush_pending_ = false;
-    }
-    state_.store(MonitorState::playing, std::memory_order_seq_cst);
-    play_pending_after_seek_ = false;
-    // Keep this ordered with pause(): once playing is published, resume the device before releasing
-    // control_mutex_, so a following pause cannot be overtaken by a late worker-side resume.
-    device_.resume();
-}
-
-// NOLINTNEXTLINE(readability-function-size): keep command ordering and callback handshakes in one worker transaction.
-void MonitorEngine::worker_loop() {
-    bool room_worker_active = false;
-    while (!quit_.load(std::memory_order_acquire)) {
-        {
-            std::unique_lock<std::mutex> lock(control_mutex_);
-            if (overrides_pending_) {
-                // Hand the newest target snapshot to the stream. Streams publish gain targets and
-                // queue topology work here, then perform sample ramps / state crossfades in their
-                // render path. Apply while paused so resume already carries the current targets.
-                // During a crossfade both streams are audible, so apply to both. Remember
-                // the snapshot so a later hot-switch can re-apply it to the incoming stream.
-                stream_->set_overrides(pending_overrides_);
-                if (xfade_active_) {
-                    xfade_stream_->set_overrides(pending_overrides_);
-                }
-                current_overrides_ = pending_overrides_;
-                applied_override_revision_.store(pending_overrides_.revision, std::memory_order_relaxed);
-                overrides_pending_ = false;
-            }
-            apply_pending_seek_locked(lock);
-            if (seek_pending_ || quit_.load(std::memory_order_acquire)) {
-                continue;
-            }
-            if (orientation_pending_) {
-                // Hand the latest head orientation to the stream(s). Cheap (a global AU param on
-                // the Apple binaural backend; ignored elsewhere). Apply even while paused so the
-                // pose is right on resume; during a crossfade both streams are audible. Remember
-                // it so a later hot-switch re-applies it to the incoming stream.
-                stream_->set_listener_orientation(pending_orientation_);
-                if (xfade_active_) {
-                    xfade_stream_->set_listener_orientation(pending_orientation_);
-                }
-                current_orientation_ = pending_orientation_;
-                orientation_pending_ = false;
-            }
-            poll_switch_locked();
-            if (switch_pending_ && pending_stream_ready_) {
-                // Begin a crossfade to the incoming backend. Settle any in-flight fade
-                // first, then seek the incoming stream to the current playhead so it renders
-                // the same frames as the outgoing one, and re-apply the current overrides so
-                // the switched backend keeps the user's edits. On seek failure keep the old.
-                finalize_crossfade();
-                // Output-stage holds intermediate in the ring (not blendable as output), so a switch
-                // there starts the incoming stream at the playhead (not the read-ahead position).
-                const uint64_t switch_to =
-                    output_stage_ ? frames_played_.load(std::memory_order_relaxed) : producer_pos_;
-                pending_stream_->set_overrides(current_overrides_);
-                if (auto r = pending_stream_->validate_overrides(current_overrides_); r) {
-                    pending_stream_->set_listener_orientation(current_orientation_);
-                    if (output_stage_) {
-                        // Hard cut: park the callback, swap the stream, drop the ring so it refills
-                        // from the new stream at the playhead. (Crossfade is unsupported here.)
-                        flushing_.store(true, std::memory_order_seq_cst);
-                        while (in_pop_.load(std::memory_order_seq_cst)) {
-                            std::this_thread::yield();
-                        }
-                        stream_ = std::move(pending_stream_);
-                        std::atomic_store(&room_control_, stream_->room_control());
-                        producer_pos_ = switch_to;
-                        consumer_src_pos_ = switch_to;
-                        ring_.clear();
-                        meter_ring_.clear();
-                        ended_.store(false, std::memory_order_relaxed);
-                        failed_.store(false, std::memory_order_relaxed);
-                        // The hard cut is a real waveform discontinuity, and until now nothing
-                        // bridged it: this branch never bumped seek_generation_, so
-                        // the Rust seek transition left it alone. On its own that is a small step;
-                        // downstream of an HpTF cascade the IIR smears it and the outgoing
-                        // ring-out crosses the cut. Bumping the generation makes the existing
-                        // 10 ms bridge cover the splice, and resetting the
-                        // cascade stops the pre-cut tail bleeding into the new stream. Both are
-                        // safe here: the callback is parked by the flushing_/in_pop_ handshake
-                        // above, exactly as for ring_.clear().
-                        seek_generation_.fetch_add(1U, std::memory_order_release);
-                        hptf_.reset_state();
-                        flushing_.store(false, std::memory_order_seq_cst);
-                    } else {
-                        xfade_stream_ = std::move(pending_stream_);
-                        xfade_active_ = true;
-                        crossfade_dsp_.reset();
-                        ended_.store(false, std::memory_order_relaxed); // incoming re-arms production
-                        failed_.store(false, std::memory_order_relaxed);
-                    }
-                    finish_switch(pending_switch_receipt_, StreamSwitchState::applied);
-                } else {
-                    finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
-                    logs_.log(LogLevel::error, "monitor", r.error().message);
-                    pending_stream_.reset();
-                }
-                pending_switch_receipt_.reset();
-                switch_pending_ = false;
-                pending_stream_ready_ = false;
-            }
-            const bool producer_done =
-                ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
-            // Idle (don't spin on process()) when not playing or the stream is exhausted /
-            // failed. A seek re-arms production (clears ended_/failed_) and wakes us; a
-            // pending override / switch wakes us too so it applies promptly even while paused.
-            if (state_.load(std::memory_order_seq_cst) != MonitorState::playing || producer_done) {
-                wake_.wait_for(lock, switch_warmup_ ? k_idle_nap : std::chrono::milliseconds(1000), [this] {
-                    const bool done = ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
-                    return quit_.load(std::memory_order_acquire) || seek_pending_ || overrides_pending_ ||
-                           orientation_pending_ || (switch_pending_ && !switch_warmup_) ||
-                           (state_.load(std::memory_order_seq_cst) == MonitorState::playing && !done);
-                });
-                continue;
-            }
-        }
-
-        const bool room_active = stream_->room_control() || (xfade_stream_ && xfade_stream_->room_control());
-        if (room_active || room_worker_active) {
-            set_room_worker_active(room_active);
-            room_worker_active = room_active;
-        }
-        // Output-stage: drain the callback's rendered-output tap to keep the LUFS meter fed (no-op
-        // otherwise), and surface a callback render error (the affected block was already silenced).
-        if (output_stage_) {
-            drain_meter_ring();
-            if (stream_->render_failed() && !failed_.load(std::memory_order_relaxed)) {
-                logs_.log(LogLevel::error, "monitor", "apple 输出级渲染失败(AudioUnit 错误),已静音并停止");
-                failed_.store(true, std::memory_order_release);
-            }
-        }
-        // Produce ahead of the playhead without holding the lock.
-        if (!top_up_ring()) {
-            if (stream_->room_control() || (xfade_stream_ && xfade_stream_->room_control())) {
-                wait_room_worker(k_idle_nap);
-            } else {
-                std::this_thread::sleep_for(k_idle_nap); // ring full (or nothing to add) — back off
-            }
-        }
-    }
-}
-
-bool MonitorEngine::top_up_ring_output_stage() {
-    // Output-stage producer: fill the ring with orientation-INDEPENDENT intermediate (source PCM)
-    // via produce_intermediate. No crossfade and no meter here (the callback renders the output and
-    // taps it for the meter); a deep lead is fine because the head pose is applied at the callback,
-    // so the lead time no longer gates head-tracking latency.
-    bool produced = false;
-    std::size_t budget = (ring_.capacity() / scratch_.size()) + 1;
-    while (ring_.available_write() >= scratch_.size() && budget-- > 0) {
-        uint64_t frames = k_chunk_frames;
-        const uint64_t loop_end = loop_end_.load(std::memory_order_relaxed);
-        const uint64_t loop_start = loop_start_.load(std::memory_order_relaxed);
-        const bool looping = loop_end > loop_start;
-        if (looping && producer_pos_ < loop_end) {
-            frames = std::min<uint64_t>(frames, loop_end - producer_pos_);
-        }
-        auto result = stream_->produce_intermediate(std::span<float>(scratch_.data(), frames * ring_channels_), frames);
-        if (!result) {
-            logs_.log(LogLevel::error, "monitor", result.error().message);
-            failed_.store(true, std::memory_order_release);
-            return produced;
-        }
-        const std::size_t got = *result;
-        if (got == 0) {
-            ended_.store(true, std::memory_order_relaxed);
-            return produced;
-        }
-        ring_.push(scratch_.data(), got * ring_channels_);
-        producer_pos_ += got;
-        if (switch_warmup_) {
-            switch_warmup_->target.store(producer_pos_);
-        }
-        produced = true;
-        if (looping && producer_pos_ >= loop_end) {
-            // Stage A loop wrap: reposition ONLY the source read. The render cursors / AU state stay
-            // put — the consumer is still playing earlier frames and wraps its own state later, when
-            // playout reaches the boundary (pull_output_stage → loop_render_reset).
-            if (auto rep = stream_->reposition_source(loop_start); !rep) {
-                logs_.log(LogLevel::error, "monitor", rep.error().message);
-                failed_.store(true, std::memory_order_release);
-                return produced;
-            }
-            producer_pos_ = loop_start;
-        }
-        if (got < frames) {
-            return produced; // short block (end)
-        }
-    }
-    return produced;
-}
-
-bool MonitorEngine::restore_loop(uint64_t loop_start) {
-    std::unique_lock<std::mutex> lock(control_mutex_);
-    if (quit_.load(std::memory_order_acquire) || seek_pending_) {
-        return false;
-    }
-    seek_cancel_ = std::stop_source{};
-    const auto cancel = seek_cancel_.get_token();
-    seek_in_progress_ = true;
-    seek_target_ = loop_start;
-    lock.unlock();
-    auto seek_res = stream_->seek_with_cancel(loop_start, cancel);
-    lock.lock();
-    seek_in_progress_ = false;
-    if (cancel.stop_requested()) {
-        return false;
-    }
-    if (!seek_res) {
-        logs_.log(LogLevel::error, "monitor", seek_res.error().message);
-        failed_.store(true, std::memory_order_release);
-        return false;
-    }
-    producer_pos_ = loop_start;
-    return true;
-}
-
-bool MonitorEngine::top_up_ring() {
-    if (output_stage_) {
-        return top_up_ring_output_stage();
-    }
-    bool produced = false;
-    // Produce at most one ring's worth per call, then return so the worker loop re-checks for a
-    // pending command (seek / override / switch). Without this bound, a consumer that drains as
-    // fast as we produce keeps available_write above a chunk indefinitely, so this loop never
-    // exits and the worker never returns to apply queued commands — starving mid-play edits
-    // exactly when production is near the consume rate.
-    // Lead target: while head tracking, only render a shallow amount ahead so a head turn is heard
-    // promptly (the lead is the head-tracking latency). Otherwise fill the whole ring for maximum
-    // underrun cushion — there `available_read < capacity` never gates before `available_write`, so
-    // this is behaviourally identical to filling unconditionally.
-    const bool tracking = pull_is_realtime_playback_ && head_tracking_recent();
-    const std::size_t lead_target_floats =
-        tracking ? static_cast<std::size_t>(k_tracking_lookahead_frames) * channels_ : ring_.capacity();
-    std::size_t budget = (ring_.capacity() / scratch_.size()) + 1;
-    while (ring_.available_write() >= scratch_.size() && ring_.available_read() < lead_target_floats && budget-- > 0) {
-        // Finer render granularity while head tracking so the orientation applies sooner (see
-        // k_tracking_chunk_frames); the larger chunk otherwise keeps per-chunk overhead low.
-        uint64_t frames = tracking ? k_tracking_chunk_frames : k_chunk_frames;
-        const uint64_t loop_end = loop_end_.load(std::memory_order_relaxed);
-        const uint64_t loop_start = loop_start_.load(std::memory_order_relaxed);
-        // Loop-region clamping is suspended during a crossfade (both streams must stay in
-        // lockstep over the short fade window; a loop wrap mid-fade is not worth the desync).
-        const bool looping = !xfade_active_ && loop_end > loop_start;
-        if (looping && producer_pos_ < loop_end) {
-            frames = std::min<uint64_t>(frames, loop_end - producer_pos_);
-        }
-
-        auto result = stream_->process(std::span<float>(scratch_.data(), frames * channels_), frames);
-        if (!result) {
-            logs_.log(LogLevel::error, "monitor", result.error().message);
-            failed_.store(true, std::memory_order_release); // render error: stop producing
-            return produced;
-        }
-        std::size_t got = *result;
-        if (got > frames) {
-            std::terminate(); // IRenderStream must not return more frames than requested.
-        }
-
-        if (xfade_active_) {
-            // Render the incoming stream over the same frames and linearly blend old→new.
-            auto in_res = xfade_stream_->process(std::span<float>(scratch_b_.data(), frames * channels_), frames);
-            if (!in_res) {
-                logs_.log(LogLevel::error, "monitor", in_res.error().message);
-                failed_.store(true, std::memory_order_release);
-                return produced;
-            }
-            if (*in_res > frames) {
-                std::terminate();
-            }
-            got = std::min(got, *in_res);
-            const bool complete = crossfade_dsp_.process(
-                std::span{scratch_}.first(got * channels_), std::span{scratch_b_}.first(got * channels_), got);
-            // Finalize when the ramp completes or either stream ran short (end of material).
-            if (complete || got < frames) {
-                const std::lock_guard<std::mutex> lock(control_mutex_);
-                finalize_crossfade();
-            }
-        }
-
-        if (got == 0) {
-            ended_.store(true, std::memory_order_relaxed); // end of material (non-looping)
-            return produced;
-        }
-        feed_meter(scratch_.data(), got); // add the produced chunk to the LUFS meter + refresh snapshots (worker-only)
-        ring_.push(scratch_.data(), got * channels_); // available_write checked: full push
-        producer_pos_ += got;
-        if (switch_warmup_) {
-            switch_warmup_->target.store(producer_pos_);
-        }
-        produced = true;
-
-        if (looping && producer_pos_ >= loop_end) {
-            // Producer-side wrap: ring stays valid, no flush needed. On failure, stop
-            // producing rather than pretend the wrap happened.
-            if (!restore_loop(loop_start)) {
-                return produced;
-            }
-        }
-        if (got < frames) {
-            return produced; // stream produced a short block (end)
-        }
-    }
-    return produced;
-}
-
-std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
-    if (frames > std::numeric_limits<std::size_t>::max() / channels_ || frames * channels_ > out.size()) {
-        std::terminate(); // Device callback contract; reject before consuming the ring (ADR 0005).
-    }
-    const std::size_t floats = frames * channels_;
-    in_pop_.store(true, std::memory_order_seq_cst);
-
-    const bool active =
-        state_.load(std::memory_order_seq_cst) == MonitorState::playing && !flushing_.load(std::memory_order_seq_cst);
-    // PullFn contract: return the number of frames actually produced from the ring (not the
-    // requested count). A short read lets a non-realtime "feed" sink (the AVSampleBufferAudio-
-    // Renderer monitor) avoid enqueuing the silence-padded tail and stalling the system buffer;
-    // a realtime callback sink (miniaudio) ignores it since pull already padded. paused /
-    // flushing produces nothing, so the feed sink lets its buffer drain until playback resumes.
-    std::size_t produced_frames = 0;
-    if (!active) {
-        std::fill_n(out.data(), floats, 0.0F);
-    } else if (output_stage_) {
-        produced_frames = pull_output_stage(out, frames);
-    } else {
-        const std::size_t got = ring_.pop(out.data(), floats);
-        if (got < floats) {
-            std::fill_n(out.data() + got, floats - got, 0.0F);
-            // A short read is an underrun only while the producer should still be feeding
-            // us; once the stream has ended/failed, an empty ring is the expected silence.
-            const bool producer_done =
-                ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
-            if (!producer_done && pull_is_realtime_playback_) {
-                underruns_.fetch_add(1, std::memory_order_relaxed);
-            }
-        }
-        frames_played_.fetch_add(got / channels_, std::memory_order_relaxed);
-        produced_frames = got / channels_;
-    }
-
-    if (!output_stage_ && ended_.load(std::memory_order_relaxed) && ring_.available_read() == 0U) {
-        device_.mark_end();
-    }
-
-    // Headphone compensation (HpTF). Position matters in three independent ways:
-    //
-    //  * BEFORE the Rust seek transition: that bridge anchors on the last emitted frame, which it
-    //    captures from `out` itself. Filtering afterwards would leave the anchor holding
-    //    pre-HpTF audio while post-HpTF audio is what actually plays, so every seek would step
-    //    by the cascade's instantaneous response (several dB on a typical AutoEq profile).
-    //  * AFTER both LUFS taps (worker-side feed_meter for single-stage, meter_ring_ inside
-    //    pull_output_stage for output-stage): program loudness must stay headphone-independent,
-    //    so the meter reads pre-HpTF in both modes. This placement gives that for free.
-    //  * BEFORE the peak/RMS loop below, which is correct — those are device clipping
-    //    indicators and should reflect what the device actually receives.
-    //
-    // Skipped while inactive: that path writes exact silence, and running a biquad cascade over
-    // zeros would emit its ring-out into what must be digital silence. The state is deliberately
-    // NOT reset on pause — pause neither clears the ring nor moves the playhead, so the first
-    // sample after resume is the immediate successor of the last filtered one and the filter
-    // must stay continuous across it. (Seek is the case that does reset; see apply_seek_locked.)
-    if (active) {
-        // Mirror the Rust seek transition's own rule: a realtime sink plays the zero-padded
-        // underrun tail, so the cascade should ring out into it; a push sink enqueues only the
-        // produced portion, so the cascade must not advance over frames that are never emitted.
-        const std::size_t hptf_frames = pull_is_realtime_playback_ ? frames : std::min(frames, produced_frames);
-        hptf_.process(out.data(), hptf_frames);
-    }
-
-    std::array<float, k_max_level_channels> peaks{};
-    std::array<float, k_max_level_channels> rms{};
-    output_dsp_.process(out.first(floats),
-                        frames,
-                        produced_frames,
-                        active,
-                        seek_generation_.load(std::memory_order_acquire),
-                        peaks,
-                        rms);
-    const std::size_t meter_ch = std::min<std::size_t>(channels_, k_max_level_channels);
-    for (std::size_t c = 0; c < meter_ch; ++c) {
-        peak_.at(c).store(peaks.at(c), std::memory_order_relaxed);
-        rms_.at(c).store(rms.at(c), std::memory_order_relaxed);
-    }
-
-    in_pop_.store(false, std::memory_order_seq_cst);
-    return produced_frames;
-}
-
-std::size_t MonitorEngine::pull_output_stage(std::span<float> out, std::size_t frames) {
-    // Audio callback: pop the buffered intermediate and render it to the output with the CURRENT
-    // head pose (orientation_snapshot, lock-free) — so a head turn is heard at playout. Tap the
-    // rendered output into meter_ring_ for the worker's LUFS meter. No alloc/lock (pull_scratch_ is
-    // preallocated; render_output is realtime-safe). Loops only if a callback ever asks for more
-    // than pull_scratch_ holds.
-    const ListenerOrientation o = orientation_snapshot();
-    const std::size_t max_chunk = pull_scratch_.size() / ring_channels_;
-    const uint64_t loop_end = loop_end_.load(std::memory_order_relaxed);
-    const uint64_t loop_start = loop_start_.load(std::memory_order_relaxed);
-    const bool looping = loop_end > loop_start;
-    std::size_t done = 0;
-    while (done < frames) {
-        std::size_t want = std::min(frames - done, max_chunk);
-        // Clamp to the loop end so the render cursors wrap exactly at the boundary (Stage B loop).
-        if (looping && consumer_src_pos_ < loop_end) {
-            want = std::min<std::size_t>(want, static_cast<std::size_t>(loop_end - consumer_src_pos_));
-        }
-        const std::size_t got_floats = ring_.pop(pull_scratch_.data(), want * ring_channels_);
-        const std::size_t got = got_floats / ring_channels_;
-        if (got == 0) {
-            break;
-        }
-        const std::size_t rendered =
-            stream_->render_output(std::span<const float>(pull_scratch_.data(), got * ring_channels_),
-                                   std::span<float>(out.data() + (done * channels_), got * channels_),
-                                   got,
-                                   o);
-        meter_ring_.push(out.data() + (done * channels_), rendered * channels_); // best-effort tap
-        done += got;
-        consumer_src_pos_ += got;
-        if (looping && consumer_src_pos_ >= loop_end) {
-            // Playout reached the loop boundary: wrap the render cursors (realtime-safe; no AU reset).
-            stream_->loop_render_reset(loop_start);
-            consumer_src_pos_ = loop_start;
-        }
-        if (got < want) {
-            break; // ring drained mid-block
-        }
-    }
-    if (done < frames) {
-        std::fill_n(out.data() + (done * channels_), (frames - done) * channels_, 0.0F);
-        const bool producer_done = ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
-        if (!producer_done && pull_is_realtime_playback_) {
-            underruns_.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
-    frames_played_.fetch_add(done, std::memory_order_relaxed);
-    return done;
-}
-
-void MonitorEngine::drain_meter_ring() {
-    // Worker: drain the callback's rendered-output tap and feed the LUFS meter (which can't run on
-    // the audio callback). Bounded per call. peak/RMS are computed inline on the callback already.
-    if (meter_scratch_.empty()) {
-        return;
-    }
-    std::size_t budget = (meter_ring_.capacity() / meter_scratch_.size()) + 1;
-    while (meter_ring_.available_read() >= channels_ && budget-- > 0) {
-        const std::size_t got = meter_ring_.pop(meter_scratch_.data(), meter_scratch_.size());
-        if (got < channels_) {
-            break;
-        }
-        feed_meter(meter_scratch_.data(), got / channels_);
-    }
-}
-
-bool MonitorEngine::apply_seek_locked(uint64_t frame, std::unique_lock<std::mutex>& lock) {
-    // Settle any in-flight crossfade to the incoming stream, so the seek targets the stream
-    // that will actually be playing afterwards.
-    finalize_crossfade();
-    // Block the audio thread from touching the ring, then wait for any in-flight pop to
-    // finish (bounded by one callback). seq_cst on flushing_/in_pop_ gives a total order:
-    // a pull either sees flushing_ and skips the ring, or it set in_pop_ first and we wait
-    // for it. The worker is the sole producer and is here (not in top_up_ring), so once the
-    // consumer is idle the ring has no concurrent access and clear() is safe.
-    flushing_.store(true, std::memory_order_seq_cst);
-    while (in_pop_.load(std::memory_order_seq_cst)) {
-        std::this_thread::yield();
-    }
-    ring_.clear();
-    meter_ring_.clear(); // output-stage tap (no-op buffer otherwise); consumer is parked, safe to reset
-    seek_cancel_ = std::stop_source{};
-    const auto cancel = seek_cancel_.get_token();
-    seek_in_progress_ = true;
-    lock.unlock();
-    auto seek_res = stream_->seek_with_cancel(frame, cancel);
-    lock.lock();
-    seek_in_progress_ = false;
-    if (cancel.stop_requested() || seek_pending_ || quit_.load(std::memory_order_acquire)) {
-        // Keep callbacks parked until the newest request has restored a complete state.
-        return false;
-    }
-    if (seek_res) {
-        producer_pos_ = frame;
-        consumer_src_pos_ = frame; // output-stage consumer position (callback parked during seek)
-        frames_played_.store(frame, std::memory_order_relaxed);
-        // Seeking re-arms production: a position before EOF has more to render.
-        ended_.store(false, std::memory_order_relaxed);
-        failed_.store(false, std::memory_order_relaxed);
-        seek_generation_.fetch_add(1U, std::memory_order_release);
-    } else {
-        // Don't fake a repositioned playhead: the stream is still wherever it was. Surface
-        // the failure instead of silently claiming the seek landed.
-        logs_.log(LogLevel::error, "monitor", seek_res.error().message);
-        failed_.store(true, std::memory_order_release);
-    }
-    // A running device must drop stale pre-seek output now. While paused, keep its frozen queue
-    // untouched: a destructive system-queue flush can be audible even with the playback clock at
-    // zero. play() discards that queue before it changes state or resumes the clock, so stale audio
-    // still cannot splice onto the new position. Realtime callback sinks implement flush() as a
-    // no-op, but follow the same state contract.
-    if (state_.load(std::memory_order_seq_cst) == MonitorState::playing) {
-        device_.flush();
-        device_flush_pending_ = false;
-    } else {
-        device_flush_pending_ = true;
-    }
-    // The playhead jumped: restart loudness integration from the new position (momentary /
-    // short-term windows would otherwise span the discontinuity).
-    rebuild_meter();
-    // Same reasoning, and race-free for the same reason ring_.clear() above is: flushing_ plus the
-    // in_pop_ spin has parked the callback, so the worker is the only thread touching this state.
-    // Without the reset the pre-seek ring-out would splice across the timeline jump and partially
-    // defeat the 10 ms bridge.
-    hptf_.reset_state();
-    flushing_.store(false, std::memory_order_seq_cst);
-    return true;
+    mradm_engine_live_monitor_switch(rust_.get(), &source, record.ctx != nullptr ? &record : nullptr);
 }
 
 MonitorStatus MonitorEngine::status() const {
+    MradmEngineLiveMonitorStatus value{};
+    mradm_engine_live_monitor_status(rust_.get(), &value);
     MonitorStatus s;
-    s.state = state_.load(std::memory_order_seq_cst);
-    s.playhead_frames = frames_played_.load(std::memory_order_relaxed);
-    s.underruns = underruns_.load(std::memory_order_relaxed);
-    const std::size_t cap = ring_.capacity();
-    const std::size_t buffered_floats = ring_.available_read();
-    s.buffered_frames = ring_channels_ > 0 ? buffered_floats / ring_channels_ : 0;
-    s.ring_fill = cap > 0 ? static_cast<float>(buffered_floats) / static_cast<float>(cap) : 0.0F;
-    s.ended = ended_.load(std::memory_order_relaxed);
-    // Acquire pairs with the producer's release: a reported failure's log line is already written.
-    s.failed = failed_.load(std::memory_order_acquire);
-    s.override_revision = applied_override_revision_.load(std::memory_order_relaxed);
+    s.state = static_cast<MonitorState>(value.state);
+    s.playhead_frames = value.playhead_frames;
+    s.underruns = value.underruns;
+    s.buffered_frames = value.buffered_frames;
+    s.ring_fill = value.ring_fill;
+    s.ended = value.ended != 0U;
+    s.failed = value.failed != 0U;
+    s.override_revision = value.override_revision;
     return s;
 }
 
 MonitorLevels MonitorEngine::levels() const {
+    MradmEngineLiveMonitorLevels value{};
+    mradm_engine_live_monitor_levels(rust_.get(), &value);
     MonitorLevels l;
-    l.channels = std::min<uint32_t>(channels_, static_cast<uint32_t>(k_max_level_channels));
-    for (std::size_t c = 0; c < l.channels; ++c) {
-        l.peak.at(c) = peak_.at(c).load(std::memory_order_relaxed);
-        l.rms.at(c) = rms_.at(c).load(std::memory_order_relaxed);
-    }
-    // Program loudness: read the worker's lock-free snapshots (the meter itself is worker-only),
-    // so this 30 Hz UI poll never blocks the realtime worker on a shared meter lock.
-    l.momentary_lufs = momentary_lufs_.load(std::memory_order_relaxed);
-    l.shortterm_lufs = shortterm_lufs_.load(std::memory_order_relaxed);
-    l.integrated_lufs = integrated_lufs_.load(std::memory_order_relaxed);
+    l.channels = value.channels;
+    std::copy_n(std::begin(value.peak), k_max_level_channels, l.peak.begin());
+    std::copy_n(std::begin(value.rms), k_max_level_channels, l.rms.begin());
+    l.momentary_lufs = value.momentary_lufs;
+    l.shortterm_lufs = value.shortterm_lufs;
+    l.integrated_lufs = value.integrated_lufs;
     return l;
 }
 

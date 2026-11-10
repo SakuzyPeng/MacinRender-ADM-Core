@@ -87,4 +87,9 @@ open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomC
                                                                  std::string_view output_layout,
                                                                  RoomControlAdopter room_control);
 
+// Gives up an engine stream's Rust handle (with its info) to a Rust monitor; null (and the stream
+// untouched) for any other IRenderStream.
+[[nodiscard]] MradmEngineStream* release_engine_stream(std::unique_ptr<IRenderStream>& stream,
+                                                       MradmEngineStreamInfo& info);
+
 } // namespace mradm::render_common

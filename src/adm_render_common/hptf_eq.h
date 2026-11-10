@@ -124,6 +124,8 @@ class HptfProcessor {
     HptfProcessor& operator=(HptfProcessor&&) = delete;
     // 控制线程,构造期调用一次。channels 是**输出**宽度。
     void prepare(std::uint32_t channel_count, std::uint32_t rate);
+    // The processor of a Rust monitor (mradm_engine_live_monitor_hptf), which outlives this view.
+    void borrow(const void* live, std::uint32_t channel_count, std::uint32_t rate);
 
     [[nodiscard]] std::uint32_t sample_rate() const noexcept { return sample_rate_; }
     [[nodiscard]] std::uint32_t channels() const noexcept { return channels_; }

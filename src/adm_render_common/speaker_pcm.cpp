@@ -197,6 +197,12 @@ class EngineStream final : public IRenderStream {
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
 
+    [[nodiscard]] MradmEngineStream* release(MradmEngineStreamInfo& info) {
+        info = MradmEngineStreamInfo{
+            outputs_, sample_rate_, output_layout_ == "binaural" ? 1U : 0U, requires_preroll_ ? 1U : 0U};
+        return handle_.release();
+    }
+
   private:
     std::unique_ptr<MradmEngineStream, decltype(&mradm_engine_stream_destroy)> handle_;
     std::shared_ptr<IRoomControl> control_;
@@ -237,6 +243,16 @@ open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomC
         return error.error(code, plan.input_path);
     }
     return adopt_engine_stream(raw, stream_info, plan.input_path, plan.output_layout, room_control);
+}
+
+MradmEngineStream* release_engine_stream(std::unique_ptr<IRenderStream>& stream, MradmEngineStreamInfo& info) {
+    auto* engine = dynamic_cast<EngineStream*>(stream.get());
+    if (engine == nullptr) {
+        return nullptr;
+    }
+    auto* raw = engine->release(info);
+    stream.reset();
+    return raw;
 }
 
 std::unique_ptr<IRenderStream> adopt_engine_stream(MradmEngineStream* raw,
