@@ -35,6 +35,8 @@ pub struct EngineIslandStream {
     requires_preroll: u32,
     /// Nonzero for an output-stage stream: the intermediate width.
     intermediate_channels: u32,
+    /// `renders_orientation_at_output`, which a session's backend switch compares.
+    renders_orientation: u32,
     process: Option<
         unsafe extern "C" fn(
             *mut c_void,
@@ -112,32 +114,41 @@ pub struct EngineLiveMonitorSource {
 /// `MonitorStatus`; `state`: 0 stopped, 1 playing, 2 paused.
 #[repr(C)]
 pub struct EngineLiveMonitorStatus {
-    state: u32,
-    playhead_frames: u64,
-    underruns: u64,
-    buffered_frames: u64,
-    ring_fill: f32,
-    ended: u32,
-    failed: u32,
-    override_revision: u64,
+    pub(super) state: u32,
+    pub(super) playhead_frames: u64,
+    pub(super) underruns: u64,
+    pub(super) buffered_frames: u64,
+    pub(super) ring_fill: f32,
+    pub(super) ended: u32,
+    pub(super) failed: u32,
+    pub(super) override_revision: u64,
 }
 
 /// `MonitorLevels`.
 #[repr(C)]
 pub struct EngineLiveMonitorLevels {
-    channels: u32,
-    peak: [f32; LEVEL_CHANNELS],
-    rms: [f32; LEVEL_CHANNELS],
-    momentary_lufs: f32,
-    shortterm_lufs: f32,
-    integrated_lufs: f32,
+    pub(super) channels: u32,
+    pub(super) peak: [f32; LEVEL_CHANNELS],
+    pub(super) rms: [f32; LEVEL_CHANNELS],
+    pub(super) momentary_lufs: f32,
+    pub(super) shortterm_lufs: f32,
+    pub(super) integrated_lufs: f32,
 }
 
 /// One callback's result: frames taken from the ring; `mark_end` asks the device to mark the end.
 #[repr(C)]
 pub struct EngineLiveMonitorPull {
-    frames: usize,
-    mark_end: u32,
+    pub(super) frames: usize,
+    pub(super) mark_end: u32,
+}
+
+impl EngineLiveMonitorPull {
+    pub(super) fn new(frames: usize, mark_end: bool) -> Self {
+        Self {
+            frames,
+            mark_end: u32::from(mark_end),
+        }
+    }
 }
 
 pub struct EngineLiveMonitor {
@@ -167,7 +178,7 @@ impl Drop for ShellReceipt {
 }
 
 /// The C++ code a failed `MonitorEngine` constructor threw with (the shell rethrows).
-const CONSTRUCTION_FAILED: i32 = 100;
+const CONSTRUCTION_FAILED: i32 = mradm_engine::monitor::session::THROWN;
 const ISLAND_TEXT: usize = 4096;
 
 struct Island {
@@ -186,13 +197,13 @@ impl Drop for Island {
     }
 }
 
-struct Buffers {
+pub(super) struct Buffers {
     message: Vec<u8>,
     context: Vec<u8>,
 }
 
 impl Buffers {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             message: vec![0; ISLAND_TEXT],
             context: vec![0; ISLAND_TEXT],
@@ -200,7 +211,10 @@ impl Buffers {
     }
 
     /// Runs one island call with the buffers and converts its status.
-    fn call(&mut self, f: impl FnOnce(*const EngineIslandError) -> i32) -> Result<(), Error> {
+    pub(super) fn call(
+        &mut self,
+        f: impl FnOnce(*const EngineIslandError) -> i32,
+    ) -> Result<(), Error> {
         let (mut message_len, mut context_len) = (self.message.len(), self.context.len());
         let e = EngineIslandError {
             message: self.message.as_mut_ptr(),
@@ -249,7 +263,7 @@ fn records(overrides: &Overrides) -> Vec<RenderLiveOverride> {
         .collect()
 }
 
-struct IslandSource {
+pub(super) struct IslandSource {
     island: Arc<Island>,
     buffers: Buffers,
     stage: Option<Arc<IslandStage>>,
@@ -307,7 +321,7 @@ impl OutputStage for IslandStage {
 }
 
 impl IslandSource {
-    fn new(table: EngineIslandStream) -> Self {
+    pub(super) fn new(table: EngineIslandStream) -> Self {
         let output_stage = table.intermediate_channels > 0;
         let island = Arc::new(Island { table });
         Self {
@@ -422,6 +436,9 @@ impl Source for IslandSource {
     }
     fn output_stage(&self) -> Option<Arc<dyn OutputStage>> {
         self.stage.clone().map(|s| s as Arc<dyn OutputStage>)
+    }
+    fn renders_orientation_at_output(&self) -> bool {
+        self.t().renders_orientation != 0
     }
     fn intermediate_channels(&self) -> usize {
         self.t().intermediate_channels as usize
@@ -634,26 +651,35 @@ pub unsafe extern "C" fn mradm_engine_live_monitor_overrides(
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
         let m = unsafe { monitor(handle) }.ok_or_else(|| bad("无效监听句柄"))?;
-        let records = unsafe { input(values, values_len)? };
-        let mut objects = Vec::with_capacity(records.len());
-        for o in records {
-            let base = unsafe { override_value(&o.base)? };
-            objects.push(ObjectOverride {
-                object_id: base.object_id.to_vec(),
-                speaker_label: base.speaker_label.to_vec(),
-                mute: base.mute,
-                gain_db: base.gain_db,
-                head_locked: base.head_locked,
-                extent_scale: o.extent_scale,
-                extent_width_scale: o.extent_width_scale,
-                extent_height_scale: o.extent_height_scale,
-                extent_depth_scale: o.extent_depth_scale,
-                diffuse_scale: o.diffuse_scale,
-                divergence_scale: o.divergence_scale,
-            });
-        }
-        m.set_overrides(Overrides { objects, revision })
+        m.set_overrides(unsafe { overrides_of(values, values_len, revision)? })
     })
+}
+
+/// Owned live edits from override records.
+pub(super) unsafe fn overrides_of(
+    values: *const RenderLiveOverride,
+    values_len: usize,
+    revision: u64,
+) -> Result<Overrides, Error> {
+    let records = unsafe { input(values, values_len)? };
+    let mut objects = Vec::with_capacity(records.len());
+    for o in records {
+        let base = unsafe { override_value(&o.base)? };
+        objects.push(ObjectOverride {
+            object_id: base.object_id.to_vec(),
+            speaker_label: base.speaker_label.to_vec(),
+            mute: base.mute,
+            gain_db: base.gain_db,
+            head_locked: base.head_locked,
+            extent_scale: o.extent_scale,
+            extent_width_scale: o.extent_width_scale,
+            extent_height_scale: o.extent_height_scale,
+            extent_depth_scale: o.extent_depth_scale,
+            diffuse_scale: o.diffuse_scale,
+            divergence_scale: o.divergence_scale,
+        });
+    }
+    Ok(Overrides { objects, revision })
 }
 
 #[unsafe(no_mangle)]

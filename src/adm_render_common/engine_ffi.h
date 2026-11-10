@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "../adm_core/config_ffi.h"
+#include "../adm_dsp/dsp_ffi.h"
 #include "../adm_metadata/adm_ffi.h"
 #include "../adm_metadata/scene_ffi.h"
 #include "routing_ffi.h"
@@ -508,6 +509,7 @@ typedef struct MradmEngineIslandStream {
     uint32_t sample_rate;
     uint32_t requires_preroll;
     uint32_t intermediate_channels;
+    uint32_t renders_orientation; // renders_orientation_at_output, compared by a backend switch
     int32_t (*process)(void*, float*, size_t, size_t, size_t*, const MradmEngineIslandError*);
     int32_t (*seek)(void*, uint64_t, const MradmEngineIslandError*);
     void (*cancel_begin)(void*);
@@ -619,6 +621,121 @@ void mradm_engine_live_monitor_pull(const MradmEngineLiveMonitor* handle,
                                     size_t output_len,
                                     size_t frames,
                                     MradmEngineLiveMonitorPull* result);
+
+// ── The monitor session (5.5 B) ─────────────────────────────────────────────────────────────
+// The session owns the monitor and its backend options; the shell provides the devices, the
+// Apple island and the options (`options`: a RenderOptions copy released by release_options).
+// Code 100 from any call means the former C++ session threw: the shell rethrows the message.
+typedef struct MradmEngineMonitorSession MradmEngineMonitorSession;
+typedef struct MradmEngineSessionMonitor MradmEngineSessionMonitor;
+
+typedef struct MradmEngineMonitorSessionHost {
+    void* ctx;
+    void* (*device)(void*, void*, const uint8_t*, size_t);
+    uint32_t (*device_realtime)(void*, void*);
+    int32_t (*device_start)(
+        void*, void*, uint32_t, uint32_t, const MradmEngineSessionMonitor*, const MradmEngineIslandError*);
+    void (*device_stop)(void*, void*);
+    void (*device_flush)(void*, void*);
+    void (*device_pause)(void*, void*);
+    void (*device_resume)(void*, void*);
+    void (*device_destroy)(void*, void*);
+    int32_t (*open_apple)(void*,
+                          void*,
+                          const uint8_t*,
+                          size_t,
+                          const MradmDirectMatrixView*,
+                          MradmEngineIslandStream*,
+                          const MradmEngineIslandError*);
+    void (*release_options)(void*, void*);
+} MradmEngineMonitorSessionHost;
+
+// A session without an engine; null for an invalid host or platform record. The scene handle
+// must outlive the session.
+MradmEngineMonitorSession* mradm_engine_monitor_session_new(const MradmEnginePlatform* platform,
+                                                            const MradmSceneHandle* scene,
+                                                            uint32_t sample_rate,
+                                                            uint64_t total_frames,
+                                                            const MradmEngineMonitorSessionHost* host);
+// Appends a log line (level: adm::LogLevel).
+void mradm_engine_monitor_session_log(const MradmEngineMonitorSession* handle,
+                                      uint32_t level,
+                                      const uint8_t* module,
+                                      size_t module_len,
+                                      const uint8_t* text,
+                                      size_t text_len);
+// Opens the first stream and starts the device; the options are taken over in every case.
+int32_t mradm_engine_monitor_session_start(const MradmEngineMonitorSession* handle,
+                                           const MradmEngineRenderRequest* request,
+                                           uint32_t system_spatial,
+                                           void* options,
+                                           const uint8_t* device_id,
+                                           size_t device_id_len,
+                                           uint8_t* message,
+                                           size_t* message_len,
+                                           uint8_t* context,
+                                           size_t* context_len);
+void mradm_engine_monitor_session_destroy(MradmEngineMonitorSession* handle);
+void mradm_engine_monitor_session_play(const MradmEngineMonitorSession* handle);
+void mradm_engine_monitor_session_pause(const MradmEngineMonitorSession* handle);
+int32_t mradm_engine_monitor_session_seek(const MradmEngineMonitorSession* handle,
+                                          double seconds,
+                                          uint8_t* message,
+                                          size_t* message_len,
+                                          uint8_t* context,
+                                          size_t* context_len);
+void mradm_engine_monitor_session_set_loop(const MradmEngineMonitorSession* handle, double start, double end);
+int32_t mradm_engine_monitor_session_overrides(const MradmEngineMonitorSession* handle,
+                                               const MradmRenderLiveOverride* values,
+                                               size_t values_len,
+                                               uint64_t revision,
+                                               uint8_t* message,
+                                               size_t* message_len,
+                                               uint8_t* context,
+                                               size_t* context_len);
+void mradm_engine_monitor_session_orientation(const MradmEngineMonitorSession* handle,
+                                              float yaw,
+                                              float pitch,
+                                              float roll);
+int32_t mradm_engine_monitor_session_switch(const MradmEngineMonitorSession* handle,
+                                            const MradmEngineRenderRequest* request,
+                                            uint32_t system_spatial,
+                                            void* options,
+                                            uint8_t* message,
+                                            size_t* message_len,
+                                            uint8_t* context,
+                                            size_t* context_len);
+int32_t mradm_engine_monitor_session_output_device(const MradmEngineMonitorSession* handle,
+                                                   const uint8_t* device_id,
+                                                   size_t device_id_len,
+                                                   uint8_t* message,
+                                                   size_t* message_len,
+                                                   uint8_t* context,
+                                                   size_t* context_len);
+// settings: a mradm_dsp_hptf_settings_create handle (copied).
+int32_t mradm_engine_monitor_session_hptf(const MradmEngineMonitorSession* handle,
+                                          const void* settings,
+                                          uint8_t* message,
+                                          size_t* message_len,
+                                          uint8_t* context,
+                                          size_t* context_len);
+// 0 without an engine (and for the next three).
+uint32_t mradm_engine_monitor_session_hptf_snapshot(const MradmEngineMonitorSession* handle, MradmDspHptfSnapshot* out);
+uint32_t mradm_engine_monitor_session_status(const MradmEngineMonitorSession* handle,
+                                             MradmEngineLiveMonitorStatus* out);
+uint32_t mradm_engine_monitor_session_levels(const MradmEngineMonitorSession* handle,
+                                             MradmEngineLiveMonitorLevels* out);
+size_t mradm_engine_monitor_session_log_count(const MradmEngineMonitorSession* handle);
+// The texts stay valid until the next call on this session.
+uint32_t mradm_engine_monitor_session_log_entry(
+    const MradmEngineMonitorSession* handle, size_t index, uint32_t* level, MradmAdmText* module, MradmAdmText* text);
+MradmRenderRoomControl* mradm_engine_monitor_session_room_control(const MradmEngineMonitorSession* handle);
+// Device callback of a session's engine: never waits or allocates.
+void mradm_engine_session_monitor_pull(const MradmEngineSessionMonitor* monitor,
+                                       float* output,
+                                       size_t output_len,
+                                       size_t frames,
+                                       MradmEngineLiveMonitorPull* result);
 
 #ifdef __cplusplus
 }

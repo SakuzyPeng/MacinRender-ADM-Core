@@ -8,6 +8,7 @@
 //! in through the same [`Source`] trait from the FFI boundary.
 mod native;
 mod pull;
+pub mod session;
 mod worker;
 
 pub use native::Native;
@@ -26,6 +27,7 @@ use std::time::{Duration, Instant};
 /// `adm::ErrorCode`.
 pub mod code {
     pub const INVALID_ARGUMENT: i32 = 1;
+    pub const UNSUPPORTED: i32 = 2;
     pub const RENDER_FAILED: i32 = 4;
     pub const CANCELLED: i32 = 5;
     pub const INTERNAL_ERROR: i32 = 6;
@@ -88,6 +90,11 @@ pub trait Source: Send {
     /// Some when the stream renders the orientation at the output with a non-empty intermediate.
     fn output_stage(&self) -> Option<Arc<dyn OutputStage>> {
         None
+    }
+    /// `renders_orientation_at_output`: what a backend switch compares with the monitor's mode
+    /// (an island may report it without an intermediate).
+    fn renders_orientation_at_output(&self) -> bool {
+        self.output_stage().is_some()
     }
     fn intermediate_channels(&self) -> usize {
         0

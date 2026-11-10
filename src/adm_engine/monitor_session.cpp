@@ -1,12 +1,10 @@
 #include <algorithm>
 #include <cstdint>
-#include <filesystem>
+#include <exception>
 #include <iterator>
-#include <limits>
 #include <memory>
-#include <mutex>
-#include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -19,203 +17,21 @@
 #include "../adm_render_room/room_internal.h"
 #include "audio_output_device.h"
 #include "catalog.h"
-#include "monitor_engine.h"
-#include "render_stream_factory.h"
+#include "hptf_eq.h"
+#include "island_stream.h"
+#include "render_common.h"
 #include "renderer_factory.h"
 #include "request_record.h"
 #include "scene_handle.h"
-#include "timeline.h"
 
+// The session logic (log buffer, stream opening, options, edits, HpTF, backend and device
+// transactions) is Rust mradm-engine `monitor::session` (PCM consistency 5.5 B). This shell keeps
+// the devices, the Apple island and the RenderOptions each backend choice was made from.
 namespace mradm {
 
 namespace {
 
-// Seconds → absolute output frame, clamped to [0, total_frames]. The nearest frame, ties away
-// from zero, as for the output trim and the preview window (PCM consistency 3.6); the conversion
-// saturates, so any finite time is safe. Negative times and NaN map to 0, +inf to the end.
-[[nodiscard]] uint64_t clamp_frame(double seconds, uint32_t sample_rate, uint64_t total_frames) {
-    if (seconds == std::numeric_limits<double>::infinity()) {
-        return total_frames;
-    }
-    return std::min(dsp::seconds_to_frame(seconds, sample_rate).value_or(0), total_frames);
-}
-
-// Thread-safe, append-only diagnostics buffer. The monitor renders on a worker thread and
-// resolves the backend at create time; this captures their warnings/errors for polling.
-class BufferingLogSink final : public LogSink {
-  public:
-    void log(LogLevel level, std::string_view module, std::string_view message) override {
-        const std::lock_guard<std::mutex> lock(mutex_);
-        entries_.push_back({level, std::string{module}, std::string{message}});
-    }
-
-    [[nodiscard]] std::size_t count() const {
-        const std::lock_guard<std::mutex> lock(mutex_);
-        return entries_.size();
-    }
-
-    [[nodiscard]] bool get(std::size_t index, LogLevel& level, std::string& module, std::string& message) const {
-        const std::lock_guard<std::mutex> lock(mutex_);
-        if (index >= entries_.size()) {
-            return false;
-        }
-        const auto& entry = entries_[index];
-        level = entry.level;
-        module = entry.module;
-        message = entry.message;
-        return true;
-    }
-
-  private:
-    struct Entry {
-        LogLevel level{};
-        std::string module;
-        std::string message;
-    };
-    mutable std::mutex mutex_;
-    std::vector<Entry> entries_;
-};
-
-// Production stream factory. The opening rules (renderer resolution, DirectSpeakers routing and
-// matrix, the screen check, the backend preparation and the file stream) are Rust mradm-engine
-// `stream::open_monitor` (PCM consistency 5.3 B); this side forwards its log lines and opens the
-// Apple island. Retains every backend for the session's lifetime (an Apple stream borrows its
-// prepared state, and during a hot-switch crossfade two streams are live at once); a Rust stream
-// owns its preparation and keeps an empty slot so forget_last_backend() pops the matching entry.
-class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
-  public:
-    RealtimeStreamFactory(std::string input_path, std::shared_ptr<const detail::RenderSceneHandle> scene_handle)
-        : input_path_(std::move(input_path)), scene_handle_(std::move(scene_handle)) {}
-
-    Result<std::unique_ptr<IRenderStream>>
-    open(const AdmScene& scene, const RenderOptions& options, LogSink& logs) override {
-        const RenderRequest request{input_path_, std::nullopt, options};
-        const engine::RequestTexts texts(request);
-        const auto record = texts.record(request);
-        const engine::RenderPlatform platform;
-        MradmEngineMonitor* raw = nullptr;
-        MradmEngineMonitorView view{};
-        if (mradm_engine_monitor_open(&record,
-                                      platform.get(),
-                                      scene_handle_ != nullptr ? scene_handle_->raw : nullptr,
-                                      options.monitor_system_spatial ? 1U : 0U,
-                                      &raw,
-                                      &view) != 0) {
-            return make_error(ErrorCode::invalid_argument,
-                              "invalid monitor request (UTF-8 paths without NUL required)");
-        }
-        const std::unique_ptr<MradmEngineMonitor, decltype(&mradm_engine_monitor_destroy)> opened(
-            raw, &mradm_engine_monitor_destroy);
-        using render_common::engine_text;
-        for (const auto& line : std::span{view.status.logs, view.status.logs_len}) {
-            logs.log(static_cast<LogLevel>(line.level), engine_text(line.module), engine_text(line.message));
-        }
-        if (view.kind == 1U) {
-            auto stream = render_common::adopt_engine_stream(mradm_engine_monitor_take_stream(raw),
-                                                             view.info,
-                                                             input_path_,
-                                                             engine_text(view.layout),
-                                                             &room_internal::control);
-            keepalive_.emplace_back();
-            return stream;
-        }
-        if (view.kind == 2U) {
-            return open_apple(scene, options, view, logs);
-        }
-        const auto code = view.status.code;
-        return make_error(code > 0 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error,
-                          engine_text(view.status.message),
-                          engine_text(view.status.context));
-    }
-
-    // Drop the most-recently retained backend. The caller MUST have already destroyed the
-    // stream returned by the matching open() (streams borrow the prepared state). Used when
-    // a just-opened backend is rejected (e.g. a hot-switch format mismatch) so repeated
-    // rejected switches don't accumulate prepared state for the session's lifetime.
-    void forget_last_backend() {
-        if (!keepalive_.empty()) {
-            keepalive_.pop_back();
-        }
-    }
-
-  private:
-    // The Apple island over the engine's resolved layout and DirectSpeakers matrix.
-    Result<std::unique_ptr<IRenderStream>>
-    open_apple(const AdmScene& scene, const RenderOptions& options, const MradmEngineMonitorView& view, LogSink& logs) {
-        auto renderer = engine::apple_renderer();
-        if (!renderer) {
-            return tl::unexpected{renderer.error()};
-        }
-        RenderPlan plan;
-        plan.input_path = input_path_;
-        plan.output_layout = render_common::engine_text(view.layout);
-        plan.scene = scene;
-        plan.scene_handle = scene_handle_;
-        plan.sofa_path = options.sofa_path;
-        plan.room = options.room;
-        plan.screens = options.screens;
-        plan.default_interp_ms = options.default_interp_ms;
-        plan.object_smoothing_frames = options.object_smoothing_frames;
-        plan.speaker_geometry = options.speaker_geometry;
-        plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
-        if (view.has_matrix != 0U) {
-            plan.direct_speakers_matrix =
-                std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(view.matrix));
-        }
-        plan.speaker_spread_mode = options.speaker_spread_mode;
-        plan.triple_balance_mode = options.triple_balance_mode;
-        plan.binaural_spread_mode = options.binaural_spread_mode;
-        plan.lfe_routing_mode = options.lfe_routing_mode;
-        plan.apple_spatial_preset = options.apple_spatial_preset;
-        plan.apple_speaker_rendering_flags = options.apple_speaker_rendering_flags;
-        // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
-        // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
-        plan.listener_orientation =
-            options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
-        auto prepared = (*renderer)->prepare(plan, logs);
-        if (!prepared) {
-            return tl::unexpected{prepared.error()};
-        }
-        std::shared_ptr<IPreparedRender> prepared_state = std::move(*prepared);
-        auto stream = (*renderer)->open_stream(*prepared_state, plan, logs);
-        if (!stream) {
-            return tl::unexpected{stream.error()};
-        }
-        keepalive_.push_back({std::move(*renderer), std::move(prepared_state)});
-        return std::move(*stream);
-    }
-
-    struct BackendKeepAlive {
-        // Both members retain the backend and its prepared state for the session's lifetime.
-        std::unique_ptr<IRenderer> renderer; // cppcheck-suppress unusedStructMember
-        // cppcheck-suppress unusedStructMember
-        std::shared_ptr<IPreparedRender> prepared;
-    };
-    std::string input_path_;
-    std::shared_ptr<const detail::RenderSceneHandle> scene_handle_; // the Rust scene of every `scene`
-    std::vector<BackendKeepAlive> keepalive_;
-};
-
-// Rebuilding a monitor must retain its output width; no speaker/HOA downmix is allowed.
-class MonitorOutputFactory final : public realtime::IRenderStreamFactory {
-  public:
-    MonitorOutputFactory(RealtimeStreamFactory& source, uint32_t channels) : source_(source), channels_(channels) {}
-
-    Result<std::unique_ptr<IRenderStream>>
-    open(const AdmScene& scene, const RenderOptions& options, LogSink& logs) override {
-        auto stream = source_.open(scene, options, logs);
-        if (!stream || (*stream)->out_channels() == channels_) {
-            return stream;
-        }
-        stream->reset();
-        source_.forget_last_backend();
-        return make_error(ErrorCode::unsupported, "monitor cannot change its output channel count");
-    }
-
-  private:
-    RealtimeStreamFactory& source_;
-    uint32_t channels_;
-};
+constexpr int32_t k_thrown = 100;
 
 [[nodiscard]] std::unique_ptr<realtime::IAudioOutputDevice> make_monitor_device(const RenderOptions& options,
                                                                                 const std::string& device_id) {
@@ -241,80 +57,234 @@ class MonitorOutputFactory final : public realtime::IRenderStreamFactory {
     return realtime::make_miniaudio_device(/*use_null_backend=*/false, device_id);
 }
 
-} // namespace
+RenderOptions& options_of(void* ctx) {
+    return *static_cast<RenderOptions*>(ctx);
+}
 
-// Declaration order matters for teardown: the engine (which stops the device + joins the
-// worker + destroys the stream) is destroyed first, then the device, then the factory whose
-// prepared state the stream may reference, then the log buffer.
-// The private Pimpl is an aggregate owned exclusively by MonitorSession.
-// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
-struct MonitorSession::Impl {
-    BufferingLogSink log_sink;
-    uint64_t loop_start{0};
-    uint64_t loop_end{0};
-    std::unique_ptr<RealtimeStreamFactory> factory;
-    std::unique_ptr<realtime::IAudioOutputDevice> device;
-    std::unique_ptr<realtime::MonitorEngine> engine;
-    AdmScene scene;                // policy-applied scene, reused when hot-switching the backend
-    RenderOptions current_options; // last-used options (create / switch_backend), to rebuild on device switch
-    struct PendingOptions {
-        std::shared_ptr<realtime::StreamSwitchReceipt> receipt;
-        RenderOptions options;
-    };
-    std::vector<PendingOptions> pending_options;
+realtime::IAudioOutputDevice& device_of(void* device) {
+    return *static_cast<realtime::IAudioOutputDevice*>(device);
+}
 
-    void refresh_options() {
-        std::erase_if(pending_options, [&](const auto& pending) {
-            const auto state = pending.receipt->state.load();
-            if (state == realtime::StreamSwitchState::applied) {
-                current_options = pending.options;
-            }
-            return state != realtime::StreamSwitchState::pending;
-        });
+// An exception becomes code 100 (the session rethrows it).
+template <class F> int32_t guarded(const MradmEngineIslandError* e, const F& f) noexcept {
+    try {
+        return f();
+    } catch (const std::exception& error) {
+        return realtime::island_error(Error{static_cast<ErrorCode>(k_thrown), error.what(), {}}, e);
+    } catch (...) {
+        return realtime::island_error(Error{static_cast<ErrorCode>(k_thrown), "unknown exception", {}}, e);
     }
+}
 
-    void queue_stream(std::unique_ptr<IRenderStream> stream, const RenderOptions& options) {
-        auto receipt = std::make_shared<realtime::StreamSwitchReceipt>();
-        pending_options.push_back({receipt, options});
-        engine->switch_stream(std::move(stream), std::move(receipt));
-    }
-
-    LiveOverrides current_overrides;           // last-applied overrides, re-applied after a device switch
-    ListenerOrientation current_orientation{}; // last-applied head orientation, re-applied after a device switch
-    std::optional<render_common::HptfSettings> current_hptf; // Owned parameters survive rate/device rebuilds.
-    std::string device_id;                                   // current output device token ("" = default)
-    uint32_t sample_rate{48000};
-    uint64_t total_frames{0};
-
-    // The orientation actually fed to the render stream. Under system-spatial monitoring the
-    // system owns head tracking, so a local orientation must NOT reach AppleStream (it would
-    // rotate the 7.1.4 bed at the source → double rotation). Forced neutral there; the user's
-    // real pose is still kept in current_orientation (and drives the GUI spatial view separately).
-    [[nodiscard]] ListenerOrientation effective_orientation() const {
-        return current_options.monitor_system_spatial ? ListenerOrientation{} : current_orientation;
-    }
-
-    // Design the stored profile for the CURRENT engine's rate and publish it. Called on every
-    // path that creates or rebuilds the engine, so HpTF survives switch_backend /
-    // set_output_device. Silent no-op when the engine cannot carry it (not a stereo feed).
-    void republish_hptf() {
-        if (engine == nullptr || !engine->hptf_supported()) {
-            return;
-        }
-        if (!current_hptf.has_value()) {
-            engine->set_hptf(std::nullopt, 0);
-            return;
-        }
-        auto coeffs = current_hptf->design(engine->sample_rate());
-        if (!coeffs) {
-            log_sink.log(LogLevel::warning, "monitor", "耳机补偿重建失败:" + coeffs.error().message);
-            return;
-        }
-        engine->set_hptf(*coeffs);
-    }
+// Both members retain the Apple backend for as long as its stream lives.
+struct AppleKeepAlive {
+    std::unique_ptr<IRenderer> renderer; // cppcheck-suppress unusedStructMember
+    // cppcheck-suppress unusedStructMember
+    std::shared_ptr<IPreparedRender> prepared;
 };
 
+// The error buffers of one Rust session call (large enough for any path in a message).
+constexpr size_t k_text_capacity = 65536;
+class Texts {
+  public:
+    explicit Texts(size_t context_capacity = k_text_capacity)
+        : context_(std::max(context_capacity, k_text_capacity), '\0'), context_len_(context_.size()) {}
+    uint8_t* m() { return reinterpret_cast<uint8_t*>(message_.data()); }
+    uint8_t* c() { return reinterpret_cast<uint8_t*>(context_.data()); }
+    size_t* ml() { return &message_len_; }
+    size_t* cl() { return &context_len_; }
+
+    [[nodiscard]] Result<void> result(int32_t code) {
+        if (code == 0) {
+            return {};
+        }
+        message_.resize(message_len_);
+        context_.resize(context_len_);
+        if (code == k_thrown) {
+            throw std::runtime_error(message_);
+        }
+        return make_error(static_cast<ErrorCode>(code), std::move(message_), std::move(context_));
+    }
+
+  private:
+    std::string message_ = std::string(k_text_capacity, '\0');
+    std::string context_;
+    size_t message_len_ = k_text_capacity;
+    size_t context_len_ = 0;
+};
+
+// The import's log lines, replayed into the session once it exists.
+class BufferedLogSink final : public LogSink {
+  public:
+    void log(LogLevel level, std::string_view module, std::string_view message) override {
+        lines_.push_back({level, std::string{module}, std::string{message}});
+    }
+    void replay(LogSink& sink) const {
+        for (const auto& line : lines_) {
+            sink.log(line.level, line.module, line.message);
+        }
+    }
+
+  private:
+    struct Line {
+        LogLevel level{};
+        std::string module;
+        std::string message;
+    };
+    std::vector<Line> lines_;
+};
+
+} // namespace
+
+// The scene and its handle outlive the Rust session, which borrows the handle and opens Apple
+// streams on the scene.
+// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
+struct MonitorSession::Impl {
+    std::string input_path;
+    AdmScene scene;
+    std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
+    MradmEngineMonitorSessionHost host{};
+    MradmEngineMonitorSession* rust{nullptr};
+
+    ~Impl() { mradm_engine_monitor_session_destroy(rust); }
+    Impl() = default;
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+    Impl(Impl&&) = delete;
+    Impl& operator=(Impl&&) = delete;
+
+    [[nodiscard]] Result<MradmEngineIslandStream>
+    open_apple(const RenderOptions& options, std::string layout, const MradmDirectMatrixView* matrix) const;
+    void bind_host();
+};
+
+namespace {
+
+// Forwards to the session's log buffer (the import's and the Apple backend's lines).
+class SessionLogSink final : public LogSink {
+  public:
+    explicit SessionLogSink(const MradmEngineMonitorSession* session) : session_(session) {}
+    void log(LogLevel level, std::string_view module, std::string_view message) override {
+        mradm_engine_monitor_session_log(session_,
+                                         static_cast<uint32_t>(level),
+                                         reinterpret_cast<const uint8_t*>(module.data()),
+                                         module.size(),
+                                         reinterpret_cast<const uint8_t*>(message.data()),
+                                         message.size());
+    }
+
+  private:
+    const MradmEngineMonitorSession* session_;
+};
+
+} // namespace
+
 // NOLINTEND(misc-non-private-member-variables-in-classes)
+
+// The Apple island over the engine's resolved layout and DirectSpeakers matrix; the stream owns
+// the renderer and its prepared state.
+Result<MradmEngineIslandStream> MonitorSession::Impl::open_apple(const RenderOptions& options,
+                                                                 std::string layout,
+                                                                 const MradmDirectMatrixView* matrix) const {
+    auto renderer = engine::apple_renderer();
+    if (!renderer) {
+        return tl::unexpected{renderer.error()};
+    }
+    RenderPlan plan;
+    plan.input_path = input_path;
+    plan.output_layout = std::move(layout);
+    plan.scene = scene;
+    plan.scene_handle = scene_handle;
+    plan.sofa_path = options.sofa_path;
+    plan.room = options.room;
+    plan.screens = options.screens;
+    plan.default_interp_ms = options.default_interp_ms;
+    plan.object_smoothing_frames = options.object_smoothing_frames;
+    plan.speaker_geometry = options.speaker_geometry;
+    plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
+    if (matrix != nullptr) {
+        plan.direct_speakers_matrix = std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(*matrix));
+    }
+    plan.speaker_spread_mode = options.speaker_spread_mode;
+    plan.triple_balance_mode = options.triple_balance_mode;
+    plan.binaural_spread_mode = options.binaural_spread_mode;
+    plan.lfe_routing_mode = options.lfe_routing_mode;
+    plan.apple_spatial_preset = options.apple_spatial_preset;
+    plan.apple_speaker_rendering_flags = options.apple_speaker_rendering_flags;
+    // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
+    // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
+    plan.listener_orientation = options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
+    SessionLogSink logs(rust);
+    auto prepared = (*renderer)->prepare(plan, logs);
+    if (!prepared) {
+        return tl::unexpected{prepared.error()};
+    }
+    std::shared_ptr<IPreparedRender> prepared_state = std::move(*prepared);
+    auto stream = (*renderer)->open_stream(*prepared_state, plan, logs);
+    if (!stream) {
+        return tl::unexpected{stream.error()};
+    }
+    auto keep = std::make_shared<AppleKeepAlive>(AppleKeepAlive{std::move(*renderer), std::move(prepared_state)});
+    return realtime::island_table(std::move(*stream), std::move(keep));
+}
+
+void MonitorSession::Impl::bind_host() {
+    host.ctx = this;
+    host.device = [](void*, void* options, const uint8_t* id, size_t id_len) noexcept -> void* {
+        try {
+            return make_monitor_device(options_of(options), {reinterpret_cast<const char*>(id), id_len}).release();
+        } catch (...) {
+            std::terminate();
+        }
+    };
+    host.device_realtime = [](void*, void* device) noexcept -> uint32_t {
+        return device_of(device).pull_is_realtime_playback() ? 1U : 0U;
+    };
+    host.device_start = [](void*,
+                           void* device,
+                           uint32_t channels,
+                           uint32_t rate,
+                           const MradmEngineSessionMonitor* monitor,
+                           const MradmEngineIslandError* e) noexcept {
+        return guarded(e, [&] {
+            auto& d = device_of(device);
+            auto started = d.start(channels, rate, [monitor, &d](std::span<float> out, std::size_t frames) {
+                MradmEngineLiveMonitorPull result{};
+                mradm_engine_session_monitor_pull(monitor, out.data(), out.size(), frames, &result);
+                if (result.mark_end != 0U) {
+                    d.mark_end();
+                }
+                return result.frames;
+            });
+            return started ? 0 : realtime::island_error(started.error(), e);
+        });
+    };
+    host.device_stop = [](void*, void* device) noexcept { device_of(device).stop(); };
+    host.device_flush = [](void*, void* device) noexcept { device_of(device).flush(); };
+    host.device_pause = [](void*, void* device) noexcept { device_of(device).pause(); };
+    host.device_resume = [](void*, void* device) noexcept { device_of(device).resume(); };
+    host.device_destroy = [](void*, void* device) noexcept { delete &device_of(device); };
+    host.open_apple = [](void* ctx,
+                         void* options,
+                         const uint8_t* layout,
+                         size_t layout_len,
+                         const MradmDirectMatrixView* matrix,
+                         MradmEngineIslandStream* out,
+                         const MradmEngineIslandError* e) noexcept {
+        return guarded(e, [&] {
+            const auto& impl = *static_cast<const Impl*>(ctx);
+            auto table = impl.open_apple(
+                options_of(options), std::string{reinterpret_cast<const char*>(layout), layout_len}, matrix);
+            if (!table) {
+                return realtime::island_error(table.error(), e);
+            }
+            *out = *table;
+            return 0;
+        });
+    };
+    host.release_options = [](void*, void* options) noexcept { delete &options_of(options); };
+}
+
 MonitorSession::MonitorSession() : impl_(std::make_unique<Impl>()) {}
 MonitorSession::~MonitorSession() = default;
 
@@ -336,85 +306,90 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     // Import + apply the semantic policy via the same path PreviewSession uses, so the
     // monitored scene is the effective (policy-applied) scene — matching offline rendering.
     RenderService service;
-    auto scene = service.prepare_preview_scene(input_path, options, impl.log_sink);
+    BufferedLogSink import_logs;
+    auto scene = service.prepare_preview_scene(input_path, options, import_logs);
     if (!scene) {
         return tl::unexpected{scene.error()};
     }
-    impl.sample_rate = scene->scene.info.sample_rate;
-    impl.total_frames = scene->scene.info.num_frames;
+    impl.input_path = input_path;
     impl.scene = std::move(scene->scene);
-    impl.current_options = options;
-    impl.device_id = device_id;
-
-    impl.factory = std::make_unique<RealtimeStreamFactory>(input_path, std::move(scene->handle));
-    impl.device = make_monitor_device(options, device_id);
-
-    auto engine = realtime::MonitorEngine::create(
-        *impl.factory, *impl.device, impl.scene, options, impl.log_sink, &room_internal::control);
-    if (!engine) {
-        return tl::unexpected{engine.error()};
+    impl.scene_handle = std::move(scene->handle);
+    impl.bind_host();
+    const engine::RenderPlatform platform;
+    impl.rust = mradm_engine_monitor_session_new(platform.get(),
+                                                 impl.scene_handle != nullptr ? impl.scene_handle->raw : nullptr,
+                                                 impl.scene.info.sample_rate,
+                                                 impl.scene.info.num_frames,
+                                                 &impl.host);
+    if (impl.rust == nullptr) {
+        return make_error(ErrorCode::internal_error, "invalid monitor session");
     }
-    impl.engine = std::move(*engine);
+    SessionLogSink logs(impl.rust);
+    import_logs.replay(logs);
+
+    const RenderRequest request{input_path, std::nullopt, options};
+    const engine::RequestTexts texts(request);
+    const auto record = texts.record(request);
+    Texts errors;
+    const auto code = mradm_engine_monitor_session_start(impl.rust,
+                                                         &record,
+                                                         options.monitor_system_spatial ? 1U : 0U,
+                                                         new RenderOptions(options),
+                                                         reinterpret_cast<const uint8_t*>(device_id.data()),
+                                                         device_id.size(),
+                                                         errors.m(),
+                                                         errors.ml(),
+                                                         errors.c(),
+                                                         errors.cl());
+    if (auto created = errors.result(code); !created) {
+        return tl::unexpected{created.error()};
+    }
     return session;
 }
 
 void MonitorSession::play() {
-    if (impl_->engine == nullptr) {
-        return; // session invalidated (a backend rebuild failed); stay inert rather than crash
-    }
-    impl_->engine->play();
+    mradm_engine_monitor_session_play(impl_->rust);
 }
 
 void MonitorSession::pause() {
-    if (impl_->engine == nullptr) {
-        return;
-    }
-    impl_->engine->pause();
+    mradm_engine_monitor_session_pause(impl_->rust);
 }
 
 Result<void> MonitorSession::seek_seconds(double seconds) {
-    if (impl_->engine == nullptr) {
-        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
-    }
-    // negative clamps to 0, past the end clamps to total_frames.
-    impl_->engine->seek(clamp_frame(seconds, impl_->sample_rate, impl_->total_frames));
-    return {};
+    Texts errors;
+    return errors.result(
+        mradm_engine_monitor_session_seek(impl_->rust, seconds, errors.m(), errors.ml(), errors.c(), errors.cl()));
 }
 
 void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) {
-    if (impl_->engine == nullptr) {
-        return;
-    }
-    impl_->loop_start = clamp_frame(start_seconds, impl_->sample_rate, impl_->total_frames);
-    impl_->loop_end = clamp_frame(end_seconds, impl_->sample_rate, impl_->total_frames);
-    impl_->engine->set_loop(impl_->loop_start, impl_->loop_end);
+    mradm_engine_monitor_session_set_loop(impl_->rust, start_seconds, end_seconds);
 }
 
 Result<void> MonitorSession::set_overrides(const LiveOverrides& overrides) {
-    if (impl_->engine == nullptr) {
-        return make_error(ErrorCode::internal_error, "monitor session is unavailable");
+    const auto records = render_common::live_override_records(overrides);
+    size_t context = 0;
+    for (const auto& item : overrides.objects) {
+        context = std::max(context, item.object_id.size() + 1);
     }
-    auto applied = impl_->engine->set_overrides(overrides);
-    if (applied) {
-        impl_->current_overrides = overrides;
-    }
-    return applied;
+    Texts errors(context);
+    return errors.result(mradm_engine_monitor_session_overrides(impl_->rust,
+                                                                records.data(),
+                                                                records.size(),
+                                                                overrides.revision,
+                                                                errors.m(),
+                                                                errors.ml(),
+                                                                errors.c(),
+                                                                errors.cl()));
 }
 
 std::shared_ptr<IRoomControl> MonitorSession::room_control() const {
-    return impl_->engine ? impl_->engine->room_control() : nullptr;
+    auto* raw = mradm_engine_monitor_session_room_control(impl_->rust);
+    return raw == nullptr ? nullptr : room_internal::control(raw);
 }
 
 void MonitorSession::set_listener_orientation(const ListenerOrientation& orientation) {
-    impl_->refresh_options();
-    impl_->current_orientation = orientation; // kept so a device switch can re-apply the head pose
-    if (impl_->engine == nullptr) {
-        return;
-    }
-    // 系统空间化监听:头追由系统(AirPods)在它自己的输出级接管。若把本地朝向喂给 AppleStream
-    // (AUSpatialMixer),它会在源头先把 7.1.4 声场转一道,再被系统头追转第二道 = 双重旋转。
-    // 故在系统空间化下强制中立朝向(GUI 的 spatial view 视觉监视走另一条路,不受影响)。
-    impl_->engine->set_listener_orientation(impl_->effective_orientation());
+    mradm_engine_monitor_session_orientation(
+        impl_->rust, orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg);
 }
 
 Result<void> MonitorSession::set_hptf(const std::string& path, HptfPreampMode mode, std::uint64_t revision) {
@@ -427,220 +402,75 @@ MonitorSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode m
     return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
 }
 Result<void> MonitorSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
-    if (!impl_->engine) {
-        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
-    }
-    if (!impl_->engine->hptf_supported()) {
-        return make_error(ErrorCode::unsupported, "耳机补偿(HpTF)只适用于双声道耳机监听");
-    }
-    auto snapshot = settings.design(impl_->engine->sample_rate());
-    if (!snapshot) {
-        return tl::unexpected{snapshot.error()};
-    }
-    const auto info = render_common::hptf_snapshot_info(*snapshot);
-    if (std::max(info.left.max_response_db, info.right.max_response_db) > 0.0F) {
-        impl_->log_sink.log(LogLevel::warning,
-                            "monitor",
-                            "耳机补偿曲线可能削波(左 " + std::to_string(info.left.max_response_db) + " dB,右 " +
-                                std::to_string(info.right.max_response_db) + " dB)");
-    }
-    impl_->current_hptf = settings;
-    impl_->engine->set_hptf(*snapshot);
-    return {};
+    Texts errors;
+    return errors.result(mradm_engine_monitor_session_hptf(
+        impl_->rust, settings.handle.get(), errors.m(), errors.ml(), errors.c(), errors.cl()));
 }
 HptfStereoInfo MonitorSession::hptf_stereo_info() const {
-    return impl_->engine ? render_common::hptf_snapshot_info(impl_->engine->hptf_active_snapshot()) : HptfStereoInfo{};
+    MradmDspHptfSnapshot snapshot{};
+    if (mradm_engine_monitor_session_hptf_snapshot(impl_->rust, &snapshot) == 0U) {
+        return {};
+    }
+    return render_common::hptf_snapshot_info(render_common::hptf_snapshot(snapshot));
 }
 HptfInfo MonitorSession::hptf_info() const {
     return hptf_stereo_info().left;
 }
 
-// NOLINTNEXTLINE(readability-function-size): keep backend rollback and keepalive lifetimes in one transaction.
 Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
-    impl_->refresh_options();
-    if (impl_->engine == nullptr) {
-        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
-    }
-    // Prepare the new backend off the audio thread (resolve + prepare + open_stream),
-    // reusing the policy-applied scene. The factory retains its prepared state.
-    auto stream = impl_->factory->open(impl_->scene, options, impl_->log_sink);
-    if (!stream) {
-        return tl::unexpected{stream.error()};
-    }
-    if (*stream == nullptr) {
-        return make_error(ErrorCode::internal_error, "monitor switch_backend produced a null stream");
-    }
-    auto valid_overrides = (*stream)->validate_overrides(impl_->current_overrides);
-    if (!valid_overrides) {
-        stream->reset();
-        impl_->factory->forget_last_backend();
-        return tl::unexpected{valid_overrides.error()};
-    }
-    const uint32_t monitor_channels = impl_->engine->out_channels();
-    if ((*stream)->out_channels() != monitor_channels) {
-        stream->reset();
-        impl_->factory->forget_last_backend();
-        return make_error(
-            ErrorCode::unsupported,
-            "monitor backend switches cannot change the output channel count; use binaural output for headphones");
-    }
-    // No resampling across a switch: the monitor device runs at a fixed rate.
-    if ((*stream)->sample_rate() != impl_->engine->sample_rate()) {
-        stream->reset();
-        impl_->factory->forget_last_backend();
-        return make_error(ErrorCode::unsupported, "monitor backend switch requires the same sample rate");
-    }
-    // The engine's ring layout (intermediate vs output PCM) is fixed at create from the stream's
-    // output-stage mode. A switch that flips that mode (e.g. Apple binaural ↔ SAF binaural)
-    // requires rebuilding the engine on the same device,
-    // preserving the playhead / edits / play state (mirrors set_output_device).
-    const bool new_output_stage = (*stream)->renders_orientation_at_output();
-    if (new_output_stage != impl_->engine->output_stage()) {
-        stream->reset(); // the factory re-opens the new backend inside MonitorEngine::create below
-        const realtime::MonitorStatus snap = impl_->engine->status();
-        const uint64_t playhead = snap.playhead_frames;
-        const bool was_playing = snap.state == realtime::MonitorState::playing;
-        impl_->engine.reset(); // stops the device (engine borrows it by reference)
-        impl_->refresh_options();
-        const RenderOptions prev_options = impl_->current_options; // restore the last applied backend on failure
-        impl_->device.reset();
-
-        // Build a fresh device + engine for `opts` on the same device id. Leaves engine/device null
-        // on failure (the caller decides whether to retry the previous backend).
-        auto rebuild_with = [&](const RenderOptions& opts) -> Result<void> {
-            impl_->factory->forget_last_backend();
-            impl_->current_options = opts;
-            impl_->device = make_monitor_device(opts, impl_->device_id);
-            MonitorOutputFactory factory(*impl_->factory, monitor_channels);
-            auto rebuilt = realtime::MonitorEngine::create(
-                factory, *impl_->device, impl_->scene, opts, impl_->log_sink, &room_internal::control);
-            if (!rebuilt) {
-                impl_->engine.reset();
-                impl_->device.reset();
-                return tl::unexpected{rebuilt.error()};
-            }
-            impl_->engine = std::move(*rebuilt);
-            return {};
-        };
-
-        std::optional<Error> switch_error;
-        if (auto built = rebuild_with(options); !built) {
-            // Restore the previous (working) backend so monitoring survives a failed flip rather than
-            // leaving the session torn down. If that also fails the session is left invalid (null
-            // engine) — the entry points are null-safe.
-            switch_error = built.error();
-            impl_->log_sink.log(LogLevel::warning, "monitor", "切换后端失败,回退到原后端:" + built.error().message);
-            if (auto restored = rebuild_with(prev_options); !restored) {
-                return tl::unexpected{built.error()};
-            }
-        }
-        impl_->engine->set_overrides(impl_->current_overrides);
-        impl_->engine->set_loop(impl_->loop_start, impl_->loop_end);
-        impl_->engine->seek(playhead);
-        impl_->engine->set_listener_orientation(impl_->effective_orientation());
-        impl_->republish_hptf(); // a rebuilt engine starts with an empty cascade
-        if (was_playing) {
-            impl_->engine->play();
-        }
-        // Reverted to the old backend: surface the original failure so the UI shows the switch failed
-        // (the session is still live on the previous backend, not the requested one).
-        if (switch_error.has_value()) {
-            return tl::unexpected{*switch_error};
-        }
-        return {};
-    }
-    impl_->queue_stream(std::move(*stream), options);
-    return {};
+    const RenderRequest request{impl_->input_path, std::nullopt, options};
+    const engine::RequestTexts texts(request);
+    const auto record = texts.record(request);
+    Texts errors;
+    return errors.result(mradm_engine_monitor_session_switch(impl_->rust,
+                                                             &record,
+                                                             options.monitor_system_spatial ? 1U : 0U,
+                                                             new RenderOptions(options),
+                                                             errors.m(),
+                                                             errors.ml(),
+                                                             errors.c(),
+                                                             errors.cl()));
 }
 
 Result<void> MonitorSession::set_output_device(const std::string& device_id) {
-    if (impl_->engine == nullptr) {
-        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
-    }
-    if (device_id == impl_->device_id) {
-        return {}; // already on this device
-    }
-
-    // Snapshot what must survive the device re-open: playhead, play state, and (re-applied)
-    // live overrides. The backend is rebuilt from the retained scene + current_options.
-    const realtime::MonitorStatus snap = impl_->engine->status();
-    const uint64_t playhead = snap.playhead_frames;
-    const bool was_playing = snap.state == realtime::MonitorState::playing;
-    const auto monitor_channels = impl_->engine->out_channels();
-
-    // Stop the old engine + device first (engine borrows the device by reference), so two
-    // devices never pull at once. Then open the new device and rebuild the engine on it.
-    impl_->engine.reset();
-    impl_->refresh_options();
-    impl_->device.reset();
-
-    auto open_on = [&](const std::string& id) -> Result<void> {
-        impl_->device = make_monitor_device(impl_->current_options, id);
-        MonitorOutputFactory factory(*impl_->factory, monitor_channels);
-        auto engine = realtime::MonitorEngine::create(
-            factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink, &room_internal::control);
-        if (!engine) {
-            impl_->device.reset();
-            return tl::unexpected{engine.error()};
-        }
-        impl_->engine = std::move(*engine);
-        impl_->device_id = id;
-        return {};
-    };
-
-    auto opened = open_on(device_id);
-    if (!opened) {
-        // Fall back to the system default so the session keeps playing rather than dying on a
-        // bad device id (e.g. the device was unplugged between enumeration and selection).
-        impl_->log_sink.log(LogLevel::warning, "monitor", "切换输出设备失败,回落到默认设备:" + opened.error().message);
-        auto fallback = open_on(std::string{});
-        if (!fallback) {
-            return tl::unexpected{fallback.error()};
-        }
-    }
-
-    // Restore playhead + edits + play state on the freshly rebuilt engine.
-    impl_->engine->set_overrides(impl_->current_overrides);
-    impl_->engine->set_loop(impl_->loop_start, impl_->loop_end);
-    impl_->engine->seek(playhead);
-    impl_->engine->set_listener_orientation(impl_->effective_orientation()); // 系统空间化→中立(见 setter)
-    impl_->republish_hptf(); // a rebuilt engine starts with an empty cascade
-    if (was_playing) {
-        impl_->engine->play();
-    }
-    return {};
+    Texts errors;
+    return errors.result(mradm_engine_monitor_session_output_device(impl_->rust,
+                                                                    reinterpret_cast<const uint8_t*>(device_id.data()),
+                                                                    device_id.size(),
+                                                                    errors.m(),
+                                                                    errors.ml(),
+                                                                    errors.c(),
+                                                                    errors.cl()));
 }
 
 MonitorStatusSnapshot MonitorSession::status() const {
-    impl_->refresh_options();
-    if (impl_->engine == nullptr) {
-        MonitorStatusSnapshot out; // invalid session → report a stopped/failed snapshot
-        out.state = MonitorPlaybackState::stopped;
+    MradmEngineLiveMonitorStatus s{};
+    MonitorStatusSnapshot out;
+    if (mradm_engine_monitor_session_status(impl_->rust, &s) == 0U) {
+        out.state = MonitorPlaybackState::stopped; // invalid session → a stopped/failed snapshot
         out.failed = true;
         return out;
     }
-    const realtime::MonitorStatus s = impl_->engine->status();
-    MonitorStatusSnapshot out;
-    out.state = static_cast<MonitorPlaybackState>(static_cast<std::uint8_t>(s.state));
+    out.state = static_cast<MonitorPlaybackState>(s.state);
     out.playhead_frames = s.playhead_frames;
     out.underruns = s.underruns;
     out.buffered_frames = s.buffered_frames;
     out.ring_fill = s.ring_fill;
-    out.ended = s.ended;
-    out.failed = s.failed;
+    out.ended = s.ended != 0U;
+    out.failed = s.failed != 0U;
     out.override_revision = s.override_revision;
     return out;
 }
 
 MonitorLevelsSnapshot MonitorSession::levels() const {
-    if (impl_->engine == nullptr) {
-        return MonitorLevelsSnapshot{}; // invalid session → silent levels
-    }
-    const realtime::MonitorLevels l = impl_->engine->levels();
+    MradmEngineLiveMonitorLevels l{};
     MonitorLevelsSnapshot out;
+    if (mradm_engine_monitor_session_levels(impl_->rust, &l) == 0U) {
+        return out; // invalid session → silent levels
+    }
     out.channels = l.channels;
-    out.peak = l.peak;
-    out.rms = l.rms;
+    std::copy_n(std::begin(l.peak), out.peak.size(), out.peak.begin());
+    std::copy_n(std::begin(l.rms), out.rms.size(), out.rms.begin());
     out.momentary_lufs = l.momentary_lufs;
     out.shortterm_lufs = l.shortterm_lufs;
     out.integrated_lufs = l.integrated_lufs;
@@ -648,11 +478,20 @@ MonitorLevelsSnapshot MonitorSession::levels() const {
 }
 
 std::size_t MonitorSession::log_count() const {
-    return impl_->log_sink.count();
+    return mradm_engine_monitor_session_log_count(impl_->rust);
 }
 
 bool MonitorSession::log_entry(std::size_t index, LogLevel& level, std::string& module, std::string& message) const {
-    return impl_->log_sink.get(index, level, module, message);
+    uint32_t value = 0;
+    MradmAdmText m{};
+    MradmAdmText t{};
+    if (mradm_engine_monitor_session_log_entry(impl_->rust, index, &value, &m, &t) == 0U) {
+        return false;
+    }
+    level = static_cast<LogLevel>(value);
+    module = render_common::engine_text(m);
+    message = render_common::engine_text(t);
+    return true;
 }
 
 } // namespace mradm

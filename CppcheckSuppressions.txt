@@ -45,7 +45,7 @@ unusedStructMember:*/src/adm_renderer_factory/renderer_factory.h
 # MonitorStatus/MonitorLevels + engine members are written/read across monitor_engine.cpp
 # and consumers; cppcheck sees the header alone.
 unusedStructMember:*/src/adm_realtime/audio_output_device.h
-unusedStructMember:*/src/adm_realtime/monitor_engine.h
+unusedStructMember:*/tests/support/realtime/monitor_engine.h
 # SAF spreader is a local C fork of the upstream SAF example; keep cppcheck from
 # treating third-party C idioms as project C++ style issues.
 *:*/tests/reference/spreader_mr.c

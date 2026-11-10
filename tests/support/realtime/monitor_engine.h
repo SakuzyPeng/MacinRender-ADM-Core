@@ -14,9 +14,9 @@
 #include "adm/options.h"
 #include "adm/scene.h"
 
-#include "../adm_render_common/engine_ffi.h"
-#include "../adm_render_common/hptf_eq.h"
 #include "audio_output_device.h"
+#include "engine_ffi.h"
+#include "hptf_eq.h"
 #include "render_stream_factory.h"
 
 // File streaming monitor engine: a worker renders ahead of the playhead into a ring that the
