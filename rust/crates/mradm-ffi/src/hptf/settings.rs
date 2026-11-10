@@ -229,6 +229,7 @@ unsafe fn file(path: *const u8) -> Result<dsp::Profile> {
     validate(profile).map_err(with_file)
 }
 
+#[derive(Clone)]
 pub struct Settings {
     profiles: [dsp::Profile; 2],
     mode: dsp::PreampMode,

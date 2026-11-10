@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 132,
-      "lines": 25477
+      "files": 131,
+      "lines": 25077
     },
     "islands": {
       "files": 5,
@@ -14,16 +14,16 @@
       "lines": 512
     },
     "tests": {
-      "files": 156,
-      "lines": 49509
+      "files": 159,
+      "lines": 49911
     },
     "reference": {
       "files": 38,
       "lines": 12022
     },
     "rust": {
-      "files": 330,
-      "lines": 122255
+      "files": 333,
+      "lines": 124233
     },
     "rust-vendor": {
       "files": 175,
@@ -35,8 +35,8 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40626,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 18766,
-    "rust/crates/mradm-ffi": 23373,
+    "rust/crates/mradm-engine": 20083,
+    "rust/crates/mradm-ffi": 24034,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 809,
@@ -56,12 +56,12 @@
     "src/adm_cli": 1642,
     "src/adm_core": 350,
     "src/adm_dsp": 1535,
-    "src/adm_engine": 1968,
+    "src/adm_engine": 1807,
     "src/adm_io": 381,
     "src/adm_metadata": 744,
-    "src/adm_realtime": 2389,
+    "src/adm_realtime": 2033,
     "src/adm_render_binaural": 231,
-    "src/adm_render_common": 3543,
+    "src/adm_render_common": 3660,
     "src/adm_render_ear": 55,
     "src/adm_render_hoa": 56,
     "src/adm_render_room": 326,
@@ -92,7 +92,7 @@
     "tests/reference/spreader_mr_internal.h": 153,
     "tests/reference/triple_balance": 1619,
     "tests/reference/wav_container": 1456,
-    "tests/support": 4323,
+    "tests/support": 4725,
     "tests/tools": 1748,
     "tests/unit": 41015
   }

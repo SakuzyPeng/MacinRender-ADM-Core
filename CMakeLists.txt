@@ -561,7 +561,7 @@ mr_adm_core_apply_static_analysis(mr_adm_engine)
 add_library(mr_adm_realtime)
 add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
 target_sources(mr_adm_realtime PRIVATE
-    src/adm_realtime/monitor_engine.cpp
+    src/adm_realtime/island_stream.cpp
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
     src/adm_realtime/room_worker_wait.cpp
@@ -570,7 +570,6 @@ target_sources(mr_adm_realtime PRIVATE
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
-# The Rust meter is PRIVATE too: its worker-owned state stays in monitor_engine.cpp.
 target_link_libraries(mr_adm_realtime
     PUBLIC MacinRender::ADMCore
     PRIVATE
@@ -1246,13 +1245,23 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
+    # The C++ MonitorEngine shell over the Rust monitor (PCM consistency 5.5 B moved it out of
+    # production): the realtime tests and the monitor benchmark drive the engine through it.
+    add_library(mr_adm_monitor_engine_test_support STATIC tests/support/realtime/monitor_engine.cpp)
+    target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
+        tests/support/realtime src/adm_realtime src/adm_render_common)
+    target_link_libraries(mr_adm_monitor_engine_test_support PUBLIC
+        MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_monitor_engine_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_monitor_engine_test_support)
+
     add_executable(mr_adm_realtime_tests tests/unit/realtime_stream_fixture_test.cpp)
     # ADMRenderCommon is PRIVATE on mr_adm_realtime, so its PUBLIC include dir does not
     # propagate; the HpTF tests below use that module's API directly, hence the explicit link.
     target_link_libraries(
         mr_adm_realtime_tests
         PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon Threads::Threads
-        mr_adm_output_dsp_test_support
+        mr_adm_output_dsp_test_support mr_adm_monitor_engine_test_support
     )
     mr_adm_core_apply_warnings(mr_adm_realtime_tests)
     mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
@@ -1306,7 +1315,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_monitor_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo)
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo
+        mr_adm_monitor_engine_test_support)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 

@@ -1202,6 +1202,8 @@ mod stream_ffi;
 
 #[path = "engine_monitor.rs"]
 mod engine_monitor;
+#[path = "engine_monitor_session.rs"]
+mod engine_monitor_session;
 
 #[cfg(test)]
 #[path = "../../mradm-render/tests/common/mod.rs"]
