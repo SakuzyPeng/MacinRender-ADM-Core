@@ -4,7 +4,6 @@
 //! ring that [`Stream::pull`] drains. The epochs, generations, budgets, fences, backend crossfades,
 //! semantic policy, preroll and rational timeline, end of stream, diagnostics and `scene/*`
 //! checkpoints keep the C++ rules, order and texts.
-mod ring;
 #[cfg(test)]
 mod tests;
 mod trace;
@@ -13,13 +12,13 @@ mod worker;
 use super::renderer::{self, Renderer};
 use crate::backend::Host;
 use crate::request::Selection;
+use crate::ring::Ring;
 use mradm_dsp::resampler::Resampler;
 use mradm_dsp::scene_transition::Transitions;
 use mradm_render::live::{self, field};
 use mradm_render::room_runtime::Control as RoomControl;
 use mradm_render::routing::Error;
 use mradm_scene::{error::Context, live_policy, policy};
-use ring::Ring;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};

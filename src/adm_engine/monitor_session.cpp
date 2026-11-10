@@ -349,7 +349,8 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     impl.factory = std::make_unique<RealtimeStreamFactory>(input_path, std::move(scene->handle));
     impl.device = make_monitor_device(options, device_id);
 
-    auto engine = realtime::MonitorEngine::create(*impl.factory, *impl.device, impl.scene, options, impl.log_sink);
+    auto engine = realtime::MonitorEngine::create(
+        *impl.factory, *impl.device, impl.scene, options, impl.log_sink, &room_internal::control);
     if (!engine) {
         return tl::unexpected{engine.error()};
     }
@@ -511,8 +512,8 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
             impl_->current_options = opts;
             impl_->device = make_monitor_device(opts, impl_->device_id);
             MonitorOutputFactory factory(*impl_->factory, monitor_channels);
-            auto rebuilt =
-                realtime::MonitorEngine::create(factory, *impl_->device, impl_->scene, opts, impl_->log_sink);
+            auto rebuilt = realtime::MonitorEngine::create(
+                factory, *impl_->device, impl_->scene, opts, impl_->log_sink, &room_internal::control);
             if (!rebuilt) {
                 impl_->engine.reset();
                 impl_->device.reset();
@@ -577,7 +578,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
         impl_->device = make_monitor_device(impl_->current_options, id);
         MonitorOutputFactory factory(*impl_->factory, monitor_channels);
         auto engine = realtime::MonitorEngine::create(
-            factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink);
+            factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink, &room_internal::control);
         if (!engine) {
             impl_->device.reset();
             return tl::unexpected{engine.error()};

@@ -33,7 +33,7 @@ pub struct Mailbox<T> {
 
 impl<T: Copy> Mailbox<T> {
     pub fn new(initial: T) -> Self {
-        Self {
+        let mailbox = Self {
             slots: [
                 Mutex::new(initial),
                 Mutex::new(initial),
@@ -42,7 +42,13 @@ impl<T: Copy> Mailbox<T> {
             middle: AtomicU32::new(2),
             write: AtomicU32::new(0),
             read: AtomicU32::new(1),
+        };
+        // macOS allocates a Mutex's backing storage on first use. Prepare every slot here,
+        // including the ones that only reach the callback after later mailbox exchanges.
+        for slot in &mailbox.slots {
+            drop(slot.lock().unwrap_or_else(|e| e.into_inner()));
         }
+        mailbox
     }
 
     /// Producer side: write the private slot, then exchange it with the middle one.
@@ -128,7 +134,7 @@ impl Live {
         );
         let status = Mailbox::new(bypass);
         status.publish(bypass);
-        Ok(Self {
+        let live = Self {
             channels,
             sample_rate,
             publication: Mutex::new(()),
@@ -136,7 +142,10 @@ impl Live {
             processor: Mutex::new(processor),
             status,
             observed: Mutex::new(snapshot(Coefficients::default(), 0)),
-        })
+        };
+        // Keep the processor's first lock initialization off the audio callback too.
+        drop(live.processor.lock().unwrap_or_else(|e| e.into_inner()));
+        Ok(live)
     }
 
     pub fn channels(&self) -> usize {

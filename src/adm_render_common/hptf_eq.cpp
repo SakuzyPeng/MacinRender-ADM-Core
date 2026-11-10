@@ -201,7 +201,8 @@ HptfStereoInfo hptf_snapshot_info(const HptfSnapshot& snapshot) {
 // ── HptfProcessor ─────────────────────────────────────────────────────────────
 
 struct HptfProcessor::State {
-    std::unique_ptr<void, decltype(&mradm_dsp_hptf_live_destroy)> handle{nullptr, mradm_dsp_hptf_live_destroy};
+    std::unique_ptr<void, decltype(&mradm_dsp_hptf_live_destroy)> owned{nullptr, mradm_dsp_hptf_live_destroy};
+    const void* handle{nullptr};
 };
 HptfProcessor::HptfProcessor() = default;
 HptfProcessor::~HptfProcessor() = default;
@@ -211,8 +212,17 @@ void HptfProcessor::prepare(std::uint32_t channel_count, std::uint32_t rate) {
     void* raw = nullptr;
     std::array<char, 256> message{};
     dsp::check(mradm_dsp_hptf_live_create(channel_count, rate, &raw, message.data(), message.size()), message.data());
-    prepared->handle.reset(raw);
+    prepared->owned.reset(raw);
+    prepared->handle = raw;
     state_ = std::move(prepared);
+    channels_ = channel_count;
+    sample_rate_ = rate;
+}
+
+void HptfProcessor::borrow(const void* live, std::uint32_t channel_count, std::uint32_t rate) {
+    auto borrowed = std::make_unique<State>();
+    borrowed->handle = live;
+    state_ = std::move(borrowed);
     channels_ = channel_count;
     sample_rate_ = rate;
 }
@@ -226,8 +236,7 @@ void HptfProcessor::publish(const HptfSnapshot& snapshot) {
     }
     const auto target = to_rust(snapshot);
     std::array<char, 256> message{};
-    dsp::check(mradm_dsp_hptf_live_publish(state_->handle.get(), &target, message.data(), message.size()),
-               message.data());
+    dsp::check(mradm_dsp_hptf_live_publish(state_->handle, &target, message.data(), message.size()), message.data());
 }
 
 void HptfProcessor::publish_bypass(std::uint64_t revision) {
@@ -235,13 +244,12 @@ void HptfProcessor::publish_bypass(std::uint64_t revision) {
         return;
     }
     std::array<char, 256> message{};
-    dsp::check(mradm_dsp_hptf_live_bypass(state_->handle.get(), revision, message.data(), message.size()),
-               message.data());
+    dsp::check(mradm_dsp_hptf_live_bypass(state_->handle, revision, message.data(), message.size()), message.data());
 }
 
 void HptfProcessor::reset_state() noexcept {
     if (state_) {
-        mradm_dsp_hptf_live_reset(state_->handle.get());
+        mradm_dsp_hptf_live_reset(state_->handle);
     }
 }
 
@@ -250,7 +258,7 @@ HptfSnapshot HptfProcessor::active_snapshot() const {
         return {};
     }
     MradmDspHptfSnapshot snapshot{};
-    mradm_dsp_hptf_live_snapshot(state_->handle.get(), &snapshot);
+    mradm_dsp_hptf_live_snapshot(state_->handle, &snapshot);
     return from_rust(snapshot);
 }
 
@@ -266,7 +274,7 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
     if (frames == 0U || channels_ == 0U || !state_ || interleaved == nullptr) {
         return;
     }
-    mradm_dsp_hptf_live_process(state_->handle.get(), interleaved, audio_length(frames, channels_));
+    mradm_dsp_hptf_live_process(state_->handle, interleaved, audio_length(frames, channels_));
 }
 
 } // namespace mradm::render_common

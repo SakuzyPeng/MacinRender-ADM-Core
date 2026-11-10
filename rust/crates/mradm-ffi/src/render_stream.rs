@@ -27,10 +27,10 @@ pub struct EngineStreamSettings {
 /// `IRenderStream`'s format queries; `binaural` is 1 when the output layout is "binaural".
 #[repr(C)]
 pub struct EngineStreamInfo {
-    outputs: usize,
-    sample_rate: u32,
-    binaural: u32,
-    requires_preroll: u32,
+    pub(super) outputs: usize,
+    pub(super) sample_rate: u32,
+    pub(super) binaural: u32,
+    pub(super) requires_preroll: u32,
 }
 
 pub struct EngineStream {
@@ -42,6 +42,11 @@ impl EngineStream {
     #[cfg(test)]
     pub(super) fn new(validator: Validator, body: Body) -> Self {
         Self { validator, body }
+    }
+
+    /// The validator and body a monitor takes over (`release_engine_stream`).
+    pub(super) fn into_parts(self) -> (Validator, Body) {
+        (self.validator, self.body)
     }
 }
 

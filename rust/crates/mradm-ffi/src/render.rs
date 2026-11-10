@@ -1200,6 +1200,9 @@ mod binaural_ffi;
 #[path = "render_stream.rs"]
 mod stream_ffi;
 
+#[path = "engine_monitor.rs"]
+mod engine_monitor;
+
 #[cfg(test)]
 #[path = "../../mradm-render/tests/common/mod.rs"]
 mod test_common;

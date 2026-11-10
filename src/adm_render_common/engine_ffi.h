@@ -487,6 +487,139 @@ int32_t mradm_engine_monitor_open(const MradmEngineRenderRequest* request,
 MradmEngineStream* mradm_engine_monitor_take_stream(MradmEngineMonitor* handle);
 void mradm_engine_monitor_destroy(MradmEngineMonitor* handle);
 
+// ── The realtime monitor (5.5 A) ───────────────────────────────────────────────────────────────
+typedef struct MradmEngineLiveMonitor MradmEngineLiveMonitor;
+
+// The error buffers of one island call: *_len holds the capacity in and the length out.
+typedef struct MradmEngineIslandError {
+    uint8_t* message;
+    size_t* message_len;
+    uint8_t* context;
+    size_t* context_len;
+} MradmEngineIslandError;
+
+// A C++ IRenderStream. validate and cancel_request may run on any thread, render_output and
+// loop_render_reset on the device callback, everything else on the worker. cancel_begin starts a
+// fresh stop source for the next seek_cancellable. intermediate_channels is nonzero for an
+// output-stage stream. destroy releases the stream.
+typedef struct MradmEngineIslandStream {
+    void* ctx;
+    uint32_t out_channels;
+    uint32_t sample_rate;
+    uint32_t requires_preroll;
+    uint32_t intermediate_channels;
+    int32_t (*process)(void*, float*, size_t, size_t, size_t*, const MradmEngineIslandError*);
+    int32_t (*seek)(void*, uint64_t, const MradmEngineIslandError*);
+    void (*cancel_begin)(void*);
+    void (*cancel_request)(void*);
+    int32_t (*seek_cancellable)(void*, uint64_t, const MradmEngineIslandError*);
+    int32_t (*validate)(void*, const MradmRenderLiveOverride*, size_t, uint64_t, const MradmEngineIslandError*);
+    void (*set_overrides)(void*, const MradmRenderLiveOverride*, size_t, uint64_t);
+    void (*set_orientation)(void*, float, float, float);
+    int32_t (*produce_intermediate)(void*, float*, size_t, size_t, size_t*, const MradmEngineIslandError*);
+    size_t (*render_output)(void*, const float*, size_t, float*, size_t, size_t, float, float, float);
+    int32_t (*reposition_source)(void*, uint64_t, const MradmEngineIslandError*);
+    void (*loop_render_reset)(void*, uint64_t);
+    uint32_t (*render_failed)(void*);
+    void (*destroy)(void*);
+} MradmEngineIslandStream;
+
+// The shell's log sink (level: adm::LogLevel) and device controls.
+typedef struct MradmEngineLiveMonitorHost {
+    void* ctx;
+    void (*log)(void*, uint32_t, const uint8_t*, size_t, const uint8_t*, size_t);
+    void (*device_flush)(void*);
+    void (*device_pause)(void*);
+    void (*device_resume)(void*);
+} MradmEngineLiveMonitorHost;
+
+// A Rust stream (taken over, with its info) when stream is non-null, else the island.
+typedef struct MradmEngineLiveMonitorSource {
+    MradmEngineStream* stream;
+    MradmEngineStreamInfo info;
+    const MradmEngineIslandStream* island;
+} MradmEngineLiveMonitorSource;
+
+// The C++ StreamSwitchReceipt of a switch: finish stores each state (1 applied, 2 rejected);
+// release drops the reference once the monitor no longer holds it.
+typedef struct MradmEngineLiveMonitorReceipt {
+    void* ctx;
+    void (*finish)(void*, uint32_t);
+    void (*release)(void*);
+} MradmEngineLiveMonitorReceipt;
+
+// MonitorStatus; state 0 stopped, 1 playing, 2 paused.
+typedef struct MradmEngineLiveMonitorStatus {
+    uint32_t state;
+    uint64_t playhead_frames;
+    uint64_t underruns;
+    uint64_t buffered_frames;
+    float ring_fill;
+    uint32_t ended;
+    uint32_t failed;
+    uint64_t override_revision;
+} MradmEngineLiveMonitorStatus;
+
+typedef struct MradmEngineLiveMonitorLevels {
+    uint32_t channels;
+    float peak[64];
+    float rms[64];
+    float momentary_lufs;
+    float shortterm_lufs;
+    float integrated_lufs;
+} MradmEngineLiveMonitorLevels;
+
+typedef struct MradmEngineLiveMonitorPull {
+    size_t frames;
+    uint32_t mark_end;
+} MradmEngineLiveMonitorPull;
+
+// Starts the worker; the source is consumed either way. 100: the C++ constructor threw (the
+// shell rethrows the message).
+int32_t mradm_engine_live_monitor_create(const MradmEngineLiveMonitorSource* source,
+                                         uint32_t realtime,
+                                         const MradmEngineLiveMonitorHost* host,
+                                         MradmEngineLiveMonitor** output,
+                                         uint8_t* message,
+                                         size_t* message_len,
+                                         uint8_t* context,
+                                         size_t* context_len);
+// Before the device stops; destroy joins the worker after it stopped.
+void mradm_engine_live_monitor_begin_shutdown(const MradmEngineLiveMonitor* handle);
+void mradm_engine_live_monitor_destroy(MradmEngineLiveMonitor* handle);
+void mradm_engine_live_monitor_format(const MradmEngineLiveMonitor* handle,
+                                      uint32_t* channels,
+                                      uint32_t* sample_rate,
+                                      uint32_t* output_stage);
+void mradm_engine_live_monitor_play(const MradmEngineLiveMonitor* handle);
+void mradm_engine_live_monitor_pause(const MradmEngineLiveMonitor* handle);
+void mradm_engine_live_monitor_seek(const MradmEngineLiveMonitor* handle, uint64_t frame);
+void mradm_engine_live_monitor_set_loop(const MradmEngineLiveMonitor* handle, uint64_t start, uint64_t end);
+int32_t mradm_engine_live_monitor_overrides(const MradmEngineLiveMonitor* handle,
+                                            const MradmRenderLiveOverride* values,
+                                            size_t values_len,
+                                            uint64_t revision,
+                                            uint8_t* message,
+                                            size_t* message_len,
+                                            uint8_t* context,
+                                            size_t* context_len);
+void mradm_engine_live_monitor_orientation(const MradmEngineLiveMonitor* handle, float yaw, float pitch, float roll);
+// The source is consumed; receipt may be null.
+void mradm_engine_live_monitor_switch(const MradmEngineLiveMonitor* handle,
+                                      const MradmEngineLiveMonitorSource* source,
+                                      const MradmEngineLiveMonitorReceipt* receipt);
+// The monitor's HpTF processor (mradm_dsp_hptf_live_*), valid until destroy.
+const void* mradm_engine_live_monitor_hptf(const MradmEngineLiveMonitor* handle);
+MradmRenderRoomControl* mradm_engine_live_monitor_room_control(const MradmEngineLiveMonitor* handle);
+void mradm_engine_live_monitor_status(const MradmEngineLiveMonitor* handle, MradmEngineLiveMonitorStatus* out);
+void mradm_engine_live_monitor_levels(const MradmEngineLiveMonitor* handle, MradmEngineLiveMonitorLevels* out);
+// Device callback: never waits or allocates.
+void mradm_engine_live_monitor_pull(const MradmEngineLiveMonitor* handle,
+                                    float* output,
+                                    size_t output_len,
+                                    size_t frames,
+                                    MradmEngineLiveMonitorPull* result);
+
 #ifdef __cplusplus
 }
 #endif
