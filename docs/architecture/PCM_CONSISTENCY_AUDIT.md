@@ -606,9 +606,19 @@ PCM、检查点、日志、错误文字、CLI 输出与 C ABI 不变。本机对
 - B：新旧 Apple 计划探针 7,000 种组合、89,444 条总线、152,366 个事件逐位相同，植入的 7 处缺陷都被抓到；
 - C：C++ CLI 的 `inspect` 文本重放（31 个输入）与新旧 `mradm` 100 个用例逐字节相同，植入的 2 处缺陷都被抓到。
 
-维护者已在本机验证并合并 A、B、C；C2 待 macOS Apple 测试、Windows 规范构建与 Consistency。
+维护者已在本机验证并合并 A、B、C，并合并了 C2。
 
 生产 C/C++ 24,409 → 21,776 行。见 [5.6 记录](RUST_ORCHESTRATION_SHELLS.md)。
+
+**5.8 状态**：期次与实现语言不再出现在一致性工具、目标与生产注释的命名中，分三批：
+- A：一致性采集改用功能名（`collect.py`、`collection.py`、`compare-evidence.py`、`gates.json`、`mr_adm_consistency_*`、
+  `collection_tools_test.py`、`tests/fixtures/room/synthetic{,-96k}`、`mradm.consistency.*` schema）；
+- B：C++ 的 `Rust*` 包装与 `*_rust_tests` 按功能改名（`WavFileReader`、`PcmOutputWriter`、`FfiError`、`live_renderer_adapter`、
+  `*_parity_tests`、`mr_adm_wav_io_tests`）；
+- C：生产注释中的切片编号改写为功能描述，删去 `PreviewSession` 的 Phase 2a / 2b 与 GUI 头追踪的 Phase 编号。
+
+同一 Release 构建上新旧脚本的两份采集按名字映射后 1,642 个文件逐字节相同（294 个 PCM）。待维护者在 macOS / Windows 与
+Consistency 上验证。生产 C/C++ 21,776 → 21,772 行。见 [5.8 记录](RUST_ORCHESTRATION_NAMING.md)。
 
 ## 每个迁移切片的验证
 
