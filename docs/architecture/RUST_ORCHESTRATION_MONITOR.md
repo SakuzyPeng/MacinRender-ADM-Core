@@ -72,7 +72,7 @@
    - 错误文字经 64 KiB 缓冲区传递。
 3. **C**：
    1. **等待方式**：
-      - 原接收线程用 20 ms 的 `poll` 等待，再非阻塞 `recvfrom`；现在改为阻塞 `recv_from`，读超时 20 ms（`SO_RCVTIMEO`）。`stop` 的延迟不变；
+      - 原接收线程用 20 ms 的 `poll` 等待，再非阻塞 `recvfrom`；现在改为阻塞 `recv_from`，读超时 20 ms（`SO_RCVTIMEO`）。`stop` 等待接收线程退出，实测见下文；
       - 因为没有 `poll` 了，“OSC UDP 等待失败”与“OSC UDP socket 不可用”两条文字不再出现，socket 错误统一报“OSC UDP 接收失败 (错误码)”。
    2. **Linux / macOS 的绑定**：
       - `std::net` 一次调用完成创建 socket 与绑定，失败文字按错误类型选：地址占用、地址不可用、权限被拒报“OSC 回环端口绑定失败，端口可能已被占用”，其余报“OSC UDP socket 创建失败”；
@@ -131,6 +131,35 @@
 - FFI 头校验通过，412 个函数、159 个结构体与 Rust 一致。`cargo fmt --all -- --check`、相对主线的 C/C++ 规模棘轮及 `git diff --check` 通过。
 - Windows 验证二进制来自候选 `1a64c18b`。合并后源码快进至 `0f2449de`，工作区干净，LFS 对象校验通过。
 
+### 完整主机与设备验证
+
+后续完整验证使用 `0761b410`，相对合并提交 `0f2449de` 只有本文件的文档变更。
+两台主机均复用既有构建与 Cargo 缓存，使用具备 numpy、scipy、h5py 的 Python 重新配置，纳入三项 Python 工具测试。
+
+| 主机与构建 | 检查 | 结果 |
+| --- | --- | --- |
+| macOS arm64，Debug | 全量构建，`ctest --parallel 12 --repeat until-fail:3 --output-on-failure` | 87/87，每项运行三次，共 261 次执行全部通过 |
+| Windows x64，canonical MSVC/Ninja Release | 全量构建，`ctest --parallel 16 --repeat until-fail:3 --output-on-failure` | 86/86，每项运行三次，共 258 次执行全部通过 |
+| macOS arm64，Release | 7.1.4 文件流式渲染监听，经 `AVSampleBufferAudioRenderer` 输出到当前内建扬声器路由，检查循环、暂停、seek 与继续播放 | 短会话功能检查通过，播放头前进，`failed=0`，欠载 0 |
+| Windows x64，Release | 7.1.4 文件流式渲染监听，经 `ISpatialAudioClient` 输出到当前默认端点，检查循环、暂停、seek 与继续播放 | 三次短会话功能检查通过，播放头前进，`failed=0`，欠载均为 0 |
+| macOS arm64，Release | PoseBridge CLI 0.6.0 的 `simulate` 经 UDP 输入生产 C ABI，覆盖 quaternion / Euler、采样时钟、跨 ±180°、换实例、来源过滤与心跳过期 | 通过，接收 508 个姿态和 21 个遥测数据报，覆盖 4 个来源实例 |
+| macOS arm64，GUI Release | 重建并启动 `.app`，运行 GUI 自检，含合成 ADM 输入的离线渲染与 FLAC 编码 | 原生库加载、P/Invoke、监听入口与文件写出检查通过 |
+
+Windows 动态库探针最初将整个 PATH 注册为 DLL 搜索目录，混入 JDK 附带的 `MSVCP140.dll` 并触发访问违规。
+限定为 canonical 构建对应的运行库目录后，同一系统空间监听探针三次通过。
+
+### OSC 等待与停止测量
+
+Windows x64 使用 Release 生产 C ABI，在正常桌面环境完成测量，交流电接通、电池 100%，计时前 CPU 采样约 1.12%。
+完整 CTest 结束后执行此项，保留日常应用与后台服务。
+
+| 检查 | 结果 |
+| --- | --- |
+| 回读 Rust `Receiver::start` 所用原始 socket 句柄的 `SO_RCVTIMEO` | 配置为 20 ms |
+| 32 次无数据报时的阻塞读取 | 唤醒均值 31.628 ms，最大 32.664 ms |
+| 200 次启动后停止，停止前交错等待 0–21 ms | `stop` 均值 14.219 ms，p99 32.586 ms，最大 32.722 ms |
+| 每次运行中用 `SO_REUSEADDR` 尝试共享端口，停止后重新绑定 | 200 次共享尝试均被拒绝，停止后的 200 次重绑均成功 |
+
 ### 合并后的 Consistency
 
 已核对以下主线工作流完成并通过。
@@ -140,13 +169,16 @@
 | A（`2a735365`） | [42793410919](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42793410919) |
 | B（`4b1da58d`） | [42854859745](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42854859745) |
 | B 后的维护者修正（`b87d5a3a`） | [42862032746](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42862032746) |
+| C（`0f2449de`，文档补记 `0761b410`） | [42971449429](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42971449429) |
 
-### 待完成的验证
+C 的合并提交对应运行 `42969917705` 被后续文档更新取消，由 `0761b410` 那次成功运行覆盖。
+已下载并核对 config A、B 的普通与诊断四份报告，每份均为 294 个 PCM id 相同、0 个不同，三平台齐全，319 项数值门禁全部通过。
 
-- Windows x64 的接收线程读超时与 `stop` 延迟专项测量，以及系统空间监听 sink。
-- macOS arm64 的 PoseBridge 实机 GUI 头追踪，以及 `AVSampleBufferAudioRenderer` 监听。
-- macOS arm64 与 Windows x64 的完整 CTest 重复运行。维护者主机验证使用这两个平台，保留已有 Linux 记录。
-- C 合并后的完整 Consistency 结果（预期 294 个 PCM id 相同、门禁失败 0）。
+### 实机与 GUI 后续项
+
+- GUI 当前提供 AirPods 与手动转头来源，PoseBridge OSC 输入入口尚未实现。本轮按维护者决定完成现有链路验证并记录这一缺口。
+- 维护者暂不接入物理头追踪设备，实机采样、头动与听感确认暂缓。
+- 维护者主机验证矩阵为 macOS arm64 与 Windows x64，保留已有 Linux 和工作流验证记录。
 
 ## 规模
 
