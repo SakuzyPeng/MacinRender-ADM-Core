@@ -20,6 +20,7 @@
 #include "../adm_audio/audio_io_internal.h"
 #include "../adm_io/scene_import_internal.h"
 #include "adm_fixture.h"
+#include "adm_scene.h"
 #include "audio_output_device.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
@@ -31,7 +32,7 @@ constexpr uint16_t k_input_channels = 13;
 constexpr uint64_t k_frames = uint64_t{k_sample_rate} * 70;
 class Factory final : public mradm::realtime::IRenderStreamFactory {
   public:
-    Factory(mradm::IRenderer& renderer, const mradm::IPreparedRender& prepared, const mradm::RenderPlan& plan)
+    Factory(mradm::IRenderer& renderer, const mradm::IPreparedRender& prepared, const mradm::ScenePlan& plan)
         : renderer_(renderer), prepared_(prepared), plan_(plan) {}
     mradm::Result<std::unique_ptr<mradm::IRenderStream>>
     open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*options*/, mradm::LogSink& logs) override {
@@ -41,7 +42,7 @@ class Factory final : public mradm::realtime::IRenderStreamFactory {
   private:
     mradm::IRenderer& renderer_;
     const mradm::IPreparedRender& prepared_;
-    const mradm::RenderPlan& plan_;
+    const mradm::ScenePlan& plan_;
 };
 class InputFile {
   public:
@@ -134,7 +135,7 @@ mradm::audio::WavLayoutFinalization fixture_metadata() {
     return metadata;
 }
 
-[[maybe_unused]] mradm::Result<mradm::RenderPlan> make_plan(const std::string& input, const std::string& layout) {
+[[maybe_unused]] mradm::Result<mradm::ScenePlan> make_plan(const std::string& input, const std::string& layout) {
     {
         auto writer = mradm::audio::FloatWavWriter::open(input, k_input_channels, k_sample_rate);
         if (!writer) {
@@ -164,10 +165,10 @@ mradm::audio::WavLayoutFinalization fixture_metadata() {
     if (!scene) {
         return tl::unexpected{scene.error()};
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input;
     plan.output_layout = layout;
-    plan.scene = scene->scene();
+    plan.scene = mradm::io::adm_scene(*scene);
     plan.scene_handle = scene->handle();
     return plan;
 }

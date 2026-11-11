@@ -281,3 +281,35 @@ fn encoder_availability_follows_the_platform() {
     let matrix = tables::support_matrix_json(&platform);
     assert!(!matrix.contains("is unavailable") && !matrix.contains("macOS only"));
 }
+
+#[test]
+fn inspect_text_matches_the_cpp_cli() {
+    let out = std::env::temp_dir().join(format!("mradm-engine-inspect-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    let mut names = write_inputs(&out);
+    let inspect = dir().join("../inspect-v1");
+    adm_wav(&inspect, "rich", &out.join("rich.wav"), SampleFormat::Pcm24);
+    names.push("rich".to_owned());
+    let expected = std::fs::read_to_string(inspect.join("scenes.jsonl")).unwrap();
+    let records: Vec<Value> = expected
+        .lines()
+        .map(|l| mradm_json::parse(l.as_bytes()).unwrap())
+        .collect();
+    assert_eq!(records.len(), names.len());
+    let mut compared = 0;
+    for (name, record) in names.iter().zip(&records) {
+        assert_eq!(field(record, "name").as_str().unwrap(), name);
+        let path = out.join(format!("{name}.wav"));
+        let imported = mradm_scene::import(path.to_str().unwrap().as_bytes(), Default::default());
+        match (imported, field(record, "text").as_str()) {
+            (Ok(scene), Some(text)) => {
+                assert_eq!(scene_json::inspect_text(&scene), text, "{name}");
+                compared += 1;
+            }
+            (Err(_), None) => {}
+            (imported, _) => panic!("{name}: Rust import ok = {}", imported.is_ok()),
+        }
+    }
+    assert_eq!(compared, 25, "only {compared} scenes compared");
+    std::fs::remove_dir_all(&out).unwrap();
+}

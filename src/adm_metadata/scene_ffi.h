@@ -91,6 +91,8 @@ int32_t mradm_scene_inspect_json(MradmSceneHandle* handle,
                                  MradmAdmText* output,
                                  uint8_t* message,
                                  size_t capacity);
+// The `mradm inspect` summary after its `File:` line, held like a report.
+int32_t mradm_scene_inspect_text(MradmSceneHandle* handle, MradmAdmText* output, uint8_t* message, size_t capacity);
 // The source AXML with the scene's semantic edits patched in, held like a report.
 int32_t mradm_scene_export_axml(MradmSceneHandle* handle,
                                 const uint8_t* xml,

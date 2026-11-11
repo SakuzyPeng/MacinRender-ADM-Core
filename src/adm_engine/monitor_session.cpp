@@ -137,12 +137,10 @@ class BufferedLogSink final : public LogSink {
 
 } // namespace
 
-// The scene and its handle outlive the Rust session, which borrows the handle and opens Apple
-// streams on the scene.
+// The scene handle outlives the Rust session, which borrows it and opens Apple streams on it.
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct MonitorSession::Impl {
     std::string input_path;
-    AdmScene scene;
     std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
     MradmEngineMonitorSessionHost host{};
     MradmEngineMonitorSession* rust{nullptr};
@@ -194,7 +192,6 @@ Result<MradmEngineIslandStream> MonitorSession::Impl::open_apple(const RenderOpt
     RenderPlan plan;
     plan.input_path = input_path;
     plan.output_layout = std::move(layout);
-    plan.scene = scene;
     plan.scene_handle = scene_handle;
     plan.sofa_path = options.sofa_path;
     plan.room = options.room;
@@ -313,15 +310,15 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
         return tl::unexpected{scene.error()};
     }
     impl.input_path = input_path;
-    impl.scene = std::move(scene->scene);
     impl.scene_handle = std::move(scene->handle);
+    const auto info = impl.scene_handle != nullptr ? detail::scene_info(*impl.scene_handle) : std::nullopt;
+    if (!info) {
+        return make_error(ErrorCode::internal_error, "invalid monitor scene");
+    }
     impl.bind_host();
     const engine::RenderPlatform platform;
-    impl.rust = mradm_engine_monitor_session_new(platform.get(),
-                                                 impl.scene_handle != nullptr ? impl.scene_handle->raw : nullptr,
-                                                 impl.scene.info.sample_rate,
-                                                 impl.scene.info.num_frames,
-                                                 &impl.host);
+    impl.rust = mradm_engine_monitor_session_new(
+        platform.get(), impl.scene_handle->raw, info->sample_rate, info->frames, &impl.host);
     if (impl.rust == nullptr) {
         return make_error(ErrorCode::internal_error, "invalid monitor session");
     }

@@ -31,6 +31,7 @@
 
 #include "consistency_trace.h"
 #include "render_common.h"
+#include "render_common_scene.h"
 
 
 namespace mradm::hoa_legacy {

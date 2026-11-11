@@ -13,6 +13,7 @@
 #include "adm/io.h"
 #include "adm/render.h"
 
+#include "adm_scene.h"
 #include "test_portable.h"
 
 namespace {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -17,9 +18,19 @@ struct RenderSceneHandle;
 
 namespace mradm::io {
 
-// The Rust render scene and its public AdmScene (PCM consistency 4.3, the semantic policy since 4.4).
-// The import, the policy (mradm-engine since 5.2 C2), its report and template, and the render-scene
-// checkpoints are Rust; this adapter rebuilds the public scene from the scene's view.
+// The audio format, the top-level counts and the import warnings of an imported scene.
+struct SceneSummary {
+    uint32_t sample_rate{0};
+    uint16_t channels{0};
+    uint64_t frames{0};
+    uint32_t programmes{0};
+    uint32_t objects{0};
+    std::vector<std::string> warnings;
+};
+
+// The Rust render scene (PCM consistency 4.3, the semantic policy since 4.4). The import, the policy
+// (mradm-engine since 5.2 C2), its report and template, the inspect summary and the render-scene
+// checkpoints are Rust; since 5.6 C no C++ copy of the scene is built.
 class RenderScene {
   public:
     // options == nullptr imports ADM BW64 only; otherwise the options route ADM or a channel bed.
@@ -29,13 +40,15 @@ class RenderScene {
     // Takes over `raw` (an engine render's scene copy) with `path` as its input path.
     [[nodiscard]] static Result<RenderScene> adopt(MradmSceneHandle* raw, std::string path);
 
-    [[nodiscard]] const AdmScene& scene() const { return scene_; }
     [[nodiscard]] std::shared_ptr<const detail::RenderSceneHandle> handle() const { return handle_; }
 
     // The neutral policy template of the scene; no trailing newline.
     [[nodiscard]] Result<std::string> policy_template() const;
     // The scene inspect JSON (mradm.scene-inspect v1, PCM consistency 5.2 A).
     [[nodiscard]] Result<std::string> inspect_json() const;
+    // The `mradm inspect` summary after its `File:` line (PCM consistency 5.6 C).
+    [[nodiscard]] Result<std::string> inspect_text() const;
+    [[nodiscard]] Result<SceneSummary> summary() const;
     // Writes the source file with this scene's semantic edits patched into its AXML: PCM and every
     // other chunk are copied byte for byte (a temporary file replaces `dst`). Positions, user levels
     // and HOA pack gain or mute are not written back; edits to shared nodes that disagree and edits
@@ -43,8 +56,6 @@ class RenderScene {
     [[nodiscard]] Result<void> write(const std::string& dst) const;
     // Writes render-scene/offline.<stage>.i32 in diagnostic builds; a no-op otherwise.
     void checkpoint(const char* stage) const;
-    // Rebuilds the public scene after the Rust scene changed (the semantic policy).
-    Result<void> refresh();
 
   private:
     RenderScene(std::shared_ptr<detail::RenderSceneHandle> handle, std::string path)
@@ -52,7 +63,6 @@ class RenderScene {
 
     std::shared_ptr<detail::RenderSceneHandle> handle_;
     std::string path_;
-    AdmScene scene_;
 };
 
 // Writes a policy template with a trailing newline, LF on every platform. `what` names it in the I/O

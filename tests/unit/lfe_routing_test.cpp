@@ -18,9 +18,11 @@
 #include "adm/render_apple.h"
 
 #include "../support/direct_speakers_fixture.h"
+#include "adm_scene.h"
 #endif
 
 #include "render_common.h"
+#include "render_common_scene.h"
 #include "test_portable.h"
 
 namespace {
@@ -65,7 +67,7 @@ bool check(bool condition, const std::string& message) {
     return condition;
 }
 
-void append_lfe_block(mradm::RenderPlan& plan, mradm::SceneDirectSpeakersBlock block) {
+void append_lfe_block(mradm::ScenePlan& plan, mradm::SceneDirectSpeakersBlock block) {
     if (plan.scene.objects.empty()) {
         plan.scene.objects.emplace_back();
         plan.scene.objects.back().tracks.emplace_back();
@@ -79,7 +81,7 @@ bool verify_shared_semantics() {
 
     bool ok = check(mradm::RenderOptions{}.lfe_routing_mode == mradm::LfeRoutingMode::direct,
                     "RenderOptions defaults to direct LFE routing");
-    ok = check(mradm::RenderPlan{}.lfe_routing_mode == mradm::LfeRoutingMode::direct,
+    ok = check(mradm::ScenePlan{}.lfe_routing_mode == mradm::LfeRoutingMode::direct,
                "RenderPlan defaults to direct LFE routing") &&
          ok;
 
@@ -112,7 +114,7 @@ bool verify_shared_semantics() {
     non_lfe.speaker_labels = {"M+030"};
     ok = check(direct_speakers_lfe_target(non_lfe) == LfeTarget::none, "non-LFE block remains unclassified") && ok;
 
-    mradm::RenderPlan repeated;
+    mradm::ScenePlan repeated;
     repeated.output_layout = "9+10+3";
     repeated.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
     for (int i = 0; i < 2; ++i) {
@@ -127,7 +129,7 @@ bool verify_shared_semantics() {
     ok = check(repeated_result.has_value() && repeated_result->has_lfe1 && !repeated_result->has_lfe2,
                "repeated LFE1 remains one semantic LFE") &&
          ok;
-    mradm::RenderPlan direct = repeated;
+    mradm::ScenePlan direct = repeated;
     direct.lfe_routing_mode = mradm::LfeRoutingMode::direct;
     CapturingLogSink direct_logs;
     const auto direct_result = mradm::render_common::resolve_lfe_routing(direct, direct_logs, "test");
@@ -136,7 +138,7 @@ bool verify_shared_semantics() {
                "direct routing uses an exact unity coefficient without crossfeed") &&
          ok;
 
-    mradm::RenderPlan lfe2_only;
+    mradm::ScenePlan lfe2_only;
     lfe2_only.output_layout = "9+10+3";
     lfe2_only.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
     mradm::SceneDirectSpeakersBlock lfe2_block;
@@ -148,7 +150,7 @@ bool verify_shared_semantics() {
                "standalone LFE2 is valid for split-power") &&
          ok;
 
-    mradm::RenderPlan dual = repeated;
+    mradm::ScenePlan dual = repeated;
     // The second semantic LFE is another channel, not a block overwriting LFE1 at the same start.
     dual.scene.objects.back().tracks.emplace_back();
     mradm::SceneDirectSpeakersBlock second;
@@ -161,7 +163,7 @@ bool verify_shared_semantics() {
                "dual semantic LFE split is rejected with the stable user error") &&
          ok;
 
-    mradm::RenderPlan empty;
+    mradm::ScenePlan empty;
     empty.output_layout = "9+10+3";
     empty.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
     CapturingLogSink empty_logs;
@@ -170,7 +172,7 @@ bool verify_shared_semantics() {
         check(empty_result.has_value() && empty_logs.has_warning("no semantic LFE"), "split-power without LFE warns") &&
         ok;
 
-    mradm::RenderPlan other_layout = lfe2_only;
+    mradm::ScenePlan other_layout = lfe2_only;
     other_layout.output_layout = "0+5+0";
     CapturingLogSink other_logs;
     const auto other_result = mradm::render_common::resolve_lfe_routing(other_layout, other_logs, "test");
@@ -399,11 +401,11 @@ bool verify_apple_side_bus_stream_and_override() {
         return false;
     }
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_path = output.string();
     plan.output_layout = "9+10+3";
-    plan.scene = scene->scene;
+    plan.scene = mradm::adm_scene(*scene);
     plan.scene_handle = scene->handle;
     plan.lfe_routing_mode = mradm::LfeRoutingMode::direct;
 
@@ -511,10 +513,10 @@ bool verify_apple_side_bus_stream_and_override() {
     if (!check(mixed_scene.has_value(), "Apple mixed blocks: import ADM fixture")) {
         return false;
     }
-    mradm::RenderPlan mixed_plan = plan;
+    mradm::ScenePlan mixed_plan = plan;
     mixed_plan.input_path = mixed_input.string();
     mixed_plan.output_path = mixed_output.string();
-    mixed_plan.scene = mixed_scene->scene;
+    mixed_plan.scene = mradm::adm_scene(*mixed_scene);
     mixed_plan.scene_handle = mixed_scene->handle;
 
     auto mixed_prepared = renderer->prepare(mixed_plan, logs);

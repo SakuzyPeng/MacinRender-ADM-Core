@@ -4,6 +4,8 @@
 
 #include "adm/scene.h"
 
+#include "adm_scene.h"
+
 namespace mradm::engine {
 
 // Serialize a full AdmScene tree to a JSON string (UTF-8). The schema mirrors

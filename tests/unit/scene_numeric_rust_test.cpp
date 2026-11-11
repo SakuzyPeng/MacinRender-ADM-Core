@@ -18,6 +18,7 @@
 #include "dsp_ffi.h"
 #include "head_rotation.h"
 #include "render_common.h"
+#include "render_common_scene.h"
 #include "scene_math.h"
 #include "scene_transition.h"
 

@@ -150,7 +150,6 @@ target_sources(
     mr_adm_core
     PRIVATE
         src/adm_core/direct_speakers_matrix.cpp
-        src/adm_core/scene_math.cpp
         src/adm_core/screen.cpp
         "${MR_ADM_GENERATED_VERSION_CPP}"
     PUBLIC
@@ -184,14 +183,6 @@ target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE
 mr_adm_core_apply_warnings(mr_adm_core)
 mr_adm_core_apply_static_analysis(mr_adm_core)
 
-# Private Rust ADM metadata adapter; the public scene remains owned by C++.
-add_library(mr_adm_metadata src/adm_metadata/metadata.cpp)
-add_library(MacinRender::ADMMetadata ALIAS mr_adm_metadata)
-target_include_directories(mr_adm_metadata PUBLIC src/adm_metadata src/adm_audio src/adm_render_common)
-target_link_libraries(mr_adm_metadata PUBLIC MacinRender::ADMCore PRIVATE mradm_ffi)
-mr_adm_core_apply_warnings(mr_adm_metadata)
-mr_adm_core_apply_static_analysis(mr_adm_metadata)
-
 # ── adm_io ────────────────────────────────────────────────────────────────────
 
 add_library(mr_adm_io)
@@ -206,12 +197,14 @@ target_sources(
         BASE_DIRS include
         FILES
             include/adm/io.h
-            include/adm/scene.h
 )
 
+# The Rust render scene (mradm-scene) behind the private scene_ffi.h; no C++ scene copy since PCM
+# consistency 5.6 C.
+target_include_directories(mr_adm_io PRIVATE src/adm_metadata src/adm_audio)
 target_link_libraries(mr_adm_io
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMMetadata MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp mradm_ffi
 )
 mr_adm_core_apply_warnings(mr_adm_io)
 mr_adm_core_apply_static_analysis(mr_adm_io)
@@ -410,7 +403,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMMetadata MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -644,7 +637,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
 
     add_executable(mr_adm_io_smoke_tests tests/unit/adm_io_smoke_test.cpp)
-    target_link_libraries(mr_adm_io_smoke_tests PRIVATE MacinRender::ADMIo MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_io_smoke_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMIo MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_io_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_smoke_tests)
     add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
@@ -721,6 +714,23 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
     add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
 
+    # The C++ AdmScene of the former SDK header (tests/support/adm_scene, PCM consistency 5.6 C): the
+    # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
+    # ScenePlan, the C++ scene math and the routing / object-preprocessing wrappers over its blocks.
+    # Production reads the Rust render scene only; the tests and the frozen references read these.
+    add_library(mr_adm_scene_test_support STATIC
+        tests/support/adm_scene/adm_scene.cpp
+        tests/support/adm_scene/metadata.cpp
+        tests/support/adm_scene/render_common_scene.cpp
+        tests/support/adm_scene/scene_math.cpp)
+    target_include_directories(mr_adm_scene_test_support PUBLIC
+        tests/support/adm_scene src/adm_metadata src/adm_audio src/adm_render_common)
+    target_include_directories(mr_adm_scene_test_support PRIVATE src/adm_io)
+    target_link_libraries(mr_adm_scene_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMIo
+        MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp mradm_ffi)
+    mr_adm_core_apply_warnings(mr_adm_scene_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_test_support)
+
     # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer,
     # PCM consistency 5.6 A): the one preparation entry, the offline driver and the file stream of
     # every Rust backend behind create_*_renderer. Production renders through mradm-engine directly;
@@ -739,7 +749,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/engine_renderer src/adm_render_common)
     target_include_directories(mr_adm_engine_renderer_test_support PRIVATE
         tests/support/binaural src/adm_render_room src/adm_audio src/adm_metadata)
-    target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMRenderCommon
+    target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC mr_adm_scene_test_support MacinRender::ADMCore MacinRender::ADMRenderCommon
         MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp)
     target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE
         MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
@@ -827,7 +837,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_live_binaural_rust_tests COMMAND mr_adm_live_binaural_rust_tests)
 
     add_executable(mr_adm_scene_numeric_rust_tests tests/unit/scene_numeric_rust_test.cpp)
-    target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     target_include_directories(mr_adm_scene_numeric_rust_tests PRIVATE tests/support tests/support/dsp)
     mr_adm_core_apply_warnings(mr_adm_scene_numeric_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_scene_numeric_rust_tests)
@@ -920,7 +930,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS)
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
         add_library(mr_adm_libadm_reference STATIC tests/reference/libadm/scene_importer.cpp)
-        target_link_libraries(mr_adm_libadm_reference PRIVATE MacinRender::ADMIo MacinRender::ADMAudio adm)
+        target_link_libraries(mr_adm_libadm_reference PRIVATE
+            mr_adm_scene_test_support MacinRender::ADMIo MacinRender::ADMAudio adm)
         add_executable(mr_adm_make_libadm_fixture tests/reference/libadm/make_fixture.cpp)
         target_link_libraries(mr_adm_make_libadm_fixture PRIVATE libbw64 adm)
         # The frozen comparison serializes both AdmScene copies with the former C++ inspect writer,
@@ -929,7 +940,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             tests/support/scene_json/scene_json.cpp)
         target_include_directories(mr_adm_libadm_reference_tests PRIVATE tests/support/scene_json)
         target_link_libraries(mr_adm_libadm_reference_tests PRIVATE mr_adm_libadm_reference
-            MacinRender::ADMMetadata MacinRender::ADMEngine MacinRender::ADMRenderCommon libbw64 adm nlohmann_json::nlohmann_json)
+            mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMRenderCommon libbw64 adm nlohmann_json::nlohmann_json)
         add_test(NAME mr_adm_libadm_reference_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/reference/libadm/run.py"
             $<TARGET_FILE:mr_adm_make_libadm_fixture> $<TARGET_FILE:mr_adm_libadm_reference_tests>)
@@ -1115,14 +1126,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
-    target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_semantic_policy_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMCore MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)
     mr_adm_core_apply_static_analysis(mr_adm_semantic_policy_tests)
     add_test(NAME mr_adm_semantic_policy_tests COMMAND mr_adm_semantic_policy_tests)
 
     add_executable(mr_adm_io_fixture_tests tests/unit/adm_io_fixture_test.cpp)
     target_link_libraries(mr_adm_io_fixture_tests
-        PRIVATE
+        PRIVATE mr_adm_scene_test_support
             MacinRender::ADMIo
     )
     mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
@@ -1131,7 +1142,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_scene_export_tests tests/unit/scene_export_fixture_test.cpp)
     target_link_libraries(mr_adm_scene_export_tests
-        PRIVATE
+        PRIVATE mr_adm_scene_test_support
             MacinRender::ADMEngine
             MacinRender::ADMIo
     )
@@ -1205,7 +1216,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_room_file_device_probe EXCLUDE_FROM_ALL tests/manual/room_file_device_probe.cpp
         tests/support/realtime/room_worker_wait.cpp)
-    target_link_libraries(mr_adm_room_file_device_probe PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
+    target_link_libraries(mr_adm_room_file_device_probe PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMRealtime
         MacinRender::ADMRenderRoom MacinRender::ADMIo nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_room_file_device_probe PRIVATE tests/support/realtime)
     if(WIN32)
@@ -1228,7 +1239,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/triple_balance/size_panner.cpp tests/support/triple_balance/size_processor.cpp
         tests/support/triple_balance/size_mixer.cpp)
     target_include_directories(mr_adm_triple_balance_test_support PUBLIC tests/support/triple_balance tests/support)
-    target_link_libraries(mr_adm_triple_balance_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp
+    target_link_libraries(mr_adm_triple_balance_test_support PUBLIC mr_adm_scene_test_support MacinRender::ADMCore MacinRender::ADMDsp
         MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_test_support)
@@ -1355,7 +1366,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
-    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
     mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
     add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
@@ -1367,7 +1378,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_config_json_compat_tests COMMAND mr_adm_config_json_compat_tests)
 
     add_executable(mr_adm_direct_speakers_matrix_tests tests/unit/direct_speakers_matrix_test.cpp)
-    target_link_libraries(mr_adm_direct_speakers_matrix_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_direct_speakers_matrix_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_tests)
     mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_tests)
     add_test(NAME mr_adm_direct_speakers_matrix_tests COMMAND mr_adm_direct_speakers_matrix_tests)
@@ -1376,7 +1387,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(APPLE)
         add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
         target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
-            PRIVATE MacinRender::ADMEngine MacinRender::ADMRenderApple MacinRender::ADMAudio)
+            PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMRenderApple MacinRender::ADMAudio)
         mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
         mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
@@ -1390,14 +1401,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_ear_smoke_tests COMMAND mr_adm_ear_smoke_tests)
 
     add_executable(mr_adm_channel_bed_render_tests tests/unit/channel_bed_render_test.cpp)
-    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio MacinRender::ADMIo)
+    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMAudio MacinRender::ADMIo)
     mr_adm_core_apply_warnings(mr_adm_channel_bed_render_tests)
     mr_adm_core_apply_static_analysis(mr_adm_channel_bed_render_tests)
     add_test(NAME mr_adm_channel_bed_render_tests COMMAND mr_adm_channel_bed_render_tests)
 
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
     target_link_libraries(mr_adm_lfe_routing_tests
-        PRIVATE
+        PRIVATE mr_adm_scene_test_support
             MacinRender::ADMEngine
             MacinRender::ADMRenderCommon
             MacinRender::ADMIo
@@ -1684,7 +1695,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
         add_executable(mr_adm_apple_smoke_tests tests/unit/apple_renderer_smoke_test.cpp)
         target_link_libraries(mr_adm_apple_smoke_tests
-            PRIVATE
+            PRIVATE mr_adm_scene_test_support
                 MacinRender::ADMEngine
                 MacinRender::ADMIo
                 MacinRender::ADMRenderApple
@@ -1742,7 +1753,6 @@ install(
 install(
     TARGETS
         mr_adm_c_api
-        mr_adm_metadata
         mr_adm_io
         mr_adm_render_room
         mr_adm_engine

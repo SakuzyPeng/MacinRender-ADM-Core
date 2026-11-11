@@ -10,7 +10,7 @@
 
 namespace mradm::triple_balance_legacy {
 
-Result<SizeMixer> SizeMixer::create(const Prepared& prepared, const RenderPlan& plan, bool live_points) {
+Result<SizeMixer> SizeMixer::create(const Prepared& prepared, const ScenePlan& plan, bool live_points) {
     SizeMixer result;
     result.prepared_ = &prepared;
     result.layout_ = plan.output_layout;

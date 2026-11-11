@@ -18,6 +18,7 @@
 #include "adm/render_room.h"
 
 #include "../adm_io/scene_import_internal.h"
+#include "adm_scene.h"
 #include "live_renderer.h"
 #include "speaker_pcm.h"
 #include "wav_fixture.h"
@@ -76,7 +77,7 @@ void screen_config_test() {
 // The moving object of the file tests as an imported ADM BW64 (the room backend reads the Rust render
 // scene, PCM consistency 4.6): two Cartesian blocks split at 17913 frames (0.3731875 s), the second
 // ramping over 3317 frames (0.0691 s).
-mradm::RenderPlan moving_plan(const std::filesystem::path& root, const std::vector<float>& input, bool screen_ref) {
+mradm::ScenePlan moving_plan(const std::filesystem::path& root, const std::vector<float>& input, bool screen_ref) {
     const auto path = root / (screen_ref ? "input-screen.wav" : "input.wav");
     const std::string screen = screen_ref ? "<screenRef>1</screenRef>" : "";
     const auto position = [](const char* x, const char* y) {
@@ -119,17 +120,17 @@ mradm::RenderPlan moving_plan(const std::filesystem::path& root, const std::vect
         writer->write(input.data(), input.size());
     }
     auto scene = take(mradm::io::RenderScene::import(utf8(path), nullptr));
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = utf8(path);
     plan.output_layout = "binaural";
-    plan.scene = scene.scene();
+    plan.scene = mradm::io::adm_scene(scene);
     plan.scene_handle = scene.handle();
     return plan;
 }
 
 void screened_file_test(const std::filesystem::path& root,
                         const std::vector<float>& input,
-                        const mradm::RenderPlan& base,
+                        const mradm::ScenePlan& base,
                         const std::vector<float>& reference) {
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;

@@ -29,7 +29,9 @@
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
+#include "adm_scene.h"
 #include "render_common.h"
+#include "render_common_scene.h"
 #include "scene_import_internal.h"
 
 namespace {
@@ -1349,7 +1351,7 @@ bool verify_direct_speakers_routing_modes() {
     mradm::NullLogSink logs;
     const auto routing_input = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
     FileGuard routing_guard{routing_input};
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = routing_input.string();
     plan.scene_handle = rust_scene(routing_input);
     plan.output_layout = "binaural";
@@ -1377,7 +1379,7 @@ bool verify_direct_speakers_missing_position_fallback() {
     }
     const auto rear_output = temp_path("mr_apple_ds_rear_label_fallback", ".wav");
     FileGuard rear_output_guard{rear_output};
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_path = rear_output.string();
     plan.output_layout = "0+5+0";
@@ -1424,7 +1426,7 @@ bool verify_mixed_object_direct_and_lfe_paths() {
 
     const auto output = temp_path("mr_apple_mixed_paths", ".wav");
     FileGuard output_guard{output};
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_path = output.string();
     plan.output_layout = "9+10+3";
@@ -1602,7 +1604,7 @@ bool verify_listener_orientation() {
 // pattern. Returns interleaved float PCM, or nullopt on error.
 std::optional<std::vector<float>> render_apple_stream_full(mradm::IRenderer& renderer,
                                                            const mradm::IPreparedRender& prepared,
-                                                           const mradm::RenderPlan& plan,
+                                                           const mradm::ScenePlan& plan,
                                                            mradm::LogSink& logs,
                                                            const std::vector<std::size_t>& chunk_pattern,
                                                            const mradm::LiveOverrides* overrides = nullptr) {
@@ -1653,7 +1655,7 @@ bool verify_apple_direct_stream_and_dynamic_blocks() {
         return false;
     }
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_layout = "4+7+0";
     plan.scene = *scene;
@@ -1789,7 +1791,7 @@ bool verify_apple_output_stage_matches_process() {
     if (!check(scene.has_value(), "output-stage: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -1861,7 +1863,7 @@ bool verify_apple_reposition_source() {
     if (!check(scene.has_value(), "reposition-source: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -1906,7 +1908,7 @@ bool verify_apple_stream_matches_window() {
         return false;
     }
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -1923,7 +1925,7 @@ bool verify_apple_stream_matches_window() {
     // Reference: the offline render_window path to a float WAV.
     const auto out_ref = temp_path("mr_apple_stream_ref", ".wav");
     FileGuard out_guard(out_ref);
-    mradm::RenderPlan window_plan = plan;
+    mradm::ScenePlan window_plan = plan;
     window_plan.output_path = out_ref.string();
     if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
                "stream: reference render_window")) {
@@ -1967,7 +1969,7 @@ bool verify_apple_stream_listener_orientation() {
     if (!check(scene.has_value(), "stream-orient: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -2026,7 +2028,7 @@ bool verify_apple_stream_initial_head_locked_orientation() {
     }
     const std::string object_id = scene->objects.front().id;
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -2100,7 +2102,7 @@ bool verify_apple_stream_adm_head_locked() {
     ok &= check(scene->objects.front().head_locked && scene->objects.front().tracks.front().blocks.front().head_locked,
                 "stream-adm-headlock: AudioObject value is inherited by its block");
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -2166,7 +2168,7 @@ bool verify_apple_head_locked_timeline() {
     ok &= check(!blocks[0].head_locked && blocks[1].head_locked,
                 "apple-headtrack-timeline: imported blocks keep explicit false/true");
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -2183,7 +2185,7 @@ bool verify_apple_head_locked_timeline() {
     const auto realtime = render_apple_stream_full(*renderer, **prepared, plan, logs, {333U, 1024U, 511U});
     const auto output = temp_path("mr_apple_head_timeline_output", ".wav");
     FileGuard output_guard(output);
-    mradm::RenderPlan offline_plan = plan;
+    mradm::ScenePlan offline_plan = plan;
     offline_plan.output_path = output.string();
     if (!check(renderer->render_window(**prepared, offline_plan, progress, logs).has_value(),
                "apple-headtrack-timeline: offline render")) {
@@ -2234,7 +2236,7 @@ bool verify_apple_stream_silent() {
     if (!check(scene.has_value(), "silent: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -2281,7 +2283,7 @@ bool verify_apple_stream_gain_override() {
     }
     const std::string object_id = scene->objects.front().id;
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
@@ -2354,7 +2356,7 @@ bool verify_apple_output_stage_live_gain_ramp() {
     if (!check(scene.has_value() && !scene->objects.empty(), "output-gain-ramp: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
