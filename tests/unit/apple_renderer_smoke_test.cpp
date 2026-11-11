@@ -29,6 +29,7 @@
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
 #include "render_common.h"
+#include "scene_import_internal.h"
 
 namespace {
 
@@ -1098,6 +1099,123 @@ write_ds_fixture(float azimuth, float elevation, const std::string& label, uint3
     return in;
 }
 
+// BEGIN Apple recipe fixtures (PCM consistency 5.6 B)
+// The Rust render scene the Apple recipe reads, imported as RenderService imports an ADM file.
+std::shared_ptr<const mradm::detail::RenderSceneHandle> rust_scene(const std::filesystem::path& input) {
+    auto scene = mradm::io::RenderScene::import(input.string(), nullptr);
+    return scene ? scene->handle() : nullptr;
+}
+
+// One DirectSpeakers block: its label and, when timed, its start and duration.
+struct DsBlockSpec {
+    std::string label;
+    std::optional<std::chrono::nanoseconds> start;
+    std::optional<std::chrono::nanoseconds> duration;
+};
+
+// A DirectSpeakers channel at a fixed nominal position, added to `pf`; returns its track UID.
+std::shared_ptr<fixture::AudioTrackUid> add_ds_channel(const std::shared_ptr<fixture::Document>& doc,
+                                                       const std::shared_ptr<fixture::AudioPackFormat>& pf,
+                                                       const std::string& name,
+                                                       float azimuth,
+                                                       const std::vector<DsBlockSpec>& blocks) {
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{name + "CF"},
+                                                  fixture::TypeDefinition::direct_speakers);
+    for (const auto& spec : blocks) {
+        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
+            fixture::Azimuth{azimuth}, fixture::Elevation{0.0F}, fixture::Distance{1.0F}}};
+        block.add(fixture::SpeakerLabel{spec.label});
+        block.set(fixture::Gain{1.0F});
+        if (spec.start) {
+            block.set(fixture::Rtime{fixture::Time{*spec.start}});
+        }
+        if (spec.duration) {
+            block.set(fixture::Duration{fixture::Time{*spec.duration}});
+        }
+        cf->add(block);
+    }
+    doc->add(cf);
+    pf->add_reference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{name + "SF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
+    doc->add(sf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{name + "TF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
+    doc->add(tf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
+    doc->add(uid);
+    return uid;
+}
+
+// A mono 440 Hz input whose every track UID plays file channel 1.
+std::filesystem::path write_mono_doc(const std::shared_ptr<fixture::Document>& doc,
+                                     const std::vector<std::shared_ptr<fixture::AudioTrackUid>>& uids,
+                                     std::string_view stem,
+                                     uint32_t frames = 8192U) {
+    constexpr uint32_t k_sr = 48000U;
+    fixture::reassign_ids(doc);
+    std::vector<fixture::WaveAudioId> ids;
+    for (const auto& uid : uids) {
+        ids.emplace_back(1U, fixture::format_id(uid->get<fixture::AudioTrackUidId>()), "", "");
+    }
+    const auto in = temp_path(std::string{stem}, ".wav");
+    std::ostringstream xml_buf;
+    fixture::write_xml(xml_buf, doc);
+    auto chna = std::make_shared<fixture::WaveChna>(ids);
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(in.string(), 1U, k_sr, 24U, chna, axml);
+    std::vector<float> samples(frames);
+    for (uint32_t i = 0; i < frames; ++i) {
+        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                      static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), frames);
+    return in;
+}
+
+// One DirectSpeakers object of one channel with `blocks`.
+std::filesystem::path write_ds_blocks_fixture(float azimuth, const std::vector<DsBlockSpec>& blocks) {
+    auto doc = fixture::Document::create();
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleDsBlocksPF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    auto uid = add_ds_channel(doc, pf, "AppleDsBlocks", azimuth, blocks);
+    doc->add(pf);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleDsBlocksObject"});
+    obj->add_reference(uid);
+    doc->add(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleDsBlocksContent"});
+    content->add_reference(obj);
+    doc->add(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleDsBlocksProgramme"});
+    prog->add_reference(content);
+    doc->add(prog);
+    return write_mono_doc(doc, {uid}, "mr_apple_ds_blocks_input");
+}
+
+// An Objects object at `azimuth` and a DirectSpeakers object of M+030 and LFE1, all three tracks on
+// the one file channel.
+std::filesystem::path write_mixed_paths_fixture(float azimuth) {
+    const auto doc = make_object_doc(azimuth, 1.0F, 0.0F, false).first;
+    const auto object_track = doc->get_elements<fixture::AudioTrackUid>().front();
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleMixedDsPF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    auto front = add_ds_channel(doc, pf, "AppleMixedFront", 30.0F, {{"M+030", std::nullopt, std::nullopt}});
+    auto lfe = add_ds_channel(doc, pf, "AppleMixedLfe", 0.0F, {{"LFE1", std::nullopt, std::nullopt}});
+    doc->add(pf);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleMixedBed"});
+    obj->add_reference(front);
+    obj->add_reference(lfe);
+    doc->add(obj);
+    doc->get_elements<fixture::AudioContent>().front()->add_reference(obj);
+    return write_mono_doc(doc, {object_track, front, lfe}, "mr_apple_mixed_input");
+}
+// END Apple recipe fixtures
+
 // Render a single DirectSpeakers bed channel through the apple backend to `layout`.
 std::optional<std::vector<float>>
 render_ds(float azimuth,
@@ -1227,7 +1345,11 @@ bool verify_direct_speakers_routing_modes() {
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
+    const auto routing_input = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
+    FileGuard routing_guard{routing_input};
     mradm::RenderPlan plan;
+    plan.input_path = routing_input.string();
+    plan.scene_handle = rust_scene(routing_input);
     plan.output_layout = "binaural";
     plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::automatic;
     ok &= check(renderer->prepare(plan, logs).has_value(), "Apple binaural automatic DirectSpeakers routing prepares");
@@ -1240,57 +1362,29 @@ bool verify_direct_speakers_routing_modes() {
     return ok;
 }
 
+// An ADM DirectSpeakers block always has a nominal position (only a channel bed's LFE has none), so
+// the front-centre fallback of a block without one is checked in Rust (mradm-render tests/apple.rs).
 bool verify_direct_speakers_missing_position_fallback() {
-    constexpr uint16_t k_channels = 24U;
-    const auto input = write_ds_fixture(30.0F, 0.0F, "UNKNOWN");
+    // M+135 is not a 5.1 output: label routing spatializes it from its label direction, not from
+    // the block's front-left nominal position.
+    const auto input = write_ds_blocks_fixture(30.0F, {{"M+135", std::nullopt, std::nullopt}});
     FileGuard input_guard{input};
     auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value() && !scene->objects.empty() && !scene->objects.front().tracks.empty() &&
-                   !scene->objects.front().tracks.front().ds_blocks.empty(),
-               "Apple missing-position fixture imports")) {
+    if (!check(scene.has_value(), "Apple rear-label fixture imports")) {
         return false;
     }
-    auto& block = scene->objects.front().tracks.front().ds_blocks.front();
-    block.speaker_labels = {"UNKNOWN"};
-    block.has_position = false;
-
-    const auto output = temp_path("mr_apple_ds_missing_position", ".wav");
-    FileGuard output_guard{output};
-    mradm::RenderPlan plan;
-    plan.input_path = input.string();
-    plan.output_path = output.string();
-    plan.output_layout = "9+10+3";
-    plan.scene = *scene;
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
-
-    auto renderer = mradm::create_apple_renderer();
-    CapturingLogSink logs;
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value() && renderer->render_window(**prepared, plan, progress, logs).has_value(),
-               "Apple missing-position label fallback renders")) {
-        return false;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!check(reader.has_value() && reader->channels() == k_channels,
-               "Apple missing-position fallback output opens")) {
-        return false;
-    }
-    std::vector<float> samples(static_cast<std::size_t>(reader->frame_count()) * k_channels);
-    reader->read(samples.data(), reader->frame_count());
-
-    bool ok = true;
-    ok &= check(loudest_channel(samples, k_channels) == 2U,
-                "Apple missing position falls back to front-centre M+000 (ch2)");
-    ok &= check(logs.has_warning("no nominal position"), "Apple missing position emits a warning");
-    ok &= check(logs.has_warning("not in output layout"), "Apple unmatched label emits a fallback warning");
-
-    block.speaker_labels = {"M+135"};
     const auto rear_output = temp_path("mr_apple_ds_rear_label_fallback", ".wav");
     FileGuard rear_output_guard{rear_output};
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
     plan.output_path = rear_output.string();
     plan.output_layout = "0+5+0";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(input);
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullProgressSink progress;
     CapturingLogSink rear_logs;
     auto rear_prepared = renderer->prepare(plan, rear_logs);
     if (!check(rear_prepared.has_value() &&
@@ -1307,7 +1401,8 @@ bool verify_direct_speakers_missing_position_fallback() {
     const double rear_left = channel_energy(rear_samples, 6U, 4U);
     const double front = channel_energy(rear_samples, 6U, 0U) + channel_energy(rear_samples, 6U, 1U) +
                          channel_energy(rear_samples, 6U, 2U);
-    ok &= check(rear_left > front, "Apple M+135 without coordinates stays behind when rendered to 5.1");
+    bool ok = true;
+    ok &= check(rear_left > front, "Apple M+135 label direction keeps the bed behind when rendered to 5.1");
     ok &= check(rear_logs.has_warning("spatializing from label direction"),
                 "Apple absent output slot reports label-direction fallback");
     ok &= check(!rear_logs.has_warning("no nominal position"),
@@ -1317,29 +1412,13 @@ bool verify_direct_speakers_missing_position_fallback() {
 
 bool verify_mixed_object_direct_and_lfe_paths() {
     constexpr uint16_t k_channels = 24U;
-    const auto input = write_fixture(-90.0F, 8192U, 1.0F, 0.0F, false);
+    // An Objects object and a DirectSpeakers object of M+030 and LFE1, all on file channel 1.
+    const auto input = write_mixed_paths_fixture(-90.0F);
     FileGuard input_guard{input};
     auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "Apple mixed-path fixture imports")) {
+    if (!check(scene.has_value() && scene->objects.size() == 2U, "Apple mixed-path fixture imports")) {
         return false;
     }
-
-    const auto make_direct_track = [&](std::string label, float azimuth, float elevation) {
-        mradm::SceneTrackRef track;
-        track.channel_index = 0U;
-        track.track_uid = std::move(label);
-        mradm::SceneDirectSpeakersBlock block;
-        block.speaker_labels = {track.track_uid};
-        block.azimuth = azimuth;
-        block.elevation = elevation;
-        block.has_position = true;
-        block.start_sample = 0U;
-        block.end_sample = scene->info.num_frames;
-        track.ds_blocks.push_back(std::move(block));
-        return track;
-    };
-    scene->objects.front().tracks.push_back(make_direct_track("M+030", 30.0F, 0.0F));
-    scene->objects.front().tracks.push_back(make_direct_track("LFE1", 0.0F, 0.0F));
 
     const auto output = temp_path("mr_apple_mixed_paths", ".wav");
     FileGuard output_guard{output};
@@ -1348,6 +1427,7 @@ bool verify_mixed_object_direct_and_lfe_paths() {
     plan.output_path = output.string();
     plan.output_layout = "9+10+3";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(input);
     plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
 
     auto renderer = mradm::create_apple_renderer();
@@ -1557,32 +1637,25 @@ bool verify_apple_direct_stream_and_dynamic_blocks() {
     // Deliberately not aligned to k_render_block: direct-bus target changes must
     // occur on the metadata sample, not at the next AUSpatialMixer slice.
     constexpr uint64_t k_boundary = 4099U;
-    const auto input = write_ds_fixture(30.0F, 0.0F, "M+030");
+    // 85.395833 ms is frame 4099 at 48 kHz; the second block ends at the file's end (frame 8192).
+    const auto input =
+        write_ds_blocks_fixture(30.0F,
+                                {{"M+030", std::chrono::nanoseconds{0}, std::chrono::nanoseconds{85395833}},
+                                 {"M-030", std::chrono::nanoseconds{85395833}, std::chrono::nanoseconds{85270834}}});
     FileGuard input_guard{input};
     auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value() && !scene->objects.empty() && !scene->objects.front().tracks.empty(),
-               "direct stream: import DirectSpeakers scene")) {
+    if (!check(scene.has_value() && !scene->objects.empty() && !scene->objects.front().tracks.empty() &&
+                   scene->objects.front().tracks.front().ds_blocks.size() == 2U &&
+                   scene->objects.front().tracks.front().ds_blocks.back().start_sample == k_boundary,
+               "direct stream: import the two-block DirectSpeakers scene")) {
         return false;
     }
-
-    auto& blocks = scene->objects.front().tracks.front().ds_blocks;
-    if (!check(!blocks.empty(), "direct stream: imported DirectSpeakers block")) {
-        return false;
-    }
-    mradm::SceneDirectSpeakersBlock left = blocks.front();
-    left.speaker_labels = {"M+030"};
-    left.start_sample = 0;
-    left.end_sample = k_boundary;
-    mradm::SceneDirectSpeakersBlock right = left;
-    right.speaker_labels = {"M-030"};
-    right.start_sample = k_boundary;
-    right.end_sample = scene->info.num_frames;
-    blocks = {left, right};
 
     mradm::RenderPlan plan;
     plan.input_path = input.string();
     plan.output_layout = "4+7+0";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(input);
     plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
     const auto output = temp_path("mr_apple_direct_stream_ref", ".wav");
     FileGuard output_guard{output};
@@ -1718,6 +1791,7 @@ bool verify_apple_output_stage_matches_process() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -1789,6 +1863,7 @@ bool verify_apple_reposition_source() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -1833,6 +1908,7 @@ bool verify_apple_stream_matches_window() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -1893,6 +1969,7 @@ bool verify_apple_stream_listener_orientation() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -1951,6 +2028,7 @@ bool verify_apple_stream_initial_head_locked_orientation() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
     plan.listener_orientation.yaw_deg = 90.0F;
 
     auto renderer = mradm::create_apple_renderer();
@@ -2024,6 +2102,7 @@ bool verify_apple_stream_adm_head_locked() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
     plan.listener_orientation.yaw_deg = 90.0F;
 
     auto renderer = mradm::create_apple_renderer();
@@ -2089,6 +2168,7 @@ bool verify_apple_head_locked_timeline() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
     plan.listener_orientation.yaw_deg = 90.0F;
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -2156,6 +2236,7 @@ bool verify_apple_stream_silent() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -2202,6 +2283,7 @@ bool verify_apple_stream_gain_override() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;
@@ -2274,6 +2356,7 @@ bool verify_apple_output_stage_live_gain_ramp() {
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = *scene;
+    plan.scene_handle = rust_scene(in);
 
     auto renderer = mradm::create_apple_renderer();
     mradm::NullLogSink logs;

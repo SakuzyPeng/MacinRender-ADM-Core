@@ -1692,6 +1692,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 MacinRender::ADMAudio
         )
         target_link_libraries(mr_adm_apple_smoke_tests PRIVATE ${MR_ADM_AUDIOTOOLBOX_FW})
+        target_include_directories(mr_adm_apple_smoke_tests PRIVATE src/adm_io)
         mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
