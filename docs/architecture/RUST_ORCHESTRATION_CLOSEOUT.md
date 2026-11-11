@@ -1,6 +1,6 @@
 # 五期结项（五期 5.9）
 
-> 状态：验收进行中（2026-11-11）。Consistency、CI 与 Quality 已在 main 上通过；Release Build 与 Reference tests 待运行。
+> 状态：已完成（2026-11-11）。Consistency、CI、Quality、Release Build 与 Reference tests 都已在 main 上通过。
 > 五期按 [ADR 0021](../adr/0021-rust-primary-project.md) 把编排与实时调度迁入 Rust，切片与验证要求见
 > [PCM 一致性审计的五期一节](PCM_CONSISTENCY_AUDIT.md#五期编排与实时调度迁入-rust)，驱动面清单与规模基线见 [5.1 记录](RUST_ORCHESTRATION_BASELINE.md)。
 
@@ -8,17 +8,19 @@
 
 验收提交为 main `5b436f8`（5.8 合入 `7d111ba` 之后，只多维护者的两个 CI 依赖提交）。按 5.9 的范围，三平台由 CI 运行，
 不再另安排 Linux 主机验证；macOS arm64 与 Windows x64 的本机验证由维护者在各切片合并前完成。
+Release Build 与 Reference tests 在 main `2207538` 上运行，它比验收提交只多本记录的文档提交。
 
 | 工作流 | 运行 | 结果 |
 | --- | --- | --- |
 | Consistency | 43058940532 | 通过；config A、B 的普通与诊断四份报告都是 294 个 PCM id 相同、0 个不同、平台集完整，门禁失败 0 |
 | CI | 43058944168 | 通过 |
 | Quality | 43058944517 | 通过 |
-| Release Build | 待运行 | — |
-| Reference tests | 待运行 | — |
+| Release Build | 43120180578 | 通过；macOS / Windows CLI、Linux AppImage、macOS / Windows GUI 五个打包 job 成功（Publish 只在 tag push 时运行，已跳过） |
+| Reference tests | 43120184482 | 通过；7 个单元全部成功 |
 
 Release Build 在三个平台上构建发布配置，跑许可证全量校验、C ABI 导出校验、CLI 与打包 smoke，并打包 macOS / Windows GUI；
-Reference tests 在发布配置下逐个打开 7 个冻结的第三方对照。两者都是手动触发，本仓库还没有运行记录。
+Reference tests 在发布配置下逐个打开 7 个冻结的第三方对照（SAF 在 macOS，libear、libadm、libbw64、
+libsamplerate、libebur128、dr_wav 在 Linux）。两者都是手动触发，这是它们在本仓库的第一次运行。
 
 五期的退出条件——一致性工具改为 Rust 并在同一构建上证明新旧工具逐位相同、C++ 的 `AdmScene` 与适配壳删除——已满足：
 `mr_adm_consistency_{render,stream,scene}` 分别在 5.2 D、5.3 B、5.4 D 改为 Rust，切换前都在同一构建上与旧工具逐字节对照；
