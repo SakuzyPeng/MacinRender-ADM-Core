@@ -224,7 +224,8 @@ fn monitor_opening_matches_the_cpp_factory() {
     let inputs = std::env::temp_dir().join(format!("mradm-engine-monitor-{}", std::process::id()));
     common::monitor::write_inputs(&inputs);
     let room = Arc::new(
-        loading::load_package(format!("{}/room/synthetic/room.json", fixtures()).as_bytes()).unwrap(),
+        loading::load_package(format!("{}/room/synthetic/room.json", fixtures()).as_bytes())
+            .unwrap(),
     );
     let input_dir = inputs.to_str().unwrap().to_owned();
     let normalize = |s: &str| {
@@ -295,7 +296,8 @@ fn system_spatial_monitoring_opens_orientation_neutral() {
     let input = wav.to_str().unwrap();
     let scene = mradm_scene::import_adm(input.as_bytes()).unwrap();
     let room = Arc::new(
-        loading::load_package(format!("{}/room/synthetic/room.json", fixtures()).as_bytes()).unwrap(),
+        loading::load_package(format!("{}/room/synthetic/room.json", fixtures()).as_bytes())
+            .unwrap(),
     );
     let case = |orientation: &str| {
         mradm_json::parse(
@@ -332,7 +334,8 @@ fn the_apple_backend_is_an_island() {
     let input = format!("{}/directspeakers-48000.wav", inputs.to_str().unwrap());
     let scene = mradm_scene::import_adm(input.as_bytes()).unwrap();
     let room = Arc::new(
-        loading::load_package(format!("{}/room/synthetic/room.json", fixtures()).as_bytes()).unwrap(),
+        loading::load_package(format!("{}/room/synthetic/room.json", fixtures()).as_bytes())
+            .unwrap(),
     );
     let open = |text: &str, apple: bool| {
         let c = mradm_json::parse(text.as_bytes()).unwrap();
