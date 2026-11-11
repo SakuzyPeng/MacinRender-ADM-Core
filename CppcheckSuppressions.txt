@@ -58,6 +58,10 @@ unusedStructMember:*tests/support/osc/osc_head_tracking_protocol.h
 unusedStructMember:*/src/adm_render_common/engine_records.h
 unusedStructMember:*/tests/support/engine_renderer/speaker_pcm.h
 
+# Test-only HRTF views and frozen mixer aggregates are consumed across translation units.
+unusedStructMember:*/tests/support/binaural/hrtf_state.h
+unusedStructMember:*/tests/support/speaker_mix.h
+
 # Private Rust transport PODs and renderer control mappings are read across the FFI / translation units.
 unusedStructMember:*/tests/support/triple_balance/triple_balance_ffi.h
 unusedStructMember:*/src/adm_render_triple_balance/render_state.h

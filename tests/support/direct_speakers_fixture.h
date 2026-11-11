@@ -68,11 +68,11 @@ inline void write_mono_direct_speakers(const std::filesystem::path& path,
     doc->add(programme);
     reassign_ids(doc);
 
-    std::ostringstream xml;
-    write_xml(xml, doc);
+    std::ostringstream xml_buffer;
+    write_xml(xml_buffer, doc);
     auto chna =
         std::make_shared<WaveChna>(std::vector<WaveAudioId>{{1U, format_id(uid->get<AudioTrackUidId>()), "", ""}});
-    auto axml = std::make_shared<WaveAxml>(xml.str());
+    auto axml = std::make_shared<WaveAxml>(xml_buffer.str());
     auto writer = write_wave(path.string(), 1U, sample_rate, 24U, chna, axml);
     writer->write(samples.data(), samples.size());
 }

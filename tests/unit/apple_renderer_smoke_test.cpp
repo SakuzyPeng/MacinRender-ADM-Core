@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <numbers>
 #include <numeric>
 #include <optional>
@@ -1160,9 +1161,10 @@ std::filesystem::path write_mono_doc(const std::shared_ptr<fixture::Document>& d
     constexpr uint32_t k_sr = 48000U;
     fixture::reassign_ids(doc);
     std::vector<fixture::WaveAudioId> ids;
-    for (const auto& uid : uids) {
-        ids.emplace_back(1U, fixture::format_id(uid->get<fixture::AudioTrackUidId>()), "", "");
-    }
+    ids.reserve(uids.size());
+    std::ranges::transform(uids, std::back_inserter(ids), [](const auto& uid) {
+        return fixture::WaveAudioId{1U, fixture::format_id(uid->get<fixture::AudioTrackUidId>()), "", ""};
+    });
     const auto in = temp_path(std::string{stem}, ".wav");
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
