@@ -78,7 +78,7 @@ struct OscHeadTrackingSnapshot {
 class OscHeadTrackingReceiver {
   public:
     // port 0 requests an OS-assigned port for embedding/tests; default is 9000.
-    explicit OscHeadTrackingReceiver(std::uint16_t port = 9000, std::string source_id = {});
+    explicit OscHeadTrackingReceiver(std::uint16_t port = 9000, const std::string& source_id = {});
     ~OscHeadTrackingReceiver();
     OscHeadTrackingReceiver(const OscHeadTrackingReceiver&) = delete;
     OscHeadTrackingReceiver& operator=(const OscHeadTrackingReceiver&) = delete;

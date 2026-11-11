@@ -45,7 +45,7 @@ struct OscHeadTrackingReceiver::Impl {
     MradmOscReceiver* handle_;
 };
 
-OscHeadTrackingReceiver::OscHeadTrackingReceiver(std::uint16_t port, std::string source_id) {
+OscHeadTrackingReceiver::OscHeadTrackingReceiver(std::uint16_t port, const std::string& source_id) {
     auto* handle =
         mradm_osc_receiver_create(port, reinterpret_cast<const std::uint8_t*>(source_id.data()), source_id.size());
     if (handle == nullptr) {
