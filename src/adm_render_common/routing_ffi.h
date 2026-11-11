@@ -1,9 +1,9 @@
 // Rust mradm-render (PCM consistency 4.5): the live-override and LFE gain rules, the room control
 // of a file stream (mradm_engine_stream_*, engine_ffi.h) and the Scene stream engine. The routing
 // rules, the Scene stream renderer outside the engine and the HRTF view only the tests call are in
-// tests/support/render_test_ffi.h (PCM consistency 5.6 C). Inputs are borrowed for the call; views live until the handle's next call
-// or destroy. Error buffers: capacity in *len, bytes written out,
-// NUL-terminated. Status values follow adm::ErrorCode.
+// tests/support/render_test_ffi.h (PCM consistency 5.6 C). Inputs are borrowed for the call; views live until the
+// handle's next call or destroy. Error buffers: capacity in *len, bytes written out, NUL-terminated. Status values
+// follow adm::ErrorCode.
 #pragma once
 #include "../adm_dsp/dsp_ffi.h"
 #include "../adm_dsp/room_ffi.h"

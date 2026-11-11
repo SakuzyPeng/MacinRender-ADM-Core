@@ -17,9 +17,9 @@
 #include "adm/render.h"
 #include "adm/scene.h"
 
+#include "../render_test_ffi.h"
 #include "adm_scene.h"
 #include "render_common.h"
-#include "../render_test_ffi.h"
 
 namespace mradm::render_common {
 
