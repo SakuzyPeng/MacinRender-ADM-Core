@@ -19,8 +19,7 @@
 #include "engine_result.h"
 
 // The engine request record (MradmEngineRenderRequest) of a RenderRequest and the Apple island's
-// adapter, shared by the offline render service and the monitor's stream opening (PCM consistency
-// 5.2 C2, 5.3 B).
+// adapter, shared by the offline render service and the monitor's stream opening.
 namespace mradm::engine {
 
 // The Apple backend the engine hands back as an island; the engine requests it only where the

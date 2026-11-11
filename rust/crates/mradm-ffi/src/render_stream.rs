@@ -1,4 +1,4 @@
-//! Private file-stream boundary (PCM consistency 5.3 A): one handle for every Rust backend's
+//! Private file-stream boundary: one handle for every Rust backend's
 //! stream (`mradm-engine::stream`). Validation may overlap the worker and borrows only the
 //! immutable validator; serialize every other call on the worker and destroy after all return.
 //! Errors carry the stream locator (`MradmRenderLocation`) like the offline driver's.
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn mradm_engine_stream_destroy(handle: *mut EngineStream) 
     }
 }
 
-// ── The monitor's stream opening (5.3 B) ──────────────────────────────────────────────────────
+// ── The monitor's stream opening ────────────────────────────────────────────────────────────
 
 /// What `mradm_engine_monitor_open` opened: kind 0 a rejection (status), 1 a stream (info and the
 /// plan's layout; take it with `mradm_engine_monitor_take_stream`), 2 the Apple backend over

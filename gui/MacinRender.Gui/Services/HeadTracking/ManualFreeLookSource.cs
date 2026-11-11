@@ -5,7 +5,7 @@ namespace MacinRender.Gui.Services.HeadTracking;
 
 /// <summary>
 /// 手操自由视角来源:无硬件,由 UI(鼠标拖拽 / 触控板双指 / 键盘)喂增量。它是
-/// <see cref="IHeadTrackingSource"/> 的第一个实现,用来零硬件验证整条头追踪管线;Phase 2 的
+/// <see cref="IHeadTrackingSource"/> 的第一个实现,用来零硬件验证整条头追踪管线;
 /// AirPods 来源是它的平级兄弟,共用下游同一条四元数管线。
 ///
 /// 内部以 yaw/pitch/roll(度)累积——这正是鼠标两轴 + roll 键的「原生」输入空间,等同于

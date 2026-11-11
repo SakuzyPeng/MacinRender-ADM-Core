@@ -1,4 +1,4 @@
-//! File streaming over a backend preparation (PCM consistency 5.3 A): one stream for the six Rust
+//! File streaming over a backend preparation: one stream for the six Rust
 //! backends, moved from the four C++ `IRenderStream` shells with their open checks, cancellation
 //! points and texts. The caller samples its stop token before every seek call; the Triple Balance
 //! seek finish runs in its last step, the room checks only between steps, and the binaural seek
@@ -347,7 +347,7 @@ pub enum Monitor {
     },
 }
 
-/// The monitor's stream opening (the C++ `RealtimeStreamFactory::open`, PCM consistency 5.3 B):
+/// The monitor's stream opening (the C++ `RealtimeStreamFactory::open`):
 /// the renderer resolution, DirectSpeakers routing and matrix rules, the screen check, the backend
 /// preparation and the file stream, with the factory's order, texts and log modules. `scene` is
 /// the session's policy-applied scene; with `system_spatial` the stream opens orientation-neutral

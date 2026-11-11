@@ -1,4 +1,4 @@
-//! The realtime monitor (`mradm-engine` `monitor`, PCM consistency 5.5 A) behind the C++
+//! The realtime monitor (`mradm-engine` `monitor`) behind the C++
 //! `MonitorEngine` shell, which keeps the device. A monitor takes over either a Rust file stream
 //! (`mradm_engine_stream_*`, driven directly) or a C++ stream through the island table below;
 //! the C++ trampolines catch every exception and report errors as codes and texts.

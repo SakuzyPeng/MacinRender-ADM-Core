@@ -1,9 +1,9 @@
-//! File streaming over a prepared plan (PCM consistency 4.5), moved from the C++ `VbapStream`,
+//! File streaming over a prepared plan, moved from the C++ `VbapStream`,
 //! `HoaStream` and `EarStream`: blocks of `max(1024, smoothing)` frames go through the same
 //! renderer as the offline driver into a FIFO served at any frame count, so a gap-free run from
 //! frame 0 is bit-identical to the offline render. Live gain pre-scales each input channel (the
 //! render is linear) through a 20 ms de-zipper. A seek renders from where an offline window at the
-//! target starts (PCM consistency 4.9): the block grid that object smoothing interpolates across,
+//! target starts: the block grid that object smoothing interpolates across,
 //! one more aligned block for HOA and EAR state, and the frames before the target dropped. It
 //! also restarts the de-zipper at the current targets, so the dropped frames leave no ramp.
 use crate::offline::{

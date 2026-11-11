@@ -47,7 +47,7 @@ Result<void> RenderInputReader::seek_frame(uint64_t frame) {
 }
 
 // ── apply_gain_to_file / trim_file_frames ───────────────────────────────────
-// Rust rewrites the file through the final-PCM writer and installs it (PCM consistency 4.8).
+// Rust rewrites the file through the final-PCM writer and installs it.
 
 Result<void> apply_gain_to_file(const std::string& path,
                                 float gain,

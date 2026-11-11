@@ -1,4 +1,4 @@
-//! Triple Balance file streaming (PCM consistency 4.6), moved from the C++ `TripleBalanceStream`
+//! Triple Balance file streaming, moved from the C++ `TripleBalanceStream`
 //! with the same block order and state rules: 1024-frame blocks into a FIFO; point and bed
 //! channels through the gain mixer (a canonical track at size scale 0 through its point curve),
 //! then the size mix; live gain through a 20 ms de-zipper; size scales, which reach the next

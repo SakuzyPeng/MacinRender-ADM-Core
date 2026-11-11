@@ -1,4 +1,4 @@
-//! Input import (PCM consistency 4.3): WAVE format, the CHNA channel policy and the ADM projection,
+//! Input import: WAVE format, the CHNA channel policy and the ADM projection,
 //! or a synthesized DirectSpeakers channel bed. Moved from the C++ scene and channel-bed importers
 //! with the same checks, order, messages and locators.
 use crate::error::{Context, Error, Result};

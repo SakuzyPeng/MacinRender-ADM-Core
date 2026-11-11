@@ -50,7 +50,7 @@ mod timeline;
 mod triple_balance;
 mod wav;
 
-/// The engine host the C++ shell and the Rust consistency tools share (5.2 D); Rust visibility
+/// The engine host the C++ shell and the Rust consistency tools share; Rust visibility
 /// only, no C symbol.
 #[doc(hidden)]
 pub use engine_render::FfiHost;

@@ -1,4 +1,4 @@
-//! File-streaming and offline backend arithmetic that used to live in C++ (PCM consistency 3.1).
+//! File-streaming and offline backend arithmetic that used to live in C++.
 //!
 //! Every product and sum here is rounded separately, as Rust never contracts `a * b + c` into a
 //! fused multiply-add. The C++ expressions these replace could be contracted by clang on arm64,

@@ -182,7 +182,7 @@ bool FloatWavReader::seek(uint64_t frame) {
 }
 
 // ── downconvert_to_int / finalize_wav_layout ─────────────────────────────────
-// Rust converts or rewrites into a sidecar and installs it with a backup (PCM consistency 4.8).
+// Rust converts or rewrites into a sidecar and installs it with a backup.
 
 namespace {
 

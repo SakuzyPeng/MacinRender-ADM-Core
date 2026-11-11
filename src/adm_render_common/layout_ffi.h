@@ -1,4 +1,4 @@
-// Private loudspeaker layout boundary (PCM consistency 4.3); see mradm-scene `layouts`. The table
+// Private loudspeaker layout boundary; see mradm-scene `layouts`. The table
 // points at process-lifetime Rust data and is never freed. Status values follow adm::ErrorCode.
 #pragma once
 #include <stddef.h>

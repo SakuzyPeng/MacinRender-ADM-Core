@@ -1,8 +1,8 @@
-//! Rendering on top of the render scene (PCM consistency 4.5): the shared DirectSpeakers, label
+//! Rendering on top of the render scene: the shared DirectSpeakers, label
 //! and LFE routing rules, the offline driver, file streaming, the loudspeaker and HOA backends and
-//! the Scene stream VBAP renderer; the Triple Balance and room backends (4.6); the binaural HRTF
-//! state, source plan and offline renderer (4.7); the final float PCM writers and the
-//! post-processing passes (4.8).
+//! the Scene stream VBAP renderer; the Triple Balance and room backends; the binaural HRTF
+//! state, source plan and offline renderer; the final float PCM writers and the
+//! post-processing passes.
 #![forbid(unsafe_code)]
 
 pub mod apple;

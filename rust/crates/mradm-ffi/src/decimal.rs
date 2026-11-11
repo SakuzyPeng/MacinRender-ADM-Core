@@ -1,4 +1,4 @@
-//! Private boundary for locale-independent decimal parameters (PCM consistency 3.5).
+//! Private boundary for locale-independent decimal parameters.
 use crate::{boundary, checked::*};
 use mradm_dsp::decimal;
 

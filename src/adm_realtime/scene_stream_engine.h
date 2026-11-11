@@ -100,7 +100,7 @@ struct SceneStreamStatus {
 };
 
 // Scene streaming engine: queues caller-submitted frames and exposes rendered PCM through pull().
-// The engine is Rust mradm-engine `scene::stream` (PCM consistency 5.4 B); this shell converts the
+// The engine is Rust mradm-engine `scene::stream`; this shell converts the
 // records.
 class SceneStreamEngine {
   public:

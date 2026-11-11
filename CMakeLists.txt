@@ -199,8 +199,8 @@ target_sources(
             include/adm/io.h
 )
 
-# The Rust render scene (mradm-scene) behind the private scene_ffi.h; no C++ scene copy since PCM
-# consistency 5.6 C.
+# The Rust render scene (mradm-scene) behind the private scene_ffi.h; production builds no C++
+# copy of the scene.
 target_include_directories(mr_adm_io PRIVATE src/adm_metadata src/adm_audio)
 target_link_libraries(mr_adm_io
     PUBLIC MacinRender::ADMCore
@@ -665,7 +665,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
 
     # The PoseBridge decoder and source ordering as C++ values (tests/support/osc): the protocol
-    # tests check them directly; production decodes in the Rust receiver (PCM consistency 5.5 C).
+    # tests check them directly; production decodes in the Rust receiver.
     add_library(mr_adm_osc_protocol_test_support STATIC tests/support/osc/osc_head_tracking_protocol.cpp)
     target_include_directories(mr_adm_osc_protocol_test_support PUBLIC tests/support/osc)
     target_link_libraries(mr_adm_osc_protocol_test_support PUBLIC MacinRender::ADMRealtime MacinRender::ADMDsp)
@@ -714,7 +714,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
     add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
 
-    # The C++ AdmScene of the former SDK header (tests/support/adm_scene, PCM consistency 5.6 C): the
+    # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
     # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
     # ScenePlan, the C++ scene math and the routing / object-preprocessing wrappers over its blocks.
     # Production reads the Rust render scene only; the tests and the frozen references read these.
@@ -731,8 +731,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_scene_test_support)
 
-    # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer,
-    # PCM consistency 5.6 A): the one preparation entry, the offline driver and the file stream of
+    # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer):
+    # the one preparation entry, the offline driver and the file stream of
     # every Rust backend behind create_*_renderer. Production renders through mradm-engine directly;
     # the C++ tests and the frozen references drive the backends through these. HrtfState
     # (tests/support/binaural) is the binaural HRTF view the SOFA tests read.
@@ -799,7 +799,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_scene_callback_alloc_tests COMMAND mr_adm_scene_callback_alloc_tests)
     set_tests_properties(mr_adm_scene_callback_alloc_tests PROPERTIES TIMEOUT 60)
 
-    # Test-only copy of the C++ HRTF state before PCM consistency 4.7 A, for the frozen live binaural
+    # Test-only copy of the C++ HRTF state from before the Rust binaural backend, for the frozen live binaural
     # reference and the HRTF interpolation tests; production prepares it in Rust.
     add_library(mr_adm_binaural_test_support STATIC tests/support/binaural/legacy_state.cpp)
     target_include_directories(mr_adm_binaural_test_support PUBLIC tests/support/binaural)
@@ -809,8 +809,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_binaural_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_test_support)
 
-    # One Scene stream renderer behind the C++ interface, outside the stream engine (Rust since PCM
-    # consistency 5.4 B): the live renderer tests, the frozen references and the manual benchmarks.
+    # One Scene stream renderer behind the C++ interface, outside the Rust stream engine:
+    # the live renderer tests, the frozen references and the manual benchmarks.
     add_library(mr_adm_live_scene_test_support STATIC
         tests/support/live_scene/live_renderer.cpp
         tests/support/live_scene/live_renderer_adapter.cpp
@@ -935,7 +935,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_executable(mr_adm_make_libadm_fixture tests/reference/libadm/make_fixture.cpp)
         target_link_libraries(mr_adm_make_libadm_fixture PRIVATE libbw64 adm)
         # The frozen comparison serializes both AdmScene copies with the former C++ inspect writer,
-        # kept as test support since PCM consistency 5.2 A moved the production document to Rust.
+        # kept as test support; the production document is Rust.
         add_executable(mr_adm_libadm_reference_tests tests/reference/libadm/reference_test.cpp
             tests/support/scene_json/scene_json.cpp)
         target_include_directories(mr_adm_libadm_reference_tests PRIVATE tests/support/scene_json)
@@ -1152,8 +1152,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
-    # The C++ MonitorEngine shell over the Rust monitor (PCM consistency 5.5 B moved it out of
-    # production): the realtime tests and the monitor benchmark drive the engine through it.
+    # The C++ MonitorEngine shell over the Rust monitor (not in production):
+    # the realtime tests and the monitor benchmark drive the engine through it.
     add_library(mr_adm_monitor_engine_test_support STATIC tests/support/realtime/monitor_engine.cpp)
     target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
         tests/support/realtime src/adm_realtime src/adm_render_common)
@@ -1232,7 +1232,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
-    # Test-only C++ adapters over the Triple Balance numeric FFI (out of production, PCM consistency 4.6).
+    # Test-only C++ adapters over the Triple Balance numeric FFI (out of production).
     add_library(mr_adm_triple_balance_test_support STATIC
         tests/support/triple_balance/bed.cpp
         tests/support/triple_balance/panner.cpp tests/support/triple_balance/layout_222.cpp
@@ -1644,7 +1644,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_render_trim_fixture_tests)
     add_test(NAME mr_adm_render_trim_fixture_tests COMMAND mr_adm_render_trim_fixture_tests)
 
-    # PCM consistency 2.4: final PCM after loudness / peak gain staging, re-measured.
+    # Final PCM after loudness / peak gain staging, re-measured.
     add_executable(mr_adm_normalization_acceptance_tests tests/unit/normalization_acceptance_test.cpp)
     target_link_libraries(mr_adm_normalization_acceptance_tests
         PRIVATE

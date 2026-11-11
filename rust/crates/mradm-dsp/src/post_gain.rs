@@ -2,7 +2,7 @@
 //! (loudness target, peak makeup, peak ceiling, final gain) and the standalone
 //! loudness-normalization and peak-limit gains. Conversions take log10/pow from
 //! the libm port, so every platform derives the same f32 gain from the same
-//! measurement (PCM consistency 2.3). Decisions keep the established tolerances.
+//! measurement. Decisions keep the established tolerances.
 
 /// `20·log10(linear)`; zero gives -inf, as before.
 pub fn amplitude_to_db(linear: f64) -> f64 {

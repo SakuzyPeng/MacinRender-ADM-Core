@@ -4,7 +4,7 @@
 
 // The output-layout aliases of the Rust request rules (mradm-engine `request`), for the monitor's
 // system-spatial sink selection. Backend selection, validation and preparation are Rust, shared by
-// the offline render and the monitor so the two never diverge (PCM consistency 5.2 B, 5.3 B). See
+// the offline render and the monitor so the two never diverge. See
 // docs/architecture/REALTIME_MONITORING_SLICE1.md §5.
 namespace mradm {
 

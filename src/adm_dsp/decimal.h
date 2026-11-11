@@ -7,7 +7,7 @@
 
 #include "decimal_ffi.h"
 
-// Locale-independent, correctly rounded decimal parameters (PCM consistency 3.5). Unlike strtod /
+// Locale-independent, correctly rounded decimal parameters. Unlike strtod /
 // strtold the result does not depend on the C library, its long double or the process locale.
 namespace mradm::dsp {
 

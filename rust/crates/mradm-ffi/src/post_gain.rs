@@ -1,4 +1,4 @@
-//! Private boundary for offline post-processing gain (PCM consistency 2.3).
+//! Private boundary for offline post-processing gain.
 use crate::{boundary, checked::*};
 use mradm_dsp::post_gain::{self, RenderGainRequest, Stage};
 

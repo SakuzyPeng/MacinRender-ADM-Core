@@ -302,7 +302,7 @@ class Islands {
     return {};
 }
 
-// The policy of a preview or export import, in Rust (mradm-engine `render`, PCM consistency 5.2 C2).
+// The policy of a preview or export import, in Rust (mradm-engine `render`).
 [[nodiscard]] Result<void>
 apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptions& options, LogSink& logs) {
     const auto json = options.semantic_policy_json;
@@ -329,7 +329,7 @@ apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptio
 
 RenderService::RenderService() = default;
 
-// The offline render is a Rust step machine (mradm-engine `render`, PCM consistency 5.2 C2): this
+// The offline render is a Rust step machine (mradm-engine `render`): this
 // loop forwards its progress and logs, passes the stop token before every step and executes the
 // islands it requests.
 RenderResult RenderService::render(const RenderRequest& request,

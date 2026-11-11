@@ -1,4 +1,4 @@
-//! Post-processing passes over a rendered file (PCM consistency 4.8), moved from the C++
+//! Post-processing passes over a rendered file, moved from the C++
 //! `audio_handles.cpp`, `wav_io.cpp` and `wav_output.cpp`: gain rewrite, trim, integer PCM
 //! conversion, WAV layout finalization and AXML replacement, with their temporary files and
 //! installation. Each pass is stepped; the caller checks cancellation between steps and reports

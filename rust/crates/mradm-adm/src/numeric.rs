@@ -1,4 +1,4 @@
-//! Numeric projections of ADM values into the scene (PCM consistency 3.5, audit N02). Elementary
+//! Numeric projections of ADM values into the scene. Elementary
 //! functions come from the libm port, so imported gains and positions do not depend on the
 //! platform C library.
 

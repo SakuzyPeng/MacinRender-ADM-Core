@@ -1,6 +1,6 @@
-//! The render scene (PCM consistency 4.3): loudspeaker layouts, channel-bed input presets and the
+//! The render scene: loudspeaker layouts, channel-bed input presets and the
 //! input import that produces the scene the renderers consume, and the semantic policy applied
-//! to it, and the DirectSpeakers matrix and screen configuration JSON (4.4).
+//! to it, and the DirectSpeakers matrix and screen configuration JSON.
 #![forbid(unsafe_code)]
 
 pub mod checkpoint;

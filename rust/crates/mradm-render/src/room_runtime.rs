@@ -1,4 +1,4 @@
-//! The room session's runtime (PCM consistency 4.6, moved from the C++ `room_internal::Runtime`):
+//! The room session's runtime (formerly the C++ `room_internal::Runtime`):
 //! the render-worker session plus a preparation thread that builds switch candidates and disposes
 //! of retired instances, so that neither preparation nor a destructor runs on the worker. The
 //! request, epoch, candidate and disposal rules, `pump` and `publish` keep the C++ order.

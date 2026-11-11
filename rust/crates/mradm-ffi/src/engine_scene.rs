@@ -1,4 +1,4 @@
-//! The Scene stream engine (`mradm-engine` `scene::stream`, PCM consistency 5.4 B) behind the C++
+//! The Scene stream engine (`mradm-engine` `scene::stream`) behind the C++
 //! `SceneStreamEngine` shell. Errors use the render boundary (code, message, context); the frame
 //! records reuse the Scene renderer's entry and update records.
 use super::room_ffi::{RenderRoomControl, control_handle};

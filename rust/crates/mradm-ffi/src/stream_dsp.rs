@@ -1,5 +1,5 @@
-//! Private boundary for the monitor's live gain (PCM consistency 3.1); the file-stream arithmetic
-//! is called inside Rust since 4.7 C.
+//! Private boundary for the monitor's live gain; the file-stream arithmetic
+//! is called inside Rust.
 use mradm_dsp::stream_dsp;
 
 #[unsafe(no_mangle)]

@@ -86,7 +86,7 @@ struct RenderPlan {
     std::string input_path;
     std::string output_path;
     std::string output_layout;
-    // The policy-applied Rust render scene (PCM consistency 4.4), populated by RenderService;
+    // The policy-applied Rust render scene, populated by RenderService;
     // backends read only this and must not re-parse ADM.
     std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
     std::optional<std::filesystem::path> sofa_path; // binaural renderer only; empty = built-in KEMAR
@@ -304,7 +304,7 @@ class IRenderer {
     // Render one output (window) using `prepared` — which MUST come from THIS
     // renderer's prepare() — plus the per-call plan.output_path / render_window /
     // meter_window / cancel_token. Only the Apple backend implements it: the Rust backends'
-    // offline windows render in the engine (PCM consistency 5.2 C1).
+    // offline windows render in the engine.
     [[nodiscard]] virtual Result<RenderMetrics>
     render_window(const IPreparedRender& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
         (void) prepared;
@@ -514,8 +514,6 @@ class RenderService {
 // same (input, options) cheaply by reusing the cached scene (skipping re-import +
 // policy) together with on-demand window rendering. Intended for GUI timeline
 // scrubbing. Not thread-safe; use one session per thread or serialize access.
-// (Phase 2a: the scene is cached; per-window backend state — gain matrices / HRTF —
-// is still rebuilt each call, which Phase 2b will cache.)
 class PreviewSession {
   public:
     // Import + apply the semantic policy from `options`. The output time-range trim

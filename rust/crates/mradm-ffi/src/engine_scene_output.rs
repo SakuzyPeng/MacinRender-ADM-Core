@@ -1,4 +1,4 @@
-//! The Scene output session (`mradm-engine` `scene::output`, PCM consistency 5.4 C) behind the C++
+//! The Scene output session (`mradm-engine` `scene::output`) behind the C++
 //! `SceneOutputSession` shell, which keeps the device. Errors use the render boundary.
 use super::engine_scene::EngineSceneStream;
 use super::{Error, bad, boundary};

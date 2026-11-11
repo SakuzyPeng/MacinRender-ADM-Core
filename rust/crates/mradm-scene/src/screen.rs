@@ -1,4 +1,4 @@
-//! Screen configuration JSON, `mradm.screen-config` version 1 (PCM consistency 4.4). Moved from
+//! Screen configuration JSON, `mradm.screen-config` version 1. Moved from
 //! the C++ `screen.cpp`: the same 1 MiB limit, lookups in the same order and nlohmann's exception
 //! texts after `无效的屏幕配置: `; only the text of JSON syntax errors is the project's own.
 //! Unknown keys are accepted. Geometry validation (`room::screen::Mapping`) stays with the caller.

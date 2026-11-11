@@ -1,4 +1,4 @@
-//! Render request resolution (PCM consistency 5.2 B), moved from the C++ `renderer_factory` and
+//! Render request resolution, moved from the C++ `renderer_factory` and
 //! `RenderService::render` with the same order, messages and locators: the output layout aliases,
 //! the backend selection, DirectSpeakers routing and matrix validation, the output time-range
 //! trim and the output container decisions.

@@ -1,4 +1,4 @@
-//! Backend preparation (PCM consistency 5.2 C1): one entry for the six Rust backends, moved from
+//! Backend preparation: one entry for the six Rust backends, moved from
 //! the C++ `IRenderer::prepare` shells with the same check order, messages, locators and log
 //! modules, ahead of the `mradm-render` preparations. The file streams and the offline driver
 //! ([`crate::offline`]) read the result.

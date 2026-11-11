@@ -1,4 +1,4 @@
-//! The Scene stream VBAP renderer (PCM consistency 4.5): element generations, the per-frame
+//! The Scene stream VBAP renderer: element generations, the per-frame
 //! staging of initial states and metadata updates, the panning tables of Objects (after channel
 //! lock and divergence), DirectSpeakers (label routing or the canonical position) and LFE, the
 //! one-per-renderer warnings and the `.30-vbap` checkpoints. Moved from the C++

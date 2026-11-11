@@ -1,4 +1,4 @@
-//! The Scene stream engine (PCM consistency 5.4 B, formerly the C++ `SceneStreamEngine`): it
+//! The Scene stream engine (formerly the C++ `SceneStreamEngine`): it
 //! queues the frames a producer submits, renders them on a worker thread through the generation's
 //! [`Renderer`](super::renderer::Renderer), and hands the PCM to the player through a wait-free
 //! ring that [`Stream::pull`] drains. The epochs, generations, budgets, fences, backend crossfades,

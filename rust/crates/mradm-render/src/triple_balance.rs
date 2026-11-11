@@ -1,4 +1,4 @@
-//! The Triple Balance room backend (`triple-balance`, PCM consistency 4.6): the private
+//! The Triple Balance room backend (`triple-balance`): the private
 //! compatibility copy of the scene (file-absolute rtime timeline, native gain / mute / end
 //! ignored, an initial default block), its `triple-balance-objects-v1` report, the input checks
 //! and the numeric plan (bed routes, point and size tracks, D mode). Moved from the C++

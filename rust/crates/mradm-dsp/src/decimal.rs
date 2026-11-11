@@ -1,4 +1,4 @@
-//! Locale-independent decimal parameters (PCM consistency 3.5, audit N01).
+//! Locale-independent decimal parameters.
 //!
 //! `str::parse` rounds correctly on every platform. The C library routes the CLI used before go
 //! through `strtold`, whose `long double` is 64-bit on macOS arm64 and Windows, 80-bit on Linux

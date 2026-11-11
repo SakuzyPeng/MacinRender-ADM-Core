@@ -26,7 +26,7 @@
 #include "scene_handle.h"
 
 // The session logic (log buffer, stream opening, options, edits, HpTF, backend and device
-// transactions) is Rust mradm-engine `monitor::session` (PCM consistency 5.5 B). This shell keeps
+// transactions) is Rust mradm-engine `monitor::session`. This shell keeps
 // the devices, the Apple island and the RenderOptions each backend choice was made from.
 namespace mradm {
 

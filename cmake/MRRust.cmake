@@ -85,10 +85,10 @@ if(_mr_consistency_features)
     list(JOIN _mr_consistency_features "," _mr_consistency_feature_string)
     set(_mr_consistency_feature_args --features "${_mr_consistency_feature_string}")
 endif()
-# Rust consistency tools (`mradm-ffi` examples): the kernel probe, from 5.2 D the offline
-# same-process repeat render (formerly tests/tools/phase2_render.cpp), from 5.3 B the
-# file-streaming replay (formerly tests/tools/phase2_stream.cpp) and from 5.4 D the Scene replay
-# (formerly tests/tools/phase2_scene.cpp). The Scene replay builds by default, as the C++ tool did,
+# Rust consistency tools (`mradm-ffi` examples): the kernel probe, the offline
+# same-process repeat render, the file-streaming replay and the Scene replay (formerly the C++
+# tests/tools/phase2_{render,stream,scene}.cpp). The Scene replay builds by default, as the C++
+# tool did,
 # because ctest's mr_adm_collection_tool_tests runs it.
 foreach(_mr_consistency_example IN ITEMS kernels render stream scene)
     set(_mr_consistency_all)

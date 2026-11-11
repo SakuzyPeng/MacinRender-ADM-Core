@@ -1,4 +1,4 @@
-//! Binaural file streaming (PCM consistency 4.7 C), moved from the C++ `BinauralStream`: blocks of
+//! Binaural file streaming, moved from the C++ `BinauralStream`: blocks of
 //! the preparation's size go through the same per-source OLA bank as the offline renderer into a
 //! FIFO served at any frame count, so a gap-free run from frame 0 is bit-identical to the offline
 //! render. Live gain follows one 20 ms ramp per `object\0label` key; live topology scales rebuild

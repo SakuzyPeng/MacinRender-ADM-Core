@@ -1,4 +1,4 @@
-//! The HOA3 encoder backend (`hoa-encode`, PCM consistency 4.5): the per-channel encoder blocks
+//! The HOA3 encoder backend (`hoa-encode`): the per-channel encoder blocks
 //! of Objects (position offset and divergence; extent and diffuse in the coefficients) and
 //! DirectSpeakers (nominal position, or the position its BS.2051 label names; LFE W-only),
 //! compiled into one HOA plan. Moved from the C++ `hoa_renderer` with the same block precedence,

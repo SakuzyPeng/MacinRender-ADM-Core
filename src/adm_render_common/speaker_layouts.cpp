@@ -21,7 +21,7 @@ std::optional<std::pair<float, float>> range(uint32_t present, float min, float 
     return present != 0 ? std::optional{std::pair{min, max}} : std::nullopt;
 }
 
-// The table data lives in Rust (mradm-scene `layouts`, PCM consistency 4.3); these views point at
+// The table data lives in Rust (mradm-scene `layouts`); these views point at
 // its process-lifetime strings.
 std::vector<SpeakerLayout> load(SpeakerGeometry geometry) {
     const MradmLayoutEntry* entries = nullptr;

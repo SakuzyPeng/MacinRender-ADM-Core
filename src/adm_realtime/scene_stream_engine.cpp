@@ -51,7 +51,7 @@ struct Destroy {
 } // namespace
 
 // The epochs, generations, queue, worker, policy, crossfades, timeline, ring, diagnostics and
-// `scene/*` checkpoints are Rust mradm-engine `scene::stream` (PCM consistency 5.4 B).
+// `scene/*` checkpoints are Rust mradm-engine `scene::stream`.
 struct SceneStreamEngine::Impl {
     std::unique_ptr<MradmEngineSceneStream, Destroy> handle;
     std::uint32_t output_rate{0U};

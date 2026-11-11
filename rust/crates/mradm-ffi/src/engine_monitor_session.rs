@@ -1,4 +1,4 @@
-//! The monitor session (`mradm-engine` `monitor::session`, PCM consistency 5.5 B) behind the C++
+//! The monitor session (`mradm-engine` `monitor::session`) behind the C++
 //! `MonitorSession` shell. The shell provides the devices, the Apple island and the backend
 //! options through the host table below; its device callbacks pull the session's monitor with
 //! [`mradm_engine_session_monitor_pull`].

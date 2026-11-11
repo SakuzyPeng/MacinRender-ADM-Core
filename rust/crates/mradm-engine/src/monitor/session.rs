@@ -1,4 +1,4 @@
-//! The monitor session (formerly the C++ `MonitorSession`, PCM consistency 5.5 B): the session's
+//! The monitor session (formerly the C++ `MonitorSession`): the session's
 //! log buffer, the stream opening of the C++ `RealtimeStreamFactory` (the rules are
 //! [`stream::open_monitor`]), the last-used and pending backend options, the edits, orientation
 //! and HpTF profile that survive a rebuild, and the backend-switch and output-device transactions

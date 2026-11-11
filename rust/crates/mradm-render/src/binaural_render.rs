@@ -1,4 +1,4 @@
-//! Binaural rendering (PCM consistency 4.7 B), moved from the C++ `binaural_renderer.cpp` and
+//! Binaural rendering, moved from the C++ `binaural_renderer.cpp` and
 //! `binaural_spreader.cpp`: the per-source OLA convolution (`render_source_ola_block`, with its
 //! HRTF cache, head-rotation crossfade, object smoothing and LFE bypass), the SAF spreader adapter
 //! (512-frame batches, output ring, one-frame prime) and the offline render loop (OLA reduction in

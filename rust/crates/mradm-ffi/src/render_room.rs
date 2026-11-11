@@ -1,4 +1,4 @@
-//! Private room control, file stream and Scene stream boundary (PCM consistency 4.6 E). The room
+//! Private room control, file stream and Scene stream boundary. The room
 //! runtime's session calls run through `crate::room::scope`, the boundary they used to cross.
 use super::*;
 use crate::room::{RoomProfileHandle, RoomSourceInfo, package, prepare_switch};

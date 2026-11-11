@@ -1,4 +1,4 @@
-//! Loudspeaker layouts shared by the input importer and the renderers (PCM consistency 4.3).
+//! Loudspeaker layouts shared by the input importer and the renderers.
 //! Moved verbatim from the C++ `render_layouts` table: every coordinate is the same f32 literal.
 use std::sync::OnceLock;
 

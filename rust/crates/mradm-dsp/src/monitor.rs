@@ -25,7 +25,7 @@ fn samples(channels: usize, frames: usize, length: usize) -> Result<usize> {
 
 /// Constant-power stereo fold of one speaker at `azimuth` degrees (+left, BS.2051): the azimuth is
 /// clamped to +-90 so rear speakers fold to the nearest side, and the {L, R} gains are the sine
-/// and cosine of a quarter turn scaled by the pan position, from the libm port (PCM consistency 3.1).
+/// and cosine of a quarter turn scaled by the pan position, from the libm port.
 pub fn stereo_fold(azimuth: f32) -> [f32; 2] {
     let azimuth = azimuth.clamp(-90.0, 90.0);
     let position = (azimuth / 90.0 + 1.0) * 0.5;

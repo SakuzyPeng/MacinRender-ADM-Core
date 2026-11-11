@@ -333,7 +333,7 @@ pub unsafe extern "C" fn mradm_wav_append_bext(
     })
 }
 
-// ── Post-processing passes (PCM consistency 4.8) ──────────────────────────────
+// ── Post-processing passes ──────────────────────────────
 
 pub struct PostHandle {
     pass: Option<Pass>,
@@ -852,7 +852,7 @@ pub unsafe extern "C" fn mradm_wav_has_chunk(
     })
 }
 
-// ── Final float PCM writers and CAF (PCM consistency 4.8) ─────────────────────
+// ── Final float PCM writers and CAF ─────────────────────
 
 pub struct OutputHandle {
     writer: mradm_render::output::Writer,

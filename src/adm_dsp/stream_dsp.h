@@ -2,7 +2,7 @@
 
 #include "stream_dsp_ffi.h"
 
-// The monitor's live gain multiplier of a dB override (PCM consistency 3.1).
+// The monitor's live gain multiplier of a dB override.
 namespace mradm::dsp {
 
 [[nodiscard]] inline float live_gain(float db) noexcept {

@@ -1,4 +1,4 @@
-//! The render orchestration boundary (`mradm-engine`, PCM consistency 5.2 A): the backend
+//! The render orchestration boundary (`mradm-engine`): the backend
 //! capability records and the discovery JSON documents. Island facts (the Apple backend, the
 //! system-spatial layouts, encoder availability) arrive as [`EnginePlatform`].
 use crate::adm::Text;
@@ -364,7 +364,7 @@ pub unsafe extern "C" fn mradm_engine_text_destroy(text: *mut EngineText) {
     }
 }
 
-// ── Request resolution (PCM consistency 5.2 B) ─────────────────────────────────────────────
+// ── Request resolution ─────────────────────────────────────────────
 
 #[repr(C)]
 pub struct EngineLog {

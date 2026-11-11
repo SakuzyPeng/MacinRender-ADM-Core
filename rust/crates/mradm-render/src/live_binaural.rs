@@ -1,4 +1,4 @@
-//! The Scene stream binaural renderer (PCM consistency 4.7 D): element generations with their
+//! The Scene stream binaural renderer: element generations with their
 //! fallback directions, the per-frame staging of initial states, PCM views and metadata updates,
 //! the DirectSpeakers direction rules (state position, the fixed label table, the producer
 //! position), the warnings and the `.30-binaural` checkpoints. Moved from the C++

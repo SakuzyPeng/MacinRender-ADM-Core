@@ -1,4 +1,4 @@
-//! Final float PCM writers (PCM consistency 4.8): WAVE (always RF64) or CAF, chosen by the caller.
+//! Final float PCM writers: WAVE (always RF64) or CAF, chosen by the caller.
 //! Every writer takes the next number of one process-wide sequence when it opens, so the
 //! `writer/pass{N}-s{frame}.80-pcm.f32` checkpoints of WAVE and CAF outputs never share a name.
 use mradm_dsp::diagnostics::{ENABLED, Words, process};

@@ -1,4 +1,4 @@
-//! Private boundary of the offline render service (PCM consistency 5.2 C2, `mradm-engine`
+//! Private boundary of the offline render service (`mradm-engine`
 //! `render`): the C++ `RenderService` steps a handle, executes its island requests and answers
 //! them. Texts in events and results live until the next call on the handle.
 use crate::adm::Text;

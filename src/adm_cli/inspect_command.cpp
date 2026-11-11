@@ -39,7 +39,7 @@ int run_inspect(const InspectCliOptions& opts) {
         }
         spdlog::info("wrote {}", opts.semantic_policy_template_path);
     } else {
-        // The summary is Rust (mradm-engine `scene_json`, PCM consistency 5.6 C).
+        // The summary is Rust (mradm-engine `scene_json`).
         const mradm::RenderService service;
         auto result = service.inspect_text(opts.input);
         if (!result.has_value()) {

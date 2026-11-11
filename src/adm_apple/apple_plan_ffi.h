@@ -1,4 +1,4 @@
-// The Apple AUSpatialMixer recipe in Rust mradm-render `apple` (PCM consistency 5.6 B): the Apple
+// The Apple AUSpatialMixer recipe in Rust mradm-render `apple`: the Apple
 // island's buses from the policy-applied scene. Objects are point sources (divergence and the
 // extent cloud on parallel buses); DirectSpeakers are beds, host-side direct buses or LFE bypass
 // buses. Events are in AudioUnit convention (azimuth positive to the right). Error buffers:

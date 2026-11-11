@@ -1,4 +1,4 @@
-//! The room file stream and Scene stream renderer (PCM consistency 4.6, moved from the C++
+//! The room file stream and Scene stream renderer (formerly the C++
 //! `RoomStream` and `LiveRoomRenderer`): input in 2048-frame blocks, the event table replayed on
 //! the input clock, the room tail after the material, seeks that prime the event anchors and
 //! re-render only the finite acoustic history (stepped, so the caller can cancel), live edits and

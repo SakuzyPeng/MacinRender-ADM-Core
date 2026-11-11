@@ -98,7 +98,7 @@ ConfigRecord::ConfigRecord(const RoomConfig& config) : hrir(utf8_path(config.hri
 
 namespace {
 // Switch requests, the preparation thread and the status snapshots are Rust mradm-render
-// `room_runtime` (PCM consistency 4.6 E); this shell converts the records.
+// `room_runtime`; this shell converts the records.
 class RoomControl final : public IRoomControl {
   public:
     explicit RoomControl(MradmRenderRoomControl* raw) : handle_(raw, &mradm_room_control_destroy) {}

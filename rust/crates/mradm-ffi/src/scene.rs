@@ -1,5 +1,5 @@
-//! Private render-scene boundary (PCM consistency 4.3, the semantic policy, DirectSpeakers matrix
-//! and screen configuration since 4.4). Layout and
+//! Private render-scene boundary with the semantic policy, the DirectSpeakers
+//! matrix and the screen configuration. Layout and
 //! input-preset tables are process-lifetime views of `mradm-scene` static data and are never freed;
 //! an imported scene is owned by its handle and its views are borrowed until the next call that
 //! changes it (`mradm_engine_apply_policy`, `mradm_scene_template`) or until
@@ -470,7 +470,7 @@ pub unsafe extern "C" fn mradm_scene_template(
     })
 }
 
-/// The scene inspect document `mradm.scene-inspect` v1 (PCM consistency 5.2 A, nlohmann
+/// The scene inspect document `mradm.scene-inspect` v1 (nlohmann
 /// `dump(2)` bytes, no trailing newline) for the input `path` as the caller spelled it in UTF-8,
 /// held by the handle until the next report, template, inspect or export call.
 #[unsafe(no_mangle)]

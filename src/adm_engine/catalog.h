@@ -11,7 +11,7 @@
 
 namespace mradm::engine {
 
-// The discovery documents built in Rust mradm-engine (PCM consistency 5.2 A). This side supplies
+// The discovery documents built in Rust mradm-engine. This side supplies
 // the island facts: encoder availability, the Apple backend and the system-spatial layouts.
 enum class Document : uint32_t {
     capabilities = 0,
@@ -29,7 +29,7 @@ enum class Document : uint32_t {
 [[nodiscard]] std::vector<OutputLayoutRow> build_output_layouts();
 [[nodiscard]] OutputFormats build_output_formats();
 
-// The platform facts of an offline render (PCM consistency 5.2 C2): IAMF availability and, in Apple
+// The platform facts of an offline render: IAMF availability and, in Apple
 // builds, the Apple backend's capability records.
 class RenderPlatform {
   public:

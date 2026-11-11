@@ -3,7 +3,7 @@
 //!
 //! `process` writes production-path checkpoints without a scope, with the same contract as C++
 //! `consistency::dump`: `MR_ADM_TRACE_DIR/<name>`, the first value per path in the process wins,
-//! words are explicit little-endian. Code moved from C++ (PCM consistency phase 4) keeps emitting
+//! words are explicit little-endian. Code moved from C++ keeps emitting
 //! the same files through it. Each checkpoint name has exactly one owner, so the C++ and Rust
 //! registries never see the same path. Use the mradm-dsp copy; mradm-ear's is unused.
 #[cfg(feature = "diagnostics")]

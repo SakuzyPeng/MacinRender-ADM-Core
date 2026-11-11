@@ -29,7 +29,7 @@ struct ConfigRecord {
     std::string hrir;
     MradmRenderRoomConfig record{};
 };
-// IRoomControl over a Rust mradm-render `room_runtime` control handle (PCM consistency 4.6 E).
+// IRoomControl over a Rust mradm-render `room_runtime` control handle.
 [[nodiscard]] std::shared_ptr<IRoomControl> control(MradmRenderRoomControl* raw);
 // cppcheck-suppress-end unusedStructMember
 } // namespace mradm::room_internal

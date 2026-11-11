@@ -1,4 +1,4 @@
-// Private render-scene boundary (PCM consistency 4.3, the semantic policy since 4.4); see mradm-scene.
+// Private render-scene boundary with the semantic policy; see mradm-scene.
 // Scene views are borrowed until the next call that changes the scene (apply_policy, report,
 // template, export) or mradm_scene_destroy; preset and catalog tables point at process-lifetime Rust data.
 // Status values follow adm::ErrorCode. `context` receives the error locator the caller attaches:

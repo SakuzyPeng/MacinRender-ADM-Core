@@ -1,4 +1,4 @@
-//! The offline render of a Rust backend preparation (PCM consistency 5.2 C1), moved from the C++
+//! The offline render of a Rust backend preparation, moved from the C++
 //! `render_window` loops with the same order, messages, locators, progress events, cancellation
 //! points and logs: the loudspeaker driver (VBAP, HOA, EAR, Triple Balance; `render_speaker_pcm`),
 //! the binaural driver and the room file stream with its meter.
