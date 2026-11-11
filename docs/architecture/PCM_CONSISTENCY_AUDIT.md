@@ -620,6 +620,10 @@ PCM、检查点、日志、错误文字、CLI 输出与 C ABI 不变。本机对
 同一 Release 构建上新旧脚本的两份采集按名字映射后 1,642 个文件逐字节相同（294 个 PCM）。待维护者在 macOS / Windows 与
 Consistency 上验证。生产 C/C++ 21,776 → 21,772 行。见 [5.8 记录](RUST_ORCHESTRATION_NAMING.md)。
 
+**5.9 状态**：验收进行中。main `5b436f8` 上 Consistency 43058940532 的四份报告都是 294 个 PCM id 相同、门禁失败 0，
+CI 43058944168 与 Quality 43058944517 通过；Release Build 与 Reference tests 待运行。五期生产 C/C++ 32,551 → 21,772 行
+（−33.1%）。见 [五期结项](RUST_ORCHESTRATION_CLOSEOUT.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
