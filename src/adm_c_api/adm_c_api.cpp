@@ -27,7 +27,7 @@
 #include "adm/room.h"
 
 #include "../adm_engine/scene_output_session.h"
-#include "osc_head_tracking_protocol.h"
+#include "osc_ffi.h"
 #include "scene_stream_engine.h"
 
 namespace {
@@ -745,7 +745,8 @@ adm_error_code_t adm_create_osc_head_tracking(const adm_osc_head_tracking_config
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     if (config != nullptr && config->source_id != nullptr && !std::string_view{config->source_id}.empty() &&
-        !mradm::realtime::valid_source_id(config->source_id)) {
+        mradm_osc_valid_source_id(reinterpret_cast<const std::uint8_t*>(config->source_id),
+                                  std::string_view{config->source_id}.size()) == 0U) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {

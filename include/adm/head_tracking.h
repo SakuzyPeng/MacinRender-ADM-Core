@@ -63,15 +63,13 @@ struct OscHeadTrackingSnapshot {
     bool heartbeat_alive{false};
     std::uint64_t heartbeat_age_ms{0};
     std::string source_id; // bound by the first accepted pose, or specified at construction
-    std::string info_json;
-    std::string status_json;
     bool info_matches_pose{false};
     bool status_matches_pose{false};
     HeadTrackingOrientation orientation;
     HeadTrackingTiming timing;
 };
 
-// Independent, loopback-only UDP receiver. Implemented in ADMRealtime; no audio device,
+// Independent, loopback-only UDP receiver: Rust mradm-osc behind ADMRealtime; no audio device,
 // GUI, BLE dependency or callback. The worker only replaces a single latest snapshot.
 // Poll on a control thread, then apply recenter/smoothing/arbitration in the host and
 // submit to Monitor/Scene using their existing thread/lifetime contracts.
@@ -91,7 +89,7 @@ class OscHeadTrackingReceiver {
     void stop() noexcept;               // idempotent; retains the last pose with fresh=false
     [[nodiscard]] OscHeadTrackingSnapshot snapshot() const;
     [[nodiscard]] std::string last_error() const;
-    [[nodiscard]] std::string snapshot_json() const;
+    [[nodiscard]] std::string snapshot_json() const; // includes the latest info / status telemetry
 
   private:
     struct Impl;
