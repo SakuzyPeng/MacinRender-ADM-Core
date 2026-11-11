@@ -47,6 +47,7 @@ FFI_HEADERS = [
     "src/adm_realtime/osc_ffi.h",
     "src/adm_core/config_ffi.h",
     "src/adm_render_common/routing_ffi.h",
+    "tests/support/render_test_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
 ]

@@ -4,8 +4,8 @@
 #include <memory>
 #include <string>
 
+#include "../render_test_ffi.h"
 #include "live_scene_interface.h"
-#include "routing_ffi.h"
 #include "scene_renderer_request.h"
 
 namespace mradm::live_scene {

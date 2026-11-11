@@ -9,8 +9,8 @@
 
 #include "adm/errors.h"
 
+#include "../render_test_ffi.h"
 #include "hrtf.h"
-#include "routing_ffi.h"
 
 namespace mradm::binaural_internal {
 

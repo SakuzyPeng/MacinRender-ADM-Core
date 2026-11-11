@@ -166,17 +166,17 @@ APAC, and AirPods head tracking. See the [semantic editor design](docs/architect
 ```text
 mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
-ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
-          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio
+ADMEngine ──→ ADMRendererFactory / ADMRenderRoom / ADMRenderApple
+          ──→ ADMRealtime / ADMIo / ADMAudio
 C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render / mradm-engine
 All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
 
 | Component | Responsibility |
 |---|---|
-| `ADMCore` | Project-owned ADM domain model (`AdmScene`), errors, logging, options, capabilities, and semantic policy |
-| `ADMMetadata` / `ADMIo` | `AdmScene` built from the Rust render scene, and ADM AXML write-back |
-| `ADMRender*` | EAR, VBAP, Triple Balance, HOA, HRTF binaural, and Apple AUSpatialMixer backends |
+| `ADMCore` | Render requests and plans, errors, logging, options, capabilities, and the C++ views of DirectSpeakers matrices and screen configuration |
+| `ADMIo` | C++ entry to the Rust render scene: import, policy template, inspect, and ADM AXML write-back |
+| `ADMRenderRoom` / `ADMRenderApple` | Room control shell; the macOS AUSpatialMixer backend (platform island; the EAR, VBAP, Triple Balance, HOA, binaural and room backends are in `mradm-render`) |
 | `ADMRendererFactory` | Backend selection shared by offline rendering and realtime monitoring |
 | `ADMAudio` | Container encoding and metadata |
 | `ADMRealtime` | Realtime monitoring: MonitorEngine, SceneStream, device output, and head tracking |
@@ -202,7 +202,7 @@ isolation.
 ADM BWF / BW64 / RF64, or ordinary multichannel WAVE
     → container and chunk reading (mradm-wav)
     → ADM AXML parsing (mradm-adm) or channel-bed synthesis
-    → AdmScene  ← optional semantic-policy rewrite
+    → Rust render scene (mradm-scene) ← optional semantic-policy rewrite
     → RenderPlan → render backend (EAR / VBAP / Triple Balance / HOA / binaural / Apple)
     → post-processing (loudness normalization, True Peak limiting, bit-depth conversion)
     → container encoding (WAV / CAF / FLAC / Opus MKA / IAMF / APAC)

@@ -157,17 +157,17 @@ cmake --build --preset release
 ```text
 mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
-ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
-          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio
+ADMEngine ──→ ADMRendererFactory / ADMRenderRoom / ADMRenderApple
+          ──→ ADMRealtime / ADMIo / ADMAudio
 C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render / mradm-engine
 所有模块 ──→ ADMCore（领域模型、错误、选项、能力）
 ```
 
 | 组件 | 职责 |
 |---|---|
-| `ADMCore` | 自有 ADM 领域模型（`AdmScene`）、错误、日志、选项、能力与语义策略 |
-| `ADMMetadata` / `ADMIo` | 由 Rust 渲染场景生成 `AdmScene`，以及 ADM AXML 回写 |
-| `ADMRender*` | EAR、VBAP、Triple Balance、HOA、HRTF 双耳与 Apple AUSpatialMixer 后端 |
+| `ADMCore` | 渲染请求与计划、错误、日志、选项、能力、DirectSpeakers 矩阵与屏幕配置的 C++ 视图 |
+| `ADMIo` | Rust 渲染场景的 C++ 入口：导入、策略模板、inspect、ADM AXML 回写 |
+| `ADMRenderRoom` / `ADMRenderApple` | room 控制薄壳；macOS AUSpatialMixer 后端（平台岛，EAR、VBAP、Triple Balance、HOA、双耳与 room 后端在 `mradm-render`） |
 | `ADMRendererFactory` | 离线渲染与实时监听共用的后端选择 |
 | `ADMAudio` | 容器编码与元数据 |
 | `ADMRealtime` | 实时监听：MonitorEngine、SceneStream、设备输出与头部追踪 |
@@ -192,7 +192,7 @@ C++ 模块 ──→ ADMDsp ──→ mradm-ffi（Rust staticlib）──→ mra
 ADM BWF / BW64 / RF64，或普通多声道 WAVE
     → 容器与 chunk 读取（mradm-wav）
     → ADM AXML 解析（mradm-adm）或声道床合成
-    → AdmScene  ← 可选语义策略改写
+    → Rust 渲染场景（mradm-scene）← 可选语义策略改写
     → RenderPlan → 渲染后端（EAR / VBAP / Triple Balance / HOA / 双耳 / Apple）
     → 后处理（响度归一化、True Peak 限制、位深转换）
     → 容器编码（WAV / CAF / FLAC / Opus MKA / IAMF / APAC）
