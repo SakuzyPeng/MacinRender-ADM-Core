@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 106,
-      "lines": 21963
+      "lines": 21776
     },
     "islands": {
       "files": 6,
@@ -14,8 +14,8 @@
       "lines": 512
     },
     "tests": {
-      "files": 189,
-      "lines": 52864
+      "files": 190,
+      "lines": 53071
     },
     "reference": {
       "files": 38,
@@ -60,7 +60,7 @@
     "src/adm_io": 364,
     "src/adm_metadata": 386,
     "src/adm_realtime": 1366,
-    "src/adm_render_common": 2816,
+    "src/adm_render_common": 2629,
     "src/adm_render_room": 283,
     "src/adm_render_room/cuda": 512,
     "src/adm_renderer_factory": 46,
@@ -87,7 +87,7 @@
     "tests/reference/spreader_mr_internal.h": 153,
     "tests/reference/triple_balance": 1620,
     "tests/reference/wav_container": 1456,
-    "tests/support": 7590,
+    "tests/support": 7797,
     "tests/tools": 1748,
     "tests/unit": 41101
   }
