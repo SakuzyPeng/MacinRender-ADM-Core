@@ -1,5 +1,6 @@
-//! Shared by the consistency tools `phase2_render`, `phase2_stream` and `phase2_scene`: the failure
-//! type and the canonical PCM wire data (formerly `tests/tools/phase2_io.h`).
+//! Shared by the consistency tools `consistency_render`, `consistency_stream` and
+//! `consistency_scene`: the failure type and the canonical PCM wire data (formerly
+//! `tests/tools/phase2_io.h`).
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;

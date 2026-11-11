@@ -694,7 +694,7 @@ mod tests {
     fn a_full_disposal_list_keeps_the_candidate_off_the_worker() {
         let manifest = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../tests/fixtures/room/phase2/room.json"
+            "/../../../tests/fixtures/room/synthetic/room.json"
         );
         let package = Arc::new(loading::load_package(manifest.as_bytes()).unwrap());
         let set = loading::prepare(&package, b"", b"", None, Quality::Exact).unwrap();

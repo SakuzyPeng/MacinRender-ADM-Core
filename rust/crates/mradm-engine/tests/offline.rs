@@ -425,7 +425,7 @@ fn room_runs_report_the_cpp_events() {
     scene_wav("objects-point", &wav, 6000, 48000);
     let scene = import(&wav);
     let input = wav.to_str().unwrap().as_bytes();
-    let manifest = repo().join("tests/fixtures/room/phase2/room.json");
+    let manifest = repo().join("tests/fixtures/room/synthetic/room.json");
     let package = Arc::new(loading::load_package(manifest.to_str().unwrap().as_bytes()).unwrap());
     let mut r = request(Kind::Room, b"binaural", input);
     r.room.package = Some(package);
@@ -533,7 +533,7 @@ fn room_meter_windows_meter_only_the_window() {
     scene_wav("objects-point", &wav, 24000, 48000);
     let scene = import(&wav);
     let input = wav.to_str().unwrap().as_bytes();
-    let manifest = repo().join("tests/fixtures/room/phase2/room.json");
+    let manifest = repo().join("tests/fixtures/room/synthetic/room.json");
     let package = Arc::new(loading::load_package(manifest.to_str().unwrap().as_bytes()).unwrap());
     let mut r = request(Kind::Room, b"binaural", input);
     r.room.package = Some(package);

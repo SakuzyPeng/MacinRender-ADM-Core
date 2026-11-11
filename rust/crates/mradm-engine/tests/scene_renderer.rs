@@ -45,7 +45,7 @@ fn config(selection: Selection, layout: &'static [u8]) -> Config<'static> {
 }
 
 fn room_config(layout: &'static [u8]) -> Config<'static> {
-    let manifest = repo().join("tests/fixtures/room/phase2/room.json");
+    let manifest = repo().join("tests/fixtures/room/synthetic/room.json");
     let mut c = config(Selection::RoomBinaural, layout);
     c.room.package = Some(Arc::new(
         loading::load_package(manifest.to_str().unwrap().as_bytes()).unwrap(),

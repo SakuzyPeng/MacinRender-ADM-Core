@@ -1,4 +1,4 @@
-//! `mr_adm_phase2_stream`: release replay of file-streaming renders (PCM consistency 3.1–4.9; in
+//! `mr_adm_consistency_stream`: release replay of file-streaming renders (PCM consistency 3.1–4.9; in
 //! Rust since 5.3 B, formerly `tests/tools/phase2_stream.cpp`). The backend comes from the same
 //! renderer resolution and preparation as the monitor; its file stream is pulled in a fixed request
 //! partition while live overrides, head orientations and seeks land at fixed output frames, so the
@@ -21,9 +21,9 @@ use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-#[path = "phase2/io.rs"]
-mod phase2_io;
-use phase2_io::{Failure, pcm, require};
+#[path = "consistency/io.rs"]
+mod consistency_io;
+use consistency_io::{Failure, pcm, require};
 
 fn renderer(name: &str) -> Result<Selection, Failure> {
     Ok(match name {
@@ -401,7 +401,7 @@ fn seek(body: &mut Body, frame: u64) -> bool {
 fn run(args: &[PathBuf]) -> Result<(), Failure> {
     require(
         args.len() == 3,
-        "usage: mr_adm_phase2_stream case.json input.wav output-directory",
+        "usage: mr_adm_consistency_stream case.json input.wav output-directory",
     )?;
     let (case, input, directory) = (&args[0], &args[1], &args[2]);
     let spec: Value = serde_json::from_slice(&fs::read(case).map_err(|e| e.to_string())?)

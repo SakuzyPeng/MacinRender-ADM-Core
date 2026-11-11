@@ -1,5 +1,5 @@
 {
-  "schema": "mradm.phase2.gates.v1",
+  "schema": "mradm.consistency.gates.v1",
   "gates": [
     {
       "kind": "kernel",

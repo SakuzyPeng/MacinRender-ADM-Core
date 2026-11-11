@@ -1028,20 +1028,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_test(NAME mr_adm_room_device_probe_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_device_probe_test.py")
-        add_custom_target(mr_adm_phase2_tools
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/phase2_common.py"
+        add_custom_target(mr_adm_consistency_tools
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"
                 --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
-            DEPENDS mradm_exe mr_adm_make_fixture mr_adm_pcm_bits mr_adm_phase2_render
-                mr_adm_phase2_scene mr_adm_phase2_stream mr_adm_phase2_kernels mr_adm_repeat_render
+            DEPENDS mradm_exe mr_adm_make_fixture mr_adm_pcm_bits mr_adm_consistency_render
+                mr_adm_consistency_scene mr_adm_consistency_stream mr_adm_consistency_kernels mr_adm_repeat_render
             USES_TERMINAL
         )
         set(_mr_scene_checkpoint_args)
         if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
             list(APPEND _mr_scene_checkpoint_args --diagnostic-checkpoints)
         endif()
-        add_test(NAME mr_adm_phase2_tool_tests
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/phase2_tools_test.py"
-                --scene "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_scene${CMAKE_EXECUTABLE_SUFFIX}"
+        add_test(NAME mr_adm_collection_tool_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/collection_tools_test.py"
+                --scene "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_consistency_scene${CMAKE_EXECUTABLE_SUFFIX}"
                 ${_mr_scene_checkpoint_args})
     endif()
 

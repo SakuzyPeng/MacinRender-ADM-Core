@@ -16,9 +16,9 @@ use std::io::{BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-#[path = "phase2/io.rs"]
-mod phase2_io;
-use phase2_io::{Failure, pcm, require};
+#[path = "consistency/io.rs"]
+mod consistency_io;
+use consistency_io::{Failure, pcm, require};
 
 // The same locale-independent, correctly rounded parser as the mradm command line (3.5).
 fn f64_of(text: &str) -> Result<f64, Failure> {
@@ -316,7 +316,7 @@ fn samples_wav(path: &Path, depth: u32) -> Result<(u32, u32, Vec<f32>), Failure>
 fn run(args: &[PathBuf]) -> Result<(), Failure> {
     require(
         args.len() == 3,
-        "usage: mr_adm_phase2_render case.json input.wav output-directory",
+        "usage: mr_adm_consistency_render case.json input.wav output-directory",
     )?;
     let (case, input, directory) = (&args[0], &args[1], &args[2]);
     let spec: Value = serde_json::from_slice(&fs::read(case).map_err(|e| e.to_string())?)

@@ -19,7 +19,7 @@ const FRAMES: u64 = 24000;
 
 fn manifest() -> String {
     format!(
-        "{}/../../../tests/fixtures/room/phase2/room.json",
+        "{}/../../../tests/fixtures/room/synthetic/room.json",
         env!("CARGO_MANIFEST_DIR")
     )
 }

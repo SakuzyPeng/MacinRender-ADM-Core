@@ -39,7 +39,7 @@ fn scope(call: &mut dyn FnMut() -> mradm_dsp::Result<()>) -> Result<(), Fault> {
 fn room_switch_disposal_keeps_the_worker_allocation_free() {
     let manifest = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../../tests/fixtures/room/phase2/room.json"
+        "/../../../tests/fixtures/room/synthetic/room.json"
     );
     let package = Arc::new(loading::load_package(manifest.as_bytes()).unwrap());
     let set = loading::prepare(&package, b"", b"", None, Quality::Exact).unwrap();

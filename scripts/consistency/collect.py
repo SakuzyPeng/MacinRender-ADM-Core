@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import phase2_common as common
+import collection as common
 from build_info import collect, read_cache
 from render_scene_checkpoint import RENDER_SCENE_STAGES, require_render_scene_checkpoints
 
@@ -28,7 +28,7 @@ def run(command, log, trace=None, extra_env=None):
 
 def load_uninstrumented_baseline(root, source, config):
     baseline = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-    if (baseline.get('schema') != 'mradm.phase2.v1' or baseline.get('complete') is not True
+    if (baseline.get('schema') != 'mradm.consistency.collection.v1' or baseline.get('complete') is not True
             or baseline.get('source') != source or baseline.get('config') != config):
         raise ValueError('baseline schema/source/config/completeness mismatch')
     if (baseline.get('diagnostics') is not False
@@ -106,7 +106,8 @@ def main():
     build_record, build_errors = collect(build)
     if build_errors:
         raise ValueError('invalid build provenance: ' + '; '.join(build_errors))
-    manifest = {'schema': 'mradm.phase2.v1', 'complete': False, 'config': args.config, 'diagnostics': diagnostics,
+    manifest = {'schema': 'mradm.consistency.collection.v1', 'complete': False, 'config': args.config,
+                'diagnostics': diagnostics,
                 'source': source, 'offline': offline, 'scene': scenes, 'stream': streams, 'sofa': common.SOFA_FIXTURES,
                 'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
                 'room_96k': common.ROOM_96K_FIXTURES, 'build': build_record,
@@ -160,7 +161,7 @@ def main():
                     shutil.move(bits, destination)
                 else:
                     manifest['comparisons'][name + '-new-process'] = common.require_same(destination, bits); bits.unlink()
-            run([binaries['mr_adm_phase2_render'], case, fixture, work / 'repeat'], out / 'logs' / (name + '-repeat.log'))
+            run([binaries['mr_adm_consistency_render'], case, fixture, work / 'repeat'], out / 'logs' / (name + '-repeat.log'))
             for repeat in (1, 2):
                 bits = work / 'repeat' / f'pass-{repeat}.pcmbits'
                 manifest['comparisons'][name + f'-same-process-{repeat}'] = common.require_same(destination, bits)
@@ -171,7 +172,7 @@ def main():
             case = out / 'cases' / (name + '.json'); common.save(case, row)
             for process in (1, 2):
                 directory = work / f'scene{process}'
-                run([binaries['mr_adm_phase2_scene'], case, directory], out / 'logs' / f'{name}-process{process}.log',
+                run([binaries['mr_adm_consistency_scene'], case, directory], out / 'logs' / f'{name}-process{process}.log',
                     out / 'checkpoints' / name if diagnostics and process == 1 else None)
                 if diagnostics and process == 1:
                     common.canonicalize_device_trace(out / 'checkpoints' / name, row)
@@ -201,7 +202,7 @@ def main():
             destination = out / 'pcm' / (name + '.pcmbits')
             for process in (1, 2):
                 directory = work / f'stream{process}'
-                run([binaries['mr_adm_phase2_stream'], case, fixture, directory], out / 'logs' / f'{name}-process{process}.log')
+                run([binaries['mr_adm_consistency_stream'], case, fixture, directory], out / 'logs' / f'{name}-process{process}.log')
                 first, second = (directory / f'pass-{i}.pcmbits' for i in (1, 2))
                 manifest['comparisons'][name + f'-same-process{process}'] = common.require_same(first, second)
                 if process == 1:
@@ -211,7 +212,7 @@ def main():
                 shutil.rmtree(directory)
         for process in (1, 2):
             directory = work / f'kernels{process}'
-            run([binaries['mr_adm_phase2_kernels'], directory, out / 'fixtures'], out / 'logs' / f'kernels{process}.log',
+            run([binaries['mr_adm_consistency_kernels'], directory, out / 'fixtures'], out / 'logs' / f'kernels{process}.log',
                 out / 'kernel-checkpoints' if diagnostics and process == 1 else None)
             for path in sorted((directory / 'pass-1').iterdir()):
                 other = directory / 'pass-2' / path.name
@@ -299,7 +300,7 @@ def require_scene_checkpoints(root, row):
                                                     '.21-effective.f32', '.21-effective-fields.i32', '.40-render.f32')]
         patterns += [prefix + '-current' + suffix for suffix in backend_patterns[row['backend']]]
     # The replay switches backend only for stereo outputs and Triple Balance, never for a room
-    # (mr_adm_phase2_scene, rust/crates/mradm-ffi/examples/phase2_scene.rs).
+    # (mr_adm_consistency_scene, rust/crates/mradm-ffi/examples/consistency_scene.rs).
     if row['backend'] != 'room-binaural' and (row['backend'] == 'triple-balance' or row['layout'] in ('0+2+0', 'binaural')):
         patterns += ['scene/e1-*.35-outgoing.f32', 'scene/e1-*.36-incoming.f32']
         incoming = 'binaural' if row['backend'] == 'vbap' or 'sofa' in row else 'vbap'

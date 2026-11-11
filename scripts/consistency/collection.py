@@ -1,4 +1,4 @@
-"""Strict, portable evidence primitives for the Rust phase-2 baseline."""
+"""Strict, portable evidence primitives for the cross-platform consistency collection."""
 import array
 import hashlib
 import importlib.util
@@ -17,9 +17,9 @@ SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support'
 BINARY_SUFFIXES = {'.bin', '.sofa', '.f32le', '.f32', '.f64', '.u32'}
 TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml',
                  '.dat', '.manifest'}
-REPLAY_TOOLS = ('mr_adm_phase2_render', 'mr_adm_phase2_stream', 'mr_adm_phase2_scene')
+REPLAY_TOOLS = ('mr_adm_consistency_render', 'mr_adm_consistency_stream', 'mr_adm_consistency_scene')
 BUILD_TOOLS = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', *REPLAY_TOOLS,
-               'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
+               'mr_adm_consistency_kernels', 'mr_adm_repeat_render')
 BUILD_CONFIGURATION_FILES = ('CMakeCache.txt', 'compile_commands.json', 'consistency-dependencies.json',
                              'rust-dependencies.json')
 
@@ -169,10 +169,10 @@ JSON_FIXTURES = {
 }
 
 
-# The synthetic room pack (tests/tools/make_room_phase2_fixtures.py). Its phase table came from the
+# The synthetic room pack (tests/tools/make_consistency_room.py). Its phase table came from the
 # platform libm, so these committed bytes are the input on every platform, never regenerated.
 ROOM_FIXTURE_ROOT = 'tests/fixtures/room'
-ROOM_FIXTURE_DIR = 'tests/fixtures/room/phase2'
+ROOM_FIXTURE_DIR = 'tests/fixtures/room/synthetic'
 ROOM_FIXTURES = {
     'bands.f64': '65c5345153d2f48b057ce282be27f774447677c4afb9cde391a88c6bd1acdb29',
     'delays.f64': 'f5a9165f9a4852698b1b7bd7512f2f602da6b2688a9a4106be78a67455a7b044',
@@ -188,9 +188,9 @@ ROOM_FIXTURES = {
 }
 
 
-# PCM consistency 5.7: the same pack at 96 kHz (make_room_phase2_fixtures.py --derive-96k), whose
+# PCM consistency 5.7: the same pack at 96 kHz (make_consistency_room.py --derive-96k), whose
 # objects without an interpolation length ramp over default_interp_ms at the room's own rate.
-ROOM_96K_FIXTURE_DIR = 'tests/fixtures/room/phase2-96k'
+ROOM_96K_FIXTURE_DIR = 'tests/fixtures/room/synthetic-96k'
 ROOM_96K_FIXTURES = dict(ROOM_FIXTURES, **{
     'hrir.json': '9a601f5c48145f246d2621bd78dd90e23bfc8c10114b0ee36046baa9cb9d1bf9',
     'room.json': '8b1e6739485ea19ae47c8a6d18d8317094c937b4fadfb7f448fa6c7443e9c15f',
@@ -236,7 +236,7 @@ def offline_cases():
             (line.split('|') for line in match.group(1).splitlines())]
     if len(rows) != 16:
         raise ValueError('review legacy matrix changes explicitly')
-    extra = load_module('phase2_pcm_cases', ROOT / 'scripts/consistency/compare-pcm-mix.py').CASES
+    extra = load_module('consistency_pcm_cases', ROOT / 'scripts/consistency/compare-pcm-mix.py').CASES
     extra = list(extra) + [
         ('scene-binaural-point', 'objects-point', ['--renderer', 'saf-binaural', '--output-layout', 'binaural']),
         ('scene-binaural-cloud', 'objects-extent-multi', ['--renderer', 'saf-binaural', '--output-layout', 'binaural', '--binaural-spread-mode', 'cloud']),
@@ -683,7 +683,7 @@ METER_CHANNELS = (2, 12)
 
 
 def kernel_outputs():
-    """Measurement files written by the mr_adm_phase2_kernels probe, per pass."""
+    """Measurement files written by the mr_adm_consistency_kernels probe, per pass."""
     names = ['fft-twiddles.10-libm.f64', 'fft-twiddles.20-table.f32']
     names += [f'fft-{n}.{part}' for n in FFT_SIZES for part in ('10-input.f32', '20-spectrum.c32', '30-inverse.f32')]
     names += ['scene.10-input.f32', 'scene.20-output.f32']
@@ -809,19 +809,19 @@ def build_configuration(build):
 
 
 def validate_build_stamp(build, source, binaries):
-    stamp = json.loads((build / 'phase2-build-stamp.json').read_text(encoding='utf-8'))
+    stamp = json.loads((build / 'consistency-build-stamp.json').read_text(encoding='utf-8'))
     if (stamp.get('source') != source
             or stamp.get('binaries') != {name: digest(path.read_bytes()) for name, path in binaries.items()}
             or stamp.get('configuration') != build_configuration(build)):
-        raise ValueError('stale source/binaries/configuration; build target mr_adm_phase2_tools first')
+        raise ValueError('stale source/binaries/configuration; build target mr_adm_consistency_tools first')
 
 
 def stamp_build(build):
     """Called by CMake only after all measured executables were built."""
     import os
     binaries = {name: digest((build / (name + ('.exe' if os.name == 'nt' else ''))).read_bytes()) for name in BUILD_TOOLS}
-    save(build / 'phase2-build-stamp.json', {'source': source_fingerprint(), 'binaries': binaries,
-                                           'configuration': build_configuration(build)})
+    save(build / 'consistency-build-stamp.json', {'source': source_fingerprint(), 'binaries': binaries,
+                                                  'configuration': build_configuration(build)})
 
 
 if __name__ == '__main__':

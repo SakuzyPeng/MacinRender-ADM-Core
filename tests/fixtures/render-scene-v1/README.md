@@ -5,7 +5,7 @@ These are frozen little-endian word streams from the production C++
 `46b3ed806d9a2d39275e3e3f36a39fb084d1627b`, emitted by a temporary standalone
 Apple Clang 21 C++20 Debug probe with `MR_ADM_CONSISTENCY_DIAGNOSTICS` enabled.
 The probe only serializes metadata; it does not render audio. The Python validator
-did not generate these fixtures. SHA-256 values are pinned in `phase2_tools_test.py`.
+did not generate these fixtures. SHA-256 values are pinned in `collection_tools_test.py`.
 
 - `empty.i32`: 48 kHz, three channels, `0x100000003` frames, empty scene lists.
 - `defaults.i32`: the same info with one default programme, content, object and HOA

@@ -22,7 +22,7 @@ fn replay(trace: &Path, selection: Selection, layout: &'static [u8]) -> PathBuf 
     let _ = std::fs::remove_dir_all(trace);
     // SAFETY: the only test of this binary sets it between its replays, before any stream exists.
     unsafe { std::env::set_var("MR_ADM_TRACE_DIR", trace) };
-    let manifest = repo().join("tests/fixtures/room/phase2/room.json");
+    let manifest = repo().join("tests/fixtures/room/synthetic/room.json");
     let package = (selection == Selection::RoomBinaural)
         .then(|| Arc::new(loading::load_package(manifest.to_str().unwrap().as_bytes()).unwrap()));
     let renderer = renderer::Config {

@@ -28,7 +28,7 @@ impl Fixture {
     fn new() -> Self {
         let manifest = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../tests/fixtures/room/phase2/room.json"
+            "/../../../tests/fixtures/room/synthetic/room.json"
         );
         let mut profile = ptr::null_mut();
         assert_eq!(
