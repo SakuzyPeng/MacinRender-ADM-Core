@@ -1,4 +1,4 @@
-//! The VBAP loudspeaker backend (`saf-vbap`, PCM consistency 4.5): the per-channel gain tables
+//! The VBAP loudspeaker backend (`saf-vbap`): the per-channel gain tables
 //! of Objects (VBAP / MDAP after channel lock and divergence) and DirectSpeakers (label,
 //! position or matrix routing and the 22.2 LFE routing), compiled into one `PcmMixer` plan.
 //! Moved from the C++ `vbap_renderer` with the same block precedence, arithmetic, checkpoints,

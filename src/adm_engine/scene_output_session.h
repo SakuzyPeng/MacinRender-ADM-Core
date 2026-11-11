@@ -44,7 +44,7 @@ struct SceneDeviceStatus {
 };
 
 // The session itself (pull, the stereo feed's prefetch, HpTF and peak guard, volume, epochs,
-// status) is Rust mradm-engine `scene::output` (PCM consistency 5.4 C); this shell owns the device.
+// status) is Rust mradm-engine `scene::output`; this shell owns the device.
 class SceneOutputSession {
   public:
     [[nodiscard]] static Result<std::unique_ptr<SceneOutputSession>>

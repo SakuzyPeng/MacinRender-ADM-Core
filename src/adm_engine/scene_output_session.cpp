@@ -2,13 +2,13 @@
 
 #include <utility>
 
+#include "../adm_render_common/ffi_error.h"
 #include "../adm_render_common/routing_ffi.h"
-#include "../adm_render_common/rust_error.h"
 #include "../adm_render_common/speaker_layouts.h"
 
 namespace mradm::realtime {
 namespace {
-using live_scene::RustError;
+using live_scene::FfiError;
 struct Destroy {
     void operator()(MradmEngineSceneOutput* handle) const noexcept { mradm_engine_scene_output_destroy(handle); }
 };
@@ -64,7 +64,7 @@ Result<std::unique_ptr<SceneOutputSession>> SceneOutputSession::create_with_devi
     const auto format = stream->output_format();
     auto handle = std::make_unique<Handle>();
     {
-        RustError error;
+        FfiError error;
         MradmEngineSceneOutput* raw = nullptr;
         if (const auto code = mradm_engine_scene_output_create(stream_handle(*stream),
                                                                protect_stereo ? 1U : 0U,
@@ -125,7 +125,7 @@ void SceneOutputSession::pause() {
 
 Result<void> SceneOutputSession::begin_epoch(std::uint64_t epoch, std::int64_t target) {
     const std::lock_guard lock(control_);
-    RustError error;
+    FfiError error;
     // Reject a stale epoch before disturbing the current device queue.
     if (const auto code = mradm_engine_scene_output_check_epoch(
             handle_->rust.get(), epoch, error.message(), error.message_len(), error.context(), error.context_len());
@@ -149,7 +149,7 @@ Result<void> SceneOutputSession::begin_epoch(std::uint64_t epoch, std::int64_t t
 
 Result<void> SceneOutputSession::set_volume(float gain) {
     const std::lock_guard lock(control_);
-    RustError error;
+    FfiError error;
     if (const auto code = mradm_engine_scene_output_set_volume(
             handle_->rust.get(), gain, error.message(), error.message_len(), error.context(), error.context_len());
         code != 0) {
@@ -168,7 +168,7 @@ Result<void> SceneOutputSession::set_hptf(const std::optional<render_common::Hpt
     if (coeffs.has_value()) {
         record = render_common::hptf_record(*coeffs);
     }
-    RustError error;
+    FfiError error;
     if (const auto code = mradm_engine_scene_output_set_hptf(handle_->rust.get(),
                                                              record ? &*record : nullptr,
                                                              revision,
@@ -194,7 +194,7 @@ SceneOutputSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMo
 }
 Result<void> SceneOutputSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
     // Rust designs for the fixed stream rate and serialises publication independently of the output control lock.
-    RustError error;
+    FfiError error;
     if (const auto code = mradm_engine_scene_output_set_hptf_settings(handle_->rust.get(),
                                                                       settings.handle.get(),
                                                                       error.message(),

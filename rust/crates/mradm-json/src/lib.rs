@@ -1,4 +1,4 @@
-//! JSON compatible with the project's former nlohmann/json 3.12.0 handling (PCM consistency 4.4).
+//! JSON compatible with the project's former nlohmann/json 3.12.0 handling.
 //!
 //! Parsing follows nlohmann's acceptance: an optional UTF-8 BOM, RFC 8259 grammar with strict
 //! UTF-8 strings, no nesting limit, later duplicate keys replacing earlier ones,

@@ -1,7 +1,7 @@
 name: Consistency
 
 # Rust phase 2 is closed for the versioned Release matrix (RUST_PHASE2_CLOSEOUT.md).
-# scripts/consistency/phase2-gates.json defines the exact PCM and kernel equality gates.
+# scripts/consistency/gates.json defines the exact PCM and kernel equality gates.
 # A is default; B controls C/C++ floating point only. RustFFT uses its scalar planner in both.
 # Each job rebuilds in place for diagnostic noninterference and bounded attribution.
 
@@ -117,7 +117,7 @@ jobs:
       - name: Build
         run: >
           cmake --build build/consistency-${{ matrix.config }}
-          --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
+          --target mr_adm_consistency_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
 
       - name: C ABI exports
         run: python3 scripts/quality/check-capi-exports.py "build/consistency-${{ matrix.config }}/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
@@ -153,11 +153,11 @@ jobs:
           python3 tests/unit/consistency_build_test.py
           python3 tests/unit/consistency_checkpoints_test.py
           python3 tests/unit/fft_benchmark_test.py
-          python3 tests/unit/phase2_tools_test.py --scene build/consistency-${{ matrix.config }}/mr_adm_phase2_scene
+          python3 tests/unit/collection_tools_test.py --scene build/consistency-${{ matrix.config }}/mr_adm_consistency_scene
 
-      - name: Collect Rust phase-2 baseline
+      - name: Collect consistency evidence
         run: >
-          python3 scripts/consistency/run-rust-phase2.py
+          python3 scripts/consistency/collect.py
           build/consistency-${{ matrix.config }} out/${{ matrix.platform }} --config ${{ matrix.config }}
 
       # The build record travels with the PCM. A controlled-build result only means something
@@ -187,8 +187,8 @@ jobs:
       - name: Rebuild and collect diagnostics
         run: |
           cmake -S . -B build/consistency-${{ matrix.config }} -DMR_ADM_CONSISTENCY_DIAGNOSTICS=ON
-          cmake --build build/consistency-${{ matrix.config }} --target mr_adm_phase2_tools
-          python3 scripts/consistency/run-rust-phase2.py build/consistency-${{ matrix.config }} out/${{ matrix.platform }}-diagnostic --config ${{ matrix.config }} --baseline out/${{ matrix.platform }}
+          cmake --build build/consistency-${{ matrix.config }} --target mr_adm_consistency_tools
+          python3 scripts/consistency/collect.py build/consistency-${{ matrix.config }} out/${{ matrix.platform }}-diagnostic --config ${{ matrix.config }} --baseline out/${{ matrix.platform }}
 
       - name: Upload diagnostic baseline
         if: always()
@@ -310,7 +310,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/win-canon --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
+          cmake --build build/win-canon --target mr_adm_consistency_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
 
       - name: C ABI exports
         shell: pwsh
@@ -352,16 +352,16 @@ jobs:
           if errorlevel 1 exit /b 1
           python tests/unit/fft_benchmark_test.py
           if errorlevel 1 exit /b 1
-          python tests/unit/phase2_tools_test.py --scene build/win-canon/mr_adm_phase2_scene.exe
+          python tests/unit/collection_tools_test.py --scene build/win-canon/mr_adm_consistency_scene.exe
 
       # One render script for all three platforms. cmd loads the MSVC environment first so the
       # binaries find their runtime, then hands off to Git Bash so the matrix has a single
       # implementation rather than a PowerShell copy that can drift.
-      - name: Collect Rust phase-2 baseline
+      - name: Collect consistency evidence
         shell: cmd
         run: |
           call "%VCVARS64%"
-          python scripts/consistency/run-rust-phase2.py build/win-canon out/windows --config ${{ matrix.config }}
+          python scripts/consistency/collect.py build/win-canon out/windows --config ${{ matrix.config }}
 
       # scan-fp.sh needs a disassembler; Git Bash ships none, so it records that the scan was
       # skipped instead of failing. build-info.sh still captures whether /fp:precise and the
@@ -390,9 +390,9 @@ jobs:
           call "%VCVARS64%"
           cmake -S . -B build/win-canon -DMR_ADM_CONSISTENCY_DIAGNOSTICS=ON
           if errorlevel 1 exit /b 1
-          cmake --build build/win-canon --target mr_adm_phase2_tools
+          cmake --build build/win-canon --target mr_adm_consistency_tools
           if errorlevel 1 exit /b 1
-          python scripts/consistency/run-rust-phase2.py build/win-canon out/windows-diagnostic --config ${{ matrix.config }} --baseline out/windows
+          python scripts/consistency/collect.py build/win-canon out/windows-diagnostic --config ${{ matrix.config }} --baseline out/windows
 
       - name: Upload diagnostic baseline
         if: always()
@@ -427,14 +427,14 @@ jobs:
           path: baselines
 
       # Cross-platform differences are measured, except the bit-equality gates in
-      # scripts/consistency/phase2-gates.json (ADR 0015). Every report is written before failing.
+      # scripts/consistency/gates.json (ADR 0015). Every report is written before failing.
       - name: Compare both configurations and diagnostic checkpoints
         shell: bash
         run: |
           status=0
           for config in a b; do
             for suffix in "" "-diagnostic"; do
-              python3 scripts/consistency/compare-rust-phase2.py \
+              python3 scripts/consistency/compare-evidence.py \
                 --output "consistency-report-${config}${suffix}.json" \
                 "baselines/consistency-macos-${config}${suffix}" \
                 "baselines/consistency-linux-${config}${suffix}" \

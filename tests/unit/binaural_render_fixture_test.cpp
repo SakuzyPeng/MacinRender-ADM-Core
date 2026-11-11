@@ -65,19 +65,19 @@ class FileGuard {
 
 // An imported scene with its Rust render-scene handle, as RenderService plans carry it; the
 // binaural backend plans from the handle (PCM consistency 4.7 B).
-struct RustScene : mradm::AdmScene {
+struct ImportedScene : mradm::AdmScene {
     std::shared_ptr<const mradm::detail::RenderSceneHandle> handle;
 };
 // The scene a plan copies, without slicing the handle off by accident.
-const mradm::AdmScene& adm(const RustScene& scene) {
+const mradm::AdmScene& adm(const ImportedScene& scene) {
     return scene;
 }
-mradm::Result<RustScene> import_rust_scene(const std::string& path) {
+mradm::Result<ImportedScene> import_scene_with_handle(const std::string& path) {
     auto imported = mradm::io::RenderScene::import(path, nullptr);
     if (!imported) {
         return tl::make_unexpected(imported.error());
     }
-    return RustScene{mradm::io::adm_scene(*imported), imported->handle()};
+    return ImportedScene{mradm::io::adm_scene(*imported), imported->handle()};
 }
 
 bool check(bool condition, const char* msg) {
@@ -1101,7 +1101,7 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
                                                          const mradm::LiveOverrides* overrides,
                                                          const mradm::ListenerOrientation* orient = nullptr,
                                                          std::string_view policy = {}) {
-    auto scene = import_rust_scene(input.string());
+    auto scene = import_scene_with_handle(input.string());
     if (!check(scene.has_value(), "stream: import scene")) {
         return std::nullopt;
     }
@@ -1161,7 +1161,7 @@ std::optional<std::vector<float>>
 render_binaural_window(const std::filesystem::path& input,
                        const mradm::ListenerOrientation& orientation,
                        mradm::BinauralSpreadMode spread_mode = mradm::BinauralSpreadMode::automatic) {
-    auto scene = import_rust_scene(input.string());
+    auto scene = import_scene_with_handle(input.string());
     if (!check(scene.has_value(), "headtrack-window: import scene")) {
         return std::nullopt;
     }
@@ -1201,7 +1201,7 @@ render_binaural_window(const std::filesystem::path& input,
 std::optional<std::vector<float>> render_binaural_stream_with_mid_override(const std::filesystem::path& input,
                                                                            std::size_t boundary_frames,
                                                                            const mradm::LiveOverrides& overrides) {
-    auto scene = import_rust_scene(input.string());
+    auto scene = import_scene_with_handle(input.string());
     if (!check(scene.has_value(), "mid-override: import scene")) {
         return std::nullopt;
     }
@@ -1249,7 +1249,7 @@ bool verify_binaural_stream_matches_window() {
     const auto in = write_fixture(30.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value(), "stream: import scene for reference")) {
         return false;
     }
@@ -1397,7 +1397,7 @@ bool verify_binaural_stream_seek() {
         const FileGuard input_guard(input);
         const auto output = temp_path("mr_binaural_seek_window", ".wav");
         const FileGuard output_guard(output);
-        const auto scene = import_rust_scene(input.string());
+        const auto scene = import_scene_with_handle(input.string());
         if (!check(scene.has_value(), "stream-seek: import scene")) {
             return false;
         }
@@ -1458,7 +1458,7 @@ bool verify_binaural_stream_gain_override() {
     const auto in = write_fixture(30.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "override: import scene with an object")) {
         return false;
     }
@@ -1496,7 +1496,7 @@ bool verify_binaural_stream_live_gain_ramp() {
     const auto in = write_fixture(ObjectFixtureOptions{.duration = std::chrono::milliseconds{400}}, 16384U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "gain-ramp: import scene")) {
         return false;
     }
@@ -1544,7 +1544,7 @@ bool verify_binaural_stream_topology_crossfade() {
         write_fixture(ObjectFixtureOptions{.duration = std::chrono::milliseconds{400}, .width = 1.0F}, 16384U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "topology-xfade: import scene")) {
         return false;
     }
@@ -1581,7 +1581,7 @@ bool verify_binaural_stream_topology_reprepare() {
     const auto in = write_fixture(ObjectFixtureOptions{.width = 1.0F}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "reprepare: import scene with an object")) {
         return false;
     }
@@ -1666,7 +1666,7 @@ bool verify_binaural_stream_extent_policy_matches_live() {
                                                            .cartesian = cartesian},
                                       4096U);
         FileGuard in_guard(in);
-        auto scene = import_rust_scene(in.string());
+        auto scene = import_scene_with_handle(in.string());
         if (!check(scene.has_value() && !scene->objects.empty(), "extent-policy: import fixture")) {
             return false;
         }
@@ -1698,7 +1698,7 @@ bool verify_binaural_head_tracking() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "headtrack: import scene with an object")) {
         return false;
     }
@@ -1744,7 +1744,7 @@ bool verify_binaural_head_tracking() {
     adm_locked_options.object_head_locked = true;
     const auto adm_locked_in = write_fixture(adm_locked_options, 8192U);
     FileGuard adm_locked_guard(adm_locked_in);
-    auto adm_locked_scene = import_rust_scene(adm_locked_in.string());
+    auto adm_locked_scene = import_scene_with_handle(adm_locked_in.string());
     if (!check(adm_locked_scene.has_value() && !adm_locked_scene->objects.empty(),
                "headtrack: import ADM head-locked object")) {
         return false;
@@ -1830,7 +1830,7 @@ bool verify_binaural_head_locked_timeline() {
     const auto in = write_head_locked_timeline_fixture(k_frames);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
                    scene->objects.front().tracks.front().blocks.size() == 2U,
                "headtrack-timeline: import two Objects blocks")) {
@@ -1879,7 +1879,7 @@ bool verify_binaural_head_tracking_dynamic() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{400}, 19200U);
     FileGuard in_guard(in);
 
-    auto scene = import_rust_scene(in.string());
+    auto scene = import_scene_with_handle(in.string());
     if (!check(scene.has_value() && !scene->objects.empty(), "headtrack-dyn: import scene")) {
         return false;
     }

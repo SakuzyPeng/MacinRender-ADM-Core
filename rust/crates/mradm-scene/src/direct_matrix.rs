@@ -1,5 +1,5 @@
-//! DirectSpeakers label-routing matrix JSON, `mradm.direct-speakers-matrix.v1` (PCM consistency
-//! 4.4). Moved from the C++ `direct_speakers_matrix.cpp` with the same checks, check order and
+//! DirectSpeakers label-routing matrix JSON, `mradm.direct-speakers-matrix.v1`.
+//! Moved from the C++ `direct_speakers_matrix.cpp` with the same checks, check order and
 //! messages; only the text of JSON syntax errors is the project's own. Every error is
 //! `invalid_argument` with the caller's source label as context.
 use crate::error::{Context, Error, Result};

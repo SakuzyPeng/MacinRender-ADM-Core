@@ -1,4 +1,4 @@
-//! The realtime monitor (formerly the C++ `MonitorEngine`, PCM consistency 5.5 A): a worker renders
+//! The realtime monitor (formerly the C++ `MonitorEngine`): a worker renders
 //! ahead into an SPSC ring that the device callback drains. The worker applies queued overrides,
 //! seeks (cancellable, with the device flush deferred while paused), listener orientations and
 //! backend switches (a synchronous seek or a background warmup, then a 2048-frame crossfade or, for

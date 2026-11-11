@@ -1,7 +1,7 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
-// Locale-independent decimal parameters (PCM consistency 3.5); see mradm-dsp `decimal`. Rust's
+// Locale-independent decimal parameters; see mradm-dsp `decimal`. Rust's
 // correctly rounded parser; `single` != 0 rounds the text once to binary32 (widened exactly).
 // Status values follow adm::ErrorCode.
 #ifdef __cplusplus

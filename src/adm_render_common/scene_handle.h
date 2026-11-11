@@ -9,8 +9,8 @@
 #include "../adm_metadata/scene_ffi.h"
 
 namespace mradm::detail {
-// The imported Rust render scene (mradm-scene) behind RenderPlan::scene_handle; every backend reads
-// it (PCM consistency 4.5, the Apple island since 5.6 B).
+// The imported Rust render scene (mradm-scene) behind RenderPlan::scene_handle; every backend,
+// the Apple island included, reads it.
 struct RenderSceneHandle {
     explicit RenderSceneHandle(MradmSceneHandle* scene) : raw(scene) {}
     RenderSceneHandle(const RenderSceneHandle&) = delete;

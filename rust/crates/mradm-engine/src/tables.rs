@@ -1,4 +1,4 @@
-//! Discovery documents (PCM consistency 5.2 A), moved from the C++ engine's `capability_json`,
+//! Discovery documents, moved from the C++ engine's `capability_json`,
 //! `layout_table`, `format_table`, `input_layout_json` and `support_matrix`. Each document is
 //! byte-identical to its former nlohmann `dump(2)`: keys in byte order, floats widened to double.
 use crate::catalog::{self, Backend, Layout, Mode, Platform};

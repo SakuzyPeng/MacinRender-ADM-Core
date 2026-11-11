@@ -2,7 +2,7 @@
 """Regenerate the project-owned off-axis SOFA fixture (numpy/netCDF4 required).
 
 CI reads the committed bytes; it never regenerates or downloads SOFA inputs.
-After intentional regeneration, update the pinned SHA-256 in phase2_common.py.
+After intentional regeneration, update the pinned SHA-256 in collection.py.
 """
 from itertools import product
 from pathlib import Path

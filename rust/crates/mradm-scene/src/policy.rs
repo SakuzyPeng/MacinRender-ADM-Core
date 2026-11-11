@@ -1,4 +1,4 @@
-//! Semantic policy `mradm.semantic-policy.v1` (PCM consistency 4.4): parsing, rule matching,
+//! Semantic policy `mradm.semantic-policy.v1`: parsing, rule matching,
 //! merging and application to the render scene. Moved from the C++ `semantic_policy.cpp` with the
 //! same validation order, messages, match rules and last-write-wins merge; the arithmetic is the
 //! existing `mradm_dsp::semantic_policy`. JSON follows nlohmann/json through `mradm-json`.

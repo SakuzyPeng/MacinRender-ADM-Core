@@ -1,4 +1,4 @@
-//! Seconds to sample frames (PCM consistency 3.6, audit S06).
+//! Seconds to sample frames.
 //!
 //! The output trim, the preview window and Monitor seek / loop points all name a time in seconds.
 //! The trim used `llround(seconds * rate)` while Monitor truncated toward zero, so the same time

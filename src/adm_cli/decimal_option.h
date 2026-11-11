@@ -11,7 +11,7 @@
 namespace mradm::cli {
 
 // A floating-point option parsed by the project's locale-independent, correctly rounded parser
-// (PCM consistency 3.5) instead of CLI11's strtold, whose long double differs by platform; float
+// instead of CLI11's strtold, whose long double differs by platform; float
 // targets are rounded once from the decimal text. The inclusive range is checked on the result.
 template <typename T>
 CLI::Option* add_decimal_option(CLI::App& app,

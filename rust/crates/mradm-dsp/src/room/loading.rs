@@ -1,4 +1,4 @@
-//! Room package and HRIR loading (PCM consistency 4.6, moved from the private FFI): bounded file
+//! Room package and HRIR loading (formerly behind the private FFI): bounded file
 //! reads, the room profile with its arrays, native SOFA, HRTF collection and prepared-bank
 //! manifests, and the weak preparation caches that share immutable data between Scene and file
 //! sessions without keeping inactive rooms alive. Paths arrive as the caller's UTF-8 bytes and

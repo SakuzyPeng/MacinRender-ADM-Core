@@ -1,9 +1,9 @@
-//! The offline driver (PCM consistency 4.5): reads the input in blocks, renders them with a
+//! The offline driver: reads the input in blocks, renders them with a
 //! prepared `PcmMixer` plan (loudspeakers) or HOA encoder plan and meters the written frames,
 //! moved from the C++ `render_speaker_pcm` and HOA `render_window` with the same block size,
 //! window and pre-roll rules, checkpoints and meter order. The caller steps it one block at a
 //! time: between `render` and `commit` it writes the emitted frames, and it owns cancellation
-//! and progress reporting. Triple Balance's size and D-mode processors (4.6) run inside the
+//! and progress reporting. Triple Balance's size and D-mode processors run inside the
 //! driver after the gain mix, as the C++ block processor did.
 use mradm_dsp::diagnostics::{ENABLED, Words, process};
 use mradm_dsp::ear_post::{FilterBank, Processor};
@@ -507,7 +507,7 @@ impl MeterWorker {
 /// object smoothing interpolates across. Loudspeaker mixing is stateless at block edges, so a
 /// window starts at its own block. HOA's 1024-frame diffuse delay line and EAR's decorrelation
 /// overlap and compensation delay are refilled by one aligned pre-roll block. A stateful Triple
-/// Balance stage needs every block from frame 0. File-stream seeks start here too (4.9).
+/// Balance stage needs every block from frame 0. File-stream seeks start here too.
 pub(crate) fn window_start(engine: &Engine, target: u64, block_size: u64) -> u64 {
     if engine.is_hoa() || engine.is_ear() {
         if target >= block_size {

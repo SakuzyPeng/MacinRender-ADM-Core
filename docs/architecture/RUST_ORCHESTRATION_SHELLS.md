@@ -17,7 +17,7 @@
 | A（`172b8df`） | `vbap` / `ear` / `hoa` / `triple_balance` / `binaural` / `room` 六个后端的 `IRenderer` 壳；只剩测试在用的 `speaker_pcm`（准备、离线驱动、文件流式）与 `HrtfState`；公开头 `include/adm/render_{vbap,ear,hoa,triple_balance,binaural,room}.h` 与 5 个 CMake 库目标（用户决定：SDK 头在 5.6 移出） | 壳与驱动移到 `tests/support/engine_renderer`（`mr_adm_engine_renderer_test_support`），测试照旧经 `create_*_renderer` 驱动；生产仍要的矩阵、屏幕、实时编辑与 `EnginePrepared` 记录留在 `src/adm_render_common/engine_records`；CLI `backends` / `layouts` 经新增的 `RenderService::backend_capabilities` 取能力表 |
 | B（`691192e`，维护者修正 `e777cc9`、`d52f6e9`、`eb17077`） | Apple 岛的 `build_bus_plans` 与 `prepare` 里的检查、日志、文字与算术：DirectSpeakers 路由（标签 / 位置 / 矩阵 / LFE 旁路）、对象块的生效块、通道锁、发散与 extent 云、AU 坐标约定、22.2 LFE 判定 | `mradm-render` `apple::prepare`；岛经 `mradm_render_apple_prepare`（`src/adm_apple/apple_plan_ffi.h`）读回总线与事件，不再读 `AdmScene`，也不再调 C++ 路由包装 |
 | C（`a058396`，维护者修正 `4d85c2c`） | `RenderPlan::scene`、`PreparedScene::scene`、`PreviewSession::scene()`、`io::import_scene`、`include/adm/scene.h`、`ADMMetadata`（`metadata.{h,cpp}`，由视图重建 `AdmScene`）、`src/adm_core/scene_math.cpp`、CLI `inspect` 的文本打印 | 生产只持有 Rust 场景句柄；`inspect` 文本在 `mradm-engine` `scene_json::inspect_text`（`mradm_scene_inspect_text`，`RenderService::inspect_text`）；`probe` 的计数、导入告警与 Monitor 会话的格式读场景视图；C++ 场景及其构建、导入、场景数学与块级包装移到 `tests/support/adm_scene`（`mr_adm_scene_test_support`） |
-| C2（本批） | `routing_ffi.h` 中只剩测试调用的声明：标签 / LFE / 目标索引 / 矩阵解析、`mradm_render_lfe_routing`、Scene 流式渲染器在引擎之外的入口（`mradm_engine_scene_renderer_create` 与 `mradm_render_live_*`）、双耳 HRTF 视图 | 测试侧 `tests/support/render_test_ffi.h`（纳入 `check-ffi-headers.py`）；Rust 导出不变 |
+| C2（`fb7bd41`、`da93b7d`、`bc05730`） | `routing_ffi.h` 中只剩测试调用的声明：标签 / LFE / 目标索引 / 矩阵解析、`mradm_render_lfe_routing`、Scene 流式渲染器在引擎之外的入口（`mradm_engine_scene_renderer_create` 与 `mradm_render_live_*`）、双耳 HRTF 视图 | 测试侧 `tests/support/render_test_ffi.h`（纳入 `check-ffi-headers.py`）；Rust 导出不变 |
 
 ### C++ 剩下的部分
 
@@ -63,10 +63,7 @@
 - `mr_adm_rust_quality`（rustfmt + clippy `-D warnings`）、`check-ffi-headers.py`、`check-reference-retention.py`、`format.sh --check`、`language-surface.py --check` 通过；
 - Apple 岛与三个 Apple 门控测试（`apple_renderer_smoke_test`、`direct_speakers_matrix_render_test`、`lfe_routing_test`）在桩 AudioToolbox 头下 `clang -fsyntax-only -D__APPLE__ -Wall -Wextra` 0 错误 0 警告。这只说明类型对得上。
 
-维护者已在本机验证并合并 A、B、C（含上列修正）。C2 待维护者验证：
-- macOS：`ctest --test-dir build/debug -R "apple|lfe_routing|direct_speakers_matrix_render" --output-on-failure`；
-- Windows 规范构建（Windows sink 包含 `render_common.h`）；
-- Consistency CI（结构迁移，PCM 应全部不变）。
+维护者已在本机验证并合并 A、B、C（含上列修正），并合并了 C2。
 
 ## 规模
 

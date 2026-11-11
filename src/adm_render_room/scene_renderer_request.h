@@ -3,14 +3,14 @@
 #include <cstddef>
 #include <string>
 
+#include "ffi_error.h"
 #include "live_scene_renderer.h"
 #include "routing_ffi.h"
-#include "rust_error.h"
 
 namespace mradm::live_scene {
 
-// The Rust request of a Scene renderer configuration (mradm-engine `scene::renderer`, PCM
-// consistency 5.4 A) with the UTF-8 texts it points at; it also borrows `config`. It lives with the
+// The Rust request of a Scene renderer configuration (mradm-engine `scene::renderer`)
+// with the UTF-8 texts it points at; it also borrows `config`. It lives with the
 // room renderer for the room profile handle.
 class SceneRendererRequest {
   public:
@@ -23,8 +23,8 @@ class SceneRendererRequest {
 
     [[nodiscard]] const MradmEngineSceneRendererRequest* get() const noexcept { return &request_; }
     // A buffer for the creation's errors, which can quote the layout and the paths.
-    [[nodiscard]] RustError error() const {
-        return RustError(layout_ + sofa_.size() + hrir_.size(), sofa_.size() + hrir_.size());
+    [[nodiscard]] FfiError error() const {
+        return FfiError(layout_ + sofa_.size() + hrir_.size(), sofa_.size() + hrir_.size());
     }
 
   private:

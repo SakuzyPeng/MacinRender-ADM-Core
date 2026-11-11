@@ -1,5 +1,5 @@
 //! Core Audio Format files with little-endian float32 PCM, moved from the C++ `caf_io.cpp`
-//! (PCM consistency 4.8). Chunk headers and metadata are big-endian; samples are little-endian
+//!. Chunk headers and metadata are big-endian; samples are little-endian
 //! float32 on every host. Messages are the established English texts.
 use crate::{Error, Result};
 use std::{

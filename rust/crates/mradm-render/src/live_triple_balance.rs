@@ -1,4 +1,4 @@
-//! The Scene stream Triple Balance renderer (PCM consistency 4.6): element generations with the
+//! The Scene stream Triple Balance renderer: element generations with the
 //! RC 7.1.2 bed lanes, the per-frame staging of initial states and metadata updates, the state
 //! rules of the room panner, the spread=none warning and the `.30-triple` checkpoints. Moved from
 //! the C++ `live_triple_balance_renderer` with the same checks, order and texts; the ramps are the

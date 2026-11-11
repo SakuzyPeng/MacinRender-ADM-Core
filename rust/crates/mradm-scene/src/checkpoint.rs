@@ -1,4 +1,4 @@
-//! Version-1 render-scene checkpoint (PCM consistency 4.1, emitted here from 4.3): the canonical
+//! Version-1 render-scene checkpoint: the canonical
 //! word stream of the public `AdmScene` this scene becomes, specified in
 //! docs/architecture/RUST_INVERSION_BASELINE.md. It follows the C++ view mapping field by field,
 //! including the user state a semantic policy keeps beside the records (user levels, the

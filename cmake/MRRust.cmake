@@ -70,41 +70,41 @@ string(SHA1 _mr_rust_path_hash "${_mr_rust_manifest}")
 string(SUBSTRING "${_mr_rust_path_hash}" 0 5 _mr_rust_path_hash)
 set(MR_ADM_RUST_TARGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/rust/cargo/rust_${_mr_rust_path_hash}")
 
-set(_mr_phase2_features)
+set(_mr_consistency_features)
 if(MR_ADM_ENABLE_SOFA)
-    list(APPEND _mr_phase2_features sofa)
+    list(APPEND _mr_consistency_features sofa)
 endif()
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-    list(APPEND _mr_phase2_features diagnostics)
+    list(APPEND _mr_consistency_features diagnostics)
 endif()
 if(MR_ADM_ENABLE_ROOM_CUDA)
-    list(APPEND _mr_phase2_features room-cuda)
+    list(APPEND _mr_consistency_features room-cuda)
 endif()
-set(_mr_phase2_feature_args)
-if(_mr_phase2_features)
-    list(JOIN _mr_phase2_features "," _mr_phase2_feature_string)
-    set(_mr_phase2_feature_args --features "${_mr_phase2_feature_string}")
+set(_mr_consistency_feature_args)
+if(_mr_consistency_features)
+    list(JOIN _mr_consistency_features "," _mr_consistency_feature_string)
+    set(_mr_consistency_feature_args --features "${_mr_consistency_feature_string}")
 endif()
-# Rust consistency tools (`mradm-ffi` examples): the kernel probe, from 5.2 D the offline
-# same-process repeat render (formerly tests/tools/phase2_render.cpp), from 5.3 B the
-# file-streaming replay (formerly tests/tools/phase2_stream.cpp) and from 5.4 D the Scene replay
-# (formerly tests/tools/phase2_scene.cpp). The Scene replay builds by default, as the C++ tool did,
-# because ctest's mr_adm_phase2_tool_tests runs it.
-foreach(_mr_phase2_example IN ITEMS kernels render stream scene)
-    set(_mr_phase2_all)
-    if(_mr_phase2_example STREQUAL "scene" AND MR_ADM_CORE_BUILD_TESTS)
-        set(_mr_phase2_all ALL)
+# Rust consistency tools (`mradm-ffi` examples): the kernel probe, the offline
+# same-process repeat render, the file-streaming replay and the Scene replay (formerly the C++
+# tests/tools/phase2_{render,stream,scene}.cpp). The Scene replay builds by default, as the C++
+# tool did,
+# because ctest's mr_adm_collection_tool_tests runs it.
+foreach(_mr_consistency_example IN ITEMS kernels render stream scene)
+    set(_mr_consistency_all)
+    if(_mr_consistency_example STREQUAL "scene" AND MR_ADM_CORE_BUILD_TESTS)
+        set(_mr_consistency_all ALL)
     endif()
-    add_custom_target(mr_adm_phase2_${_mr_phase2_example} ${_mr_phase2_all}
+    add_custom_target(mr_adm_consistency_${_mr_consistency_example} ${_mr_consistency_all}
         COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
             "${MR_ADM_RUST_NATIVE_ENV}"
             "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
-            --example phase2_${_mr_phase2_example} --no-default-features ${_mr_phase2_feature_args}
+            --example consistency_${_mr_consistency_example} --no-default-features ${_mr_consistency_feature_args}
             --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/phase2_${_mr_phase2_example}${CMAKE_EXECUTABLE_SUFFIX}"
-            "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_${_mr_phase2_example}${CMAKE_EXECUTABLE_SUFFIX}"
+            "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/consistency_${_mr_consistency_example}${CMAKE_EXECUTABLE_SUFFIX}"
+            "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_consistency_${_mr_consistency_example}${CMAKE_EXECUTABLE_SUFFIX}"
         DEPENDS FLAC::FLAC
         USES_TERMINAL
         VERBATIM
@@ -116,7 +116,7 @@ endforeach()
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}"
         "${Rust_CARGO_CACHED}" metadata --locked --format-version 1
-        --no-default-features ${_mr_phase2_feature_args}
+        --no-default-features ${_mr_consistency_feature_args}
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"
     RESULT_VARIABLE _mr_cargo_metadata_status

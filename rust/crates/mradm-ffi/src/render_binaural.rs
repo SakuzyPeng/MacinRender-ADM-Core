@@ -1,4 +1,4 @@
-//! The binaural HRTF state (PCM consistency 4.7 A): loading, preparation and the Scene stream
+//! The binaural HRTF state: loading, preparation and the Scene stream
 //! cache run in Rust `mradm-render::binaural_hrtf`; the C++ renderers borrow its view.
 use super::*;
 use mradm_dsp::hrtf_filters::Filters;

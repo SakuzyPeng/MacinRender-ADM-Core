@@ -20,7 +20,7 @@
 
 namespace mradm::io {
 
-// The import itself is Rust (mradm-scene, PCM consistency 4.3): WAVE format, the CHNA channel policy,
+// The import itself is Rust (mradm-scene): WAVE format, the CHNA channel policy,
 // the ADM projection and channel-bed synthesis.
 namespace {
 

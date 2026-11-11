@@ -1,8 +1,8 @@
-//! The offline render service (PCM consistency 5.2 C2), moved from the C++
+//! The offline render service, moved from the C++
 //! `RenderService::render` with the same order, messages, locators, logs, progress events and
-//! cancellation points: validation, import and policy, the request resolution (5.2 B), the
-//! semantic report, the output decisions and temporary files, the backend preparation and render
-//! (5.2 C1), the post-processing passes, encoding, installation, the WAV layout and metadata.
+//! cancellation points: validation, import and policy, the request resolution, the
+//! semantic report, the output decisions and temporary files, the backend preparation and
+//! render, the post-processing passes, encoding, installation, the WAV layout and metadata.
 //!
 //! [`Render::next`] advances one step. What only the platform layer can do arrives as an
 //! [`Island`] request the caller executes and answers with [`Render::resume`]: the encoders, the

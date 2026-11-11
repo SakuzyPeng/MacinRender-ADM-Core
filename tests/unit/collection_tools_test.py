@@ -21,10 +21,10 @@ OPTIONS = None
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/consistency'))
-import phase2_common as common
+import collection as common
 from render_scene_checkpoint import validate_render_scene
-comparator = common.load_module('phase2_comparator', ROOT / 'scripts/consistency/compare-rust-phase2.py')
-collector = common.load_module('phase2_collector', ROOT / 'scripts/consistency/run-rust-phase2.py')
+comparator = common.load_module('consistency_comparator', ROOT / 'scripts/consistency/compare-evidence.py')
+collector = common.load_module('consistency_collector', ROOT / 'scripts/consistency/collect.py')
 collections = common.load_module('compare_collections', ROOT / 'scripts/consistency/compare-collections.py')
 
 
@@ -43,8 +43,8 @@ class CollectionTests(unittest.TestCase):
         common.save(self.build / 'consistency-dependencies.json', {'version': 1, 'dependencies': []})
         common.save(self.build / 'rust-dependencies.json', {'packages': [], 'resolve': {'nodes': []}})
         self.binaries = {}
-        for name in ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render',
-                     'mr_adm_phase2_scene', 'mr_adm_phase2_stream', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render'):
+        for name in ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_consistency_render',
+                     'mr_adm_consistency_scene', 'mr_adm_consistency_stream', 'mr_adm_consistency_kernels', 'mr_adm_repeat_render'):
             path = self.build / (name + ('.exe' if os.name == 'nt' else ''))
             path.write_bytes(b'unchanged executable')
             self.binaries[name] = path
@@ -87,7 +87,7 @@ class CollectionTests(unittest.TestCase):
                 path.write_bytes(original)
 
     def test_legacy_stamp_requires_rebuild(self):
-        path = self.build / 'phase2-build-stamp.json'
+        path = self.build / 'consistency-build-stamp.json'
         stamp = json.loads(path.read_text())
         del stamp['configuration']
         common.save(path, stamp)
@@ -108,7 +108,7 @@ class CollectionTests(unittest.TestCase):
         self.configure()
         common.stamp_build(self.build)
         root = self.root / 'baseline'
-        baseline = {'schema': 'mradm.phase2.v1', 'complete': True, 'source': self.source, 'config': 'a',
+        baseline = {'schema': 'mradm.consistency.collection.v1', 'complete': True, 'source': self.source, 'config': 'a',
                     'diagnostics': False, 'build': {'cmake.MR_ADM_CONSISTENCY_DIAGNOSTICS': 'OFF'}}
         common.save(root / 'manifest.json', baseline)
         self.assertEqual(collector.load_uninstrumented_baseline(root, self.source, 'a'), baseline)
@@ -237,7 +237,7 @@ class EvidenceTests(unittest.TestCase):
                 bits = b'\0' * (channels * frames * 4)
                 pcm.write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, channels, rate, frames) + bits)
                 common.save(root / 'manifest.json', {
-                    'schema': 'mradm.phase2.v1', 'complete': True,
+                    'schema': 'mradm.consistency.collection.v1', 'complete': True,
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': [], 'scene': [], 'stream': [case], 'sofa': common.SOFA_FIXTURES,
                     'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES,
@@ -410,7 +410,7 @@ class EvidenceTests(unittest.TestCase):
     def test_incomplete_and_path_escape_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / 'run'; root.mkdir()
-            common.save(root / 'manifest.json', {'schema': 'mradm.phase2.v1', 'complete': False})
+            common.save(root / 'manifest.json', {'schema': 'mradm.consistency.collection.v1', 'complete': False})
             with self.assertRaises(ValueError):
                 comparator.validate(root)
             (Path(tmp) / 'external').write_bytes(b'1234')
@@ -583,7 +583,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(observed), 5)
         self.assertEqual(len([n for n in names if n.startswith('room.')]), 2)
         self.assertTrue(all(gated(n) for n in names))
-        for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
+        for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.consistency.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'
                 path.write_text(json.dumps(bad), encoding='utf-8')
@@ -840,7 +840,7 @@ class RenderSceneCheckpointTests(unittest.TestCase):
             common.save(root / 'cases/case.json', case)
             checkpoint_root = root / 'checkpoints/case/render-scene'; checkpoint_root.mkdir(parents=True)
             manifest = {
-                'schema': 'mradm.phase2.v1', 'complete': True, 'diagnostics': True,
+                'schema': 'mradm.consistency.collection.v1', 'complete': True, 'diagnostics': True,
                 'noninterference': {'passed': True},
                 'source': {'files': {}, 'sha256': common.json_digest({})},
                 'offline': [case], 'scene': [], 'stream': [], 'sofa': common.SOFA_FIXTURES,
@@ -1068,24 +1068,24 @@ class ToolSubstitutionTests(unittest.TestCase):
 
     def test_tool_overrides_accept_only_replay_tools(self):
         tool = self.tool()
-        parsed = collector.parse_tool_overrides([f'mr_adm_phase2_stream={tool}', f'mr_adm_phase2_scene={tool}'])
-        self.assertEqual(parsed, {'mr_adm_phase2_stream': tool.resolve(), 'mr_adm_phase2_scene': tool.resolve()})
+        parsed = collector.parse_tool_overrides([f'mr_adm_consistency_stream={tool}', f'mr_adm_consistency_scene={tool}'])
+        self.assertEqual(parsed, {'mr_adm_consistency_stream': tool.resolve(), 'mr_adm_consistency_scene': tool.resolve()})
         self.assertEqual(collector.parse_tool_overrides(None), {})
-        for values, message in (([f'mradm={tool}'], 'only'), ([f'mr_adm_phase2_kernels={tool}'], 'only'),
-                                ([f'mr_adm_phase2_render={tool}'] * 2, 'twice'), (['mr_adm_phase2_render'], 'NAME=PATH'),
-                                (['mr_adm_phase2_render='], 'NAME=PATH'),
-                                ([f'mr_adm_phase2_render={self.root / "missing"}'], 'not an executable')):
+        for values, message in (([f'mradm={tool}'], 'only'), ([f'mr_adm_consistency_kernels={tool}'], 'only'),
+                                ([f'mr_adm_consistency_render={tool}'] * 2, 'twice'), (['mr_adm_consistency_render'], 'NAME=PATH'),
+                                (['mr_adm_consistency_render='], 'NAME=PATH'),
+                                ([f'mr_adm_consistency_render={self.root / "missing"}'], 'not an executable')):
             with self.subTest(values=values), self.assertRaisesRegex(ValueError, message):
                 collector.parse_tool_overrides(values)
         if os.name != 'nt':
             plain = self.root / 'plain'; plain.write_bytes(b'')
             with self.assertRaisesRegex(ValueError, 'not an executable'):
-                collector.parse_tool_overrides([f'mr_adm_phase2_render={plain}'])
+                collector.parse_tool_overrides([f'mr_adm_consistency_render={plain}'])
 
     def test_platform_comparison_rejects_substituted_tools(self):
         root = self.root / 'collection'; root.mkdir()
-        common.save(root / 'manifest.json', {'schema': 'mradm.phase2.v1', 'complete': True,
-                                             'tool_overrides': {'mr_adm_phase2_stream': {'path': 'x', 'sha256': 'y'}}})
+        common.save(root / 'manifest.json', {'schema': 'mradm.consistency.collection.v1', 'complete': True,
+                                             'tool_overrides': {'mr_adm_consistency_stream': {'path': 'x', 'sha256': 'y'}}})
         with self.assertRaisesRegex(ValueError, 'not platform evidence'):
             comparator.validate(root)
 
@@ -1110,7 +1110,7 @@ class ToolSubstitutionTests(unittest.TestCase):
         comparisons.update({'scene-case' + f'-epoch{epoch}' + suffix: {'identical': True}
                             for epoch in (1, 2) for suffix in ('-same-process1', '-same-process2', '-new-process')})
         status = {'epochs': [{'epoch': 1, 'frames': 2}, {'epoch': 2, 'frames': 1}], 'status': 'passed', 'underruns': 0}
-        manifest = {'schema': 'mradm.phase2.v1', 'complete': True, 'config': 'a', 'diagnostics': False,
+        manifest = {'schema': 'mradm.consistency.collection.v1', 'complete': True, 'config': 'a', 'diagnostics': False,
                     'source': {'files': {}, 'sha256': common.json_digest({})},
                     'offline': self.offline, 'scene': self.scene, 'stream': [], 'sofa': {}, 'json_fixtures': {}, 'room': {},
                     'room_96k': {}, 'build': {'platform.system': platform.system(), 'platform.machine': platform.machine(),
@@ -1296,7 +1296,7 @@ class ToolSubstitutionTests(unittest.TestCase):
     def test_only_declared_replay_binary_changes_are_accepted(self):
         reference, candidate = self.collection('reference'), self.collection('candidate')
         manifest = self.seal(candidate)
-        name = 'mr_adm_phase2_stream'
+        name = 'mr_adm_consistency_stream'
         manifest['binaries'][name] = common.digest(b'new replay')
         common.save(candidate / 'manifest.json', manifest)
         with self.assertRaisesRegex(collections.PreconditionError, 'declared tool overrides'):

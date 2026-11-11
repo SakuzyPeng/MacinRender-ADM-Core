@@ -1,5 +1,5 @@
-//! Private boundary of the backend preparation and the offline render step (PCM consistency
-//! 5.2 C1, `mradm-engine` `backend` and `offline`). This layer is the engine's [`Host`]: the room
+//! Private boundary of the backend preparation and the offline render step
+//! (`mradm-engine` `backend` and `offline`). This layer is the engine's [`Host`]: the room
 //! floating-point scope, the room resources with their CUDA selection and the room switch.
 use crate::adm::Text;
 use crate::engine::{EngineLog, EngineStatus};

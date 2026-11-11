@@ -28,9 +28,8 @@ struct SceneSummary {
     std::vector<std::string> warnings;
 };
 
-// The Rust render scene (PCM consistency 4.3, the semantic policy since 4.4). The import, the policy
-// (mradm-engine since 5.2 C2), its report and template, the inspect summary and the render-scene
-// checkpoints are Rust; since 5.6 C no C++ copy of the scene is built.
+// The Rust render scene. The import, the policy (mradm-engine), its report and template, the
+// inspect summary and the render-scene checkpoints are Rust; no C++ copy of the scene is built.
 class RenderScene {
   public:
     // options == nullptr imports ADM BW64 only; otherwise the options route ADM or a channel bed.
@@ -44,9 +43,9 @@ class RenderScene {
 
     // The neutral policy template of the scene; no trailing newline.
     [[nodiscard]] Result<std::string> policy_template() const;
-    // The scene inspect JSON (mradm.scene-inspect v1, PCM consistency 5.2 A).
+    // The scene inspect JSON (mradm.scene-inspect v1).
     [[nodiscard]] Result<std::string> inspect_json() const;
-    // The `mradm inspect` summary after its `File:` line (PCM consistency 5.6 C).
+    // The `mradm inspect` summary after its `File:` line.
     [[nodiscard]] Result<std::string> inspect_text() const;
     [[nodiscard]] Result<SceneSummary> summary() const;
     // Writes the source file with this scene's semantic edits patched into its AXML: PCM and every

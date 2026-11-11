@@ -8,31 +8,31 @@ use std::{
     io::{BufWriter, Write},
     path::Path,
 };
-#[path = "phase2/coverage.rs"]
+#[path = "consistency/coverage.rs"]
 mod coverage;
-#[path = "phase2/ear_gains.rs"]
+#[path = "consistency/ear_gains.rs"]
 mod ear_gains;
-#[path = "phase2/final_pcm.rs"]
+#[path = "consistency/final_pcm.rs"]
 mod final_pcm;
-#[path = "phase2/hoa.rs"]
+#[path = "consistency/hoa.rs"]
 mod hoa;
-#[path = "phase2/hptf_stereo.rs"]
+#[path = "consistency/hptf_stereo.rs"]
 mod hptf_stereo;
-#[path = "phase2/meter.rs"]
+#[path = "consistency/meter.rs"]
 mod meter;
-#[path = "phase2/meter_acceptance.rs"]
+#[path = "consistency/meter_acceptance.rs"]
 mod meter_acceptance;
-#[path = "phase2/params.rs"]
+#[path = "consistency/params.rs"]
 mod params;
-#[path = "phase2/post_gain.rs"]
+#[path = "consistency/post_gain.rs"]
 mod post_gain;
-#[path = "phase2/room.rs"]
+#[path = "consistency/room.rs"]
 mod room;
-#[path = "phase2/sofa.rs"]
+#[path = "consistency/sofa.rs"]
 mod sofa;
-#[path = "phase2/stream_dsp.rs"]
+#[path = "consistency/stream_dsp.rs"]
 mod stream_dsp;
-#[path = "phase2/triple_balance.rs"]
+#[path = "consistency/triple_balance.rs"]
 mod triple_balance;
 fn floats(path: &Path, name: &str, values: &[f32]) {
     assert!(!values.is_empty() && values.iter().all(|v| v.is_finite()));

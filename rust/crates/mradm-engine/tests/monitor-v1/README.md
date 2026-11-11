@@ -11,7 +11,7 @@ factory per case:
   (`RendererSelection` value), output layout, DirectSpeakers routing and matrix (a JSON text or a
   path of `../request-v1/matrices`, a missing file included), Triple Balance D mode, the reference
   and reproduction screens, system-spatial monitoring with a listener orientation, smoothing,
-  default interpolation, binaural and speaker spread, a SOFA fixture, the phase-2 room package,
+  default interpolation, binaural and speaker spread, a SOFA fixture, the synthetic room package,
   split-power LFE routing, the Apple speaker geometry and the internal speaker-stereo switch.
 - `expected.jsonl`: per case the log lines (level, module, message) in order, and the error (code,
   message, context) or the opened stream's channels, rate, layout, pre-roll hint, appended tail and

@@ -5,7 +5,7 @@
 
 #include "timeline_ffi.h"
 
-// One seconds-to-frame rule for every entry that names a time in seconds (PCM consistency 3.6):
+// One seconds-to-frame rule for every entry that names a time in seconds:
 // the output trim, the preview window and Monitor seek / loop points.
 namespace mradm::dsp {
 

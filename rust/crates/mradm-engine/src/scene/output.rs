@@ -1,4 +1,4 @@
-//! The Scene output session (PCM consistency 5.4 C, formerly the C++ `SceneOutputSession`)
+//! The Scene output session (formerly the C++ `SceneOutputSession`)
 //! without its device: the device callback's pull, the stereo headphone feed's prefetch, HpTF and
 //! sample-peak guard, the volume, the epoch reset and the status. The device itself (miniaudio,
 //! the system spatial sinks, test captures) stays a C++ island, so every step that touches it is

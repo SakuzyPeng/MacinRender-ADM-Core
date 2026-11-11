@@ -1,6 +1,6 @@
 //! The Scene stream renderers (`mradm-render` `live_vbap`, `live_triple_balance`, `live_binaural`
 //! and `room_stream::Live`) behind one type, and their creation from the stream configuration
-//! (PCM consistency 5.4 A, formerly the C++ `create_live_renderer` and the four
+//! (formerly the C++ `create_live_renderer` and the four
 //! `create_live_*_renderer` shells): the selection, the checks, their order and texts unchanged.
 use crate::backend::{BinauralSpreadMode, Host, RoomRequest, Screens, Sofa, SpeakerSpread, native};
 use crate::request::{Selection, code};

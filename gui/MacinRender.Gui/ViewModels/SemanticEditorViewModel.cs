@@ -576,7 +576,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private ulong _overrideRevision;
     private uint _sampleRate;
 
-    // ── 头部追踪(Phase 1.5 手操自由视角):manual 来源 → manager(四元数管线)→ 末端 Euler
+    // ── 头部追踪(手操自由视角):manual 来源 → manager(四元数管线)→ 末端 Euler
     // 扇出视觉(SpatialSceneControl)+ 音频(MonitorService.SetListenerOrientation)。Tick 复用轮询定时器。──
     private const double Deg2Rad = Math.PI / 180.0;
     private readonly HeadTrackingManager _headTracking = new();

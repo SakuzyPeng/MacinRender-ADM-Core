@@ -298,7 +298,7 @@ struct ApplePrepared final : IPreparedRender {
     render_common::LfeRoutingPlan lfe_routing;
 };
 
-// The buses of the Rust recipe (mradm-render `apple`, PCM consistency 5.6 B), whose events are
+// The buses of the Rust recipe (mradm-render `apple`), whose events are
 // already in AudioUnit convention.
 [[nodiscard]] std::vector<BusPlan> bus_plans(const MradmRenderAppleBus* records, std::size_t count) {
     std::vector<BusPlan> buses;

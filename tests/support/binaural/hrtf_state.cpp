@@ -2,7 +2,7 @@
 
 #include <utility>
 
-#include "rust_error.h"
+#include "ffi_error.h"
 
 namespace mradm::binaural_internal {
 namespace {
@@ -28,7 +28,7 @@ Result<std::shared_ptr<const HrtfState>> adopt(const std::filesystem::path* sofa
     const auto file_name = sofa != nullptr ? utf8(sofa->filename()) : std::string{};
     MradmBinauralHrtfHandle* raw = nullptr;
     MradmRenderBinauralHrtfView view{};
-    live_scene::RustError error(0, display.size());
+    live_scene::FfiError error(0, display.size());
     const Request request{sofa != nullptr ? 1U : 0U, text(path), text(display), text(file_name), &raw, &view};
     if (const auto code = call(request, error); code != 0) {
         return error.error(code);
@@ -55,7 +55,7 @@ Result<std::shared_ptr<const HrtfState>> adopt(const std::filesystem::path* sofa
 
 Result<std::shared_ptr<const HrtfState>>
 HrtfState::prepare(const std::optional<std::filesystem::path>& sofa, std::uint32_t input_rate, std::uint64_t block) {
-    return adopt(sofa ? &*sofa : nullptr, [&](const Request& r, live_scene::RustError& error) {
+    return adopt(sofa ? &*sofa : nullptr, [&](const Request& r, live_scene::FfiError& error) {
         return mradm_render_binaural_hrtf_prepare(r.sofa,
                                                   r.path,
                                                   r.display,
@@ -73,7 +73,7 @@ HrtfState::prepare(const std::optional<std::filesystem::path>& sofa, std::uint32
 
 Result<std::shared_ptr<const HrtfState>> HrtfState::prepare_live(const std::filesystem::path& sofa,
                                                                  std::uint32_t sample_rate) {
-    return adopt(sofa.empty() ? nullptr : &sofa, [&](const Request& r, live_scene::RustError& error) {
+    return adopt(sofa.empty() ? nullptr : &sofa, [&](const Request& r, live_scene::FfiError& error) {
         return mradm_render_binaural_hrtf_live(r.sofa,
                                                r.path,
                                                r.display,

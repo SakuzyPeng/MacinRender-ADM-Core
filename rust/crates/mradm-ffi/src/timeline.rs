@@ -1,4 +1,4 @@
-//! Private boundary for seconds-to-frame conversion (PCM consistency 3.6).
+//! Private boundary for seconds-to-frame conversion.
 use crate::{boundary, checked::*};
 use mradm_dsp::timeline;
 

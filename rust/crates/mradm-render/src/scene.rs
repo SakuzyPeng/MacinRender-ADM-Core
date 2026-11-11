@@ -1,4 +1,4 @@
-//! The render scene as the loudspeaker backends read it (PCM consistency 4.5): the blocks in
+//! The render scene as the loudspeaker backends read it: the blocks in
 //! effect and the Objects block preparation (position offset, channel lock, divergence), moved
 //! from the C++ `render_common` with the same arithmetic. Records are read as the C++ `AdmScene`
 //! copied them; the effective object mute and DirectSpeakers position come from the overlay.

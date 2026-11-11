@@ -1,4 +1,4 @@
-//! The backend capability reports (PCM consistency 5.2 A), moved from each C++ adapter's
+//! The backend capability reports, moved from each C++ adapter's
 //! `*_capabilities()` with the same values and layout order. The Apple AUSpatialMixer report is
 //! an island fact and arrives through [`Platform`].
 use mradm_scene::layouts::{self, Geometry, Speaker};

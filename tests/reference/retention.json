@@ -82,8 +82,8 @@
       "provenance": "tests/reference/scene_numeric/provenance.json",
       "cmake_option": null,
       "tests": [
-        "mr_adm_scene_numeric_rust_tests",
-        "mr_adm_live_binaural_rust_tests"
+        "mr_adm_scene_numeric_parity_tests",
+        "mr_adm_live_binaural_parity_tests"
       ],
       "depends_on": [],
       "status": "retained",
@@ -108,7 +108,7 @@
       "provenance": "tests/reference/hoa/provenance.json",
       "cmake_option": null,
       "tests": [
-        "mr_adm_hoa_rust_tests"
+        "mr_adm_hoa_parity_tests"
       ],
       "depends_on": [
         "scene_numeric"
@@ -133,7 +133,7 @@
       "provenance": "tests/reference/live_vbap/provenance.json",
       "cmake_option": null,
       "tests": [
-        "mr_adm_live_vbap_rust_tests"
+        "mr_adm_live_vbap_parity_tests"
       ],
       "depends_on": [
         "scene_numeric"
@@ -182,7 +182,7 @@
       "provenance": "tests/reference/triple_balance/provenance.json",
       "cmake_option": null,
       "tests": [
-        "mr_adm_triple_balance_rust_tests"
+        "mr_adm_triple_balance_parity_tests"
       ],
       "depends_on": [],
       "status": "retained",
@@ -302,7 +302,7 @@
       "files": {
         "tests/reference/libbw64/acceptance.json": "1ac215081910024d132be06d63e63c7af0469645b21833b0073596f345bce327",
         "tests/reference/libbw64/provenance.json": "714eb856cacafaec7ec5a39e99cbf38a986660cd7e3a53cce008ae7303de3ddf",
-        "tests/reference/libbw64/reference_test.cpp": "b87a431e6a4b43149f6a426a94dd26fca93e0a33296d7dd87fae10476f72d2fa"
+        "tests/reference/libbw64/reference_test.cpp": "ecec8d3e462eb99e8fedba9ffdd602562c171911f79f1cbb0d5038b394c51b07"
       }
     },
     {

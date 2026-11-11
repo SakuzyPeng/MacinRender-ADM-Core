@@ -8,7 +8,7 @@
 
 #include "../adm_render_common/engine_ffi.h"
 
-// A C++ IRenderStream behind the Rust monitor's island table (PCM consistency 5.5 A): the
+// A C++ IRenderStream behind the Rust monitor's island table: the
 // trampolines catch every exception (a render_failed error with its what()) and carry the
 // override revision. `keep` (an Apple backend's renderer and prepared state) is released with the
 // stream.

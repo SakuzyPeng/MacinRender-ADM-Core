@@ -12,7 +12,7 @@ namespace mradm::audio {
 // ── RenderInputReader ────────────────────────────────────────────────────────
 
 struct RenderInputReader::Impl {
-    std::unique_ptr<RustWavReader> reader;
+    std::unique_ptr<WavFileReader> reader;
 };
 
 RenderInputReader::RenderInputReader() = default;
@@ -22,7 +22,7 @@ RenderInputReader& RenderInputReader::operator=(RenderInputReader&&) noexcept = 
 
 Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path) {
     try {
-        auto reader = RustWavReader::open(path);
+        auto reader = WavFileReader::open(path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
@@ -47,7 +47,7 @@ Result<void> RenderInputReader::seek_frame(uint64_t frame) {
 }
 
 // ── apply_gain_to_file / trim_file_frames ───────────────────────────────────
-// Rust rewrites the file through the final-PCM writer and installs it (PCM consistency 4.8).
+// Rust rewrites the file through the final-PCM writer and installs it.
 
 Result<void> apply_gain_to_file(const std::string& path,
                                 float gain,

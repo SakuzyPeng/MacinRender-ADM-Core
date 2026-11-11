@@ -68,7 +68,7 @@ fn prepare(i: &Input, kind: Kind, layout: &[u8], d: bool) -> Arc<Prepared> {
     r.triple_balance_d = d;
     if kind == Kind::Room {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../tests/fixtures/room/phase2/room.json");
+            .join("../../../tests/fixtures/room/synthetic/room.json");
         r.room.package = Some(Arc::new(
             loading::load_package(manifest.to_str().unwrap().as_bytes()).unwrap(),
         ));

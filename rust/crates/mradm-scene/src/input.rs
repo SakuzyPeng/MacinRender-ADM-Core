@@ -1,4 +1,4 @@
-//! Channel-bed input presets, the custom-label catalog and label resolution (PCM consistency 4.3),
+//! Channel-bed input presets, the custom-label catalog and label resolution,
 //! moved from the C++ channel-bed importer. Label and layout matching is ASCII-only.
 use crate::error::{Context, Error, Result};
 use crate::layouts::{Geometry, find, layouts};

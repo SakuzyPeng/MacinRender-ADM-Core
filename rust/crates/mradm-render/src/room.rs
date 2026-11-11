@@ -1,10 +1,10 @@
-//! The room file renderer's sources and event table (PCM consistency 4.6), moved from the C++
+//! The room file renderer's sources and event table, moved from the C++
 //! `RoomRenderer::prepare` with the same checks, order, arithmetic and texts: one source per
 //! track with blocks, the in-effect Objects and DirectSpeakers blocks as activation, state and
 //! deactivation events, the reference screen of screen-referenced objects, and the stable
 //! `(sample, priority, element)` order. A block without its own interpolation length ramps over
-//! `default_interp_ms` at the room's sample rate, as the other backends do (PCM consistency 5.7;
-//! the C++ shell had `default_interp_ms × 48`, half the length at 96 kHz).
+//! `default_interp_ms` at the room's sample rate, as the other backends do (the
+//! C++ shell had `default_interp_ms × 48`, half the length at 96 kHz).
 use crate::routing::{self, Error, Level};
 use crate::scene::{self, Log, in_effect, labels, span};
 use mradm_adm::records::{AdmPosition, AdmScreen, Object};

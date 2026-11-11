@@ -1,4 +1,4 @@
-//! fmt / printf number formatting the C++ engine's messages used (PCM consistency 5.2 B).
+//! fmt / printf number formatting the C++ engine's messages used.
 
 /// `{:.<precision>g}`: `precision` significant digits (at least one), exponent form when the
 /// decimal exponent is below -4 or not below the precision, trailing zeros and a bare point

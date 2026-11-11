@@ -1,5 +1,5 @@
-//! Private boundary of the Apple AUSpatialMixer recipe (`mradm-render` `apple`, PCM consistency
-//! 5.6 B): the Apple island prepares its buses from the policy-applied Rust scene and reads them
+//! Private boundary of the Apple AUSpatialMixer recipe (`mradm-render`
+//! `apple`): the Apple island prepares its buses from the policy-applied Rust scene and reads them
 //! back as plain records, which stay valid until `mradm_render_apple_plan_destroy`.
 use crate::adm::Text;
 use crate::render::{RenderMatrixRoute, boundary, bytes, matrix_routes};

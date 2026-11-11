@@ -1,7 +1,7 @@
-// Rust mradm-render (PCM consistency 4.5): the live-override and LFE gain rules, the room control
+// Rust mradm-render: the live-override and LFE gain rules, the room control
 // of a file stream (mradm_engine_stream_*, engine_ffi.h) and the Scene stream engine. The routing
 // rules, the Scene stream renderer outside the engine and the HRTF view only the tests call are in
-// tests/support/render_test_ffi.h (PCM consistency 5.6 C). Inputs are borrowed for the call; views live until the
+// tests/support/render_test_ffi.h. Inputs are borrowed for the call; views live until the
 // handle's next call or destroy. Error buffers: capacity in *len, bytes written out, NUL-terminated. Status values
 // follow adm::ErrorCode.
 #pragma once
@@ -144,7 +144,7 @@ typedef struct MradmRenderRoomStatus {
 } MradmRenderRoomStatus;
 // IRoomControl: concurrent requests/queries; serialize status calls through copying their message.
 typedef struct MradmRenderRoomControl MradmRenderRoomControl;
-// The Scene stream engine (mradm-engine scene::stream, PCM consistency 5.4 B). The configuration
+// The Scene stream engine (mradm-engine scene::stream). The configuration
 // leaves out the renderer; manual_clock selects the replay clock starting at clock_ns; the *_bytes
 // are the C++ sizeof of live_scene::Frame, PcmPlane, StateEntry and MetadataUpdate.
 typedef struct MradmEngineSceneConfig {

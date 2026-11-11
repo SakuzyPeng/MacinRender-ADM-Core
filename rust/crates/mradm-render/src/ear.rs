@@ -1,4 +1,4 @@
-//! The EAR loudspeaker backend (`ear`, PCM consistency 4.5): the EAR output layout (standard,
+//! The EAR loudspeaker backend (`ear`): the EAR output layout (standard,
 //! project-defined and Apple geometry), the per-channel direct and diffuse gain tables of Objects
 //! (after channel lock and divergence), DirectSpeakers (EAR, matrix and 22.2 LFE routing) and HOA
 //! packs (AllRAD decode), compiled into one `PcmMixer` plan, and the decorrelation filter bank.

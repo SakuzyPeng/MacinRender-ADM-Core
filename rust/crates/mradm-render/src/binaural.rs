@@ -1,4 +1,4 @@
-//! The binaural source plan (PCM consistency 4.7 B), moved from the C++ `build_sources`,
+//! The binaural source plan, moved from the C++ `build_sources`,
 //! `build_spreader_tracks` and `build_spreader_groups`: the 3 × 17 divergence × extent slots of
 //! the HRTF convolution sources, the LFE bypass, the DirectSpeakers positions, and the SAF
 //! spreader tracks and their adapter groups, with the same order, warnings and checkpoints.

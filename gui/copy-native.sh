@@ -5,17 +5,17 @@
 #   cmake --preset release -DMR_ADM_BUILD_CAPI_BUNDLE=ON
 #   cmake --build --preset release --target mradm_capi_bundle
 #
-# 一期手动跑;Windows/Linux 产物与 CI 化留后。
+# 目前手动跑;Windows/Linux 产物与 CI 化留后。
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$here/.." && pwd)"
 
-# 平台 → RID + 库名(一期只覆盖 macOS arm64)
+# 平台 → RID + 库名(目前只覆盖 macOS arm64)
 case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) rid="osx-arm64";  lib="libmradm_capi.dylib" ;;
     Darwin-x86_64) rid="osx-x64";   lib="libmradm_capi.dylib" ;;
-    *) echo "暂未支持的平台: $(uname -s)-$(uname -m)(一期仅 macOS)"; exit 1 ;;
+    *) echo "暂未支持的平台: $(uname -s)-$(uname -m)(目前仅 macOS)"; exit 1 ;;
 esac
 
 src_dir="$repo_root/build/release"

@@ -1,4 +1,4 @@
-// DirectSpeakers matrix and screen configuration JSON in Rust mradm-scene (PCM consistency 4.4).
+// DirectSpeakers matrix and screen configuration JSON in Rust mradm-scene.
 // A matrix view borrows from its handle until mradm_scene_direct_matrix_destroy. Status values
 // follow adm::ErrorCode.
 #pragma once

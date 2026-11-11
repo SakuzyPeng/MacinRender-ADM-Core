@@ -21,7 +21,7 @@ namespace mradm::render_common {
     return {reinterpret_cast<const uint8_t*>(text.data()), text.size()};
 }
 
-// One mradm-engine request resolution (PCM consistency 5.2 B): its status and log lines.
+// One mradm-engine request resolution: its status and log lines.
 class EngineOutcome {
   public:
     // `call` passes out() and status() to the FFI function; a non-zero return is a broken contract.

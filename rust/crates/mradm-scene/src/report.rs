@@ -1,4 +1,4 @@
-//! Semantic report `mradm.semantic-report.v1` and policy template (PCM consistency 4.4), moved
+//! Semantic report `mradm.semantic-report.v1` and policy template, moved
 //! from the C++ `semantic_policy.cpp`. Byte-identical to its nlohmann `dump(2)` output: keys in
 //! byte order, floats widened to double, `null` for absent values (see `mradm-json`).
 use crate::error::{Context, Error, Result};

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Compare two complete collections from the same build and platform, byte for byte (phase 5.1).
+"""Compare two complete collections from the same build and platform, byte for byte.
 
-Used to prove that a replacement replay tool (run-rust-phase2.py --tool) reproduces the tool it
+Used to prove that a replacement replay tool (collect.py --tool) reproduces the tool it
 replaces: same PCM, same in-collection comparisons and replay status, same kernels and diagnostic
-checkpoints, and the same tool logs. It is not platform evidence; compare-rust-phase2.py does that.
+checkpoints, and the same tool logs. It is not platform evidence; compare-evidence.py does that.
 
 Preconditions (exit 2 when unmet): both collections pass evidence integrity validation, and share
 the source fingerprint, build identity (configuration and original binaries), build provenance,
 diagnostics flag, platform and case catalog. Collections need the build identity, log inventory
-and original root recorded by run-rust-phase2.py; recollect older evidence without these fields.
+and original root recorded by collect.py; recollect older evidence without these fields.
 
 Compared (exit 1 on any difference):
 - manifest outputs (path and PCM sha256), comparisons and replay_status;
@@ -22,14 +22,14 @@ import argparse
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import sys
 
-import phase2_common as common
+import collection as common
 
 PRECONDITION_KEYS = ('schema', 'source', 'config', 'diagnostics', 'offline', 'scene', 'stream', 'sofa',
                      'json_fixtures', 'room', 'room_96k')
 COMPARED = ('outputs', 'fixtures', 'comparisons', 'replay_status', 'artifacts', 'logs')
 PLATFORM_KEYS = ('platform.system', 'platform.machine')
 CHECKPOINT_SUFFIXES = ('.f32', '.c32', '.f64', '.i32')
-evidence = common.load_module('phase2_evidence', Path(__file__).with_name('compare-rust-phase2.py'))
+evidence = common.load_module('consistency_evidence', Path(__file__).with_name('compare-evidence.py'))
 
 
 class PreconditionError(ValueError):
@@ -82,7 +82,7 @@ def check_preconditions(a, b):
             raise PreconditionError(f'collections differ in {key}; compare runs of the same build')
     for key in PLATFORM_KEYS:
         if a['build'].get(key) != b['build'].get(key):
-            raise PreconditionError(f'collections differ in {key}; use compare-rust-phase2.py across platforms')
+            raise PreconditionError(f'collections differ in {key}; use compare-evidence.py across platforms')
     for key in ('build_identity', 'build'):
         if a[key] != b[key]:
             raise PreconditionError(f'collections differ in {key}; compare runs of the same build')

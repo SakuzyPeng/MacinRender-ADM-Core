@@ -1,4 +1,4 @@
-//! The Apple AUSpatialMixer backend's render recipe (PCM consistency 5.6 B): the input buses, their
+//! The Apple AUSpatialMixer backend's render recipe: the input buses, their
 //! control events and the 22.2 LFE routing, moved from the C++ `build_bus_plans` and the Apple
 //! `prepare` checks with the same rules, order, texts and arithmetic. The Apple island turns the
 //! buses into AudioUnit elements and renders them; it no longer reads the C++ scene.

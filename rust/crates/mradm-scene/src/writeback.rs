@@ -1,4 +1,4 @@
-//! Export writeback (PCM consistency 4.4): the semantic differences between the scene as imported
+//! Export writeback: the semantic differences between the scene as imported
 //! and as the policy left it, patched into the source AXML. Moved from the C++
 //! `metadata.cpp` `collect_patches` with the same field mapping, consistency checks, check order
 //! and messages; the patching itself is `mradm_adm::Document::apply_patches`. Positions, user

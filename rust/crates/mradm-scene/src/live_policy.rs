@@ -1,4 +1,4 @@
-//! Semantic policy for Scene streams (PCM consistency 4.4): element identities, per-generation
+//! Semantic policy for Scene streams: element identities, per-generation
 //! resolution and per-update application to producer state. Moved from the C++
 //! `SceneStreamEngine` (`build_policy_identities`, `apply_policy_to_state`) with the same rules;
 //! the block and DirectSpeakers actions are the offline ones in [`crate::policy`].

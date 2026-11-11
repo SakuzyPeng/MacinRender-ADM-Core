@@ -1,4 +1,4 @@
-//! HRTF preparation for the binaural renderers (PCM consistency 4.7 A), moved from the C++
+//! HRTF preparation for the binaural renderers, moved from the C++
 //! `load_sofa_dataset` / `build_binaural_state`, the C++ geometry cache (`hrtf_grid.cpp`) and the
 //! Scene stream renderer's HRTF state cache with its HRIR resampling, with the same checks, texts,
 //! cache budgets and checkpoints. The prepared state is immutable and shared.

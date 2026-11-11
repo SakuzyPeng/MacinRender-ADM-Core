@@ -47,7 +47,7 @@ rubato = { path = "vendor/rubato" }
 rustfft = { path = "vendor/rustfft" }
 # Portable libm twiddles (ADR 0018); RustFFT carries the same patch.
 realfft = { path = "vendor/realfft" }
-# Portable libm true-peak interpolation coefficients (PCM consistency phase 2).
+# Portable libm true-peak interpolation coefficients.
 ebur128 = { path = "vendor/ebur128" }
 # Initialize Apple worker parking storage during pool construction.
 rayon-core = { path = "vendor/rayon-core" }

@@ -1,5 +1,5 @@
 //! DirectSpeakers, speaker-label and LFE routing shared by every loudspeaker backend and the
-//! Apple island (PCM consistency 4.5). Moved from the C++ `render_common` with the same alias
+//! Apple island. Moved from the C++ `render_common` with the same alias
 //! table, matching order, messages and gains. Labels are protocol bytes: case folding and
 //! character classes are ASCII only, and non-UTF-8 input is compared and reported unchanged.
 use mradm_dsp::stream_dsp::live_gain;

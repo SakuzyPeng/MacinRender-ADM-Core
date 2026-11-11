@@ -1,4 +1,4 @@
-//! Private boundary of `mradm-render` (PCM consistency 4.5): the shared DirectSpeakers, label and
+//! Private boundary of `mradm-render`: the shared DirectSpeakers, label and
 //! LFE routing rules, the offline loudspeaker driver the caller steps block by block, and the VBAP
 //! backend with its file stream. Inputs are borrowed for the call; a resolved matrix is owned by its handle
 //! and its view lives until `mradm_render_matrix_destroy`. Errors fill the caller's message and
@@ -852,7 +852,7 @@ unsafe fn live_renderer<'a>(handle: *mut RenderLive) -> Result<&'a mut RenderLiv
     unsafe { handle.as_mut() }.ok_or_else(|| bad("无效 Scene 流式渲染句柄"))
 }
 
-/// `live_scene::RendererConfig` (PCM consistency 5.4 A). `selection` is the `RendererSelection`
+/// `live_scene::RendererConfig`. `selection` is the `RendererSelection`
 /// value; `speaker_spread` / `binaural_spread` the C++ enum values; `has_sofa` marks a non-empty
 /// SOFA path (UTF-8); `reference` holds the default geometry when absent; `room_profile` may be
 /// null; `sink` is whether the caller publishes diagnostics.

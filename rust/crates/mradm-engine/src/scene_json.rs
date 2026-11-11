@@ -1,4 +1,4 @@
-//! The scene inspect document `mradm.scene-inspect` v1 (PCM consistency 5.2 A), moved from the
+//! The scene inspect document `mradm.scene-inspect` v1, moved from the
 //! C++ engine's `scene_json`. It reads the Rust render scene the C++ `AdmScene` copied field by
 //! field: element records, the overlay's effective object mute and DirectSpeakers `has_position`,
 //! and the import info. Byte-identical to the former nlohmann `dump(2)`.
@@ -481,7 +481,7 @@ fn object_text(d: &Doc<'_>, scene: &RenderScene, o: &Object, out: &mut String) {
 }
 
 /// The `mradm inspect` summary of an imported (policy-free) scene after its `File:` line, which
-/// the caller writes with the path as given (PCM consistency 5.6 C, moved from the C++ CLI).
+/// the caller writes with the path as given (formerly in the C++ CLI).
 pub fn inspect_text(scene: &RenderScene) -> String {
     let s = &scene.snapshot;
     let d = Doc { s };

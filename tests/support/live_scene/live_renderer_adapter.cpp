@@ -1,4 +1,4 @@
-#include "live_rust_renderer.h"
+#include "live_renderer_adapter.h"
 
 #include <algorithm>
 #include <span>
@@ -61,7 +61,7 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
                                {e.x, e.y, e.z}});
             labels += e.speaker_label.size();
         }
-        RustError error(labels);
+        FfiError error(labels);
         const MradmRenderLiveDiagnostic* list = nullptr;
         std::size_t count = 0;
         const auto code = mradm_render_live_configure(handle_.get(),
@@ -139,7 +139,7 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
     }
     [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const override { return room_; }
     [[nodiscard]] Result<std::uint64_t> end_input() override {
-        RustError error;
+        FfiError error;
         std::uint64_t tail = 0;
         if (const auto code = mradm_render_live_end_input(
                 handle_.get(), &tail, error.message(), error.message_len(), error.context(), error.context_len());
@@ -181,7 +181,7 @@ class LiveRustRenderer final : public ILiveSceneRenderer {
     std::vector<MradmRenderLiveEntry> initial_;
     std::vector<MradmRenderLiveUpdate> updates_;
     std::string trace_;
-    RustError error_;
+    FfiError error_;
     std::shared_ptr<IRoomControl> room_;
 };
 

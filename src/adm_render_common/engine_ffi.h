@@ -1,6 +1,6 @@
-// Private render-orchestration boundary (mradm-engine, PCM consistency 5.2): the Rust backends'
-// capability records and the discovery JSON documents (5.2 A), the request resolution (5.2 B), the
-// backend preparation and offline render step (5.2 C1), and the offline render service (5.2 C2).
+// Private render-orchestration boundary (mradm-engine): the Rust backends'
+// capability records and the discovery JSON documents, the request resolution, the backend
+// preparation and offline render step, and the offline render service.
 // Backend records are process-lifetime Rust data and are never freed; a document is owned by its
 // MradmEngineText handle.
 #pragma once
@@ -81,7 +81,7 @@ int32_t mradm_engine_document(uint32_t kind,
                               MradmAdmText* document);
 void mradm_engine_text_destroy(MradmEngineText* text);
 
-// ── Request resolution (5.2 B) ──────────────────────────────────────────────────────────────
+// ── Request resolution ──────────────────────────────────────────────────────────────────────
 typedef struct MradmEngineResult MradmEngineResult;
 
 typedef struct MradmEngineLog {
@@ -104,7 +104,7 @@ typedef struct MradmEngineStatus {
 int32_t mradm_engine_normalize_layout(const uint8_t* layout, size_t len, MradmAdmText* out);
 void mradm_engine_result_destroy(MradmEngineResult* result);
 
-// ── Backend preparation and the offline render step (5.2 C1) ──────────────────────────────────
+// ── Backend preparation and the offline render step ───────────────────────────────────────────
 
 // RenderPlan for a backend: kind is render_common::EngineBackend; routing, speaker_spread and
 // binaural_spread the C++ enum values; reference holds the default geometry when absent; sofa_path is
@@ -211,7 +211,7 @@ int32_t mradm_engine_offline_next(MradmEngineOffline* handle,
                                   MradmEngineStatus* status);
 void mradm_engine_offline_destroy(MradmEngineOffline* handle);
 
-// ── File streaming (5.3 A) ─────────────────────────────────────────────────────────────────────
+// ── File streaming ─────────────────────────────────────────────────────────────────────────────
 // One stream for every Rust backend. validate may overlap the worker; serialize the other calls
 // and destroy after all return. Errors set *location: 0 none, 1 path=<input>, 2 input=<input>,
 // 3 meter, 4 HOA DSP, 5 Triple Balance DSP, 6 room-binaural.
@@ -282,7 +282,7 @@ uint64_t mradm_engine_stream_tail(const MradmEngineStream* handle);
 MradmRenderRoomControl* mradm_engine_stream_control(const MradmEngineStream* handle);
 void mradm_engine_stream_destroy(MradmEngineStream* handle);
 
-// ── The offline render service (5.2 C2) ───────────────────────────────────────────────────────
+// ── The offline render service ────────────────────────────────────────────────────────────────
 
 // A path's UTF-8 text and its spelling in messages.
 typedef struct MradmEnginePath {
@@ -462,7 +462,7 @@ int32_t mradm_engine_apply_policy(MradmSceneHandle* scene,
                                   MradmEngineResult** result,
                                   MradmEngineStatus* status);
 
-// ── The monitor's stream opening (5.3 B) ───────────────────────────────────────────────────────
+// ── The monitor's stream opening ───────────────────────────────────────────────────────────────
 typedef struct MradmEngineMonitor MradmEngineMonitor;
 
 // kind 0 a rejection (status), 1 a stream (info and the plan's layout), 2 the Apple backend over
@@ -488,7 +488,7 @@ int32_t mradm_engine_monitor_open(const MradmEngineRenderRequest* request,
 MradmEngineStream* mradm_engine_monitor_take_stream(MradmEngineMonitor* handle);
 void mradm_engine_monitor_destroy(MradmEngineMonitor* handle);
 
-// ── The realtime monitor (5.5 A) ───────────────────────────────────────────────────────────────
+// ── The realtime monitor ───────────────────────────────────────────────────────────────────────
 typedef struct MradmEngineLiveMonitor MradmEngineLiveMonitor;
 
 // The error buffers of one island call: *_len holds the capacity in and the length out.
@@ -622,7 +622,7 @@ void mradm_engine_live_monitor_pull(const MradmEngineLiveMonitor* handle,
                                     size_t frames,
                                     MradmEngineLiveMonitorPull* result);
 
-// ── The monitor session (5.5 B) ─────────────────────────────────────────────────────────────
+// ── The monitor session ─────────────────────────────────────────────────────────────────────
 // The session owns the monitor and its backend options; the shell provides the devices, the
 // Apple island and the options (`options`: a RenderOptions copy released by release_options).
 // Code 100 from any call means the former C++ session threw: the shell rethrows the message.

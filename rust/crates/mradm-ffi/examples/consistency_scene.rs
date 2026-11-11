@@ -1,4 +1,4 @@
-//! `mr_adm_phase2_scene`: sample-clock replay of the Scene stream worker and the device-bound
+//! `mr_adm_consistency_scene`: sample-clock replay of the Scene stream worker and the device-bound
 //! output DSP (PCM consistency 1.5–4.2; in Rust since 5.4 D, formerly
 //! `tests/tools/phase2_scene.cpp`). A fixed control script (generations, pose, semantic policy,
 //! backend switches, HpTF and volume) lands at fixed input samples under a manual clock, so the
@@ -24,9 +24,9 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-#[path = "phase2/io.rs"]
-mod phase2_io;
-use phase2_io::{Failure, pcm, require};
+#[path = "consistency/io.rs"]
+mod consistency_io;
+use consistency_io::{Failure, pcm, require};
 
 const SIGNAL_SEED: u32 = 0x1234_5678;
 const MAIN_EPOCH_END: u32 = 12289;
@@ -975,7 +975,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
     }
     require(
         args.len() == 3,
-        "usage: mr_adm_phase2_scene case.json output-directory",
+        "usage: mr_adm_consistency_scene case.json output-directory",
     )?;
     let case = Path::new(&args[1]);
     let text = std::fs::read(case).map_err(|e| e.to_string())?;

@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "live_rust_renderer.h"
+#include "live_renderer_adapter.h"
 #include "room_internal.h"
 #include "scene_renderer_request.h"
 

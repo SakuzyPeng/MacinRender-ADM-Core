@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Validate complete phase-2 evidence, then locate the first observed numerical divergence."""
+"""Validate complete consistency evidence, then locate the first observed numerical divergence."""
 import argparse
 import fnmatch
 import itertools
 import json
 from pathlib import Path
 import re
-import phase2_common as common
+import collection as common
 from render_scene_checkpoint import require_render_scene_checkpoints
 
 REQUIRED_PLATFORMS = {('Darwin', 'arm64'), ('Windows', 'x86_64'), ('Linux', 'x86_64')}
-DEFAULT_GATES = Path(__file__).with_name('phase2-gates.json')
+DEFAULT_GATES = Path(__file__).with_name('gates.json')
 FFT_SIMD_FEATURES = {'default', 'avx', 'sse', 'neon', 'wasm_simd'}
 
 
@@ -54,7 +54,7 @@ def fft_features(build):
 
 def load_gates(path):
     data = json.loads(Path(path).read_text(encoding='utf-8'))
-    if data.get('schema') != 'mradm.phase2.gates.v1' or not isinstance(data.get('gates'), list):
+    if data.get('schema') != 'mradm.consistency.gates.v1' or not isinstance(data.get('gates'), list):
         raise ValueError('unsupported gate file')
     for gate in data['gates']:
         if gate.get('kind') not in {'kernel', 'case'} or not gate.get('pattern') or not gate.get('reason'):
@@ -116,7 +116,7 @@ def validate_scene_status(manifest):
 
 def validate(root, *, allow_tool_overrides=False):
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-    if not isinstance(manifest, dict) or manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
+    if not isinstance(manifest, dict) or manifest.get('schema') != 'mradm.consistency.collection.v1' or manifest.get('complete') is not True:
         raise ValueError('incomplete or unsupported baseline')
     if manifest.get('tool_overrides') and not allow_tool_overrides:
         raise ValueError('replay tools were replaced; such collections are same-build comparisons, not platform evidence')
@@ -266,7 +266,7 @@ def compare(directories, require_platforms=True, gates=()):
         platforms.add((m['build']['platform.system'], arch))
     if require_platforms and platforms != REQUIRED_PLATFORMS:
         raise ValueError('expected macOS arm64, Windows x64 and Linux x64')
-    report = {'schema': 'mradm.phase2.comparison.v1', 'source_sha256': first['source']['sha256'],
+    report = {'schema': 'mradm.consistency.comparison.v1', 'source_sha256': first['source']['sha256'],
               'config': first['config'], 'diagnostics': first['diagnostics'],
               'full_platform_set': platforms == REQUIRED_PLATFORMS,
               'platforms': sorted(platforms), 'pairs': [],
