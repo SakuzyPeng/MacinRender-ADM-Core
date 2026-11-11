@@ -31,13 +31,13 @@ Reference tests 在发布配置下逐个打开 7 个冻结的第三方对照。�
 | 5.1 | 方向与基线：驱动面与岛接口清单、规模基线、工具切换规则与 `compare-collections.py` | 291 | 32,551 | [5.1](RUST_ORCHESTRATION_BASELINE.md) |
 | 5.2 | 离线编排：能力表与发现文档、请求判定、后端准备与离线驱动、`RenderService` 状态机，Rust 版离线重放工具 | 291 | 29,805 | [5.2](RUST_ORCHESTRATION_OFFLINE.md) |
 | 5.3 | 文件流式与监听的打开，Rust 版文件流式重放工具 | 291 | 29,297 | [5.3](RUST_ORCHESTRATION_STREAM.md) |
-| 5.7 | room 默认 ramp 按房间采样率换算（有意的数值变化，提前到 5.4 之前） | 294 | 29,297 | [5.7](RUST_ROOM_DEFAULT_RAMP.md) |
+| 5.7 | room 默认 ramp 按房间采样率换算（有意的数值变化，提前到 5.4 之前） | 294 | 29,260 | [5.7](RUST_ROOM_DEFAULT_RAMP.md) |
 | 5.4 | Scene 流式引擎、输出会话与 HpTF 运行时，Rust 版 Scene 重放工具，五个怪癖的修正 | 294 | 26,363 | [5.4](RUST_ORCHESTRATION_SCENE.md) |
 | 5.5 | Monitor 调度、监听会话与 OSC 接收器 | 294 | 24,409 | [5.5](RUST_ORCHESTRATION_MONITOR.md) |
 | 5.6 | 后端适配壳、Apple 总线计划、C++ `AdmScene` 与测试专用路由 FFI 删出生产 | 294 | 21,776 | [5.6](RUST_ORCHESTRATION_SHELLS.md) |
 | 5.8 | 一致性工具、C++ 包装、测试目标与生产注释按功能命名 | 294 | 21,772 | [5.8](RUST_ORCHESTRATION_NAMING.md) |
 
-行数是各切片最后一次合并后 `language-surface-baseline.json` 的值；5.7 与 5.4 之间少的 37 行来自维护者的 `7b08527`（FLAC 读取校验）。
+行数是各切片最后一次合并后 `language-surface-baseline.json` 的值；5.3 与 5.7 之间少的 37 行来自维护者的 `7b08527`（FLAC 读取校验）。
 内核测量 255 份，全部设为门禁，五期未变。有意的数值变化只有两处，各自单独记录：5.7 的 room 默认 ramp（3 个新 id），
 5.4 的尾声长度修正（36 个变采样双耳 Scene 用例末尾的重采样 lookahead 区间）。其余切片都是结构迁移，以删除前的 C++ 生成的
 黄金数据、同构建新旧工具或新旧探针对照与植入缺陷验收。
