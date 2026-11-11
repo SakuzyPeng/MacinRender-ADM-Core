@@ -278,7 +278,7 @@
         "tests/reference/libadm/provenance.json": "8bcf4d0884c42312476803daa7b9f81543346a972dcdb73cf6e6fe08ea472616",
         "tests/reference/libadm/reference_test.cpp": "d0574f7d2b23943fe9438280395e1f4bb2ca09c22ca820c467ed5506a0677b2e",
         "tests/reference/libadm/run.py": "7ed1f5059f298301bf69e6d8f67af38241ed8cc3544046e3037689837bca8763",
-        "tests/reference/libadm/scene_importer.cpp": "cc30cc6a39a42e528b2de754f374f1b41ff5361fb79a4955351ba489c1d98cea"
+        "tests/reference/libadm/scene_importer.cpp": "96a76a33f07bdfa459026eff9537c6234c637d074a605251dc61760f5489dade"
       }
     },
     {

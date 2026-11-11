@@ -19,7 +19,7 @@
     },
     "reference": {
       "files": 38,
-      "lines": 12025
+      "lines": 12026
     },
     "rust": {
       "files": 338,
@@ -71,7 +71,7 @@
     "tests/reference/ebur128_reference_test.cpp": 187,
     "tests/reference/hoa": 655,
     "tests/reference/hptf_parse": 243,
-    "tests/reference/libadm": 1994,
+    "tests/reference/libadm": 1995,
     "tests/reference/libbw64": 168,
     "tests/reference/libear": 402,
     "tests/reference/live_vbap": 661,

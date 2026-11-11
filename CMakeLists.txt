@@ -930,7 +930,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS)
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
         add_library(mr_adm_libadm_reference STATIC tests/reference/libadm/scene_importer.cpp)
-        target_link_libraries(mr_adm_libadm_reference PRIVATE MacinRender::ADMIo MacinRender::ADMAudio adm)
+        target_link_libraries(mr_adm_libadm_reference PRIVATE
+            mr_adm_scene_test_support MacinRender::ADMIo MacinRender::ADMAudio adm)
         add_executable(mr_adm_make_libadm_fixture tests/reference/libadm/make_fixture.cpp)
         target_link_libraries(mr_adm_make_libadm_fixture PRIVATE libbw64 adm)
         # The frozen comparison serializes both AdmScene copies with the former C++ inspect writer,

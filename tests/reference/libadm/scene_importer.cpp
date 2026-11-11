@@ -25,6 +25,7 @@
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
+#include "adm/scene.h"
 
 namespace mradm::io::libadm_reference {
 

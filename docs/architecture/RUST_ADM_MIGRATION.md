@@ -60,3 +60,7 @@ C++ 质量门仍显示既有长函数等告警；没有将其描述为零告警�
 - 单元 `libadm`（`tests/reference/libadm/`）：在默认 OFF 的 `MR_ADM_BUILD_LIBADM_REFERENCE_TESTS` 下编译，由 `mr_adm_libadm_reference_tests` 比较。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+2026-11-11（PCM consistency 5.6 C）：`AdmScene` 迁入 `tests/support/adm_scene` 后，
+参考导入器通过显式包含 `adm/scene.h` 和链接 `mr_adm_scene_test_support` 获取场景类型。
+参考文件新增该头文件引用，并同步登记哈希。
