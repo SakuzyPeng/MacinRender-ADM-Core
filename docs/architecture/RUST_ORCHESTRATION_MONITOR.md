@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | A（`a74c923`） | `MonitorEngine` 的调度：worker 与命令顺序、输出环、seek 的 10 ms 桥接与延后的设备 flush、loop（含输出级两段式回绕）、实时编辑与 revision、听者朝向快照、同步与后台预热的后端切换（2048 帧交叉淡化或输出级硬切）、HpTF、LUFS 表、电平与失败状态；`ring_buffer.h` | `monitor`（`mod` / `worker` / `pull` / `native`），输出环与 Scene 共用 `ring`；FFI `mradm_engine_live_monitor_*` |
 | B（`a46c67a`） | `MonitorSession`：会话日志、原 `RealtimeStreamFactory` 的打开流程、上次与待用的后端选择、重建时保留的编辑 / 朝向 / HpTF 档案、秒到帧换算、后端切换的检查与回退、输出设备重建与回退到默认设备、HpTF 告警、会话失效后的回答 | `monitor::session`；FFI `mradm_engine_monitor_session_*` |
-| C | `OscHeadTrackingReceiver`（517 行）：回环 UDP socket、接收线程、来源过滤、姿态排序、遥测缓存与匹配、新鲜度与心跳、快照 JSON、错误文字 | `mradm-osc` `receiver`；FFI `mradm_osc_receiver_*` 与 `mradm_osc_text_*`，Windows 的独占绑定在 `mradm-ffi` `osc::winsock` |
+| C（`b82987c`） | `OscHeadTrackingReceiver`（517 行）：回环 UDP socket、接收线程、来源过滤、姿态排序、遥测缓存与匹配、新鲜度与心跳、快照 JSON、错误文字 | `mradm-osc` `receiver`；FFI `mradm_osc_receiver_*` 与 `mradm_osc_text_*`，Windows 的独占绑定在 `mradm-ffi` `osc::winsock` |
 
 审计列在 5.5 下的其余几项，这次之前就已经迁出，或已没有生产调用者：
 - downmix：Monitor 不做扬声器或 HOA 的 downmix，重建时必须保持输出声道数，C++ 会话原来就这样规定。`DownmixStream` 已只剩测试在用，C 把它移到 `tests/support/realtime`。
@@ -27,7 +27,7 @@
 ### C++ 剩下的部分
 
 `src/adm_realtime` 剩 1,366 行：
-- **`osc_head_tracking.cpp`**（126 行）：`mradm_osc_receiver_*` 的薄壳。`include/adm/head_tracking.h` 的接口不变，C ABI 与手动探针都没有改。
+- **`osc_head_tracking.cpp`**（126 行）：`mradm_osc_receiver_*` 的薄壳。保留 `OscHeadTrackingReceiver` 的 C++ 类接口，快照结构的遥测字符串字段变更见发布说明。C ABI 与手动探针都没有改。
 - **`scene_stream_engine.*`**（518 行）：Scene 流的薄壳，见 5.4 记录。
 - **`island_stream.*`**（213 行）：C++ `IRenderStream` 的岛表，Apple 后端与测试流经它交给 Rust Monitor。
 - **设备岛**：
@@ -109,25 +109,44 @@
 | B | `2a73536` | 新旧探针在手动设备上驱动 `MonitorSession` 的公开 API（VBAP、双耳、Triple Balance、room、HOA）：播放、编辑、暂停中带 loop 的 seek、后端切换、设备切换、设备失败与回退、HpTF 与削波告警、被拒的改声道切换、播放到结束 | PCM、状态、电平、LUFS、错误、HpTF 信息与日志在每份构建上跑两次都相同 |
 | C | `b87d5a3` | 新旧探针：原 C++ 接收器（`HEAD` 源码，改名到 `legacy` 命名空间）与新接收器编进同一个进程，收同一串数据报。共 12 个种子，每个 1,500 个数据报，内容包括姿态（推进、重复、回退、换实例 / 会话 / 参考 / 修订、各种采样时钟）、info / status 遥测（各种状态、BOM、浮点 / 大整数 / 转义的附加字段）、非法数据报、协议不符与其他来源；第 3、6、9、12 个种子带来源过滤，偶数种子中途静默 620 ms；另外比较端口占用与非法过滤的启动失败 | 13,203 项比较 0 差异。比较内容：快照的全部字段（时间字段除外），屏蔽端口与时间之后的快照 JSON 字节，`last_error`，启动结果与错误文字 |
 
-- **常规检查**（Linux x64）：
+- **实现方常规检查**（Linux x64）：
   - A：ctest 83/83 连跑 3 次，`mr_adm_realtime_tests` 50 次，Triple Balance 监听基准 60 s 欠载 0；
   - B：ctest 83/83 连跑 3 次，`mr_adm_realtime_tests` 30 次，会话测试 20 次，监听基准 60 s 欠载 0；
   - C：全量 ctest 81/81 跑 1 次（本机缺 room HRIR 准备所需的 Python 依赖，所以比 83 个少 2 个），`mradm-osc` 单元测试通过；没有重复跑；
   - clippy 与 fmt 通过，C 另对 `x86_64-pc-windows-msvc` 跑了 clippy，覆盖 `osc::winsock`；
   - FFI 头校验：A 后 383 个函数、157 个结构体，B 后 403 / 158，C 后 412 / 159；
   - C 改动的 C++ 文件 clang-format 与 clang-tidy 通过；许可、retention、version 与规模棘轮通过；受影响的手动目标（两个 room 探针、OSC 探针与 C 示例）都能编译。
-- **待你本地验证**（这台机器上跑不了，或跑起来太慢）：
-  - Windows x64：
-    - `mr_adm_osc_head_tracking_tests`，其中“exclusive port”一项检查 `SO_EXCLUSIVEADDRUSE`；
-    - 接收线程的 20 ms 读超时与 `stop` 延迟；
-    - room 探针链接 `avrt`；
-    - 系统空间监听 sink；
-  - macOS arm64：
-    - OSC 测试；
-    - GUI 用 PoseBridge 实机做头追踪；
-    - `AVSampleBufferAudioRenderer` 监听；
-  - 三平台：完整 ctest 重复跑；Consistency 工作流（C 不改 PCM，预期 294 个 PCM id 相同、门禁失败 0）；
-  - A、B 合并后的 Consistency 运行号待补。
+
+### 维护者审查与合并验证
+
+2026-11-10 审查 C 的候选 `1a64c18b`（基线 `b87d5a3a`），随后合入主线为 `0f2449de`。
+已核对合并提交与候选的 Git tree 相同。
+
+| 主机与提交 | 检查 | 结果 |
+| --- | --- | --- |
+| macOS arm64，候选 `1a64c18b` | `cargo test --locked -p mradm-osc`，候选 C++ 翻译单元重编译并与候选 Rust 库链接后运行两项 OSC 测试 | Rust 单元测试 16/16，C ABI 契约测试通过，协议差分覆盖 294,704 个数据报（5,641 个接受）并通过 |
+| macOS arm64，合并 `0f2449de`，Debug | 用 CMake 构建两项 OSC 测试、`mr_adm_realtime_tests` 与两个 room 手动探针，运行三项定向 CTest | 构建与链接通过，CTest 3/3 通过 |
+| Windows x64，候选 `1a64c18b`，canonical MSVC/Ninja Release，SOFA/IAMF off | 构建并运行 `mr_adm_osc_head_tracking_tests`、`mr_adm_osc_protocol_reference_tests`，构建 `mr_adm_room_scene_benchmark` 与 `mr_adm_room_file_device_probe` | CTest 2/2 通过，覆盖端口占用、释放和停止等 C ABI 契约，两个 room 探针含 `avrt` 的链接通过 |
+
+- FFI 头校验通过，412 个函数、159 个结构体与 Rust 一致。`cargo fmt --all -- --check`、相对主线的 C/C++ 规模棘轮及 `git diff --check` 通过。
+- Windows 验证二进制来自候选 `1a64c18b`。合并后源码快进至 `0f2449de`，工作区干净，LFS 对象校验通过。
+
+### 合并后的 Consistency
+
+已核对以下主线工作流完成并通过。
+
+| 合并点 | 运行 |
+| --- | --- |
+| A（`2a735365`） | [42793410919](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42793410919) |
+| B（`4b1da58d`） | [42854859745](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42854859745) |
+| B 后的维护者修正（`b87d5a3a`） | [42862032746](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/42862032746) |
+
+### 待完成的验证
+
+- Windows x64 的接收线程读超时与 `stop` 延迟专项测量，以及系统空间监听 sink。
+- macOS arm64 的 PoseBridge 实机 GUI 头追踪，以及 `AVSampleBufferAudioRenderer` 监听。
+- macOS arm64 与 Windows x64 的完整 CTest 重复运行。维护者主机验证使用这两个平台，保留已有 Linux 记录。
+- C 合并后的完整 Consistency 结果（预期 294 个 PCM id 相同、门禁失败 0）。
 
 ## 规模
 
@@ -138,7 +157,7 @@ C/C++（`language-surface.py`）：
 | 5.4 E（`12c823c`） | 26,363 | 49,297 | 3,314 | 1,967 | 3,379 | 5.5 基线 |
 | A（`2a73536`） | 25,477 | 49,509 | 2,389 | 1,968 | 3,543 | `MonitorEngine` 只剩外壳；岛表与 FFI 声明加入 |
 | B（`4b1da58`） | 25,077 | 49,911 | 2,033 | 1,807 | 3,660 | `MonitorSession` 只剩外壳；C++ `MonitorEngine` 外壳移到 `tests/support/realtime` |
-| C | 24,409 | 50,237 | 1,366 | 1,807 | 3,660 | OSC 接收器只剩外壳；三组文件移到 `tests/support` |
+| C（`0f2449de`） | 24,409 | 50,237 | 1,366 | 1,807 | 3,660 | OSC 接收器只剩外壳；三组文件移到 `tests/support` |
 
 - **累计**：5.5 共减少生产 C/C++ 1,954 行。五期至今 32,551 → 24,409，减少 25.0%。
 - **Rust**：
