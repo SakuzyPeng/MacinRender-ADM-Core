@@ -227,10 +227,10 @@ target_sources(
     mr_adm_render_common
     PRIVATE
         src/adm_render_common/capability_records.cpp
+        src/adm_render_common/engine_records.cpp
         src/adm_render_common/hptf_eq.cpp
         src/adm_render_common/render_common.cpp
         src/adm_render_common/speaker_layouts.cpp
-        src/adm_render_common/speaker_pcm.cpp
 )
 target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
 target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads
@@ -238,144 +238,22 @@ target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::
 mr_adm_core_apply_warnings(mr_adm_render_common)
 mr_adm_core_apply_static_analysis(mr_adm_render_common)
 
-# ── adm_render_ear ────────────────────────────────────────────────────────────
-# Rust EAR Objects/DirectSpeakers/HOA renderer with a private C++ adapter.
-
-add_library(mr_adm_render_ear)
-add_library(MacinRender::ADMRenderEar ALIAS mr_adm_render_ear)
-
-target_sources(
-    mr_adm_render_ear
-    PRIVATE
-        src/adm_render_ear/ear_renderer.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/render_ear.h
-)
-
-target_link_libraries(mr_adm_render_ear
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp
-)
-mr_adm_core_apply_warnings(mr_adm_render_ear)
-mr_adm_core_apply_static_analysis(mr_adm_render_ear)
-
-# ── adm_render_vbap ───────────────────────────────────────────────────────────
-# Rust-backed VBAP renderer. Legacy renderer selection names stay compatible.
-# Objects-to-loudspeaker rendering through project-owned VBAP/MDAP.
-
-add_library(mr_adm_render_vbap)
-add_library(MacinRender::ADMRenderVBAP ALIAS mr_adm_render_vbap)
-
-target_sources(
-    mr_adm_render_vbap
-    PRIVATE
-        src/adm_render_vbap/vbap_renderer.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/render_vbap.h
-)
-
-target_link_libraries(mr_adm_render_vbap
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
-    PRIVATE MacinRender::ADMDsp
-)
-mr_adm_core_apply_warnings(mr_adm_render_vbap)
-mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
-
-# ── adm_render_triple_balance ─────────────────────────────────────────────────
-# Project-owned Cartesian room renderer. No SAF or libear dependency.
-add_library(mr_adm_render_triple_balance)
-add_library(MacinRender::ADMRenderTripleBalance ALIAS mr_adm_render_triple_balance)
-target_sources(mr_adm_render_triple_balance
-    PRIVATE
-        src/adm_render_triple_balance/triple_balance_renderer.cpp
-    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
-)
-target_link_libraries(mr_adm_render_triple_balance
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp
-)
-mr_adm_core_apply_warnings(mr_adm_render_triple_balance)
-mr_adm_core_apply_static_analysis(mr_adm_render_triple_balance)
-
-# ── adm_render_hoa ────────────────────────────────────────────────────────────
-# HOA encode renderer: Objects → HOA bed (ACN/SN3D), prepared and rendered in Rust mradm-render.
-# Output order is selected via output_layout ("hoa3" = 3rd order, 16ch).
-
-add_library(mr_adm_render_hoa)
-add_library(MacinRender::ADMRenderHOA ALIAS mr_adm_render_hoa)
-
-target_sources(
-    mr_adm_render_hoa
-    PRIVATE
-        src/adm_render_hoa/hoa_renderer.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/render_hoa.h
-)
-
-target_link_libraries(mr_adm_render_hoa
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp
-)
-mr_adm_core_apply_warnings(mr_adm_render_hoa)
-mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
-
-# ── adm_render_binaural ───────────────────────────────────────────────────────
+# ── adm_render_room ───────────────────────────────────────────────────────────
 # Native room DSP is shared by offline rendering, file streaming and Scene streaming.
 add_library(mr_adm_render_room)
 add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
 target_sources(mr_adm_render_room PRIVATE
     src/adm_render_room/room.cpp
-    src/adm_render_room/room_renderer.cpp
     src/adm_render_room/scene_renderer_request.cpp
-    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h include/adm/render_room.h)
+    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h)
 target_include_directories(mr_adm_render_room PRIVATE src/adm_render_room)
 target_link_libraries(mr_adm_render_room PUBLIC MacinRender::ADMCore
     PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp Threads::Threads)
 mr_adm_core_apply_warnings(mr_adm_render_room)
 mr_adm_core_apply_static_analysis(mr_adm_render_room)
 
-# Rust HRTF binaural renderer: Objects/DirectSpeakers → 2ch via VBAP-interpolated
-# KEMAR or user SOFA HRTF convolution.  HOA not supported.
-
-add_library(mr_adm_render_binaural)
-add_library(MacinRender::ADMRenderBinaural ALIAS mr_adm_render_binaural)
-
-target_sources(
-    mr_adm_render_binaural
-    PRIVATE
-        src/adm_render_binaural/binaural_renderer.cpp
-        src/adm_render_binaural/hrtf_state.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/render_binaural.h
-)
-
-target_link_libraries(mr_adm_render_binaural
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
-    PRIVATE MacinRender::ADMDsp
-)
-target_compile_definitions(mr_adm_render_binaural PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
-mr_adm_core_apply_warnings(mr_adm_render_binaural)
-mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
-
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-    target_sources(mr_adm_render_binaural PRIVATE src/adm_render_binaural/consistency_spreader_trace.cpp)
-    foreach(_mr_diagnostic_target IN ITEMS mr_adm_render_common mr_adm_render_ear mr_adm_render_hoa mr_adm_render_binaural mr_adm_render_vbap)
-        target_compile_definitions(${_mr_diagnostic_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    endforeach()
+    target_compile_definitions(mr_adm_render_common PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
 endif()
 if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
     if(NOT MR_ADM_BUILD_SAF_REFERENCE_TESTS)
@@ -532,7 +410,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMMetadata MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMMetadata MacinRender::ADMDsp
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -575,17 +453,11 @@ target_link_libraries(mr_adm_realtime
         miniaudio
         MacinRender::ADMDsp
         MacinRender::ADMRenderCommon
-        MacinRender::ADMRenderVBAP
-        MacinRender::ADMRenderBinaural
         MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderTripleBalance
 )
 # src/adm_metadata only for the plain C adm_ffi.h the private FFI headers build on.
 target_include_directories(mr_adm_realtime PRIVATE
     src/adm_metadata
-    src/adm_render_vbap
-    src/adm_render_binaural
-    src/adm_render_triple_balance
     src/adm_render_room
 )
 mr_adm_core_apply_warnings(mr_adm_realtime)
@@ -686,11 +558,6 @@ if(MR_ADM_CORE_BUILD_CLI)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMIo
-            MacinRender::ADMRenderEar
-            MacinRender::ADMRenderVBAP
-            MacinRender::ADMRenderTripleBalance
-            MacinRender::ADMRenderHOA
-            MacinRender::ADMRenderBinaural
             MacinRender::ADMRenderRoom
             MacinRender::ADMAudio
             MacinRender::ADMDsp
@@ -854,6 +721,34 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
     add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
 
+    # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer,
+    # PCM consistency 5.6 A): the one preparation entry, the offline driver and the file stream of
+    # every Rust backend behind create_*_renderer. Production renders through mradm-engine directly;
+    # the C++ tests and the frozen references drive the backends through these. HrtfState
+    # (tests/support/binaural) is the binaural HRTF view the SOFA tests read.
+    add_library(mr_adm_engine_renderer_test_support STATIC
+        tests/support/engine_renderer/binaural_renderer.cpp
+        tests/support/engine_renderer/ear_renderer.cpp
+        tests/support/engine_renderer/hoa_renderer.cpp
+        tests/support/engine_renderer/room_renderer.cpp
+        tests/support/engine_renderer/speaker_pcm.cpp
+        tests/support/engine_renderer/triple_balance_renderer.cpp
+        tests/support/engine_renderer/vbap_renderer.cpp
+        tests/support/binaural/hrtf_state.cpp)
+    target_include_directories(mr_adm_engine_renderer_test_support PUBLIC
+        tests/support/engine_renderer src/adm_render_common)
+    target_include_directories(mr_adm_engine_renderer_test_support PRIVATE
+        tests/support/binaural src/adm_render_room src/adm_audio src/adm_metadata)
+    target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMRenderCommon
+        MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp)
+    target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE
+        MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
+    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_engine_renderer_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_engine_renderer_test_support)
+
     # Test-only output DSP helpers (tests/support/dsp): the stand-alone stereo peak guard and the
     # HpTF design / cascade wrappers. Production uses the Rust Scene output and HptfProcessor.
     add_library(mr_adm_output_dsp_test_support STATIC
@@ -920,11 +815,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_live_scene_test_support)
 
     add_executable(mr_adm_live_binaural_rust_tests tests/unit/live_binaural_rust_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
+    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
     # The frozen reference includes the former creation header (tests/support/frozen_includes) and the
     # resampler wrapper (tests/support/dsp).
-    target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural src/adm_render_room
+    target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_room
         tests/support/frozen_includes tests/support/dsp)
     mr_adm_core_apply_warnings(mr_adm_live_binaural_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_live_binaural_rust_tests)
@@ -946,10 +841,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
             "-DMR_ADM_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_executable(mr_adm_live_vbap_rust_tests tests/unit/live_vbap_rust_test.cpp)
-    target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE MacinRender::ADMRenderVBAP MacinRender::ADMRenderRoom
+    target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt mr_adm_live_scene_test_support)
     # The frozen reference includes the former creation header (tests/support/frozen_includes).
-    target_include_directories(mr_adm_live_vbap_rust_tests PRIVATE src/adm_render_vbap src/adm_render_room src/adm_render_common
+    target_include_directories(mr_adm_live_vbap_rust_tests PRIVATE src/adm_render_room src/adm_render_common
         tests/unit tests/support/frozen_includes)
     mr_adm_core_apply_warnings(mr_adm_live_vbap_rust_tests)
     mr_adm_core_scene_reference_fp(mr_adm_live_vbap_rust_tests)
@@ -1072,7 +967,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
         target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
             MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json
-            mr_adm_live_scene_test_support)
+            mr_adm_live_scene_test_support mr_adm_engine_renderer_test_support)
         target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room tests/support)
         mr_adm_core_apply_warnings(mr_adm_room_tests)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
@@ -1140,7 +1035,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_render_triple_balance mr_adm_audio mr_adm_render_common)
+        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_audio mr_adm_render_common)
             target_compile_definitions(${_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
         endforeach()
     endif()
@@ -1252,7 +1147,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
         tests/support/realtime src/adm_realtime src/adm_render_common)
     target_link_libraries(mr_adm_monitor_engine_test_support PUBLIC
-        MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+        MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_engine_renderer_test_support)
     mr_adm_core_apply_warnings(mr_adm_monitor_engine_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_monitor_engine_test_support)
 
@@ -1272,8 +1167,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_vbap_smoke_tests
         PRIVATE
             MacinRender::ADMEngine
-            MacinRender::ADMRenderVBAP
-            MacinRender::ADMRenderTripleBalance
+            mr_adm_engine_renderer_test_support
             MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
@@ -1286,9 +1180,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_scene_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
-        MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderRoom
+        MacinRender::ADMEngine MacinRender::ADMRealtime mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon mr_adm_live_scene_test_support)
-    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine src/adm_render_triple_balance
+    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine
         src/adm_render_room)
     if(WIN32)
         target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE Psapi)
@@ -1322,7 +1216,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_monitor_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo
+        mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo
         mr_adm_monitor_engine_test_support)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
@@ -1343,48 +1237,48 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/reference/triple_balance/panner.cpp tests/reference/triple_balance/layout_222.cpp
         tests/reference/triple_balance/size_panner.cpp tests/reference/triple_balance/size_processor.cpp
         tests/reference/triple_balance/render_state.cpp)
-    target_link_libraries(mr_adm_triple_balance_rust_tests PRIVATE MacinRender::ADMRenderTripleBalance
+    target_link_libraries(mr_adm_triple_balance_rust_tests PRIVATE mr_adm_engine_renderer_test_support
         MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_triple_balance_test_support nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_triple_balance_rust_tests BEFORE PRIVATE tests/support/legacy_speaker_pcm)
-    target_include_directories(mr_adm_triple_balance_rust_tests PRIVATE src/adm_render_triple_balance src/adm_render_common)
+    target_include_directories(mr_adm_triple_balance_rust_tests PRIVATE src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_rust_tests)
     add_test(NAME mr_adm_triple_balance_rust_tests COMMAND mr_adm_triple_balance_rust_tests)
     set_tests_properties(mr_adm_triple_balance_rust_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
-    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderRoom
+    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon mr_adm_triple_balance_test_support mr_adm_live_scene_test_support)
-    target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_triple_balance src/adm_render_room)
+    target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_room)
     mr_adm_core_apply_warnings(mr_adm_live_triple_balance_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_triple_balance_tests)
     add_test(NAME mr_adm_live_triple_balance_tests COMMAND mr_adm_live_triple_balance_tests)
 
     add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
     target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
-        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
+        mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
         MacinRender::ADMIo)
-    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE src/adm_render_triple_balance tests/support)
+    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)
     add_test(NAME mr_adm_triple_balance_stream_tests COMMAND mr_adm_triple_balance_stream_tests)
 
     add_executable(mr_adm_triple_balance_point_tests tests/unit/triple_balance_point_test.cpp)
     add_executable(mr_adm_triple_balance_222_tests tests/unit/triple_balance_222_test.cpp)
-    target_include_directories(mr_adm_triple_balance_222_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_222_tests PRIVATE MacinRender::ADMRenderTripleBalance
+    target_include_directories(mr_adm_triple_balance_222_tests PRIVATE)
+    target_link_libraries(mr_adm_triple_balance_222_tests PRIVATE mr_adm_engine_renderer_test_support
         mr_adm_triple_balance_test_support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_222_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_222_tests)
     add_test(NAME mr_adm_triple_balance_222_tests COMMAND mr_adm_triple_balance_222_tests)
     add_executable(mr_adm_triple_balance_semantics_tests tests/unit/triple_balance_semantics_test.cpp)
-    target_include_directories(mr_adm_triple_balance_semantics_tests PRIVATE src/adm_render_triple_balance)
+    target_include_directories(mr_adm_triple_balance_semantics_tests PRIVATE)
     target_link_libraries(mr_adm_triple_balance_semantics_tests PRIVATE mr_adm_triple_balance_test_support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_semantics_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_semantics_tests)
     add_test(NAME mr_adm_triple_balance_semantics_tests COMMAND mr_adm_triple_balance_semantics_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_semantics")
-    target_include_directories(mr_adm_triple_balance_point_tests PRIVATE src/adm_render_triple_balance)
-    target_link_libraries(mr_adm_triple_balance_point_tests PRIVATE MacinRender::ADMRenderTripleBalance
+    target_include_directories(mr_adm_triple_balance_point_tests PRIVATE)
+    target_link_libraries(mr_adm_triple_balance_point_tests PRIVATE mr_adm_engine_renderer_test_support
         mr_adm_triple_balance_test_support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_point_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_point_tests)
@@ -1399,13 +1293,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_triple_balance_size_filter_tests COMMAND mr_adm_triple_balance_size_filter_tests)
 
     add_executable(mr_adm_triple_balance_size_probe tests/unit/triple_balance_size_probe.cpp)
-    target_include_directories(mr_adm_triple_balance_size_probe PRIVATE src/adm_render_triple_balance)
+    target_include_directories(mr_adm_triple_balance_size_probe PRIVATE)
     target_link_libraries(mr_adm_triple_balance_size_probe PRIVATE mr_adm_triple_balance_test_support
         nlohmann_json::nlohmann_json)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_size_probe)
 
     add_executable(mr_adm_triple_balance_size_processor_tests tests/unit/triple_balance_size_processor_test.cpp)
-    target_include_directories(mr_adm_triple_balance_size_processor_tests PRIVATE src/adm_render_triple_balance)
+    target_include_directories(mr_adm_triple_balance_size_processor_tests PRIVATE)
     target_link_libraries(mr_adm_triple_balance_size_processor_tests PRIVATE mr_adm_triple_balance_test_support
         nlohmann_json::nlohmann_json)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_size_processor_tests)
@@ -1490,7 +1384,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Smoke test: non-existent file → io_error via full engine stack.
     add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)
-    target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMRenderEar)
+    target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine mr_adm_engine_renderer_test_support)
     mr_adm_core_apply_warnings(mr_adm_ear_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_smoke_tests)
     add_test(NAME mr_adm_ear_smoke_tests COMMAND mr_adm_ear_smoke_tests)
@@ -1521,7 +1415,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_ear_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
-            MacinRender::ADMRenderEar
+            mr_adm_engine_renderer_test_support
             MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
@@ -1545,7 +1439,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
     add_executable(mr_adm_hoa_rust_tests tests/unit/hoa_rust_test.cpp)
-    target_link_libraries(mr_adm_hoa_rust_tests PRIVATE MacinRender::ADMRenderHOA MacinRender::ADMRenderCommon
+    target_link_libraries(mr_adm_hoa_rust_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderCommon
         MacinRender::ADMDsp nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_hoa_rust_tests PRIVATE src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_hoa_rust_tests)
@@ -1557,7 +1451,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
-            MacinRender::ADMRenderHOA
+            mr_adm_engine_renderer_test_support
             MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
@@ -1586,7 +1480,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_binaural_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
-            MacinRender::ADMRenderBinaural
+            mr_adm_engine_renderer_test_support
             MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
@@ -1598,8 +1492,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
 
     add_executable(mr_adm_sofa_fixture_tests tests/unit/sofa_fixture_test.cpp)
-    target_link_libraries(mr_adm_sofa_fixture_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    target_include_directories(mr_adm_sofa_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
+    target_link_libraries(mr_adm_sofa_fixture_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_include_directories(mr_adm_sofa_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support/binaural")
     target_compile_definitions(mr_adm_sofa_fixture_tests PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
     mr_adm_core_apply_warnings(mr_adm_sofa_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_sofa_fixture_tests)
@@ -1652,10 +1546,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_hrtf_interpolation_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
+    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
     target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/support/binaural"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_room"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
 
@@ -1849,11 +1743,6 @@ install(
         mr_adm_c_api
         mr_adm_metadata
         mr_adm_io
-        mr_adm_render_ear
-        mr_adm_render_vbap
-        mr_adm_render_triple_balance
-        mr_adm_render_hoa
-        mr_adm_render_binaural
         mr_adm_render_room
         mr_adm_engine
         mr_adm_audio

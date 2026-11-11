@@ -5,14 +5,6 @@
 #include <fmt/format.h>
 
 #include "adm/render.h"
-#ifdef __APPLE__
-#include "adm/render_apple.h"
-#endif
-#include "adm/render_binaural.h"
-#include "adm/render_ear.h"
-#include "adm/render_hoa.h"
-#include "adm/render_triple_balance.h"
-#include "adm/render_vbap.h"
 
 #include "commands.h"
 
@@ -107,27 +99,8 @@ CLI::Validator renderer_validator() {
 // Backend display name for the optional "Renderer:" header line. Only the name
 // is needed here; the channel-order data comes from RenderService.
 std::string backend_name_for(std::string_view renderer) {
-    if (renderer == "ear") {
-        return mradm::ear_capabilities().backend_name;
-    }
-    if (renderer == "saf") {
-        return mradm::vbap_capabilities().backend_name;
-    }
-    if (renderer == "triple-balance") {
-        return mradm::triple_balance_capabilities().backend_name;
-    }
-    if (renderer == "hoa") {
-        return mradm::hoa_capabilities().backend_name;
-    }
-    if (renderer == "saf-binaural" || renderer == "binaural") {
-        return mradm::binaural_capabilities().backend_name;
-    }
-#ifdef __APPLE__
-    if (renderer == "apple") {
-        return mradm::apple_capabilities().backend_name;
-    }
-#endif
-    return {};
+    const auto caps = mradm::RenderService{}.backend_capabilities(renderer);
+    return caps ? caps->backend_name : std::string{};
 }
 
 int print_layouts(std::string format, const std::string& layout_filter, std::string renderer_filter) {

@@ -1,17 +1,12 @@
 #include <algorithm>
+#include <array>
 #include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#ifdef __APPLE__
-#include "adm/render_apple.h"
-#endif
-#include "adm/render_binaural.h"
-#include "adm/render_ear.h"
-#include "adm/render_hoa.h"
-#include "adm/render_triple_balance.h"
-#include "adm/render_vbap.h"
+#include "adm/render.h"
 
 #include "commands.h"
 
@@ -89,19 +84,24 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
 }
 
 void print_all_capabilities() {
-    print_capabilities(mradm::ear_capabilities());
-    fmt::print("\n");
-    print_capabilities(mradm::vbap_capabilities());
-    fmt::print("\n");
-    print_capabilities(mradm::triple_balance_capabilities());
-    fmt::print("\n");
-    print_capabilities(mradm::hoa_capabilities());
-    fmt::print("\n");
-    print_capabilities(mradm::binaural_capabilities());
 #ifdef __APPLE__
-    fmt::print("\n");
-    print_capabilities(mradm::apple_capabilities());
+    constexpr std::array<std::string_view, 6> renderers{"ear", "saf", "triple-balance", "hoa", "saf-binaural", "apple"};
+#else
+    constexpr std::array<std::string_view, 5> renderers{"ear", "saf", "triple-balance", "hoa", "saf-binaural"};
 #endif
+    const mradm::RenderService service;
+    bool first = true;
+    for (const auto renderer : renderers) {
+        const auto caps = service.backend_capabilities(renderer);
+        if (!caps) {
+            continue;
+        }
+        if (!first) {
+            fmt::print("\n");
+        }
+        first = false;
+        print_capabilities(*caps);
+    }
 }
 
 } // namespace

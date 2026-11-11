@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
+#include "engine_records.h"
 #include "scene_math.h"
-#include "speaker_pcm.h"
 
 namespace mradm::render_common {
 

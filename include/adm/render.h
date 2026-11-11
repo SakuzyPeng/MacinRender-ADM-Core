@@ -445,6 +445,11 @@ class RenderService {
     // (no I/O), so it does not fail.
     [[nodiscard]] std::string capabilities_json() const;
 
+    // The capability report `mradm backends` prints for a renderer selection: "ear", "saf",
+    // "triple-balance", "hoa", "saf-binaural" (or "binaural"), "room-binaural", and "apple" in
+    // Apple builds. Nullopt for any other name.
+    [[nodiscard]] std::optional<CapabilityReport> backend_capabilities(std::string_view renderer) const;
+
     // The output channel-order reference table (mirrors `mradm layouts`), with
     // per-row supported_by computed from the renderer capabilities. Pure
     // in-memory query (no I/O), so it does not fail.

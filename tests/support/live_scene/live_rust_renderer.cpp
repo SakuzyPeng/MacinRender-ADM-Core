@@ -4,8 +4,8 @@
 #include <span>
 #include <utility>
 
+#include "engine_records.h"
 #include "live_scene_trace.h"
-#include "speaker_pcm.h"
 
 namespace mradm::live_scene {
 

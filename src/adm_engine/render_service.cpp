@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
@@ -7,21 +8,26 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/options.h"
 #include "adm/render.h"
+#ifdef __APPLE__
+#include "adm/render_apple.h"
+#endif
 
 #include "../adm_core/direct_matrix_records.h"
 #include "../adm_io/scene_import_internal.h"
 #include "../adm_render_room/room_internal.h"
+#include "capability_records.h"
 #include "catalog.h"
+#include "engine_records.h"
 #include "engine_result.h"
 #include "request_record.h"
 #include "scene_handle.h"
-#include "speaker_pcm.h"
 
 namespace mradm {
 
@@ -408,6 +414,30 @@ Result<std::string> RenderService::inspect_json(const std::string& input_path) c
 
 std::string RenderService::capabilities_json() const {
     return engine::document(engine::Document::capabilities);
+}
+
+std::optional<CapabilityReport> RenderService::backend_capabilities(std::string_view renderer) const {
+    using render_common::EngineBackend;
+    constexpr std::array<std::pair<std::string_view, EngineBackend>, 7> backends{{
+        {"ear", EngineBackend::ear},
+        {"saf", EngineBackend::saf},
+        {"triple-balance", EngineBackend::triple_balance},
+        {"hoa", EngineBackend::hoa},
+        {"saf-binaural", EngineBackend::binaural},
+        {"binaural", EngineBackend::binaural},
+        {"room-binaural", EngineBackend::room},
+    }};
+    for (const auto& [name, backend] : backends) {
+        if (name == renderer) {
+            return render_common::engine_capabilities(backend);
+        }
+    }
+#ifdef __APPLE__
+    if (renderer == "apple") {
+        return apple_capabilities();
+    }
+#endif
+    return std::nullopt;
 }
 
 std::vector<OutputLayoutRow> RenderService::output_layouts() const {
