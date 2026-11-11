@@ -63,9 +63,9 @@ LiveOverrides overrides_of(const MradmRenderLiveOverride* values, size_t count, 
     return result;
 }
 
-// A C++ stream behind the island table. The stop source is replaced per cancellable seek.
+// Retained state outlives the borrowing stream. The stop source is replaced per cancellable seek.
 struct Island {
-    std::shared_ptr<void> keep; // declared first: outlives the stream that borrows it
+    std::shared_ptr<void> keep; // cppcheck-suppress unusedStructMember
     std::unique_ptr<IRenderStream> stream;
     std::mutex cancel_mutex;
     std::stop_source cancel;
