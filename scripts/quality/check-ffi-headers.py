@@ -48,6 +48,7 @@ FFI_HEADERS = [
     "src/adm_core/config_ffi.h",
     "src/adm_render_common/routing_ffi.h",
     "src/adm_render_common/engine_ffi.h",
+    "src/adm_apple/apple_plan_ffi.h",
 ]
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.

@@ -21,16 +21,16 @@ pub struct RenderTarget {
 
 #[repr(C)]
 pub struct RenderMatrixTarget {
-    label: Text,
-    gain: f32,
+    pub(crate) label: Text,
+    pub(crate) gain: f32,
 }
 
 #[repr(C)]
 pub struct RenderMatrixRoute {
-    source_label: Text,
-    mute: u32,
-    targets: *const RenderMatrixTarget,
-    targets_len: usize,
+    pub(crate) source_label: Text,
+    pub(crate) mute: u32,
+    pub(crate) targets: *const RenderMatrixTarget,
+    pub(crate) targets_len: usize,
 }
 
 #[repr(C)]
@@ -89,7 +89,7 @@ pub struct RenderMatrix {
     records: Vec<RenderResolvedRoute>,
 }
 
-fn bad(message: &str) -> Error {
+pub(crate) fn bad(message: &str) -> Error {
     Error {
         code: 1,
         message: message.as_bytes().to_vec(),
@@ -97,7 +97,7 @@ fn bad(message: &str) -> Error {
     }
 }
 
-unsafe fn input<'a, T>(data: *const T, len: usize) -> Result<&'a [T], Error> {
+pub(crate) unsafe fn input<'a, T>(data: *const T, len: usize) -> Result<&'a [T], Error> {
     if len == 0 {
         return Ok(&[]);
     }
@@ -154,7 +154,7 @@ unsafe fn write(detail: &[u8], out: *mut u8, len: *mut usize) {
     }
 }
 
-fn boundary(
+pub(crate) fn boundary(
     message: *mut u8,
     message_len: *mut usize,
     context: *mut u8,
@@ -301,19 +301,7 @@ pub unsafe extern "C" fn mradm_render_matrix_resolve(
             return Err(bad("无效 DirectSpeakers 矩阵输出"));
         }
         unsafe { *output = ptr::null_mut() };
-        let authored = unsafe { input(routes, routes_len)? }
-            .iter()
-            .map(|r| {
-                Ok(MatrixRoute {
-                    source_label: unsafe { bytes(&r.source_label)? },
-                    mute: r.mute != 0,
-                    targets: unsafe { input(r.targets, r.targets_len)? }
-                        .iter()
-                        .map(|t| Ok((unsafe { bytes(&t.label)? }, t.gain)))
-                        .collect::<Result<_, Error>>()?,
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let authored = unsafe { matrix_routes(routes, routes_len)? };
         let t = unsafe { targets(targets_ptr, targets_len)? };
         let resolved = routing::resolve_matrix(&authored, &t, unsafe { bytes(&layout_id)? })?;
         let resolved_targets: Vec<Vec<RenderResolvedTarget>> = resolved

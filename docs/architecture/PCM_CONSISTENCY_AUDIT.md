@@ -582,7 +582,14 @@ Monitor 不做 downmix。立体声峰值保护与 Windows room worker 等待在 
 例外包括：岛流的异常改为 render_failed；Apple 后端的状态随流释放；同一 monitor 上的会话调用串行化；OSC 接收改为带读超时的阻塞接收，Linux / macOS 的绑定失败文字按错误类型选；C++ SDK 的 OSC 快照删除两个遥测文字字段。
 
 本机对照都是 0 差异：A、B 的新旧探针在每份构建上跑两次，PCM、状态、电平、LUFS 与日志相同；C 把新旧接收器编进同一进程，13,203 项比较相同。三个批次的植入缺陷都被抓到。
-macOS 与 Windows 的设备与 OSC 验证、合并后的 Consistency 待补。
+维护者在 macOS arm64 与 Windows x64 上完成主机验证：
+- 完整 CTest 各重复 3 次，分别为 87/87 与 86/86；
+- 两个系统空间监听 sink 的短会话功能检查；
+- PoseBridge 模拟输入经生产 C ABI；
+- Windows 的 OSC 读超时与 `stop` 延迟测量，以及独占端口。
+
+A、B、C 合并后的 Consistency 都通过，C 的四份报告都是 294 个 PCM id 相同、0 个不同。
+GUI 尚无 PoseBridge OSC 输入入口；物理头追踪设备的实机验证按维护者决定暂缓。
 
 生产 C/C++ 26,363 → 24,409 行。见 [5.5 记录](RUST_ORCHESTRATION_MONITOR.md)。
 

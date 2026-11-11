@@ -15,8 +15,8 @@
 
 #include "../adm_render_room/room_internal.h"
 #include "engine_ffi.h"
+#include "engine_records.h"
 #include "engine_result.h"
-#include "speaker_pcm.h"
 
 // The engine request record (MradmEngineRenderRequest) of a RenderRequest and the Apple island's
 // adapter, shared by the offline render service and the monitor's stream opening (PCM consistency

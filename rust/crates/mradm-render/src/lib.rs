@@ -5,6 +5,7 @@
 //! post-processing passes (4.8).
 #![forbid(unsafe_code)]
 
+pub mod apple;
 pub mod binaural;
 pub mod binaural_hrtf;
 pub mod binaural_render;

@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "engine_records.h"
 #include "pcm_mix.h"
-#include "speaker_pcm.h"
 
 // Per-channel gain blocks compiled into a PcmMixer plan and the legacy accumulation context, for
 // tests comparing the Rust mixer and size session with the frozen legacy code. Production plans

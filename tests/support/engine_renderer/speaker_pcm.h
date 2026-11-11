@@ -1,5 +1,10 @@
 #pragma once
 
+// The test drivers of the Rust backends (formerly production, PCM consistency 5.6 A): the one
+// preparation entry, the offline driver and the file stream of every Rust backend, which the
+// backend IRenderer shells in this directory and the C++ tests use. Production renders through
+// mradm-engine directly.
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -14,6 +19,7 @@
 
 #include "capability_records.h"
 #include "engine_ffi.h"
+#include "engine_records.h"
 #include "routing_ffi.h"
 
 namespace mradm::render_common {
@@ -35,28 +41,6 @@ class DriverError {
     uint32_t location_{0};
 };
 
-[[nodiscard]] inline MradmAdmText text(std::string_view value) noexcept {
-    return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
-}
-
-// A DirectSpeakers matrix as Rust routing records, borrowing the matrix's labels.
-struct MatrixRecords {
-    explicit MatrixRecords(const DirectSpeakersMatrix& matrix);
-    std::vector<std::vector<MradmRenderMatrixTarget>> targets;
-    std::vector<MradmRenderMatrixRoute> routes;
-    std::size_t label_bytes{0};
-};
-
-// A Rust backend preparation (mradm-engine `backend`, PCM consistency 5.2 C1): immutable and reused
-// across offline windows and file streams (PreviewSession scrubbing). The Rust preparation keeps
-// the input format the stream checks compare (5.3 A).
-struct EnginePrepared final : IPreparedRender {
-    std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
-        nullptr, &mradm_render_prepared_destroy};
-};
-
-// A screen as the Rust room record.
-[[nodiscard]] MradmRoomScreenGeometry screen_geometry(const ScreenGeometry& screen);
 
 // The one preparation entry of the Rust backends (also for MonitorEngine and the stream tools):
 // the plan's backend checks, logs and the backend's own preparation run in Rust. `room_profile` is
