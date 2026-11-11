@@ -27,7 +27,7 @@ jobs:
       - name: Verify GUI localization
         run: python3 scripts/quality/check_gui_i18n.py
 
-      - name: Verify Ubuntu dependency setup
+      - name: Verify Ubuntu build tool setup
         run: python3 -B tests/unit/ci_dependencies_test.py
 
       # Frozen Rust-migration references must stay registered and byte-identical.
@@ -55,7 +55,7 @@ jobs:
             install: brew install cmake ninja ccache
           - name: Linux debug
             runner: ubuntu-24.04
-            install: sudo python3 scripts/ci/install-ubuntu-deps.py cmake ninja-build build-essential git pkg-config ccache
+            install: python3 scripts/ci/setup-ubuntu-build.py --ccache
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -142,7 +142,7 @@ jobs:
       - name: Install toolchains
         run: |
           rustup toolchain install 1.98.0 --profile minimal
-          sudo python3 scripts/ci/install-ubuntu-deps.py cmake ninja-build build-essential git pkg-config
+          python3 scripts/ci/setup-ubuntu-build.py
       - name: Restore source and Cargo caches
         uses: actions/cache@v5
         with:

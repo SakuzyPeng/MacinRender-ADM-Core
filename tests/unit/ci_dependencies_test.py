@@ -1,80 +1,85 @@
 #!/usr/bin/env python3
-"""Offline checks for Ubuntu CI source configuration and failed index updates."""
+"""Offline checks for hosted Ubuntu build tools and the pinned ccache download."""
 
+import hashlib
 import importlib.util
+import io
 from pathlib import Path
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location('ubuntu_deps', ROOT / 'scripts/ci/install-ubuntu-deps.py')
-installer = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(installer)
+SPEC = importlib.util.spec_from_file_location('ubuntu_build', ROOT / 'scripts/ci/setup-ubuntu-build.py')
+setup = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(setup)
 
 
-class UbuntuDependenciesTests(unittest.TestCase):
-    def test_runner_sources_use_https_and_keep_architecture_and_signature_settings(self):
-        fixtures = {
-            'sources.list': (
-                'deb [arch=amd64 signed-by=/keys/ubuntu.gpg] http://azure.archive.ubuntu.com/ubuntu/ noble main\n',
-                'deb [arch=amd64 signed-by=/keys/ubuntu.gpg] https://archive.ubuntu.com/ubuntu/ noble main\n'),
-            'sources.list.d/ubuntu.sources': (
-                'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports/\nSuites: noble noble-security\n'
-                'Components: main universe\nSigned-By: /keys/ubuntu.gpg\n',
-                'Types: deb\nURIs: https://ports.ubuntu.com/ubuntu-ports/\nSuites: noble noble-security\n'
-                'Components: main universe\nSigned-By: /keys/ubuntu.gpg\n'),
-            'apt-mirrors.txt': (
-                'http://azure.archive.ubuntu.com/ubuntu/\nhttps://archive.ubuntu.com/ubuntu/\n'
-                'http://security.ubuntu.com/ubuntu/\n',
-                'https://archive.ubuntu.com/ubuntu/\nhttps://archive.ubuntu.com/ubuntu/\n'
-                'https://security.ubuntu.com/ubuntu/\n'),
-            'sources.list.d/mirrors.sources': (
-                'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble\n',
-                'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble\n'),
-            'sources.list.d/other.list': (
-                'deb https://packages.microsoft.com/ubuntu/24.04/prod noble main\n',
-                'deb https://packages.microsoft.com/ubuntu/24.04/prod noble main\n'),
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            apt_root = Path(directory)
-            for name, (original, _) in fixtures.items():
-                path = apt_root / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(original, encoding='utf-8')
-            for _ in range(2):
-                installer.use_https_sources(apt_root)
-                for name, (_, expected) in fixtures.items():
-                    with self.subTest(name=name):
-                        self.assertEqual((apt_root / name).read_text(encoding='utf-8'), expected)
+class UbuntuBuildTests(unittest.TestCase):
+    def test_preinstalled_tools_need_no_download(self):
+        with patch.object(setup.shutil, 'which', return_value='/usr/bin/tool') as which:
+            with patch.object(setup.subprocess, 'run') as run:
+                with patch('sys.argv', ['setup-ubuntu-build.py']):
+                    setup.main()
+        self.assertEqual([call.args[0] for call in which.call_args_list], list(setup.REQUIRED_TOOLS))
+        run.assert_not_called()
 
-    def test_missing_source_formats_are_optional(self):
-        with tempfile.TemporaryDirectory() as directory:
-            installer.use_https_sources(Path(directory))
-            self.assertEqual(list(Path(directory).iterdir()), [])
+    def test_missing_build_tool_fails_before_download(self):
+        with patch.object(setup.shutil, 'which', return_value=None):
+            with patch.object(setup.subprocess, 'run') as run:
+                with patch('sys.argv', ['setup-ubuntu-build.py', '--ccache']):
+                    with self.assertRaises(SystemExit):
+                        setup.main()
+        run.assert_not_called()
 
-    @patch.object(installer, 'use_https_sources')
-    @patch.object(installer.subprocess, 'run')
-    def test_update_and_install_retry_with_timeouts(self, run, configure):
-        with patch('sys.argv', ['install-ubuntu-deps.py', 'cmake', 'ninja-build']):
-            installer.main()
-        configure.assert_called_once_with(Path('/etc/apt'))
-        update, install = run.call_args_list
-        self.assertEqual(update.args[0][-2:], ['update', '--error-on=any'])
-        self.assertEqual(install.args[0][-4:], ['install', '-y', 'cmake', 'ninja-build'])
-        for call in (update, install):
-            self.assertTrue(call.kwargs['check'])
-            for option in ('Acquire::Retries=3', 'Acquire::http::Timeout=30', 'Acquire::https::Timeout=30'):
-                self.assertIn(option, call.args[0])
+    def test_ccache_download_is_pinned_and_installs_only_the_checked_binary(self):
+        for architecture in ('x86_64', 'aarch64'):
+            with self.subTest(architecture=architecture), tempfile.TemporaryDirectory() as directory:
+                archive = Path(directory) / 'fixture.tar.xz'
+                name = f'ccache-{setup.CCACHE_VERSION}-linux-{architecture}-musl-static'
+                payload = b'ccache executable fixture'
+                with tarfile.open(archive, 'w:xz') as package:
+                    member = tarfile.TarInfo(f'{name}/ccache')
+                    member.size = len(payload)
+                    package.addfile(member, io.BytesIO(payload))
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
 
-    @patch.object(installer, 'use_https_sources')
-    @patch.object(installer.subprocess, 'run', side_effect=subprocess.CalledProcessError(100, ['apt-get']))
-    def test_failed_update_stops_before_install(self, run, configure):
-        with patch('sys.argv', ['install-ubuntu-deps.py', 'cmake']):
-            with self.assertRaises(subprocess.CalledProcessError):
-                installer.main()
+                def command(args, **kwargs):
+                    self.assertTrue(kwargs['check'])
+                    if args[0] == 'curl':
+                        self.assertEqual(args[-1],
+                                         f'https://github.com/ccache/ccache/releases/download/v{setup.CCACHE_VERSION}/{name}.tar.xz')
+                        shutil.copyfile(archive, args[args.index('--output') + 1])
+                    else:
+                        self.assertEqual(args[:4], ['sudo', 'install', '-m', '755'])
+                        self.assertEqual(args[-1], '/usr/local/bin/ccache')
+                        self.assertEqual(Path(args[-2]).read_bytes(), payload)
+
+                with patch.object(setup.platform, 'machine', return_value=architecture):
+                    with patch.dict(setup.CCACHE_SHA256, {architecture: digest}):
+                        with patch.object(setup.subprocess, 'run', side_effect=command) as run:
+                            setup.install_ccache()
+                self.assertEqual(run.call_count, 2)
+
+    def test_bad_checksum_stops_before_install(self):
+        def download(args, **kwargs):
+            Path(args[args.index('--output') + 1]).write_bytes(b'tampered archive')
+
+        with patch.object(setup.platform, 'machine', return_value='x86_64'):
+            with patch.object(setup.subprocess, 'run', side_effect=download) as run:
+                with self.assertRaisesRegex(ValueError, 'SHA-256 mismatch'):
+                    setup.install_ccache()
+        run.assert_called_once()
+
+    def test_failed_download_stops_before_install(self):
+        with patch.object(setup.platform, 'machine', return_value='x86_64'):
+            with patch.object(setup.subprocess, 'run', side_effect=subprocess.CalledProcessError(22, ['curl'])) as run:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    setup.install_ccache()
         run.assert_called_once()
 
 

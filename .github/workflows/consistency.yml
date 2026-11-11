@@ -35,7 +35,7 @@ jobs:
           - platform: linux
             name: Linux render
             runner: ubuntu-24.04
-            install: sudo python3 scripts/ci/install-ubuntu-deps.py cmake ninja-build build-essential git pkg-config ccache
+            install: python3 scripts/ci/setup-ubuntu-build.py --ccache
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
