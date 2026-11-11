@@ -1162,7 +1162,7 @@ std::filesystem::path write_mono_doc(const std::shared_ptr<fixture::Document>& d
     fixture::reassign_ids(doc);
     std::vector<fixture::WaveAudioId> ids;
     ids.reserve(uids.size());
-    std::ranges::transform(uids, std::back_inserter(ids), [](const auto& uid) {
+    std::ranges::transform(uids, std::back_inserter(ids), [](const std::shared_ptr<fixture::AudioTrackUid>& uid) {
         return fixture::WaveAudioId{1U, fixture::format_id(uid->get<fixture::AudioTrackUidId>()), "", ""};
     });
     const auto in = temp_path(std::string{stem}, ".wav");
