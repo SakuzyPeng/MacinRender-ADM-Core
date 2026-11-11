@@ -124,7 +124,7 @@ int main() {
                         promote_fixture(riff, path, container, 513);
                     }
                     auto legacy = bw64::readFile(path.string());
-                    auto candidate = mradm::audio::RustWavReader::open(path.string());
+                    auto candidate = mradm::audio::WavFileReader::open(path.string());
                     require(candidate.has_value(), "Rust reader open failed");
                     std::vector<float> expected(input.size());
                     std::vector<float> actual(input.size());

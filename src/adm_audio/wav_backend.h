@@ -96,10 +96,10 @@ inline std::string wav_path_utf8(const std::string& path) {
 #endif
 }
 
-class RustWavReader {
+class WavFileReader {
   public:
-    static Result<std::unique_ptr<RustWavReader>> open(const std::string& path) {
-        auto reader = std::unique_ptr<RustWavReader>{new RustWavReader{path}};
+    static Result<std::unique_ptr<WavFileReader>> open(const std::string& path) {
+        auto reader = std::unique_ptr<WavFileReader>{new WavFileReader{path}};
         const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmWavReader* handle = nullptr;
@@ -143,17 +143,17 @@ class RustWavReader {
     [[nodiscard]] const MradmWavInfo& info() const noexcept { return info_; }
 
   private:
-    explicit RustWavReader(std::string path) : path_(std::move(path)) {}
+    explicit WavFileReader(std::string path) : path_(std::move(path)) {}
     std::string path_;
     MradmWavInfo info_{};
     std::unique_ptr<MradmWavReader, decltype(&mradm_wav_reader_destroy)> handle_{nullptr, mradm_wav_reader_destroy};
 };
 
 // Metadata reader: validates the container without requiring a supported audio encoding.
-class RustWavChunks {
+class WavChunkReader {
   public:
-    static Result<std::unique_ptr<RustWavChunks>> open(const std::string& path) {
-        auto reader = std::unique_ptr<RustWavChunks>{new RustWavChunks{path}};
+    static Result<std::unique_ptr<WavChunkReader>> open(const std::string& path) {
+        auto reader = std::unique_ptr<WavChunkReader>{new WavChunkReader{path}};
         const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmWavChunks* handle = nullptr;
@@ -235,7 +235,7 @@ class RustWavChunks {
     }
 
   private:
-    explicit RustWavChunks(std::string path) : path_(std::move(path)) {}
+    explicit WavChunkReader(std::string path) : path_(std::move(path)) {}
     std::string path_;
     std::unique_ptr<MradmWavChunks, decltype(&mradm_wav_chunks_destroy)> handle_{nullptr, mradm_wav_chunks_destroy};
 };
@@ -243,11 +243,11 @@ class RustWavChunks {
 // Streaming WAVE writer. Integer PCM starts as RIFF and promotes to BW64; float32 is always RF64.
 // Exclusive writers refuse to replace an existing file; others truncate it like fopen("wb").
 // The file is only valid after finish() succeeds; destroying an unfinished writer leaves it incomplete.
-class RustWavWriter {
+class WavFileWriter {
   public:
-    static Result<std::unique_ptr<RustWavWriter>> create(
+    static Result<std::unique_ptr<WavFileWriter>> create(
         const std::string& path, uint32_t channels, uint32_t rate, uint16_t bits, bool float_output, bool exclusive) {
-        auto writer = std::unique_ptr<RustWavWriter>{new RustWavWriter{path, channels}};
+        auto writer = std::unique_ptr<WavFileWriter>{new WavFileWriter{path, channels}};
         const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmWavWriter* handle = nullptr;
@@ -289,18 +289,18 @@ class RustWavWriter {
     }
 
   private:
-    RustWavWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
+    WavFileWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
     std::string path_;
     uint32_t channels_;
     std::unique_ptr<MradmWavWriter, decltype(&mradm_wav_writer_destroy)> handle_{nullptr, mradm_wav_writer_destroy};
 };
 
 // Final float PCM output, RF64 WAVE or CAF (layout non-empty); numbers its writer/pass* checkpoints.
-class RustOutputWriter {
+class PcmOutputWriter {
   public:
-    static Result<std::unique_ptr<RustOutputWriter>>
+    static Result<std::unique_ptr<PcmOutputWriter>>
     create(const std::string& path, uint32_t channels, uint32_t rate, std::optional<std::string_view> caf_layout) {
-        auto writer = std::unique_ptr<RustOutputWriter>{new RustOutputWriter{path, channels}};
+        auto writer = std::unique_ptr<PcmOutputWriter>{new PcmOutputWriter{path, channels}};
         const auto utf8_path = wav_path_utf8(path);
         const auto layout = caf_layout.value_or(std::string_view{});
         std::array<uint8_t, 512> message{};
@@ -337,17 +337,17 @@ class RustOutputWriter {
     }
 
   private:
-    RustOutputWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
+    PcmOutputWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
     std::string path_;
     uint32_t channels_;
     std::unique_ptr<MradmOutputWriter, decltype(&mradm_output_writer_destroy)> handle_{nullptr,
                                                                                        mradm_output_writer_destroy};
 };
 
-class RustCafReader {
+class CafFileReader {
   public:
-    static Result<std::unique_ptr<RustCafReader>> open(const std::string& path) {
-        auto reader = std::unique_ptr<RustCafReader>{new RustCafReader{}};
+    static Result<std::unique_ptr<CafFileReader>> open(const std::string& path) {
+        auto reader = std::unique_ptr<CafFileReader>{new CafFileReader{}};
         const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmCafReader* handle = nullptr;
@@ -376,16 +376,16 @@ class RustCafReader {
     [[nodiscard]] const MradmWavInfo& info() const noexcept { return info_; }
 
   private:
-    RustCafReader() = default;
+    CafFileReader() = default;
     MradmWavInfo info_{};
     std::unique_ptr<MradmCafReader, decltype(&mradm_caf_reader_destroy)> handle_{nullptr, mradm_caf_reader_destroy};
 };
 
 // Integer PCM conversion output: exclusive create, installed by the caller only after finish().
 struct IntegerWavWriter {
-    static Result<std::unique_ptr<RustWavWriter>>
+    static Result<std::unique_ptr<WavFileWriter>>
     create(const std::string& path, uint32_t channels, uint32_t rate, uint16_t bits) {
-        return RustWavWriter::create(path, channels, rate, bits, false, true);
+        return WavFileWriter::create(path, channels, rate, bits, false, true);
     }
 };
 } // namespace mradm::audio

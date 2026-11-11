@@ -12,7 +12,7 @@ namespace mradm::audio {
 // ── RenderInputReader ────────────────────────────────────────────────────────
 
 struct RenderInputReader::Impl {
-    std::unique_ptr<RustWavReader> reader;
+    std::unique_ptr<WavFileReader> reader;
 };
 
 RenderInputReader::RenderInputReader() = default;
@@ -22,7 +22,7 @@ RenderInputReader& RenderInputReader::operator=(RenderInputReader&&) noexcept = 
 
 Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path) {
     try {
-        auto reader = RustWavReader::open(path);
+        auto reader = WavFileReader::open(path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }

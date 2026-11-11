@@ -169,12 +169,12 @@ jobs:
       - name: Build Scene references
         run: >
           cmake --build build/scene-release --parallel 4
-          --target mr_adm_scene_numeric_rust_tests mr_adm_live_binaural_rust_tests
-          mr_adm_live_vbap_rust_tests mr_adm_hoa_rust_tests
+          --target mr_adm_scene_numeric_parity_tests mr_adm_live_binaural_parity_tests
+          mr_adm_live_vbap_parity_tests mr_adm_hoa_parity_tests
       - name: Validate arithmetic and semantic boundaries
         run: >
           ctest --test-dir build/scene-release --parallel 4 --output-on-failure
-          -R '^(mr_adm_scene_numeric_rust_tests|mr_adm_live_binaural_rust_tests|mr_adm_live_vbap_rust_tests|mr_adm_hoa_rust_tests)$'
+          -R '^(mr_adm_scene_numeric_parity_tests|mr_adm_live_binaural_parity_tests|mr_adm_live_vbap_parity_tests|mr_adm_hoa_parity_tests)$'
 
   windows-debug:
     name: Windows debug

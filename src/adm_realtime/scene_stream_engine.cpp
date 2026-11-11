@@ -16,7 +16,7 @@ namespace mradm::realtime {
 
 namespace {
 
-using live_scene::RustError;
+using live_scene::FfiError;
 
 // Policy errors keep the 1024-byte text of the former FFI buffer; the rest are fixed wording.
 constexpr std::size_t k_error_text = 1024U;
@@ -98,7 +98,7 @@ std::uint32_t SceneStreamEngine::input_sample_rate() const noexcept {
 }
 
 Result<void> SceneStreamEngine::begin_epoch(std::uint64_t epoch_id, std::int64_t target_sample) {
-    RustError error;
+    FfiError error;
     if (const auto code = mradm_engine_scene_begin_epoch(impl_->handle.get(),
                                                          epoch_id,
                                                          target_sample,
@@ -152,7 +152,7 @@ Result<void> SceneStreamEngine::configure_generation(std::uint64_t epoch_id,
                            programmes[index].data(),
                            programmes[index].size()};
     }
-    RustError error(k_error_text);
+    FfiError error(k_error_text);
     if (const auto code = mradm_engine_scene_configure(impl_->handle.get(),
                                                        epoch_id,
                                                        generation_id,
@@ -199,7 +199,7 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
                                       initial.size(),
                                       updates.data(),
                                       updates.size()};
-    RustError error;
+    FfiError error;
     uint32_t submit_status = 0U;
     if (const auto code = mradm_engine_scene_submit(impl_->handle.get(),
                                                     &frame,
@@ -216,7 +216,7 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
 }
 
 Result<void> SceneStreamEngine::signal_end(std::uint64_t epoch_id, std::int64_t end_sample) {
-    RustError error;
+    FfiError error;
     if (const auto code = mradm_engine_scene_signal_end(impl_->handle.get(),
                                                         epoch_id,
                                                         end_sample,
@@ -246,7 +246,7 @@ Result<void> SceneStreamEngine::switch_backend(const live_scene::RendererConfig&
 }
 
 Result<void> SceneStreamEngine::wait_idle(std::chrono::milliseconds timeout) {
-    RustError error;
+    FfiError error;
     if (const auto code = mradm_engine_scene_wait_idle(impl_->handle.get(),
                                                        timeout.count(),
                                                        error.message(),
@@ -269,7 +269,7 @@ std::shared_ptr<IRoomControl> SceneStreamEngine::room_control() const {
 }
 
 Result<void> SceneStreamEngine::set_semantic_policy_json(std::string_view json, std::uint64_t revision) {
-    RustError error(k_error_text);
+    FfiError error(k_error_text);
     if (const auto code = mradm_engine_scene_policy(impl_->handle.get(),
                                                     reinterpret_cast<const uint8_t*>(json.data()),
                                                     json.size(),

@@ -21,11 +21,11 @@ namespace mradm::audio {
 // Both wrap the Rust final-PCM writer, which also numbers and writes the writer/pass* checkpoints.
 
 struct FloatWavWriter::Impl {
-    std::unique_ptr<RustOutputWriter> writer;
+    std::unique_ptr<PcmOutputWriter> writer;
 };
 
 Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
-    auto writer = RustOutputWriter::create(path, channels, sample_rate, std::nullopt);
+    auto writer = PcmOutputWriter::create(path, channels, sample_rate, std::nullopt);
     if (!writer) {
         return tl::unexpected{writer.error()};
     }
@@ -48,12 +48,12 @@ Result<void> FloatWavWriter::finish() {
 }
 
 struct FloatCafWriter::Impl {
-    std::unique_ptr<RustOutputWriter> writer;
+    std::unique_ptr<PcmOutputWriter> writer;
 };
 
 Result<FloatCafWriter>
 FloatCafWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate, const std::string& layout_id) {
-    auto writer = RustOutputWriter::create(path, channels, sample_rate, layout_id);
+    auto writer = PcmOutputWriter::create(path, channels, sample_rate, layout_id);
     if (!writer) {
         return tl::unexpected{writer.error()};
     }
@@ -77,11 +77,11 @@ Result<void> FloatCafWriter::finish() {
 // ── FloatCafReader ────────────────────────────────────────────────────────────
 
 struct FloatCafReader::Impl {
-    std::unique_ptr<RustCafReader> reader;
+    std::unique_ptr<CafFileReader> reader;
 };
 
 Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
-    auto reader = RustCafReader::open(path);
+    auto reader = CafFileReader::open(path);
     if (!reader) {
         return tl::unexpected{reader.error()};
     }
@@ -132,11 +132,11 @@ Result<void> write_caf_metadata(const std::string& path, const MetadataFields& m
 // ── FloatWavReader ────────────────────────────────────────────────────────────
 
 struct FloatWavReader::Impl {
-    std::unique_ptr<RustWavReader> reader;
+    std::unique_ptr<WavFileReader> reader;
 };
 
 Result<FloatWavReader> FloatWavReader::open(const std::string& path) {
-    auto reader = RustWavReader::open(path);
+    auto reader = WavFileReader::open(path);
     if (!reader) {
         return tl::unexpected{reader.error()};
     }
@@ -287,7 +287,7 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
 }
 
 Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
-    auto reader = RustWavChunks::open(path);
+    auto reader = WavChunkReader::open(path);
     if (!reader) {
         return tl::unexpected{reader.error()};
     }

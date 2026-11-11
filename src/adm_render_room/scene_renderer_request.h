@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <string>
 
+#include "ffi_error.h"
 #include "live_scene_renderer.h"
 #include "routing_ffi.h"
-#include "rust_error.h"
 
 namespace mradm::live_scene {
 
@@ -23,8 +23,8 @@ class SceneRendererRequest {
 
     [[nodiscard]] const MradmEngineSceneRendererRequest* get() const noexcept { return &request_; }
     // A buffer for the creation's errors, which can quote the layout and the paths.
-    [[nodiscard]] RustError error() const {
-        return RustError(layout_ + sofa_.size() + hrir_.size(), sofa_.size() + hrir_.size());
+    [[nodiscard]] FfiError error() const {
+        return FfiError(layout_ + sofa_.size() + hrir_.size(), sofa_.size() + hrir_.size());
     }
 
   private:
