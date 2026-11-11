@@ -16,6 +16,8 @@
 #include "adm/render.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
+
+#include "../support/direct_speakers_fixture.h"
 #endif
 
 #include "render_common.h"
@@ -189,20 +191,16 @@ struct SignalSpec {
     float frequency{80.0F};
 };
 
+constexpr uint32_t k_sample_rate = 48000U;
+constexpr uint64_t k_frames = 4800U;
+
 [[nodiscard]] std::filesystem::path unique_path(std::string_view stem) {
     static std::atomic<unsigned int> sequence{0};
     return std::filesystem::path{mr_test::temp_prefix() + std::string{stem} + "_" +
                                  std::to_string(sequence.fetch_add(1)) + ".wav"};
 }
 
-bool write_input(const std::filesystem::path& path, const std::vector<SignalSpec>& signals) {
-    constexpr uint32_t k_sample_rate = 48000U;
-    constexpr uint64_t k_frames = 4800U;
-    auto writer =
-        mradm::audio::FloatWavWriter::open(path.string(), static_cast<uint32_t>(signals.size()), k_sample_rate);
-    if (!writer) {
-        return false;
-    }
+std::vector<float> make_input_samples(const std::vector<SignalSpec>& signals) {
     std::vector<float> samples(k_frames * signals.size(), 0.0F);
     for (uint64_t frame = 0; frame < k_frames; ++frame) {
         for (std::size_t channel = 0; channel < signals.size(); ++channel) {
@@ -212,6 +210,16 @@ bool write_input(const std::filesystem::path& path, const std::vector<SignalSpec
             samples[(frame * signals.size()) + channel] = signal.amplitude * std::sin(phase);
         }
     }
+    return samples;
+}
+
+bool write_input(const std::filesystem::path& path, const std::vector<SignalSpec>& signals) {
+    auto writer =
+        mradm::audio::FloatWavWriter::open(path.string(), static_cast<uint32_t>(signals.size()), k_sample_rate);
+    if (!writer) {
+        return false;
+    }
+    const auto samples = make_input_samples(signals);
     return writer->write(samples.data(), k_frames) == k_frames;
 }
 
@@ -383,9 +391,10 @@ bool verify_apple_side_bus_stream_and_override() {
         return false;
     }
 
-    mradm::io::SceneImportOptions import_options;
+    mradm::RenderOptions import_options;
     import_options.input_channel_labels = {"LFE1"};
-    auto scene = mradm::io::import_scene(input.string(), import_options);
+    mradm::NullLogSink logs;
+    auto scene = mradm::RenderService{}.prepare_preview_scene(input, import_options, logs);
     if (!check(scene.has_value(), "Apple LFE stream: import channel-bed scene")) {
         return false;
     }
@@ -394,11 +403,11 @@ bool verify_apple_side_bus_stream_and_override() {
     plan.input_path = input.string();
     plan.output_path = output.string();
     plan.output_layout = "9+10+3";
-    plan.scene = *scene;
+    plan.scene = scene->scene;
+    plan.scene_handle = scene->handle;
     plan.lfe_routing_mode = mradm::LfeRoutingMode::direct;
 
     auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     auto prepared = renderer->prepare(plan, logs);
     if (!check(prepared.has_value(), "Apple LFE stream: prepare pure side-bus scene") ||
@@ -430,7 +439,7 @@ bool verify_apple_side_bus_stream_and_override() {
             total_frames += *produced;
             if (apply_override && !override_applied && total_frames >= 1024U) {
                 mradm::LiveObjectOverride object_override;
-                object_override.object_id = scene->objects.front().id;
+                object_override.object_id = plan.scene.objects.front().id;
                 object_override.speaker_label = "LFE1";
                 object_override.gain_db = -20.0F;
                 mradm::LiveOverrides overrides;
@@ -487,22 +496,26 @@ bool verify_apple_side_bus_stream_and_override() {
     // time. The Apple prepare recipe must split the intervals, not classify the whole
     // track as LFE and drop its later full-range block.
     constexpr uint64_t k_switch_frame = 2048U;
+    const auto mixed_input = unique_path("apple_lfe_mixed_blocks_input");
     const auto mixed_output = unique_path("apple_lfe_mixed_blocks");
+    FileGuard mixed_input_guard(mixed_input);
     FileGuard mixed_output_guard(mixed_output);
+    fixture::write_mono_direct_speakers(
+        mixed_input,
+        k_sample_rate,
+        make_input_samples({{0.2F, 80.0F}}),
+        1.0F,
+        {fixture::direct_speakers_block("LFE1", 0U, k_switch_frame, k_sample_rate),
+         fixture::direct_speakers_block("M+000", k_switch_frame, k_frames, k_sample_rate)});
+    auto mixed_scene = mradm::RenderService{}.prepare_preview_scene(mixed_input, {}, logs);
+    if (!check(mixed_scene.has_value(), "Apple mixed blocks: import ADM fixture")) {
+        return false;
+    }
     mradm::RenderPlan mixed_plan = plan;
+    mixed_plan.input_path = mixed_input.string();
     mixed_plan.output_path = mixed_output.string();
-    auto& mixed_blocks = mixed_plan.scene.objects.front().tracks.front().ds_blocks;
-    mixed_blocks.front().end_sample = k_switch_frame;
-    auto spatial_block = mixed_blocks.front();
-    spatial_block.speaker_labels = {"M+000"};
-    spatial_block.low_pass_hz.reset();
-    spatial_block.has_position = true;
-    spatial_block.azimuth = 0.0F;
-    spatial_block.elevation = 0.0F;
-    spatial_block.distance = 1.0F;
-    spatial_block.start_sample = k_switch_frame;
-    spatial_block.end_sample = mixed_plan.scene.info.num_frames;
-    mixed_blocks.push_back(std::move(spatial_block));
+    mixed_plan.scene = mixed_scene->scene;
+    mixed_plan.scene_handle = mixed_scene->handle;
 
     auto mixed_prepared = renderer->prepare(mixed_plan, logs);
     if (!check(mixed_prepared.has_value(), "Apple mixed blocks: prepare") ||

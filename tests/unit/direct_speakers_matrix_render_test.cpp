@@ -23,6 +23,8 @@
 #include "adm/render.h"
 #include "adm/render_apple.h"
 
+#include "../support/direct_speakers_fixture.h"
+
 namespace {
 
 constexpr uint32_t k_sample_rate = 48000U;
@@ -91,80 +93,6 @@ std::vector<float> make_input_samples() {
         samples[frame] = 0.2F * std::sin(phase);
     }
     return samples;
-}
-
-bool write_input(const std::filesystem::path& path, const std::vector<float>& samples) {
-    auto writer = mradm::audio::FloatWavWriter::open(path.string(), 1U, k_sample_rate);
-    if (!writer) {
-        std::cerr << "FAIL: cannot create matrix input: " << writer.error().message << '\n';
-        return false;
-    }
-    return check(writer->write(samples.data(), samples.size()) == samples.size(), "matrix input writes every frame");
-}
-
-mradm::AdmScene make_dynamic_scene() {
-    mradm::AdmScene scene;
-    scene.info.sample_rate = k_sample_rate;
-    scene.info.num_channels = 1U;
-    scene.info.num_frames = k_frames;
-    scene.info.source_kind = mradm::SceneSourceKind::channel_bed;
-
-    mradm::SceneObject object;
-    object.id = "AO_matrix_dynamic";
-    object.gain = k_object_gain;
-
-    mradm::SceneTrackRef track;
-    track.channel_index = 0U;
-    track.track_uid = "ATU_matrix_dynamic";
-
-    mradm::SceneDirectSpeakersBlock split;
-    split.speaker_labels = {"M+000"};
-    split.gain = 0.5F;
-    split.start_sample = 0U;
-    split.end_sample = k_first_boundary;
-
-    mradm::SceneDirectSpeakersBlock centre = split;
-    centre.speaker_labels = {"U+000"};
-    centre.gain = 0.25F;
-    centre.start_sample = k_first_boundary;
-    centre.end_sample = k_second_boundary;
-
-    mradm::SceneDirectSpeakersBlock muted = split;
-    muted.speaker_labels = {"M+110"};
-    muted.gain = 0.75F;
-    muted.start_sample = k_second_boundary;
-    muted.end_sample = k_frames;
-
-    track.ds_blocks = {split, centre, muted};
-    object.tracks.push_back(std::move(track));
-    scene.objects.push_back(std::move(object));
-    return scene;
-}
-
-mradm::AdmScene make_lfe_scene() {
-    mradm::AdmScene scene;
-    scene.info.sample_rate = k_sample_rate;
-    scene.info.num_channels = 1U;
-    scene.info.num_frames = k_frames;
-    scene.info.source_kind = mradm::SceneSourceKind::channel_bed;
-
-    mradm::SceneObject object;
-    object.id = "AO_matrix_lfe";
-    object.gain = 0.7F;
-
-    mradm::SceneTrackRef track;
-    track.channel_index = 0U;
-    track.track_uid = "ATU_matrix_lfe";
-    mradm::SceneDirectSpeakersBlock lfe;
-    lfe.speaker_labels = {"RC_LFE"};
-    lfe.low_pass_hz = 120.0F;
-    lfe.gain = 0.6F;
-    lfe.start_sample = 0U;
-    lfe.end_sample = k_frames;
-    track.ds_blocks.push_back(std::move(lfe));
-    object.tracks.push_back(std::move(track));
-    scene.objects.push_back(std::move(object));
-    return scene;
 }
 
 std::shared_ptr<const mradm::DirectSpeakersMatrix> parse_profile(std::string_view json) {
@@ -318,14 +246,21 @@ bool verify_lfe_samples(std::string_view backend,
 bool verify_backend(std::string_view name,
                     std::unique_ptr<mradm::IRenderer> renderer,
                     const std::filesystem::path& input_path,
+                    const std::filesystem::path& lfe_input_path,
                     const std::vector<float>& input_samples,
                     const std::shared_ptr<const mradm::DirectSpeakersMatrix>& dynamic_matrix,
                     const std::shared_ptr<const mradm::DirectSpeakersMatrix>& lfe_matrix,
                     uint64_t direct_delay = 0U) {
+    mradm::NullLogSink logs;
+    auto scene = mradm::RenderService{}.prepare_preview_scene(input_path, {}, logs);
+    if (!check(scene.has_value() && !scene->scene.objects.empty(), "matrix ADM fixture imports")) {
+        return false;
+    }
     mradm::RenderPlan plan;
     plan.input_path = input_path.string();
     plan.output_layout = "0+5+0";
-    plan.scene = make_dynamic_scene();
+    plan.scene = scene->scene;
+    plan.scene_handle = scene->handle;
     plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
     plan.direct_speakers_matrix = dynamic_matrix;
 
@@ -333,7 +268,6 @@ bool verify_backend(std::string_view name,
     FileGuard output_guard{output_path};
     plan.output_path = output_path.string();
 
-    mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     auto prepared = renderer->prepare(plan, logs);
     if (!prepared) {
@@ -363,7 +297,7 @@ bool verify_backend(std::string_view name,
     ok &= check(uniform.value() == varied.value(), std::string{name} + ": stream is independent of pull chunking");
 
     mradm::LiveObjectOverride object_override;
-    object_override.object_id = "AO_matrix_dynamic";
+    object_override.object_id = plan.scene.objects.front().id;
     object_override.gain_db = -6.020599913F;
     mradm::LiveOverrides overrides;
     overrides.revision = 1U;
@@ -377,10 +311,15 @@ bool verify_backend(std::string_view name,
     ok &= check(max_difference(gained.value(), expected_gained) < 2.0e-6,
                 std::string{name} + ": live gain multiplies the prepared matrix result once");
 
+    auto lfe_scene = mradm::RenderService{}.prepare_preview_scene(lfe_input_path, {}, logs);
+    if (!check(lfe_scene.has_value(), "matrix LFE ADM fixture imports")) {
+        return false;
+    }
     mradm::RenderPlan lfe_plan;
-    lfe_plan.input_path = input_path.string();
+    lfe_plan.input_path = lfe_input_path.string();
     lfe_plan.output_layout = "9+10+3";
-    lfe_plan.scene = make_lfe_scene();
+    lfe_plan.scene = lfe_scene->scene;
+    lfe_plan.scene_handle = lfe_scene->handle;
     lfe_plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
     lfe_plan.direct_speakers_matrix = lfe_matrix;
     lfe_plan.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
@@ -412,10 +351,23 @@ bool verify_backend(std::string_view name,
 int main() {
     const auto input_samples = make_input_samples();
     const auto input_path = temp_path("mradm-matrix-input");
+    const auto lfe_input_path = temp_path("mradm-matrix-lfe-input");
     FileGuard input_guard{input_path};
-    if (!write_input(input_path, input_samples)) {
-        return EXIT_FAILURE;
-    }
+    FileGuard lfe_input_guard{lfe_input_path};
+    fixture::write_mono_direct_speakers(
+        input_path,
+        k_sample_rate,
+        input_samples,
+        k_object_gain,
+        {fixture::direct_speakers_block("M+000", 0U, k_first_boundary, k_sample_rate, 0.5F),
+         fixture::direct_speakers_block("U+000", k_first_boundary, k_second_boundary, k_sample_rate, 0.25F),
+         fixture::direct_speakers_block("M+110", k_second_boundary, k_frames, k_sample_rate, 0.75F)});
+    fixture::write_mono_direct_speakers(lfe_input_path,
+                                        k_sample_rate,
+                                        input_samples,
+                                        0.7F,
+                                        {fixture::direct_speakers_block("RC_LFE", 0U, k_frames, k_sample_rate, 0.6F)},
+                                        120.0F);
 
     const auto dynamic_matrix = parse_profile(k_dynamic_matrix_json);
     const auto lfe_matrix = parse_profile(k_lfe_matrix_json);
@@ -425,8 +377,8 @@ int main() {
 
     // VBAP and EAR read only the Rust render scene (PCM consistency 4.5); see mradm-render
     // tests/vbap.rs and tests/ear.rs.
-    const bool ok =
-        verify_backend("Apple", mradm::create_apple_renderer(), input_path, input_samples, dynamic_matrix, lfe_matrix);
+    const bool ok = verify_backend(
+        "Apple", mradm::create_apple_renderer(), input_path, lfe_input_path, input_samples, dynamic_matrix, lfe_matrix);
 
     if (ok) {
         std::cout << "DirectSpeakers matrix renderer test passed\n";

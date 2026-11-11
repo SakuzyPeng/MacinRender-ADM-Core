@@ -1376,7 +1376,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(APPLE)
         add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
         target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
-            PRIVATE MacinRender::ADMRenderApple MacinRender::ADMAudio)
+            PRIVATE MacinRender::ADMEngine MacinRender::ADMRenderApple MacinRender::ADMAudio)
         mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
         mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
