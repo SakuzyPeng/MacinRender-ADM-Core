@@ -226,7 +226,6 @@ class Islands {
             plan.meter_window = MeterWindow{e.meter_start, e.meter_count};
         }
         plan.cancel_token = o.cancel_token;
-        plan.scene = scene->scene();
         plan.scene_handle = scene->handle();
         auto renderer = apple_renderer();
         if (!renderer) {
@@ -292,6 +291,17 @@ class Islands {
     return result;
 }
 
+[[nodiscard]] Result<void> log_import_warnings(const io::RenderScene& scene, LogSink& logs) {
+    auto summary = scene.summary();
+    if (!summary) {
+        return tl::unexpected{summary.error()};
+    }
+    for (const auto& warning : summary->warnings) {
+        logs.log(LogLevel::warning, "importer", warning);
+    }
+    return {};
+}
+
 // The policy of a preview or export import, in Rust (mradm-engine `render`, PCM consistency 5.2 C2).
 [[nodiscard]] Result<void>
 apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptions& options, LogSink& logs) {
@@ -309,9 +319,6 @@ apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptio
                                          status);
     });
     outcome.emit(logs, "semantic-policy");
-    if (auto refreshed = scene.refresh(); !refreshed) {
-        return refreshed;
-    }
     if (!outcome.ok()) {
         return tl::unexpected{outcome.error()};
     }
@@ -379,7 +386,8 @@ RenderResult RenderService::render(const RenderRequest& request,
 }
 
 Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
-    auto scene_result = io::import_scene(input_path, {});
+    const io::SceneImportOptions no_options{};
+    auto scene_result = io::RenderScene::import(input_path, &no_options);
     if (!scene_result) {
         // Probe remains useful before the caller has chosen an explicit mapping:
         // return raw WAVE audio facts even when its channel mask is unknown.
@@ -393,13 +401,16 @@ Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
         raw.num_frames = wave->frame_count();
         return raw;
     }
-    const auto& scene = *scene_result;
+    auto summary = scene_result->summary();
+    if (!summary) {
+        return tl::unexpected(summary.error());
+    }
     SceneProbe probe;
-    probe.sample_rate = scene.info.sample_rate;
-    probe.num_channels = scene.info.num_channels;
-    probe.num_frames = scene.info.num_frames;
-    probe.programme_count = static_cast<uint32_t>(scene.programmes.size());
-    probe.object_count = static_cast<uint32_t>(scene.objects.size());
+    probe.sample_rate = summary->sample_rate;
+    probe.num_channels = summary->channels;
+    probe.num_frames = summary->frames;
+    probe.programme_count = summary->programmes;
+    probe.object_count = summary->objects;
     return probe;
 }
 
@@ -410,6 +421,19 @@ Result<std::string> RenderService::inspect_json(const std::string& input_path) c
         return tl::unexpected(scene.error());
     }
     return scene->inspect_json();
+}
+
+Result<std::string> RenderService::inspect_text(const std::string& input_path) const {
+    const io::SceneImportOptions no_options{};
+    auto scene = io::RenderScene::import(input_path, &no_options);
+    if (!scene) {
+        return tl::unexpected(scene.error());
+    }
+    auto text = scene->inspect_text();
+    if (!text) {
+        return tl::unexpected(text.error());
+    }
+    return "File: " + input_path + "\n" + *text;
 }
 
 std::string RenderService::capabilities_json() const {
@@ -499,8 +523,8 @@ Result<void> RenderService::export_file(const std::string& input_path,
     if (!scene) {
         return tl::unexpected(scene.error());
     }
-    for (const auto& w : scene->scene().import_warnings) {
-        logs.log(LogLevel::warning, "importer", w);
+    if (auto logged = log_import_warnings(*scene, logs); !logged) {
+        return tl::unexpected(logged.error());
     }
     if (auto applied = apply_policy(*scene, input_path, options, logs); !applied) {
         return applied;
@@ -516,13 +540,13 @@ Result<PreparedScene> RenderService::prepare_preview_scene(const std::filesystem
     if (!scene) {
         return tl::unexpected(scene.error());
     }
-    for (const auto& w : scene->scene().import_warnings) {
-        logs.log(LogLevel::warning, "importer", w);
+    if (auto logged = log_import_warnings(*scene, logs); !logged) {
+        return tl::unexpected(logged.error());
     }
     if (auto applied = apply_policy(*scene, input_path.string(), options, logs); !applied) {
         return tl::unexpected(applied.error());
     }
-    return PreparedScene{scene->scene(), scene->handle()};
+    return PreparedScene{scene->handle()};
 }
 
 // ── PreviewSession ──────────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@
 #include "adm/render_apple.h"
 
 #include "../support/direct_speakers_fixture.h"
+#include "adm_scene.h"
 
 namespace {
 
@@ -116,7 +117,7 @@ std::optional<std::vector<float>> read_output(const std::filesystem::path& path,
 
 std::optional<std::vector<float>> pull_stream(mradm::IRenderer& renderer,
                                               const mradm::IPreparedRender& prepared,
-                                              const mradm::RenderPlan& plan,
+                                              const mradm::ScenePlan& plan,
                                               const std::vector<std::size_t>& chunks,
                                               const mradm::LiveOverrides* overrides = nullptr) {
     mradm::NullLogSink logs;
@@ -253,13 +254,13 @@ bool verify_backend(std::string_view name,
                     uint64_t direct_delay = 0U) {
     mradm::NullLogSink logs;
     auto scene = mradm::RenderService{}.prepare_preview_scene(input_path, {}, logs);
-    if (!check(scene.has_value() && !scene->scene.objects.empty(), "matrix ADM fixture imports")) {
+    if (!check(scene.has_value() && !mradm::adm_scene(*scene).objects.empty(), "matrix ADM fixture imports")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input_path.string();
     plan.output_layout = "0+5+0";
-    plan.scene = scene->scene;
+    plan.scene = mradm::adm_scene(*scene);
     plan.scene_handle = scene->handle;
     plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
     plan.direct_speakers_matrix = dynamic_matrix;
@@ -315,10 +316,10 @@ bool verify_backend(std::string_view name,
     if (!check(lfe_scene.has_value(), "matrix LFE ADM fixture imports")) {
         return false;
     }
-    mradm::RenderPlan lfe_plan;
+    mradm::ScenePlan lfe_plan;
     lfe_plan.input_path = lfe_input_path.string();
     lfe_plan.output_layout = "9+10+3";
-    lfe_plan.scene = lfe_scene->scene;
+    lfe_plan.scene = mradm::adm_scene(*lfe_scene);
     lfe_plan.scene_handle = lfe_scene->handle;
     lfe_plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
     lfe_plan.direct_speakers_matrix = lfe_matrix;

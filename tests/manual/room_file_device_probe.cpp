@@ -21,6 +21,7 @@
 #include "adm/monitor.h"
 #include "adm/room.h"
 
+#include "adm_scene.h"
 #include "room_worker_wait.h"
 
 namespace {

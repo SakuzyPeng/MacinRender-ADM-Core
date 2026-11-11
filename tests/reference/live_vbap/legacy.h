@@ -24,6 +24,7 @@
 #include "dsp.h"
 #include "live_vbap_renderer.h"
 #include "render_common.h"
+#include "render_common_scene.h"
 #include "speaker_layouts.h"
 
 namespace mradm::live_vbap_legacy {

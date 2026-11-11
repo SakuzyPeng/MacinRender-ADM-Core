@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 110,
-      "lines": 23413
+      "files": 106,
+      "lines": 21963
     },
     "islands": {
       "files": 6,
@@ -14,16 +14,16 @@
       "lines": 512
     },
     "tests": {
-      "files": 180,
-      "lines": 51331
+      "files": 189,
+      "lines": 52864
     },
     "reference": {
       "files": 38,
-      "lines": 12022
+      "lines": 12025
     },
     "rust": {
       "files": 338,
-      "lines": 126670
+      "lines": 126935
     },
     "rust-vendor": {
       "files": 175,
@@ -31,12 +31,12 @@
     }
   },
   "modules": {
-    "include/adm": 4308,
+    "include/adm": 3985,
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40626,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 20083,
-    "rust/crates/mradm-ffi": 24618,
+    "rust/crates/mradm-engine": 20327,
+    "rust/crates/mradm-ffi": 24639,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 1757,
@@ -53,28 +53,28 @@
     "src/adm_apple": 2336,
     "src/adm_audio": 4169,
     "src/adm_c_api": 3545,
-    "src/adm_cli": 1615,
-    "src/adm_core": 350,
+    "src/adm_cli": 1410,
+    "src/adm_core": 200,
     "src/adm_dsp": 1535,
-    "src/adm_engine": 1837,
-    "src/adm_io": 381,
-    "src/adm_metadata": 744,
+    "src/adm_engine": 1858,
+    "src/adm_io": 364,
+    "src/adm_metadata": 386,
     "src/adm_realtime": 1366,
-    "src/adm_render_common": 3234,
+    "src/adm_render_common": 2816,
     "src/adm_render_room": 283,
     "src/adm_render_room/cuda": 512,
     "src/adm_renderer_factory": 46,
     "src/adm_windows": 709,
-    "tests/manual": 2423,
+    "tests/manual": 2425,
     "tests/reference/dr_wav_reference_test.cpp": 274,
     "tests/reference/ear_post_legacy.h": 147,
     "tests/reference/ebur128_reference_test.cpp": 187,
-    "tests/reference/hoa": 654,
+    "tests/reference/hoa": 655,
     "tests/reference/hptf_parse": 243,
     "tests/reference/libadm": 1994,
     "tests/reference/libbw64": 168,
     "tests/reference/libear": 402,
-    "tests/reference/live_vbap": 660,
+    "tests/reference/live_vbap": 661,
     "tests/reference/monitor": 108,
     "tests/reference/osc_protocol": 407,
     "tests/reference/output_dsp_legacy.h": 222,
@@ -85,10 +85,10 @@
     "tests/reference/spreader_mr.c": 955,
     "tests/reference/spreader_mr.h": 85,
     "tests/reference/spreader_mr_internal.h": 153,
-    "tests/reference/triple_balance": 1619,
+    "tests/reference/triple_balance": 1620,
     "tests/reference/wav_container": 1456,
-    "tests/support": 6062,
+    "tests/support": 7590,
     "tests/tools": 1748,
-    "tests/unit": 41098
+    "tests/unit": 41101
   }
 }

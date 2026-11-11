@@ -13,7 +13,6 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 
-#include "metadata.h"
 #include "scene_ffi.h"
 #include "scene_handle.h"
 #include "scene_import_internal.h"
@@ -22,7 +21,7 @@
 namespace mradm::io {
 
 // The import itself is Rust (mradm-scene, PCM consistency 4.3): WAVE format, the CHNA channel policy,
-// the ADM projection and channel-bed synthesis. This adapter builds the public scene from its view.
+// the ADM projection and channel-bed synthesis.
 namespace {
 
 MradmAdmText text(std::string_view value) {
@@ -84,51 +83,30 @@ RenderScene::import(const std::string& path, const SceneImportOptions* options, 
     if (checkpoint != nullptr) {
         scene.checkpoint(checkpoint);
     }
-    if (auto refreshed = scene.refresh(); !refreshed) {
-        return tl::unexpected{refreshed.error()};
-    }
     return scene;
 }
 
 Result<RenderScene> RenderScene::adopt(MradmSceneHandle* raw, std::string path) {
-    RenderScene scene{std::make_shared<detail::RenderSceneHandle>(raw), std::move(path)};
-    if (auto refreshed = scene.refresh(); !refreshed) {
-        return tl::unexpected{refreshed.error()};
-    }
-    return scene;
+    return RenderScene{std::make_shared<detail::RenderSceneHandle>(raw), std::move(path)};
 }
 
-Result<void> RenderScene::refresh() {
+Result<SceneSummary> RenderScene::summary() const {
     std::array<uint8_t, 1024> message{};
     MradmSceneImportInfo info{};
     MradmAdmView view{};
-    MradmSceneOverlay overlay{};
-    auto code = mradm_scene_view(handle_->raw, &info, &view, message.data(), message.size());
-    if (code == 0) {
-        code = mradm_scene_overlay(handle_->raw, &overlay, message.data(), message.size());
-    }
-    if (code != 0) {
+    if (const auto code = mradm_scene_view(handle_->raw, &info, &view, message.data(), message.size()); code != 0) {
         return tl::unexpected{scene_error(code, message, 1U, path_)};
     }
-    const bool channel_bed = info.source_kind == 1U;
-    auto refreshed_scene = metadata::scene_from_view(view, !channel_bed, &overlay);
-    if (!refreshed_scene) {
-        auto error = refreshed_scene.error();
-        error.context = "input=" + path_;
-        return tl::unexpected{std::move(error)};
+    SceneSummary summary;
+    summary.sample_rate = info.sample_rate;
+    summary.channels = static_cast<uint16_t>(info.channels);
+    summary.frames = info.frames;
+    summary.programmes = static_cast<uint32_t>(view.programmes_len);
+    summary.objects = static_cast<uint32_t>(view.objects_len);
+    for (const auto id : std::span{view.warnings, view.warnings_len}) {
+        summary.warnings.push_back(copy(std::span{view.strings, view.strings_len}[id]));
     }
-    auto& scene_info = refreshed_scene->info;
-    scene_info.sample_rate = info.sample_rate;
-    scene_info.num_channels = static_cast<uint16_t>(info.channels);
-    scene_info.num_frames = info.frames;
-    scene_info.file_path = path_;
-    scene_info.source_kind = channel_bed ? SceneSourceKind::channel_bed : SceneSourceKind::adm;
-    scene_info.input_layout = copy(info.input_layout);
-    for (const auto& label : std::span{info.input_channel_labels, info.input_channel_labels_len}) {
-        scene_info.input_channel_labels.push_back(copy(label));
-    }
-    scene_ = std::move(*refreshed_scene);
-    return {};
+    return summary;
 }
 
 void RenderScene::checkpoint(const char* stage) const {
@@ -161,6 +139,15 @@ Result<std::string> RenderScene::inspect_json() const {
                                                    message.data(),
                                                    message.size());
         code != 0) {
+        return make_error(static_cast<ErrorCode>(code), message_text(message), {});
+    }
+    return copy(output);
+}
+
+Result<std::string> RenderScene::inspect_text() const {
+    std::array<uint8_t, 1024> message{};
+    MradmAdmText output{};
+    if (const auto code = mradm_scene_inspect_text(handle_->raw, &output, message.data(), message.size()); code != 0) {
         return make_error(static_cast<ErrorCode>(code), message_text(message), {});
     }
     return copy(output);
@@ -203,20 +190,6 @@ void check_table(int32_t code, const std::array<uint8_t, 1024>& message) {
 }
 
 } // namespace
-
-Result<AdmScene> import_scene(const std::string& path) {
-    try {
-        return RenderScene::import(path, nullptr).map([](const RenderScene& scene) { return scene.scene(); });
-    } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error, std::string("解析 BW64/ADM 文件失败：") + e.what(), "input=" + path);
-    } catch (...) {
-        return make_error(ErrorCode::io_error, "解析 BW64/ADM 文件时发生未知异常", "input=" + path);
-    }
-}
-
-Result<AdmScene> import_scene(const std::string& path, const SceneImportOptions& options) {
-    return RenderScene::import(path, &options).map([](const RenderScene& scene) { return scene.scene(); });
-}
 
 const std::vector<InputLayoutDefinition>& input_layouts() {
     static const std::vector<InputLayoutDefinition> layouts = [] {

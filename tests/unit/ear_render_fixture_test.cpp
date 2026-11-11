@@ -28,6 +28,7 @@
 #include "adm/render.h"
 #include "adm/render_ear.h"
 
+#include "adm_scene.h"
 #include "render_common.h"
 #include "scene_import_internal.h"
 #include "speaker_pcm.h"
@@ -1636,10 +1637,10 @@ bool verify_ear_stream_matches_window() {
     if (!check(scene.has_value(), "ear stream: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in_path.string();
     plan.output_layout = "0+5+0";
-    plan.scene = scene->scene();
+    plan.scene = mradm::io::adm_scene(*scene);
     plan.scene_handle = scene->handle();
 
     auto renderer = mradm::create_ear_renderer();
@@ -1652,7 +1653,7 @@ bool verify_ear_stream_matches_window() {
 
     const auto ref_path = std::filesystem::temp_directory_path() / "mr_ear_stream_ref.wav";
     FileGuard ref_guard{ref_path};
-    mradm::RenderPlan window_plan = plan;
+    mradm::ScenePlan window_plan = plan;
     window_plan.output_path = ref_path.string();
     if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "ear stream: reference render_window")) {
@@ -1708,15 +1709,15 @@ bool verify_ear_stream_gain_override() {
 
     // EAR reads only the Rust render scene (PCM consistency 4.5): import it with its handle.
     auto scene = mradm::io::RenderScene::import(in_path.string(), nullptr);
-    if (!check(scene.has_value() && !scene->scene().objects.empty(), "ear override: import scene")) {
+    if (!check(scene.has_value() && !mradm::io::adm_scene(*scene).objects.empty(), "ear override: import scene")) {
         return false;
     }
-    const std::string object_id = scene->scene().objects.front().id;
+    const std::string object_id = mradm::io::adm_scene(*scene).objects.front().id;
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in_path.string();
     plan.output_layout = "0+5+0";
-    plan.scene = scene->scene();
+    plan.scene = mradm::io::adm_scene(*scene);
     plan.scene_handle = scene->handle();
 
     auto renderer = mradm::create_ear_renderer();
@@ -1817,15 +1818,16 @@ bool verify_ear_stream_per_channel_override() {
 
     // EAR reads only the Rust render scene (PCM consistency 4.5): import it with its handle.
     auto scene = mradm::io::RenderScene::import(in_path.string(), nullptr);
-    if (!check(scene.has_value() && !scene->scene().objects.empty(), "per-channel: import DS bed scene")) {
+    if (!check(scene.has_value() && !mradm::io::adm_scene(*scene).objects.empty(),
+               "per-channel: import DS bed scene")) {
         return false;
     }
-    const std::string object_id = scene->scene().objects.front().id;
+    const std::string object_id = mradm::io::adm_scene(*scene).objects.front().id;
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in_path.string();
     plan.output_layout = "0+5+0"; // L, R, C, Ls, Rs → M+030 drives ch0 (L), M-030 drives ch1 (R)
-    plan.scene = scene->scene();
+    plan.scene = mradm::io::adm_scene(*scene);
     plan.scene_handle = scene->handle();
 
     auto renderer = mradm::create_ear_renderer();

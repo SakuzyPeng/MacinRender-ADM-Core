@@ -16,6 +16,7 @@
 #include "adm/render_triple_balance.h"
 
 #include "../adm_io/scene_import_internal.h"
+#include "adm_scene.h"
 #include "scene_policy.h"
 #include "speaker_pcm.h"
 #include "wav_fixture.h"
@@ -189,7 +190,7 @@ std::pair<std::string, std::vector<fixture::WaveAudioId>> scene_xml(const Varian
 
 // The input of a variant (the same PCM for every one) and the plan of its imported Rust scene,
 // with `policy` applied as RenderService does.
-mradm::RenderPlan
+mradm::ScenePlan
 make_plan(const Files& files, const std::string& layout, const Variant& v = {}, const std::string& policy = {}) {
     const auto name = files.input().string() + (v.solo ? "-solo" : "") + (v.lower ? "-lower" : "") +
                       (v.zero ? "-zero" : "") + "-" + std::to_string(v.rate) + ".wav";
@@ -211,11 +212,11 @@ make_plan(const Files& files, const std::string& layout, const Variant& v = {}, 
     if (!policy.empty()) {
         done(mradm::test::apply_policy(scene, policy));
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = name;
     plan.output_path = files.output().string();
     plan.output_layout = layout;
-    plan.scene = scene.scene();
+    plan.scene = mradm::io::adm_scene(scene);
     plan.scene_handle = scene.handle();
     return plan;
 }
@@ -229,7 +230,7 @@ std::string object_policy(float scale) {
     return out.str();
 }
 
-std::vector<float> offline(mradm::IRenderer& renderer, const mradm::RenderPlan& plan) {
+std::vector<float> offline(mradm::IRenderer& renderer, const mradm::ScenePlan& plan) {
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     auto prepared = take(renderer.prepare(plan, logs));
@@ -263,7 +264,7 @@ void expect_equal(const std::vector<float>& actual, const std::vector<float>& ex
     require(actual == expected, label);
 }
 void check_live_edits(const Files& files,
-                      const mradm::RenderPlan& plan,
+                      const mradm::ScenePlan& plan,
                       mradm::IRenderer& renderer,
                       const mradm::IPreparedRender& prepared,
                       std::span<const std::size_t> chunks) {
@@ -371,7 +372,7 @@ void run(const Files& files, const std::string& layout) {
     check_live_edits(files, plan, *renderer, *prepared, chunks);
     std::cout << layout << ": stream, policy, checkpoint and seek checks passed\n";
 }
-void check_d_lfe_routes(mradm::IRenderer& renderer, const mradm::RenderPlan& plan, std::span<const float> full) {
+void check_d_lfe_routes(mradm::IRenderer& renderer, const mradm::ScenePlan& plan, std::span<const float> full) {
     auto direct_plan = plan;
     direct_plan.lfe_routing_mode = mradm::LfeRoutingMode::direct;
     const auto direct = offline(renderer, direct_plan);

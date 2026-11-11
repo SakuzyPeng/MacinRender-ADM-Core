@@ -12,6 +12,7 @@
 #include "adm/scene.h"
 
 #include "render_common.h"
+#include "render_common_scene.h"
 
 namespace {
 

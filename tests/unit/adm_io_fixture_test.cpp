@@ -18,6 +18,8 @@
 // Our library (mradm namespace)
 #include "adm/io.h"
 
+#include "adm_scene.h"
+
 // libadm – used here only for constructing the fixture document
 
 // libbw64 – used here only for writing the fixture BW64 file

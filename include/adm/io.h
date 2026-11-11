@@ -6,10 +6,11 @@
 #include <vector>
 
 #include "adm/errors.h"
-#include "adm/scene.h"
 
 namespace mradm::io {
 
+// How RenderService imports an input: ADM BWF, or an ordinary channel-based WAVE/RF64/BW64 file
+// from which a DirectSpeakers scene is synthesized.
 struct SceneImportOptions {
     // nullopt / "auto" selects ADM when AXML exists, otherwise a recognised
     // WAVEFORMATEXTENSIBLE channel mask. Any other value forces channel-bed input.
@@ -36,15 +37,6 @@ struct InputLayoutDefinition {
     std::vector<InputChannelDefinition> channels;
     std::vector<InputChannelDefinition> wave_mask_channels;
 };
-
-// Import an ADM BWF file from path and return a self-owned AdmScene.
-// Returns io_error if the file is missing, not a valid BW64/ADM file,
-// or the axml chunk is absent.
-Result<AdmScene> import_scene(const std::string& path);
-
-// Rendering-oriented import. In addition to ADM BWF, accepts an ordinary
-// channel-based WAVE/RF64/BW64 file and synthesizes a DirectSpeakers scene.
-Result<AdmScene> import_scene(const std::string& path, const SceneImportOptions& options);
 
 // Single source of truth for accepted channel-bed presets and custom labels.
 const std::vector<InputLayoutDefinition>& input_layouts();

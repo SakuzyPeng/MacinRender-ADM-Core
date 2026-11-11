@@ -17,9 +17,6 @@ namespace mradm::test {
         return mradm_engine_apply_policy(
             scene.handle()->raw, 1U, render_common::engine_text(json), 0U, {}, {}, out, status);
     });
-    if (auto refreshed = scene.refresh(); !refreshed) {
-        return refreshed;
-    }
     if (!applied.ok()) {
         return tl::unexpected{applied.error()};
     }

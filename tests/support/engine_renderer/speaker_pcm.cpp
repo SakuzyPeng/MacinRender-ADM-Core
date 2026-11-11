@@ -4,6 +4,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <utility>
@@ -169,14 +170,27 @@ class EngineStream final : public IRenderStream {
     bool requires_preroll_;
 };
 
+// The input format of the plan's scene (RenderPlan::scene until PCM consistency 5.6 C); zero
+// without a scene, which the engine rejects.
+struct SceneFormat {
+    uint32_t channels{0};
+    uint64_t frames{0};
+    uint32_t sample_rate{0};
+};
+
+[[nodiscard]] SceneFormat scene_format(const RenderPlan& plan) {
+    const auto info = plan.scene_handle != nullptr ? detail::scene_info(*plan.scene_handle) : std::nullopt;
+    return info ? SceneFormat{info->channels, info->frames, info->sample_rate} : SceneFormat{};
+}
+
 } // namespace
 
 Result<std::unique_ptr<IRenderStream>>
 open_engine_stream(const EnginePrepared& prepared, const RenderPlan& plan, RoomControlAdopter room_control) {
-    const auto& info = plan.scene.info;
+    const auto info = scene_format(plan);
     const auto& pose = plan.listener_orientation;
-    const MradmEngineStreamSettings settings{info.num_channels,
-                                             info.num_frames,
+    const MradmEngineStreamSettings settings{info.channels,
+                                             info.frames,
                                              info.sample_rate,
                                              plan.default_interp_ms,
                                              plan.object_smoothing_frames,
@@ -321,7 +335,7 @@ render_offline(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink
     if (prepared == nullptr) {
         return make_error(ErrorCode::internal_error, "offline render received an incompatible prepared state");
     }
-    const auto& info = plan.scene.info;
+    const auto info = scene_format(plan);
     const auto input = audio::wav_path_utf8(plan.input_path);
     const auto output = audio::wav_path_utf8(plan.output_path);
     const auto& window = plan.render_window;
@@ -332,8 +346,8 @@ render_offline(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink
                                               text(input),
                                               text(output),
                                               text(plan.output_layout),
-                                              info.num_channels,
-                                              info.num_frames,
+                                              info.channels,
+                                              info.frames,
                                               info.sample_rate,
                                               plan.default_interp_ms,
                                               plan.object_smoothing_frames,

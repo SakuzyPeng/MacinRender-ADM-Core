@@ -25,6 +25,7 @@
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
+#include "adm_scene.h"
 #include "scene_import_internal.h"
 
 #ifdef _WIN32
@@ -39,12 +40,12 @@
 namespace {
 
 // The Rust render scene RenderService hands the backends; VBAP reads only it (PCM consistency 4.5).
-bool use_imported_scene(mradm::RenderPlan& plan, const std::filesystem::path& path) {
+bool use_imported_scene(mradm::ScenePlan& plan, const std::filesystem::path& path) {
     auto scene = mradm::io::RenderScene::import(path.string(), nullptr);
     if (!scene) {
         return false;
     }
-    plan.scene = scene->scene();
+    plan.scene = mradm::io::adm_scene(*scene);
     plan.scene_handle = scene->handle();
     return true;
 }
@@ -813,7 +814,7 @@ bool verify_direct_speakers_routing_modes() {
     bool ok = true;
     ok &= check(mradm::RenderOptions{}.direct_speakers_routing_mode == mradm::DirectSpeakersRoutingMode::automatic,
                 "RenderOptions DirectSpeakers routing defaults to automatic");
-    ok &= check(mradm::RenderPlan{}.direct_speakers_routing_mode == mradm::DirectSpeakersRoutingMode::automatic,
+    ok &= check(mradm::ScenePlan{}.direct_speakers_routing_mode == mradm::DirectSpeakersRoutingMode::automatic,
                 "RenderPlan DirectSpeakers routing defaults to automatic");
 
     auto render = [](const std::shared_ptr<fixture::Document>& doc,
@@ -908,7 +909,7 @@ bool verify_direct_speakers_routing_modes() {
         auto [rear_doc, rear_uid] = make_direct_speakers_doc("M+135", 0.0F, 0.0F, false);
         const auto input = write_input_fixture(rear_doc, rear_uid);
         FileGuard input_guard{input};
-        mradm::RenderPlan plan;
+        mradm::ScenePlan plan;
         if (!use_imported_scene(plan, input) || plan.scene.objects.empty() ||
             plan.scene.objects.front().tracks.empty() || plan.scene.objects.front().tracks.front().ds_blocks.empty()) {
             return check(false, "SAF rear-label fixture imports");
@@ -2169,7 +2170,7 @@ bool verify_vbap_stream_matches_window() {
     const auto in_path = write_input_fixture(doc, uid_str, 48000U, 4096U);
     FileGuard in_guard{in_path};
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     if (!check(use_imported_scene(plan, in_path), "vbap stream: import scene")) {
         return false;
     }
@@ -2186,7 +2187,7 @@ bool verify_vbap_stream_matches_window() {
 
     const auto ref_path = std::filesystem::temp_directory_path() / "mr_vbap_stream_ref.wav";
     FileGuard ref_guard{ref_path};
-    mradm::RenderPlan window_plan = plan;
+    mradm::ScenePlan window_plan = plan;
     window_plan.output_path = ref_path.string();
     if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "vbap stream: reference render_window")) {
@@ -2249,7 +2250,7 @@ bool verify_vbap_stream_gain_override() {
     const auto in_path = write_input_fixture(doc, uid_str, 48000U, 4096U);
     FileGuard in_guard{in_path};
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     if (!check(use_imported_scene(plan, in_path) && !plan.scene.objects.empty(), "vbap override: import scene")) {
         return false;
     }

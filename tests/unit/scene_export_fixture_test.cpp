@@ -20,6 +20,8 @@
 #include "adm/render.h"
 #include "adm/scene.h"
 
+#include "adm_scene.h"
+
 // libadm / libbw64 — used here only to construct and inspect the fixture file.
 #include "../support/wav_fixture.h"
 

@@ -120,7 +120,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/hoa/legacy.h": "18c64eda423f32d8d4c59ae6ca49aa3295c0d37cfa1cb7be2819211820fdd6ca",
+        "tests/reference/hoa/legacy.h": "9e75f267f5dd61088e09a3d02d0bef2bc9eb9e7b1481a59be8afe2348f40ea74",
         "tests/reference/hoa/provenance.json": "d7213dc456795b8e61c5eed678b0324916a59c57a5b437e95f510090cca2b55c"
       }
     },
@@ -145,7 +145,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/live_vbap/legacy.h": "5853d927b66b0233de39f61eb033f83eb7fdae92b7538b1172e100a30c77227d",
+        "tests/reference/live_vbap/legacy.h": "edcfd5ce424943ef71dce824184b8568b16447c75838d71c0ce55b2833aadb15",
         "tests/reference/live_vbap/provenance.json": "0358076f6ac6779812764ad78d4dc9e01ec5b72236c59543ce99844fc37d4f0f",
         "tests/reference/live_vbap/ramps.h": "00d34b1992715fbaf2c225ed27e72cae64e4aeef3ce741fbaa12a5e33496bac9"
       }
@@ -198,8 +198,8 @@
         "tests/reference/triple_balance/panner.cpp": "2f002a7f41a0d9eb897f852f686361db6f292db671ee9a30be702797e7720bbe",
         "tests/reference/triple_balance/panner.h": "243c7634163cc52a6daac0add14a39b1faf41c38596901e2b4ad563d60b97641",
         "tests/reference/triple_balance/provenance.json": "8bd4bd7ebf0b32e051d345b5710d006969dca62368ab07fe0d7c57fd4fc78468",
-        "tests/reference/triple_balance/render_state.cpp": "ac11886bd6c7595281e89c16fcbc33028946fac1396fe4a89dcb71d812713742",
-        "tests/reference/triple_balance/render_state.h": "d25710ea4888eb8c0121d24c3c2441c158e3359fe21dead816dead46901024ac",
+        "tests/reference/triple_balance/render_state.cpp": "efe9259879261245a98f5aafab94d347482a5f9c021d96281ecc4c9e4347d771",
+        "tests/reference/triple_balance/render_state.h": "bfab1fe55507c4f97c36822d8cb991e9c5bb8bb483aa8a8ec88894aff4524a90",
         "tests/reference/triple_balance/size_panner.cpp": "35f12b5dd60d9310c42f3bc75c78e8f19f0214bd38c82adea0d457d34d3bf3d7",
         "tests/reference/triple_balance/size_panner.h": "895f0e192920837ad2961750b83f3022a6e198f8dd1580b504822cad87b6a9e8",
         "tests/reference/triple_balance/size_processor.cpp": "fe1f569c005149b2b1147a8638949ae18fa751bf3b28511070d4d8a0a7ae9779",

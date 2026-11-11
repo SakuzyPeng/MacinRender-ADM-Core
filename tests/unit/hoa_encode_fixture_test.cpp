@@ -24,6 +24,7 @@
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
+#include "adm_scene.h"
 #include "scene_import_internal.h"
 #include "speaker_pcm.h"
 
@@ -68,15 +69,15 @@ bool check(bool condition, const char* msg) {
 
 // HOA reads only the Rust render scene (PCM consistency 4.5), so drive the renderer with the
 // imported scene and its handle.
-std::optional<mradm::RenderPlan> imported_plan(const std::filesystem::path& path) {
+std::optional<mradm::ScenePlan> imported_plan(const std::filesystem::path& path) {
     auto scene = mradm::io::RenderScene::import(path.string(), nullptr);
-    if (!scene || scene->scene().objects.empty()) {
+    if (!scene || mradm::io::adm_scene(*scene).objects.empty()) {
         return std::nullopt;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = path.string();
     plan.output_layout = "hoa3";
-    plan.scene = scene->scene();
+    plan.scene = mradm::io::adm_scene(*scene);
     plan.scene_handle = scene->handle();
     return plan;
 }
@@ -1056,7 +1057,7 @@ bool verify_ds_off_axis_position() {
 
 bool verify_hoa_stream_boundaries(mradm::IRenderer& renderer,
                                   const mradm::IPreparedRender& prepared,
-                                  const mradm::RenderPlan& plan,
+                                  const mradm::ScenePlan& plan,
                                   mradm::LogSink& logs) {
     bool ok = true;
     auto stream = renderer.open_stream(prepared, plan, logs);
@@ -1079,9 +1080,23 @@ bool verify_hoa_stream_boundaries(mradm::IRenderer& renderer,
         ok &= check(got && wanted && *got == *wanted && a == b,
                     "HOA seek keeps no diffuse history from earlier playback");
     }
-    auto mismatched_plan = plan;
-    ++mismatched_plan.scene.info.num_channels;
-    ok &= check(!renderer.open_stream(prepared, mismatched_plan, logs), "HOA rejects prepared/input format mismatch");
+    // A plan whose scene has another channel count than the prepared one (a 5.1 channel bed).
+    const auto bed_path = std::filesystem::temp_directory_path() / "mr_hoa_mismatched_bed.wav";
+    FileGuard bed_guard{bed_path};
+    {
+        auto writer = mradm::audio::FloatWavWriter::open(bed_path.string(), 6, 48000);
+        const std::vector<float> silence(std::size_t{6} * 16);
+        ok &= check(writer && writer->write(silence.data(), 16) == 16 && writer->finish(), "HOA mismatch: write bed");
+    }
+    const mradm::io::SceneImportOptions bed_options{std::string{"5.1"}, {}};
+    auto bed = mradm::io::RenderScene::import(bed_path.string(), &bed_options);
+    ok &= check(bed.has_value(), "HOA mismatch: import bed");
+    if (bed) {
+        auto mismatched_plan = plan;
+        mismatched_plan.scene_handle = bed->handle();
+        ok &=
+            check(!renderer.open_stream(prepared, mismatched_plan, logs), "HOA rejects prepared/input format mismatch");
+    }
     // Premature EOF (offline and streaming) is covered by mradm-render tests/hoa.rs.
     return ok;
 }
@@ -1112,7 +1127,7 @@ bool verify_hoa_stream_matches_window() {
 
     const auto ref_path = std::filesystem::temp_directory_path() / "mr_hoa_stream_ref.wav";
     FileGuard ref_guard{ref_path};
-    mradm::RenderPlan window_plan = plan;
+    mradm::ScenePlan window_plan = plan;
     window_plan.output_path = ref_path.string();
     if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "hoa stream: reference render_window")) {

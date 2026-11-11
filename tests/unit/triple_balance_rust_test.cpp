@@ -16,6 +16,7 @@
 #include "../reference/triple_balance/motion.h"
 #include "../reference/triple_balance/render_state.h"
 #include "../reference/triple_balance/size_processor.h"
+#include "adm_scene.h"
 #include "layout_222.h"
 #include "panner.h"
 #include "size_mixer.h"
@@ -237,7 +238,7 @@ void curves_and_mix(Stats& stats) {
         input[(i * 2) + 1] = mono[mono.size() - 1 - i];
     }
     for (const auto* layout : {"7.1.4", "9.1.6", "22.2"}) {
-        RenderPlan plan;
+        ScenePlan plan;
         plan.output_layout = layout;
         plan.scene.info.sample_rate = 48000;
         plan.scene.info.num_channels = 2;

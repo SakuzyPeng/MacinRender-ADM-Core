@@ -13,6 +13,7 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 
+#include "adm_scene.h"
 #include "test_portable.h"
 
 namespace {

@@ -356,3 +356,215 @@ pub fn inspect_json(scene: &RenderScene, path: &str) -> String {
     );
     mradm_json::dump(&Value::Object(root), Some(2))
 }
+
+/// fmt `{:.<precision>f}` of a float.
+fn f(value: f32, precision: usize) -> String {
+    crate::fmt::fixed(f64::from(value), precision, false)
+}
+
+impl Doc<'_> {
+    fn str(&self, id: u32) -> &str {
+        &self.s.strings[id as usize]
+    }
+
+    fn strs(&self, span: Span) -> impl Iterator<Item = &str> {
+        self.s.indices[span.offset..span.offset + span.len]
+            .iter()
+            .map(|&id| self.str(id))
+    }
+
+    fn quoted_labels(&self, out: &mut String, span: Span) {
+        if span.len != 0 {
+            out.push_str("    label:");
+            for label in self.strs(span) {
+                out.push_str(&format!(" \"{label}\""));
+            }
+            out.push('\n');
+        }
+    }
+
+    fn loudness_text(&self, out: &mut String, l: &Loudness) {
+        if l.method != NONE {
+            out.push_str(&format!("    loudness method: {}\n", self.str(l.method)));
+        }
+        for (bit, label, value, unit) in [
+            (1, "integrated loudness: ", l.integrated, "LUFS"),
+            (2, "max true peak:       ", l.true_peak, "dBTP"),
+            (4, "loudness range:      ", l.range, "LU"),
+            (8, "max momentary:       ", l.momentary, "LUFS"),
+            (16, "max short-term:      ", l.short_term, "LUFS"),
+            (32, "dialogue loudness:   ", l.dialogue, "LUFS"),
+        ] {
+            if l.fields & bit != 0 {
+                out.push_str(&format!("    {label}{} {unit}\n", f(value, 1)));
+            }
+        }
+    }
+}
+
+fn object_text(d: &Doc<'_>, scene: &RenderScene, o: &Object, out: &mut String) {
+    let s = d.s;
+    out.push_str(&format!("  {}  \"{}\"\n", d.str(o.id), d.str(o.name)));
+    d.quoted_labels(out, o.labels);
+    if o.importance_present != 0 {
+        out.push_str(&format!("    importance: {}\n", o.importance));
+    }
+    if o.dialogue_present != 0 {
+        let name = match o.dialogue {
+            0 => "non-dialogue".to_owned(),
+            1 => "dialogue".to_owned(),
+            2 => "mixed".to_owned(),
+            other => other.to_string(),
+        };
+        out.push_str(&format!("    dialogue: {name}\n"));
+    }
+    for t in &s.tracks[o.tracks.offset..o.tracks.offset + o.tracks.len] {
+        if t.channel >= 0 {
+            out.push_str(&format!("    {}  ch={}\n", d.str(t.uid), t.channel as u16));
+        } else {
+            out.push_str(&format!("    {}  ch=<unmapped>\n", d.str(t.uid)));
+        }
+        let blocks = &s.object_blocks[t.blocks.offset..t.blocks.offset + t.blocks.len];
+        for (bi, b) in blocks.iter().enumerate() {
+            let p = &b.position;
+            if p.cartesian != 0 {
+                out.push_str(&format!(
+                    "      block[{bi}]: x={} y={} z={}  gain={}\n",
+                    f(p.x, 3),
+                    f(p.y, 3),
+                    f(p.z, 3),
+                    f(b.gain, 3)
+                ));
+            } else {
+                out.push_str(&format!(
+                    "      block[{bi}]: az={} el={} dist={}  gain={}\n",
+                    f(p.azimuth, 1),
+                    f(p.elevation, 1),
+                    f(p.distance, 3),
+                    f(b.gain, 3)
+                ));
+            }
+            if b.diffuse > 0.0 || b.width > 0.0 || b.height > 0.0 {
+                out.push_str(&format!(
+                    "               diffuse={}  w={} h={} d={}\n",
+                    f(b.diffuse, 3),
+                    f(b.width, 1),
+                    f(b.height, 1),
+                    f(b.depth, 1)
+                ));
+            }
+        }
+        for (bi, index) in (t.ds_blocks.offset..t.ds_blocks.offset + t.ds_blocks.len).enumerate() {
+            let b = &s.direct_blocks[index];
+            out.push_str(&format!("      ds_block[{bi}]: labels="));
+            if b.labels.len == 0 {
+                out.push_str("<none>");
+            } else {
+                out.push_str(&d.strs(b.labels).collect::<Vec<_>>().join(","));
+            }
+            let pack = d.str(b.pack_id);
+            out.push_str(&format!(
+                "  pack={}  gain={}\n",
+                if pack.is_empty() { "<unset>" } else { pack },
+                f(b.gain, 3)
+            ));
+            if scene.overlay.direct_blocks[index].has_position {
+                out.push_str(&format!(
+                    "                   az={} el={} dist={}\n",
+                    f(b.azimuth, 1),
+                    f(b.elevation, 1),
+                    f(b.distance, 3)
+                ));
+            }
+        }
+    }
+}
+
+/// The `mradm inspect` summary of an imported (policy-free) scene after its `File:` line, which
+/// the caller writes with the path as given (PCM consistency 5.6 C, moved from the C++ CLI).
+pub fn inspect_text(scene: &RenderScene) -> String {
+    let s = &scene.snapshot;
+    let d = Doc { s };
+    let info = &scene.info;
+    let mut out = String::new();
+    out.push_str(&format!(
+        "  Sample rate: {} Hz  Channels: {}  Frames: {}\n",
+        info.sample_rate, info.channels, info.frames
+    ));
+    let bed = info.source_kind == SourceKind::ChannelBed;
+    out.push_str(&format!(
+        "  Source:      {}\n",
+        if bed { "channel bed" } else { "ADM" }
+    ));
+    if bed {
+        out.push_str(&format!("  Input layout: {}\n", info.input_layout));
+        out.push_str("  Input order:");
+        for label in &info.input_channel_labels {
+            out.push_str(&format!(" {label}"));
+        }
+        out.push('\n');
+    }
+    if info.sample_rate > 0 && info.frames > 0 {
+        let seconds = info.frames as f64 / f64::from(info.sample_rate);
+        out.push_str(&format!(
+            "  Duration:    {} s\n",
+            crate::fmt::fixed(seconds, 2, false)
+        ));
+    }
+
+    out.push_str(&format!("\nProgrammes ({}):\n", s.programmes.len()));
+    for p in &s.programmes {
+        out.push_str(&format!("  {}  \"{}\"\n", d.str(p.id), d.str(p.name)));
+        if p.language != NONE {
+            out.push_str(&format!("    language: {}\n", d.str(p.language)));
+        }
+        d.quoted_labels(&mut out, p.labels);
+        if p.start > 0 {
+            out.push_str(&format!("    start: {} samples\n", p.start));
+        }
+        if p.end_present != 0 {
+            out.push_str(&format!("    end:   {} samples\n", p.end));
+        }
+        if p.reference_screen != 0 {
+            out.push_str("    reference screen: present (geometry not represented in scene)\n");
+        }
+        if p.loudness.present != 0 {
+            d.loudness_text(&mut out, &p.loudness);
+        }
+        for id in d.strs(p.content_ids) {
+            out.push_str(&format!("    → {id}\n"));
+        }
+    }
+
+    out.push_str(&format!("\nContents ({}):\n", s.contents.len()));
+    for c in &s.contents {
+        out.push_str(&format!("  {}  \"{}\"\n", d.str(c.id), d.str(c.name)));
+        if c.language != NONE {
+            out.push_str(&format!("    language: {}\n", d.str(c.language)));
+        }
+        d.quoted_labels(&mut out, c.labels);
+        if c.dialogue_kind != NONE {
+            if c.content_kind != NONE {
+                out.push_str(&format!(
+                    "    dialogue: {} ({})\n",
+                    d.str(c.dialogue_kind),
+                    d.str(c.content_kind)
+                ));
+            } else {
+                out.push_str(&format!("    dialogue: {}\n", d.str(c.dialogue_kind)));
+            }
+        }
+        if c.loudness.present != 0 {
+            d.loudness_text(&mut out, &c.loudness);
+        }
+        for id in d.strs(c.object_ids) {
+            out.push_str(&format!("    → {id}\n"));
+        }
+    }
+
+    out.push_str(&format!("\nObjects ({}):\n", s.objects.len()));
+    for o in &s.objects {
+        object_text(&d, scene, o, &mut out);
+    }
+    out
+}

@@ -8,6 +8,7 @@
 
 #include "adm/render.h"
 
+#include "adm_scene.h"
 #include "size_processor.h"
 #include "speaker_pcm.h"
 
@@ -47,7 +48,7 @@ struct Prepared final : IPreparedRender {
 // Common offline/streaming size mix. Live envelopes are applied after each object's DSP.
 class SizeMixer {
   public:
-    static Result<SizeMixer> create(const Prepared& prepared, const RenderPlan& plan, bool live_points = false);
+    static Result<SizeMixer> create(const Prepared& prepared, const ScenePlan& plan, bool live_points = false);
     Result<void> prepare_points(uint64_t start_frame, std::size_t frames);
     void accumulate_point(std::size_t track,
                           const render_common::AccumulateContext& context,
@@ -84,7 +85,7 @@ class SizeMixer {
 };
 
 Result<std::unique_ptr<IRenderStream>> open_stream(const Prepared& prepared,
-                                                   const RenderPlan& plan,
+                                                   const ScenePlan& plan,
                                                    std::size_t checkpoint_budget = std::size_t{32} * 1024 * 1024);
 
 } // namespace mradm::triple_balance_legacy

@@ -7,6 +7,7 @@
 #include "adm/options.h"
 
 #include "render_common.h"
+#include "render_common_scene.h"
 #include "speaker_layouts.h"
 
 namespace {

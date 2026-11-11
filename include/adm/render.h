@@ -17,7 +17,6 @@
 #include "adm/logging.h"
 #include "adm/options.h"
 #include "adm/progress.h"
-#include "adm/scene.h"
 
 namespace mradm {
 
@@ -82,14 +81,13 @@ struct RenderWindow {
     uint64_t frame_count{0};
 };
 
-// Input to a renderer backend: file paths, output layout, and pre-parsed scene metadata.
+// Input to a renderer backend: file paths, output layout, and the imported scene.
 struct RenderPlan {
     std::string input_path;
     std::string output_path;
     std::string output_layout;
-    AdmScene scene; // populated by RenderService; backends must not re-parse ADM
-    // The policy-applied Rust render scene that `scene` was built from (PCM consistency 4.4); the
-    // Rust loudspeaker backends read only this (4.5).
+    // The policy-applied Rust render scene (PCM consistency 4.4), populated by RenderService;
+    // backends read only this and must not re-parse ADM.
     std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
     std::optional<std::filesystem::path> sofa_path; // binaural renderer only; empty = built-in KEMAR
     // Default gain-interpolation ramp in milliseconds (from RenderOptions).
@@ -136,9 +134,8 @@ struct RenderPlan {
     ScreenConfig screens{};
 };
 
-// A policy-applied scene with its Rust render scene, imported once for many renders.
+// A policy-applied Rust render scene, imported once for many renders.
 struct PreparedScene {
-    AdmScene scene;
     std::shared_ptr<const detail::RenderSceneHandle> handle;
 };
 
@@ -341,7 +338,7 @@ class IRenderer {
 
 // File-level ADM scene summary returned by RenderService::probe().
 // Contains only the top-level counts and audio info; does not expose per-object
-// or per-block detail (use mradm::io::import_scene for that directly).
+// or per-block detail (see inspect_json / inspect_text).
 struct SceneProbe {
     uint32_t sample_rate{0};
     uint16_t num_channels{0};
@@ -438,6 +435,9 @@ class RenderService {
     // contents, objects (with per-track/per-block detail), HOA tracks, and
     // import warnings. Returns io_error if the file is missing or invalid.
     [[nodiscard]] Result<std::string> inspect_json(const std::string& input_path) const;
+    // The `mradm inspect` text summary (UTF-8, starting with `File: <input_path>`), with the same
+    // import as inspect_json. Returns the import error.
+    [[nodiscard]] Result<std::string> inspect_text(const std::string& input_path) const;
 
     // Enumerate the available renderer backends and their capabilities, serialized
     // to a JSON string (UTF-8). Mirrors the `mradm backends` field set: per-backend
@@ -532,8 +532,6 @@ class PreviewSession {
                                              std::optional<std::filesystem::path> output_path,
                                              ProgressSink& progress,
                                              LogSink& logs) const;
-
-    [[nodiscard]] const AdmScene& scene() const noexcept { return scene_.scene; }
 
   private:
     PreviewSession(std::filesystem::path input, RenderOptions options, PreparedScene scene);

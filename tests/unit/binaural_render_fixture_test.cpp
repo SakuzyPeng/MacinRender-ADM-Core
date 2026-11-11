@@ -28,6 +28,7 @@
 #include "../support/adm_fixture.h"
 #include "../support/scene_policy.h"
 #include "../support/wav_fixture.h"
+#include "adm_scene.h"
 #include "binaural_test_probe.h"
 #include "scene_import_internal.h"
 #include "speaker_pcm.h"
@@ -76,7 +77,7 @@ mradm::Result<RustScene> import_rust_scene(const std::string& path) {
     if (!imported) {
         return tl::make_unexpected(imported.error());
     }
-    return RustScene{imported->scene(), imported->handle()};
+    return RustScene{mradm::io::adm_scene(*imported), imported->handle()};
 }
 
 bool check(bool condition, const char* msg) {
@@ -1104,7 +1105,7 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
     if (!check(scene.has_value(), "stream: import scene")) {
         return std::nullopt;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_layout = "binaural";
     plan.scene = adm(*scene);
@@ -1116,7 +1117,7 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
                    "stream: apply semantic policy")) {
             return std::nullopt;
         }
-        plan.scene = effective->scene();
+        plan.scene = mradm::io::adm_scene(*effective);
         plan.scene_handle = effective->handle();
     }
 
@@ -1167,7 +1168,7 @@ render_binaural_window(const std::filesystem::path& input,
 
     const auto output = temp_path("mr_binaural_headtrack_window", ".wav");
     FileGuard output_guard(output);
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_path = output.string();
     plan.output_layout = "binaural";
@@ -1204,7 +1205,7 @@ std::optional<std::vector<float>> render_binaural_stream_with_mid_override(const
     if (!check(scene.has_value(), "mid-override: import scene")) {
         return std::nullopt;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = input.string();
     plan.output_layout = "binaural";
     plan.scene = adm(*scene);
@@ -1252,7 +1253,7 @@ bool verify_binaural_stream_matches_window() {
     if (!check(scene.has_value(), "stream: import scene for reference")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = adm(*scene);
@@ -1269,7 +1270,7 @@ bool verify_binaural_stream_matches_window() {
     // Reference: the offline render_window path to a float WAV.
     const auto ref_path = temp_path("mr_binaural_stream_ref", ".wav");
     FileGuard ref_guard(ref_path);
-    mradm::RenderPlan window_plan = plan;
+    mradm::ScenePlan window_plan = plan;
     window_plan.output_path = ref_path.string();
     if (!check(mradm::render_common::render_offline(**prepared, window_plan, progress, logs).has_value(),
                "stream: reference render_window")) {
@@ -1330,7 +1331,7 @@ bool binaural_pcm_equal(std::span<const float> actual, std::span<const float> ex
 
 bool verify_binaural_seek_controls(mradm::IRenderer& renderer,
                                    const mradm::IPreparedRender& prepared,
-                                   const mradm::RenderPlan& plan,
+                                   const mradm::ScenePlan& plan,
                                    mradm::IRenderStream& stream) {
     // A cancelled request must not discard an already buffered remainder.
     if (!check(stream.seek(1031U).has_value(), "stream-seek: cancellation setup")) {
@@ -1400,7 +1401,7 @@ bool verify_binaural_stream_seek() {
         if (!check(scene.has_value(), "stream-seek: import scene")) {
             return false;
         }
-        mradm::RenderPlan plan;
+        mradm::ScenePlan plan;
         plan.input_path = input.string();
         plan.output_path = output.string();
         plan.output_layout = "binaural";
@@ -1586,7 +1587,7 @@ bool verify_binaural_stream_topology_reprepare() {
     }
     const std::string object_id = scene->objects.front().id;
 
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = adm(*scene);
@@ -1637,9 +1638,9 @@ bool verify_binaural_stream_topology_reprepare() {
         return o;
     };
 
-    const auto baseline = run({});                                             // width = 1.0 (wide cloud)
-    const auto pointed = run({extent_override(0.0F)});                         // extent_scale 0 → collapses to a point
-    const auto width_pointed = run({extent_width_override(0.0F)});             // width_scale 0 also collapses width
+    const auto baseline = run({});                                 // width = 1.0 (wide cloud)
+    const auto pointed = run({extent_override(0.0F)});             // extent_scale 0 → collapses to a point
+    const auto width_pointed = run({extent_width_override(0.0F)}); // width_scale 0 also collapses width
     const auto reverted = run({extent_override(0.0F), extent_override(1.0F)}); // back to unscaled
     if (!baseline || !pointed || !width_pointed || !reverted) {
         return false;
@@ -1882,7 +1883,7 @@ bool verify_binaural_head_tracking_dynamic() {
     if (!check(scene.has_value() && !scene->objects.empty(), "headtrack-dyn: import scene")) {
         return false;
     }
-    mradm::RenderPlan plan;
+    mradm::ScenePlan plan;
     plan.input_path = in.string();
     plan.output_layout = "binaural";
     plan.scene = adm(*scene);

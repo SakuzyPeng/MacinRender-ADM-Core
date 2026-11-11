@@ -15,7 +15,6 @@ unusedStructMember:*/include/adm/options.h
 unusedStructMember:*/include/adm/capability.h
 unusedStructMember:*/include/adm/direct_speakers_matrix.h
 unusedStructMember:*/include/adm/render.h
-unusedStructMember:*/include/adm/scene.h
 unusedStructMember:*/include/adm/monitor.h
 unusedStructMember:*/include/adm/hptf.h
 unusedStructMember:*/include/adm/head_tracking.h
@@ -71,7 +70,13 @@ unusedStructMember:*/tests/unit/hoa_ffi.h
 
 # Private ADM records are populated by Rust and copied across implementation units.
 unusedStructMember:*/src/adm_metadata/adm_ffi.h
-unusedStructMember:*/src/adm_metadata/metadata.h
+
+# The test-side AdmScene, its plan and the C++ routing wrappers over it (out of production, PCM
+# consistency 5.6 C) are consumed across the tests and the frozen references.
+unusedStructMember:*/tests/support/adm_scene/adm/scene.h
+unusedStructMember:*/tests/support/adm_scene/adm_scene.h
+unusedStructMember:*/tests/support/adm_scene/metadata.h
+unusedStructMember:*/tests/support/adm_scene/render_common_scene.h
 
 # SemanticReportOptions fields are read by scene_importer.cpp, outside the standalone header scan.
 unusedStructMember:*/src/adm_io/scene_import_internal.h

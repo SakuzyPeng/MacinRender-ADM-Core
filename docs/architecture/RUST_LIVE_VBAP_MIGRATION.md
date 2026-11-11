@@ -103,4 +103,6 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 - 单元 `live_vbap`（`tests/reference/live_vbap/`）：随默认测试构建编译，由 `mr_adm_live_vbap_rust_tests` 比较。
   引用 `scene_numeric/spatial.h`，因此 `scene_numeric` 须等本单元退役后才能退役。
 
+五期 5.6 C 把 C++ 路由与对象预处理包装移到测试侧 `tests/support/adm_scene/render_common_scene.h` 后，`tests/reference/live_vbap/legacy.h` 只多一行该头的 include，算法未改，`retention.json` 的哈希已更新。
+
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
