@@ -97,6 +97,7 @@
 - [Monitor 与实时调度迁入 Rust（五期 5.5）](architecture/RUST_ORCHESTRATION_MONITOR.md)
 - [删除适配壳与 C++ 场景（五期 5.6）](architecture/RUST_ORCHESTRATION_SHELLS.md)
 - [一致性工具与命名清理（五期 5.8）](architecture/RUST_ORCHESTRATION_NAMING.md)
+- [五期结项（五期 5.9）](architecture/RUST_ORCHESTRATION_CLOSEOUT.md)
 - [room 默认 ramp 按采样率换算（五期 5.7）](architecture/RUST_ROOM_DEFAULT_RAMP.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
