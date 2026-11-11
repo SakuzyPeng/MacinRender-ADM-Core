@@ -421,5 +421,7 @@ impl SourceOrder {
     }
 }
 
+pub mod receiver;
+
 #[cfg(test)]
 mod tests;

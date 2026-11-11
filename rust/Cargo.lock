@@ -343,6 +343,7 @@ name = "mradm-osc"
 version = "0.1.0"
 dependencies = [
  "mradm-dsp",
+ "mradm-json",
  "serde_json",
 ]
 

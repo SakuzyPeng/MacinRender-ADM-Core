@@ -564,9 +564,7 @@ target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/island_stream.cpp
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
-    src/adm_realtime/room_worker_wait.cpp
     src/adm_realtime/osc_head_tracking.cpp
-    src/adm_realtime/osc_head_tracking_protocol.cpp
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
@@ -589,13 +587,6 @@ target_include_directories(mr_adm_realtime PRIVATE
     src/adm_render_binaural
     src/adm_render_triple_balance
     src/adm_render_room
-)
-if(WIN32)
-    target_link_libraries(mr_adm_realtime PRIVATE ws2_32)
-endif()
-# PoseBridge telemetry JSON stays on the background/control threads.
-target_include_directories(mr_adm_realtime SYSTEM PRIVATE
-    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
 )
 mr_adm_core_apply_warnings(mr_adm_realtime)
 mr_adm_core_apply_static_analysis(mr_adm_realtime)
@@ -813,8 +804,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
 
+    # The PoseBridge decoder and source ordering as C++ values (tests/support/osc): the protocol
+    # tests check them directly; production decodes in the Rust receiver (PCM consistency 5.5 C).
+    add_library(mr_adm_osc_protocol_test_support STATIC tests/support/osc/osc_head_tracking_protocol.cpp)
+    target_include_directories(mr_adm_osc_protocol_test_support PUBLIC tests/support/osc)
+    target_link_libraries(mr_adm_osc_protocol_test_support PUBLIC MacinRender::ADMRealtime MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_osc_protocol_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_osc_protocol_test_support)
+
     add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
-    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI MacinRender::ADMRealtime)
+    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI MacinRender::ADMRealtime
+        mr_adm_osc_protocol_test_support)
     target_include_directories(mr_adm_osc_head_tracking_tests PRIVATE src/adm_render_common tests/support)
     target_include_directories(mr_adm_osc_head_tracking_tests SYSTEM PRIVATE
         "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
@@ -828,7 +828,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Frozen C++ PoseBridge decoder vs Rust mradm-osc (tests/reference/osc_protocol).
     add_executable(mr_adm_osc_protocol_reference_tests tests/unit/osc_protocol_reference_test.cpp)
-    target_link_libraries(mr_adm_osc_protocol_reference_tests PRIVATE MacinRender::ADMRealtime MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_osc_protocol_reference_tests PRIVATE MacinRender::ADMRealtime MacinRender::ADMDsp
+        mr_adm_osc_protocol_test_support)
     target_include_directories(mr_adm_osc_protocol_reference_tests SYSTEM PRIVATE
         "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
     )
@@ -1294,21 +1295,27 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
     mr_adm_core_apply_warnings(mr_adm_triple_balance_scene_benchmark)
 
-    add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp)
+    # The C++ room-worker wait (MMCSS and a high-resolution timer on Windows) for the manual room
+    # probes; production waits in Rust (mradm-ffi scene_worker).
+    add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp
+        tests/support/realtime/room_worker_wait.cpp)
     target_link_libraries(mr_adm_room_scene_benchmark PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
         MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json miniaudio
         mr_adm_live_scene_test_support)
-    target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room)
+    target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room
+        tests/support/realtime)
     if(WIN32)
-        target_link_libraries(mr_adm_room_scene_benchmark PRIVATE Psapi)
+        target_link_libraries(mr_adm_room_scene_benchmark PRIVATE Psapi avrt)
     endif()
     mr_adm_core_apply_warnings(mr_adm_room_scene_benchmark)
 
-    add_executable(mr_adm_room_file_device_probe EXCLUDE_FROM_ALL tests/manual/room_file_device_probe.cpp)
+    add_executable(mr_adm_room_file_device_probe EXCLUDE_FROM_ALL tests/manual/room_file_device_probe.cpp
+        tests/support/realtime/room_worker_wait.cpp)
     target_link_libraries(mr_adm_room_file_device_probe PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
         MacinRender::ADMRenderRoom MacinRender::ADMIo nlohmann_json::nlohmann_json)
+    target_include_directories(mr_adm_room_file_device_probe PRIVATE tests/support/realtime)
     if(WIN32)
-        target_link_libraries(mr_adm_room_file_device_probe PRIVATE Psapi)
+        target_link_libraries(mr_adm_room_file_device_probe PRIVATE Psapi avrt)
     endif()
     mr_adm_core_apply_warnings(mr_adm_room_file_device_probe)
 

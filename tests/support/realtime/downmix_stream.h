@@ -11,7 +11,7 @@
 
 #include "adm/render.h"
 
-#include "../adm_dsp/pcm_mix.h"
+#include "pcm_mix.h"
 
 namespace mradm::realtime {
 

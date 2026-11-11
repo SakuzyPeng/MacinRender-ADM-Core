@@ -571,6 +571,21 @@ D 在同一构建上的 `compare-collections` 全部相同；E 的差异只落�
 
 生产 C/C++ 29,260 → 26,363 行。见 [5.4 记录](RUST_ORCHESTRATION_SCENE.md)。
 
+**5.5 状态**：实时监听的调度、会话与 OSC 头追踪接收在 Rust，分三批完成：
+- A：`MonitorEngine` 的调度移入 `mradm-engine` `monitor`，包括 worker、输出环、seek 桥接、loop、实时编辑、朝向、后端切换与交叉淡化、HpTF、LUFS 与电平。C++ 只剩接口不变的外壳，移到 `tests/support/realtime`；岛流经窄 C 表交给 Rust；
+- B：`monitor_session` 的规则移入 `monitor::session`，包括打开流、后端与设备的切换和回退、重建时保留的状态、HpTF 告警。C++ 外壳经宿主表提供设备、Apple 岛与选项；
+- C：PoseBridge UDP 接收器移入 `mradm-osc` `receiver`，Windows 的 `SO_EXCLUSIVEADDRUSE` 绑定在 `mradm-ffi`；`OscHeadTrackingReceiver` 只剩薄壳。没有生产调用者的 `osc_head_tracking_protocol`、`downmix_stream` 与 `room_worker_wait` 移到 `tests/support`。
+
+Monitor 不做 downmix。立体声峰值保护与 Windows room worker 等待在 5.4 已迁入 Rust。设备留作岛：miniaudio 是 C 岛，Apple / Windows 系统空间 sink 经宿主表交给 Rust。
+
+除 [5.5 发布说明](RUST_ORCHESTRATION_MONITOR.md#发布说明) 列出的例外外，PCM、状态、电平、LUFS、日志与错误文字逐项不变。
+例外包括：岛流的异常改为 render_failed；Apple 后端的状态随流释放；同一 monitor 上的会话调用串行化；OSC 接收改为带读超时的阻塞接收，Linux / macOS 的绑定失败文字按错误类型选；C++ SDK 的 OSC 快照删除两个遥测文字字段。
+
+本机对照都是 0 差异：A、B 的新旧探针在每份构建上跑两次，PCM、状态、电平、LUFS 与日志相同；C 把新旧接收器编进同一进程，13,203 项比较相同。三个批次的植入缺陷都被抓到。
+macOS 与 Windows 的设备与 OSC 验证、合并后的 Consistency 待补。
+
+生产 C/C++ 26,363 → 24,409 行。见 [5.5 记录](RUST_ORCHESTRATION_MONITOR.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

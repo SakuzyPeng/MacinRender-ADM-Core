@@ -1,6 +1,6 @@
 use super::*;
 
-fn text(bytes: &mut Vec<u8>, value: &[u8]) {
+pub(crate) fn text(bytes: &mut Vec<u8>, value: &[u8]) {
     bytes.extend_from_slice(value);
     bytes.push(0);
     while !bytes.len().is_multiple_of(4) {
@@ -8,7 +8,7 @@ fn text(bytes: &mut Vec<u8>, value: &[u8]) {
     }
 }
 
-fn timing() -> Timing {
+pub(crate) fn timing() -> Timing {
     Timing {
         protocol_version: PROTOCOL,
         instance_id: 123,
@@ -21,7 +21,7 @@ fn timing() -> Timing {
     }
 }
 
-fn pose_packet(address: &str, values: &[f32], t: &Timing, source: &[u8]) -> Vec<u8> {
+pub(crate) fn pose_packet(address: &str, values: &[f32], t: &Timing, source: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::new();
     text(&mut bytes, address.as_bytes());
     text(
@@ -51,11 +51,11 @@ fn pose_packet(address: &str, values: &[f32], t: &Timing, source: &[u8]) -> Vec<
     bytes
 }
 
-fn euler(t: &Timing) -> Vec<u8> {
+pub(crate) fn euler(t: &Timing) -> Vec<u8> {
     pose_packet("/posebridge/euler", &[30., 20., 10.], t, b"head")
 }
 
-fn status_json(state: &str) -> String {
+pub(crate) fn status_json(state: &str) -> String {
     format!(
         r#"{{"schema":3,"kind":"status","source_id":"head","instance_id":"123","session_id":"456",
 "reference_epoch":"1","metadata_revision":"1","message_seq":"7",
@@ -63,7 +63,7 @@ fn status_json(state: &str) -> String {
     )
 }
 
-fn info_json() -> String {
+pub(crate) fn info_json() -> String {
     r#"{"schema":3,"kind":"info","source_id":"head","instance_id":"123","session_id":"456",
 "reference_epoch":"1","metadata_revision":"1","message_seq":"7",
 "descriptor":{"source_id":"head","instance_id":"123","session_id":"456","reference_epoch":"1",
@@ -71,7 +71,7 @@ fn info_json() -> String {
         .to_owned()
 }
 
-fn telemetry(json: &[u8], info: bool) -> Vec<u8> {
+pub(crate) fn telemetry(json: &[u8], info: bool) -> Vec<u8> {
     let mut bytes = Vec::new();
     text(
         &mut bytes,
