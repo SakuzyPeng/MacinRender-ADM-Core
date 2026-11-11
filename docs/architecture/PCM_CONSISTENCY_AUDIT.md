@@ -593,6 +593,23 @@ GUI 尚无 PoseBridge OSC 输入入口；物理头追踪设备的实机验证按
 
 生产 C/C++ 26,363 → 24,409 行。见 [5.5 记录](RUST_ORCHESTRATION_MONITOR.md)。
 
+**5.6 状态**：适配壳与 C++ 场景删出生产，分四批完成：
+- A：六个 Rust 后端的 C++ `IRenderer` 壳、只剩测试在用的扬声器离线驱动与文件流式、`HrtfState` 移到 `tests/support/engine_renderer`；按用户决定，`include/adm/render_*.h` 六个 SDK 头与 5 个后端库目标一并移出。CLI 经 `RenderService::backend_capabilities` 取能力表；
+- B：Apple 岛的总线计划（DirectSpeakers 路由、对象块预处理、22.2 LFE 判定、日志与错误）移入 `mradm-render` `apple`，岛经 `apple_plan_ffi.h` 读回，不再读 `AdmScene`；
+- C：`AdmScene`、`RenderPlan::scene`、`PreparedScene::scene`、`io::import_scene`、`include/adm/scene.h`、`ADMMetadata` 与 C++ 场景数学删出生产，移到 `tests/support/adm_scene`；CLI `inspect` 文本由 `mradm-engine` 写出；
+- C2：`routing_ffi.h` 中只剩测试调用的声明移到 `tests/support/render_test_ffi.h`。
+
+`IRenderer` / `IRenderStream` 接口留给 Apple 岛与 `EngineStream`；`ILiveSceneRenderer` 5.4 起已只在测试侧。
+
+PCM、检查点、日志、错误文字、CLI 输出与 C ABI 不变。本机对照都是 0 差异：
+- A：CLI 新旧 44 份输出；
+- B：新旧 Apple 计划探针 7,000 种组合、89,444 条总线、152,366 个事件逐位相同，植入的 7 处缺陷都被抓到；
+- C：C++ CLI 的 `inspect` 文本重放（31 个输入）与新旧 `mradm` 100 个用例逐字节相同，植入的 2 处缺陷都被抓到。
+
+维护者已在本机验证并合并 A、B、C；C2 待 macOS Apple 测试、Windows 规范构建与 Consistency。
+
+生产 C/C++ 24,409 → 21,776 行。见 [5.6 记录](RUST_ORCHESTRATION_SHELLS.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

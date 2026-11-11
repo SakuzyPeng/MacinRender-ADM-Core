@@ -49,12 +49,11 @@
 - `render_service.cpp` 在 `__APPLE__` 下 dispatch `RendererSelection::apple`；非 Apple 平台保持 unsupported。
 - CLI 使用 `--renderer apple` 选择该后端。
 
-后端不重解析 ADM，只消费 `RenderService` 生成的 `RenderPlan::scene` / `AdmScene`，并复用共享语义预处理函数：
-
-- `scene_position_to_polar()`
-- `render_common::prepare_object_block()`
-- `render_common::direct_speakers_block_is_lfe()`
-- `expand_object_divergence()` 等由共享路径间接完成
+后端不重解析 ADM，只消费 `RenderService` 填好的 `RenderPlan::scene_handle`（策略后的 Rust 渲染场景）。
+总线计划在 Rust `mradm-render` `apple::prepare`（五期 5.6 B）：DirectSpeakers 的标签 / 位置 / 矩阵路由与 LFE 旁路、
+对象块的生效块、位置偏移、通道锁、发散与 extent 云、AU 坐标约定和 22.2 LFE 判定，以及对应的日志与错误文字。
+岛经 `mradm_render_apple_prepare`（`src/adm_apple/apple_plan_ffi.h`）读回总线、事件与输入格式，只负责 AU 实例、
+参数写入、渲染循环与实时编辑；见 [5.6 记录](RUST_ORCHESTRATION_SHELLS.md)。
 
 ## 3. IRenderer 结构
 
