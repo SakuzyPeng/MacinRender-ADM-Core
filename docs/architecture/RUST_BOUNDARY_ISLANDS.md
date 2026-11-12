@@ -137,9 +137,36 @@ consumer 测试），候选为本批的同配置构建：
 - Linux 上用 macOS 构建的预处理分支（`-D__APPLE__ -fsyntax-only`）检查了 `apple_island.cpp`、`render_service.cpp`、
   `monitor_session.cpp`、`apple_island_test.cpp` 与 `c_api_fixture_test.cpp`；clang-tidy 对新增与改动的 C++ 文件无新增提示。
 
-待 macOS 验证：
-- 新增 `mr_adm_apple_island_tests`（仅 macOS 注册）：真实表的准备、渲染、窗口、开始前与渲染中取消、监听流在准备句柄释放后仍可渲染、
-  不支持的布局与 NULL 参数；
-- `c_api_fixture_test` 的 macOS 分支：Apple 渲染中进度回调抛异常 → `INTERNAL` 与空结果、WAV 清理直写输出、FLAC 保留既有输出并清理临时文件，预览两个窗口；
-- 完整 CTest、CLI / C ABI 新旧对照（含 `render-apple*` 与 `preview.apple`）、换库 consumer，以及实机 Apple 监听（含 system spatial
-  与后端切换）。
+### 2026-11-12 维护者复核
+
+测试源码为 `026f8d11`，参照为主线 `3bdeb17c` 的 Release 构建。复用既有构建树、Cargo 和 FetchContent 缓存。
+macOS arm64 使用 SOFA on、IAMF off，Windows x64 使用规范 MSVC/Ninja Release、SOFA/IAMF off。
+
+审查修正了两处测试问题。
+Apple 回调异常用例覆盖无既有文件的 WAV 清理，以及 FLAC 在有无既有文件时的暂存清理和旧文件保护。
+WAV 的直写流程会截断目标，旧内容保护的断言通过 FLAC 暂存流程验证。
+Apple 岛测试入口补上异常处理，每次流调用分别提供错误缓冲区容量，并收紧局部变量作用域。
+
+| 平台 | 完整 CTest | CLI 命令 | C ABI 采集 | 候选 consumer |
+| --- | ---: | ---: | ---: | ---: |
+| macOS arm64 Debug | 90/90 | 102（Release） | 3,607 行、39 个输出文件（Release） | 2/2（Release，串行） |
+| Windows x64 Release | 88/88 | 102 | 3,179 行、35 个输出文件 | 2/2 |
+
+两平台的 C ABI 采集逐字节对照一致，包含 Apple 预览两个窗口的结果和产物。
+Windows 的 CLI 对照为 0 差异。macOS 的 CLI 对照有一项 APAC M4A 字节差异，其余退出码、正文、日志和产物对照一致。
+两平台各有三项 help 文本因可执行文件路径不同而产生信息性差异。
+macOS 主线相同二进制重复编码同一输入时，APAC `mdat` 也分别为 88,942 和 88,941 字节，后一次与候选的 payload SHA-256 相同。
+APAC 原始字节差异纳入本次验证记录。
+
+macOS 冻结的主线 consumer 分别换入主线和候选库后均为 2/2，新 consumer 在候选库上为 2/2。
+首轮同时运行两组换库 consumer 时，两组的默认渲染用例都出现失败。
+分别串行复跑后均为 2/2，默认渲染补充探针的三轮双进程、共 30 次渲染也全部通过，首轮失败原因尚未确认。
+Windows 同一套 consumer 分别换入主线和候选库后均为 2/2。
+
+macOS 新增 Apple 岛测试已验证真实表的准备、渲染、窗口、开始前与渲染中取消、准备句柄释放后的流生命周期、
+不支持的布局与 NULL 参数。C ABI 测试已验证 Apple 回调异常返回 `INTERNAL` 与空结果，以及预览两个窗口。
+clang-format、clang-tidy、cppcheck 的改动文件质量脚本通过，clang-tidy 的警告保留在原始日志中。
+Rust fmt/clippy、FFI 头校验（415 个函数、168 个结构体）、C ABI 导出校验（164 个函数）和规模棘轮通过。
+
+原始对照、首轮失败与复跑记录保存在忽略的 `local/research/claude-492aa814-review/`。
+实机 Apple 监听的 system spatial 和后端切换、IAMF 启用配置仍待验证。
