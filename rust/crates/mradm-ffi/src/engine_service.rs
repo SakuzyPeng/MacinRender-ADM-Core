@@ -3,7 +3,7 @@
 //! inside the step, the others are returned and answered. Texts in events and results live until
 //! the next call on the handle.
 use crate::adm::Text;
-use crate::engine::{EngineLog, EnginePlatform, EngineStatus, platform};
+use crate::engine::{EngineLog, EngineStatus, Facts, PlatformIslands, platform};
 use crate::engine_render::{FfiHost, log_views};
 use crate::render::RenderPrepared;
 use crate::render::apple_island::{Apple, AppleIslands, Preparation, Settings};
@@ -335,7 +335,7 @@ pub(crate) unsafe fn request_of(r: &EngineRenderRequest) -> Option<Request> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_render_begin(
     request: *const EngineRenderRequest,
-    platform_record: *const EnginePlatform,
+    islands: *const PlatformIslands,
     preimported: *const SceneHandle,
     cached: *const RenderPrepared,
     output: *mut *mut EngineRender,
@@ -345,13 +345,12 @@ pub unsafe extern "C" fn mradm_engine_render_begin(
     };
     *out = ptr::null_mut();
     catch_unwind(AssertUnwindSafe(|| {
-        let (Some(r), Some(p)) = (unsafe { request.as_ref() }, unsafe {
-            platform_record.as_ref()
-        }) else {
+        let (Some(r), Some(p)) = (unsafe { request.as_ref() }, unsafe { islands.as_ref() }) else {
             return 1;
         };
-        let (Some(request), Some(platform)) = (unsafe { request_of(r) }, unsafe { platform(p) })
-        else {
+        let (Some(request), Some(platform)) = (unsafe { request_of(r) }, unsafe {
+            platform(p, Facts::Render)
+        }) else {
             return 1;
         };
         let cached = unsafe { cached.as_ref() };

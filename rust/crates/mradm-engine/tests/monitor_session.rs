@@ -6,9 +6,7 @@ use mradm_dsp::hptf::{Coefficients, Snapshot, StereoSnapshot};
 use mradm_dsp::room::loading::Package;
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
 use mradm_engine::backend::{self, Screens};
-use mradm_engine::monitor::session::{
-    AppleOpen, Choice, Device, HptfDesign, Session, SessionHost, Token,
-};
+use mradm_engine::monitor::session::{AppleOpen, Choice, Device, HptfDesign, Session, SessionHost};
 use mradm_engine::monitor::{
     Cancel, Monitor, ObjectOverride, OutputStage, Overrides, Source, State, Validate,
 };
@@ -217,7 +215,7 @@ impl SessionHost for Host {
     fn apple(&self) -> bool {
         true
     }
-    fn device(&self, _: &Token, device_id: &[u8]) -> Arc<dyn Device> {
+    fn device(&self, _: &Choice, device_id: &[u8]) -> Arc<dyn Device> {
         self.calls.lock().unwrap().devices.push(device_id.to_vec());
         Arc::new(MockDevice {
             id: device_id.to_vec(),

@@ -4,7 +4,7 @@
 //! Errors carry the stream locator (`MradmRenderLocation`) like the offline driver's.
 use super::room_ffi::{RenderRoomControl, control_handle};
 use super::*;
-use crate::engine::{EngineLog, EnginePlatform, EngineStatus, platform};
+use crate::engine::{EngineLog, EngineStatus, Facts, PlatformIslands, platform};
 use crate::engine_render::{FfiHost, log_views, status_of};
 use crate::engine_service::{EngineRenderRequest, request_of};
 use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
@@ -295,7 +295,7 @@ pub struct EngineMonitor {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_monitor_open(
     request: *const EngineRenderRequest,
-    platform_record: *const EnginePlatform,
+    islands: *const PlatformIslands,
     scene: *const SceneHandle,
     system_spatial: u32,
     output: *mut *mut EngineMonitor,
@@ -306,13 +306,14 @@ pub unsafe extern "C" fn mradm_engine_monitor_open(
             unsafe { output.as_mut() },
             unsafe { view.as_mut() },
             unsafe { request.as_ref() },
-            unsafe { platform_record.as_ref() },
+            unsafe { islands.as_ref() },
         ) else {
             return 1;
         };
         *out = ptr::null_mut();
-        let (Some(request), Some(platform)) = (unsafe { request_of(r) }, unsafe { platform(p) })
-        else {
+        let (Some(request), Some(platform)) = (unsafe { request_of(r) }, unsafe {
+            platform(p, Facts::Render)
+        }) else {
             return 1;
         };
         let scene = unsafe { scene.as_ref() }.map(SceneHandle::scene);

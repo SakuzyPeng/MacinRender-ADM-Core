@@ -1,10 +1,8 @@
 #include <algorithm>
 #include <cstdint>
-#include <exception>
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -18,84 +16,22 @@
 #include "../adm_apple/apple_island.h"
 #endif
 #include "../adm_render_room/room_internal.h"
-#include "audio_output_device.h"
 #include "catalog.h"
+#include "device_island.h"
 #include "hptf_eq.h"
+#include "platform_island.h"
 #include "render_common.h"
-#include "renderer_factory.h"
 #include "request_record.h"
 #include "scene_handle.h"
 
 // The session logic (log buffer, stream opening, options, edits, HpTF, backend and device
-// transactions) is Rust mradm-engine `monitor::session`, which also opens the Apple islands' streams.
-// This shell keeps the devices and the RenderOptions each backend choice was made from.
+// transactions) is Rust mradm-engine `monitor::session`, which also opens and drives the output
+// devices and the Apple islands' streams. This shell registers the islands and imports the scene.
 namespace mradm {
 
 namespace {
 
 constexpr int32_t k_thrown = 100;
-
-[[nodiscard]] std::unique_ptr<realtime::IAudioOutputDevice> make_monitor_device(const RenderOptions& options,
-                                                                                const std::string& device_id) {
-#ifdef __APPLE__
-    // System-spatial monitor follows the system media route (AirPods / current output), not a
-    // selectable raw hardware token. Keep create() and set_output_device() on the same path so a
-    // device refresh cannot silently fall back to miniaudio and lose system head tracking.
-    if (options.monitor_system_spatial) {
-        return realtime::make_avsamplebuffer_device(normalize_output_layout(options.output_layout));
-    }
-#elif defined(_WIN32)
-    // Windows system-spatial: hand the bed to ISpatialAudioClient so the active spatializer (Windows
-    // Sonic / Dolby Atmos / DTS for headphones) renders it. No OS head tracking (static), so unlike
-    // macOS there is no per-route reason to pin this — but keep it on the same selection path so a
-    // device refresh can't silently drop to miniaudio and lose spatialization.
-    if (options.monitor_system_spatial) {
-        return realtime::make_spatialaudioclient_device(normalize_output_layout(options.output_layout),
-                                                        options.speaker_geometry);
-    }
-#else
-    (void) options;
-#endif
-    return realtime::make_miniaudio_device(/*use_null_backend=*/false, device_id);
-}
-
-RenderOptions& options_of(void* ctx) {
-    return *static_cast<RenderOptions*>(ctx);
-}
-
-realtime::IAudioOutputDevice& device_of(void* device) {
-    return *static_cast<realtime::IAudioOutputDevice*>(device);
-}
-
-void write(std::string_view text, uint8_t* out, size_t* len) {
-    if (len == nullptr) {
-        return;
-    }
-    const auto n = (*len == 0U || out == nullptr) ? 0U : std::min(text.size(), *len - 1U);
-    if (out != nullptr && *len != 0U) {
-        std::copy_n(text.data(), n, out);
-        out[n] = 0U;
-    }
-    *len = n;
-}
-
-// Writes `error` into the island error buffers and returns its code.
-int32_t island_error(const Error& error, const MradmEngineIslandError* e) noexcept {
-    write(error.message, e->message, e->message_len);
-    write(error.context, e->context, e->context_len);
-    return static_cast<int32_t>(error.code);
-}
-
-// An exception becomes code 100 (the session rethrows it).
-template <class F> int32_t guarded(const MradmEngineIslandError* e, const F& f) noexcept {
-    try {
-        return f();
-    } catch (const std::exception& error) {
-        return island_error(Error{static_cast<ErrorCode>(k_thrown), error.what(), {}}, e);
-    } catch (...) {
-        return island_error(Error{static_cast<ErrorCode>(k_thrown), "unknown exception", {}}, e);
-    }
-}
 
 // The error buffers of one Rust session call (large enough for any path in a message).
 constexpr size_t k_text_capacity = 65536;
@@ -155,7 +91,6 @@ class BufferedLogSink final : public LogSink {
 struct MonitorSession::Impl {
     std::string input_path;
     std::shared_ptr<const detail::RenderSceneHandle> scene_handle;
-    MradmEngineMonitorSessionHost host{};
     MradmEngineMonitorSession* rust{nullptr};
 
     ~Impl() { mradm_engine_monitor_session_destroy(rust); }
@@ -164,8 +99,6 @@ struct MonitorSession::Impl {
     Impl& operator=(const Impl&) = delete;
     Impl(Impl&&) = delete;
     Impl& operator=(Impl&&) = delete;
-
-    void bind_host();
 };
 // NOLINTEND(misc-non-private-member-variables-in-classes)
 
@@ -190,60 +123,32 @@ class SessionLogSink final : public LogSink {
 
 } // namespace
 
-void MonitorSession::Impl::bind_host() {
-    host.ctx = this;
-    host.device = [](void*, void* options, const uint8_t* id, size_t id_len) noexcept -> void* {
-        try {
-            return make_monitor_device(options_of(options), {reinterpret_cast<const char*>(id), id_len}).release();
-        } catch (...) {
-            std::terminate();
-        }
-    };
-    host.device_realtime = [](void*, void* device) noexcept -> uint32_t {
-        return device_of(device).pull_is_realtime_playback() ? 1U : 0U;
-    };
-    host.device_start = [](void*,
-                           void* device,
-                           uint32_t channels,
-                           uint32_t rate,
-                           const MradmEngineSessionMonitor* monitor,
-                           const MradmEngineIslandError* e) noexcept {
-        return guarded(e, [&] {
-            auto& d = device_of(device);
-            auto started = d.start(channels, rate, [monitor, &d](std::span<float> out, std::size_t frames) {
-                MradmEngineLiveMonitorPull result{};
-                mradm_engine_session_monitor_pull(monitor, out.data(), out.size(), frames, &result);
-                if (result.mark_end != 0U) {
-                    d.mark_end();
-                }
-                return result.frames;
-            });
-            return started ? 0 : island_error(started.error(), e);
-        });
-    };
-    host.device_stop = [](void*, void* device) noexcept { device_of(device).stop(); };
-    host.device_flush = [](void*, void* device) noexcept { device_of(device).flush(); };
-    host.device_pause = [](void*, void* device) noexcept { device_of(device).pause(); };
-    host.device_resume = [](void*, void* device) noexcept { device_of(device).resume(); };
-    host.device_destroy = [](void*, void* device) noexcept { delete &device_of(device); };
-#ifdef __APPLE__
-    host.apple = mradm_apple_islands();
-#endif
-    host.release_options = [](void*, void* options) noexcept { delete &options_of(options); };
-}
-
 MonitorSession::MonitorSession() : impl_(std::make_unique<Impl>()) {}
 MonitorSession::~MonitorSession() = default;
 
 std::vector<AudioOutputDeviceInfo> MonitorSession::list_output_devices() {
     std::vector<AudioOutputDeviceInfo> out;
-    const auto devices = realtime::enumerate_output_devices();
-    out.reserve(devices.size());
-    std::ranges::transform(devices, std::back_inserter(out), [](const realtime::AudioDeviceInfo& d) {
-        return AudioOutputDeviceInfo{d.id, d.name, d.is_default};
-    });
+    const MradmDeviceEnumeration each{
+        &out, [](void* user, MradmAdmText id, MradmAdmText name, uint32_t is_default) {
+            static_cast<std::vector<AudioOutputDeviceInfo>*>(user)->push_back(
+                {render_common::engine_text(id), render_common::engine_text(name), is_default != 0U});
+        }};
+    mradm_device_islands()->enumerate(&each);
     return out;
 }
+
+namespace {
+
+// The islands the session opens: the output devices and, in macOS builds, the Apple backend.
+[[nodiscard]] MradmEngineMonitorSessionHost islands() noexcept {
+#ifdef __APPLE__
+    return {mradm_device_islands(), mradm_apple_islands()};
+#else
+    return {mradm_device_islands(), nullptr};
+#endif
+}
+
+} // namespace
 
 Result<std::unique_ptr<MonitorSession>>
 MonitorSession::create(const std::string& input_path, const RenderOptions& options, const std::string& device_id) {
@@ -264,10 +169,9 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     if (!info) {
         return make_error(ErrorCode::internal_error, "invalid monitor scene");
     }
-    impl.bind_host();
-    const engine::RenderPlatform platform;
+    const auto host = islands();
     impl.rust = mradm_engine_monitor_session_new(
-        platform.get(), impl.scene_handle->raw, info->sample_rate, info->frames, &impl.host);
+        mradm_platform_islands(), impl.scene_handle->raw, info->sample_rate, info->frames, &host);
     if (impl.rust == nullptr) {
         return make_error(ErrorCode::internal_error, "invalid monitor session");
     }
@@ -281,7 +185,6 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     const auto code = mradm_engine_monitor_session_start(impl.rust,
                                                          &record,
                                                          options.monitor_system_spatial ? 1U : 0U,
-                                                         new RenderOptions(options),
                                                          reinterpret_cast<const uint8_t*>(device_id.data()),
                                                          device_id.size(),
                                                          errors.m(),
@@ -371,7 +274,6 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
     return errors.result(mradm_engine_monitor_session_switch(impl_->rust,
                                                              &record,
                                                              options.monitor_system_spatial ? 1U : 0U,
-                                                             new RenderOptions(options),
                                                              errors.m(),
                                                              errors.ml(),
                                                              errors.c(),

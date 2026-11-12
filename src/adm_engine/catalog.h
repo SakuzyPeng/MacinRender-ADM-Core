@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -11,8 +10,8 @@
 
 namespace mradm::engine {
 
-// The discovery documents built in Rust mradm-engine. This side supplies
-// the island facts: encoder availability, the Apple backend and the system-spatial layouts.
+// The discovery documents built in Rust mradm-engine, which reads the island facts (encoder
+// availability, the Apple backend and the system-spatial layouts) from mradm_platform_islands().
 enum class Document : uint32_t {
     capabilities = 0,
     layouts = 1,
@@ -28,23 +27,5 @@ enum class Document : uint32_t {
 // The output channel-order reference and the output container formats, read from their documents.
 [[nodiscard]] std::vector<OutputLayoutRow> build_output_layouts();
 [[nodiscard]] OutputFormats build_output_formats();
-
-// The platform facts of an offline render: IAMF availability and, in Apple
-// builds, the Apple backend's capability records.
-class RenderPlatform {
-  public:
-    RenderPlatform();
-    ~RenderPlatform();
-    RenderPlatform(const RenderPlatform&) = delete;
-    RenderPlatform& operator=(const RenderPlatform&) = delete;
-    RenderPlatform(RenderPlatform&&) = delete;
-    RenderPlatform& operator=(RenderPlatform&&) = delete;
-    [[nodiscard]] const MradmEnginePlatform* get() const noexcept { return &platform_; }
-
-  private:
-    class Apple;
-    std::unique_ptr<Apple> apple_;
-    MradmEnginePlatform platform_{0, 0, 0, -1, nullptr, nullptr, 0};
-};
 
 } // namespace mradm::engine

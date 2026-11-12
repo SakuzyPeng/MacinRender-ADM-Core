@@ -1192,6 +1192,8 @@ mod stream_ffi;
 
 #[path = "apple_island.rs"]
 pub(crate) mod apple_island;
+#[path = "device_island.rs"]
+pub(crate) mod device_island;
 #[path = "engine_monitor.rs"]
 mod engine_monitor;
 #[path = "engine_monitor_session.rs"]

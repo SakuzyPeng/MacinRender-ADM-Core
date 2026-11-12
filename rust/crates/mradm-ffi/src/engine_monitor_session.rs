@@ -1,15 +1,15 @@
 //! The monitor session (`mradm-engine` `monitor::session`) behind the C++
-//! `MonitorSession` shell. The shell provides the devices, the Apple islands and the backend
-//! options through the host table below; its device callbacks pull the session's monitor with
-//! [`mradm_engine_session_monitor_pull`].
+//! `MonitorSession` shell. The shell registers the output devices and the Apple islands; the
+//! session opens and drives the devices itself.
 use super::apple_island::{Apple, AppleIslands, Settings as AppleSettings, log_context};
-use super::engine_monitor::{
-    Buffers, EngineIslandError, EngineLiveMonitorLevels, EngineLiveMonitorPull,
-    EngineLiveMonitorStatus, overrides_of,
+use super::device_island::{
+    Device as OutputDevice, DeviceIslands, Devices, HARDWARE, SYSTEM_SPATIAL,
+    output as device_output,
 };
+use super::engine_monitor::{EngineLiveMonitorLevels, EngineLiveMonitorStatus, overrides_of};
 use super::room_ffi::{RenderRoomControl, control_handle};
 use super::*;
-use crate::engine::{EnginePlatform, platform};
+use crate::engine::{Facts, PlatformIslands, platform};
 use crate::engine_render::FfiHost;
 use crate::engine_service::{EngineRenderRequest, empty_reply, request_of};
 use crate::hptf::Snapshot;
@@ -17,132 +17,104 @@ use crate::hptf::settings::Settings;
 use crate::scene::SceneHandle;
 use mradm_engine::backend;
 use mradm_engine::monitor::session::{
-    AppleOpen, Choice, Device, Entry, HptfDesign, Session, SessionHost, Token,
+    AppleOpen, Choice, Device, Entry, HptfDesign, Session, SessionHost,
 };
 use mradm_engine::monitor::{Monitor, Source};
+use mradm_engine::request::normalize_output_layout;
 use mradm_scene::RenderScene;
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex};
 
-/// The shell's devices, Apple island and options. `options` are the caller's `RenderOptions`
-/// copies the session holds until `release_options`; `device` handles until `device_destroy`.
+/// The shell's islands: the output devices and the Apple backend (either may be null).
 #[repr(C)]
 pub struct EngineMonitorSessionHost {
-    ctx: *mut c_void,
-    device: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const u8, usize) -> *mut c_void>,
-    device_realtime: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> u32>,
-    device_start: Option<
-        unsafe extern "C" fn(
-            *mut c_void,
-            *mut c_void,
-            u32,
-            u32,
-            *const EngineSessionMonitor,
-            *const EngineIslandError,
-        ) -> i32,
-    >,
-    device_stop: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    device_flush: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    device_pause: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    device_resume: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    device_destroy: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+    devices: *const DeviceIslands,
     apple: *const AppleIslands,
-    release_options: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-}
-
-/// A session's monitor as its device callback sees it: an opaque `Monitor` pointer.
-pub struct EngineSessionMonitor {
-    _opaque: [u8; 0],
 }
 
 pub struct EngineMonitorSession {
     session: Session,
-    table: Arc<Table>,
     entry: Mutex<Option<Entry>>,
 }
 
-struct Table(EngineMonitorSessionHost);
-// SAFETY: The shell's host callbacks are thread-safe; its context outlives the session.
-unsafe impl Send for Table {}
-unsafe impl Sync for Table {}
-
-/// The caller's options of one choice.
-struct Options {
-    table: Arc<Table>,
-    ctx: *mut c_void,
+/// A session device: an opened device table, or the error opening it gave (reported by `start`).
+struct IslandDevice {
+    device: Result<IslandOutput, Error>,
 }
-// SAFETY: The options are an immutable C++ copy, released once.
-unsafe impl Send for Options {}
-unsafe impl Sync for Options {}
 
-impl Drop for Options {
-    fn drop(&mut self) {
-        if let Some(release) = self.table.0.release_options {
-            unsafe { release(self.table.0.ctx, self.ctx) };
-        }
+/// The device and the monitor its callback pulls.
+struct IslandOutput {
+    device: OutputDevice,
+    pull: Mutex<Option<Box<Puller>>>,
+}
+
+/// What a monitor device's callback reads: the monitor and the device (for `mark_end`).
+struct Puller {
+    monitor: *const Monitor,
+    device: *const OutputDevice,
+}
+// SAFETY: Both outlive the device's callbacks (the session stops the device first) and are only read.
+unsafe impl Send for Puller {}
+unsafe impl Sync for Puller {}
+
+/// The callback of a session's engine: never waits or allocates.
+unsafe extern "C" fn pull_monitor(
+    user: *mut c_void,
+    out: *mut f32,
+    len: usize,
+    frames: usize,
+) -> usize {
+    let p = unsafe { &*user.cast::<Puller>() };
+    let output = unsafe { device_output(out, len) };
+    let pulled = unsafe { &*p.monitor }.pull(output, frames);
+    if pulled.mark_end {
+        unsafe { &*p.device }.mark_end();
     }
+    pulled.frames
 }
 
-fn options_ctx(token: &Token) -> *mut c_void {
-    token
-        .downcast_ref::<Options>()
-        .map_or(ptr::null_mut(), |o| o.ctx)
-}
-
-struct ShellDevice {
-    table: Arc<Table>,
-    device: *mut c_void,
-}
-// SAFETY: An `IAudioOutputDevice`, controlled from the worker and the control thread as before.
-unsafe impl Send for ShellDevice {}
-unsafe impl Sync for ShellDevice {}
-
-impl ShellDevice {
-    fn call(&self, f: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>) {
-        if let Some(f) = f {
-            unsafe { f(self.table.0.ctx, self.device) };
-        }
-    }
-}
-
-impl Drop for ShellDevice {
-    fn drop(&mut self) {
-        self.call(self.table.0.device_destroy);
-    }
-}
-
-impl Device for ShellDevice {
+impl Device for IslandDevice {
     fn realtime(&self) -> bool {
-        self.table
-            .0
-            .device_realtime
-            .is_some_and(|f| unsafe { f(self.table.0.ctx, self.device) } != 0)
+        self.device.as_ref().is_ok_and(|d| d.device.realtime())
     }
     fn start(&self, channels: usize, sample_rate: u32, monitor: &Monitor) -> Result<(), Error> {
-        let Some(f) = self.table.0.device_start else {
-            return Ok(());
-        };
-        // SAFETY of the pointer: the session stops this device before the monitor drops.
-        let pulled = (monitor as *const Monitor).cast::<EngineSessionMonitor>();
-        let (ctx, device) = (self.table.0.ctx, self.device);
-        Buffers::new().call(|e| unsafe { f(ctx, device, channels as u32, sample_rate, pulled, e) })
+        let d = self.device.as_ref().map_err(Clone::clone)?;
+        // SAFETY of the pointers: the session stops this device before the monitor drops, and the
+        // puller lives with the device.
+        let mut slot = d.pull.lock().unwrap_or_else(|e| e.into_inner());
+        let puller = slot.insert(Box::new(Puller {
+            monitor,
+            device: &d.device,
+        }));
+        let user = ptr::from_mut::<Puller>(puller).cast();
+        d.device
+            .start(channels as u32, sample_rate, user, pull_monitor)
     }
     fn stop(&self) {
-        self.call(self.table.0.device_stop);
+        if let Ok(d) = &self.device {
+            d.device.stop();
+        }
     }
     fn flush(&self) {
-        self.call(self.table.0.device_flush);
+        if let Ok(d) = &self.device {
+            d.device.flush();
+        }
     }
     fn pause(&self) {
-        self.call(self.table.0.device_pause);
+        if let Ok(d) = &self.device {
+            d.device.pause();
+        }
     }
     fn resume(&self) {
-        self.call(self.table.0.device_resume);
+        if let Ok(d) = &self.device {
+            d.device.resume();
+        }
     }
 }
 
 struct ShellHost {
-    table: Arc<Table>,
+    devices: Option<Devices>,
+    apple_islands: *const AppleIslands,
     scene: *const SceneHandle,
     apple: bool,
 }
@@ -191,18 +163,25 @@ impl SessionHost for ShellHost {
     fn apple(&self) -> bool {
         self.apple
     }
-    fn device(&self, choice: &Token, device_id: &[u8]) -> Arc<dyn Device> {
-        let device = self.table.0.device.map_or(ptr::null_mut(), |f| unsafe {
-            f(
-                self.table.0.ctx,
-                options_ctx(choice),
-                device_id.as_ptr(),
-                device_id.len(),
-            )
-        });
-        Arc::new(ShellDevice {
-            table: self.table.clone(),
-            device,
+    fn device(&self, choice: &Choice, device_id: &[u8]) -> Arc<dyn Device> {
+        let Some(devices) = self.devices else {
+            return Arc::new(IslandDevice {
+                device: Err(bad("output devices are unavailable")),
+            });
+        };
+        let r = &choice.request;
+        let (kind, layout, geometry, id) = device_choice(
+            choice.system_spatial && devices.system_spatial(),
+            &r.output_layout,
+            r.apple_geometry,
+            device_id,
+        );
+        let device = devices.open(kind, &layout, geometry, id);
+        Arc::new(IslandDevice {
+            device: device.map(|device| IslandOutput {
+                device,
+                pull: Mutex::new(None),
+            }),
         })
     }
     fn open_apple(
@@ -210,7 +189,7 @@ impl SessionHost for ShellHost {
         plan: &AppleOpen<'_>,
         log: &dyn Fn(u32, &str, &[u8]),
     ) -> Result<Box<dyn Source>, Error> {
-        let Some(apple) = Apple::new(self.table.0.apple) else {
+        let Some(apple) = Apple::new(self.apple_islands) else {
             return Err(bad("Apple backend is unavailable"));
         };
         let settings = AppleSettings::new(plan.input_path, plan.layout, plan.matrix, &plan.options);
@@ -248,24 +227,39 @@ impl HptfDesign for Design {
     }
 }
 
-/// One backend choice from a request record; the options are released on failure too.
+/// The device of a choice: the system-spatial sink (where the platform has one) follows the system
+/// media route over the normalised layout, keeping a device refresh on the same sink; otherwise the
+/// hardware device `device_id`.
+fn device_choice<'a>(
+    system_spatial: bool,
+    output_layout: &str,
+    apple_geometry: bool,
+    device_id: &'a [u8],
+) -> (u32, String, u32, &'a [u8]) {
+    if system_spatial {
+        (
+            SYSTEM_SPATIAL,
+            normalize_output_layout(output_layout),
+            u32::from(apple_geometry),
+            b"",
+        )
+    } else {
+        (HARDWARE, String::new(), 0, device_id)
+    }
+}
+
+/// One backend choice from a request record.
 unsafe fn choice(
-    table: &Arc<Table>,
     request: *const EngineRenderRequest,
     system_spatial: u32,
-    options: *mut c_void,
 ) -> Result<Choice, Error> {
-    let token: Token = Arc::new(Options {
-        table: table.clone(),
-        ctx: options,
-    });
     let request = unsafe { request.as_ref() }
         .and_then(|r| unsafe { request_of(r) })
         .ok_or_else(|| bad("invalid monitor request (UTF-8 paths without NUL required)"))?;
     Ok(Choice {
         request,
         system_spatial: system_spatial != 0,
-        token,
+        token: Arc::new(()),
     })
 }
 
@@ -276,7 +270,7 @@ unsafe fn session<'a>(handle: *const EngineMonitorSession) -> Option<&'a EngineM
 /// A session without an engine; null for an invalid host or platform record.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_monitor_session_new(
-    platform_record: *const EnginePlatform,
+    islands: *const PlatformIslands,
     scene: *const SceneHandle,
     sample_rate: u32,
     total_frames: u64,
@@ -285,21 +279,20 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_new(
     catch_unwind(AssertUnwindSafe(|| {
         let (Some(host), Some(apple)) = (
             unsafe { host.as_ref() },
-            unsafe { platform_record.as_ref() }
-                .and_then(|p| unsafe { platform(p) })
+            unsafe { islands.as_ref() }
+                .and_then(|p| unsafe { platform(p, Facts::Render) })
                 .map(|p| p.apple.is_some()),
         ) else {
             return ptr::null_mut();
         };
-        let table = Arc::new(Table(EngineMonitorSessionHost { ..*host }));
         let shell = Arc::new(ShellHost {
-            table: table.clone(),
+            devices: Devices::new(host.devices),
+            apple_islands: host.apple,
             scene,
             apple,
         });
         Box::into_raw(Box::new(EngineMonitorSession {
             session: Session::new(sample_rate, total_frames, shell),
-            table,
             entry: Mutex::new(None),
         }))
     }))
@@ -327,14 +320,13 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_log(
     h.session.log(level, &String::from_utf8_lossy(module), text);
 }
 
-/// Opens the first stream on a device for `device_id` and starts it. Code 100: the C++ session
-/// threw (the shell rethrows the message). The options are taken over in every case.
+/// Opens the first stream on a device for `device_id` and starts it. Code 100: the former C++
+/// session threw (the shell rethrows the message).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_monitor_session_start(
     handle: *const EngineMonitorSession,
     request: *const EngineRenderRequest,
     system_spatial: u32,
-    options: *mut c_void,
     device_id: *const u8,
     device_id_len: usize,
     message: *mut u8,
@@ -344,7 +336,7 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_start(
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
         let h = unsafe { session(handle) }.ok_or_else(|| bad("无效监听句柄"))?;
-        let choice = unsafe { choice(&h.table, request, system_spatial, options)? };
+        let choice = unsafe { choice(request, system_spatial)? };
         h.session
             .start(choice, unsafe { input(device_id, device_id_len)? })
     })
@@ -427,13 +419,12 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_orientation(
     }
 }
 
-/// `switch_backend`; the options are taken over in every case.
+/// `switch_backend`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_monitor_session_switch(
     handle: *const EngineMonitorSession,
     request: *const EngineRenderRequest,
     system_spatial: u32,
-    options: *mut c_void,
     message: *mut u8,
     message_len: *mut usize,
     context: *mut u8,
@@ -441,7 +432,7 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_switch(
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
         let h = unsafe { session(handle) }.ok_or_else(|| bad("无效监听句柄"))?;
-        let choice = unsafe { choice(&h.table, request, system_spatial, options)? };
+        let choice = unsafe { choice(request, system_spatial)? };
         h.session.switch_backend(choice)
     })
 }
@@ -593,27 +584,56 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_room_control(
         .map_or(ptr::null_mut(), control_handle)
 }
 
-/// Device callback of a session's engine: never waits or allocates.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_session_monitor_pull(
-    monitor: *const EngineSessionMonitor,
-    output: *mut f32,
-    output_len: usize,
-    frames: usize,
-    result: *mut EngineLiveMonitorPull,
-) {
-    let monitor = monitor.cast::<Monitor>();
-    let (Some(m), Some(result)) = (unsafe { monitor.as_ref() }, unsafe { result.as_mut() }) else {
-        return;
-    };
-    if output_len != 0 && (output.is_null() || output_len > isize::MAX as usize / 4) {
-        std::process::abort();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::render::device_island::DeviceTable;
+    use std::sync::Mutex as StdMutex;
+
+    static OPENED: StdMutex<Vec<String>> = StdMutex::new(Vec::new());
+
+    unsafe extern "C" fn open(
+        kind: u32,
+        layout: Text,
+        geometry: u32,
+        id: Text,
+        _: *mut DeviceTable,
+        e: *const crate::render::engine_monitor::EngineIslandError,
+    ) -> i32 {
+        let text = |t: &Text| String::from_utf8(unsafe { bytes(t) }.unwrap().to_vec()).unwrap();
+        OPENED
+            .lock()
+            .unwrap()
+            .push(format!("{kind} {} {geometry} {}", text(&layout), text(&id)));
+        if kind == HARDWARE && text(&id) == "missing" {
+            return unsafe {
+                crate::render::engine_monitor::island_error_for_test(e, 2, "no device")
+            };
+        }
+        0
     }
-    let output: &mut [f32] = if output_len == 0 {
-        &mut []
-    } else {
-        unsafe { std::slice::from_raw_parts_mut(output, output_len) }
-    };
-    let pulled = m.pull(output, frames);
-    *result = EngineLiveMonitorPull::new(pulled.frames, pulled.mark_end);
+
+    #[test]
+    fn devices_follow_the_choice_and_report_open_errors() {
+        assert_eq!(
+            device_choice(true, "7.1.4", true, b"usb"),
+            (
+                SYSTEM_SPATIAL,
+                normalize_output_layout("7.1.4"),
+                1,
+                &b""[..]
+            )
+        );
+        assert_eq!(
+            device_choice(false, "7.1.4", true, b"usb"),
+            (HARDWARE, String::new(), 0, &b"usb"[..])
+        );
+        let table = DeviceIslands::for_test(1, Some(open));
+        let devices = Devices::new(&table).unwrap();
+        assert!(devices.system_spatial());
+        assert!(devices.open(SYSTEM_SPATIAL, "4+7+0", 1, b"").is_ok());
+        let failed = devices.open(HARDWARE, "", 0, b"missing").err().unwrap();
+        assert_eq!((failed.code, &failed.message[..]), (2, &b"no device"[..]));
+        assert_eq!(*OPENED.lock().unwrap(), ["0 4+7+0 1 ", "1  0 missing"]);
+    }
 }

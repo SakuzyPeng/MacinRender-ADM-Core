@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 104,
-      "lines": 21403
+      "lines": 21124
     },
     "islands": {
       "files": 6,
@@ -14,20 +14,20 @@
       "lines": 512
     },
     "island-interfaces": {
-      "files": 5,
-      "lines": 614
+      "files": 9,
+      "lines": 988
     },
     "tests": {
-      "files": 194,
-      "lines": 54883
+      "files": 195,
+      "lines": 55247
     },
     "reference": {
       "files": 38,
       "lines": 12026
     },
     "rust": {
-      "files": 339,
-      "lines": 128186
+      "files": 340,
+      "lines": 128685
     },
     "rust-vendor": {
       "files": 175,
@@ -39,8 +39,8 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-dsp": 40626,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 20788,
-    "rust/crates/mradm-ffi": 25429,
+    "rust/crates/mradm-engine": 20787,
+    "rust/crates/mradm-ffi": 25929,
     "rust/crates/mradm-json": 1284,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 1757,
@@ -65,11 +65,15 @@
     "src/adm_cli": 1410,
     "src/adm_core": 200,
     "src/adm_dsp": 1535,
-    "src/adm_engine": 1647,
+    "src/adm_engine": 1339,
+    "src/adm_engine/platform_island.cpp": 176,
+    "src/adm_engine/platform_island.h": 15,
     "src/adm_io": 363,
     "src/adm_metadata": 386,
     "src/adm_realtime": 1153,
-    "src/adm_render_common": 2683,
+    "src/adm_realtime/device_island.cpp": 160,
+    "src/adm_realtime/device_island.h": 23,
+    "src/adm_render_common": 2712,
     "src/adm_render_room": 283,
     "src/adm_render_room/cuda": 512,
     "src/adm_renderer_factory": 46,
@@ -97,14 +101,18 @@
     "tests/reference/triple_balance": 1620,
     "tests/reference/wav_container": 1456,
     "tests/support": 8010,
-    "tests/tools": 3152,
-    "tests/unit": 41296
+    "tests/tools": 3183,
+    "tests/unit": 41629
   },
   "island_interfaces": {
     "src/adm_apple/apple_island.cpp": 353,
     "src/adm_apple/apple_island.h": 14,
     "src/adm_audio/island.cpp": 117,
     "src/adm_audio/island_driver.h": 113,
-    "src/adm_audio/island_ffi.h": 17
+    "src/adm_audio/island_ffi.h": 17,
+    "src/adm_engine/platform_island.cpp": 176,
+    "src/adm_engine/platform_island.h": 15,
+    "src/adm_realtime/device_island.cpp": 160,
+    "src/adm_realtime/device_island.h": 23
   }
 }
