@@ -14,6 +14,7 @@
 | `input-layouts` | 列出普通多声道输入预设与标签几何 |
 | `formats` | 列出输出容器格式、可用性与约束（声道数、采样率、位深、码率） |
 | `export` | 把应用语义策略后的场景写回新的 ADM BWF（复用源 PCM，不重渲染） |
+| `room-check` | 检查并准备房间包与个人 HRIR（`--hrir` / `--sofa`，`--quality exact` / `realtime`）；用法见[房间资源说明](../../scripts/room/README.md) |
 
 每个子命令都支持 `--help`。示例中的 `./build/release/mradm` 可替换为发行包内的 `bin/mradm`。
 

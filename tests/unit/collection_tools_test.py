@@ -1066,12 +1066,15 @@ class ToolSubstitutionTests(unittest.TestCase):
         path.chmod(0o755)
         return path
 
-    def test_tool_overrides_accept_only_replay_tools(self):
+    def test_tool_overrides_accept_only_cli_and_replay_tools(self):
         tool = self.tool()
-        parsed = collector.parse_tool_overrides([f'mr_adm_consistency_stream={tool}', f'mr_adm_consistency_scene={tool}'])
-        self.assertEqual(parsed, {'mr_adm_consistency_stream': tool.resolve(), 'mr_adm_consistency_scene': tool.resolve()})
+        parsed = collector.parse_tool_overrides([f'mr_adm_consistency_stream={tool}', f'mr_adm_consistency_scene={tool}',
+                                                 f'mradm={tool}'])
+        self.assertEqual(parsed, {'mr_adm_consistency_stream': tool.resolve(), 'mr_adm_consistency_scene': tool.resolve(),
+                                  'mradm': tool.resolve()})
         self.assertEqual(collector.parse_tool_overrides(None), {})
-        for values, message in (([f'mradm={tool}'], 'only'), ([f'mr_adm_consistency_kernels={tool}'], 'only'),
+        for values, message in (([f'mr_adm_make_fixture={tool}'], 'only'), ([f'mr_adm_consistency_kernels={tool}'], 'only'),
+                                ([f'mr_adm_pcm_bits={tool}'], 'only'),
                                 ([f'mr_adm_consistency_render={tool}'] * 2, 'twice'), (['mr_adm_consistency_render'], 'NAME=PATH'),
                                 (['mr_adm_consistency_render='], 'NAME=PATH'),
                                 ([f'mr_adm_consistency_render={self.root / "missing"}'], 'not an executable')):
@@ -1293,7 +1296,7 @@ class ToolSubstitutionTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(collections.PreconditionError):
                 collections.compare(reference, candidate)
 
-    def test_only_declared_replay_binary_changes_are_accepted(self):
+    def test_only_declared_tool_binary_changes_are_accepted(self):
         reference, candidate = self.collection('reference'), self.collection('candidate')
         manifest = self.seal(candidate)
         name = 'mr_adm_consistency_stream'
@@ -1304,9 +1307,17 @@ class ToolSubstitutionTests(unittest.TestCase):
         manifest['tool_overrides'][name] = {'path': str(self.root / 'new-replay'), 'sha256': manifest['binaries'][name]}
         common.save(candidate / 'manifest.json', manifest)
         self.assertTrue(collections.compare(reference, candidate)['identical'])
+        # The CLI may stand in too (phase 6), but only with its own declared digest.
         manifest['tool_overrides']['mradm'] = manifest['tool_overrides'][name]
         common.save(candidate / 'manifest.json', manifest)
-        with self.assertRaisesRegex(collections.PreconditionError, 'only replay tools'):
+        with self.assertRaisesRegex(collections.PreconditionError, 'declared tool overrides'):
+            collections.compare(reference, candidate)
+        manifest['binaries']['mradm'] = manifest['tool_overrides'][name]['sha256']
+        common.save(candidate / 'manifest.json', manifest)
+        self.assertTrue(collections.compare(reference, candidate)['identical'])
+        manifest['tool_overrides']['mr_adm_consistency_kernels'] = manifest['tool_overrides'][name]
+        common.save(candidate / 'manifest.json', manifest)
+        with self.assertRaisesRegex(collections.PreconditionError, 'only the CLI and the replay tools'):
             collections.compare(reference, candidate)
 
     def test_exit_codes(self):

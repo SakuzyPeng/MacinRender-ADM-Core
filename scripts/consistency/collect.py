@@ -37,9 +37,7 @@ def load_uninstrumented_baseline(root, source, config):
     return baseline
 
 
-# Replay tools a candidate implementation may stand in for (phase 5.1). The CLI and the fixture,
-# PCM-extraction and kernel tools always come from the build directory.
-REPLACEABLE_TOOLS = common.REPLAY_TOOLS
+REPLACEABLE_TOOLS = common.SUBSTITUTABLE_TOOLS
 
 
 def parse_tool_overrides(values):
@@ -67,7 +65,7 @@ def main():
     parser.add_argument('--config', required=True, choices=['a', 'b'])
     parser.add_argument('--baseline', type=Path, help='diagnostic run must match this uninstrumented run')
     parser.add_argument('--tool', action='append', metavar='NAME=PATH',
-                        help='replace a replay tool for a same-build comparison (compare-collections.py); '
+                        help='replace the CLI or a replay tool for a same-build comparison (compare-collections.py); '
                              'such collections are not platform evidence')
     args = parser.parse_args()
     try:
