@@ -19,6 +19,7 @@
 #include "adm/render_apple.h"
 #endif
 
+#include "../adm_audio/island_ffi.h"
 #include "../adm_core/direct_matrix_records.h"
 #include "../adm_io/scene_import_internal.h"
 #include "../adm_render_room/room_internal.h"
@@ -87,8 +88,22 @@ class MappedProgress final : public ProgressSink {
     ProgressSink* downstream_;
 };
 
-// The C++ islands of a render: encoders, container metadata, the MP4 packager probe and the Apple
-// backend. The reply's texts live until the engine resumes.
+// The caller's stop token and progress for the islands the engine runs (mradm_audio_island).
+struct IslandDriver {
+    const std::stop_token* token;
+    ProgressSink* progress;
+};
+
+uint32_t island_cancelled(void* user) {
+    return static_cast<const IslandDriver*>(user)->token->stop_requested() ? 1U : 0U;
+}
+
+void island_progress(void* user, const MradmEngineProgress* event) {
+    static_cast<IslandDriver*>(user)->progress->on_progress(progress_of(*event));
+}
+
+// The Apple backend island of a render (the engine runs the audio islands). The reply's texts
+// live until the engine resumes.
 class Islands {
   public:
     Islands(const MradmEngineRender* render,
@@ -103,74 +118,11 @@ class Islands {
         context_.clear();
         reply_ = {};
         reply_.ffmpeg_major = -1;
-        const auto& token = request_->options.cancel_token;
-        const auto src = native(e.src.utf8);
-        const auto dst = native(e.dst.utf8);
-        const auto layout = engine_text(e.layout);
         MappedProgress mapped(render_, *progress_);
-        switch (e.island) {
-        case 1: {
-            const auto packager = audio::detect_iamf_mp4_packager();
-            reply_.packager = static_cast<uint32_t>(packager.kind);
-            reply_.ffmpeg_major = packager.ffmpeg_major;
-            break;
-        }
-        case 2:
-        case 3:
-            apple(e, dst, mapped);
-            break;
-        case 4:
-            done(audio::convert_to_flac(src, dst, token, &mapped));
-            break;
-        case 5:
-            done(audio::convert_to_opus_mka(src, dst, layout, e.bitrate, token));
-            break;
-        case 6:
-            done(audio::convert_to_apac(src,
-                                        dst,
-                                        layout,
-                                        e.bitrate,
-                                        e.drc_music != 0U,
-                                        e.caf != 0U ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4,
-                                        token,
-                                        &mapped));
-            break;
-        case 7: {
-            std::vector<std::string> layers;
-            for (const auto& layer : std::span{e.layers, e.layers_len}) {
-                layers.push_back(engine_text(layer));
-            }
-            done(audio::convert_to_iamf(src,
-                                        dst,
-                                        layout,
-                                        e.bitrate,
-                                        e.has_lufs != 0U ? std::optional<double>(e.lufs) : std::nullopt,
-                                        e.has_peak != 0U ? std::optional<double>(e.peak_dbtp) : std::nullopt,
-                                        token,
-                                        layers));
-            break;
-        }
-        case 8:
-            done(audio::package_iamf_to_mp4(src, dst, token));
-            break;
-        case 9: {
-            audio::MetadataFields fields;
-            fields.encoder = engine_text(e.encoder);
-            fields.date_utc = engine_text(e.date_utc);
-            fields.renderer = engine_text(e.renderer);
-            fields.output_layout = layout;
-            if (e.has_lufs != 0U) {
-                fields.lufs = e.lufs;
-            }
-            if (e.has_peak != 0U) {
-                fields.peak_dbtp = e.peak_dbtp;
-            }
-            done(audio::write_file_metadata(dst, fields));
-            break;
-        }
-        default:
+        if (e.island == 2U || e.island == 3U) {
+            apple(e, native(e.dst.utf8), mapped);
+        } else {
             fail({ErrorCode::internal_error, "unknown render island", {}});
-            break;
         }
         return reply_;
     }
@@ -182,11 +134,6 @@ class Islands {
         reply_.code = static_cast<int32_t>(error.code);
         reply_.message = engine_text(message_);
         reply_.context = engine_text(context_);
-    }
-    void done(const Result<void>& result) {
-        if (!result) {
-            fail(result.error());
-        }
     }
 
     // The Apple backend prepares and renders its own windows over the engine's scene and plan.
@@ -355,6 +302,11 @@ RenderResult RenderService::render(const RenderRequest& request,
             error_of(code, engine_text("invalid render request (UTF-8 paths without NUL required)"), {}), {}, {}, {}};
     }
     const RenderHandle render(raw, &mradm_engine_render_destroy);
+    IslandDriver driver{&request.options.cancel_token, &progress};
+    const MradmIslandRunner runner{&mradm_audio_island, {&driver, &island_cancelled, &island_progress}};
+    if (mradm_engine_render_set_islands(render.get(), &runner) != 0) {
+        return {{ErrorCode::internal_error, "render islands unavailable", {}}, std::nullopt, std::nullopt, {}};
+    }
     Islands islands(render.get(), request, progress, logs, slot);
     for (;;) {
         MradmEngineRenderEvent event{};

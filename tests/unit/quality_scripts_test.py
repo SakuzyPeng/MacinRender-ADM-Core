@@ -393,6 +393,50 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.assertEqual(result, 1, output)
         self.assertIn("无法读取基准提交", output)
 
+    def test_island_interfaces_are_registered_file_by_file(self):
+        interface, neighbour = surface.ISLAND_INTERFACES[0], "src/adm_audio/neighbour.cpp"
+        self.write(interface, 6)
+        self.write(neighbour, 1)
+        areas = surface.measure(self.root)["areas"]
+        self.assertEqual(areas["island-interfaces"]["lines"], 6)
+        self.assertEqual(areas["production"]["lines"], 13)  # the neighbour in the same directory stays production
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("尚未登记", output)
+        (self.root / neighbour).unlink()
+        self.assertEqual(self.run_surface("--update")[0], 0)
+        self.assertEqual(json.loads(self.baseline.read_text())["island_interfaces"], {interface: 6})
+        self.assertEqual(self.run_surface("--check")[0], 0)
+        self.write(interface, 7)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn(interface, output)
+        self.assertEqual(self.run_surface("--update")[0], 1)  # --update cannot raise a registered ceiling
+        self.write(interface, 5)
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("收紧", output)
+        self.assertEqual(self.run_surface("--update")[0], 0)
+        (self.root / interface).unlink()
+        result, output = self.run_surface("--check")
+        self.assertEqual(result, 1)
+        self.assertIn("已不存在", output)
+
+    def test_base_ref_allows_registering_but_not_raising_island_interfaces(self):
+        first, second = surface.ISLAND_INTERFACES[:2]
+        self.write(first, 4)
+        self.assertEqual(self.run_surface("--update")[0], 0)
+        ref = self.commit_baseline()
+        self.write(second, 3)
+        self.assertEqual(self.run_surface("--update", "--base-ref", ref)[0], 0)
+        self.assertEqual(self.run_surface("--check", "--base-ref", ref)[0], 0)
+        self.write(first, 5)
+        self.baseline.write_text(json.dumps(surface.measure(self.root)))
+        for mode in ("--check", "--update"):
+            result, output = self.run_surface(mode, "--base-ref", ref)
+            self.assertEqual(result, 1, output)
+            self.assertIn("基线上限", output)
+
     def test_legacy_baseline_seeds_only_the_fixed_cuda_ceiling(self):
         legacy = json.loads(self.baseline.read_text())
         del legacy["areas"]["cuda"]

@@ -442,6 +442,23 @@ int32_t mradm_engine_render_begin(const MradmEngineRenderRequest* request,
 // cancelled is the caller's stop token now; texts live until the next call on the handle.
 int32_t mradm_engine_render_next(MradmEngineRender* handle, uint32_t cancelled, MradmEngineRenderEvent* event);
 int32_t mradm_engine_render_resume(MradmEngineRender* handle, const MradmEngineIslandReply* reply);
+// The caller's side of an island run inside mradm_engine_render_next: cancelled polls its stop token
+// (possibly from another thread), progress receives an event mapped into the render's range.
+typedef struct MradmIslandContext {
+    void* user;
+    uint32_t (*cancelled)(void* user);
+    void (*progress)(void* user, const MradmEngineProgress* event);
+} MradmIslandContext;
+// A library's islands: run returns 0 when it ran the island (any failure in reply), nonzero to leave it
+// to the caller as an island event.
+typedef struct MradmIslandRunner {
+    int32_t (*run)(const MradmEngineRenderEvent* request,
+                   const MradmIslandContext* context,
+                   MradmEngineIslandReply* reply);
+    MradmIslandContext driver;
+} MradmIslandRunner;
+// Runs the islands runner accepts inside mradm_engine_render_next (copied); NULL returns them again.
+int32_t mradm_engine_render_set_islands(MradmEngineRender* handle, const MradmIslandRunner* runner);
 // An island's progress event mapped into the render's range.
 int32_t mradm_engine_render_map_progress(const MradmEngineRender* handle,
                                          const MradmEngineProgress* event,

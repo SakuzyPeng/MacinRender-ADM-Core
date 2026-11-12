@@ -1,6 +1,7 @@
 //! Private boundary of the offline render service (`mradm-engine`
-//! `render`): the C++ `RenderService` steps a handle, executes its island requests and answers
-//! them. Texts in events and results live until the next call on the handle.
+//! `render`): the C++ `RenderService` steps a handle; the islands a registered runner accepts run
+//! inside the step, the others are returned and answered. Texts in events and results live until
+//! the next call on the handle.
 use crate::adm::Text;
 use crate::engine::{EngineLog, EnginePlatform, EngineStatus, platform};
 use crate::engine_render::{FfiHost, log_views};
@@ -15,6 +16,7 @@ use mradm_engine::render::{
 };
 use mradm_engine::request::{self, Packager};
 use std::{
+    ffi::c_void,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
 };
@@ -181,6 +183,7 @@ pub struct EngineRenderResult {
 pub struct EngineRender {
     render: Render,
     island: Option<Island>,
+    islands: Option<IslandRunner>,
     texts: Vec<Text>,
     matrix: Option<Box<DirectMatrix>>,
     message: String,
@@ -353,6 +356,7 @@ pub unsafe extern "C" fn mradm_engine_render_begin(
         *out = Box::into_raw(Box::new(EngineRender {
             render: Render::new(request, platform, reuse),
             island: None,
+            islands: None,
             texts: Vec::new(),
             matrix: None,
             message: String::new(),
@@ -433,9 +437,24 @@ fn empty_event() -> EngineRenderEvent {
     }
 }
 
+/// The texts and matrix an island record borrows besides the island itself.
+#[derive(Default)]
+struct IslandStorage {
+    texts: Vec<Text>,
+    matrix: Option<Box<DirectMatrix>>,
+}
+
 /// Fills `e` with the pending island, borrowing the handle's copy of it.
 fn island_record(h: &mut EngineRender, e: &mut EngineRenderEvent) {
     let island = h.island.as_ref().expect("pending island");
+    let mut storage = IslandStorage::default();
+    island_fields(island, &mut storage, e);
+    h.texts = storage.texts;
+    h.matrix = storage.matrix;
+}
+
+/// Fills `e` with `island`, borrowing it and `storage`.
+fn island_fields(island: &Island, storage: &mut IslandStorage, e: &mut EngineRenderEvent) {
     e.kind = 3;
     let apple = |e: &mut EngineRenderEvent, plan: &render::ApplePlan| {
         e.dst = path_record(&plan.output_path);
@@ -464,7 +483,7 @@ fn island_record(h: &mut EngineRender, e: &mut EngineRenderEvent) {
                 let matrix = DirectMatrix::new(m.clone());
                 e.has_matrix = 1;
                 e.matrix = matrix.view();
-                h.matrix = Some(matrix);
+                storage.matrix = Some(matrix);
             }
         }
         Island::EncodeFlac { src, dst } => {
@@ -518,9 +537,9 @@ fn island_record(h: &mut EngineRender, e: &mut EngineRenderEvent) {
             e.lufs = lufs.unwrap_or(0.);
             e.has_peak = u32::from(peak_dbtp.is_some());
             e.peak_dbtp = peak_dbtp.unwrap_or(0.);
-            h.texts = layers.iter().map(|l| Text::new(l)).collect();
-            e.layers = h.texts.as_ptr();
-            e.layers_len = h.texts.len();
+            storage.texts = layers.iter().map(|l| Text::new(l)).collect();
+            e.layers = storage.texts.as_ptr();
+            e.layers_len = storage.texts.len();
         }
         Island::PackageMp4 { src, dst } => {
             e.island = 8;
@@ -555,7 +574,8 @@ pub unsafe extern "C" fn mradm_engine_render_next(
     };
     *e = empty_event();
     catch_unwind(AssertUnwindSafe(|| {
-        match h.render.next(cancelled != 0, &FfiHost) {
+        let islands = h.islands.as_ref().map(|r| r as &dyn render::Islands);
+        match h.render.next_with(cancelled != 0, &FfiHost, islands) {
             Event::Continue => {}
             Event::Progress(p) => {
                 e.kind = 1;
@@ -589,33 +609,132 @@ pub unsafe extern "C" fn mradm_engine_render_resume(
         return 1;
     };
     catch_unwind(AssertUnwindSafe(|| {
-        let error = if r.code != 0 {
-            Some(request::Error::new(
-                r.code,
-                unsafe { string(&r.message) }.unwrap_or_default(),
-                unsafe { string(&r.context) }.unwrap_or_default(),
-            ))
-        } else {
-            None
-        };
+        let reply = unsafe { reply_of(r) };
         h.island = None;
         h.matrix = None;
-        h.render.resume(Reply {
-            error,
-            metrics: Metrics {
-                lufs: (r.has_lufs != 0).then_some(r.lufs),
-                peak_dbtp: (r.has_peak != 0).then_some(r.peak_dbtp),
-            },
-            packager: match r.packager {
-                1 => Packager::Mp4box,
-                2 => Packager::Ffmpeg,
-                _ => Packager::None,
-            },
-            ffmpeg_major: r.ffmpeg_major,
-        });
+        h.render.resume(reply);
         0
     }))
     .unwrap_or(6)
+}
+
+/// An island's reply, copying its texts.
+unsafe fn reply_of(r: &EngineIslandReply) -> Reply {
+    let error = (r.code != 0).then(|| {
+        request::Error::new(
+            r.code,
+            unsafe { string(&r.message) }.unwrap_or_default(),
+            unsafe { string(&r.context) }.unwrap_or_default(),
+        )
+    });
+    Reply {
+        error,
+        metrics: Metrics {
+            lufs: (r.has_lufs != 0).then_some(r.lufs),
+            peak_dbtp: (r.has_peak != 0).then_some(r.peak_dbtp),
+        },
+        packager: match r.packager {
+            1 => Packager::Mp4box,
+            2 => Packager::Ffmpeg,
+            _ => Packager::None,
+        },
+        ffmpeg_major: r.ffmpeg_major,
+    }
+}
+
+/// The caller's side of an island run inside `mradm_engine_render_next`: `cancelled` polls its
+/// stop token (possibly from another thread), `progress` receives an event mapped into the
+/// render's range.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IslandContext {
+    user: *mut c_void,
+    cancelled: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
+    progress: Option<unsafe extern "C" fn(*mut c_void, *const EngineProgress)>,
+}
+
+/// A library's islands: `run` returns 0 when it ran the island (any failure in the reply) and
+/// nonzero to leave it to the caller as an island event.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IslandRunner {
+    run: Option<
+        unsafe extern "C" fn(
+            *const EngineRenderEvent,
+            *const IslandContext,
+            *mut EngineIslandReply,
+        ) -> i32,
+    >,
+    driver: IslandContext,
+}
+
+/// An island's context while it runs: the caller's context and the render's progress mapping.
+struct Bridge<'a> {
+    driver: IslandContext,
+    map: &'a dyn Fn(&Progress) -> Progress,
+}
+
+unsafe extern "C" fn bridge_cancelled(user: *mut c_void) -> u32 {
+    let b = unsafe { &*user.cast::<Bridge<'_>>() };
+    b.driver
+        .cancelled
+        .map_or(0, |f| unsafe { f(b.driver.user) })
+}
+
+unsafe extern "C" fn bridge_progress(user: *mut c_void, event: *const EngineProgress) {
+    let b = unsafe { &*user.cast::<Bridge<'_>>() };
+    let (Some(f), Some(e)) = (b.driver.progress, unsafe { event.as_ref() }) else {
+        return;
+    };
+    let mapped = mapped_progress(e, b.map);
+    unsafe { f(b.driver.user, &mapped) };
+}
+
+impl render::Islands for IslandRunner {
+    fn run(&self, island: &Island, map: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
+        let run = self.run?;
+        let mut storage = IslandStorage::default();
+        let mut e = empty_event();
+        island_fields(island, &mut storage, &mut e);
+        let bridge = Bridge {
+            driver: self.driver,
+            map,
+        };
+        let context = IslandContext {
+            user: ptr::from_ref(&bridge).cast_mut().cast(),
+            cancelled: Some(bridge_cancelled),
+            progress: Some(bridge_progress),
+        };
+        let mut reply = EngineIslandReply {
+            code: 0,
+            message: Text::new(""),
+            context: Text::new(""),
+            has_lufs: 0,
+            has_peak: 0,
+            lufs: 0.,
+            peak_dbtp: 0.,
+            packager: 0,
+            ffmpeg_major: -1,
+        };
+        if unsafe { run(&e, &context, &mut reply) } != 0 {
+            return None;
+        }
+        Some(unsafe { reply_of(&reply) })
+    }
+}
+
+/// Runs the islands `runner` accepts inside `mradm_engine_render_next` (copied); null returns
+/// every island to the caller again. Returns 1 for a null handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_engine_render_set_islands(
+    handle: *mut EngineRender,
+    runner: *const IslandRunner,
+) -> i32 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 1;
+    };
+    h.islands = unsafe { runner.as_ref() }.copied();
+    0
 }
 
 /// An island's progress event mapped into the render's range; `out.message` borrows `event`'s
@@ -633,6 +752,12 @@ pub unsafe extern "C" fn mradm_engine_render_map_progress(
     ) else {
         return 1;
     };
+    *out = mapped_progress(e, &|p| h.render.map_progress(p));
+    0
+}
+
+/// `e` mapped by `map`; the message borrows `e`'s unless it was empty.
+fn mapped_progress(e: &EngineProgress, map: &dyn Fn(&Progress) -> Progress) -> EngineProgress {
     // The range only needs to know whether the message is empty: map with a static stand-in and
     // keep the caller's text.
     let raw = Progress {
@@ -644,12 +769,11 @@ pub unsafe extern "C" fn mradm_engine_render_map_progress(
         total: e.total,
         message: if e.message.len == 0 { "" } else { "-" },
     };
-    let mapped = h.render.map_progress(&raw);
-    *out = progress_record(&mapped);
+    let mut out = progress_record(&map(&raw));
     if e.message.len != 0 {
         out.message = e.message;
     }
-    0
+    out
 }
 
 /// The result after the done event; views live until the next call on the handle.
