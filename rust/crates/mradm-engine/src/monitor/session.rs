@@ -26,7 +26,7 @@ pub const THROWN: i32 = 100;
 
 const INVALID_SESSION: &str = "监听会话无效:后端重建失败";
 
-/// The caller's `RenderOptions` of a [`Choice`], for the device and the Apple island.
+/// The caller's own data of a [`Choice`] (the C++ shell passes none; tests tag choices with it).
 pub type Token = Arc<dyn Any + Send + Sync>;
 
 /// One backend configuration: the request the Rust opening reads and the caller's options.
@@ -60,8 +60,9 @@ pub trait SessionHost: backend::Host + Send + Sync {
     fn scene(&self) -> Option<&RenderScene>;
     /// Whether the Apple backend is available.
     fn apple(&self) -> bool;
-    /// `make_monitor_device` for the options of `choice` on `device_id` ("" = default).
-    fn device(&self, choice: &Token, device_id: &[u8]) -> Arc<dyn Device>;
+    /// The output device for `choice` on `device_id` ("" = default): the system-spatial sink for a
+    /// system-spatial choice, otherwise the hardware device.
+    fn device(&self, choice: &Choice, device_id: &[u8]) -> Arc<dyn Device>;
     /// The Apple island's stream; `log` appends a line (level, module, message) to the session's
     /// log buffer.
     fn open_apple(
@@ -257,7 +258,7 @@ impl Session {
         let mut inner = self.lock();
         inner.current = Some(choice.clone());
         inner.device_id = device_id.to_vec();
-        let device = self.host.device(&choice.token, device_id);
+        let device = self.host.device(&choice, device_id);
         inner.device = Some(device.clone());
         inner.monitor = Some(self.engine(&choice, device, None)?);
         Ok(())
@@ -559,7 +560,7 @@ impl Session {
     /// device, as the C++ unwinding did).
     fn rebuild(&self, inner: &mut Inner, choice: &Choice, channels: usize) -> Result<(), Error> {
         inner.current = Some(choice.clone());
-        let device = self.host.device(&choice.token, &inner.device_id);
+        let device = self.host.device(choice, &inner.device_id);
         inner.device = Some(device.clone());
         match self.engine(choice, device, Some(channels)) {
             Ok(monitor) => {
@@ -607,7 +608,7 @@ impl Session {
         let Some(choice) = inner.current.clone() else {
             return Err(error(code::INTERNAL_ERROR, INVALID_SESSION));
         };
-        let device = self.host.device(&choice.token, device_id);
+        let device = self.host.device(&choice, device_id);
         inner.device = Some(device.clone());
         match self.engine(&choice, device, Some(channels)) {
             Ok(monitor) => {

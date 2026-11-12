@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -43,8 +42,8 @@ struct SceneDeviceStatus {
     bool ended{false};
 };
 
-// The session itself (pull, the stereo feed's prefetch, HpTF and peak guard, volume, epochs,
-// status) is Rust mradm-engine `scene::output`; this shell owns the device.
+// The session (pull, the stereo feed's prefetch, HpTF and peak guard, volume, epochs, status) and
+// its device are Rust mradm-engine `scene::output` with the device islands; this shell forwards.
 class SceneOutputSession {
   public:
     [[nodiscard]] static Result<std::unique_ptr<SceneOutputSession>>
@@ -64,7 +63,7 @@ class SceneOutputSession {
     [[nodiscard]] Result<void> set_volume(float gain);
 
     // Publish a headphone-compensation (HpTF) cascade, or bypass when `coeffs` is nullopt.
-    // Takes control_ like set_volume and deliberately does NOT park(): parking the device on every
+    // Serialised like set_volume and deliberately does NOT park: parking the device on every
     // profile change would stall playback, and the handoff to the callback is lock-free anyway.
     // Returns `unsupported` unless this session owns the stereo headphone feed — a multichannel
     // bed handed to the OS for HRTF has no 2ch signal on our side to compensate.
@@ -94,17 +93,11 @@ class SceneOutputSession {
 
   private:
     struct Handle;
-    SceneOutputSession(std::shared_ptr<SceneStreamEngine> stream,
-                       std::unique_ptr<IAudioOutputDevice> device,
-                       std::unique_ptr<Handle> handle,
-                       bool hptf_supported);
-    void park();
+    SceneOutputSession(std::shared_ptr<SceneStreamEngine> stream, std::unique_ptr<Handle> handle, bool hptf_supported);
     [[nodiscard]] render_common::HptfSnapshot hptf_snapshot() const;
 
     std::shared_ptr<SceneStreamEngine> stream_;
-    std::unique_ptr<IAudioOutputDevice> device_;
     std::unique_ptr<Handle> handle_;
-    mutable std::mutex control_;
     bool hptf_supported_{false};
 };
 

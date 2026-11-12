@@ -142,15 +142,6 @@ pub struct EngineLiveMonitorPull {
     pub(super) mark_end: u32,
 }
 
-impl EngineLiveMonitorPull {
-    pub(super) fn new(frames: usize, mark_end: bool) -> Self {
-        Self {
-            frames,
-            mark_end: u32::from(mark_end),
-        }
-    }
-}
-
 pub struct EngineLiveMonitor {
     monitor: Monitor,
 }
@@ -802,4 +793,24 @@ pub unsafe extern "C" fn mradm_engine_live_monitor_pull(
         frames: pulled.frames,
         mark_end: u32::from(pulled.mark_end),
     };
+}
+
+/// Writes `message` into an island call's error buffers, as a C++ island does.
+#[cfg(test)]
+pub(crate) unsafe fn island_error_for_test(
+    e: *const EngineIslandError,
+    code: i32,
+    message: &str,
+) -> i32 {
+    let e = unsafe { &*e };
+    let n = message
+        .len()
+        .min(unsafe { *e.message_len }.saturating_sub(1));
+    unsafe {
+        std::ptr::copy_nonoverlapping(message.as_ptr(), e.message, n);
+        *e.message.add(n) = 0;
+        *e.message_len = n;
+        *e.context_len = 0;
+    }
+    code
 }

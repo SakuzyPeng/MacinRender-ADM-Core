@@ -586,6 +586,78 @@ struct MradmAppleIslands {
     void (*destroy)(MradmApplePrepared* prepared);
 };
 
+// A device's pull: fills out (len floats) with up to frames frames and returns how many, on the
+// device's audio thread, never blocking or allocating; the device's mark_end may be called inside.
+typedef struct MradmDevicePull {
+    void* user;
+    size_t (*pull)(void* user, float* out, size_t len, size_t frames);
+} MradmDevicePull;
+// One playback device of an enumeration; the texts live during the call.
+typedef struct MradmDeviceEnumeration {
+    void* user;
+    void (*each)(void* user, MradmAdmText id, MradmAdmText name, uint32_t is_default);
+} MradmDeviceEnumeration;
+// An opened output device (src/adm_realtime/device_island.h). start begins pulling (the pull record
+// is copied) and returns 0 or an error code (100: the device threw, its message the exception's).
+// destroy releases the device (after stop).
+typedef struct MradmDeviceTable {
+    void* ctx;
+    int32_t (*start)(void* ctx,
+                     uint32_t channels,
+                     uint32_t sample_rate,
+                     const MradmDevicePull* pull,
+                     const MradmEngineIslandError* error);
+    void (*stop)(void* ctx);
+    void (*flush)(void* ctx);
+    void (*pause)(void* ctx);
+    void (*resume)(void* ctx);
+    void (*mark_end)(void* ctx);
+    uint32_t (*realtime)(void* ctx);
+    uint32_t (*has_volume)(void* ctx);
+    void (*set_volume)(void* ctx, float gain);
+    void (*progress)(void* ctx, MradmEngineSceneDeviceProgress* out);
+    void (*destroy)(void* ctx);
+} MradmDeviceTable;
+
+// The output devices. open kind 0 is the system-spatial sink over layout (geometry: SpeakerGeometry),
+// 1 the hardware device device_id ("" = default), 2 miniaudio's null backend; it returns 0 with
+// *output set or an error code (unsupported: no system-spatial sink on this platform; 100: the factory
+// threw, its message the exception's).
+// system_spatial is 1 where the platform has that sink. enumerate calls each once per playback device.
+typedef struct MradmDeviceIslands {
+    uint32_t system_spatial;
+    int32_t (*open)(uint32_t kind,
+                    MradmAdmText layout,
+                    uint32_t geometry,
+                    MradmAdmText device_id,
+                    MradmDeviceTable* output,
+                    const MradmEngineIslandError* error);
+    void (*enumerate)(const MradmDeviceEnumeration* devices);
+} MradmDeviceIslands;
+
+// The Scene output over a device it opens: kind is SceneOutputKind (0 system spatial over layout in
+// geometry, 1 the stereo hardware device device_id, 2 the null backend). Started and paused.
+int32_t mradm_engine_scene_output_open(const MradmEngineSceneStream* stream,
+                                       uint32_t kind,
+                                       MradmAdmText layout,
+                                       uint32_t geometry,
+                                       MradmAdmText device_id,
+                                       const MradmDeviceIslands* devices,
+                                       MradmEngineSceneOutput** output,
+                                       uint8_t* message,
+                                       size_t* message_len,
+                                       uint8_t* context,
+                                       size_t* context_len);
+// The Scene output over a caller's opened device, taken over in every case.
+int32_t mradm_engine_scene_output_create(const MradmEngineSceneStream* stream,
+                                         const MradmDeviceTable* device,
+                                         uint32_t protect_stereo,
+                                         MradmEngineSceneOutput** output,
+                                         uint8_t* message,
+                                         size_t* message_len,
+                                         uint8_t* context,
+                                         size_t* context_len);
+
 // The shell's log sink (level: adm::LogLevel) and device controls.
 typedef struct MradmEngineLiveMonitorHost {
     void* ctx;
@@ -683,25 +755,14 @@ void mradm_engine_live_monitor_pull(const MradmEngineLiveMonitor* handle,
                                     MradmEngineLiveMonitorPull* result);
 
 // ── The monitor session ─────────────────────────────────────────────────────────────────────
-// The session owns the monitor and its backend options; the shell provides the devices, the
-// Apple islands (may be NULL) and the options (`options`: a RenderOptions copy released by release_options).
-// Code 100 from any call means the former C++ session threw: the shell rethrows the message.
+// The session owns the monitor, its backend options and its device; the shell registers the
+// output devices and the Apple islands (either may be NULL). Code 100 from any call means the
+// former C++ session threw: the shell rethrows the message.
 typedef struct MradmEngineMonitorSession MradmEngineMonitorSession;
-typedef struct MradmEngineSessionMonitor MradmEngineSessionMonitor;
 
 typedef struct MradmEngineMonitorSessionHost {
-    void* ctx;
-    void* (*device)(void*, void*, const uint8_t*, size_t);
-    uint32_t (*device_realtime)(void*, void*);
-    int32_t (*device_start)(
-        void*, void*, uint32_t, uint32_t, const MradmEngineSessionMonitor*, const MradmEngineIslandError*);
-    void (*device_stop)(void*, void*);
-    void (*device_flush)(void*, void*);
-    void (*device_pause)(void*, void*);
-    void (*device_resume)(void*, void*);
-    void (*device_destroy)(void*, void*);
+    const MradmDeviceIslands* devices;
     const MradmAppleIslands* apple;
-    void (*release_options)(void*, void*);
 } MradmEngineMonitorSessionHost;
 
 // A session without an engine; null for an invalid host or platform record. The scene handle
@@ -718,11 +779,10 @@ void mradm_engine_monitor_session_log(const MradmEngineMonitorSession* handle,
                                       size_t module_len,
                                       const uint8_t* text,
                                       size_t text_len);
-// Opens the first stream and starts the device; the options are taken over in every case.
+// Opens the first stream on the device for device_id and starts it.
 int32_t mradm_engine_monitor_session_start(const MradmEngineMonitorSession* handle,
                                            const MradmEngineRenderRequest* request,
                                            uint32_t system_spatial,
-                                           void* options,
                                            const uint8_t* device_id,
                                            size_t device_id_len,
                                            uint8_t* message,
@@ -754,7 +814,6 @@ void mradm_engine_monitor_session_orientation(const MradmEngineMonitorSession* h
 int32_t mradm_engine_monitor_session_switch(const MradmEngineMonitorSession* handle,
                                             const MradmEngineRenderRequest* request,
                                             uint32_t system_spatial,
-                                            void* options,
                                             uint8_t* message,
                                             size_t* message_len,
                                             uint8_t* context,
@@ -784,12 +843,6 @@ size_t mradm_engine_monitor_session_log_count(const MradmEngineMonitorSession* h
 uint32_t mradm_engine_monitor_session_log_entry(
     const MradmEngineMonitorSession* handle, size_t index, uint32_t* level, MradmAdmText* module, MradmAdmText* text);
 MradmRenderRoomControl* mradm_engine_monitor_session_room_control(const MradmEngineMonitorSession* handle);
-// Device callback of a session's engine: never waits or allocates.
-void mradm_engine_session_monitor_pull(const MradmEngineSessionMonitor* monitor,
-                                       float* output,
-                                       size_t output_len,
-                                       size_t frames,
-                                       MradmEngineLiveMonitorPull* result);
 
 #ifdef __cplusplus
 }

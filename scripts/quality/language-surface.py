@@ -35,6 +35,8 @@ ISLAND_INTERFACES = (
     "src/adm_audio/island.cpp",
     "src/adm_audio/island_driver.h",
     "src/adm_audio/island_ffi.h",
+    "src/adm_realtime/device_island.cpp",
+    "src/adm_realtime/device_island.h",
 )
 # Legacy snapshots did not separate this SDK boundary. Its existing V2 trial
 # implementation at 1cb04b3e is the one-time ceiling, not a general allowance.
