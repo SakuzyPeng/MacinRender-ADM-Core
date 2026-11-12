@@ -9,28 +9,15 @@
 
 #include "adm/options.h"
 #include "adm/render.h"
-#ifdef __APPLE__
-#include "adm/render_apple.h"
-#endif
 
 #include "../adm_render_room/room_internal.h"
 #include "engine_ffi.h"
 #include "engine_records.h"
 #include "engine_result.h"
 
-// The engine request record (MradmEngineRenderRequest) of a RenderRequest and the Apple island's
-// adapter, shared by the offline render service and the monitor's stream opening.
+// The engine request record (MradmEngineRenderRequest) of a RenderRequest, shared by the offline
+// render service and the monitor's stream opening.
 namespace mradm::engine {
-
-// The Apple backend the engine hands back as an island; the engine requests it only where the
-// platform record carries the Apple backend.
-[[nodiscard]] inline Result<std::unique_ptr<IRenderer>> apple_renderer() {
-#ifdef __APPLE__
-    return create_apple_renderer();
-#else
-    return make_error(ErrorCode::internal_error, "the Apple backend is not available in this build");
-#endif
-}
 
 [[nodiscard]] inline std::string utf8(const std::filesystem::path& path) {
     const auto bytes = path.u8string();

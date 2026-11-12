@@ -224,6 +224,7 @@ pub unsafe extern "C" fn mradm_engine_prepare(
             error,
             report: preparation.report,
             prepared,
+            apple: None,
         });
         handle.log_views = log_views(&handle.logs);
         let plan = handle.plan();

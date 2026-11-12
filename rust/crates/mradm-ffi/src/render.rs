@@ -565,14 +565,16 @@ fn driver_error(message: &str) -> offline::Error {
     }
 }
 
-/// A prepared backend (`mradm-engine::backend`), or the log lines, error and Triple Balance report
-/// of a failed preparation.
+/// A prepared backend (`mradm-engine::backend`) or Apple island, or the log lines, error and
+/// Triple Balance report of a failed preparation.
 pub struct RenderPrepared {
     pub(crate) logs: Vec<mradm_engine::request::Log>,
     pub(crate) log_views: Vec<crate::engine::EngineLog>,
     pub(crate) error: Option<mradm_engine::request::Error>,
     pub(crate) report: Option<String>,
     pub(crate) prepared: Option<Arc<mradm_engine::backend::Prepared>>,
+    /// The Apple island's preparation (a render's cache only).
+    pub(crate) apple: Option<Arc<apple_island::Preparation>>,
 }
 
 impl RenderPrepared {
@@ -1188,6 +1190,8 @@ mod binaural_ffi;
 #[path = "render_stream.rs"]
 mod stream_ffi;
 
+#[path = "apple_island.rs"]
+pub(crate) mod apple_island;
 #[path = "engine_monitor.rs"]
 mod engine_monitor;
 #[path = "engine_monitor_session.rs"]

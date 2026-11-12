@@ -6,6 +6,7 @@ use crate::adm::Text;
 use crate::engine::{EngineLog, EnginePlatform, EngineStatus, platform};
 use crate::engine_render::{FfiHost, log_views};
 use crate::render::RenderPrepared;
+use crate::render::apple_island::{Apple, AppleIslands, Preparation, Settings};
 use crate::room::RoomProfileHandle;
 use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
 use mradm_dsp::room::screen::RoomScreenGeometry;
@@ -15,10 +16,13 @@ use mradm_engine::render::{
     self, Event, Island, Outcome, PathText, Render, Reply, Request, Reuse, RoomOptions, SofaPath,
 };
 use mradm_engine::request::{self, Packager};
+use mradm_scene::RenderScene;
 use std::{
+    cell::{Cell, RefCell},
     ffi::c_void,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
+    sync::Arc,
 };
 
 /// A path's UTF-8 text and the caller's spelling of it in messages.
@@ -149,9 +153,9 @@ pub struct EngineRenderEvent {
 /// none, 1 mp4box, 2 ffmpeg) and ffmpeg major version (-1 unknown).
 #[repr(C)]
 pub struct EngineIslandReply {
-    code: i32,
-    message: Text,
-    context: Text,
+    pub(crate) code: i32,
+    pub(crate) message: Text,
+    pub(crate) context: Text,
     has_lufs: u32,
     has_peak: u32,
     lufs: f64,
@@ -184,6 +188,9 @@ pub struct EngineRender {
     render: Render,
     island: Option<Island>,
     islands: Option<IslandRunner>,
+    /// The Apple preparation the caller cached or this render made (then `apple_made`).
+    apple_prepared: RefCell<Option<Arc<Preparation>>>,
+    apple_made: Cell<bool>,
     texts: Vec<Text>,
     matrix: Option<Box<DirectMatrix>>,
     message: String,
@@ -321,17 +328,16 @@ pub(crate) unsafe fn request_of(r: &EngineRenderRequest) -> Option<Request> {
 }
 
 /// Starts a render. `preimported` (may be null) is a preview session's policy-applied scene, with
-/// a cached preparation `cached` (may be null) or the Apple preparation the caller caches
-/// (`apple_cached`). Preparation reuse does not require a preimported scene. The handle copies
-/// what it needs. Returns 1 for invalid arguments, including paths not encoded as UTF-8 or
-/// containing NUL, and 6 for a panic.
+/// a cached preparation `cached` (may be null; a Rust backend's or the Apple island's).
+/// Preparation reuse does not require a preimported scene. The handle copies what it needs.
+/// Returns 1 for invalid arguments, including paths not encoded as UTF-8 or containing NUL, and
+/// 6 for a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_render_begin(
     request: *const EngineRenderRequest,
     platform_record: *const EnginePlatform,
     preimported: *const SceneHandle,
     cached: *const RenderPrepared,
-    apple_cached: u32,
     output: *mut *mut EngineRender,
 ) -> i32 {
     let Some(out) = (unsafe { output.as_mut() }) else {
@@ -348,15 +354,19 @@ pub unsafe extern "C" fn mradm_engine_render_begin(
         else {
             return 1;
         };
+        let cached = unsafe { cached.as_ref() };
+        let apple = cached.and_then(|c| c.apple.clone());
         let reuse = Reuse {
             scene: unsafe { preimported.as_ref() }.map(|scene| scene.scene().clone()),
-            prepared: unsafe { cached.as_ref() }.and_then(|c| c.prepared.clone()),
-            apple_prepared: apple_cached != 0,
+            prepared: cached.and_then(|c| c.prepared.clone()),
+            apple_prepared: apple.is_some(),
         };
         *out = Box::into_raw(Box::new(EngineRender {
             render: Render::new(request, platform, reuse),
             island: None,
             islands: None,
+            apple_prepared: RefCell::new(apple),
+            apple_made: Cell::new(false),
             texts: Vec::new(),
             matrix: None,
             message: String::new(),
@@ -574,7 +584,13 @@ pub unsafe extern "C" fn mradm_engine_render_next(
     };
     *e = empty_event();
     catch_unwind(AssertUnwindSafe(|| {
-        let islands = h.islands.as_ref().map(|r| r as &dyn render::Islands);
+        let runner = h.islands.as_ref().map(|islands| Runner {
+            islands,
+            apple: Apple::new(islands.apple),
+            prepared: &h.apple_prepared,
+            made: &h.apple_made,
+        });
+        let islands = runner.as_ref().map(|r| r as &dyn render::Islands);
         match h.render.next_with(cancelled != 0, &FfiHost, islands) {
             Event::Continue => {}
             Event::Progress(p) => {
@@ -619,7 +635,7 @@ pub unsafe extern "C" fn mradm_engine_render_resume(
 }
 
 /// An island's reply, copying its texts.
-unsafe fn reply_of(r: &EngineIslandReply) -> Reply {
+pub(crate) unsafe fn reply_of(r: &EngineIslandReply) -> Reply {
     let error = (r.code != 0).then(|| {
         request::Error::new(
             r.code,
@@ -648,13 +664,16 @@ unsafe fn reply_of(r: &EngineIslandReply) -> Reply {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct IslandContext {
-    user: *mut c_void,
-    cancelled: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
-    progress: Option<unsafe extern "C" fn(*mut c_void, *const EngineProgress)>,
+    pub(crate) user: *mut c_void,
+    pub(crate) cancelled: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
+    pub(crate) progress: Option<unsafe extern "C" fn(*mut c_void, *const EngineProgress)>,
+    /// A line the island writes (level: `adm::LogLevel`).
+    pub(crate) log: Option<unsafe extern "C" fn(*mut c_void, u32, Text, Text)>,
 }
 
 /// A library's islands: `run` returns 0 when it ran the island (any failure in the reply) and
-/// nonzero to leave it to the caller as an island event.
+/// nonzero to leave it to the caller as an island event; `apple` (may be null) runs the Apple
+/// backend's islands.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct IslandRunner {
@@ -666,6 +685,7 @@ pub struct IslandRunner {
         ) -> i32,
     >,
     driver: IslandContext,
+    apple: *const AppleIslands,
 }
 
 /// An island's context while it runs: the caller's context and the render's progress mapping.
@@ -690,32 +710,117 @@ unsafe extern "C" fn bridge_progress(user: *mut c_void, event: *const EngineProg
     unsafe { f(b.driver.user, &mapped) };
 }
 
-impl render::Islands for IslandRunner {
-    fn run(&self, island: &Island, map: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
-        let run = self.run?;
+unsafe extern "C" fn bridge_log(user: *mut c_void, level: u32, module: Text, message: Text) {
+    let b = unsafe { &*user.cast::<Bridge<'_>>() };
+    if let Some(f) = b.driver.log {
+        unsafe { f(b.driver.user, level, module, message) };
+    }
+}
+
+impl Bridge<'_> {
+    fn context(&self) -> IslandContext {
+        IslandContext {
+            user: ptr::from_ref(self).cast_mut().cast(),
+            cancelled: Some(bridge_cancelled),
+            progress: Some(bridge_progress),
+            log: Some(bridge_log),
+        }
+    }
+}
+
+/// A reply before the island writes it.
+pub(crate) fn empty_reply() -> EngineIslandReply {
+    EngineIslandReply {
+        code: 0,
+        message: Text::new(""),
+        context: Text::new(""),
+        has_lufs: 0,
+        has_peak: 0,
+        lufs: 0.,
+        peak_dbtp: 0.,
+        packager: 0,
+        ffmpeg_major: -1,
+    }
+}
+
+/// The registered islands of one step: the audio runner and the Apple table, with the render's
+/// Apple preparation.
+struct Runner<'a> {
+    islands: &'a IslandRunner,
+    apple: Option<Apple>,
+    prepared: &'a RefCell<Option<Arc<Preparation>>>,
+    made: &'a Cell<bool>,
+}
+
+impl Runner<'_> {
+    fn apple(
+        &self,
+        apple: Apple,
+        island: &Island,
+        scene: Option<&RenderScene>,
+        bridge: &Bridge<'_>,
+    ) -> Reply {
+        let (Island::ApplePrepare(plan) | Island::AppleRender(plan)) = island else {
+            unreachable!("an Apple island");
+        };
+        let settings = Settings::new(
+            &plan.input_path,
+            &plan.output_layout,
+            plan.matrix.as_ref(),
+            &plan.options,
+        );
+        let context = bridge.context();
+        let mut reply = empty_reply();
+        if matches!(island, Island::ApplePrepare(_)) {
+            if let Some(p) = apple.prepare(&settings, scene, &context, &mut reply) {
+                *self.prepared.borrow_mut() = Some(p);
+                self.made.set(true);
+            }
+        } else if let Some(p) = self.prepared.borrow().clone() {
+            apple.render(
+                &p,
+                &settings,
+                &plan.output_path.utf8,
+                plan.window,
+                &context,
+                &mut reply,
+            );
+        } else {
+            return Reply {
+                error: Some(request::Error::new(
+                    6,
+                    "the Apple preparation is missing",
+                    "",
+                )),
+                ..Reply::default()
+            };
+        }
+        unsafe { reply_of(&reply) }
+    }
+}
+
+impl render::Islands for Runner<'_> {
+    fn run(
+        &self,
+        island: &Island,
+        scene: Option<&RenderScene>,
+        map: &dyn Fn(&Progress) -> Progress,
+    ) -> Option<Reply> {
+        let bridge = Bridge {
+            driver: self.islands.driver,
+            map,
+        };
+        if matches!(island, Island::ApplePrepare(_) | Island::AppleRender(_)) {
+            return self
+                .apple
+                .map(|apple| self.apple(apple, island, scene, &bridge));
+        }
+        let run = self.islands.run?;
         let mut storage = IslandStorage::default();
         let mut e = empty_event();
         island_fields(island, &mut storage, &mut e);
-        let bridge = Bridge {
-            driver: self.driver,
-            map,
-        };
-        let context = IslandContext {
-            user: ptr::from_ref(&bridge).cast_mut().cast(),
-            cancelled: Some(bridge_cancelled),
-            progress: Some(bridge_progress),
-        };
-        let mut reply = EngineIslandReply {
-            code: 0,
-            message: Text::new(""),
-            context: Text::new(""),
-            has_lufs: 0,
-            has_peak: 0,
-            lufs: 0.,
-            peak_dbtp: 0.,
-            packager: 0,
-            ffmpeg_major: -1,
-        };
+        let context = bridge.context();
+        let mut reply = empty_reply();
         if unsafe { run(&e, &context, &mut reply) } != 0 {
             return None;
         }
@@ -838,28 +943,23 @@ pub unsafe extern "C" fn mradm_engine_render_take_prepared(
     let Some(h) = (unsafe { handle.as_mut() }) else {
         return ptr::null_mut();
     };
-    match h.render.take_prepared() {
-        Some(p) => Box::into_raw(Box::new(RenderPrepared {
-            logs: Vec::new(),
-            log_views: Vec::new(),
-            error: None,
-            report: None,
-            prepared: Some(p),
-        })),
-        None => ptr::null_mut(),
+    let prepared = h.render.take_prepared();
+    let apple = h
+        .apple_made
+        .get()
+        .then(|| h.apple_prepared.borrow().clone())
+        .flatten();
+    if prepared.is_none() && apple.is_none() {
+        return ptr::null_mut();
     }
-}
-
-/// A copy of the render's scene for the Apple island; destroy with `mradm_scene_destroy`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_scene(
-    handle: *const EngineRender,
-) -> *mut SceneHandle {
-    unsafe { handle.as_ref() }
-        .and_then(|h| h.render.scene())
-        .map_or(ptr::null_mut(), |s| {
-            Box::into_raw(Box::new(SceneHandle::new(s.clone())))
-        })
+    Box::into_raw(Box::new(RenderPrepared {
+        logs: Vec::new(),
+        log_views: Vec::new(),
+        error: None,
+        report: None,
+        prepared,
+        apple,
+    }))
 }
 
 #[unsafe(no_mangle)]
@@ -940,5 +1040,234 @@ mod tests {
             display: Text::new(raw),
         };
         assert_eq!(unsafe { path(&p) }.unwrap().utf8, raw);
+    }
+
+    mod apple {
+        use super::*;
+        use crate::render::apple_island::{ApplePrepared, AppleSettings};
+        use mradm_engine::render::{AppleOptions, ApplePlan};
+        use mradm_render::offline::Window;
+        use std::sync::Mutex;
+
+        static CALLS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+        fn call(line: String) {
+            CALLS.lock().unwrap().push(line);
+        }
+
+        fn text(t: &Text) -> String {
+            String::from_utf8(unsafe { crate::render::bytes(t) }.unwrap().to_vec()).unwrap()
+        }
+
+        unsafe extern "C" fn prepare(
+            s: *const AppleSettings,
+            scene: *mut SceneHandle,
+            context: *const IslandContext,
+            out: *mut *mut ApplePrepared,
+            reply: *mut EngineIslandReply,
+        ) -> i32 {
+            let (s, c) = unsafe { (&*s, &*context) };
+            call(format!("prepare {}", settings_text(s)));
+            if !scene.is_null() {
+                drop(unsafe { Box::from_raw(scene) });
+            }
+            unsafe { (c.log.unwrap())(c.user, 2, Text::new("apple"), Text::new("prepared")) };
+            let raw = progress_record(&Progress {
+                stage: 2,
+                operation: 0,
+                fraction: 0.,
+                stage_fraction: 0.5,
+                current: 1,
+                total: 2,
+                message: "",
+            });
+            unsafe { (c.progress.unwrap())(c.user, &raw) };
+            if crate::render::apple_island::settings_fields(s).layout == "bad" {
+                let r = unsafe { &mut *reply };
+                r.code = 4;
+                r.message = Text::new("unsupported layout");
+                return 0;
+            }
+            unsafe { *out = Box::into_raw(Box::new(7u32)).cast() };
+            0
+        }
+
+        unsafe extern "C" fn render(
+            p: *const ApplePrepared,
+            s: *const AppleSettings,
+            output: Text,
+            has_window: u32,
+            start: u64,
+            count: u64,
+            _: *const IslandContext,
+            reply: *mut EngineIslandReply,
+        ) -> i32 {
+            let prepared = unsafe { *p.cast::<u32>() };
+            call(format!(
+                "render {prepared} {} {} {has_window} {start} {count}",
+                text(&output),
+                settings_text(unsafe { &*s })
+            ));
+            let r = unsafe { &mut *reply };
+            r.has_lufs = 1;
+            r.lufs = -20.;
+            0
+        }
+
+        unsafe extern "C" fn destroy(p: *mut ApplePrepared) {
+            call(format!("destroy {}", unsafe { *p.cast::<u32>() }));
+            drop(unsafe { Box::from_raw(p.cast::<u32>()) });
+        }
+
+        fn settings_text(s: &AppleSettings) -> String {
+            let s = crate::render::apple_island::settings_fields(s);
+            format!("{s:?}")
+        }
+
+        static TABLE: AppleIslands = crate::render::apple_island::test_table(
+            Some(prepare),
+            Some(render),
+            None,
+            Some(destroy),
+        );
+
+        #[derive(Default)]
+        struct Driver {
+            logs: Vec<String>,
+            fractions: Vec<f64>,
+        }
+
+        unsafe extern "C" fn driver_progress(user: *mut c_void, e: *const EngineProgress) {
+            let d = unsafe { &mut *user.cast::<Driver>() };
+            d.fractions.push(unsafe { (*e).fraction });
+        }
+
+        unsafe extern "C" fn driver_log(
+            user: *mut c_void,
+            level: u32,
+            module: Text,
+            message: Text,
+        ) {
+            let d = unsafe { &mut *user.cast::<Driver>() };
+            d.logs
+                .push(format!("{level} {} {}", text(&module), text(&message)));
+        }
+
+        fn plan(layout: &str) -> ApplePlan {
+            let path = |p: &str| PathText {
+                utf8: p.into(),
+                display: p.into(),
+            };
+            ApplePlan {
+                input_path: path("in.wav"),
+                output_path: path("out.wav"),
+                output_layout: layout.into(),
+                window: Some(Window {
+                    start: 10,
+                    count: 20,
+                }),
+                meter_window: None,
+                matrix: None,
+                options: AppleOptions {
+                    routing: 2,
+                    split_power: true,
+                    speaker_spread: 1,
+                    binaural_spread: 3,
+                    spatial_preset: 4,
+                    speaker_rendering_flags: true,
+                    orientation: [10., 5., -3.],
+                },
+            }
+        }
+
+        #[test]
+        fn the_apple_runner_prepares_renders_and_keeps_the_preparation() {
+            let mut driver = Driver::default();
+            let runner = IslandRunner {
+                run: None,
+                driver: IslandContext {
+                    user: ptr::from_mut(&mut driver).cast(),
+                    cancelled: None,
+                    progress: Some(driver_progress),
+                    log: Some(driver_log),
+                },
+                apple: &TABLE,
+            };
+            let prepared = RefCell::new(None);
+            let made = Cell::new(false);
+            let r = Runner {
+                islands: &runner,
+                apple: Apple::new(runner.apple),
+                prepared: &prepared,
+                made: &made,
+            };
+            let map = |p: &Progress| Progress {
+                fraction: 0.25 + p.stage_fraction,
+                ..*p
+            };
+            let islands: &dyn render::Islands = &r;
+            let reply = islands.run(
+                &Island::ApplePrepare(Box::new(plan("binaural"))),
+                None,
+                &map,
+            );
+            assert!(reply.unwrap().error.is_none());
+            assert!(made.get() && prepared.borrow().is_some());
+            let reply = islands
+                .run(&Island::AppleRender(Box::new(plan("binaural"))), None, &map)
+                .unwrap();
+            assert_eq!((reply.error, reply.metrics.lufs), (None, Some(-20.)));
+            // Other islands without an audio runner are returned.
+            assert!(islands.run(&Island::ProbeMp4Packager, None, &map).is_none());
+            let failed = islands
+                .run(&Island::ApplePrepare(Box::new(plan("bad"))), None, &map)
+                .unwrap();
+            assert_eq!(
+                failed.error.map(|e| (e.code, e.message)),
+                Some((4, "unsupported layout".into()))
+            );
+            prepared.borrow_mut().take();
+            let fields = "AppleFields { input: \"in.wav\", layout: \"binaural\", routing: 2, \
+                          has_matrix: 0, split_power: 1, speaker_spread: 1, binaural_spread: 3, \
+                          spatial_preset: 4, speaker_rendering_flags: 1, orientation: [10.0, 5.0, -3.0] }";
+            let bad = fields.replace("\"binaural\"", "\"bad\"");
+            assert_eq!(
+                *CALLS.lock().unwrap(),
+                [
+                    format!("prepare {fields}"),
+                    format!("render 7 out.wav {fields} 1 10 20"),
+                    format!("prepare {bad}"),
+                    "destroy 7".to_owned(),
+                ]
+            );
+            assert_eq!(driver.logs, ["2 apple prepared", "2 apple prepared"]);
+            assert_eq!(driver.fractions, [0.75, 0.75]);
+
+            let empty = RefCell::new(None);
+            let missing = Runner {
+                prepared: &empty,
+                ..r
+            };
+            let reply = (&missing as &dyn render::Islands)
+                .run(&Island::AppleRender(Box::new(plan("binaural"))), None, &map)
+                .unwrap();
+            assert_eq!(
+                reply.error.unwrap().message,
+                "the Apple preparation is missing"
+            );
+            let none = Runner {
+                apple: None,
+                ..missing
+            };
+            assert!(
+                (&none as &dyn render::Islands)
+                    .run(
+                        &Island::ApplePrepare(Box::new(plan("binaural"))),
+                        None,
+                        &map
+                    )
+                    .is_none()
+            );
+        }
     }
 }

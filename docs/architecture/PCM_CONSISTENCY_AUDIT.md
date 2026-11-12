@@ -675,7 +675,7 @@ macOS / Windows 验证分别记录在 6.1 记录中；CLI v2 逐条保存全部�
 生产 C/C++ 21,772 行不变。
 见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
 
-**6.2 状态**：分 A（编码器、容器元数据与 IAMF MP4 打包）、B（Apple 后端与岛流表）、C（系统空间 sink 与 miniaudio）三批，A 已完成：
+**6.2 状态**：分 A（编码器、容器元数据与 IAMF MP4 打包）、B（Apple 后端与岛流表）、C（系统空间 sink 与 miniaudio）三批，A、B 已完成：
 - 离线渲染的岛请求 1、4–9 由 Rust 直接调用 `src/adm_audio` 的 `mradm_audio_island`：`mradm-engine` 的 `Render::next_with` 在岛请求排到队首时
   经 `Islands` trait 执行，事件顺序、进度区间与取消点不变；`mradm-ffi` 提供 `MradmIslandRunner` / `MradmIslandContext` 与
   `mradm_engine_render_set_islands`；`RenderService` 删去这些岛的执行分支，只剩 Apple；
@@ -685,6 +685,16 @@ macOS / Windows 验证分别记录在 6.1 记录中；CLI v2 逐条保存全部�
 
 生产 C/C++ 21,772 → 21,761 行，`island-interfaces` 登记 205 行。
 维护者复核通过 macOS arm64 90/90 与 Windows x64 88/88 完整 CTest、两平台 CLI/C ABI 新旧对照及换库 consumer 测试。
+
+B 批：
+- Apple 后端改为 `src/adm_apple` 的窄 C 表 `mradm_apple_islands`（准备、渲染、监听流、释放），离线岛请求 2、3 与监听的 Apple 流
+  都由 Rust 直接调用；参数由 Rust 请求构造，准备状态放在 `RenderPrepared`，预览跨窗口复用不再依赖 C++ `slot`；
+- `RenderService` 不再执行任何岛，`MonitorSession` 删去 `open_apple`，岛流表 `island_stream` 只剩测试调用，移到 `tests/support`；
+- 用户决定（2026-11-12）：Apple 岛内部仍用 `IRenderer` / `IRenderStream`，停用推到 6.5，与删除 `include/adm/render.h` 一起做；
+- 本机 Linux 新旧对照 0 差异：CLI 记录 102 条、C ABI 采集 3,283 行与 36 个文件（新增 Apple 预览序列）、完整采集（产物 256、日志 666）；
+  macOS 编译与验证待维护者。
+
+生产 C/C++ 21,761 → 21,403 行，`island-interfaces` 205 → 614 行。
 见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。
 
 ## 每个迁移切片的验证

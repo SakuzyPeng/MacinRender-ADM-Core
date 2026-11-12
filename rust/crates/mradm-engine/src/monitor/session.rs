@@ -62,13 +62,41 @@ pub trait SessionHost: backend::Host + Send + Sync {
     fn apple(&self) -> bool;
     /// `make_monitor_device` for the options of `choice` on `device_id` ("" = default).
     fn device(&self, choice: &Token, device_id: &[u8]) -> Arc<dyn Device>;
-    /// The Apple island over the resolved layout and DirectSpeakers matrix.
+    /// The Apple island's stream; `log` appends a line (level, module, message) to the session's
+    /// log buffer.
     fn open_apple(
         &self,
-        choice: &Token,
-        layout: &str,
-        matrix: Option<&direct_matrix::Matrix>,
+        plan: &AppleOpen<'_>,
+        log: &dyn Fn(u32, &str, &[u8]),
     ) -> Result<Box<dyn Source>, Error>;
+}
+
+/// The Apple island's stream over the resolved layout and DirectSpeakers matrix. System-spatial
+/// monitoring hands head tracking to the system, so the rendered bed stays orientation-neutral
+/// (not rotated twice).
+pub struct AppleOpen<'a> {
+    /// The caller's options of the choice.
+    pub token: &'a Token,
+    pub input_path: &'a render::PathText,
+    pub layout: &'a str,
+    pub matrix: Option<&'a direct_matrix::Matrix>,
+    pub options: render::AppleOptions,
+}
+
+impl<'a> AppleOpen<'a> {
+    fn of(choice: &'a Choice, layout: &'a str, matrix: Option<&'a direct_matrix::Matrix>) -> Self {
+        let mut options = render::AppleOptions::of(&choice.request);
+        if choice.system_spatial {
+            options.orientation = [0.; 3];
+        }
+        Self {
+            token: &choice.token,
+            input_path: &choice.request.input,
+            layout,
+            matrix,
+            options,
+        }
+    }
 }
 
 /// One buffered log line: level, module, message.
@@ -271,10 +299,10 @@ impl Session {
                 info,
                 ..
             }) => Ok(Box::new(Native::new(validator, body, info))),
-            Ok(Opened::Apple { layout, matrix }) => {
-                self.host
-                    .open_apple(&choice.token, &layout, matrix.as_ref())
-            }
+            Ok(Opened::Apple { layout, matrix }) => self.host.open_apple(
+                &AppleOpen::of(choice, &layout, matrix.as_ref()),
+                &|level, module, message| self.logs.push(level, module, message),
+            ),
             Err(e) => Err(Error {
                 code: if (1..=6).contains(&e.code) {
                     e.code

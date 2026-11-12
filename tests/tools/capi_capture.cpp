@@ -779,6 +779,37 @@ void family_preview(Recorder& rec, const Context& context) {
         adm_destroy_render_result(result);
     }
     adm_destroy_preview_session(session);
+
+    // The Apple backend's preparation is cached across the windows (unsupported off macOS).
+    rec.begin("preview.apple");
+    const Options apple;
+    adm_render_options_set_renderer(apple.value, ADM_RENDERER_APPLE);
+    adm_render_options_set_output_layout(apple.value, "binaural");
+    adm_preview_session_t* apple_session = nullptr;
+    rec.code("create.code",
+             adm_create_preview_session(context.value, fixture("objects-point").c_str(), apple.value, &apple_session));
+    if (apple_session != nullptr) {
+        const std::array<std::pair<double, double>, 2> windows{{{0.0, 0.5}, {0.25, 0.75}}};
+        for (std::size_t i = 0; i < windows.size(); ++i) {
+            ProgressLog progress;
+            adm_render_result_t* result = nullptr;
+            const auto output = rec.output("apple-window-" + std::to_string(i) + ".wav");
+            rec.code("window." + std::to_string(i) + ".code",
+                     adm_preview_render_window_v2(apple_session,
+                                                  windows[i].first,
+                                                  windows[i].second,
+                                                  output.c_str(),
+                                                  progress_v2,
+                                                  &progress,
+                                                  &result));
+            record_result(rec, result);
+            record_progress(rec, progress);
+            adm_destroy_render_result(result);
+        }
+    }
+    adm_destroy_preview_session(apple_session);
+
+    rec.begin("preview.session.errors");
     adm_preview_session_t* missing = nullptr;
     rec.code("create.missing",
              adm_create_preview_session(context.value, "fixtures/missing/absent.wav", options.value, &missing));

@@ -431,31 +431,34 @@ typedef struct MradmEngineRenderResult {
 
 typedef struct MradmEngineRender MradmEngineRender;
 
-// Optional preimported scene and independent cached Rust/Apple preparation. Invalid arguments
-// (including non-UTF-8 or NUL-containing paths) return 1; panics return 6.
+// Optional preimported scene and cached preparation (a Rust backend's or the Apple island's).
+// Invalid arguments (including non-UTF-8 or NUL-containing paths) return 1; panics return 6.
 int32_t mradm_engine_render_begin(const MradmEngineRenderRequest* request,
                                   const MradmEnginePlatform* platform,
                                   const MradmSceneHandle* preimported,
                                   const MradmRenderPrepared* cached,
-                                  uint32_t apple_cached,
                                   MradmEngineRender** output);
 // cancelled is the caller's stop token now; texts live until the next call on the handle.
 int32_t mradm_engine_render_next(MradmEngineRender* handle, uint32_t cancelled, MradmEngineRenderEvent* event);
 int32_t mradm_engine_render_resume(MradmEngineRender* handle, const MradmEngineIslandReply* reply);
 // The caller's side of an island run inside mradm_engine_render_next: cancelled polls its stop token
-// (possibly from another thread), progress receives an event mapped into the render's range.
+// (possibly from another thread), progress receives an event mapped into the render's range, log a
+// line the island writes (level: adm::LogLevel).
 typedef struct MradmIslandContext {
     void* user;
     uint32_t (*cancelled)(void* user);
     void (*progress)(void* user, const MradmEngineProgress* event);
+    void (*log)(void* user, uint32_t level, MradmAdmText module, MradmAdmText message);
 } MradmIslandContext;
+typedef struct MradmAppleIslands MradmAppleIslands;
 // A library's islands: run returns 0 when it ran the island (any failure in reply), nonzero to leave it
-// to the caller as an island event.
+// to the caller as an island event. apple (may be NULL) runs the Apple backend's islands 2 and 3.
 typedef struct MradmIslandRunner {
     int32_t (*run)(const MradmEngineRenderEvent* request,
                    const MradmIslandContext* context,
                    MradmEngineIslandReply* reply);
     MradmIslandContext driver;
+    const MradmAppleIslands* apple;
 } MradmIslandRunner;
 // Runs the islands runner accepts inside mradm_engine_render_next (copied); NULL returns them again.
 int32_t mradm_engine_render_set_islands(MradmEngineRender* handle, const MradmIslandRunner* runner);
@@ -466,8 +469,6 @@ int32_t mradm_engine_render_map_progress(const MradmEngineRender* handle,
 int32_t mradm_engine_render_result(MradmEngineRender* handle, MradmEngineRenderResult* output);
 // The preparation the render made, or null; destroy with mradm_render_prepared_destroy.
 MradmRenderPrepared* mradm_engine_render_take_prepared(MradmEngineRender* handle);
-// A copy of the render's scene (the Apple island); destroy with mradm_scene_destroy.
-MradmSceneHandle* mradm_engine_render_scene(const MradmEngineRender* handle);
 void mradm_engine_render_destroy(MradmEngineRender* handle);
 // Policy for preview/export: returns 0 with result/status also on policy errors; nonzero on boundary failures.
 int32_t mradm_engine_apply_policy(MradmSceneHandle* scene,
@@ -542,6 +543,48 @@ typedef struct MradmEngineIslandStream {
     uint32_t (*render_failed)(void*);
     void (*destroy)(void*);
 } MradmEngineIslandStream;
+
+// The RenderPlan fields the Apple backend reads; the values are those of MradmEngineRenderRequest.
+typedef struct MradmAppleSettings {
+    MradmAdmText input;
+    MradmAdmText layout;
+    uint32_t routing;
+    uint32_t has_matrix;
+    MradmDirectMatrixView matrix;
+    uint32_t split_power;
+    uint32_t speaker_spread;
+    uint32_t binaural_spread;
+    uint32_t spatial_preset;
+    uint32_t speaker_rendering_flags;
+    float orientation[3];
+} MradmAppleSettings;
+typedef struct MradmApplePrepared MradmApplePrepared;
+// The Apple backend (src/adm_apple). prepare takes scene (destroyed either way) and returns 0 with
+// any failure in reply, *output set on success; render writes output over the window, metrics in
+// reply. Reply texts live until the next call on the thread. open_stream returns the stream table
+// (holding the preparation) or an error code, 100 for an exception. The context's cancelled and
+// progress may be null where unused.
+struct MradmAppleIslands {
+    int32_t (*prepare)(const MradmAppleSettings* settings,
+                       MradmSceneHandle* scene,
+                       const MradmIslandContext* context,
+                       MradmApplePrepared** output,
+                       MradmEngineIslandReply* reply);
+    int32_t (*render)(const MradmApplePrepared* prepared,
+                      const MradmAppleSettings* settings,
+                      MradmAdmText output,
+                      uint32_t has_window,
+                      uint64_t window_start,
+                      uint64_t window_count,
+                      const MradmIslandContext* context,
+                      MradmEngineIslandReply* reply);
+    int32_t (*open_stream)(const MradmApplePrepared* prepared,
+                           const MradmAppleSettings* settings,
+                           const MradmIslandContext* context,
+                           MradmEngineIslandStream* output,
+                           const MradmEngineIslandError* error);
+    void (*destroy)(MradmApplePrepared* prepared);
+};
 
 // The shell's log sink (level: adm::LogLevel) and device controls.
 typedef struct MradmEngineLiveMonitorHost {
@@ -641,7 +684,7 @@ void mradm_engine_live_monitor_pull(const MradmEngineLiveMonitor* handle,
 
 // ── The monitor session ─────────────────────────────────────────────────────────────────────
 // The session owns the monitor and its backend options; the shell provides the devices, the
-// Apple island and the options (`options`: a RenderOptions copy released by release_options).
+// Apple islands (may be NULL) and the options (`options`: a RenderOptions copy released by release_options).
 // Code 100 from any call means the former C++ session threw: the shell rethrows the message.
 typedef struct MradmEngineMonitorSession MradmEngineMonitorSession;
 typedef struct MradmEngineSessionMonitor MradmEngineSessionMonitor;
@@ -657,13 +700,7 @@ typedef struct MradmEngineMonitorSessionHost {
     void (*device_pause)(void*, void*);
     void (*device_resume)(void*, void*);
     void (*device_destroy)(void*, void*);
-    int32_t (*open_apple)(void*,
-                          void*,
-                          const uint8_t*,
-                          size_t,
-                          const MradmDirectMatrixView*,
-                          MradmEngineIslandStream*,
-                          const MradmEngineIslandError*);
+    const MradmAppleIslands* apple;
     void (*release_options)(void*, void*);
 } MradmEngineMonitorSessionHost;
 

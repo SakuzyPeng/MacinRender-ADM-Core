@@ -14,20 +14,21 @@
 #include "adm/monitor.h"
 #include "adm/render.h"
 
-#include "../adm_core/direct_matrix_records.h"
+#ifdef __APPLE__
+#include "../adm_apple/apple_island.h"
+#endif
 #include "../adm_render_room/room_internal.h"
 #include "audio_output_device.h"
 #include "catalog.h"
 #include "hptf_eq.h"
-#include "island_stream.h"
 #include "render_common.h"
 #include "renderer_factory.h"
 #include "request_record.h"
 #include "scene_handle.h"
 
 // The session logic (log buffer, stream opening, options, edits, HpTF, backend and device
-// transactions) is Rust mradm-engine `monitor::session`. This shell keeps
-// the devices, the Apple island and the RenderOptions each backend choice was made from.
+// transactions) is Rust mradm-engine `monitor::session`, which also opens the Apple islands' streams.
+// This shell keeps the devices and the RenderOptions each backend choice was made from.
 namespace mradm {
 
 namespace {
@@ -66,23 +67,35 @@ realtime::IAudioOutputDevice& device_of(void* device) {
     return *static_cast<realtime::IAudioOutputDevice*>(device);
 }
 
+void write(std::string_view text, uint8_t* out, size_t* len) {
+    if (len == nullptr) {
+        return;
+    }
+    const auto n = (*len == 0U || out == nullptr) ? 0U : std::min(text.size(), *len - 1U);
+    if (out != nullptr && *len != 0U) {
+        std::copy_n(text.data(), n, out);
+        out[n] = 0U;
+    }
+    *len = n;
+}
+
+// Writes `error` into the island error buffers and returns its code.
+int32_t island_error(const Error& error, const MradmEngineIslandError* e) noexcept {
+    write(error.message, e->message, e->message_len);
+    write(error.context, e->context, e->context_len);
+    return static_cast<int32_t>(error.code);
+}
+
 // An exception becomes code 100 (the session rethrows it).
 template <class F> int32_t guarded(const MradmEngineIslandError* e, const F& f) noexcept {
     try {
         return f();
     } catch (const std::exception& error) {
-        return realtime::island_error(Error{static_cast<ErrorCode>(k_thrown), error.what(), {}}, e);
+        return island_error(Error{static_cast<ErrorCode>(k_thrown), error.what(), {}}, e);
     } catch (...) {
-        return realtime::island_error(Error{static_cast<ErrorCode>(k_thrown), "unknown exception", {}}, e);
+        return island_error(Error{static_cast<ErrorCode>(k_thrown), "unknown exception", {}}, e);
     }
 }
-
-// Both members retain the Apple backend for as long as its stream lives.
-struct AppleKeepAlive {
-    std::unique_ptr<IRenderer> renderer; // cppcheck-suppress unusedStructMember
-    // cppcheck-suppress unusedStructMember
-    std::shared_ptr<IPreparedRender> prepared;
-};
 
 // The error buffers of one Rust session call (large enough for any path in a message).
 constexpr size_t k_text_capacity = 65536;
@@ -137,7 +150,7 @@ class BufferedLogSink final : public LogSink {
 
 } // namespace
 
-// The scene handle outlives the Rust session, which borrows it and opens Apple streams on it.
+// The scene handle outlives the Rust session, which borrows it (and copies it for an Apple stream).
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct MonitorSession::Impl {
     std::string input_path;
@@ -152,14 +165,13 @@ struct MonitorSession::Impl {
     Impl(Impl&&) = delete;
     Impl& operator=(Impl&&) = delete;
 
-    [[nodiscard]] Result<MradmEngineIslandStream>
-    open_apple(const RenderOptions& options, std::string layout, const MradmDirectMatrixView* matrix) const;
     void bind_host();
 };
+// NOLINTEND(misc-non-private-member-variables-in-classes)
 
 namespace {
 
-// Forwards to the session's log buffer (the import's and the Apple backend's lines).
+// Forwards to the session's log buffer (the import's lines).
 class SessionLogSink final : public LogSink {
   public:
     explicit SessionLogSink(const MradmEngineMonitorSession* session) : session_(session) {}
@@ -177,54 +189,6 @@ class SessionLogSink final : public LogSink {
 };
 
 } // namespace
-
-// NOLINTEND(misc-non-private-member-variables-in-classes)
-
-// The Apple island over the engine's resolved layout and DirectSpeakers matrix; the stream owns
-// the renderer and its prepared state.
-Result<MradmEngineIslandStream> MonitorSession::Impl::open_apple(const RenderOptions& options,
-                                                                 std::string layout,
-                                                                 const MradmDirectMatrixView* matrix) const {
-    auto renderer = engine::apple_renderer();
-    if (!renderer) {
-        return tl::unexpected{renderer.error()};
-    }
-    RenderPlan plan;
-    plan.input_path = input_path;
-    plan.output_layout = std::move(layout);
-    plan.scene_handle = scene_handle;
-    plan.sofa_path = options.sofa_path;
-    plan.room = options.room;
-    plan.screens = options.screens;
-    plan.default_interp_ms = options.default_interp_ms;
-    plan.object_smoothing_frames = options.object_smoothing_frames;
-    plan.speaker_geometry = options.speaker_geometry;
-    plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
-    if (matrix != nullptr) {
-        plan.direct_speakers_matrix = std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(*matrix));
-    }
-    plan.speaker_spread_mode = options.speaker_spread_mode;
-    plan.triple_balance_mode = options.triple_balance_mode;
-    plan.binaural_spread_mode = options.binaural_spread_mode;
-    plan.lfe_routing_mode = options.lfe_routing_mode;
-    plan.apple_spatial_preset = options.apple_spatial_preset;
-    plan.apple_speaker_rendering_flags = options.apple_speaker_rendering_flags;
-    // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
-    // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
-    plan.listener_orientation = options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
-    SessionLogSink logs(rust);
-    auto prepared = (*renderer)->prepare(plan, logs);
-    if (!prepared) {
-        return tl::unexpected{prepared.error()};
-    }
-    std::shared_ptr<IPreparedRender> prepared_state = std::move(*prepared);
-    auto stream = (*renderer)->open_stream(*prepared_state, plan, logs);
-    if (!stream) {
-        return tl::unexpected{stream.error()};
-    }
-    auto keep = std::make_shared<AppleKeepAlive>(AppleKeepAlive{std::move(*renderer), std::move(prepared_state)});
-    return realtime::island_table(std::move(*stream), std::move(keep));
-}
 
 void MonitorSession::Impl::bind_host() {
     host.ctx = this;
@@ -254,7 +218,7 @@ void MonitorSession::Impl::bind_host() {
                 }
                 return result.frames;
             });
-            return started ? 0 : realtime::island_error(started.error(), e);
+            return started ? 0 : island_error(started.error(), e);
         });
     };
     host.device_stop = [](void*, void* device) noexcept { device_of(device).stop(); };
@@ -262,24 +226,9 @@ void MonitorSession::Impl::bind_host() {
     host.device_pause = [](void*, void* device) noexcept { device_of(device).pause(); };
     host.device_resume = [](void*, void* device) noexcept { device_of(device).resume(); };
     host.device_destroy = [](void*, void* device) noexcept { delete &device_of(device); };
-    host.open_apple = [](void* ctx,
-                         void* options,
-                         const uint8_t* layout,
-                         size_t layout_len,
-                         const MradmDirectMatrixView* matrix,
-                         MradmEngineIslandStream* out,
-                         const MradmEngineIslandError* e) noexcept {
-        return guarded(e, [&] {
-            const auto& impl = *static_cast<const Impl*>(ctx);
-            auto table = impl.open_apple(
-                options_of(options), std::string{reinterpret_cast<const char*>(layout), layout_len}, matrix);
-            if (!table) {
-                return realtime::island_error(table.error(), e);
-            }
-            *out = *table;
-            return 0;
-        });
-    };
+#ifdef __APPLE__
+    host.apple = mradm_apple_islands();
+#endif
     host.release_options = [](void*, void* options) noexcept { delete &options_of(options); };
 }
 

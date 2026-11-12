@@ -6,13 +6,15 @@ use mradm_dsp::hptf::{Coefficients, Snapshot, StereoSnapshot};
 use mradm_dsp::room::loading::Package;
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
 use mradm_engine::backend::{self, Screens};
-use mradm_engine::monitor::session::{Choice, Device, HptfDesign, Session, SessionHost, Token};
+use mradm_engine::monitor::session::{
+    AppleOpen, Choice, Device, HptfDesign, Session, SessionHost, Token,
+};
 use mradm_engine::monitor::{
     Cancel, Monitor, ObjectOverride, OutputStage, Overrides, Source, State, Validate,
 };
 use mradm_engine::render::{PathText, Request, RoomOptions};
 use mradm_render::routing::Error;
-use mradm_scene::{RenderScene, direct_matrix};
+use mradm_scene::RenderScene;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -146,6 +148,10 @@ struct Calls {
     stops: usize,
     /// The token value of each opening.
     opened: Vec<u32>,
+    /// The Apple listener orientation of each opening.
+    orientations: Vec<[f32; 3]>,
+    /// Whether an opening logs a line.
+    log_apple: bool,
 }
 
 struct MockDevice {
@@ -220,15 +226,18 @@ impl SessionHost for Host {
     }
     fn open_apple(
         &self,
-        choice: &Token,
-        _: &str,
-        _: Option<&direct_matrix::Matrix>,
+        plan: &AppleOpen<'_>,
+        log: &dyn Fn(u32, &str, &[u8]),
     ) -> Result<Box<dyn Source>, Error> {
-        self.calls
-            .lock()
-            .unwrap()
+        let mut calls = self.calls.lock().unwrap();
+        calls
             .opened
-            .push(*choice.downcast_ref::<u32>().unwrap());
+            .push(*plan.token.downcast_ref::<u32>().unwrap());
+        calls.orientations.push(plan.options.orientation);
+        if calls.log_apple {
+            log(2, "apple", b"apple stream");
+        }
+        drop(calls);
         let spec = self.specs.lock().unwrap().pop_front().unwrap_or_default();
         if let Some(text) = spec.fail {
             return Err(err(4, text));
@@ -449,6 +458,25 @@ fn system_spatial_keeps_the_stream_orientation_neutral() {
         assert!(eventually(
             || f.seen(0).yaw_bits.load(Ordering::SeqCst) == bits
         ));
+    }
+}
+
+#[test]
+fn the_apple_stream_gets_the_request_orientation_and_logs_into_the_session() {
+    for (system_spatial, expected) in [(false, [10f32, 5., -3.]), (true, [0.; 3])] {
+        let f = fixture(Vec::new());
+        f.host.calls.lock().unwrap().log_apple = true;
+        let mut choice = f.choice(1, system_spatial);
+        choice.request.listener_orientation = [10., 5., -3.];
+        let s = Session::create(choice, RATE, 48000, b"", f.host.clone())
+            .unwrap_or_else(|e| panic!("{}", String::from_utf8_lossy(&e.message)));
+        assert_eq!(f.host.calls.lock().unwrap().orientations, vec![expected]);
+        let logs: Vec<_> = (0..s.log_count()).filter_map(|i| s.log_entry(i)).collect();
+        let last = logs.last().expect("the Apple stream's line");
+        assert_eq!(
+            (last.0, last.1.as_str(), &last.2[..]),
+            (2, "apple", &b"apple stream"[..])
+        );
     }
 }
 

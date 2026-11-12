@@ -9,12 +9,13 @@ use mradm_engine::catalog::Platform;
 use mradm_engine::fmt::fixed;
 use mradm_engine::offline::Progress;
 use mradm_engine::render::{
-    Event, Island, Islands, MetadataFields, PathText, Render, Reply, Request, Reuse, RoomOptions,
-    operation, stage, utc_date,
+    AppleOptions, Event, Island, Islands, MetadataFields, PathText, Render, Reply, Request, Reuse,
+    RoomOptions, operation, stage, utc_date,
 };
 use mradm_engine::request::{Error, Level, Packager};
 use mradm_render::room::PolarConversion;
 use mradm_render::room_runtime::{Config, Prepare, Resources, Scope};
+use mradm_scene::RenderScene;
 use mradm_wav::{Chna, ChnaEntry, Format, Reader, SampleFormat, Writer, WriterOptions};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -1076,7 +1077,12 @@ struct Recorded<'a> {
 }
 
 impl Islands for Recorded<'_> {
-    fn run(&self, island: &Island, map: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
+    fn run(
+        &self,
+        island: &Island,
+        _: Option<&RenderScene>,
+        map: &dyn Fn(&Progress) -> Progress,
+    ) -> Option<Reply> {
         let reply = (self.answer)(island)?;
         if let Island::EncodeFlac { dst, .. } = island {
             std::fs::write(&dst.utf8, b"flac").unwrap();
@@ -1242,7 +1248,12 @@ fn islands_run_in_order_inside_next_with() {
 fn cancellation_after_an_inline_encoder_preserves_the_previous_output() {
     struct CancelAtEncoderReturn(std::cell::Cell<bool>);
     impl Islands for CancelAtEncoderReturn {
-        fn run(&self, island: &Island, _: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
+        fn run(
+            &self,
+            island: &Island,
+            _: Option<&RenderScene>,
+            _: &dyn Fn(&Progress) -> Progress,
+        ) -> Option<Reply> {
             if let Island::EncodeFlac { dst, .. } = island {
                 std::fs::write(&dst.utf8, b"flac").unwrap();
                 self.0.set(true);
@@ -1271,4 +1282,116 @@ fn cancellation_after_an_inline_encoder_preserves_the_previous_output() {
     assert_eq!(render.outcome().unwrap().error.as_ref().unwrap().code, 5);
     assert_eq!(std::fs::read(&output).unwrap(), b"previous output");
     assert_eq!(dir.names(), vec!["out.flac"]);
+}
+
+const APPLE: u32 = 4;
+
+/// The Apple backend's islands answered inside `next_with`: they get the request's Apple fields
+/// and the scene, write the float render, and a cached preparation skips the prepare island.
+struct AppleIslands<'a> {
+    seen: &'a std::cell::RefCell<Vec<(String, AppleOptions, String, bool)>>,
+}
+
+impl Islands for AppleIslands<'_> {
+    fn run(
+        &self,
+        island: &Island,
+        scene: Option<&RenderScene>,
+        _: &dyn Fn(&Progress) -> Progress,
+    ) -> Option<Reply> {
+        let (kind, plan) = match island {
+            Island::ApplePrepare(plan) => ("prepare", plan),
+            Island::AppleRender(plan) => ("render", plan),
+            _ => return Some(Reply::default()),
+        };
+        if kind == "render" {
+            let format = Format {
+                channels: 2,
+                sample_rate: 48_000,
+                sample_format: SampleFormat::Float32,
+                channel_mask: None,
+            };
+            let options = WriterOptions {
+                container: None,
+                axml: None,
+                chna: None,
+            };
+            let file = File::create(&plan.output_path.utf8).unwrap();
+            let mut writer = Writer::new(file, format, options).unwrap();
+            writer.write_frames(&vec![0.125; 2 * 4800]).unwrap();
+            writer.finish().unwrap();
+        }
+        self.seen.borrow_mut().push((
+            kind.to_owned(),
+            plan.options,
+            plan.input_path.utf8.clone(),
+            scene.is_some(),
+        ));
+        Some(Reply::default())
+    }
+}
+
+#[test]
+fn apple_islands_get_the_request_and_a_cached_preparation_skips_prepare() {
+    let dir = Dir::new("apple-islands");
+    let input = dir.file("in.wav");
+    scene_wav("objects-point", &input, 4800);
+    let mut r = request(&input, &dir.file("out.wav"));
+    r.renderer = APPLE;
+    r.output_layout = "binaural".into();
+    r.split_power = true;
+    r.listener_orientation = [10., 5., -3.];
+    let platform = || Platform {
+        apple: Some(mradm_engine::catalog::Backend {
+            renderer: "apple".into(),
+            name: "apple-spatial-mixer".into(),
+            version: "1".into(),
+            layouts: vec![mradm_engine::catalog::Layout {
+                id: "binaural".into(),
+                display_name: "Apple binaural".into(),
+                channel_count: 2,
+                is_3d: false,
+                lfe_count: 0,
+                supports_spread: true,
+                is_binaural: true,
+            }],
+            supports_objects: true,
+            supports_direct_speakers: true,
+            supports_render_window: true,
+            hrtf_sources: vec!["system".into()],
+            ..mradm_engine::catalog::Backend::default()
+        }),
+        ..Platform::default()
+    };
+    let expected = AppleOptions {
+        routing: 0,
+        split_power: true,
+        speaker_spread: 0,
+        binaural_spread: 0,
+        spatial_preset: 0,
+        speaker_rendering_flags: false,
+        orientation: [10., 5., -3.],
+    };
+    let run = |reuse: Reuse| {
+        let seen = std::cell::RefCell::new(Vec::new());
+        let islands = AppleIslands { seen: &seen };
+        let mut render = Render::new(r.clone(), platform(), reuse);
+        loop {
+            match render.next_with(false, &TestHost, Some(&islands)) {
+                Event::Island(island) => panic!("returned {island:?}"),
+                Event::Done => break,
+                _ => {}
+            }
+        }
+        assert_eq!(render.outcome().unwrap().error, None);
+        seen.into_inner()
+    };
+    let input_text = path_text(&input).utf8;
+    let island = |kind: &str| (kind.to_owned(), expected, input_text.clone(), true);
+    assert_eq!(run(Reuse::default()), [island("prepare"), island("render")]);
+    let cached = Reuse {
+        apple_prepared: true,
+        ..Reuse::default()
+    };
+    assert_eq!(run(cached), [island("render")]);
 }

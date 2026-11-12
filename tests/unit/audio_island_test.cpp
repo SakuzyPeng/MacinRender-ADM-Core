@@ -74,7 +74,7 @@ int32_t run_flac(const fs::path& src, const fs::path& dst, Caller& caller, Mradm
     e.island = 4U;
     e.src.utf8 = view(s);
     e.dst.utf8 = view(d);
-    const MradmIslandContext context{&caller, &cancelled, &progress};
+    const MradmIslandContext context{&caller, &cancelled, &progress, nullptr};
     return mradm_audio_island(&e, &context, &reply);
 }
 
@@ -109,7 +109,7 @@ int main() {
 
     MradmEngineRenderEvent apple{};
     apple.island = 2U;
-    const MradmIslandContext none{nullptr, nullptr, nullptr};
+    const MradmIslandContext none{nullptr, nullptr, nullptr, nullptr};
     ok &= check(mradm_audio_island(&apple, &none, &reply) == 2, "the Apple islands are left to the caller");
     apple.island = 10U;
     ok &= check(mradm_audio_island(&apple, &none, &reply) == 2, "unknown islands are left to the caller");

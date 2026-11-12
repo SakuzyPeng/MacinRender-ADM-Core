@@ -29,7 +29,13 @@ CUDA_ISLAND = "src/adm_render_room/cuda"
 RATCHETED = ("production", "islands", "cuda")
 # The islands' narrow C interfaces called from Rust, file by file (user decision 2026-11-12): never a
 # directory, so no general allowance; a new file is registered by `--update` in the commit that adds it.
-ISLAND_INTERFACES = ("src/adm_audio/island.cpp", "src/adm_audio/island_ffi.h")
+ISLAND_INTERFACES = (
+    "src/adm_apple/apple_island.cpp",
+    "src/adm_apple/apple_island.h",
+    "src/adm_audio/island.cpp",
+    "src/adm_audio/island_driver.h",
+    "src/adm_audio/island_ffi.h",
+)
 # Legacy snapshots did not separate this SDK boundary. Its existing V2 trial
 # implementation at 1cb04b3e is the one-time ceiling, not a general allowance.
 LEGACY_CUDA_LIMIT = 512
