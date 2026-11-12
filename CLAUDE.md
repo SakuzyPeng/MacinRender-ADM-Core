@@ -113,7 +113,7 @@ Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（
 ./build/release/mradm formats
 ```
 
-CLI 共七个用户可见子命令：`render`、`inspect`（输入为位置参数，不用 `-i`）、`backends`、`layouts`、`input-layouts`、`formats`、`export`（定义在 `src/adm_cli/*_command.cpp`，完整参考见 `docs/guides/CLI_USAGE.md`）。另有内部子命令 `__apac-encode`（APAC 编码子进程 worker，带 heartbeat 协议，勿在文档/GUI 中暴露）。`-v` 打印详细进度日志。
+CLI 共八个用户可见子命令：`render`、`inspect`（输入为位置参数，不用 `-i`）、`backends`、`layouts`、`input-layouts`、`formats`、`export`（定义在 `src/adm_cli/*_command.cpp`），以及 `room-check`（检查并准备房间包与个人 HRIR，定义在 `src/adm_cli/main.cpp`）；完整参考见 `docs/guides/CLI_USAGE.md`。另有内部子命令 `__apac-encode`（APAC 编码子进程 worker，带 heartbeat 协议，勿在文档/GUI 中暴露）。`-v` 打印详细进度日志。
 
 ## ADM 语义策略（semantic policy）
 
