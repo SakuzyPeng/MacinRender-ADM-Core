@@ -278,6 +278,7 @@ target_sources(
         src/adm_audio/audio_handles.cpp
         src/adm_audio/flac_io.cpp
         src/adm_audio/iamf_io.cpp
+        src/adm_audio/island.cpp
         src/adm_audio/metadata_io.cpp
         src/adm_audio/opus_mka_io.cpp
         src/adm_audio/wav_io.cpp
@@ -1646,6 +1647,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
     # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
+    add_executable(mr_adm_audio_island_tests tests/unit/audio_island_test.cpp)
+    target_link_libraries(mr_adm_audio_island_tests PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_audio_island_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_audio_island_tests)
+    add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
+
     add_executable(mr_adm_flac_io_smoke_tests tests/unit/flac_io_smoke_test.cpp)
     target_link_libraries(mr_adm_flac_io_smoke_tests
         PRIVATE

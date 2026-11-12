@@ -675,6 +675,18 @@ macOS / Windows 验证分别记录在 6.1 记录中；CLI v2 逐条保存全部�
 生产 C/C++ 21,772 行不变。
 见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
 
+**6.2 状态**：分 A（编码器、容器元数据与 IAMF MP4 打包）、B（Apple 后端与岛流表）、C（系统空间 sink 与 miniaudio）三批，A 已完成：
+- 离线渲染的岛请求 1、4–9 由 Rust 直接调用 `src/adm_audio` 的 `mradm_audio_island`：`mradm-engine` 的 `Render::next_with` 在岛请求排到队首时
+  经 `Islands` trait 执行，事件顺序、进度区间与取消点不变；`mradm-ffi` 提供 `MradmIslandRunner` / `MradmIslandContext` 与
+  `mradm_engine_render_set_islands`；`RenderService` 删去这些岛的执行分支，只剩 Apple；
+- 用户决定（2026-11-12）：岛供 Rust 调用的窄 C 接口单独计量，`language-surface.py` 新增逐文件登记、只减不增的 `island-interfaces` 区域；
+- 本机 Linux 新旧对照都是 0 差异：CLI 记录 102 条、C ABI 采集 3,248 行与 36 个文件、`collect.py --tool mradm` 的完整采集（产物 256、日志 666），
+  换库 consumer 测试通过；新增 `next_with` 等价测试与 `mr_adm_audio_island_tests`。
+
+生产 C/C++ 21,772 → 21,761 行，`island-interfaces` 登记 205 行。
+维护者复核通过 macOS arm64 90/90 与 Windows x64 88/88 完整 CTest、两平台 CLI/C ABI 新旧对照及换库 consumer 测试。
+见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

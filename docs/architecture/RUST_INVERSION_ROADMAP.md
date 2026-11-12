@@ -26,6 +26,7 @@ C/C++/ObjC++ 只保留在“岛”里，经窄 C 接口由 Rust 调用：
 | `production` | `src/` + `include/`，不含岛 | 棘轮：只减不增 |
 | `islands` | `src/adm_apple`、`src/adm_windows` | 棘轮：只减不增 |
 | `cuda` | `src/adm_render_room/cuda`，仅可选 CUDA SDK 边界 | 独立棘轮：只减不增 |
+| `island-interfaces` | `ISLAND_INTERFACES` 逐个列出的岛接口文件（Rust 调用岛的窄 C 接口，六期 6.2 起） | 逐文件登记：加入时按实测登记，之后只减不增 |
 | `tests` | `tests/`，不含冻结参考 | 只报告；四期补覆盖时一致性工具仍会增长 |
 | `reference` | `tests/reference/` | 只报告，随参考退役减少 |
 | `rust`、`rust-vendor` | `rust/crates`、`rust/vendor` | 只报告 |

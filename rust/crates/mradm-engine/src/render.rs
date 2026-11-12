@@ -5,8 +5,10 @@
 //! render, the post-processing passes, encoding, installation, the WAV layout and metadata.
 //!
 //! [`Render::next`] advances one step. What only the platform layer can do arrives as an
-//! [`Island`] request the caller executes and answers with [`Render::resume`]: the encoders, the
-//! FLAC / Matroska / MP4 metadata, the MP4 packager probe and the Apple backend.
+//! [`Island`] request: the encoders, the FLAC / Matroska / MP4 metadata, the MP4 packager probe and
+//! the Apple backend. [`Render::next_with`] runs the islands an [`Islands`] implementation offers
+//! when they reach the front of the event queue; the others are returned and answered with
+//! [`Render::resume`].
 use crate::backend::{
     self, BinauralSpreadMode, Host, Kind, Prepared, Routing, Screens, SpeakerSpread,
 };
@@ -217,6 +219,15 @@ pub enum Island {
         path: PathText,
         fields: MetadataFields,
     },
+}
+
+/// The islands a caller runs inside [`Render::next_with`]. `map` maps an island's raw progress
+/// event into its range ([`Render::map_progress`]); the implementation delivers the mapped events
+/// and reads the caller's cancellation while the island runs.
+pub trait Islands {
+    /// The reply, or `None` for an island this implementation does not run (it is then returned
+    /// as [`Event::Island`]).
+    fn run(&self, island: &Island, map: &dyn Fn(&Progress) -> Progress) -> Option<Reply>;
 }
 
 /// The caller's answer to an island.
@@ -1152,10 +1163,31 @@ impl Render {
 
     /// The next event; `cancelled` is the caller's stop token now.
     pub fn next(&mut self, cancelled: bool, host: &dyn Host) -> Event {
+        self.next_with(cancelled, host, None)
+    }
+
+    /// [`Render::next`], running the islands `islands` offers once every event queued before them
+    /// has been returned, so the events keep their order.
+    pub fn next_with(
+        &mut self,
+        cancelled: bool,
+        host: &dyn Host,
+        islands: Option<&dyn Islands>,
+    ) -> Event {
         loop {
             if let Some(e) = self.queue.pop_front() {
-                if let Event::Island(_) = e {
+                if let Event::Island(island) = &e {
                     debug_assert!(self.awaiting.is_some());
+                    if let Some(islands) = islands {
+                        let range = self.range;
+                        if let Some(reply) =
+                            islands.run(island, &|p| range.map_or(*p, |r| r.map(p)))
+                        {
+                            self.resume(reply);
+                            // Let the caller refresh cancellation before advancing past the island.
+                            return Event::Continue;
+                        }
+                    }
                 }
                 return e;
             }

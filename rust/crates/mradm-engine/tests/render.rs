@@ -9,7 +9,8 @@ use mradm_engine::catalog::Platform;
 use mradm_engine::fmt::fixed;
 use mradm_engine::offline::Progress;
 use mradm_engine::render::{
-    Event, Island, PathText, Render, Reply, Request, Reuse, RoomOptions, operation, stage, utc_date,
+    Event, Island, Islands, PathText, Render, Reply, Request, Reuse, RoomOptions, operation, stage,
+    utc_date,
 };
 use mradm_engine::request::{Error, Level, Packager};
 use mradm_render::room::PolarConversion;
@@ -1064,4 +1065,182 @@ fn fixed_matches_fmt() {
         checked += 1;
     }
     assert_eq!(checked, 8363);
+}
+
+/// Islands run by `next_with`: the replies an `Islands` implementation gives, at the place the
+/// island had in the event order, with its progress mapped into the island's range; Apple and other
+/// islands it declines are still returned.
+struct Recorded<'a> {
+    log: &'a std::cell::RefCell<Vec<String>>,
+    answer: fn(&Island) -> Option<Reply>,
+}
+
+impl Islands for Recorded<'_> {
+    fn run(&self, island: &Island, map: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
+        let reply = (self.answer)(island)?;
+        if let Island::EncodeFlac { dst, .. } = island {
+            std::fs::write(&dst.utf8, b"flac").unwrap();
+        }
+        let raw = Progress {
+            stage: stage::POST_PROCESSING,
+            operation: operation::UNKNOWN,
+            fraction: 0.,
+            stage_fraction: 0.5,
+            current: 0,
+            total: 0,
+            message: "",
+        };
+        let mapped = map(&raw);
+        self.log.borrow_mut().push(format!("island {island:?}"));
+        self.log.borrow_mut().push(format!("progress {mapped:?}"));
+        Some(reply)
+    }
+}
+
+/// `text` with the random 16-hex token of every `*_tmp.` sidecar name replaced.
+fn untokened(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("_tmp.") {
+        let (head, tail) = rest.split_at(at + 5);
+        out.push_str(head);
+        let token = tail.len() >= 16 && tail.as_bytes()[..16].iter().all(u8::is_ascii_hexdigit);
+        rest = if token {
+            out.push_str("<token>");
+            &tail[16..]
+        } else {
+            tail
+        };
+    }
+    out.push_str(rest);
+    out
+}
+
+#[test]
+fn islands_run_in_order_inside_next_with() {
+    let dir = Dir::new("next-with");
+    let input = dir.file("in.wav");
+    scene_wav("objects-point", &input, 48_000);
+    let output = dir.file("out.flac");
+    let mut r = request(&input, &output);
+    r.output_layout = "5.1".into();
+    r.measure_loudness = true;
+
+    // The reference: islands returned and answered by the caller, the island's progress mapped
+    // with map_progress at the same point.
+    let mut expected = Vec::new();
+    let mut render = Render::new(r.clone(), Platform::default(), Reuse::default());
+    loop {
+        match render.next(false, &TestHost) {
+            Event::Island(island) => {
+                if let Island::EncodeFlac { dst, .. } = &island {
+                    std::fs::write(&dst.utf8, b"flac").unwrap();
+                }
+                let raw = Progress {
+                    stage: stage::POST_PROCESSING,
+                    operation: operation::UNKNOWN,
+                    fraction: 0.,
+                    stage_fraction: 0.5,
+                    current: 0,
+                    total: 0,
+                    message: "",
+                };
+                expected.push(format!("island {island:?}"));
+                expected.push(format!("progress {:?}", render.map_progress(&raw)));
+                render.resume(Reply::default());
+            }
+            Event::Done => break,
+            Event::Continue => {}
+            e => expected.push(format!("{e:?}")),
+        }
+    }
+    let reference = render.outcome().cloned();
+    std::fs::remove_file(&output).unwrap();
+
+    let log = std::cell::RefCell::new(Vec::new());
+    let islands = Recorded {
+        log: &log,
+        answer: |_| Some(Reply::default()),
+    };
+    let mut render = Render::new(r, Platform::default(), Reuse::default());
+    loop {
+        match render.next_with(false, &TestHost, Some(&islands)) {
+            Event::Island(island) => panic!("returned {island:?}"),
+            Event::Done => break,
+            Event::Continue => {}
+            e => log.borrow_mut().push(format!("{e:?}")),
+        }
+    }
+    assert!(expected.iter().any(|e| e.starts_with("island EncodeFlac")));
+    assert!(
+        expected
+            .iter()
+            .any(|e| e.starts_with("island WriteMetadata"))
+    );
+    let untoken = |lines: &[String]| lines.iter().map(|l| untokened(l)).collect::<Vec<_>>();
+    assert_eq!(untoken(&log.borrow()), untoken(&expected));
+    assert_eq!(render.outcome().cloned(), reference);
+    std::fs::remove_file(&output).unwrap();
+
+    // A declined island is returned as before.
+    let mut r = request(&input, &dir.file("declined.flac"));
+    r.output_layout = "5.1".into();
+    let declined = Recorded {
+        log: &log,
+        answer: |i| (!matches!(i, Island::EncodeFlac { .. })).then(Reply::default),
+    };
+    let mut render = Render::new(r, Platform::default(), Reuse::default());
+    let mut returned = Vec::new();
+    loop {
+        match render.next_with(false, &TestHost, Some(&declined)) {
+            Event::Island(island) => {
+                if let Island::EncodeFlac { dst, .. } = &island {
+                    std::fs::write(&dst.utf8, b"flac").unwrap();
+                }
+                returned.push(island);
+                render.resume(Reply::default());
+            }
+            Event::Done => break,
+            _ => {}
+        }
+    }
+    assert_eq!(returned.len(), 1);
+    assert!(matches!(returned[0], Island::EncodeFlac { .. }));
+    assert_eq!(render.outcome().unwrap().error, None);
+    let _ = std::fs::remove_file(dir.file("declined.flac"));
+}
+
+#[test]
+fn cancellation_after_an_inline_encoder_preserves_the_previous_output() {
+    struct CancelAtEncoderReturn(std::cell::Cell<bool>);
+    impl Islands for CancelAtEncoderReturn {
+        fn run(&self, island: &Island, _: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
+            if let Island::EncodeFlac { dst, .. } = island {
+                std::fs::write(&dst.utf8, b"flac").unwrap();
+                self.0.set(true);
+            }
+            Some(Reply::default())
+        }
+    }
+
+    let dir = Dir::new("inline-encoder-cancel");
+    let input = dir.file("in.wav");
+    let output = dir.file("out.flac");
+    scene_wav("objects-point", &input, 4096);
+    std::fs::write(&output, b"previous output").unwrap();
+    let mut r = request(&input, &output);
+    r.output_layout = "5.1".into();
+    let mut render = Render::new(r, Platform::default(), Reuse::default());
+    let islands = CancelAtEncoderReturn(std::cell::Cell::new(false));
+    loop {
+        match render.next_with(islands.0.get(), &TestHost, Some(&islands)) {
+            Event::Island(island) => panic!("returned {island:?}"),
+            Event::Done => break,
+            _ => {}
+        }
+    }
+    assert!(islands.0.get());
+    assert_eq!(render.outcome().unwrap().error.as_ref().unwrap().code, 5);
+    assert_eq!(std::fs::read(&output).unwrap(), b"previous output");
+    assert_eq!(dir.names(), vec!["out.flac"]);
 }

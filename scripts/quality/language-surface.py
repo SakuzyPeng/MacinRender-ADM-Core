@@ -2,7 +2,9 @@
 """Measure the C/C++ surface and ratchet it down (ADR 0021).
 
 Lines are newline counts (as `wc -l`). Production C/C++ is `src/` plus `include/`, excluding the
-platform islands; islands and the optional CUDA SDK boundary are ratcheted separately. Tests,
+platform islands; islands and the optional CUDA SDK boundary are ratcheted separately. The narrow C
+interfaces through which Rust calls the islands are listed file by file (`ISLAND_INTERFACES`); each
+is registered at its measured size when it is introduced and may only shrink afterwards. Tests,
 frozen references and Rust are reported only. `--check` requires an up-to-date baseline;
 after deleting C++, run `--update` in the same
 commit to tighten it. Existing limits cannot be raised by `--update`. CI also uses `--base-ref`
@@ -25,6 +27,9 @@ CXX_SUFFIXES = {".c", ".h", ".cc", ".cpp", ".hpp", ".inl", ".m", ".mm"}
 ISLANDS = ("src/adm_apple", "src/adm_windows")
 CUDA_ISLAND = "src/adm_render_room/cuda"
 RATCHETED = ("production", "islands", "cuda")
+# The islands' narrow C interfaces called from Rust, file by file (user decision 2026-11-12): never a
+# directory, so no general allowance; a new file is registered by `--update` in the commit that adds it.
+ISLAND_INTERFACES = ("src/adm_audio/island.cpp", "src/adm_audio/island_ffi.h")
 # Legacy snapshots did not separate this SDK boundary. Its existing V2 trial
 # implementation at 1cb04b3e is the one-time ceiling, not a general allowance.
 LEGACY_CUDA_LIMIT = 512
@@ -44,6 +49,8 @@ def lines(path: Path) -> int:
 
 
 def area_of(relative: str) -> str:
+    if relative.rstrip("/") in ISLAND_INTERFACES:
+        return "island-interfaces"
     if relative.startswith(CUDA_ISLAND + "/"):
         return "cuda"
     if relative.startswith(tuple(island + "/" for island in ISLANDS)):
@@ -56,8 +63,10 @@ def area_of(relative: str) -> str:
 
 
 def measure(root: Path = REPO_ROOT) -> dict:
-    areas = {name: {"files": 0, "lines": 0} for name in (*RATCHETED, "tests", "reference", "rust", "rust-vendor")}
+    areas = {name: {"files": 0, "lines": 0}
+             for name in (*RATCHETED, "island-interfaces", "tests", "reference", "rust", "rust-vendor")}
     modules: dict[str, int] = {}
+    interfaces: dict[str, int] = {}
 
     def add(area: str, module: str, path: Path) -> None:
         count = lines(path)
@@ -69,13 +78,18 @@ def measure(root: Path = REPO_ROOT) -> dict:
         for path in files(root, top, CXX_SUFFIXES):
             relative = path.relative_to(root).as_posix()
             parts = relative.split("/")
+            if area_of(relative) == "island-interfaces":
+                interfaces[relative] = lines(path)
+                add("island-interfaces", relative, path)
+                continue
             module = (CUDA_ISLAND if area_of(relative) == "cuda" else
                       "/".join(parts[:2]) if top != "tests" or parts[1] != "reference" else "/".join(parts[:3]))
             add(area_of(relative), module, path)
     for top, area in (("rust/crates", "rust"), ("rust/vendor", "rust-vendor")):
         for path in files(root, top, {".rs"}):
             add(area, "/".join(path.relative_to(root).as_posix().split("/")[:3]), path)
-    return {"schema": SCHEMA, "areas": areas, "modules": dict(sorted(modules.items()))}
+    return {"schema": SCHEMA, "areas": areas, "modules": dict(sorted(modules.items())),
+            "island_interfaces": dict(sorted(interfaces.items()))}
 
 
 def limit(baseline: dict, area: str) -> int:
@@ -84,7 +98,8 @@ def limit(baseline: dict, area: str) -> int:
     return baseline["areas"][area]["lines"]
 
 
-def check(current: dict, baseline: dict) -> list[str]:
+def check(current: dict, baseline: dict, allow_new: bool = False) -> list[str]:
+    """Limits `current` must keep; `allow_new` lets island interfaces the baseline lacks be registered."""
     errors = []
     if baseline.get("schema") != SCHEMA:
         errors.append(f"基线 schema 必须为 {SCHEMA}")
@@ -97,6 +112,13 @@ def check(current: dict, baseline: dict) -> list[str]:
                            key=lambda item: -item[1])
             detail = "，".join(f"{m} +{d}" for m, d in grown[:5])
             errors.append(f"{area} C/C++ 由 {before} 行增至 {now} 行（{detail}）；ADR 0021 要求只减不增")
+    registered = baseline.get("island_interfaces", {})
+    for path, now in current.get("island_interfaces", {}).items():
+        if path not in registered:
+            if not allow_new:
+                errors.append(f"岛接口 {path} 尚未登记；请在新增它的同一提交运行 --update")
+        elif now > registered[path]:
+            errors.append(f"岛接口 {path} 由 {registered[path]} 行增至 {now} 行；登记后只减不增")
     return errors
 
 
@@ -134,17 +156,25 @@ def main(argv: list[str] | None = None) -> int:
     try:
         baseline = (json.loads(args.baseline.read_text(encoding="utf-8"))
                     if args.baseline.exists() or args.check else None)
-        errors = check(current, baseline) if baseline is not None else []
+        errors = check(current, baseline, allow_new=args.update) if baseline is not None else []
         candidate = current if args.update else baseline
         if args.base_ref:
             previous = baseline_at(args.root, args.baseline, args.base_ref)
             if previous is not None:
-                errors.extend(f"相对 {args.base_ref} 的基线上限：{error}" for error in check(candidate, previous))
+                errors.extend(f"相对 {args.base_ref} 的基线上限：{error}"
+                              for error in check(candidate, previous, allow_new=True))
         if args.check and not errors:
             for area in RATCHETED:
                 now, before = current["areas"][area]["lines"], limit(baseline, area)
                 if now < before:
                     errors.append(f"{area} C/C++ 由 {before} 行减至 {now} 行；请在同一提交运行 --update 收紧基线")
+            registered = baseline.get("island_interfaces", {})
+            for path, before in registered.items():
+                now = current["island_interfaces"].get(path)
+                if now is None:
+                    errors.append(f"已登记的岛接口 {path} 已不存在或不再列出；请在同一提交运行 --update")
+                elif now < before:
+                    errors.append(f"岛接口 {path} 由 {before} 行减至 {now} 行；请在同一提交运行 --update 收紧基线")
     except (OSError, ValueError, KeyError, TypeError) as error:
         errors = [str(error)]
     for error in errors:
