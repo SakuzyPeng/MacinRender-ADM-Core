@@ -701,7 +701,7 @@ C 批：
   Scene 输出的设备都由 Rust 打开、拉取并按原顺序驱动，`MonitorSession` 的设备回调与 `RenderOptions` 副本删除，`SceneOutputSession` 只剩转发；
 - 用户决定（2026-11-12）：Scene 输出的设备持有与编排本批一并移到 Rust，平台事实单独一个提交；
 - 平台事实改为 `mradm_platform_islands`，Rust 按原规则只探测各调用方需要的事实，`catalog.cpp` 只剩把文档解析回 CLI 行；
-- 本机 Linux 新旧对照 0 差异：CLI 记录 102 条、C ABI 采集 3,283 行与 36 个文件、完整采集；macOS / Windows 与实机监听待维护者。
+- 本机 Linux 新旧对照 0 差异：CLI 记录 102 条、C ABI 采集 3,283 行与 36 个文件、完整采集（PCM 输出 294、产物 256、日志 666）；macOS / Windows 与实机监听待维护者。
 
 生产 C/C++ 21,403 → 21,124 行，`island-interfaces` 614 → 988 行。6.2 的岛入口全部改为由 Rust 调用，6.3 起 Rust C ABI 注册同一批窄 C 表。
 见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。

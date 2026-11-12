@@ -225,7 +225,8 @@ A、B 两批之后，C++ 外壳里仍由 C++ 执行的岛只剩两类。一是�
 - **CLI 记录**：102 条命令 0 差异（含 `backends` / `formats` / `layouts` 与能力文档）；另有与前两批相同的 3 条 help 路径差异。
 - **C ABI 采集**：3,283 行、36 个文件 0 差异（含 catalog、`scene_output.null_device` 经 miniaudio null 后端的创建、音量、HpTF 与 epoch，
   以及监听空参数）；换库运行两个 consumer 测试通过。
-- **完整一致性采集**（`collect.py --tool mradm=参照`，`compare-collections.py`）：运行中，结果另行补记。
+- **完整一致性采集**（`collect.py --tool mradm=参照`，`compare-collections.py`，源码 `3fe4a9c`）：PCM 输出 294、fixture 220、比较 989、
+  重放 176、产物 256、日志 666 全部相同。
 - **单元测试**：`mradm-ffi` 新增监听设备选择与打开失败的用例（system spatial 的布局别名与几何、硬件设备 id、错误码与文字）和平台事实的
   逐调用方探测用例；`mradm-engine` 监听会话测试适配新签名。完整 ctest 85/85；`mr_adm_rust_quality`、`mr_adm_ffi_header_check`（412 个
   函数、171 个结构体）、`language-surface.py --check --base-ref origin/main` 通过；新增与改动的 C++ 文件 clang-tidy 无提示；
