@@ -61,6 +61,18 @@ def ebml(element_id, payload, unknown=False):
     return raw_id + bytes([0x80 | len(payload)]) + payload
 
 
+def mp4_box(tag, payload, extended=False, to_end=False):
+    if extended:
+        return struct.pack('>I4sQ', 1, tag, len(payload) + 16) + payload
+    return struct.pack('>I4s', 0 if to_end else len(payload) + 8, tag) + payload
+
+
+def mp4_header(version, created, modified):
+    width = 8 if version == 1 else 4
+    return (bytes([version, 0, 0, 0]) + (created + boundary.MP4_EPOCH_OFFSET).to_bytes(width, 'big')
+            + (modified + boundary.MP4_EPOCH_OFFSET).to_bytes(width, 'big') + b'other-header-fields')
+
+
 class NormalizationTests(unittest.TestCase):
     def test_root_and_clock_only_inside_the_window(self):
         m = manifest()
@@ -106,6 +118,42 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(out.replace(bytes(8), uid, 1), data)
         self.assertEqual(boundary.normalize(b'not ebml' + uid, manifest()), b'not ebml' + uid)
 
+    def test_mp4_clocks_preserve_sample_data_and_other_header_fields(self):
+        for version in (0, 1):
+            with self.subTest(version=version):
+                header = mp4_header(version, NOW + 1, NOW + 2)
+                zeroed = header[:4] + bytes(16 if version == 1 else 8) + b'other-header-fields'
+
+                def movie(fields):
+                    return mp4_box(b'moov', mp4_box(b'mvhd', fields) + mp4_box(b'trak',
+                                   mp4_box(b'tkhd', fields) + mp4_box(b'mdia', mp4_box(b'mdhd', fields))),
+                                   extended=True)
+
+                prefix = mp4_box(b'ftyp', b'M4A \0\0\0\0M4A ')
+                # A whole movie tree embedded in mdat must stay byte-for-byte intact.
+                samples = mp4_box(b'mdat', movie(header))
+                data = prefix + samples + movie(header)
+                self.assertEqual(boundary.normalize(data, manifest()), prefix + samples + movie(zeroed))
+                changed_samples = prefix + samples[:-1] + b'!' + movie(header)
+                self.assertNotEqual(boundary.normalize(data, manifest()),
+                                    boundary.normalize(changed_samples, manifest()))
+
+    def test_mp4_clock_window_versions_and_malformed_boxes(self):
+        prefix = mp4_box(b'ftyp', b'M4A \0\0\0\0M4A ')
+        mixed = mp4_header(0, NOW - 100, NOW + 3)
+        expected = mixed[:8] + bytes(4) + mixed[12:]
+        wrap = lambda fields: prefix + mp4_box(b'moov', mp4_box(b'mvhd', fields), to_end=True)
+        self.assertEqual(boundary.normalize(wrap(mixed), manifest()), wrap(expected))
+        for data in (wrap(mp4_header(1, NOW - 100, NOW + 100)),
+                     wrap(mp4_header(2, NOW + 1, NOW + 2)),
+                     wrap(mp4_header(1, NOW + 1, NOW + 2)[:12]),
+                     prefix + struct.pack('>I4s', 4, b'moov'),
+                     prefix + struct.pack('>I4s', 9999, b'moov'),
+                     prefix + struct.pack('>I4s', 1, b'moov'),
+                     prefix + mp4_box(b'mvhd', mp4_header(0, NOW + 1, NOW + 2))):
+            with self.subTest(data=data):
+                self.assertEqual(boundary.normalize(data, manifest()), data)
+
 
 @unittest.skipIf(os.name == 'nt', 'fake tools are POSIX shell scripts')
 class CliTranscriptTests(unittest.TestCase):
@@ -149,8 +197,8 @@ class CliTranscriptTests(unittest.TestCase):
         self.record('b')
         report = cli.compare(self.root / 'a', self.root / 'b')
         self.assertTrue(report['identical'], report)
-        self.assertNotEqual((self.root / 'a/outputs/write/out.txt').read_bytes(),
-                            (self.root / 'b/outputs/write/out.txt').read_bytes())
+        self.assertNotEqual((self.root / 'a/files/write/outputs/write/out.txt').read_bytes(),
+                            (self.root / 'b/files/write/outputs/write/out.txt').read_bytes())
 
     def test_contract_differences_and_text_only_classes(self):
         self.record('a')
@@ -158,9 +206,61 @@ class CliTranscriptTests(unittest.TestCase):
         self.record('b', candidate)
         report = cli.compare(self.root / 'a', self.root / 'b')
         items = {(row['command'], row['item']) for row in report['differences']}
-        self.assertEqual(items, {('formats', 'stdout'), ('write', 'files/out.txt'), ('bad', 'exit_code')})
+        self.assertEqual(items, {('formats', 'stdout'), ('write', 'files/outputs/write/out.txt'), ('bad', 'exit_code')})
         self.assertEqual({(row['command'], row['item']) for row in report['informational']}, {('help', 'stdout')})
         self.assertEqual(cli.main(['compare', str(self.root / 'a'), str(self.root / 'b')]), 1)
+
+    def test_files_outside_output_directory_and_intermediate_changes(self):
+        common.save(self.table, {'schema': cli.TABLE_SCHEMA, 'commands': [
+            {'id': name, 'args': [name]} for name in ('create', 'overwrite', 'remove')]})
+        body = ('case "$1" in\n'
+                'create) mkdir -p nested; echo initial > unexpected.wav; echo nested > nested/out.txt;;\n'
+                'overwrite) echo replaced > unexpected.wav;;\n'
+                'remove) rm unexpected.wav;;\n'
+                'esac\n')
+        self.tool(self.build / 'mradm', body)
+        a = self.record('a')
+        self.record('b')
+        self.assertTrue(cli.compare(self.root / 'a', self.root / 'b')['identical'])
+        self.assertEqual(set(a['commands']['create']['files']), {'unexpected.wav', 'nested/out.txt'})
+        self.assertEqual((self.root / 'a/files/create/unexpected.wav').read_bytes(), b'initial\n')
+        self.assertEqual((self.root / 'a/files/overwrite/unexpected.wav').read_bytes(), b'replaced\n')
+        self.assertEqual(a['commands']['remove']['removed_files'], ['unexpected.wav'])
+        candidate = self.tool(self.root / 'candidate', body.replace('initial', 'different').replace('rm unexpected.wav', ':'))
+        self.record('c', candidate)
+        report = cli.compare(self.root / 'a', self.root / 'c')
+        self.assertEqual({(row['command'], row['item']) for row in report['differences']},
+                         {('create', 'files/unexpected.wav'), ('remove', 'removed_files')})
+
+    def test_unexpected_working_directory_file_is_a_difference(self):
+        self.record('a')
+        candidate = self.tool(self.root / 'candidate', 'echo leftover > unexpected.wav\n' + self.fake_cli())
+        self.record('b', candidate)
+        report = cli.compare(self.root / 'a', self.root / 'b')
+        self.assertFalse(report['identical'])
+        self.assertIn(('formats', 'files/unexpected.wav'),
+                      {(row['command'], row['item']) for row in report['differences']})
+        (self.root / 'b/files/formats/unexpected.wav').write_bytes(b'tampered')
+        with self.assertRaisesRegex(boundary.PreconditionError, 'output integrity'):
+            cli.compare(self.root / 'a', self.root / 'b')
+
+    def test_help_and_parse_errors_still_compare_file_effects(self):
+        common.save(self.table, {'schema': cli.TABLE_SCHEMA, 'commands': [
+            {'id': 'help', 'args': ['--help'], 'class': 'help'},
+            {'id': 'bad', 'args': ['render', '--nope'], 'class': 'parse-error'},
+        ]})
+        self.record('a')
+        candidate = self.tool(self.root / 'candidate',
+                              'if [ "$1" = --help ]; then echo unexpected > outputs/help/out.wav; '
+                              'else rm outputs/help/out.wav; echo unexpected > outputs/bad/out.wav; fi\n'
+                              + self.fake_cli(help_text='Usage:'))
+        self.record('b', candidate)
+        report = cli.compare(self.root / 'a', self.root / 'b')
+        self.assertFalse(report['identical'])
+        self.assertEqual({(row['command'], row['item']) for row in report['differences']},
+                         {('help', 'files/outputs/help/out.wav'), ('bad', 'files/outputs/bad/out.wav'),
+                          ('bad', 'removed_files')})
+        self.assertEqual({(row['command'], row['item']) for row in report['informational']}, {('help', 'stdout')})
 
     def test_preconditions(self):
         self.record('a')

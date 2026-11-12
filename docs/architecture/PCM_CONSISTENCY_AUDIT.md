@@ -669,9 +669,10 @@ C ABI 对照按迁移家族选定固定输入与调用序列，采集返回码�
 - 岛：编码器、容器元数据、IAMF 打包、APAC 子进程、Apple 后端与岛流表、系统空间 sink、miniaudio，以及已在 `mradm-ffi` 的平台服务。
 
 对照工具：`cli-transcript.py`（CLI 记录与比较）、`capi-capture.py`（C ABI 采集、比较与换库运行 consumer 测试，采集工具
-`mr_adm_capi_capture` 只用 `c_api.h`）、`collect.py --tool mradm`。归一化只有五条，事先列在 `boundary.py`：记录目录、运行时间窗内的
-UTC 时间、bext 日期时间、临时文件名的随机部分与 Matroska TrackUID。本机 Linux 上两种记录的自对照都是 0 差异（C ABI 另有 3 份并行采集），
-直通替换 0 差异，植入的 CLI 与 C ABI 缺陷都被报出。待维护者在 macOS / Windows 上验证。生产 C/C++ 21,772 行不变。
+`mr_adm_capi_capture` 只用 `c_api.h`）、`collect.py --tool mradm`。归一化事先列在 `boundary.py`：工作目录、运行时间窗内的
+UTC 时间、bext 日期时间、临时文件名的随机部分、Matroska TrackUID 与 MP4 创建／修改时间。初始 Linux 自对照和维护者修正后的
+macOS / Windows 验证分别记录在 6.1 记录中；CLI v2 逐条保存全部工作目录文件变化，help / parse-error 只豁免文字差异。
+生产 C/C++ 21,772 行不变。
 见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
 
 ## 每个迁移切片的验证

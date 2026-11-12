@@ -20,7 +20,7 @@ CLOCK_PLACEHOLDER = b'0000-00-00T00:00:00Z'
 BEXT_CLOCK_PLACEHOLDER = b'0000-00-0000-00-00'
 SIDECAR = re.compile(rb'\.((?:render|gain|trim)_tmp)\.[0-9a-f]{16}\.')
 NORMALIZATIONS = (
-    'root: the absolute record directory (as recorded, with / and \\ separators) becomes <root>',
+    'root: the absolute capture working directory (as recorded, with / and \\ separators) becomes <root>',
     'clock: an ISO 8601 UTC time YYYY-MM-DDTHH:MM:SSZ inside the record\'s own wall-clock window '
     '(start - 1 s to end + 1 s) becomes 0000-00-00T00:00:00Z, same length',
     'bext clock: in a RIFF/RF64/BW64 file, the bext OriginationDate and OriginationTime (payload bytes 320-338) '
@@ -28,6 +28,8 @@ NORMALIZATIONS = (
     'sidecar: in text, the random 16-hex token of a .render_tmp/.gain_tmp/.trim_tmp sidecar name becomes <token>',
     'matroska uid: in a Matroska file, the payload of Segment/Tracks/TrackEntry/TrackUID (drawn at random per file) '
     'becomes zero bytes, located by walking the EBML tree up to the first Cluster',
+    'mp4 clock: the creation and modification times in moov/mvhd, moov/trak/tkhd and moov/trak/mdia/mdhd '
+    '(version 0 or 1, seconds since 1904) inside the same window become zero bytes; other fields and mdat stay intact',
 )
 
 
@@ -162,6 +164,47 @@ def normalize_matroska(data):
     return bytes(out)
 
 
+MP4_EPOCH_OFFSET = 2_082_844_800  # Seconds between 1904-01-01 and the Unix epoch.
+MP4_CONTAINERS = {(): b'moov', (b'moov',): b'trak', (b'moov', b'trak'): b'mdia'}
+MP4_CLOCKS = {(b'moov',): b'mvhd', (b'moov', b'trak'): b'tkhd', (b'moov', b'trak', b'mdia'): b'mdhd'}
+
+
+def normalize_mp4(data, inside):
+    """Zero only in-window creation/modification times in the three MP4 full-box headers."""
+    if len(data) < 8 or data[4:8] != b'ftyp':
+        return data
+    out = bytearray(data)
+
+    def walk(start, end, path):
+        offset = start
+        while offset + 8 <= end:
+            size = int.from_bytes(data[offset:offset + 4], 'big')
+            tag, payload = data[offset + 4:offset + 8], offset + 8
+            if size == 1:
+                if payload + 8 > end:
+                    return
+                size = int.from_bytes(data[payload:payload + 8], 'big')
+                payload += 8
+            elif size == 0:
+                size = end - offset
+            stop = offset + size
+            if stop > end or stop < payload:
+                return
+            if tag == MP4_CONTAINERS.get(path):
+                walk(payload, stop, (*path, tag))
+            elif tag == MP4_CLOCKS.get(path) and payload + 4 <= stop:
+                width = {0: 4, 1: 8}.get(data[payload])
+                if width is not None and payload + 4 + 2 * width <= stop:
+                    for field in (payload + 4, payload + 4 + width):
+                        stamp = int.from_bytes(data[field:field + width], 'big') - MP4_EPOCH_OFFSET
+                        if inside(stamp):
+                            out[field:field + width] = bytes(width)
+            offset = stop
+
+    walk(0, len(data), ())
+    return bytes(out)
+
+
 def normalize(data, manifest, text=False):
     """Apply NORMALIZATIONS to one text stream or one file of a record."""
     root = manifest['root']
@@ -174,7 +217,7 @@ def normalize(data, manifest, text=False):
     data = ISO_UTC.sub(lambda m: CLOCK_PLACEHOLDER if inside(utc(m.groups())) else m.group(0), data)
     if text:
         return SIDECAR.sub(rb'.\1.<token>.', data)
-    return normalize_matroska(normalize_bext(data, inside))
+    return normalize_mp4(normalize_matroska(normalize_bext(data, inside)), inside)
 
 
 def first_difference(x, y):

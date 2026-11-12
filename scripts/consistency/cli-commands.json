@@ -1,6 +1,6 @@
 {
   "schema": "mradm.consistency.cli-commands.v1",
-  "comment": "Fixed command table of the CLI contract (phase 6). Placeholders: {fixture:NAME} a generated ADM fixture, {json:NAME} a JSON fixture, {room:FILE} the synthetic room pack, {sofa:FILE} a SOFA fixture, {text:FILE} a non-WAVE file, {missing:FILE} a path that never exists, {out:FILE} a file the command writes (recorded). class contract compares exit code, stdout, stderr and written files; class help and parse-error compare only the exit code (help layout and parse-error wording may change, ADR 0021 phase 6 decision 1).",
+  "comment": "Fixed command table of the CLI contract (phase 6). Placeholders: {fixture:NAME} a generated ADM fixture, {json:NAME} a JSON fixture, {room:FILE} the synthetic room pack, {sofa:FILE} a SOFA fixture, {text:FILE} a non-WAVE file, {missing:FILE} a path that never exists, {out:FILE} a file the command writes (recorded). Every class compares exit codes and all working-directory file changes. class contract also compares stdout and stderr; class help and parse-error report text differences without failing (help layout and parse-error wording may change, ADR 0021 phase 6 decision 1).",
   "commands": [
     {"id": "version", "args": ["--version"]},
     {"id": "help", "args": ["--help"], "class": "help"},

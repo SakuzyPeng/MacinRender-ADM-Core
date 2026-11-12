@@ -4,8 +4,8 @@
 record: runs every command of cli-commands.json with `mradm` from the build directory (or a candidate
 given with --tool mradm=PATH) and stores the exit code, stdout, stderr and every file the command
 wrote. compare: checks that two records come from the same source, build and platform, then compares
-them byte for byte. Only boundary.NORMALIZATIONS apply; class help and parse-error compare the exit
-code only (their text is reported, not compared).
+them byte for byte. Only boundary.NORMALIZATIONS apply; class help and parse-error exempt text
+differences only. Exit codes and file changes are compared for every class.
 
 Exit codes of compare: 0 identical, 1 differences, 2 invalid or incomparable records.
 """
@@ -15,15 +15,17 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 import boundary
 from boundary import PreconditionError, digest
 import collection as common
 
-SCHEMA = 'mradm.consistency.cli-transcript.v1'
+SCHEMA = 'mradm.consistency.cli-transcript.v2'
 TABLE_SCHEMA = 'mradm.consistency.cli-commands.v1'
 TABLE = Path(__file__).with_name('cli-commands.json')
 CLASSES = ('contract', 'help', 'parse-error')
@@ -97,21 +99,36 @@ def record(build, out, tool=None, table_path=TABLE):
                 'table': digest(table_path.read_bytes()),
                 'platform': {'system': platform.system(), 'machine': platform.machine()},
                 'build_identity': identity, 'tool_override': override, 'cli_sha256': digest(cli.read_bytes()),
-                'root': str(out), 'fixtures': fixtures, 'normalizations': list(boundary.NORMALIZATIONS), 'commands': {}}
-    start = int(time.time())
-    for row in table['commands']:
-        command_id = row['id']
-        print('cli:', command_id, flush=True)
-        (out / 'outputs' / command_id).mkdir(parents=True)
-        args = [resolve(arg, command_id) for arg in row['args']]
-        result = subprocess.run([str(cli), *args], cwd=out, env=env, capture_output=True, timeout=TIMEOUT_SECONDS)
-        (out / 'commands' / (command_id + '.stdout')).write_bytes(result.stdout)
-        (out / 'commands' / (command_id + '.stderr')).write_bytes(result.stderr)
-        manifest['commands'][command_id] = {
-            'class': row.get('class', 'contract'), 'args': args, 'exit_code': result.returncode,
-            'stdout': digest(result.stdout), 'stderr': digest(result.stderr),
-            'files': {n: digest(p.read_bytes()) for n, p in boundary.files_under(out / 'outputs' / command_id).items()}}
-    manifest['clock'] = {'start': start, 'end': int(time.time()) + 1}
+                'fixtures': fixtures, 'normalizations': list(boundary.NORMALIZATIONS), 'commands': {}}
+    # Keep the recorder's own files outside the command's working directory. Snapshot every changed
+    # file after each command, including files outside outputs/<id> and overwrites of earlier outputs.
+    # This also preserves intermediate contents if a later command overwrites or removes the same path.
+    with tempfile.TemporaryDirectory(prefix='mradm-cli-') as temporary:
+        work = Path(temporary).resolve()
+        shutil.copytree(out / 'fixtures', work / 'fixtures')
+        manifest['root'] = str(work)
+        before = {'fixtures/' + name: sha for name, sha in fixtures.items()}
+        start = int(time.time())
+        for row in table['commands']:
+            command_id = row['id']
+            print('cli:', command_id, flush=True)
+            (work / 'outputs' / command_id).mkdir(parents=True)
+            args = [resolve(arg, command_id) for arg in row['args']]
+            result = subprocess.run([str(cli), *args], cwd=work, env=env, capture_output=True, timeout=TIMEOUT_SECONDS)
+            (out / 'commands' / (command_id + '.stdout')).write_bytes(result.stdout)
+            (out / 'commands' / (command_id + '.stderr')).write_bytes(result.stderr)
+            after = {n: digest(p.read_bytes()) for n, p in boundary.files_under(work).items()}
+            changed = {name: sha for name, sha in after.items() if before.get(name) != sha}
+            for name in changed:
+                saved = out / 'files' / command_id / name
+                saved.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(work / name, saved)
+            manifest['commands'][command_id] = {
+                'class': row.get('class', 'contract'), 'args': args, 'exit_code': result.returncode,
+                'stdout': digest(result.stdout), 'stderr': digest(result.stderr),
+                'files': changed, 'removed_files': sorted(set(before) - set(after))}
+            before = after
+        manifest['clock'] = {'start': start, 'end': int(time.time()) + 1}
     manifest['complete'] = True
     common.save(out / 'manifest.json', manifest)
     return manifest
@@ -128,7 +145,11 @@ def load(root):
             for stream in ('stdout', 'stderr'):
                 if digest((root / 'commands' / f'{command_id}.{stream}').read_bytes()) != row[stream]:
                     raise ValueError(f'{stream} integrity failure: {command_id}')
-            actual = boundary.files_under(root / 'outputs' / command_id)
+            removed = row['removed_files']
+            if (not isinstance(removed, list) or not all(isinstance(name, str) for name in removed)
+                    or removed != sorted(set(removed)) or set(removed) & set(row['files'])):
+                raise ValueError('invalid removed file inventory: ' + command_id)
+            actual = boundary.files_under(root / 'files' / command_id)
             if set(actual) != set(row['files']):
                 raise ValueError('output inventory differs from manifest: ' + command_id)
             for name, path in actual.items():
@@ -172,10 +193,14 @@ def compare(reference, candidate):
             if xa != xb:
                 rows.append({'item': stream, 'first_difference': boundary.first_difference(xa, xb),
                              'reference_bytes': len(xa), 'candidate_bytes': len(xb)})
-        rows += boundary.compare_files(a, b, boundary.files_under(reference / 'outputs' / command_id),
-                                       boundary.files_under(candidate / 'outputs' / command_id), 'files')
         for row in rows:
             (differences if ra['class'] == 'contract' else informational).append({'command': command_id, **row})
+        for row in boundary.compare_files(a, b, boundary.files_under(reference / 'files' / command_id),
+                                          boundary.files_under(candidate / 'files' / command_id), 'files'):
+            differences.append({'command': command_id, **row})
+        if ra['removed_files'] != rb['removed_files']:
+            differences.append({'command': command_id, 'item': 'removed_files',
+                                'reference': ra['removed_files'], 'candidate': rb['removed_files']})
     return {'schema': 'mradm.consistency.cli-transcript-comparison.v1', 'identical': not differences,
             'commands': len(a['commands']), 'differences': differences, 'informational': informational,
             'tool_override': {'reference': a['tool_override'], 'candidate': b['tool_override']},

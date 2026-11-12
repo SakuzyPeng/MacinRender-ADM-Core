@@ -39,7 +39,8 @@ std::string quote(const char* text) {
         return "null";
     }
     std::string out = "\"";
-    for (const unsigned char c : std::string_view{text}) {
+    for (const char character : std::string_view{text}) {
+        const auto c = static_cast<unsigned char>(character);
         if (c == '"' || c == '\\') {
             out += '\\';
             out += static_cast<char>(c);
@@ -180,7 +181,7 @@ void progress_v1(double fraction, const char* stage, const char* message, void* 
     log->events.push_back(line.str());
 }
 
-void record_progress(Recorder& rec, ProgressLog& log) {
+void record_progress(Recorder& rec, const ProgressLog& log) {
     rec.put("progress.count", static_cast<unsigned long long>(log.events.size()));
     for (std::size_t i = 0; i < log.events.size(); ++i) {
         rec.put("progress." + std::to_string(i), log.events[i]);
@@ -421,8 +422,19 @@ void render_with(Recorder& rec, const Context& context, const RenderCase& c) {
 }
 
 void family_render(Recorder& rec, const Context& context) {
-    const std::array<RenderCase, 17> cases{{
+    const std::array<RenderCase, 19> cases{{
         {"binaural-default", "objects-point", "out.wav", nullptr},
+        {"binaural-no-peak-limit",
+         "objects-point",
+         "out.wav",
+         [](adm_render_options_t* o) { adm_render_options_set_peak_limit(o, 0); }},
+        {"binaural-restored-peak-limit",
+         "objects-point",
+         "out.wav",
+         [](adm_render_options_t* o) {
+             adm_render_options_set_peak_limit(o, 0);
+             adm_render_options_set_peak_limit(o, 1);
+         }},
         {"binaural-flac",
          "objects-extent",
          "out.flac",
@@ -1252,7 +1264,10 @@ void family_monitor(Recorder& rec, const Context& context) {
     rec.code("create_ex.null_path", adm_create_monitor_ex(context.value, nullptr, nullptr, nullptr, &monitor));
     rec.put("create_ex.null_path.last_error", adm_context_last_error_message(context.value));
     adm_destroy_monitor(monitor);
+}
 
+// Scene output and room controls belong to migration family E, including their error paths.
+void family_scene_output(Recorder& rec, const Context& context) {
     rec.begin("scene_output.null");
     rec.put("last_error", adm_scene_output_last_error_message(nullptr));
     rec.code("play", adm_scene_output_play(nullptr));
@@ -1263,12 +1278,16 @@ void family_monitor(Recorder& rec, const Context& context) {
     output_status.struct_size = sizeof(output_status);
     rec.code("status", adm_scene_output_get_status(nullptr, &output_status));
     rec.code("hptf", adm_scene_output_set_hptf(nullptr, nullptr));
+    adm_hptf_info_t info{};
+    info.struct_size = sizeof(info);
     rec.code("hptf_info", adm_scene_output_get_hptf_info(nullptr, &info));
     rec.code("hptf_parameters", adm_scene_output_set_hptf_parameters(nullptr, nullptr));
     rec.code("hptf_stereo", adm_scene_output_set_hptf_stereo(nullptr, nullptr));
     rec.code("hptf_stereo_parameters", adm_scene_output_set_hptf_stereo_parameters(nullptr, nullptr));
+    adm_hptf_stereo_info_t stereo_info{};
+    stereo_info.struct_size = sizeof(stereo_info);
     rec.code("hptf_stereo_info", adm_scene_output_get_hptf_stereo_info(nullptr, &stereo_info));
-    error = nullptr;
+    char* error = nullptr;
     rec.code("hptf_ex", adm_scene_output_set_hptf_ex(nullptr, nullptr, &error));
     rec.owned("hptf_ex.error", error);
     error = nullptr;
@@ -1332,7 +1351,7 @@ void family_monitor(Recorder& rec, const Context& context) {
         error = nullptr;
         rec.code("stream.switch_room.not_room", adm_scene_stream_switch_room(stream, nullptr, &switch_request, &error));
         rec.owned("stream.switch_room.not_room.error", error);
-        json = nullptr;
+        char* json = nullptr;
         rec.code("stream.room_status.not_room", adm_scene_stream_room_status_json(stream, &json));
         rec.owned("stream.room_status.not_room.json", json);
         adm_destroy_scene_stream(stream);
@@ -1376,6 +1395,7 @@ int main(int argc, char** argv) {
     }
     if (selected("scene")) {
         family_scene(rec, context);
+        family_scene_output(rec, context);
     }
     if (selected("monitor")) {
         family_monitor(rec, context);

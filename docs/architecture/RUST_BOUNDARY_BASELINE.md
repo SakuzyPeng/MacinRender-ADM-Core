@@ -79,7 +79,7 @@ C ABI 采集工具（见“对照工具”）引用了其中 163 个导出：
 
 固定命令表 [`scripts/consistency/cli-commands.json`](../../scripts/consistency/cli-commands.json) 有 102 条命令，
 覆盖全部 8 个公开子命令与 `__apac-encode`、`render` 的全部 43 个选项，以及上表的每个退出码。每条命令有一个类别：
-`contract` 比较退出码、stdout、stderr 与写出的全部文件；`help` 与 `parse-error` 只比较退出码，文字差异单独列出。
+所有类别都比较退出码与工作目录内的文件变化；`contract` 还比较 stdout、stderr，`help` 与 `parse-error` 只豁免文字差异并单独列出。
 本机记录中 77 条是 contract（53 条成功、24 条领域错误），3 条 help，22 条 parse-error。
 
 ## 岛入口清单
@@ -113,16 +113,18 @@ C ABI 采集工具（见“对照工具”）引用了其中 163 个导出：
 
 三种对照都在同一构建、同一平台上比较两份记录，不作为跨平台证据，CI 不跑。比较只做下列事先列明的归一化
 （`scripts/consistency/boundary.py` `NORMALIZATIONS`），其余每个字节都比较：
-1. **root**：记录目录的绝对路径换成 `<root>`；
+1. **root**：采集时工作目录的绝对路径换成 `<root>`；
 2. **clock**：落在本记录自身运行时间窗内（开始前 1 s 到结束后 1 s）的 ISO 8601 UTC 时间换成等长的 `0000-00-00T00:00:00Z`
    （FLAC、CAF、Matroska、MP4 的日期标签）；
 3. **bext clock**：RIFF / RF64 / BW64 中 bext 的 OriginationDate 与 OriginationTime（载荷 320–338 字节），同样只在时间窗内替换；
 4. **sidecar**：文本里 `.render_tmp` / `.gain_tmp` / `.trim_tmp` 临时文件名中的 16 位随机十六进制换成 `<token>`；
 5. **matroska uid**：Matroska 文件 Segment/Tracks/TrackEntry/TrackUID 的载荷（`opus_mka_io.cpp` 每个文件随机抽取）清零，
    沿 EBML 结构定位，到第一个 Cluster 为止，不扫描音频数据。
+6. **MP4 clock**：`moov/mvhd`、`moov/trak/tkhd`、`moov/trak/mdia/mdhd` 的创建与修改时间，在上述运行时间窗内时清零；
+   按 1904 年纪元解释 version 0 的 32 位或 version 1 的 64 位字段，保留其余头字段及 `mdat` 内容。
 
-时间、bext 与 Matroska 三条都按结构或时间窗定位，误伤音频字节的可能已由单元测试约束：外形像 bext 时间的样本、
-Cluster 里像 TrackUID 的字节都保持原样。
+时间、bext、Matroska 与 MP4 都按结构或时间窗定位；单元测试约束外形像 bext 时间的样本、Cluster 里像 TrackUID 的字节、
+`mdat` 中像完整 MP4 时间字段的字节保持原样，时间窗之外的时间和未知版本的 MP4 头不归一化。
 
 ### CLI 记录：`cli-transcript.py`
 
@@ -132,10 +134,13 @@ python3 scripts/consistency/cli-transcript.py record build/consistency-a /tmp/cl
 python3 scripts/consistency/cli-transcript.py compare /tmp/cli-old /tmp/cli-new --output report.json
 ```
 
-`record` 在记录目录里生成夹具（`mr_adm_make_fixture`、JSON 夹具、合成房间包、SOFA、非 WAVE 文件），以记录目录为工作目录、
-相对路径运行命令表中的每条命令，保存退出码、stdout、stderr 与该命令写出的全部文件（包括残留的临时文件）；
+`record` 在记录目录里生成夹具（`mr_adm_make_fixture`、JSON 夹具、合成房间包、SOFA、非 WAVE 文件），复制到临时工作目录后，
+以相对路径运行命令表中的每条命令。逐条保存退出码、stdout、stderr 和整个工作目录内的文件变化，包括预定输出目录外的残留文件、
+对夹具或先前输出的覆盖与删除。新增或修改的内容保存为 `files/<命令 id>/<工作目录相对路径>`，删除记录在 `removed_files`；
+后续命令覆盖同一路径不会改变前一条的快照。采集器自身的日志和快照始终放在工作目录外。
 清除 `MR_ADM_*` / `MRADM_*` 环境变量。manifest 记录源码指纹、命令表摘要、平台、构建身份（`CMakeCache.txt` 与 `mradm`、
-`mr_adm_make_fixture` 的摘要）、`--tool mradm` 的路径与摘要和运行时间窗。
+`mr_adm_make_fixture` 的摘要）、`--tool mradm` 的路径与摘要、临时工作目录和运行时间窗。文件快照格式使用 `cli-transcript.v2`，
+旧版记录需重新采集；其路径和归一化声明不足以用于新版比较。
 
 `compare` 先核验两份记录各自的完整性（夹具、stdout / stderr、输出清单与摘要）和前提（源码、命令表、平台、夹具、构建身份相同，
 CLI 摘要只能与声明的 `--tool mradm` 相符），不符时退出 2；再逐条比较，相同退出 0，不同退出 1。
@@ -154,6 +159,8 @@ python3 scripts/consistency/capi-capture.py tests build/consistency-a --library 
 按 B / C / D / E / F 家族运行固定的调用序列，把每个值写进 `capture.txt`（`[段名]` 与 `键=值`，double 记位模式，字符串按 JSON 转义），
 渲染输出、预览窗口与 Scene 拉取的 PCM 写进 `files/<段名>/`。不记录依赖时序的量（输出环填充、欠载、队列深度、年龄、绑定端口）。
 Scene 流提交固定的整数信号与元数据更新，`signal_end` 后拉到 EOS，记录拉取总帧数、连续性与结束状态。
+`--family scene` 同时覆盖 Scene 输出及房间状态／切换的错误路径，对应 6.3 E；`monitor` 对应 6.3 F。
+render 家族另采集非空 options 上关闭峰值限制、关闭后恢复限制的渲染，验证 setter 对公开结果和 PCM 的影响。
 
 `record` 把采集工具和要测的库（默认是构建目录里的库，`--library` 指定候选）复制进同一个临时目录，库按加载名命名
 （Linux `libmradm_capi.so.1`、macOS `libmradm_capi.1.dylib`、Windows `mradm_capi.dll`）。可执行文件带 `$ORIGIN` / `@loader_path`
@@ -182,12 +189,13 @@ rpath（Windows 先搜索可执行文件所在目录），并清除 `LD_LIBRARY_
 | `src/adm_realtime` | 1,366 | miniaudio 设备（215）留作岛，其余 6.3 / 6.5 删除 |
 | `src/adm_metadata` / `src/adm_io` / `src/adm_render_room` / `src/adm_core` / `src/adm_renderer_factory` | 386 / 363 / 283 / 200 / 46 | 6.5 删除 |
 
-预计六期结束时生产 C/C++ 约 5,500–6,500 行，以各切片实测为准。本切片新增的采集工具（1,385 行）计入 tests 区域，只报告；
+预计六期结束时生产 C/C++ 约 5,500–6,500 行，以各切片实测为准。本切片新增的采集工具计入 tests 区域，只报告；
 它在 6.3 结束、C ABI 的新旧对照完成后随七期的 C++ 测试清退一起处理。
 
 ## 验证
 
-本机 Linux x64（`build/consistency-a`，Release、vendored FLAC / Opus、C ABI bundle）：
+初始提交 `a6326614` 的 Linux x64 记录（`build/consistency-a`，Release、vendored FLAC / Opus、C ABI bundle；
+该记录早于下述维护者修正，使用当时的五条归一化和 v1 CLI 记录）：
 - **CLI 记录**：两份记录相隔数秒，102 条命令 0 差异；归一化前原始字节不同的 26 项全部由上述五条规则解释。
   `--tool mradm` 换成直通脚本 0 差异；换成植入缺陷的脚本（`formats` 多一行、`room-check` 退出码改为 3、`render-final-gain` 输出翻转一个字节），
   报出 11 处差异（8 条 room-check 退出码、1 处 stdout、1 处输出文件、1 处 parse-error 类的退出码），另有 1 处 parse-error 文字差异单独列出。
@@ -200,5 +208,5 @@ rpath（Windows 先搜索可执行文件所在目录），并清除 `LD_LIBRARY_
   家族清单与头文件 / GUI / 采集工具一致）与 `mr_adm_collection_tool_tests`（`--tool mradm` 的接受与比较）通过。
 - `language-surface.py --check` 通过；`format.sh --check` 只报出已知的 `binaural_render_fixture_test.cpp` 版本差异。
 
-待维护者在 macOS arm64 与 Windows x64 上运行：构建 `mr_adm_capi_consumers`，各做一次 CLI 记录与 C ABI 采集的自对照和 `tests`。
-macOS 上 APAC 与 Apple 后端的命令会走成功路径，Windows 上库名为 `mradm_capi.dll`。
+维护者复查发现并修正五项问题：MP4 二进制时间遗漏、峰值限制 setter 只有空句柄调用、Scene 输出误归 monitor、CLI 漏采预定输出目录外的文件、
+以及 help / parse-error 错误地豁免文件差异。新版归一化为六条，CLI 记录升级为 v2。
