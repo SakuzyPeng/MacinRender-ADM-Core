@@ -66,7 +66,8 @@ class OptionalReferenceAnalysisTests(unittest.TestCase):
             "src/adm_core/module.cpp", "tests/reference/libadm/reference_test.cpp",
             "tests/support/scene_json/scene_json.cpp", "tests/support/unconditional.cpp",
         )
-        for name in self.sources:
+        self.capi_source = "tests/tools/capi_capture.cpp"
+        for name in (*self.sources, self.capi_source):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("// Analysis fixture.\n", encoding="utf-8")
@@ -83,9 +84,10 @@ class OptionalReferenceAnalysisTests(unittest.TestCase):
                         "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={self.root / 'no-hooks'}",
                         *args], cwd=self.root, check=True, capture_output=True, text=True)
 
-    def run_quality(self, script, enabled):
+    def run_quality(self, script, enabled, bundle_enabled=False):
         (self.build / "CMakeCache.txt").write_text(
-            f"MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL={'ON' if enabled else 'OFF'}\n", encoding="utf-8",
+            f"MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL={'ON' if enabled else 'OFF'}\n"
+            f"MR_ADM_BUILD_CAPI_BUNDLE:BOOL={'ON' if bundle_enabled else 'OFF'}\n", encoding="utf-8",
         )
         self.log.unlink(missing_ok=True)
         args = ["--base", "HEAD^", "--build-dir", str(self.build)] if script == "check-changed.sh" else [str(self.build)]
@@ -118,6 +120,21 @@ class OptionalReferenceAnalysisTests(unittest.TestCase):
                 excludes = [args[index + 1] for index, arg in enumerate(args[:-1]) if arg == "-i"]
                 for name in ("tests/reference/libadm", "tests/support/scene_json"):
                     self.assertEqual(str(self.root / name) in excludes, not enabled, name)
+
+    def test_full_tidy_analyzes_capi_consumer_only_with_bundle(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                calls = self.run_quality("clang-tidy.sh", False, bundle_enabled=enabled)
+                self.assertEqual(str(self.root / self.capi_source) in calls["clang-tidy"], enabled)
+
+    def test_changed_checks_format_capi_consumer_with_or_without_bundle(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                calls = self.run_quality("check-changed.sh", False, bundle_enabled=enabled)
+                source = str(self.root / self.capi_source)
+                self.assertIn(source, calls["clang-format"])
+                for tool in ("clang-tidy", "cppcheck"):
+                    self.assertEqual(source in calls[tool], enabled)
 
 
 class FfiArrayTests(unittest.TestCase):

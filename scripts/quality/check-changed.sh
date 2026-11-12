@@ -70,6 +70,12 @@ done < <(
 is_platform_excluded() {
     case "$1" in
         src/adm_windows/* | src/adm_render_room/cuda/*) return 0 ;;
+        tests/tools/capi_capture.cpp)
+            if ! grep -q '^MR_ADM_BUILD_CAPI_BUNDLE:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+                return 0
+            fi
+            return 1
+            ;;
         tests/reference/libbw64/*)
             if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
                 return 0
