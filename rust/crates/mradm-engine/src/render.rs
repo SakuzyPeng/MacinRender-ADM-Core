@@ -153,14 +153,43 @@ pub struct Reuse {
     pub apple_prepared: bool,
 }
 
-/// The `RenderPlan` fields the Apple island needs besides the request.
+/// The request fields the Apple backend reads (`MradmAppleSettings`, values as in the request).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AppleOptions {
+    pub routing: u32,
+    pub split_power: bool,
+    pub speaker_spread: u32,
+    pub binaural_spread: u32,
+    pub spatial_preset: u32,
+    pub speaker_rendering_flags: bool,
+    pub orientation: [f32; 3],
+}
+
+impl AppleOptions {
+    /// The options of `r` with its listener orientation.
+    pub fn of(r: &Request) -> Self {
+        Self {
+            routing: r.routing,
+            split_power: r.split_power,
+            speaker_spread: r.speaker_spread,
+            binaural_spread: r.binaural_spread,
+            spatial_preset: r.apple_spatial_preset,
+            speaker_rendering_flags: r.apple_speaker_rendering_flags,
+            orientation: r.listener_orientation,
+        }
+    }
+}
+
+/// The `RenderPlan` of the Apple island.
 #[derive(Clone, Debug)]
 pub struct ApplePlan {
+    pub input_path: PathText,
     pub output_path: PathText,
     pub output_layout: String,
     pub window: Option<Window>,
     pub meter_window: Option<Window>,
     pub matrix: Option<direct_matrix::Matrix>,
+    pub options: AppleOptions,
 }
 
 /// `audio::MetadataFields`.
@@ -180,9 +209,9 @@ pub enum Island {
     /// `audio::detect_iamf_mp4_packager`.
     ProbeMp4Packager,
     /// The Apple backend's `prepare` (skipped when the caller holds its preparation).
-    ApplePrepare(ApplePlan),
+    ApplePrepare(Box<ApplePlan>),
     /// The Apple backend's `render_window`; the reply carries the metrics.
-    AppleRender(ApplePlan),
+    AppleRender(Box<ApplePlan>),
     EncodeFlac {
         src: PathText,
         dst: PathText,
@@ -221,13 +250,19 @@ pub enum Island {
     },
 }
 
-/// The islands a caller runs inside [`Render::next_with`]. `map` maps an island's raw progress
-/// event into its range ([`Render::map_progress`]); the implementation delivers the mapped events
-/// and reads the caller's cancellation while the island runs.
+/// The islands a caller runs inside [`Render::next_with`]. `scene` is the render's scene (the
+/// Apple backend prepares over it); `map` maps an island's raw progress event into its range
+/// ([`Render::map_progress`]); the implementation delivers the mapped events and reads the
+/// caller's cancellation while the island runs.
 pub trait Islands {
     /// The reply, or `None` for an island this implementation does not run (it is then returned
     /// as [`Event::Island`]).
-    fn run(&self, island: &Island, map: &dyn Fn(&Progress) -> Progress) -> Option<Reply>;
+    fn run(
+        &self,
+        island: &Island,
+        scene: Option<&RenderScene>,
+        map: &dyn Fn(&Progress) -> Progress,
+    ) -> Option<Reply>;
 }
 
 /// The caller's answer to an island.
@@ -1180,9 +1215,9 @@ impl Render {
                     debug_assert!(self.awaiting.is_some());
                     if let Some(islands) = islands {
                         let range = self.range;
-                        if let Some(reply) =
-                            islands.run(island, &|p| range.map_or(*p, |r| r.map(p)))
-                        {
+                        if let Some(reply) = islands.run(island, self.scene.as_ref(), &|p| {
+                            range.map_or(*p, |r| r.map(p))
+                        }) {
                             self.resume(reply);
                             // Let the caller refresh cancellation before advancing past the island.
                             return Event::Continue;
@@ -1814,11 +1849,13 @@ impl Render {
     fn apple_plan(&self) -> ApplePlan {
         let (window, meter_window) = self.windows();
         ApplePlan {
+            input_path: self.r.input.clone(),
             output_path: self.render_path.clone(),
             output_layout: self.layout.clone(),
             window,
             meter_window,
             matrix: self.matrix.clone(),
+            options: AppleOptions::of(&self.r),
         }
     }
 
@@ -1836,7 +1873,11 @@ impl Render {
                 "preparing backend",
             ));
             let plan = self.apple_plan();
-            return self.island(Awaiting::ApplePrepare, Island::ApplePrepare(plan), None);
+            return self.island(
+                Awaiting::ApplePrepare,
+                Island::ApplePrepare(Box::new(plan)),
+                None,
+            );
         }
         if let Some(cached) = self.cached.clone() {
             self.prepared = Some(cached);
@@ -1907,7 +1948,7 @@ impl Render {
             let plan = self.apple_plan();
             return self.island(
                 Awaiting::AppleRender,
-                Island::AppleRender(plan),
+                Island::AppleRender(Box::new(plan)),
                 Some(Self::render_range()),
             );
         }

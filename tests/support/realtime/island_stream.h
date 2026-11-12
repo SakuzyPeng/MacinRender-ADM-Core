@@ -6,7 +6,7 @@
 #include "adm/errors.h"
 #include "adm/render.h"
 
-#include "../adm_render_common/engine_ffi.h"
+#include "engine_ffi.h"
 
 // A C++ IRenderStream behind the Rust monitor's island table: the
 // trampolines catch every exception (a render_failed error with its what()) and carry the

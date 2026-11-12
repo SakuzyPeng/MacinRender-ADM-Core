@@ -1939,6 +1939,70 @@ bool verify_progress_callback(adm_context_t* ctx, const std::filesystem::path& i
     return ok;
 }
 
+#ifdef __APPLE__
+// The Apple backend runs inside the engine's step: a progress callback exception during its render
+// still reaches the caller as INTERNAL with a null result, and a preview session reuses the Apple
+// preparation across windows.
+bool verify_apple_islands(adm_context_t* ctx, const std::filesystem::path& input) {
+    auto* opts = adm_create_render_options();
+    if (opts == nullptr) {
+        return check(false, "Apple island options creation");
+    }
+    adm_render_options_set_renderer(opts, ADM_RENDERER_APPLE);
+    adm_render_options_set_output_layout(opts, "binaural");
+    bool ok = true;
+    for (const bool existing_output : {false, true}) {
+        const auto output = unique_temp_wav_path("mr_c_api_apple_callback_failure");
+        const FileGuard guard(output);
+        if (existing_output) {
+            std::ofstream previous(output, std::ios::binary);
+            previous << "previous output";
+        }
+        bool triggered = false;
+        const auto callback = [](const adm_progress_event_v2_t* event, void* user) {
+            if (event->operation == ADM_PROGRESS_OPERATION_RENDER_AUDIO && event->stage_fraction > 0.0) {
+                *static_cast<bool*>(user) = true;
+                throw std::runtime_error("Apple progress callback failed");
+            }
+        };
+        adm_render_result_t* result = nullptr;
+        const auto code = adm_render_file_ex2(
+            ctx, input.string().c_str(), output.string().c_str(), opts, callback, &triggered, &result);
+        ok = check(triggered && code == ADM_ERROR_INTERNAL && result == nullptr,
+                   "an Apple render callback exception reaches the C ABI caller") &&
+             ok;
+        if (existing_output) {
+            std::ifstream previous(output, std::ios::binary);
+            const std::string content{std::istreambuf_iterator<char>{previous}, std::istreambuf_iterator<char>{}};
+            ok = check(content == "previous output", "an Apple callback failure preserves the previous output") && ok;
+        } else {
+            ok = check(!std::filesystem::exists(output), "an Apple callback failure leaves no final output") && ok;
+        }
+        ok = check(!has_output_sidecar(output, "render_tmp") && !has_output_sidecar(output, "output_tmp"),
+                   "an Apple callback failure cleans the staging files") &&
+             ok;
+        adm_destroy_render_result(result);
+    }
+    adm_preview_session_t* session = nullptr;
+    ok = check(adm_create_preview_session(ctx, input.string().c_str(), opts, &session) == ADM_ERROR_OK &&
+                   session != nullptr,
+               "an Apple preview session opens") &&
+         ok;
+    for (const auto& [start, end] : {std::pair{0.0, 0.1}, std::pair{0.05, 0.15}}) {
+        const auto output = unique_temp_wav_path("mr_c_api_apple_preview");
+        const FileGuard guard(output);
+        adm_render_result_t* result = nullptr;
+        const auto code =
+            adm_preview_render_window_v2(session, start, end, output.string().c_str(), nullptr, nullptr, &result);
+        ok = check(code == ADM_ERROR_OK && std::filesystem::exists(output), "an Apple preview window renders") && ok;
+        adm_destroy_render_result(result);
+    }
+    adm_destroy_preview_session(session);
+    adm_destroy_render_options(opts);
+    return ok;
+}
+#endif
+
 bool verify_flac_callback_failures(adm_context_t* ctx, const std::filesystem::path& input) {
     enum class Action : uint8_t { cancel_at_end, throw_at_start, throw_at_end };
     struct State {
@@ -3062,6 +3126,9 @@ int main() try {
     ok = verify_progress_v2_render(ctx, fixture.path()) && ok;
     ok = verify_progress_v2_flac_post(ctx, fixture.path()) && ok;
     ok = verify_flac_callback_failures(ctx, fixture.path()) && ok;
+#ifdef __APPLE__
+    ok = verify_apple_islands(ctx, fixture.path()) && ok;
+#endif
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_apac_caf_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;

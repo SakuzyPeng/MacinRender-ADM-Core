@@ -19,10 +19,10 @@
 #include "adm/render.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
-#endif
 
+#include "../adm_apple/apple_island.h"
+#endif
 #include "../adm_audio/island_ffi.h"
-#include "../adm_core/direct_matrix_records.h"
 #include "../adm_io/scene_import_internal.h"
 #include "../adm_render_room/room_internal.h"
 #include "capability_records.h"
@@ -36,17 +36,10 @@ namespace mradm {
 
 namespace {
 
-using engine::apple_renderer;
 using engine::engine_path;
 using engine::RequestTexts;
 using engine::utf8;
 using render_common::engine_text;
-
-// The native spelling of a UTF-8 path from the engine (the islands open native paths).
-[[nodiscard]] std::string native(MradmAdmText text) {
-    const std::u8string bytes(reinterpret_cast<const char8_t*>(text.data), text.len);
-    return std::filesystem::path(bytes).string();
-}
 
 [[nodiscard]] Error error_of(int32_t code, MradmAdmText message, MradmAdmText context) {
     const auto kind = code >= 0 && code <= 6 ? static_cast<ErrorCode>(code) : ErrorCode::internal_error;
@@ -66,34 +59,12 @@ using RenderHandle = std::unique_ptr<MradmEngineRender, decltype(&mradm_engine_r
             std::string_view{reinterpret_cast<const char*>(p.message.data), p.message.len}};
 }
 
-// An island's progress mapped into the render's range by the engine.
-class MappedProgress final : public ProgressSink {
-  public:
-    MappedProgress(const MradmEngineRender* render, ProgressSink& downstream)
-        : render_(render), downstream_(&downstream) {}
-    void on_progress(const ProgressEvent& event) override {
-        const MradmEngineProgress raw{static_cast<uint32_t>(event.stage),
-                                      static_cast<uint32_t>(event.operation),
-                                      event.fraction,
-                                      event.stage_fraction,
-                                      event.current_frame,
-                                      event.total_frames,
-                                      engine_text(event.message)};
-        MradmEngineProgress mapped{};
-        if (mradm_engine_render_map_progress(render_, &raw, &mapped) == 0) {
-            downstream_->on_progress(progress_of(mapped));
-        }
-    }
-
-  private:
-    const MradmEngineRender* render_;
-    ProgressSink* downstream_;
-};
-
-// The caller's stop token and progress for the islands the engine runs (mradm_audio_island).
+// The caller's stop token, progress and logs for the islands the engine runs (mradm_audio_island
+// and the Apple islands).
 struct IslandDriver {
     const std::stop_token* token{nullptr};
     ProgressSink* progress{nullptr};
+    LogSink* logs{nullptr};
     std::exception_ptr failure = nullptr;
     std::atomic<bool> failed{false};
 };
@@ -104,126 +75,29 @@ uint32_t island_cancelled(void* user) noexcept {
     return driver.failed.load() || driver.token->stop_requested() ? 1U : 0U;
 }
 
-void island_progress(void* user, const MradmEngineProgress* event) noexcept {
-    auto& driver = *static_cast<IslandDriver*>(user);
+// Keeps a caller exception on the C++ side of the Rust callback boundary.
+template <class F> void island_call(IslandDriver& driver, const F& f) noexcept {
     if (driver.failed.load()) {
         return;
     }
     try {
-        driver.progress->on_progress(progress_of(*event));
+        f();
     } catch (...) {
-        // Keep exceptions on the C++ side of the Rust callback boundary.
         driver.failure = std::current_exception();
         driver.failed.store(true);
     }
 }
 
-// The Apple backend island of a render (the engine runs the audio islands). The reply's texts
-// live until the engine resumes.
-class Islands {
-  public:
-    Islands(const MradmEngineRender* render,
-            const RenderRequest& request,
-            ProgressSink& progress,
-            LogSink& logs,
-            std::shared_ptr<IPreparedRender>& slot)
-        : render_(render), request_(&request), progress_(&progress), logs_(&logs), slot_(&slot) {}
+void island_progress(void* user, const MradmEngineProgress* event) noexcept {
+    auto& driver = *static_cast<IslandDriver*>(user);
+    island_call(driver, [&] { driver.progress->on_progress(progress_of(*event)); });
+}
 
-    const MradmEngineIslandReply& run(const MradmEngineRenderEvent& e) {
-        message_.clear();
-        context_.clear();
-        reply_ = {};
-        reply_.ffmpeg_major = -1;
-        MappedProgress mapped(render_, *progress_);
-        if (e.island == 2U || e.island == 3U) {
-            apple(e, native(e.dst.utf8), mapped);
-        } else {
-            fail({ErrorCode::internal_error, "unknown render island", {}});
-        }
-        return reply_;
-    }
-
-  private:
-    void fail(const Error& error) {
-        message_ = error.message;
-        context_ = error.context;
-        reply_.code = static_cast<int32_t>(error.code);
-        reply_.message = engine_text(message_);
-        reply_.context = engine_text(context_);
-    }
-
-    // The Apple backend prepares and renders its own windows over the engine's scene and plan.
-    void apple(const MradmEngineRenderEvent& e, const std::string& output, ProgressSink& mapped) {
-        const auto& o = request_->options;
-        auto scene = io::RenderScene::adopt(mradm_engine_render_scene(render_), request_->input_path.string());
-        if (!scene) {
-            fail(scene.error());
-            return;
-        }
-        RenderPlan plan;
-        plan.input_path = request_->input_path.string();
-        plan.output_path = output;
-        plan.output_layout = engine_text(e.layout);
-        plan.sofa_path = o.sofa_path;
-        plan.room = o.room;
-        plan.screens = o.screens;
-        plan.default_interp_ms = o.default_interp_ms;
-        plan.object_smoothing_frames = o.object_smoothing_frames;
-        plan.speaker_geometry = o.speaker_geometry;
-        plan.direct_speakers_routing_mode = o.direct_speakers_routing_mode;
-        if (e.has_matrix != 0U) {
-            plan.direct_speakers_matrix =
-                std::make_shared<const DirectSpeakersMatrix>(detail::matrix_from_view(e.matrix));
-        }
-        plan.speaker_spread_mode = o.speaker_spread_mode;
-        plan.triple_balance_mode = o.triple_balance_mode;
-        plan.binaural_spread_mode = o.binaural_spread_mode;
-        plan.lfe_routing_mode = o.lfe_routing_mode;
-        plan.apple_spatial_preset = o.apple_spatial_preset;
-        plan.apple_speaker_rendering_flags = o.apple_speaker_rendering_flags;
-        plan.listener_orientation = o.listener_orientation;
-        if (e.has_window != 0U) {
-            plan.render_window = RenderWindow{e.window_start, e.window_count};
-        }
-        if (e.has_meter_window != 0U) {
-            plan.meter_window = MeterWindow{e.meter_start, e.meter_count};
-        }
-        plan.cancel_token = o.cancel_token;
-        plan.scene_handle = scene->handle();
-        auto renderer = apple_renderer();
-        if (!renderer) {
-            fail(renderer.error());
-            return;
-        }
-        if (e.island == 2U) {
-            auto prepared = (*renderer)->prepare(plan, *logs_);
-            if (!prepared) {
-                fail(prepared.error());
-                return;
-            }
-            *slot_ = std::move(*prepared);
-            return;
-        }
-        auto metrics = (*renderer)->render_window(**slot_, plan, mapped, *logs_);
-        if (!metrics) {
-            fail(metrics.error());
-            return;
-        }
-        reply_.has_lufs = metrics->measured_lufs ? 1U : 0U;
-        reply_.lufs = metrics->measured_lufs.value_or(0.0);
-        reply_.has_peak = metrics->measured_peak_dbtp ? 1U : 0U;
-        reply_.peak_dbtp = metrics->measured_peak_dbtp.value_or(0.0);
-    }
-
-    const MradmEngineRender* render_;
-    const RenderRequest* request_;
-    ProgressSink* progress_;
-    LogSink* logs_;
-    std::shared_ptr<IPreparedRender>* slot_;
-    MradmEngineIslandReply reply_{};
-    std::string message_;
-    std::string context_;
-};
+void island_log(void* user, uint32_t level, MradmAdmText module, MradmAdmText message) noexcept {
+    auto& driver = *static_cast<IslandDriver*>(user);
+    island_call(driver,
+                [&] { driver.logs->log(static_cast<LogLevel>(level), engine_text(module), engine_text(message)); });
+}
 
 [[nodiscard]] RenderResult result_of(MradmEngineRender* render) {
     MradmEngineRenderResult r{};
@@ -293,8 +167,8 @@ apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptio
 RenderService::RenderService() = default;
 
 // The offline render is a Rust step machine (mradm-engine `render`): this
-// loop forwards its progress and logs, passes the stop token before every step and executes the
-// islands it requests.
+// loop forwards its progress and logs and passes the stop token before every step; the engine
+// runs the islands (the audio library's and the Apple backend's) inside the step.
 RenderResult RenderService::render(const RenderRequest& request,
                                    ProgressSink& progress,
                                    LogSink& logs,
@@ -311,19 +185,23 @@ RenderResult RenderService::render(const RenderRequest& request,
                                                 platform.get(),
                                                 preimported_scene != nullptr ? preimported_scene->handle->raw : nullptr,
                                                 cached != nullptr ? cached->handle.get() : nullptr,
-                                                slot != nullptr && cached == nullptr ? 1U : 0U,
                                                 &raw);
     if (code != 0) {
         return {
             error_of(code, engine_text("invalid render request (UTF-8 paths without NUL required)"), {}), {}, {}, {}};
     }
     const RenderHandle render(raw, &mradm_engine_render_destroy);
-    IslandDriver driver{&request.options.cancel_token, &progress};
-    const MradmIslandRunner runner{&mradm_audio_island, {&driver, &island_cancelled, &island_progress}};
+    IslandDriver driver{&request.options.cancel_token, &progress, &logs};
+#ifdef __APPLE__
+    const MradmAppleIslands* apple = mradm_apple_islands();
+#else
+    const MradmAppleIslands* apple = nullptr;
+#endif
+    const MradmIslandRunner runner{
+        &mradm_audio_island, {&driver, &island_cancelled, &island_progress, &island_log}, apple};
     if (mradm_engine_render_set_islands(render.get(), &runner) != 0) {
         return {{ErrorCode::internal_error, "render islands unavailable", {}}, std::nullopt, std::nullopt, {}};
     }
-    Islands islands(render.get(), request, progress, logs, slot);
     for (;;) {
         MradmEngineRenderEvent event{};
         const auto status =
@@ -339,7 +217,11 @@ RenderResult RenderService::render(const RenderRequest& request,
         } else if (event.kind == 2U) {
             logs.log(static_cast<LogLevel>(event.level), engine_text(event.module), engine_text(event.message));
         } else if (event.kind == 3U) {
-            const auto& reply = islands.run(event);
+            // Every island runs inside the step; one returned here has no runner in this build.
+            MradmEngineIslandReply reply{};
+            reply.code = static_cast<int32_t>(ErrorCode::internal_error);
+            reply.message = engine_text("unknown render island");
+            reply.ffmpeg_major = -1;
             if (mradm_engine_render_resume(render.get(), &reply) != 0) {
                 return {{ErrorCode::internal_error, "render island reply failed", {}}, std::nullopt, std::nullopt, {}};
             }

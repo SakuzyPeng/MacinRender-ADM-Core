@@ -1,25 +1,26 @@
 //! The monitor session (`mradm-engine` `monitor::session`) behind the C++
-//! `MonitorSession` shell. The shell provides the devices, the Apple island and the backend
+//! `MonitorSession` shell. The shell provides the devices, the Apple islands and the backend
 //! options through the host table below; its device callbacks pull the session's monitor with
 //! [`mradm_engine_session_monitor_pull`].
+use super::apple_island::{Apple, AppleIslands, Settings as AppleSettings, log_context};
 use super::engine_monitor::{
-    Buffers, EngineIslandError, EngineIslandStream, EngineLiveMonitorLevels, EngineLiveMonitorPull,
-    EngineLiveMonitorStatus, IslandSource, overrides_of,
+    Buffers, EngineIslandError, EngineLiveMonitorLevels, EngineLiveMonitorPull,
+    EngineLiveMonitorStatus, overrides_of,
 };
 use super::room_ffi::{RenderRoomControl, control_handle};
 use super::*;
 use crate::engine::{EnginePlatform, platform};
 use crate::engine_render::FfiHost;
-use crate::engine_service::{EngineRenderRequest, request_of};
+use crate::engine_service::{EngineRenderRequest, empty_reply, request_of};
 use crate::hptf::Snapshot;
 use crate::hptf::settings::Settings;
-use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
+use crate::scene::SceneHandle;
 use mradm_engine::backend;
 use mradm_engine::monitor::session::{
-    Choice, Device, Entry, HptfDesign, Session, SessionHost, Token,
+    AppleOpen, Choice, Device, Entry, HptfDesign, Session, SessionHost, Token,
 };
 use mradm_engine::monitor::{Monitor, Source};
-use mradm_scene::{RenderScene, direct_matrix};
+use mradm_scene::RenderScene;
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex};
 
@@ -45,17 +46,7 @@ pub struct EngineMonitorSessionHost {
     device_pause: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
     device_resume: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
     device_destroy: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    open_apple: Option<
-        unsafe extern "C" fn(
-            *mut c_void,
-            *mut c_void,
-            *const u8,
-            usize,
-            *const DirectMatrixView,
-            *mut EngineIslandStream,
-            *const EngineIslandError,
-        ) -> i32,
-    >,
+    apple: *const AppleIslands,
     release_options: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
 }
 
@@ -216,29 +207,25 @@ impl SessionHost for ShellHost {
     }
     fn open_apple(
         &self,
-        choice: &Token,
-        layout: &str,
-        matrix: Option<&direct_matrix::Matrix>,
+        plan: &AppleOpen<'_>,
+        log: &dyn Fn(u32, &str, &[u8]),
     ) -> Result<Box<dyn Source>, Error> {
-        let Some(f) = self.table.0.open_apple else {
+        let Some(apple) = Apple::new(self.table.0.apple) else {
             return Err(bad("Apple backend is unavailable"));
         };
-        let matrix = matrix.cloned().map(DirectMatrix::new);
-        let view = matrix.as_ref().map(|m| m.view());
-        let mut island = std::mem::MaybeUninit::<EngineIslandStream>::zeroed();
-        let ctx = self.table.0.ctx;
-        Buffers::new().call(|e| unsafe {
-            f(
-                ctx,
-                options_ctx(choice),
-                layout.as_ptr(),
-                layout.len(),
-                view.as_ref().map_or(ptr::null(), |v| v as *const _),
-                island.as_mut_ptr(),
-                e,
-            )
-        })?;
-        Ok(Box::new(IslandSource::new(unsafe { island.assume_init() })))
+        let settings = AppleSettings::new(plan.input_path, plan.layout, plan.matrix, &plan.options);
+        let context = log_context(&log);
+        let mut reply = empty_reply();
+        let Some(prepared) = apple.prepare(&settings, self.scene(), &context, &mut reply) else {
+            let text = |t: &Text| unsafe { bytes(t) }.unwrap_or_default().to_vec();
+            return Err(Error {
+                code: reply.code,
+                message: text(&reply.message),
+                context: text(&reply.context),
+            });
+        };
+        // The stream keeps the preparation.
+        apple.open_stream(&prepared, &settings, &context)
     }
 }
 

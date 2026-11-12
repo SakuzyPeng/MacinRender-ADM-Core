@@ -323,6 +323,7 @@ if(APPLE)
         mr_adm_apple
         PRIVATE
             src/adm_apple/spatial_mixer_renderer.cpp
+            src/adm_apple/apple_island.cpp
             src/adm_apple/avsamplebuffer_device.mm
         PUBLIC
             FILE_SET HEADERS
@@ -433,7 +434,6 @@ mr_adm_core_apply_static_analysis(mr_adm_engine)
 add_library(mr_adm_realtime)
 add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
 target_sources(mr_adm_realtime PRIVATE
-    src/adm_realtime/island_stream.cpp
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
     src/adm_realtime/osc_head_tracking.cpp
@@ -1185,7 +1185,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
     # The C++ MonitorEngine shell over the Rust monitor (not in production):
     # the realtime tests and the monitor benchmark drive the engine through it.
-    add_library(mr_adm_monitor_engine_test_support STATIC tests/support/realtime/monitor_engine.cpp)
+    add_library(mr_adm_monitor_engine_test_support STATIC
+        tests/support/realtime/monitor_engine.cpp tests/support/realtime/island_stream.cpp)
     target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
         tests/support/realtime src/adm_realtime src/adm_render_common)
     target_link_libraries(mr_adm_monitor_engine_test_support PUBLIC
@@ -1744,6 +1745,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
+
+        add_executable(mr_adm_apple_island_tests tests/unit/apple_island_test.cpp)
+        target_link_libraries(mr_adm_apple_island_tests PRIVATE MacinRender::ADMRenderApple MacinRender::ADMDsp)
+        mr_adm_core_apply_warnings(mr_adm_apple_island_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_apple_island_tests)
+        add_test(NAME mr_adm_apple_island_tests COMMAND mr_adm_apple_island_tests)
     endif()
 
     if(MR_ADM_CORE_BUILD_CLI)

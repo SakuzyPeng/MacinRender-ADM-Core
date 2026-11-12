@@ -1,93 +1,18 @@
-#include <chrono>
-#include <filesystem>
 #include <optional>
 #include <span>
 #include <stop_token>
 #include <string>
-#include <string_view>
-#include <thread>
 #include <vector>
 
 #include "adm/audio_io.h"
-#include "adm/progress.h"
 
+#include "island_driver.h"
 #include "island_ffi.h"
 
 namespace mradm::audio {
 namespace {
 
-[[nodiscard]] std::string text(MradmAdmText t) {
-    return {reinterpret_cast<const char*>(t.data), t.len};
-}
-
-[[nodiscard]] MradmAdmText view(std::string_view s) noexcept {
-    return {reinterpret_cast<const uint8_t*>(s.data()), s.size()};
-}
-
-// The native spelling of a UTF-8 path from the engine.
-[[nodiscard]] std::string native(MradmAdmText t) {
-    const std::u8string bytes(reinterpret_cast<const char8_t*>(t.data), t.len);
-    return std::filesystem::path(bytes).string();
-}
-
-// The caller's cancellation as the encoders' stop token, polled while the island runs.
-class Cancel {
-  public:
-    explicit Cancel(const MradmIslandContext& context) : context_(context) {
-        if (!poll()) {
-            watcher_ = std::jthread([this](const std::stop_token& done) {
-                while (!done.stop_requested() && !poll()) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                }
-            });
-        }
-    }
-    [[nodiscard]] std::stop_token token() const { return source_.get_token(); }
-
-  private:
-    bool poll() {
-        if (context_.cancelled == nullptr || context_.cancelled(context_.user) == 0U) {
-            return false;
-        }
-        source_.request_stop();
-        return true;
-    }
-    MradmIslandContext context_;
-    std::stop_source source_;
-    std::jthread watcher_; // Joined before the stop source goes.
-};
-
-// The encoders' progress, raw, to the engine (which maps it into the render's range).
-class Progress final : public ProgressSink {
-  public:
-    explicit Progress(const MradmIslandContext& context) : context_(context) {}
-    void on_progress(const ProgressEvent& e) override {
-        if (context_.progress != nullptr) {
-            const MradmEngineProgress raw{static_cast<uint32_t>(e.stage),
-                                          static_cast<uint32_t>(e.operation),
-                                          e.fraction,
-                                          e.stage_fraction,
-                                          e.current_frame,
-                                          e.total_frames,
-                                          view(e.message)};
-            context_.progress(context_.user, &raw);
-        }
-    }
-
-  private:
-    MradmIslandContext context_;
-};
-
-// The reply's texts live until the next island on this thread.
-void fail(MradmEngineIslandReply& reply, const Error& error) {
-    thread_local std::string message;
-    thread_local std::string context;
-    message = error.message;
-    context = error.context;
-    reply.code = static_cast<int32_t>(error.code);
-    reply.message = view(message);
-    reply.context = view(context);
-}
+using island::fail;
 
 void done(MradmEngineIslandReply& reply, const Result<void>& result) {
     if (!result) {
@@ -103,6 +28,10 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
                                       MradmEngineIslandReply* reply) {
     using namespace mradm;
     using namespace mradm::audio;
+    using island::Cancel;
+    using island::native;
+    using island::Progress;
+    using island::text;
     if (request == nullptr || context == nullptr || reply == nullptr) {
         return 1;
     }
