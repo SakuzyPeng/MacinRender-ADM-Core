@@ -1951,8 +1951,11 @@ bool verify_apple_islands(adm_context_t* ctx, const std::filesystem::path& input
     adm_render_options_set_renderer(opts, ADM_RENDERER_APPLE);
     adm_render_options_set_output_layout(opts, "binaural");
     bool ok = true;
-    for (const bool existing_output : {false, true}) {
-        const auto output = unique_temp_wav_path("mr_c_api_apple_callback_failure");
+    // WAV writes directly to its destination. FLAC stages the render before installing it.
+    for (const auto& [extension, existing_output] :
+         {std::pair{".wav", false}, std::pair{".flac", false}, std::pair{".flac", true}}) {
+        auto output = unique_temp_wav_path("mr_c_api_apple_callback_failure");
+        output.replace_extension(extension);
         const FileGuard guard(output);
         if (existing_output) {
             std::ofstream previous(output, std::ios::binary);

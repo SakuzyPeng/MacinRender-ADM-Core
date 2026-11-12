@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -129,8 +130,8 @@ void progress(void* user, const MradmEngineProgress* event) {
 }
 
 void log(void* user, uint32_t /*level*/, MradmAdmText module, MradmAdmText /*message*/) {
-    auto& c = *static_cast<Caller*>(user);
     if (std::string_view{reinterpret_cast<const char*>(module.data), module.len} == "apple") {
+        auto& c = *static_cast<Caller*>(user);
         ++c.lines;
     }
 }
@@ -148,7 +149,7 @@ MradmAppleSettings settings(const std::string& input, std::string_view layout) {
 
 } // namespace
 
-int main() {
+int main() try {
     const auto dir = fs::temp_directory_path() / ("mr_adm_apple_island_" + std::to_string(std::random_device{}()));
     fs::create_directories(dir);
     const auto input = (dir / "in.wav").string();
@@ -226,9 +227,11 @@ int main() {
     if (stream.process != nullptr) {
         std::vector<float> block(size_t{2} * 1024U);
         size_t produced = 0;
-        message_len = message.size();
-        context_len = context.size();
-        ok &= check(stream.process(stream.ctx, block.data(), block.size(), 1024U, &produced, &error) == 0 &&
+        size_t process_message_len = message.size();
+        size_t process_context_len = context.size();
+        const MradmEngineIslandError process_error{
+            message.data(), &process_message_len, context.data(), &process_context_len};
+        ok &= check(stream.process(stream.ctx, block.data(), block.size(), 1024U, &produced, &process_error) == 0 &&
                         produced == 1024U,
                     "the stream renders after its preparation handle is gone");
         stream.destroy(stream.ctx);
@@ -254,4 +257,7 @@ int main() {
     }
     std::cout << "apple island tests passed\n";
     return 0;
+} catch (const std::exception& error) {
+    std::cerr << "apple island test exception: " << error.what() << '\n';
+    return 1;
 }

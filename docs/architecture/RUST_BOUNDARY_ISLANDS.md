@@ -140,6 +140,6 @@ consumer 测试），候选为本批的同配置构建：
 待 macOS 验证：
 - 新增 `mr_adm_apple_island_tests`（仅 macOS 注册）：真实表的准备、渲染、窗口、开始前与渲染中取消、监听流在准备句柄释放后仍可渲染、
   不支持的布局与 NULL 参数；
-- `c_api_fixture_test` 的 macOS 分支：Apple 渲染中进度回调抛异常 → `INTERNAL` 与空结果、保留既有输出并清理临时文件，预览两个窗口；
+- `c_api_fixture_test` 的 macOS 分支：Apple 渲染中进度回调抛异常 → `INTERNAL` 与空结果、WAV 清理直写输出、FLAC 保留既有输出并清理临时文件，预览两个窗口；
 - 完整 CTest、CLI / C ABI 新旧对照（含 `render-apple*` 与 `preview.apple`）、换库 consumer，以及实机 Apple 监听（含 system spatial
   与后端切换）。
