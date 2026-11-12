@@ -94,8 +94,8 @@ C ABI 采集工具（见“对照工具”）引用了其中 163 个导出：
 | APAC 编码子进程 | `run_apac_encode_child`（`mradm __apac-encode`，心跳协议；库侧经 `MRADM_APAC_HELPER` 或同目录的 `mradm` 找到子进程） | CLI 子命令 | 6.4 的 Rust CLI 提供 `__apac-encode`，编码本身留在 Apple 岛 |
 | Apple AUSpatialMixer 后端 | `apple_renderer()` → `IRenderer`（`src/adm_apple`，总线计划已在 Rust `mradm-render` `apple`） | 离线：岛请求 2、3；监听：`monitor_session` 打开岛流 | 窄 C 渲染接口（6.2 B 完成：`mradm_apple_islands`）；Apple 内部停用 `IRenderer` / `IRenderStream` 按用户决定推到 6.5 |
 | 岛流表 | `island_stream.cpp`：把 C++ `IRenderStream` 交给 Rust Monitor | `MonitorSession` | 随 Apple 渲染接口改为窄 C 接口（6.2 B 完成：生产代码移入 Apple 岛，`island_stream` 移到 `tests/support`） |
-| 系统空间 sink | `make_avsamplebuffer_device`（macOS）、`make_spatialaudioclient_device`（Windows） | `monitor_session` / `scene_output_session` 的宿主表 | 设备接口窄 C 化 |
-| miniaudio 设备 | `make_miniaudio_device`（含 NULL 后端与设备枚举） | 同上 | 留作 C 岛，经窄 C 接口 |
+| 系统空间 sink | `make_avsamplebuffer_device`（macOS）、`make_spatialaudioclient_device`（Windows） | `monitor_session` / `scene_output_session` 的宿主表 | 设备接口窄 C 化（6.2 C 完成：`mradm_device_islands`，设备由 Rust 打开与驱动） |
+| miniaudio 设备 | `make_miniaudio_device`（含 NULL 后端与设备枚举） | 同上 | 留作 C 岛，经窄 C 接口（6.2 C 完成，同上） |
 | CUDA、room 浮点环境、Windows MMCSS 与定时器 | 已在 `mradm-ffi`，经 `Host` trait | Rust | 不变 |
 
 ## 发现

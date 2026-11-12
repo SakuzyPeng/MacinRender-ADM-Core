@@ -2,7 +2,7 @@
 
 > 对应 [PCM 一致性审计](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)六期 6.2，清单与对照工具见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
 > 6.2 分三批：A 编码器、容器元数据与 IAMF MP4 打包；B Apple 后端与岛流表（见 [B 批](#b-批apple-后端与岛流表)）；
-> C 系统空间 sink 与 miniaudio 设备。A、B 两批的 PCM、日志、进度事件、错误文字与输出文件都不变。
+> C 输出设备与平台事实（见 [C 批](#c-批输出设备与平台事实)）。三批的 PCM、日志、进度事件、错误文字与输出文件都不变。
 
 ## 方向
 
@@ -170,3 +170,67 @@ Rust fmt/clippy、FFI 头校验（415 个函数、168 个结构体）、C ABI �
 
 原始对照、首轮失败与复跑记录保存在忽略的 `local/research/claude-492aa814-review/`。
 实机 Apple 监听的 system spatial 和后端切换、IAMF 启用配置仍待验证。
+
+## C 批：输出设备与平台事实
+
+### 方向
+
+A、B 两批之后，C++ 外壳里仍由 C++ 执行的岛只剩两类。一是输出设备：`MonitorSession` 经宿主回调用 C++ `RenderOptions` 选设备
+（system spatial → macOS AVSampleBufferAudioRenderer / Windows ISpatialAudioClient，否则 miniaudio），`SceneOutputSession` 自己持有
+`IAudioOutputDevice` 并在 C++ 里编排 start / pause / play / flush / 音量 / 进度。二是平台事实：`catalog.cpp` 在 C++ 里组装
+`MradmEnginePlatform`（APAC / IAMF / 打包器可用性、Apple 能力记录、Apple LFE 自检、系统空间布局）。6.3 起没有 C++ 外壳，Rust C ABI
+要能直接打开、驱动设备并读取这些事实。用户决定（2026-11-12）：Scene 输出的设备持有与编排本批一并移到 Rust；平台事实在 C 批内单独
+一个提交（C1 设备 `f19a332`，C2 平台事实 `e2a74c3`）。
+
+### C1：输出设备
+
+- **窄 C 接口**（`engine_ffi.h`）。`MradmDeviceTable` 是一个已打开的设备：`start`（带 `MradmDevicePull` 记录：在设备音频线程填满输出，
+  不阻塞、不分配）、`stop`、`flush`、`pause`、`resume`、`mark_end`、`realtime`、`has_volume` / `set_volume`、`progress`、`destroy`。
+  `MradmDeviceIslands` 按种类打开设备（0 系统空间 sink、1 硬件设备、2 miniaudio null 后端），`system_spatial` 标明平台是否有该 sink，
+  `enumerate` 逐个报告播放设备（`MradmDeviceEnumeration`）。回调都放在记录里，不在函数指针参数中再嵌套函数指针（FFI 头校验不解析嵌套）。
+- **设备岛入口。** `src/adm_realtime/device_island.{h,cpp}`（编进 `mr_adm_engine`，因为它要触到三个设备岛）提供 `mradm_device_islands()`，
+  经现有工厂打开设备；`device_table()` 把任何 C++ 设备包成表，测试注入也走它。设备的 `start` 与工厂抛出的异常以 100 与 `what()` 交回，
+  外壳照旧重抛（工厂异常在五期监听宿主回调里会结束进程，现在与 Scene 输出一样成为 C ABI 的 `INTERNAL`）；其余设备控制抛出时仍结束进程。
+- **监听。** 会话宿主表只剩设备岛与 Apple 岛。Rust 按选择取设备：system spatial 且平台有该 sink 时，打开系统空间 sink，布局取
+  `normalize_output_layout(output_layout)`、几何取请求的 `apple_geometry`，设备刷新仍留在同一 sink；否则打开硬件设备 `device_id`
+  （Linux 的 system spatial 照旧走 miniaudio）。拉取回调由 Rust 直接调用 `Monitor::pull`，需要时 `mark_end`。C++ 的 `RenderOptions`
+  副本、`release_options` 与全部设备回调删除，`start` / `switch` 不再带选项；引擎的 `Token` 只留给测试区分选择。
+- **Scene 输出。** `EngineSceneOutput` 持有设备并按原 C++ 顺序编排：创建时会话 → start（拉取）→ pause；`pause` 先停会话再暂停设备；
+  `begin_epoch` 先拒绝过期 epoch，再 park、flush、reset；音量先写会话再写设备；状态读设备进度；销毁时 park 后 stop，会话先于设备释放。
+  控制调用在 Rust 里串行。system spatial 的布局与声道数检查、stereo 的双声道检查随之移到 Rust，文字不变；非 macOS / Windows 的
+  system spatial 由设备岛报 `unsupported`（“System spatial output is unavailable on this platform”）。`SceneOutputSession` 只剩转发，
+  `create_with_device` 签名不变（经 `device_table()`），HpTF、回调零分配与峰值保护测试不改。设备错误文字经 Rust 时上限 4,095 字节。
+
+### C2：平台事实
+
+- `MradmPlatformIslands`（`engine_ffi.h`）取代 `MradmEnginePlatform`，`mradm_engine_document`、`mradm_engine_render_begin`、
+  `mradm_engine_monitor_open`、`mradm_engine_monitor_session_new` 改为接收它。`src/adm_engine/platform_island.{h,cpp}` 的
+  `mradm_platform_islands()` 提供 APAC、IAMF、MP4 打包器可用性（音频岛）、Apple 能力记录（`BackendRecords` 从 `catalog.cpp` 移来，进程内
+  只建一次）与 LFE 自检（Apple 岛），以及系统空间布局（Apple 取能力表的非双耳布局，Windows 取 `system_spatial_layouts()`）。
+- Rust 按 `catalog.cpp` 原规则只探测各调用方需要的事实：输出格式与支持矩阵探测 APAC、IAMF，IAMF 可用时才探测打包器；能力文档运行
+  LFE 自检并列出系统空间布局；离线渲染、文件流式与监听只取 IAMF 与 Apple 记录。单元测试逐种调用方固定探测的入口与顺序。
+  `catalog.cpp` 只剩把发现文档解析回 CLI 行，`RenderPlatform` 删除。
+
+### 规模
+
+| 区域 | 6.2 B | C1 | C2 |
+| --- | ---: | ---: | ---: |
+| production | 21,403 | 21,285（`src/adm_engine` −145，`src/adm_render_common` +27） | 21,124（`src/adm_engine` −163，`engine_ffi.h` +2） |
+| island-interfaces | 614 | 797（`device_island.cpp` 160、`device_island.h` 23） | 988（`platform_island.cpp` 176、`platform_island.h` 15） |
+| islands / cuda | 3,045 / 512 | 不变 | 不变 |
+
+### 验证
+
+本机 Linux x64，参照为 main `8b32728` 的 `build/consistency-a`（另存为 `build/ref-62c`），候选为 C2 之后的同配置构建：
+- **CLI 记录**：102 条命令 0 差异（含 `backends` / `formats` / `layouts` 与能力文档）；另有与前两批相同的 3 条 help 路径差异。
+- **C ABI 采集**：3,283 行、36 个文件 0 差异（含 catalog、`scene_output.null_device` 经 miniaudio null 后端的创建、音量、HpTF 与 epoch，
+  以及监听空参数）；换库运行两个 consumer 测试通过。
+- **完整一致性采集**（`collect.py --tool mradm=参照`，`compare-collections.py`）：运行中，结果另行补记。
+- **单元测试**：`mradm-ffi` 新增监听设备选择与打开失败的用例（system spatial 的布局别名与几何、硬件设备 id、错误码与文字）和平台事实的
+  逐调用方探测用例；`mradm-engine` 监听会话测试适配新签名。完整 ctest 85/85；`mr_adm_rust_quality`、`mr_adm_ffi_header_check`（412 个
+  函数、171 个结构体）、`language-surface.py --check --base-ref origin/main` 通过；新增与改动的 C++ 文件 clang-tidy 无提示；
+  `device_island.cpp`、`platform_island.cpp`、`catalog.cpp`、两个会话外壳在 `-D__APPLE__` 下、`platform_island.cpp` / `catalog.cpp` 在
+  `-D_WIN32` 下通过 `-fsyntax-only`。
+
+待维护者：macOS / Windows 完整 CTest、CLI / C ABI 新旧对照与换库 consumer；实机监听（miniaudio 换设备、system spatial、后端切换）与
+Scene system spatial 输出；IAMF 启用配置。

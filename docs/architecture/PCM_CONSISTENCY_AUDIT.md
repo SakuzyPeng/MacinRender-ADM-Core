@@ -675,7 +675,7 @@ macOS / Windows 验证分别记录在 6.1 记录中；CLI v2 逐条保存全部�
 生产 C/C++ 21,772 行不变。
 见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
 
-**6.2 状态**：分 A（编码器、容器元数据与 IAMF MP4 打包）、B（Apple 后端与岛流表）、C（系统空间 sink 与 miniaudio）三批，A、B 已完成：
+**6.2 状态**：分 A（编码器、容器元数据与 IAMF MP4 打包）、B（Apple 后端与岛流表）、C（输出设备与平台事实）三批，均已完成：
 - 离线渲染的岛请求 1、4–9 由 Rust 直接调用 `src/adm_audio` 的 `mradm_audio_island`：`mradm-engine` 的 `Render::next_with` 在岛请求排到队首时
   经 `Islands` trait 执行，事件顺序、进度区间与取消点不变；`mradm-ffi` 提供 `MradmIslandRunner` / `MradmIslandContext` 与
   `mradm_engine_render_set_islands`；`RenderService` 删去这些岛的执行分支，只剩 Apple；
@@ -695,6 +695,15 @@ B 批：
   macOS 编译与验证待维护者。
 
 生产 C/C++ 21,761 → 21,403 行，`island-interfaces` 205 → 614 行。
+
+C 批：
+- 输出设备改为 `mradm_device_islands`（系统空间 sink、miniaudio 硬件设备与 null 后端，`device_table` 包装任何 C++ 设备）：监听会话与
+  Scene 输出的设备都由 Rust 打开、拉取并按原顺序驱动，`MonitorSession` 的设备回调与 `RenderOptions` 副本删除，`SceneOutputSession` 只剩转发；
+- 用户决定（2026-11-12）：Scene 输出的设备持有与编排本批一并移到 Rust，平台事实单独一个提交；
+- 平台事实改为 `mradm_platform_islands`，Rust 按原规则只探测各调用方需要的事实，`catalog.cpp` 只剩把文档解析回 CLI 行；
+- 本机 Linux 新旧对照 0 差异：CLI 记录 102 条、C ABI 采集 3,283 行与 36 个文件、完整采集；macOS / Windows 与实机监听待维护者。
+
+生产 C/C++ 21,403 → 21,124 行，`island-interfaces` 614 → 988 行。6.2 的岛入口全部改为由 Rust 调用，6.3 起 Rust C ABI 注册同一批窄 C 表。
 见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。
 
 ## 每个迁移切片的验证
