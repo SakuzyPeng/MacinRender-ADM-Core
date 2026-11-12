@@ -196,7 +196,7 @@ rpath（Windows 先搜索可执行文件所在目录），并清除 `LD_LIBRARY_
 
 初始提交 `a6326614` 的 Linux x64 记录（`build/consistency-a`，Release、vendored FLAC / Opus、C ABI bundle；
 该记录早于下述维护者修正，使用当时的五条归一化和 v1 CLI 记录）：
-- **CLI 记录**：两份记录相隔数秒，102 条命令 0 差异；归一化前原始字节不同的 26 项全部由上述五条规则解释。
+- **CLI 记录**：两份记录相隔数秒，102 条命令 0 差异；归一化前原始字节不同的 26 项全部由当时的五条规则解释。
   `--tool mradm` 换成直通脚本 0 差异；换成植入缺陷的脚本（`formats` 多一行、`room-check` 退出码改为 3、`render-final-gain` 输出翻转一个字节），
   报出 11 处差异（8 条 room-check 退出码、1 处 stdout、1 处输出文件、1 处 parse-error 类的退出码），另有 1 处 parse-error 文字差异单独列出。
 - **C ABI 采集**：两份采集 3,020 行、34 个文件 0 差异；另 3 份与之并行运行（制造 CPU 争用）的采集也 0 差异。
@@ -210,3 +210,21 @@ rpath（Windows 先搜索可执行文件所在目录），并清除 `LD_LIBRARY_
 
 维护者复查发现并修正五项问题：MP4 二进制时间遗漏、峰值限制 setter 只有空句柄调用、Scene 输出误归 monitor、CLI 漏采预定输出目录外的文件、
 以及 help / parse-error 错误地豁免文件差异。新版归一化为六条，CLI 记录升级为 v2。
+
+修正代码 `1d1770b0` 的原生验证如下；后续提交只补充本节记录。两平台复用原有构建与依赖缓存，FLAC / Opus 均为 vendored、IAMF 关闭。
+
+| 平台与配置 | CLI 两次完整采集 | C ABI 两次完整采集 | 换库 consumer 测试 |
+| --- | --- | --- | --- |
+| macOS arm64，Release，SOFA 开启 | 102 条命令，0 差异 | 3,399 条值、37 个文件，0 差异 | 两个均通过 |
+| Windows x64，MSVC / Ninja canonical Release，SOFA 关闭 | 102 条命令，0 差异 | 3,143 条值、35 个文件，0 差异 | 两个均通过 |
+
+- 两平台分别运行 `capi-capture.py record --family scene` 和 `--family monitor`，确认 Scene 输出及房间状态／切换错误路径归入 scene，
+  monitor 采集中没有 Scene 输出段。macOS 的 C ABI consumer 目标另在 Debug 下构建通过；所有音频文件的采集与比较使用 Release。
+- macOS 上以替代库把 `adm_render_options_set_peak_limit` 改为空操作，新采集明确检出关闭限制用例的公开结果及 WAV 差异。
+  原始版本的采集对此返回零差异；同一缺陷导致实际禁用限制的输出从约 4.50 dBTP 变成 -1 dBTP，PCM 不同。
+- macOS 上包装真实 CLI，分别在 `formats` 留下工作目录文件、在缺少输入的 `render` 命令写出 WAV；保持 stdout 与退出码不变，
+  新比较分别报告两个文件差异。单元测试还覆盖嵌套路径、覆盖前的独立快照、删除、快照篡改及 help / parse-error 的文件变化。
+- `boundary_tools_test.py`：19 项通过（Windows 跳过 7 项 POSIX 假程序用例）；`collection_tools_test.py`：73 项通过，既有条件子测例按原规则跳过。
+  新增 MP4 测试覆盖 version 0 / 1、普通／扩展／至父级末尾的 box 长度、运行时间窗、畸形头以及音频载荷中的相似字节。
+- `scripts/quality/check-changed.sh --build-dir build/debug` 与 `language-surface.py --check` 通过；clang-tidy 保留 warning-only 提示，
+  cppcheck 通过。未改变生产代码、公开 ABI 或锁定矩阵的音频算法。
