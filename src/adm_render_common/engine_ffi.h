@@ -61,22 +61,24 @@ typedef struct MradmEngineSpatialLayout {
     uint16_t reserved;
 } MradmEngineSpatialLayout;
 
-// Island facts: apple_lfe_routing_ok is -1 when absent; apple may be NULL.
-typedef struct MradmEnginePlatform {
-    uint32_t apac;
-    uint32_t iamf;
-    uint32_t iamf_mp4_packager;
-    int32_t apple_lfe_routing_ok;
-    const MradmEngineBackend* apple;
-    const MradmEngineSpatialLayout* system_spatial;
-    size_t system_spatial_len;
-} MradmEnginePlatform;
+// The islands' platform facts (src/adm_engine/platform_island.h): encoder and MP4 packager
+// availability, the Apple backend's process-lifetime record (NULL without it) and its LFE
+// self-test (-1 without it), and the system-spatial layouts (process-lifetime records). Any entry
+// may be NULL. The engine probes only what each caller needs, as the C++ catalog did.
+typedef struct MradmPlatformIslands {
+    uint32_t (*apac)(void);
+    uint32_t (*iamf)(void);
+    uint32_t (*iamf_mp4_packager)(void);
+    const MradmEngineBackend* (*apple)(void);
+    int32_t (*apple_lfe_routing_ok)(void);
+    void (*system_spatial)(const MradmEngineSpatialLayout** layouts, size_t* len);
+} MradmPlatformIslands;
 
 // index: 0 ear, 1 saf, 2 triple-balance, 3 hoa, 4 saf-binaural, 5 room-binaural.
 int32_t mradm_engine_backend(uint32_t index, const MradmEngineBackend** out);
 // kind: 0 capabilities, 1 layouts, 2 output formats, 3 input layouts, 4 render support matrix.
 int32_t mradm_engine_document(uint32_t kind,
-                              const MradmEnginePlatform* platform,
+                              const MradmPlatformIslands* platform,
                               MradmEngineText** out,
                               MradmAdmText* document);
 void mradm_engine_text_destroy(MradmEngineText* text);
@@ -434,7 +436,7 @@ typedef struct MradmEngineRender MradmEngineRender;
 // Optional preimported scene and cached preparation (a Rust backend's or the Apple island's).
 // Invalid arguments (including non-UTF-8 or NUL-containing paths) return 1; panics return 6.
 int32_t mradm_engine_render_begin(const MradmEngineRenderRequest* request,
-                                  const MradmEnginePlatform* platform,
+                                  const MradmPlatformIslands* platform,
                                   const MradmSceneHandle* preimported,
                                   const MradmRenderPrepared* cached,
                                   MradmEngineRender** output);
@@ -497,7 +499,7 @@ typedef struct MradmEngineMonitorView {
 // scene is the session's policy-applied scene (may be null). Returns 1 for invalid arguments
 // (including paths not encoded as UTF-8 or containing NUL), 6 for a panic, otherwise 0.
 int32_t mradm_engine_monitor_open(const MradmEngineRenderRequest* request,
-                                  const MradmEnginePlatform* platform,
+                                  const MradmPlatformIslands* platform,
                                   const MradmSceneHandle* scene,
                                   uint32_t system_spatial,
                                   MradmEngineMonitor** output,
@@ -767,7 +769,7 @@ typedef struct MradmEngineMonitorSessionHost {
 
 // A session without an engine; null for an invalid host or platform record. The scene handle
 // must outlive the session.
-MradmEngineMonitorSession* mradm_engine_monitor_session_new(const MradmEnginePlatform* platform,
+MradmEngineMonitorSession* mradm_engine_monitor_session_new(const MradmPlatformIslands* platform,
                                                             const MradmSceneHandle* scene,
                                                             uint32_t sample_rate,
                                                             uint64_t total_frames,

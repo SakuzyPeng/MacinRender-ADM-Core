@@ -29,6 +29,7 @@
 #include "catalog.h"
 #include "engine_records.h"
 #include "engine_result.h"
+#include "platform_island.h"
 #include "request_record.h"
 #include "scene_handle.h"
 
@@ -176,13 +177,12 @@ RenderResult RenderService::render(const RenderRequest& request,
                                    std::shared_ptr<IPreparedRender>* prepared_cache) const {
     const RequestTexts texts(request);
     const auto record = texts.record(request);
-    const engine::RenderPlatform platform;
     std::shared_ptr<IPreparedRender> local;
     auto& slot = prepared_cache != nullptr ? *prepared_cache : local;
     const auto* cached = dynamic_cast<const render_common::EnginePrepared*>(slot.get());
     MradmEngineRender* raw = nullptr;
     const auto code = mradm_engine_render_begin(&record,
-                                                platform.get(),
+                                                mradm_platform_islands(),
                                                 preimported_scene != nullptr ? preimported_scene->handle->raw : nullptr,
                                                 cached != nullptr ? cached->handle.get() : nullptr,
                                                 &raw);

@@ -1,6 +1,6 @@
 //! The render orchestration boundary (`mradm-engine`): the backend
 //! capability records and the discovery JSON documents. Island facts (the Apple backend, the
-//! system-spatial layouts, encoder availability) arrive as [`EnginePlatform`].
+//! system-spatial layouts, encoder availability) are read from the islands' [`PlatformIslands`].
 use crate::adm::Text;
 use mradm_engine::{
     catalog::{self, Backend, Layout, Mode, Platform, SpatialLayout},
@@ -67,16 +67,26 @@ pub struct EngineSpatialLayout {
     reserved: u16,
 }
 
-/// `apple_lfe_routing_ok` is -1 when absent; `apple` may be null.
+/// The islands' platform facts (`src/adm_engine/platform_island.h`): encoder and packager
+/// availability, the Apple backend's process-lifetime record (null without it) and LFE self-test
+/// (-1 without it), and the system-spatial layouts (process-lifetime records). Entries may be
+/// null (the fact is absent).
 #[repr(C)]
-pub struct EnginePlatform {
-    apac: u32,
-    iamf: u32,
-    iamf_mp4_packager: u32,
-    apple_lfe_routing_ok: i32,
-    apple: *const EngineBackend,
-    system_spatial: *const EngineSpatialLayout,
-    system_spatial_len: usize,
+pub struct PlatformIslands {
+    apac: Option<unsafe extern "C" fn() -> u32>,
+    iamf: Option<unsafe extern "C" fn() -> u32>,
+    iamf_mp4_packager: Option<unsafe extern "C" fn() -> u32>,
+    apple: Option<unsafe extern "C" fn() -> *const EngineBackend>,
+    apple_lfe_routing_ok: Option<unsafe extern "C" fn() -> i32>,
+    system_spatial: Option<unsafe extern "C" fn(*mut *const EngineSpatialLayout, *mut usize)>,
+}
+
+/// What a caller needs from the islands: a render or stream opening (IAMF availability and the
+/// Apple backend) or discovery document `kind`.
+#[derive(Clone, Copy)]
+pub(crate) enum Facts {
+    Render,
+    Document(u32),
 }
 
 /// An owned document; its text stays valid until `mradm_engine_text_destroy`.
@@ -288,13 +298,35 @@ unsafe fn backend(b: &EngineBackend) -> Option<Backend> {
     })
 }
 
-pub(crate) unsafe fn platform(p: &EnginePlatform) -> Option<Platform> {
-    let apple = if p.apple.is_null() {
+/// The platform of `facts`, probing only what it needs as the C++ catalog did: the output-format
+/// documents probe APAC and IAMF (and the MP4 packager in IAMF builds), the capabilities document
+/// runs the Apple LFE self-test and lists the system-spatial layouts, and every caller gets the
+/// Apple backend.
+pub(crate) unsafe fn platform(p: &PlatformIslands, facts: Facts) -> Option<Platform> {
+    let flag = |f: Option<unsafe extern "C" fn() -> u32>| f.is_some_and(|f| unsafe { f() } != 0);
+    let (formats, capabilities) = match facts {
+        Facts::Render => (false, false),
+        Facts::Document(kind) => (kind == 2 || kind == 4, kind == 0),
+    };
+    let (apac, iamf, iamf_mp4_packager) = if formats {
+        let apac = flag(p.apac);
+        let iamf = flag(p.iamf);
+        // The packager probe runs only in IAMF builds.
+        (apac, iamf, iamf && flag(p.iamf_mp4_packager))
+    } else {
+        (false, matches!(facts, Facts::Render) && flag(p.iamf), false)
+    };
+    let record = p.apple.map_or(ptr::null(), |f| unsafe { f() });
+    let apple = if record.is_null() {
         None
     } else {
-        Some(unsafe { backend(&*p.apple)? })
+        Some(unsafe { backend(&*record)? })
     };
-    let system_spatial_layouts = unsafe { items(p.system_spatial, p.system_spatial_len)? }
+    let (mut layouts, mut len) = (ptr::null(), 0);
+    if capabilities && let Some(f) = p.system_spatial {
+        unsafe { f(&mut layouts, &mut len) };
+    }
+    let system_spatial_layouts = unsafe { items(layouts, len)? }
         .iter()
         .map(|l| {
             Some(SpatialLayout {
@@ -304,14 +336,17 @@ pub(crate) unsafe fn platform(p: &EnginePlatform) -> Option<Platform> {
             })
         })
         .collect::<Option<_>>()?;
+    let lfe = match p.apple_lfe_routing_ok {
+        Some(f) if capabilities => unsafe { f() },
+        _ => -1,
+    };
     Some(Platform {
-        apac: p.apac != 0,
-        iamf: p.iamf != 0,
-        iamf_mp4_packager: p.iamf_mp4_packager != 0,
+        apac,
+        iamf,
+        iamf_mp4_packager,
         apple,
         system_spatial_layouts,
-        apple_system_spatial_lfe_routing_ok: (p.apple_lfe_routing_ok >= 0)
-            .then_some(p.apple_lfe_routing_ok != 0),
+        apple_system_spatial_lfe_routing_ok: (lfe >= 0).then_some(lfe != 0),
         ..base_platform()
     })
 }
@@ -322,15 +357,15 @@ pub(crate) unsafe fn platform(p: &EnginePlatform) -> Option<Platform> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_document(
     kind: u32,
-    platform_record: *const EnginePlatform,
+    islands: *const PlatformIslands,
     out: *mut *mut EngineText,
     document: *mut Text,
 ) -> i32 {
-    if platform_record.is_null() || out.is_null() || document.is_null() {
+    if islands.is_null() || out.is_null() || document.is_null() {
         return 1;
     }
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let platform = unsafe { platform(&*platform_record)? };
+        let platform = unsafe { platform(&*islands, Facts::Document(kind))? };
         Some(match kind {
             0 => tables::capabilities_json(&platform),
             1 => tables::layouts_json(&platform),
@@ -525,6 +560,77 @@ mod tests {
         assert_eq!(text_of(out), "4+7+0");
     }
 
+    static PROBED: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+
+    fn probed(name: &'static str) {
+        PROBED.lock().unwrap().push(name);
+    }
+
+    unsafe extern "C" fn yes_apac() -> u32 {
+        probed("apac");
+        1
+    }
+    unsafe extern "C" fn yes_iamf() -> u32 {
+        probed("iamf");
+        1
+    }
+    unsafe extern "C" fn yes_packager() -> u32 {
+        probed("packager");
+        1
+    }
+    unsafe extern "C" fn lfe() -> i32 {
+        probed("lfe");
+        0
+    }
+    unsafe extern "C" fn spatial(layouts: *mut *const EngineSpatialLayout, len: *mut usize) {
+        probed("spatial");
+        unsafe {
+            *layouts = ptr::null();
+            *len = 0;
+        }
+    }
+
+    #[test]
+    fn each_caller_probes_only_its_facts() {
+        let islands = PlatformIslands {
+            apac: Some(yes_apac),
+            iamf: Some(yes_iamf),
+            iamf_mp4_packager: Some(yes_packager),
+            apple: None,
+            apple_lfe_routing_ok: Some(lfe),
+            system_spatial: Some(spatial),
+        };
+        let mut seen = Vec::new();
+        for facts in [
+            Facts::Render,
+            Facts::Document(0),
+            Facts::Document(1),
+            Facts::Document(2),
+            Facts::Document(3),
+            Facts::Document(4),
+        ] {
+            let p = unsafe { platform(&islands, facts) }.unwrap();
+            seen.push((
+                std::mem::take(&mut *PROBED.lock().unwrap()),
+                p.apac,
+                p.iamf,
+                p.iamf_mp4_packager,
+                p.apple_system_spatial_lfe_routing_ok,
+            ));
+        }
+        assert_eq!(
+            seen,
+            [
+                (vec!["iamf"], false, true, false, None),
+                (vec!["spatial", "lfe"], false, false, false, Some(false)),
+                (vec![], false, false, false, None),
+                (vec!["apac", "iamf", "packager"], true, true, true, None),
+                (vec![], false, false, false, None),
+                (vec!["apac", "iamf", "packager"], true, true, true, None),
+            ]
+        );
+    }
+
     #[test]
     fn backend_views_and_documents() {
         let mut view = ptr::null();
@@ -532,14 +638,13 @@ mod tests {
             assert_eq!(unsafe { mradm_engine_backend(index, &mut view) }, 0);
         }
         assert_eq!(unsafe { mradm_engine_backend(6, &mut view) }, 1);
-        let platform = EnginePlatform {
-            apac: 0,
-            iamf: 0,
-            iamf_mp4_packager: 0,
-            apple_lfe_routing_ok: -1,
-            apple: ptr::null(),
-            system_spatial: ptr::null(),
-            system_spatial_len: 0,
+        let platform = PlatformIslands {
+            apac: None,
+            iamf: None,
+            iamf_mp4_packager: None,
+            apple: None,
+            apple_lfe_routing_ok: None,
+            system_spatial: None,
         };
         for kind in 0..5 {
             let mut out = ptr::null_mut();

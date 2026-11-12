@@ -9,7 +9,7 @@ use super::device_island::{
 use super::engine_monitor::{EngineLiveMonitorLevels, EngineLiveMonitorStatus, overrides_of};
 use super::room_ffi::{RenderRoomControl, control_handle};
 use super::*;
-use crate::engine::{EnginePlatform, platform};
+use crate::engine::{Facts, PlatformIslands, platform};
 use crate::engine_render::FfiHost;
 use crate::engine_service::{EngineRenderRequest, empty_reply, request_of};
 use crate::hptf::Snapshot;
@@ -270,7 +270,7 @@ unsafe fn session<'a>(handle: *const EngineMonitorSession) -> Option<&'a EngineM
 /// A session without an engine; null for an invalid host or platform record.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_monitor_session_new(
-    platform_record: *const EnginePlatform,
+    islands: *const PlatformIslands,
     scene: *const SceneHandle,
     sample_rate: u32,
     total_frames: u64,
@@ -279,8 +279,8 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_new(
     catch_unwind(AssertUnwindSafe(|| {
         let (Some(host), Some(apple)) = (
             unsafe { host.as_ref() },
-            unsafe { platform_record.as_ref() }
-                .and_then(|p| unsafe { platform(p) })
+            unsafe { islands.as_ref() }
+                .and_then(|p| unsafe { platform(p, Facts::Render) })
                 .map(|p| p.apple.is_some()),
         ) else {
             return ptr::null_mut();

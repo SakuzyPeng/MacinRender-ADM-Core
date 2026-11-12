@@ -35,6 +35,8 @@ ISLAND_INTERFACES = (
     "src/adm_audio/island.cpp",
     "src/adm_audio/island_driver.h",
     "src/adm_audio/island_ffi.h",
+    "src/adm_engine/platform_island.cpp",
+    "src/adm_engine/platform_island.h",
     "src/adm_realtime/device_island.cpp",
     "src/adm_realtime/device_island.h",
 )

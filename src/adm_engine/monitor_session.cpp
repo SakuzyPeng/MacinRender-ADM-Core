@@ -19,6 +19,7 @@
 #include "catalog.h"
 #include "device_island.h"
 #include "hptf_eq.h"
+#include "platform_island.h"
 #include "render_common.h"
 #include "request_record.h"
 #include "scene_handle.h"
@@ -168,10 +169,9 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     if (!info) {
         return make_error(ErrorCode::internal_error, "invalid monitor scene");
     }
-    const engine::RenderPlatform platform;
     const auto host = islands();
     impl.rust = mradm_engine_monitor_session_new(
-        platform.get(), impl.scene_handle->raw, info->sample_rate, info->frames, &host);
+        mradm_platform_islands(), impl.scene_handle->raw, info->sample_rate, info->frames, &host);
     if (impl.rust == nullptr) {
         return make_error(ErrorCode::internal_error, "invalid monitor session");
     }

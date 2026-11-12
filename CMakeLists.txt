@@ -401,6 +401,7 @@ target_sources(
         src/adm_engine/monitor_session.cpp
         src/adm_engine/scene_output_session.cpp
         src/adm_engine/catalog.cpp
+        src/adm_engine/platform_island.cpp
         # The output devices' island interface reaches all three device islands (miniaudio in
         # adm_realtime, the system-spatial sinks in adm_apple / adm_windows), so it builds here.
         src/adm_realtime/device_island.cpp
