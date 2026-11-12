@@ -9,8 +9,8 @@ use mradm_engine::catalog::Platform;
 use mradm_engine::fmt::fixed;
 use mradm_engine::offline::Progress;
 use mradm_engine::render::{
-    Event, Island, Islands, PathText, Render, Reply, Request, Reuse, RoomOptions, operation, stage,
-    utc_date,
+    Event, Island, Islands, MetadataFields, PathText, Render, Reply, Request, Reuse, RoomOptions,
+    operation, stage, utc_date,
 };
 use mradm_engine::request::{Error, Level, Packager};
 use mradm_render::room::PolarConversion;
@@ -1091,10 +1091,38 @@ impl Islands for Recorded<'_> {
             message: "",
         };
         let mapped = map(&raw);
-        self.log.borrow_mut().push(format!("island {island:?}"));
+        self.log.borrow_mut().push(island_text(island));
         self.log.borrow_mut().push(format!("progress {mapped:?}"));
         Some(reply)
     }
+}
+
+/// An island's record without the wall clock, which may differ between renders.
+fn island_text(island: &Island) -> String {
+    let mut island = island.clone();
+    if let Island::WriteMetadata { fields, .. } = &mut island {
+        fields.date_utc.clear();
+    }
+    format!("island {island:?}")
+}
+
+#[test]
+fn island_records_ignore_the_clock_and_preserve_metadata() {
+    let at = |seconds| Island::WriteMetadata {
+        path: path_text(Path::new("out.flac")),
+        fields: MetadataFields {
+            date_utc: utc_date(seconds),
+            renderer: "saf-vbap".into(),
+            ..MetadataFields::default()
+        },
+    };
+    let reference = island_text(&at(1_000));
+    assert_eq!(reference, island_text(&at(1_001)));
+    let mut changed = at(1_001);
+    if let Island::WriteMetadata { fields, .. } = &mut changed {
+        fields.renderer = "ear".into();
+    }
+    assert_ne!(reference, island_text(&changed));
 }
 
 /// `text` with the random 16-hex token of every `*_tmp.` sidecar name replaced.
@@ -1145,7 +1173,7 @@ fn islands_run_in_order_inside_next_with() {
                     total: 0,
                     message: "",
                 };
-                expected.push(format!("island {island:?}"));
+                expected.push(island_text(&island));
                 expected.push(format!("progress {:?}", render.map_progress(&raw)));
                 render.resume(Reply::default());
             }
