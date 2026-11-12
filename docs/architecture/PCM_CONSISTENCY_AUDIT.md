@@ -625,6 +625,42 @@ CI 43058944168 与 Quality 43058944517 通过；main `2207538`（只多结项文
 与 Reference tests 43120184482 的 7 个单元通过。五期生产 C/C++ 32,551 → 21,772 行
 （−33.1%）。见 [五期结项](RUST_ORCHESTRATION_CLOSEOUT.md)。
 
+## 六期：边界迁入 Rust
+
+> 初拟于 5.9 之后（2026-11-11），用户 2026-11-12 决定照此推进。总路线见[逆转路线](RUST_INVERSION_ROADMAP.md#各期目标五期起为初拟)，五期移交的规模与开放问题见[五期结项](RUST_ORCHESTRATION_CLOSEOUT.md)。
+
+六期把五期留在 C++ 的边界迁入 Rust：公开 C ABI 由 Rust cdylib 实现（`mradm_capi`、同一 `c_api.h`、`SOVERSION 1`、只导出 `adm_*`），`mradm` CLI 改为 Rust，删除 C++ 外壳与 SDK，构建以 Cargo 为主。五期里由 Rust 状态机暂停、交回 C++ 执行的岛请求，六期改为由 Rust 直接调用岛的窄 C 接口。退出条件是 ABI 导出、GUI P/Invoke、CLI 输出与退出码回归通过，CLI11、spdlog/fmt、nlohmann_json、tl-expected 移出生产。
+
+| 执行顺序 | 工作 | 具体范围与交付 |
+| --- | --- | --- |
+| 6.1 | 方向与基线 | 清单：164 个 C ABI 导出按家族分组，标出 GUI 用到的 82 个；CLI 契约（子命令、选项与默认值、stdout、输出文件、退出码、错误消息）；Rust 要调用的岛入口。记录六期规模基线。对照工具：C ABI 在同一构建上把现有 C ABI 测试分别链接新旧两个库运行，并新增按固定调用序列采集公开输出、逐字节比较的工具（见下文）；CLI 扩展 `collect.py --tool` 允许替换 `mradm`，另加按固定命令表记录 stdout / stderr / 退出码的工具。 |
+| 6.2 | 岛改为窄 C 接口、由 Rust 调用 | FLAC / Opus MKA / IAMF / APAC 编码、MP4 元数据与打包器探测，Apple 渲染器，系统空间 sink 与 miniaudio 设备各自提供 Rust 可直接调用的窄 C 接口；`mradm-engine` 增加由 Rust 直接执行岛的路径，C++ 外壳一并改走这条路径并删去执行岛请求的代码。现有 C++ CLI 不变，作逐字节对照。 |
+| 6.3 | C ABI 由 Rust cdylib 实现 | 新 crate `mradm-capi` 产出 `mradm_capi`。A：先把现有 C++ C ABI 整体链接进 Rust cdylib，核对导出、SONAME / install_name / `.def` 与 GUI 打包，实现不变。B–F 按家族迁移，每迁一个家族删去对应 C++：B 版本、上下文与内存（7）；C render / inspect / room / 能力表（80）；D preview（4）；E Scene（38）；F Monitor / OSC（35）。每个导出以 `catch_unwind` 兜住 panic，回调线程与重入语义、`struct_size` 兼容保持不变；以现有 cbindgen 校验核对 `c_api.h` 与 Rust `#[repr(C)]`。 |
+| 6.4 | CLI 改为 Rust | 新 crate `mradm-cli` 产出 `mradm`：8 个公开子命令（`render`、`inspect`、`backends`、`layouts`、`input-layouts`、`formats`、`export`、`room-check`）与内部命令 `__apac-encode`，解析器用 clap，退出码映射为与 CLI11 相同，`-v` 日志改由 Rust 写出。CLI 只构造请求并调用 `mradm-engine`。验收：`collect.py --tool mradm=<新>` 与旧 CLI 0 差异、CLI 记录对照（覆盖全部公开子命令，补齐 `room-check` 的成功与错误路径）、`adm_cli_smoke_test` 与 macOS APAC smoke。 |
+| 6.5 | 删除 C++ 外壳与 SDK | 删除会话外壳（`RenderService`、`PreviewSession`、`MonitorSession`、`SceneOutputSession`、`SceneStreamEngine`、`OscHeadTrackingReceiver`）、`include/adm` 中 `c_api.h` 以外的头、`src/adm_core` / `adm_io` / `adm_metadata` 的残余与失去调用者的私有 FFI 头，以及 `mr_adm_c_api` 静态库、安装规则与 `MacinRenderADMCoreConfig`。测试仍要用的部分照 5.6 移到 `tests/support`，`RenderService` 改为直接调用 Rust 引擎的测试门面。CLI11、spdlog/fmt、nlohmann_json、tl-expected 移出生产，更新许可证清单。 |
+| 6.6 | 构建以 Cargo 为主 | `cargo build` 产出 `mradm` 与 `mradm_capi`；一个 `-sys` crate 的 `build.rs` 经 `cmake` crate 构建只含岛与第三方 C 库（libFLAC、libopus 等）的 CMake 工程；去掉 Corrosion。CMake 只保留岛、第三方 C 库与 C++ 测试；七期清退 C++ 测试及不再使用的测试依赖，libFLAC、libopus 等第三方 C 库按 ADR 0021 保留在岛中。CI、Release、presets 与打包脚本随之切换。 |
+| 6.7 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收，Consistency、CI、Quality、Release Build 与 Reference tests，两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化，准备七期。 |
+
+用户决定（2026-11-12）：
+1. **CLI 契约**：选项名、取值与默认值、stdout、输出文件、退出码、领域错误的中文消息不变；`--help` 的排版与参数解析错误的措辞可以变化，写进发布说明。解析器用 clap（新依赖，登记许可证），退出码另行映射为与 CLI11 相同。
+2. **构建**：以 Cargo 为入口；岛与 libFLAC / libopus 由 `-sys` crate 的 `build.rs` 调用只含岛的 CMake 工程（新增 `cmake` crate，登记许可证）。
+3. **C++ 测试**：照 5.6 移到 `tests/support`，七期清退。nlohmann_json 与 tl-expected 可作为测试专用依赖保留到七期，退出条件中的“移除”指移出生产。
+4. **preview**：preview 家族随 C ABI 迁入 Rust，取代 5.3 保留 `PreviewSession` C++ 外壳的决定（2026-11-03）。
+5. **SDK**：只剩 `c_api.h` 与 `mradm_capi`；C++ 静态库与 CMake 包配置删除，直接使用内部 C++ 头的下游不再支持。
+
+排序依据：
+- 岛先于入口：C ABI 与 CLI 改为 Rust 之前，Rust 必须能直接调用岛。
+- C ABI 先整体换壳再按家族迁移：每一步都能在同一构建上换库对照。
+- 外壳在 C ABI 与 CLI 都迁走之后删除，否则 C++ 测试与对照没有可驱动的接口。
+- 构建切换放在代码迁完之后，不与结构迁移同时进行。
+- 有意的行为变化单独成片，不与结构迁移混在一起。
+
+C ABI 对照按迁移家族选定固定输入与调用序列，采集返回码、公开结果字段、错误消息、JSON，以及适用的 PCM 与确定性输出文件，
+对新旧库的两份结果逐字节比较。结构按公开字段序列化，不比较填充字节或句柄地址；非确定项只允许按事先列明的规则归一化
+（例如临时路径、绝对时钟），不得屏蔽错误码、样本时序或数值差异。现有断言测试仍须分别通过，不能代替上述输出对照。
+
+规则沿用五期：新实现先在同一构建上与旧实现逐字节对照（C ABI 按固定调用序列采集后比较，CLI 以 `collect.py --tool mradm` 替换采集后用 `compare-collections.py` 比较），0 差异后才切换，旧实现随即删除；不为测试在 C ABI 中新增导出；锁定矩阵的 PCM、内核与检查点逐位不变；迁出即删除，生产 C/C++ 棘轮只减不增（同一提交 `language-surface.py --update`）。主机验收按当前 AGENTS.md，集中完成 macOS arm64 + Windows x64 的适用验证，Linux 由 CI 覆盖。六期结束时生产 C/C++ 预计只剩 `c_api.h`、编码器、miniaudio 与岛的 C 头，约 5,500–6,500 行，以各切片实测为准；岛与 CUDA 边界另计。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
