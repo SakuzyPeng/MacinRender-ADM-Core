@@ -58,5 +58,20 @@
 - 完整 ctest 85/85 通过；`mr_adm_rust_quality`（rustfmt + clippy）、`mr_adm_ffi_header_check`（416 个函数、166 个结构体）通过；
   `language-surface.py --check --base-ref origin/main` 通过；clang-tidy 对新增与改动的 C++ 文件无新增提示。
 
-待维护者在 macOS arm64 与 Windows x64 上验证：两平台的编译（`island.cpp` 在 macOS 调用 AudioToolbox 的 APAC 编码），
-CLI 记录与 C ABI 采集的新旧对照（macOS 上 APAC 走成功路径），以及开启 `MR_ADM_ENABLE_IAMF` 的构建中 IAMF 与 MP4 打包的对照。
+2026-11-12 维护者复核，测试源码为 `bb08c86c`，参照为候选构建前保存的主线 Release 二进制。
+macOS arm64 使用 `build/release`（SOFA on），Windows x64 使用规范 MSVC/Ninja Release 构建（SOFA off）。
+
+| 平台 | 完整 CTest | CLI 命令 | C ABI 采集 | 换库 consumer |
+| --- | ---: | ---: | ---: | ---: |
+| macOS arm64 | 90/90 | 102 | 3,400 行、36 个输出文件 | 2/2 |
+| Windows x64 | 88/88 | 102 | 3,144 行、34 个输出文件 | 2/2 |
+
+两平台的 CLI 契约与 C ABI 新旧对照均通过，macOS APAC 覆盖成功路径。
+两平台各有三个 help 输出只因可执行文件路径不同而产生信息性差异，退出码与输出文件保持一致。
+Rust 渲染测试增至 14 项，新增内联编码结束后的取消用例。
+正式 C ABI 回归覆盖 FLAC 编码首尾回调异常、结束时取消，以及有无既有输出的六种组合。
+回调异常保持 `INTERNAL` 与空结果，取消保持 `CANCELLED`，两者均保留既有输出并清理临时文件。
+macOS 改动文件的 clang-format、clang-tidy、cppcheck、Rust fmt/clippy、FFI 头校验（416 个函数、166 个结构体）
+和相对 `origin/main` 的规模棘轮通过。原生音频输出与 CLI/C ABI 采集均使用 Release 构建。
+
+本轮两平台均为 `MR_ADM_ENABLE_IAMF=OFF`。启用 IAMF 的构建及真实 IAMF/MP4 打包对照仍待单独验证。
