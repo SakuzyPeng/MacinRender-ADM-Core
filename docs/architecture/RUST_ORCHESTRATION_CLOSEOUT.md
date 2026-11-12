@@ -83,7 +83,7 @@ libsamplerate、libebur128、dr_wav 在 Linux）。两者都是手动触发，�
 
 六期按[逆转路线](RUST_INVERSION_ROADMAP.md)把边界迁入 Rust：C ABI 由 Rust cdylib 实现（`mradm_capi`、同一 `c_api.h`、
 `SOVERSION 1`、只导出 `adm_*`），CLI 改为 Rust，删除 C++ SDK 与安装规则，构建以 Cargo 为主；退出条件是 ABI 导出、GUI P/Invoke、
-CLI 输出与退出码回归通过。切片待维护者决定后写入审计。
+CLI 输出与退出码回归通过。切片与用户决定（2026-11-12）见[审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
 
 ## 维护与边界
 
