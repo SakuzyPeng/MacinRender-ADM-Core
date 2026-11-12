@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -90,16 +92,30 @@ class MappedProgress final : public ProgressSink {
 
 // The caller's stop token and progress for the islands the engine runs (mradm_audio_island).
 struct IslandDriver {
-    const std::stop_token* token;
-    ProgressSink* progress;
+    const std::stop_token* token{nullptr};
+    ProgressSink* progress{nullptr};
+    std::exception_ptr failure = nullptr;
+    std::atomic<bool> failed{false};
 };
 
-uint32_t island_cancelled(void* user) {
-    return static_cast<const IslandDriver*>(user)->token->stop_requested() ? 1U : 0U;
+// cppcheck-suppress constParameterCallback ; matches the private C callback signature.
+uint32_t island_cancelled(void* user) noexcept {
+    const auto& driver = *static_cast<const IslandDriver*>(user);
+    return driver.failed.load() || driver.token->stop_requested() ? 1U : 0U;
 }
 
-void island_progress(void* user, const MradmEngineProgress* event) {
-    static_cast<IslandDriver*>(user)->progress->on_progress(progress_of(*event));
+void island_progress(void* user, const MradmEngineProgress* event) noexcept {
+    auto& driver = *static_cast<IslandDriver*>(user);
+    if (driver.failed.load()) {
+        return;
+    }
+    try {
+        driver.progress->on_progress(progress_of(*event));
+    } catch (...) {
+        // Keep exceptions on the C++ side of the Rust callback boundary.
+        driver.failure = std::current_exception();
+        driver.failed.store(true);
+    }
 }
 
 // The Apple backend island of a render (the engine runs the audio islands). The reply's texts
@@ -310,8 +326,12 @@ RenderResult RenderService::render(const RenderRequest& request,
     Islands islands(render.get(), request, progress, logs, slot);
     for (;;) {
         MradmEngineRenderEvent event{};
-        if (mradm_engine_render_next(render.get(), request.options.cancel_token.stop_requested() ? 1U : 0U, &event) !=
-            0) {
+        const auto status =
+            mradm_engine_render_next(render.get(), request.options.cancel_token.stop_requested() ? 1U : 0U, &event);
+        if (driver.failure != nullptr) {
+            std::rethrow_exception(driver.failure);
+        }
+        if (status != 0) {
             return {{ErrorCode::internal_error, "render step failed", {}}, std::nullopt, std::nullopt, {}};
         }
         if (event.kind == 1U) {

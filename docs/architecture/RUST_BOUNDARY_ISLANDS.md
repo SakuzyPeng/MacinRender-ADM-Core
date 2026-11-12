@@ -15,7 +15,8 @@
 
 - **执行点。** `mradm-engine` `render` 新增 `Islands` trait 与 `Render::next_with(cancelled, host, islands)`。岛请求仍按原顺序排进事件队列，
   排到队首、此前排队的事件都已返回之后，才交给 `Islands::run`；它给出回复时由状态机内部 `resume`，否则照旧作为 `Event::Island` 返回。
-  所以事件顺序、进度区间与取消点都与五期相同。`Render::next` 等同于 `next_with(…, None)`，Rust 一致性工具不变。
+  回复后返回 `Event::Continue`，调用方在推进下一步前重新读取取消状态，保留编码结束到输出安装之间的取消点。
+  事件顺序与进度区间保持。`Render::next` 等同于 `next_with(…, None)`。
 - **窄 C 接口。** `mradm-ffi` 新增 `MradmIslandRunner`（`run` 函数与调用方的 `MradmIslandContext`）和
   `mradm_engine_render_set_islands`；`run` 返回 0 表示已执行（失败写在回复里），非 0 表示交回调用方。请求与回复沿用
   `MradmEngineRenderEvent` / `MradmEngineIslandReply`，不新增字段。`MradmIslandContext` 只有两个回调：`cancelled` 查询调用方的取消，
@@ -25,6 +26,8 @@
   `ProgressSink` 事件原样交给引擎，由引擎按 `map_progress` 同样的规则映射后转给调用方。异常不能穿过 Rust 栈帧，入口内捕获后
   作为 `internal_error`（“render island failed”）回复；五期中这类异常会从 `RenderService::render` 抛出，再由 C ABI 转成 INTERNAL。
 - **C++ 外壳。** `RenderService::render` 在开始渲染后注册 `mradm_audio_island` 与自己的取消、进度回调，`Islands` 类只剩 Apple 分支。
+  进度桥为 `noexcept`，在 C++ 内捕获并保存调用方异常，同时发布原子停止标志供编码器的取消线程读取。
+  Rust 调用返回后再重抛给 C++ 调用方，公开 C ABI 沿用 `INTERNAL` 与空结果句柄的异常路径。
   6.3 的 Rust C ABI 注册同一个入口，以自己的取消标志与进度回调作为 `MradmIslandContext`。
 
 ## 规模
@@ -35,7 +38,7 @@
 
 | 区域 | 6.1 | 6.2 A |
 | --- | ---: | ---: |
-| production | 21,772 | 21,741（`render_service.cpp` −48，`engine_ffi.h` +17） |
+| production | 21,772 | 21,761（`render_service.cpp` −28，`engine_ffi.h` +17） |
 | island-interfaces | — | 205（`island.cpp` 188、`island_ffi.h` 17） |
 | islands / cuda | 3,045 / 512 | 不变 |
 

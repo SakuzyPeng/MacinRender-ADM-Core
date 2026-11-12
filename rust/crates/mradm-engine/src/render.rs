@@ -1184,7 +1184,8 @@ impl Render {
                             islands.run(island, &|p| range.map_or(*p, |r| r.map(p)))
                         {
                             self.resume(reply);
-                            continue;
+                            // Let the caller refresh cancellation before advancing past the island.
+                            return Event::Continue;
                         }
                     }
                 }

@@ -1209,3 +1209,38 @@ fn islands_run_in_order_inside_next_with() {
     assert_eq!(render.outcome().unwrap().error, None);
     let _ = std::fs::remove_file(dir.file("declined.flac"));
 }
+
+#[test]
+fn cancellation_after_an_inline_encoder_preserves_the_previous_output() {
+    struct CancelAtEncoderReturn(std::cell::Cell<bool>);
+    impl Islands for CancelAtEncoderReturn {
+        fn run(&self, island: &Island, _: &dyn Fn(&Progress) -> Progress) -> Option<Reply> {
+            if let Island::EncodeFlac { dst, .. } = island {
+                std::fs::write(&dst.utf8, b"flac").unwrap();
+                self.0.set(true);
+            }
+            Some(Reply::default())
+        }
+    }
+
+    let dir = Dir::new("inline-encoder-cancel");
+    let input = dir.file("in.wav");
+    let output = dir.file("out.flac");
+    scene_wav("objects-point", &input, 4096);
+    std::fs::write(&output, b"previous output").unwrap();
+    let mut r = request(&input, &output);
+    r.output_layout = "5.1".into();
+    let mut render = Render::new(r, Platform::default(), Reuse::default());
+    let islands = CancelAtEncoderReturn(std::cell::Cell::new(false));
+    loop {
+        match render.next_with(islands.0.get(), &TestHost, Some(&islands)) {
+            Event::Island(island) => panic!("returned {island:?}"),
+            Event::Done => break,
+            _ => {}
+        }
+    }
+    assert!(islands.0.get());
+    assert_eq!(render.outcome().unwrap().error.as_ref().unwrap().code, 5);
+    assert_eq!(std::fs::read(&output).unwrap(), b"previous output");
+    assert_eq!(dir.names(), vec!["out.flac"]);
+}

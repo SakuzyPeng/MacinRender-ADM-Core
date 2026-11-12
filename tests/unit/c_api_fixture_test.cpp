@@ -18,6 +18,7 @@
 #include <iterator>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -1938,6 +1939,74 @@ bool verify_progress_callback(adm_context_t* ctx, const std::filesystem::path& i
     return ok;
 }
 
+bool verify_flac_callback_failures(adm_context_t* ctx, const std::filesystem::path& input) {
+    enum class Action : uint8_t { cancel_at_end, throw_at_start, throw_at_end };
+    struct State {
+        adm_cancel_token_t* token{nullptr};
+        Action action{Action::cancel_at_end};
+        bool triggered{false};
+    };
+    const auto callback = [](const adm_progress_event_v2_t* event, void* user) {
+        auto& state = *static_cast<State*>(user);
+        if (event->operation != ADM_PROGRESS_OPERATION_ENCODE_FLAC ||
+            (state.action != Action::throw_at_start && std::string_view{event->message} != "FLAC encoded")) {
+            return;
+        }
+        state.triggered = true;
+        if (state.action == Action::cancel_at_end) {
+            adm_cancel(state.token);
+        } else {
+            throw std::runtime_error("FLAC progress callback failed");
+        }
+    };
+    auto* opts = adm_create_render_options();
+    auto* token = adm_create_cancel_token();
+    if (opts == nullptr || token == nullptr) {
+        adm_destroy_render_options(opts);
+        adm_destroy_cancel_token(token);
+        return check(false, "FLAC callback failure options and token creation");
+    }
+    adm_render_options_set_renderer(opts, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(opts, "5.1");
+    adm_render_options_set_cancel_token(opts, token);
+    bool ok = true;
+    for (const auto action : {Action::cancel_at_end, Action::throw_at_start, Action::throw_at_end}) {
+        for (const bool existing_output : {false, true}) {
+            auto output = unique_temp_wav_path("mr_c_api_flac_callback_failure");
+            output.replace_extension(".flac");
+            const FileGuard guard(output);
+            if (existing_output) {
+                std::ofstream previous(output, std::ios::binary);
+                previous << "previous output";
+            }
+            adm_reset_cancel_token(token);
+            State state{token, action};
+            adm_render_result_t* result = nullptr;
+            const auto code = adm_render_file_ex2(
+                ctx, input.string().c_str(), output.string().c_str(), opts, callback, &state, &result);
+            const auto expected = action == Action::cancel_at_end ? ADM_ERROR_CANCELLED : ADM_ERROR_INTERNAL;
+            ok = check(state.triggered && code == expected, "FLAC callback failure reaches the C ABI caller") && ok;
+            if (action != Action::cancel_at_end) {
+                ok = check(result == nullptr, "FLAC callback exception preserves the C ABI null result") && ok;
+            }
+            if (existing_output) {
+                std::ifstream previous(output, std::ios::binary);
+                const std::string content{std::istreambuf_iterator<char>{previous}, std::istreambuf_iterator<char>{}};
+                ok = check(content == "previous output", "FLAC callback failure preserves the previous output") && ok;
+            } else {
+                ok = check(!std::filesystem::exists(output), "FLAC callback failure leaves no final output") && ok;
+            }
+            ok = check(!has_output_sidecar(output, "render_tmp") && !has_output_sidecar(output, "output_tmp"),
+                       "FLAC callback failure cleans both staging files") &&
+                 ok;
+            adm_destroy_render_result(result);
+        }
+    }
+    adm_destroy_render_options(opts);
+    adm_destroy_cancel_token(token);
+    return ok;
+}
+
 bool verify_opus_render(adm_context_t* ctx, const std::filesystem::path& input) {
     auto output = unique_temp_wav_path("mr_c_api_opus_51");
     output.replace_extension(".mka");
@@ -2992,6 +3061,7 @@ int main() try {
     ok = verify_version_110() && ok;
     ok = verify_progress_v2_render(ctx, fixture.path()) && ok;
     ok = verify_progress_v2_flac_post(ctx, fixture.path()) && ok;
+    ok = verify_flac_callback_failures(ctx, fixture.path()) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_apac_caf_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;

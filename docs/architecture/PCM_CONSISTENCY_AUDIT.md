@@ -683,7 +683,7 @@ macOS / Windows 验证分别记录在 6.1 记录中；CLI v2 逐条保存全部�
 - 本机 Linux 新旧对照都是 0 差异：CLI 记录 102 条、C ABI 采集 3,248 行与 36 个文件、`collect.py --tool mradm` 的完整采集（产物 256、日志 666），
   换库 consumer 测试通过；新增 `next_with` 等价测试与 `mr_adm_audio_island_tests`。
 
-生产 C/C++ 21,772 → 21,741 行，`island-interfaces` 登记 205 行。待维护者在 macOS / Windows 上验证。见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。
+生产 C/C++ 21,772 → 21,761 行，`island-interfaces` 登记 205 行。待维护者在 macOS / Windows 上验证。见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。
 
 ## 每个迁移切片的验证
 
