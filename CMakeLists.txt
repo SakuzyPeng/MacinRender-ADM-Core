@@ -946,6 +946,33 @@ if(MR_ADM_CORE_BUILD_TESTS)
             $<TARGET_FILE:mr_adm_make_libadm_fixture> $<TARGET_FILE:mr_adm_libadm_reference_tests>)
     endif()
 
+    # C ABI consumers for the same-build comparison of two C ABI implementations (phase 6): they link the
+    # shared libmradm_capi and load whichever copy sits next to them (an $ORIGIN / @loader_path rpath; on
+    # Windows the executable's directory), so scripts/consistency/capi-capture.py can stage them beside
+    # either library. Built by mr_adm_capi_consumers.
+    if(MR_ADM_BUILD_CAPI_BUNDLE)
+        function(mr_adm_add_capi_consumer target)
+            add_executable(${target} EXCLUDE_FROM_ALL ${ARGN})
+            target_include_directories(${target} PRIVATE include)
+            target_link_libraries(${target} PRIVATE mradm_capi_bundle)
+            if(APPLE)
+                set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "@loader_path")
+            elseif(UNIX)
+                set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
+            endif()
+            if(MSVC)
+                target_compile_options(${target} PRIVATE /utf-8)
+            endif()
+            mr_adm_core_apply_warnings(${target})
+        endfunction()
+        mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
+        mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_fixture_test.cpp)
+        target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
+        mr_adm_add_capi_consumer(mr_adm_scene_stream_c_api_consumer_tests tests/unit/scene_stream_c_api_test.cpp)
+        add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests
+            mr_adm_scene_stream_c_api_consumer_tests)
+    endif()
+
     add_executable(mr_adm_make_fixture EXCLUDE_FROM_ALL tests/tools/make_fixture.cpp)
     target_link_libraries(mr_adm_make_fixture PRIVATE MacinRender::ADMCore)
     mr_adm_core_apply_warnings(mr_adm_make_fixture)
@@ -1028,6 +1055,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_test(NAME mr_adm_room_device_probe_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_device_probe_test.py")
+        # The CLI transcript and C ABI capture tools of the phase 6 boundary comparison.
+        add_test(NAME mr_adm_boundary_tool_tests
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/boundary_tools_test.py")
         add_custom_target(mr_adm_consistency_tools
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"
                 --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"

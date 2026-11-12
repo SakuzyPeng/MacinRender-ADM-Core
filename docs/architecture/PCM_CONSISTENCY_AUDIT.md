@@ -661,6 +661,19 @@ C ABI 对照按迁移家族选定固定输入与调用序列，采集返回码�
 
 规则沿用五期：新实现先在同一构建上与旧实现逐字节对照（C ABI 按固定调用序列采集后比较，CLI 以 `collect.py --tool mradm` 替换采集后用 `compare-collections.py` 比较），0 差异后才切换，旧实现随即删除；不为测试在 C ABI 中新增导出；锁定矩阵的 PCM、内核与检查点逐位不变；迁出即删除，生产 C/C++ 棘轮只减不增（同一提交 `language-surface.py --update`）。主机验收按当前 AGENTS.md，集中完成 macOS arm64 + Windows x64 的适用验证，Linux 由 CI 覆盖。六期结束时生产 C/C++ 预计只剩 `c_api.h`、编码器、miniaudio 与岛的 C 头，约 5,500–6,500 行，以各切片实测为准；岛与 CUDA 边界另计。
 
+**6.1 状态**：三份清单、规模基线与对照工具记录在 6.1 记录，生产代码、PCM 与内核输出不变：
+- C ABI：164 个导出按 6.3 B–F 分为 7 / 80 / 4 / 38 / 35 个，GUI 用其中 82 个；机器可读的 `scripts/consistency/capi-families.json`
+  逐个写明采集范围（完整 125、部分 38、不采集 1）；
+- CLI：8 个公开子命令与 `__apac-encode`、`render` 的 43 个选项，输出通道（正文与日志写 stdout，解析错误写 stderr）与退出码
+  （0、1，CLI11 的 105–109）；固定命令表 `cli-commands.json` 有 102 条命令；
+- 岛：编码器、容器元数据、IAMF 打包、APAC 子进程、Apple 后端与岛流表、系统空间 sink、miniaudio，以及已在 `mradm-ffi` 的平台服务。
+
+对照工具：`cli-transcript.py`（CLI 记录与比较）、`capi-capture.py`（C ABI 采集、比较与换库运行 consumer 测试，采集工具
+`mr_adm_capi_capture` 只用 `c_api.h`）、`collect.py --tool mradm`。归一化只有五条，事先列在 `boundary.py`：记录目录、运行时间窗内的
+UTC 时间、bext 日期时间、临时文件名的随机部分与 Matroska TrackUID。本机 Linux 上两种记录的自对照都是 0 差异（C ABI 另有 3 份并行采集），
+直通替换 0 差异，植入的 CLI 与 C ABI 缺陷都被报出。待维护者在 macOS / Windows 上验证。生产 C/C++ 21,772 行不变。
+见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

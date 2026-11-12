@@ -18,6 +18,9 @@ BINARY_SUFFIXES = {'.bin', '.sofa', '.f32le', '.f32', '.f64', '.u32'}
 TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml',
                  '.dat', '.manifest'}
 REPLAY_TOOLS = ('mr_adm_consistency_render', 'mr_adm_consistency_stream', 'mr_adm_consistency_scene')
+# Tools a candidate implementation may stand in for in a same-build comparison: the replay tools and the
+# CLI. The fixture, PCM-extraction and kernel tools always come from the build directory.
+SUBSTITUTABLE_TOOLS = ('mradm', *REPLAY_TOOLS)
 BUILD_TOOLS = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', *REPLAY_TOOLS,
                'mr_adm_consistency_kernels', 'mr_adm_repeat_render')
 BUILD_CONFIGURATION_FILES = ('CMakeCache.txt', 'compile_commands.json', 'consistency-dependencies.json',

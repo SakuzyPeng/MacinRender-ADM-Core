@@ -52,8 +52,8 @@ def load(root):
                 or set(identity['binaries']) != set(common.BUILD_TOOLS)):
             raise ValueError('incomplete build identity; recollect this evidence')
         overrides = manifest.get('tool_overrides', {})
-        if set(overrides) - set(common.REPLAY_TOOLS):
-            raise ValueError('only replay tools may be replaced')
+        if set(overrides) - set(common.SUBSTITUTABLE_TOOLS):
+            raise ValueError('only the CLI and the replay tools may be replaced')
         expected = dict(identity['binaries'])
         for name, row in overrides.items():
             if not isinstance(row['path'], str) or not row['path']:
