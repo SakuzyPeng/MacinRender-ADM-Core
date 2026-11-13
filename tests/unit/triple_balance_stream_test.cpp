@@ -15,8 +15,8 @@
 #include "adm/audio_io.h"
 #include "adm/render_triple_balance.h"
 
-#include "../adm_io/scene_import_internal.h"
 #include "adm_scene.h"
+#include "scene_import_internal.h"
 #include "scene_policy.h"
 #include "speaker_pcm.h"
 #include "wav_fixture.h"

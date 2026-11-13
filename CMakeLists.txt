@@ -7,9 +7,6 @@ project(
     LANGUAGES C CXX
 )
 
-set(MR_ADM_GENERATED_VERSION_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/version.cpp")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_ADM_GENERATED_VERSION_CPP}" @ONLY)
-
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
 option(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS "Build optional legacy libear numerical reference tests" OFF)
@@ -140,74 +137,32 @@ if(MR_ADM_ENABLE_IAMF)
 endif()
 
 # ── adm_core ──────────────────────────────────────────────────────────────────
-# Domain types, error handling, abstract IRenderer interface.
-# No third-party ADM/renderer types leak into this target's public headers.
+# The C++ domain headers the islands still use (errors, options, progress, logs, render records).
+# Header-only in production; the C++ SDK the tests use lives in tests/support/sdk.
 
-add_library(mr_adm_core)
+add_library(mr_adm_core INTERFACE)
 add_library(MacinRender::ADMCore ALIAS mr_adm_core)
 
 target_sources(
     mr_adm_core
-    PRIVATE
-        src/adm_core/direct_speakers_matrix.cpp
-        src/adm_core/screen.cpp
-        "${MR_ADM_GENERATED_VERSION_CPP}"
-    PUBLIC
+    INTERFACE
         FILE_SET HEADERS
         BASE_DIRS include
         FILES
             include/adm/capability.h
             include/adm/direct_speakers_matrix.h
             include/adm/errors.h
-            include/adm/head_tracking.h
-            include/adm/hptf.h
             include/adm/live_override.h
             include/adm/logging.h
-            include/adm/monitor.h
             include/adm/options.h
             include/adm/progress.h
             include/adm/render.h
+            include/adm/room.h
             include/adm/screen.h
-            include/adm/version.h
 )
 
-target_include_directories(
-    mr_adm_core
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
-
-target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE
-    $<BUILD_INTERFACE:MacinRender::ADMDsp> $<INSTALL_INTERFACE:MacinRender::RustDSP>)
-mr_adm_core_apply_warnings(mr_adm_core)
-mr_adm_core_apply_static_analysis(mr_adm_core)
-
-# ── adm_io ────────────────────────────────────────────────────────────────────
-
-add_library(mr_adm_io)
-add_library(MacinRender::ADMIo ALIAS mr_adm_io)
-
-target_sources(
-    mr_adm_io
-    PRIVATE
-        src/adm_io/scene_importer.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/io.h
-)
-
-# The Rust render scene (mradm-scene) behind the private scene_ffi.h; production builds no C++
-# copy of the scene.
-target_include_directories(mr_adm_io PRIVATE src/adm_metadata src/adm_audio)
-target_link_libraries(mr_adm_io
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp mradm_capi
-)
-mr_adm_core_apply_warnings(mr_adm_io)
-mr_adm_core_apply_static_analysis(mr_adm_io)
+target_include_directories(mr_adm_core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(mr_adm_core INTERFACE tl::expected fmt::fmt)
 
 # ── adm_render_common ─────────────────────────────────────────────────────────
 # Backend-agnostic object preprocessing and block timeline helpers used by
@@ -219,9 +174,7 @@ add_library(MacinRender::ADMRenderCommon ALIAS mr_adm_render_common)
 target_sources(
     mr_adm_render_common
     PRIVATE
-        src/adm_render_common/capability_records.cpp
         src/adm_render_common/engine_records.cpp
-        src/adm_render_common/hptf_eq.cpp
         src/adm_render_common/render_common.cpp
         src/adm_render_common/speaker_layouts.cpp
 )
@@ -230,19 +183,6 @@ target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::
     PRIVATE MacinRender::ADMAudio MacinRender::ADMDsp)
 mr_adm_core_apply_warnings(mr_adm_render_common)
 mr_adm_core_apply_static_analysis(mr_adm_render_common)
-
-# ── adm_render_room ───────────────────────────────────────────────────────────
-# Native room DSP is shared by offline rendering, file streaming and Scene streaming.
-add_library(mr_adm_render_room)
-add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
-target_sources(mr_adm_render_room PRIVATE
-    src/adm_render_room/room.cpp
-    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h)
-target_include_directories(mr_adm_render_room PRIVATE src/adm_render_room)
-target_link_libraries(mr_adm_render_room PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp Threads::Threads)
-mr_adm_core_apply_warnings(mr_adm_render_room)
-mr_adm_core_apply_static_analysis(mr_adm_render_room)
 
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
     target_compile_definitions(mr_adm_render_common PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
@@ -371,93 +311,34 @@ if(WIN32)
     mr_adm_core_apply_static_analysis(mr_adm_windows)
 endif()
 
-# ── adm_renderer_factory ──────────────────────────────────────────────────────
-# Internal backend-resolution helper shared by ADMEngine (offline RenderService) and
-# ADMRealtime (realtime MonitorEngine), so the two never diverge on backend selection.
-# Knows every backend (create_*_renderer); kept OUT of ADMCore / public headers so the
-# core domain layer is not a backend registry (ADR 0003). Private internal library.
+# ── islands ───────────────────────────────────────────────────────────────────
+# The C islands the Rust library calls by name besides the audio and Apple islands: the platform
+# facts (mradm_platform_islands) and the output devices (mradm_device_islands: miniaudio here, the
+# system-spatial sinks in adm_apple / adm_windows).
 
-add_library(mr_adm_renderer_factory)
-add_library(MacinRender::ADMRendererFactory ALIAS mr_adm_renderer_factory)
-target_sources(mr_adm_renderer_factory PRIVATE src/adm_renderer_factory/renderer_factory.cpp)
-target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_renderer_factory)
-target_link_libraries(mr_adm_renderer_factory
-    PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon
+add_library(mr_adm_islands)
+add_library(MacinRender::ADMIslands ALIAS mr_adm_islands)
+target_sources(mr_adm_islands PRIVATE
+    src/adm_engine/platform_island.cpp
+    src/adm_realtime/device_island.cpp
+    src/adm_realtime/miniaudio_device.cpp
 )
-mr_adm_core_apply_warnings(mr_adm_renderer_factory)
-mr_adm_core_apply_static_analysis(mr_adm_renderer_factory)
-
-# ── adm_engine ────────────────────────────────────────────────────────────────
-# Orchestration layer: implements RenderService, selects backends.
-
-add_library(mr_adm_engine)
-add_library(MacinRender::ADMEngine ALIAS mr_adm_engine)
-
-target_sources(
-    mr_adm_engine
-    PRIVATE
-        src/adm_engine/render_service.cpp
-        src/adm_engine/monitor_session.cpp
-        src/adm_engine/catalog.cpp
-        src/adm_engine/platform_island.cpp
-        # The output devices' island interface reaches all three device islands (miniaudio in
-        # adm_realtime, the system-spatial sinks in adm_apple / adm_windows), so it builds here.
-        src/adm_realtime/device_island.cpp
-)
-
-target_link_libraries(mr_adm_engine
+target_include_directories(mr_adm_islands PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime")
+# miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
+target_link_libraries(mr_adm_islands
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp
+    PRIVATE Threads::Threads miniaudio MacinRender::ADMAudio MacinRender::ADMDsp MacinRender::ADMRenderCommon
 )
 if(APPLE)
-    target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
+    target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderApple)
 endif()
 if(WIN32)
-    # monitor_session selects the ISpatialAudioClient sink (make_spatialaudioclient_device) for
-    # Windows system-spatial monitoring; the symbol lives in mr_adm_windows.
-    target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderWindows)
+    # The ISpatialAudioClient sink and its layouts (make_spatialaudioclient_device /
+    # system_spatial_layouts) live in mr_adm_windows.
+    target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderWindows)
 endif()
-# nlohmann/json is header-only and only reads the Rust discovery documents back (catalog.cpp); PRIVATE
-# so no third-party type leaks across the module boundary (ADR 0003 / 0004).
-target_include_directories(mr_adm_engine SYSTEM PRIVATE
-    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
-)
-# ADMAudio-internal headers (audio_io_internal.h): the engine orchestrates the
-# audio layer and reaches its internal subprocess worker (run_apac_encode_child).
-# PRIVATE so this stays an engine-only coupling and never leaks to the CLI / C ABI.
-target_include_directories(mr_adm_engine PRIVATE src/adm_audio)
-mr_adm_core_apply_warnings(mr_adm_engine)
-mr_adm_core_apply_static_analysis(mr_adm_engine)
-
-# ── adm_realtime ──────────────────────────────────────────────────────────────
-# Realtime monitor engine: streaming render session (IRenderStream) pulled by a worker
-# into an SPSC ring, drained by an injected audio device. Sits beside ADMEngine. Deps grow
-# in later slices (ADMRendererFactory for the real stream factory, miniaudio for the device).
-add_library(mr_adm_realtime)
-add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
-target_sources(mr_adm_realtime PRIVATE
-    src/adm_realtime/miniaudio_device.cpp
-    src/adm_realtime/osc_head_tracking.cpp
-)
-target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
-# miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
-target_link_libraries(mr_adm_realtime
-    PUBLIC MacinRender::ADMCore
-    PRIVATE
-        Threads::Threads
-        miniaudio
-        MacinRender::ADMDsp
-        MacinRender::ADMRenderCommon
-        MacinRender::ADMRenderRoom
-)
-# src/adm_metadata only for the plain C adm_ffi.h the private FFI headers build on.
-target_include_directories(mr_adm_realtime PRIVATE
-    src/adm_metadata
-    src/adm_render_room
-)
-mr_adm_core_apply_warnings(mr_adm_realtime)
-mr_adm_core_apply_static_analysis(mr_adm_realtime)
+mr_adm_core_apply_warnings(mr_adm_islands)
+mr_adm_core_apply_static_analysis(mr_adm_islands)
 
 # ── adm_c_api ─────────────────────────────────────────────────────────────────
 # The public C ABI: the Rust mradm-capi implementation, with the C++ progress-callback trampolines and
@@ -477,14 +358,13 @@ target_sources(
             include/adm/c_api.h
 )
 
-target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon
-    MacinRender::ADMRenderRoom)
+target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMIslands MacinRender::ADMAudio)
 set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 # The Rust C ABI (libmradm_capi.a) calls back into C++ by name: the progress trampolines
-# (adm_c_api.cpp), the platform and device islands (adm_engine), the audio island and the APAC
+# (adm_c_api.cpp), the platform and device islands (mr_adm_islands), the audio island and the APAC
 # encode worker (adm_audio).
 # Those archives come before the Rust staticlib on the link line, so a single-pass linker (GNU ld,
 # lld) takes their objects only if the symbols are already undefined when it reaches them: for a
@@ -517,8 +397,7 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         VERSION   ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
     )
-    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom)
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMIslands MacinRender::ADMAudio)
     target_link_options(mradm_capi_bundle PRIVATE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
     # A table naming every function c_api.h declares: the exports implemented in Rust live in
     # the mradm-capi staticlib, and nothing else in this DSO calls them.
@@ -596,6 +475,85 @@ endif()
 
 if(MR_ADM_CORE_BUILD_TESTS)
     enable_testing()
+
+    # ── The C++ SDK, kept for the tests (tests/support/sdk) ──────────────────────
+    # RenderService / PreviewSession, MonitorSession, OscHeadTrackingReceiver, the scene import,
+    # room profiles, screen and DirectSpeakers matrix loading, the capability records and the HpTF
+    # helpers: production uses the Rust C ABI and CLI. The test targets keep their former names.
+    # Every target made below sees the SDK headers.
+    include_directories(
+        tests/support/sdk/include
+        tests/support/sdk/render_common
+        tests/support/sdk/dsp
+        tests/support/sdk/io
+        tests/support/sdk/room
+        tests/support/sdk/realtime
+    )
+    set(MR_ADM_GENERATED_VERSION_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/version.cpp")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/tests/support/sdk/core/version.cpp.in"
+        "${MR_ADM_GENERATED_VERSION_CPP}" @ONLY)
+
+    add_library(mr_adm_sdk_core STATIC
+        tests/support/sdk/core/direct_speakers_matrix.cpp
+        tests/support/sdk/core/screen.cpp
+        "${MR_ADM_GENERATED_VERSION_CPP}")
+    target_include_directories(mr_adm_sdk_core PRIVATE src/adm_core)
+    target_link_libraries(mr_adm_sdk_core PUBLIC MacinRender::ADMCore MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_sdk_core)
+    mr_adm_core_apply_static_analysis(mr_adm_sdk_core)
+
+    add_library(mr_adm_sdk_render_common STATIC
+        tests/support/sdk/render_common/capability_records.cpp
+        tests/support/sdk/render_common/hptf_eq.cpp)
+    target_link_libraries(mr_adm_sdk_render_common
+        PUBLIC mr_adm_sdk_core MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_sdk_render_common)
+    mr_adm_core_apply_static_analysis(mr_adm_sdk_render_common)
+
+    add_library(mr_adm_io STATIC tests/support/sdk/io/scene_importer.cpp)
+    add_library(MacinRender::ADMIo ALIAS mr_adm_io)
+    target_include_directories(mr_adm_io PRIVATE src/adm_metadata src/adm_audio)
+    target_link_libraries(mr_adm_io
+        PUBLIC mr_adm_sdk_core
+        PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp mradm_capi)
+    mr_adm_core_apply_warnings(mr_adm_io)
+    mr_adm_core_apply_static_analysis(mr_adm_io)
+
+    add_library(mr_adm_render_room STATIC tests/support/sdk/room/room.cpp)
+    add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
+    target_link_libraries(mr_adm_render_room
+        PUBLIC mr_adm_sdk_core
+        PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp Threads::Threads)
+    mr_adm_core_apply_warnings(mr_adm_render_room)
+    mr_adm_core_apply_static_analysis(mr_adm_render_room)
+
+    add_library(mr_adm_realtime STATIC tests/support/sdk/realtime/osc_head_tracking.cpp)
+    add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
+    target_link_libraries(mr_adm_realtime
+        PUBLIC mr_adm_sdk_core MacinRender::ADMIslands
+        PRIVATE Threads::Threads MacinRender::ADMDsp MacinRender::ADMRenderCommon)
+    target_include_directories(mr_adm_realtime PRIVATE src/adm_metadata)
+    mr_adm_core_apply_warnings(mr_adm_realtime)
+    mr_adm_core_apply_static_analysis(mr_adm_realtime)
+
+    add_library(mr_adm_engine STATIC
+        tests/support/sdk/engine/render_service.cpp
+        tests/support/sdk/engine/monitor_session.cpp
+        tests/support/sdk/engine/catalog.cpp)
+    add_library(MacinRender::ADMEngine ALIAS mr_adm_engine)
+    target_include_directories(mr_adm_engine PRIVATE src src/adm_engine src/adm_audio)
+    target_link_libraries(mr_adm_engine
+        PUBLIC mr_adm_sdk_core mr_adm_sdk_render_common MacinRender::ADMIo MacinRender::ADMRenderRoom
+            MacinRender::ADMRealtime MacinRender::ADMIslands MacinRender::ADMAudio
+        PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    if(APPLE)
+        target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
+    endif()
+    # nlohmann/json reads the Rust discovery documents back (catalog.cpp).
+    target_include_directories(mr_adm_engine SYSTEM PRIVATE
+        "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>")
+    mr_adm_core_apply_warnings(mr_adm_engine)
+    mr_adm_core_apply_static_analysis(mr_adm_engine)
 
     add_executable(mr_adm_wav_io_tests tests/unit/wav_io_test.cpp)
     target_link_libraries(mr_adm_wav_io_tests PRIVATE MacinRender::ADMAudio)
@@ -768,7 +726,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/engine_renderer src/adm_render_common)
     target_include_directories(mr_adm_engine_renderer_test_support PRIVATE
         tests/support/binaural src/adm_render_room src/adm_audio src/adm_metadata)
-    target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC mr_adm_scene_test_support MacinRender::ADMCore MacinRender::ADMRenderCommon
+    target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC mr_adm_scene_test_support mr_adm_sdk_render_common MacinRender::ADMRenderCommon
         MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp)
     target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE
         MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
@@ -876,12 +834,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_scene_reference_fp(mr_adm_scene_numeric_parity_tests)
     mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_parity_tests)
     add_test(NAME mr_adm_scene_numeric_parity_tests COMMAND mr_adm_scene_numeric_parity_tests)
-
-    add_test(NAME mr_adm_core_package_config_tests
-        COMMAND "${CMAKE_COMMAND}"
-            -S "${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/core_package_config"
-            -B "${CMAKE_CURRENT_BINARY_DIR}/tests/core_package_config"
-            "-DMR_ADM_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_executable(mr_adm_live_vbap_parity_tests tests/unit/live_vbap_parity_test.cpp)
     target_link_libraries(mr_adm_live_vbap_parity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
@@ -1230,7 +1182,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
         tests/support/realtime src/adm_realtime src/adm_render_common)
     target_link_libraries(mr_adm_monitor_engine_test_support PUBLIC
-        MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_engine_renderer_test_support)
+        MacinRender::ADMRealtime mr_adm_sdk_render_common MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_engine_renderer_test_support)
     mr_adm_core_apply_warnings(mr_adm_monitor_engine_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_monitor_engine_test_support)
 
@@ -1397,27 +1349,27 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_render_common_numeric_tests COMMAND mr_adm_render_common_numeric_tests)
 
     add_executable(mr_adm_hptf_tests tests/unit/hptf_eq_test.cpp)
-    target_link_libraries(mr_adm_hptf_tests PRIVATE MacinRender::ADMRenderCommon mr_adm_output_dsp_test_support)
+    target_link_libraries(mr_adm_hptf_tests PRIVATE mr_adm_sdk_render_common mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_tests)
     add_test(NAME mr_adm_hptf_tests COMMAND mr_adm_hptf_tests)
 
     add_executable(mr_adm_hptf_regression_tests tests/unit/hptf_eq_regression_test.cpp)
     target_link_libraries(mr_adm_hptf_regression_tests
-        PRIVATE MacinRender::ADMRenderCommon Threads::Threads mr_adm_output_dsp_test_support)
+        PRIVATE mr_adm_sdk_render_common Threads::Threads mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_regression_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_regression_tests)
     add_test(NAME mr_adm_hptf_regression_tests COMMAND mr_adm_hptf_regression_tests)
 
     # Frozen C++ AutoEq parser vs Rust mradm-dsp hptf::parametric_eq (tests/reference/hptf_parse).
     add_executable(mr_adm_hptf_parse_reference_tests tests/unit/hptf_parse_reference_test.cpp)
-    target_link_libraries(mr_adm_hptf_parse_reference_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_hptf_parse_reference_tests PRIVATE mr_adm_sdk_render_common)
     mr_adm_core_apply_warnings(mr_adm_hptf_parse_reference_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_parse_reference_tests)
     add_test(NAME mr_adm_hptf_parse_reference_tests COMMAND mr_adm_hptf_parse_reference_tests)
 
     add_executable(mr_adm_hptf_dsp_tests tests/unit/hptf_dsp_test.cpp)
-    target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE MacinRender::ADMRenderCommon mr_adm_output_dsp_test_support)
+    target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE mr_adm_sdk_render_common mr_adm_output_dsp_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_dsp_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_dsp_tests)
     add_test(NAME mr_adm_hptf_dsp_tests COMMAND mr_adm_hptf_dsp_tests)
@@ -1444,7 +1396,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
 
     add_executable(mr_adm_config_json_compat_tests tests/unit/config_json_compat_test.cpp)
-    target_link_libraries(mr_adm_config_json_compat_tests PRIVATE MacinRender::ADMCore)
+    target_link_libraries(mr_adm_config_json_compat_tests PRIVATE mr_adm_sdk_core)
     mr_adm_core_apply_warnings(mr_adm_config_json_compat_tests)
     mr_adm_core_apply_static_analysis(mr_adm_config_json_compat_tests)
     add_test(NAME mr_adm_config_json_compat_tests COMMAND mr_adm_config_json_compat_tests)
@@ -1809,61 +1761,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
 endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
-
-# Core's private Rust archive and native link requirements also travel with the package.
-include(CMakePackageConfigHelpers)
-if(WIN32)
-    set(MR_ADM_INSTALLED_RUST_ARCHIVE "mradm_ffi.lib")
-else()
-    set(MR_ADM_INSTALLED_RUST_ARCHIVE "libmradm_ffi.a")
+# The public surface is the C ABI only: c_api.h, the shared libmradm_capi (MR_ADM_BUILD_CAPI_BUNDLE)
+# and the mradm command line. There is no C++ SDK or CMake package.
+install(FILES include/adm/c_api.h DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/adm")
+if(TARGET mradm_capi_bundle)
+    install(TARGETS mradm_capi_bundle)
 endif()
-configure_package_config_file(cmake/MacinRenderADMCoreConfig.cmake.in
-    "${CMAKE_CURRENT_BINARY_DIR}/MacinRenderADMCoreConfig.cmake"
-    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore")
-install(FILES "$<TARGET_FILE:mradm_capi-static>" DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RENAME "${MR_ADM_INSTALLED_RUST_ARCHIVE}")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MacinRenderADMCoreConfig.cmake"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore")
-install(
-    TARGETS mr_adm_core
-    EXPORT MacinRenderADMCoreTargets
-    FILE_SET HEADERS
-)
-
-# mr_adm_c_api and all targets that depend on FetchContent ADM/rendering
-# libraries (the Rust archive) cannot be in the export set until those
-# libraries provide proper installed CMake configs. Install binaries and headers
-# without export; re-integrate post-M3.
-install(
-    TARGETS
-        mr_adm_c_api
-        mr_adm_io
-        mr_adm_render_room
-        mr_adm_engine
-        mr_adm_audio
-        mr_adm_realtime
-    FILE_SET HEADERS
-)
-
-if(APPLE)
-    install(
-        TARGETS mr_adm_apple
-        FILE_SET HEADERS
-    )
+if(TARGET mradm_exe)
+    install(TARGETS mradm_exe)
 endif()
-
-if(WIN32)
-    # mr_adm_engine links mr_adm_windows (make_spatialaudioclient_device / system_spatial_layouts)
-    # on Windows, so the static lib must ship or downstream manual linking misses those symbols.
-    # No FILE_SET HEADERS: adm_windows exposes no public headers (windows_layouts.h is internal).
-    install(TARGETS mr_adm_windows)
-endif()
-
-install(
-    EXPORT MacinRenderADMCoreTargets
-    NAMESPACE MacinRender::
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore"
-)
 
 # Optional untracked local targets (developer scratch / experiments). The `local/`
 # directory is git-ignored; this hook lets it reuse the main build (deps already

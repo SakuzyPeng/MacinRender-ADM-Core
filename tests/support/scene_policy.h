@@ -4,9 +4,9 @@
 
 #include "adm/errors.h"
 
-#include "../../src/adm_io/scene_import_internal.h"
 #include "engine_result.h"
 #include "scene_handle.h"
+#include "sdk/io/scene_import_internal.h"
 
 namespace mradm::test {
 

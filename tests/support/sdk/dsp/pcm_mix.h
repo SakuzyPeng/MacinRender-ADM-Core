@@ -24,6 +24,7 @@ inline void check_mix(int status, const char* message) {
 class PcmMixPlan {
   public:
     // Adopt a private Rust Arc<Plan> allocated by the same FFI crate.
+    // cppcheck-suppress constParameterPointer ; the plan takes ownership and destroys it through this pointer.
     static PcmMixPlan adopt(void* raw) {
         PcmMixPlan result;
         result.handle_.reset(raw);

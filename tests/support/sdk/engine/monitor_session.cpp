@@ -13,9 +13,9 @@
 #include "adm/render.h"
 
 #ifdef __APPLE__
-#include "../adm_apple/apple_island.h"
+#include "adm_apple/apple_island.h"
 #endif
-#include "../adm_render_room/room_internal.h"
+#include "../room/room_internal.h"
 #include "catalog.h"
 #include "device_island.h"
 #include "hptf_eq.h"
