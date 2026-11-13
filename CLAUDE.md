@@ -48,7 +48,7 @@ ctest --test-dir build/debug -R mr_adm_ear_fixture_tests --output-on-failure
 ./build/debug/mr_adm_ear_fixture_tests
 ```
 
-Rust 是必需工具链：固定 Rust 1.98.0（`rust/rust-toolchain.toml`，含 rustfmt/clippy）+ Corrosion 0.6.1 + `Cargo.lock`（`--locked`）。CMake 只导入 `mradm-capi` staticlib（它带上 `mradm-ffi` rlib），Cargo 产物统一在 `build/rust/`。Rust 单元测试经 ctest 的 `mr_adm_rust_unit_tests`（`cargo test --workspace`）运行；格式与 lint：
+Rust 是必需工具链：固定 Rust 1.98.0（`rust/rust-toolchain.toml`，含 rustfmt/clippy）+ Corrosion 0.6.1 + `Cargo.lock`（`--locked`）。CMake 只导入 `mradm-capi` staticlib（库名 `mradm_rust`，它带上 `mradm-ffi` rlib），Cargo 产物统一在 `build/rust/`。Rust 单元测试经 ctest 的 `mr_adm_rust_unit_tests`（`cargo test --workspace`）运行；格式与 lint：
 
 ```bash
 cmake --build build/debug --target mr_adm_rust_quality   # cargo fmt --check + clippy
