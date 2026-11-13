@@ -10,4 +10,7 @@
 // Linked for its `mradm_*` symbols, which nothing in this crate names.
 use mradm_ffi as _;
 
+mod context;
 mod guard;
+mod string;
+mod version;

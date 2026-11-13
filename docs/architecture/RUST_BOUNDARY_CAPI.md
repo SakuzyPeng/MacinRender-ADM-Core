@@ -87,7 +87,51 @@ macOS 参照首次采集的 APAC `mdat` 为 88,942 字节，同一二进制随�
 
 macOS 的 `mr_adm_rust_quality`（fmt + clippy）、FFI 头校验、Cargo 许可证覆盖、依赖清单与 C/C++ 规模棘轮均通过。
 
+## B 批：版本、上下文与内存
+
+7 个导出改由 `mradm-capi` 实现，`adm_c_api.cpp` 中的定义删除：
+
+- **版本。** `adm_api_version_major` / `minor` / `patch` 返回 `c_api.h` 的 `ADM_API_VERSION_*` 宏：`mradm-capi` 的 `build.rs`
+  从头文件读出三个值，版本号仍只在 `c_api.h` 一处维护。
+- **上下文。** `adm_context_t` 改为 Rust 类型（`context.rs`），只保存上一次失败的消息；消息以字节加结尾 NUL 保存，读取方遇到
+  第一个 NUL 停止，与 C++ `std::string::c_str()` 相同。`adm_context_last_error_message` 对 NULL 返回 `""`，消息在下一次改变它的
+  调用或销毁之前有效。C++ 上下文中的 `RenderService` 不持有状态，仍在 C++ 的导出改为共用一个静态实例。
+- **字符串。** `adm_free_string` 改由 Rust 释放。`c_api.h` 要求 `char**` 输出只能用它释放，因此这些字符串也统一由 Rust 分配
+  （`string.rs`，分配前置记录大小的头部），分配与释放使用同一个分配器。原先 C++ 有三种分配方式：`new[]`、
+  `make_unique<char[]>`，以及 OSC 快照的 `malloc`（与 `delete[]` 不配对）。Windows Debug 的 C++ 用 `/MDd` 调试堆，
+  Rust 链接发布版 CRT，不能由 Rust 释放 C++ 分配的内存，所以 C++ 一侧也一并改用 Rust 分配。
+- **私有入口。** 仍在 C++ 的导出经 `src/adm_c_api/capi_ffi.h` 的两个入口使用 Rust 对象：`mradm_capi_context_set_error`
+  写上下文消息，`mradm_capi_string` 分配输出字符串（失败时返回 NULL，C++ 照旧返回 `ADM_ERROR_INTERNAL` 或抛 `bad_alloc`）。
+  `check-ffi-headers.py` 按 `c_api.h` 的类型双向核对这些入口与 Rust 导出，`quality_scripts_test.py` 新增对应测试。
+- **兜底。** `adm_create_context` 与 `mradm_capi_context_set_error` 经 `guard`；版本、读消息、销毁与释放的函数体不会 panic，
+  不另包一层。context 句柄使用可失败分配，创建失败返回 NULL，空消息与清空操作不分配内存。
+  消息更新先用 `try_reserve` 预留内容与结尾 NUL，失败返回 `ADM_ERROR_INTERNAL` 并保留原消息，成功后再替换。
+  C++ 的 `store_last_error` 将失败转成 `bad_alloc`，由既有边界返回 `ADM_ERROR_INTERNAL`，catch 内的消息更新为尽力写入。
+  故障注入回归覆盖句柄、消息扩容与输出字符串的分配失败、重试、消息保留、无分配清空与超长消息拒绝。
+
+生产 C/C++ 21,121 → 21,098 行（B 初版为 21,100 行，`capi_ffi.h` 计入 production）。
+
+B 初版在 Linux x64 Release 上对照 main `620f4e8` 的同配置构建：
+- C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
+- CLI 记录 102 条中 101 条相同，`render-vbap-714-mka` 的 MKA 少 1 字节：候选这次随机得到的 TrackUID 只有 7 字节
+  （最高字节为 0，概率约 1/256），归一化把 UID 清零但不能抹平长度，上层 Tracks / TrackEntry 的大小随之各减 1。
+  参照连录三次、候选再录两次都与参照首次逐字节相同，C++ 与 Rust 都不参与这段编码；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- ctest 85/85、`mr_adm_rust_quality`、FFI 头校验（`c_api.h` 164 个函数中 7 个由 Rust 实现，私有入口 2 个）、导出校验 164 个、
+  clang-format / clang-tidy、规模棘轮。本机 cppcheck 2.13 不支持仓库的抑制语法，cppcheck 留给 macOS Quality CI。
+
+### B 批原生复核与分配失败修正
+
+复核目标为 `566390b6`，分配失败修正为 `4939cfc3`。两平台构建并测试该修正提交，复用各自的原有 Cargo 与 FetchContent 缓存。
+
+- macOS arm64 Debug（SOFA 开启）与 Windows x64 canonical MSVC/Ninja Release（SOFA/IAMF 关闭）均完成 C ABI 共享库、
+  静态链接测试与消费者目标构建。定向 CTest 各 7/7，换库消费者测试各 2/2，`mradm-capi` 单元测试各 11/11。
+- 新增的 5 个故障注入回归验证句柄和输出字符串分配失败返回 NULL、错误消息扩容失败返回 `ADM_ERROR_INTERNAL`、
+  原消息与借用指针保留、失败后重试、无分配清空及超长消息拒绝。
+- macOS 的 Rust fmt、`mradm-capi --all-targets` clippy、改动 C/C++ 的 clang-format / clang-tidy / cppcheck 与规模棘轮通过。
+  FFI 头校验覆盖 412 个 `mradm-ffi` 函数、171 个结构体、7 个 Rust 公开导出与 2 个私有入口。两平台共享库均恰好导出 164 个 `adm_*`。
+- macOS 的 C API fixture 因多声道监听设备不可用，走测试既有的设备不可用分支。
+
 ## 下一步
 
-B 批迁移版本、上下文与内存（7 个导出）：在 `mradm-capi` 中实现并删去对应 C++，`c_api.h` 的类型在 Rust 中按名声明（不透明句柄、
-`i32` 枚举），用同一套对照验收。
+C 批迁移 render / inspect / room / 能力表（80 个导出）。

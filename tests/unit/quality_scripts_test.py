@@ -271,6 +271,36 @@ class PublicHeaderTests(unittest.TestCase):
         self.assertEqual((str(ret), [str(p) for p in params]), ("i32", ["adm_render_options_t*", "i32"]))
 
 
+class CapiPrivateEntryTests(unittest.TestCase):
+    GENERATED = (
+        "typedef struct adm_context_t adm_context_t;\n"
+        "int32_t mradm_capi_context_set_error(struct adm_context_t *context, const uint8_t *message, uintptr_t len);\n"
+        "char *mradm_capi_string(const uint8_t *text, uintptr_t len);\n"
+    )
+
+    def compare(self, generated_text):
+        hand = ffi.Header({}, {}, {}, {})
+        ffi.parse_header((REPO / ffi.CAPI_HEADER).read_text(encoding="utf-8"), ffi.CAPI_HEADER, hand,
+                         function_prefix="mradm_")
+        for relative in ffi.CAPI_FFI_HEADERS:
+            ffi.parse_header((REPO / relative).read_text(encoding="utf-8"), relative, hand, function_prefix="mradm_")
+        generated = ffi.Header({}, {}, {}, {})
+        ffi.parse_header(generated_text, "generated.h", generated, function_prefix="mradm_")
+        checker = ffi.Checker(hand, generated, all_structs=False)
+        checker.run()
+        return checker.errors
+
+    def test_private_entries_match_with_public_types(self):
+        self.assertEqual(self.compare(self.GENERATED), [])
+
+    def test_private_entries_are_checked_both_ways(self):
+        missing = self.GENERATED.replace("char *mradm_capi_string(const uint8_t *text, uintptr_t len);\n", "")
+        self.assertIn("mradm_capi_string", "\n".join(self.compare(missing)))
+        extra = self.GENERATED + "void mradm_capi_unlisted(void);\n"
+        self.assertIn("mradm_capi_unlisted", "\n".join(self.compare(extra)))
+        self.assertTrue(self.compare(self.GENERATED.replace("uintptr_t len);\nchar", "uint32_t len);\nchar")))
+
+
 class ReferenceRetirementTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="mradm-quality-test-")

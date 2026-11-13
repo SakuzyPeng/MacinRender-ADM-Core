@@ -27,6 +27,7 @@
 #include "adm/room.h"
 
 #include "../adm_engine/scene_output_session.h"
+#include "capi_ffi.h"
 #include "osc_ffi.h"
 #include "scene_stream_engine.h"
 
@@ -328,11 +329,6 @@ class CollectingLogSink final : public mradm::LogSink {
 
 } // namespace
 
-struct adm_context_t {
-    mradm::RenderService service;
-    std::string last_error_message;
-};
-
 struct adm_cancel_token_t {
     // request_stop() (via adm_cancel) is safe to call from a thread other than the
     // one running the render that holds a token from this source. Resetting swaps
@@ -387,11 +383,22 @@ mradm::Result<mradm::RoomConfig> to_room_config(const adm_room_config_t* config)
     }
     return result;
 }
+// A string the caller releases with adm_free_string (allocated by the Rust C ABI); NULL when out of memory.
+char* c_string(std::string_view text) noexcept {
+    return mradm_capi_string(reinterpret_cast<const std::uint8_t*>(text.data()), text.size());
+}
+
 void owned_string(const std::string& text, char** out) {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): C ABI transfers a char buffer.
-    auto owned = std::make_unique<char[]>(text.size() + 1);
-    std::memcpy(owned.get(), text.c_str(), text.size() + 1);
-    *out = owned.release();
+    *out = c_string(text);
+    if (*out == nullptr) {
+        throw std::bad_alloc();
+    }
+}
+
+// The engine entries the context-taking exports call; the service holds no state.
+const mradm::RenderService& service() {
+    static const mradm::RenderService instance;
+    return instance;
 }
 } // namespace
 
@@ -401,21 +408,26 @@ struct adm_preview_session_t {
 
 namespace {
 
-void clear_last_error(adm_context_t* context) {
-    if (context != nullptr) {
-        context->last_error_message.clear();
-    }
+bool set_last_error(adm_context_t* context, std::string_view message) noexcept {
+    return mradm_capi_context_set_error(
+               context, reinterpret_cast<const std::uint8_t*>(message.data()), message.size()) == ADM_ERROR_OK;
+}
+
+void clear_last_error(adm_context_t* context) noexcept {
+    set_last_error(context, {});
 }
 
 void store_last_error(adm_context_t* context, const mradm::Error& error) {
     if (context == nullptr) {
         return;
     }
-
-    context->last_error_message = error.message;
+    std::string message = error.message;
     if (!error.context.empty()) {
-        context->last_error_message += ": ";
-        context->last_error_message += error.context;
+        message += ": ";
+        message += error.context;
+    }
+    if (!set_last_error(context, message)) {
+        throw std::bad_alloc();
     }
 }
 
@@ -840,13 +852,10 @@ adm_error_code_t adm_osc_head_tracking_snapshot_json(const adm_osc_head_tracking
     }
     try {
         const auto text = receiver->receiver.snapshot_json();
-        // C ABI ownership is transferred to adm_free_string, which uses free.
-        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
-        auto* buffer = static_cast<char*>(std::malloc(text.size() + 1U));
+        auto* buffer = c_string(text);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::memcpy(buffer, text.c_str(), text.size() + 1U);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -864,16 +873,6 @@ const char* adm_osc_head_tracking_last_error_message(adm_osc_head_tracking_t* re
     } catch (...) {
         return "OSC 错误信息查询失败";
     }
-}
-
-int adm_api_version_major(void) noexcept {
-    return ADM_API_VERSION_MAJOR;
-}
-int adm_api_version_minor(void) noexcept {
-    return ADM_API_VERSION_MINOR;
-}
-int adm_api_version_patch(void) noexcept {
-    return ADM_API_VERSION_PATCH;
 }
 
 /* ── Progress stage (v1.7) ──────────────────────────────────────────────────── */
@@ -906,24 +905,6 @@ adm_render_stage_t adm_render_stage_from_string(const char* stage) noexcept {
         return ADM_STAGE_FINISHED;
     }
     return ADM_STAGE_UNKNOWN;
-}
-
-/* ── Context ──────────────────────────────────────────────────────────────── */
-
-adm_context_t* adm_create_context(void) noexcept {
-    try {
-        return new adm_context_t{};
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-void adm_destroy_context(adm_context_t* context) noexcept {
-    delete context;
-}
-
-const char* adm_context_last_error_message(const adm_context_t* context) noexcept {
-    return context != nullptr ? context->last_error_message.c_str() : "";
 }
 
 /* ── Options builder ─────────────────────────────────────────────────────── */
@@ -1442,7 +1423,7 @@ static adm_error_code_t render_file_impl(const adm_context_t* context,
         mradm::NullLogSink null_sink;
         mradm::LogSink& log_sink =
             (result != nullptr) ? static_cast<mradm::LogSink&>(collecting) : static_cast<mradm::LogSink&>(null_sink);
-        mradm::RenderResult cpp_result = context->service.render(request, progress_sink, log_sink);
+        mradm::RenderResult cpp_result = service().render(request, progress_sink, log_sink);
 
         const adm_error_code_t code = map_error(cpp_result.error.code);
         if (result == nullptr) {
@@ -1523,15 +1504,13 @@ adm_error_code_t adm_create_preview_session(adm_context_t* context,
         // cppcheck-suppress unreadVariable -- session is used (*out = session)
         auto* session = new (std::nothrow) adm_preview_session_t{std::move(*created)};
         if (session == nullptr) {
-            context->last_error_message = "failed to allocate preview session handle";
+            set_last_error(context, "failed to allocate preview session handle");
             return ADM_ERROR_INTERNAL;
         }
         *out = session;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while creating preview session";
-        }
+        set_last_error(context, "unexpected exception while creating preview session");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1643,15 +1622,13 @@ adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
         // cppcheck-suppress unreadVariable -- monitor is used (*out = monitor)
         auto* monitor = new (std::nothrow) adm_monitor_t{std::move(*created), {}, {}, {}};
         if (monitor == nullptr) {
-            context->last_error_message = "failed to allocate realtime monitor handle";
+            set_last_error(context, "failed to allocate realtime monitor handle");
             return ADM_ERROR_INTERNAL;
         }
         *out = monitor;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while creating realtime monitor";
-        }
+        set_last_error(context, "unexpected exception while creating realtime monitor");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1713,11 +1690,10 @@ adm_error_code_t adm_monitor_output_devices_json(adm_context_t* context, char** 
         }
         json += "]";
 
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -2298,7 +2274,7 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
 
     try {
         clear_last_error(context);
-        auto probe_result = context->service.probe(input_path);
+        auto probe_result = service().probe(input_path);
         if (!probe_result) {
             store_last_error(context, probe_result.error());
             return map_error(probe_result.error().code);
@@ -2311,7 +2287,7 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
         // cppcheck-suppress unreadVariable -- info is read via *out = info below
         auto* info = new (std::nothrow) adm_scene_info_t{};
         if (info == nullptr) {
-            context->last_error_message = "failed to allocate scene info handle";
+            set_last_error(context, "failed to allocate scene info handle");
             return ADM_ERROR_INTERNAL;
         }
         info->sample_rate = probe_result->sample_rate;
@@ -2322,9 +2298,7 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
         *out = info;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while probing ADM file";
-        }
+        set_last_error(context, "unexpected exception while probing ADM file");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -2372,7 +2346,7 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
 
     try {
         clear_last_error(context);
-        auto json_result = context->service.inspect_json(input_path);
+        auto json_result = service().inspect_json(input_path);
         if (!json_result) {
             store_last_error(context, json_result.error());
             return map_error(json_result.error().code);
@@ -2381,16 +2355,15 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
             return ADM_ERROR_OK; // validate-only: parsed successfully, allocate nothing
         }
         const std::string& json = *json_result;
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
-            context->last_error_message = "failed to allocate ADM inspect JSON";
+            set_last_error(context, "failed to allocate ADM inspect JSON");
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
-        context->last_error_message = "unexpected exception while inspecting ADM file";
+        set_last_error(context, "unexpected exception while inspecting ADM file");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -2405,7 +2378,7 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
 
     try {
         clear_last_error(context);
-        auto xml_result = context->service.axml(input_path);
+        auto xml_result = service().axml(input_path);
         if (!xml_result) {
             store_last_error(context, xml_result.error());
             return map_error(xml_result.error().code);
@@ -2414,16 +2387,15 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
             return ADM_ERROR_OK; // validate-only: chunk readable, allocate nothing
         }
         const std::string& xml = *xml_result;
-        auto* buffer = new (std::nothrow) char[xml.size() + 1];
+        auto* buffer = c_string(xml);
         if (buffer == nullptr) {
-            context->last_error_message = "failed to allocate ADM XML";
+            set_last_error(context, "failed to allocate ADM XML");
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, xml.c_str(), xml.size() + 1);
         *out_xml = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
-        context->last_error_message = "unexpected exception while reading ADM XML";
+        set_last_error(context, "unexpected exception while reading ADM XML");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -2438,7 +2410,7 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
 
     try {
         clear_last_error(context);
-        auto tmpl_result = context->service.policy_template_json(input_path);
+        auto tmpl_result = service().policy_template_json(input_path);
         if (!tmpl_result) {
             store_last_error(context, tmpl_result.error());
             return map_error(tmpl_result.error().code);
@@ -2447,16 +2419,15 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
             return ADM_ERROR_OK; // validate-only: scene parsed, allocate nothing
         }
         const std::string& tmpl = *tmpl_result;
-        auto* buffer = new (std::nothrow) char[tmpl.size() + 1];
+        auto* buffer = c_string(tmpl);
         if (buffer == nullptr) {
-            context->last_error_message = "failed to allocate semantic-policy template JSON";
+            set_last_error(context, "failed to allocate semantic-policy template JSON");
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, tmpl.c_str(), tmpl.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
-        context->last_error_message = "unexpected exception while building semantic-policy template";
+        set_last_error(context, "unexpected exception while building semantic-policy template");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -2475,24 +2446,16 @@ adm_error_code_t adm_export_file(adm_context_t* context,
         mradm::NullLogSink logs;
         const mradm::RenderOptions default_options;
         const mradm::RenderOptions& options = (opts != nullptr) ? opts->opts : default_options;
-        auto result = context->service.export_file(input_path, output_path, options, logs);
+        auto result = service().export_file(input_path, output_path, options, logs);
         if (!result) {
             store_last_error(context, result.error());
             return map_error(result.error().code);
         }
         return ADM_ERROR_OK;
     } catch (...) {
-        context->last_error_message = "unexpected exception while exporting ADM file";
+        set_last_error(context, "unexpected exception while exporting ADM file");
         return ADM_ERROR_INTERNAL;
     }
-}
-
-// Takes ownership of a char* the ABI handed out via char** out-params; the
-// non-const pointer type is part of the contract, so the const-pointer hint
-// does not apply here.
-// NOLINTNEXTLINE(readability-non-const-parameter)
-void adm_free_string(char* s) noexcept {
-    delete[] s;
 }
 
 /* ── Capabilities (JSON) ─────────────────────────────────────────────────── */
@@ -2508,12 +2471,11 @@ adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) 
     }
 
     try {
-        const std::string json = context->service.capabilities_json();
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        const std::string json = service().capabilities_json();
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -2530,12 +2492,11 @@ adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) noexc
     }
 
     try {
-        const std::string json = context->service.layouts_json();
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        const std::string json = service().layouts_json();
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -2552,12 +2513,11 @@ adm_error_code_t adm_input_layouts_json(adm_context_t* context, char** out_json)
     }
 
     try {
-        const std::string json = context->service.input_layouts_json();
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        const std::string json = service().input_layouts_json();
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -2574,12 +2534,11 @@ adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json
     }
 
     try {
-        const std::string json = context->service.output_formats_json();
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        const std::string json = service().output_formats_json();
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -2596,12 +2555,11 @@ adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** o
     }
 
     try {
-        const std::string json = context->service.render_support_matrix_json();
-        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        const std::string json = service().render_support_matrix_json();
+        auto* buffer = c_string(json);
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
@@ -2702,11 +2660,11 @@ adm_error_code_t adm_create_scene_stream_with_room_quality(adm_context_t* contex
         *out = handle.release();
         return ADM_ERROR_OK;
     } catch (const std::exception& exception) {
-        context->last_error_message =
-            std::string{"unexpected exception while creating live Scene stream: "} + exception.what();
+        set_last_error(context,
+                       std::string{"unexpected exception while creating live Scene stream: "} + exception.what());
         return ADM_ERROR_INTERNAL;
     } catch (...) {
-        context->last_error_message = "unexpected exception while creating live Scene stream";
+        set_last_error(context, "unexpected exception while creating live Scene stream");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -3011,10 +2969,7 @@ adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* st
     }
     try {
         const auto fail = [out_error](const mradm::Error& error) {
-            const auto& message = error.message;
-            auto owned = std::make_unique<char[]>(message.size() + 1U);
-            std::memcpy(owned.get(), message.c_str(), message.size() + 1U);
-            *out_error = owned.release();
+            owned_string(error.message, out_error);
             return map_error(error.code);
         };
         auto converted = to_scene_renderer_config(config, stream->engine->input_sample_rate());
