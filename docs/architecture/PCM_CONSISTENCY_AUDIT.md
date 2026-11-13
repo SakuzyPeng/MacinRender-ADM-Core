@@ -720,6 +720,11 @@ C 批：
 
 生产 C/C++ 21,124 → 21,121 行（删去未使用的 `bundle_stub.cpp`）。见 [6.3 记录](RUST_BOUNDARY_CAPI.md)。
 
+B（版本、上下文与内存，7 个导出）完成：版本号由 `build.rs` 从 `c_api.h` 读出；`adm_context_t` 改为 Rust 类型，仍在 C++ 的导出经
+`capi_ffi.h` 写消息；`char**` 输出字符串统一由 Rust 分配、`adm_free_string` 释放（原 C++ 的 `malloc` / `delete[]` 不配对一并消除）。
+本机 Linux 新旧对照：C ABI 采集 3,283 行与 36 个文件 0 差异、consumer 测试在两个库上通过、完整采集相同；CLI 记录 101 条相同，
+1 条为 Opus MKA 随机 TrackUID 的长度差（重录一致，见 6.3 记录）。生产 C/C++ 21,121 → 21,100 行。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
