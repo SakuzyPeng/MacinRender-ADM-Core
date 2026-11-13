@@ -308,10 +308,12 @@ class CapiPrivateEntryTests(unittest.TestCase):
         self.assertTrue(self.compare(self.GENERATED.replace("uintptr_t len);\nchar", "uint32_t len);\nchar")))
 
     def test_the_repository_declares_every_private_entry(self):
-        # The whole C ABI is in Rust: no private entry, only the imported C++ trampolines.
+        # The one private entry is the command line's, called by the mradm executable's main; the
+        # imported C++ trampolines are not entries.
         hand_text = "".join((REPO / relative).read_text(encoding="utf-8") for relative in ffi.CAPI_FFI_HEADERS)
-        imports_only = "extern uint32_t mradm_capi_progress_v1(void (*callback)(double), double fraction);\n"
-        self.assertEqual(self.compare(imports_only, hand_text), [])
+        generated = ("extern uint32_t mradm_capi_progress_v1(void (*callback)(double), double fraction);\n"
+                     "int mradm_cli_main(void);\n")
+        self.assertEqual(self.compare(generated, hand_text), [])
 
 
 class ReferenceRetirementTests(unittest.TestCase):

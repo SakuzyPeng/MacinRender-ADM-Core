@@ -8,6 +8,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 mod cancel;
+mod cli;
 mod context;
 mod error;
 mod guard;

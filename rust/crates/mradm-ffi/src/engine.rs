@@ -84,7 +84,8 @@ pub struct PlatformIslands {
 /// What a caller needs from the islands: a render or stream opening (IAMF availability and the
 /// Apple backend) or discovery document `kind`.
 #[derive(Clone, Copy)]
-pub(crate) enum Facts {
+#[doc(hidden)] // Called by mradm-capi.
+pub enum Facts {
     Render,
     Document(u32),
 }
@@ -302,7 +303,8 @@ unsafe fn backend(b: &EngineBackend) -> Option<Backend> {
 /// documents probe APAC and IAMF (and the MP4 packager in IAMF builds), the capabilities document
 /// runs the Apple LFE self-test and lists the system-spatial layouts, and every caller gets the
 /// Apple backend.
-pub(crate) unsafe fn platform(p: &PlatformIslands, facts: Facts) -> Option<Platform> {
+#[doc(hidden)] // Called by mradm-capi.
+pub unsafe fn platform(p: &PlatformIslands, facts: Facts) -> Option<Platform> {
     let flag = |f: Option<unsafe extern "C" fn() -> u32>| f.is_some_and(|f| unsafe { f() } != 0);
     let (formats, capabilities) = match facts {
         Facts::Render => (false, false),

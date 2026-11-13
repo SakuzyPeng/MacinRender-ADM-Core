@@ -32,6 +32,8 @@ RATCHETED = ("production", "islands", "cuda")
 ISLAND_INTERFACES = (
     "src/adm_apple/apple_island.cpp",
     "src/adm_apple/apple_island.h",
+    "src/adm_audio/apac_worker_island.cpp",
+    "src/adm_audio/apac_worker_island.h",
     "src/adm_audio/island.cpp",
     "src/adm_audio/island_driver.h",
     "src/adm_audio/island_ffi.h",

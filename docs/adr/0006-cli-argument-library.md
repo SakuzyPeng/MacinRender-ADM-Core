@@ -1,6 +1,6 @@
 # ADR 0006：CLI 参数解析库采用 CLI11
 
-> 状态：已接受  
+> 状态：已被 [ADR 0022](0022-rust-cli-argument-parsing.md) 取代（2026-11-13，六期 6.4 CLI 改为 Rust，解析器为 clap）；原文保留为历史记录  
 > 日期：2026-05-17  
 > 适用范围：`src/adm_cli/`、未来基于核心库的命令行工具（例如 `tools/mradm/*`）。GUI（图形用户界面）、Rust 工具链、C ABI（应用二进制接口）调用方不受本 ADR 约束。
 > 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 计划在六期把 CLI 改为 Rust，届时由新 ADR 取代本决策。

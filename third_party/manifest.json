@@ -3,24 +3,6 @@
   "_comment": "第三方依赖单一事实源。新增/升级依赖只改这里。fetchcontent 组件的 version 必须与 cmake/MRDependencies.cmake 的 GIT_TAG 完全一致（由 scripts/quality/check-licenses.sh 强制）。license 原文 bundle 在 third_party/licenses/<name>/，由 scripts/licenses/sync_license_texts.py 从构建目录的 _deps 同步。SBOM 与 docs 依赖表由 scripts/licenses/generate.py 派生。",
   "components": [
     {
-      "name": "CLI11",
-      "version": "v2.5.0",
-      "cmake_key": "CLI11",
-      "purl": "pkg:github/CLIUtils/CLI11@v2.5.0",
-      "license": "BSD-3-Clause",
-      "purpose": "CLI 参数解析",
-      "distribution": "available",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "cli11-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ]
-      },
-      "notes": ""
-    },
-    {
       "name": "nlohmann_json",
       "version": "v3.12.0",
       "cmake_key": "nlohmann_json",
@@ -55,24 +37,6 @@
         ]
       },
       "notes": "若动态链接系统库，仍需记录版本与许可证"
-    },
-    {
-      "name": "spdlog",
-      "version": "v1.15.3",
-      "cmake_key": "spdlog",
-      "purl": "pkg:github/gabime/spdlog@v1.15.3",
-      "license": "MIT",
-      "purpose": "日志库",
-      "distribution": "available",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "spdlog-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ]
-      },
-      "notes": "使用 external fmt"
     },
     {
       "name": "tl-expected",
@@ -486,6 +450,26 @@
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
     },
     {
+      "name": "rust-anstyle-1.0.11",
+      "version": "1.0.11",
+      "cmake_key": null,
+      "purl": "pkg:cargo/anstyle@1.0.11",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "clap 帮助文本的样式描述",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "anstyle",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "经 clap 引入；未启用 color，不输出 ANSI 样式。"
+    },
+    {
       "name": "rust-approx-0.5.1",
       "version": "0.5.1",
       "cmake_key": null,
@@ -604,6 +588,66 @@
         ]
       },
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-clap-4.5.41",
+      "version": "4.5.41",
+      "cmake_key": null,
+      "purl": "pkg:cargo/clap@4.5.41",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "mradm 命令行的参数解析（mradm-cli）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "clap",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "只用 builder API；关闭默认 features，只开 std、help、usage、error-context（不启用 derive、color、suggestions、wrap_help）。"
+    },
+    {
+      "name": "rust-clap_builder-4.5.41",
+      "version": "4.5.41",
+      "cmake_key": null,
+      "purl": "pkg:cargo/clap_builder@4.5.41",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "clap 的解析与帮助实现",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "clap_builder",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "经 clap 引入，features 同 clap。"
+    },
+    {
+      "name": "rust-clap_lex-0.7.5",
+      "version": "0.7.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/clap_lex@0.7.5",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "clap 的命令行分词",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "clap_lex",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "经 clap 引入。"
     },
     {
       "name": "rust-dasp_frame-0.11.0",

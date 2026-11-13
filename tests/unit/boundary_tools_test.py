@@ -294,8 +294,9 @@ class CommandTableTests(unittest.TestCase):
         first = {row['args'][0] for row in table['commands'] if row['args']}
         public = {'render', 'inspect', 'backends', 'layouts', 'input-layouts', 'formats', 'export', 'room-check'}
         self.assertLessEqual(public | {'__apac-encode'}, first)
-        declared = set(re.findall(r'add_subcommand\("([^"]+)"', ''.join(
-            p.read_text(encoding='utf-8') for p in (ROOT / 'src/adm_cli').glob('*.cpp'))))
+        # The subcommands of the Rust command line's option table.
+        declared = set(re.findall(r'Sub \{\s*name: "([^"]+)"', (ROOT / 'rust/crates/mradm-cli/src/args.rs').read_text(
+            encoding='utf-8')))
         self.assertEqual(declared, public | {'__apac-encode'})
         for name in public:
             rows = [row for row in table['commands'] if row['args'][:1] == [name]]

@@ -22,7 +22,7 @@ option(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS "Build optional dr_wav float WAVE I/O 
 option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
 option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
-option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found" ON)
+option(MR_ADM_CORE_FETCH_DEPS "Fetch the C/C++ dependencies when not found" ON)
 option(MR_ADM_CORE_USE_INSTALLED_DEPS "Use installed CMake package configs before FetchContent dependencies" ON)
 option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when available" OFF)
 option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
@@ -274,6 +274,7 @@ target_sources(
     mr_adm_audio
     PRIVATE
         src/adm_audio/apac_io.cpp
+        src/adm_audio/apac_worker_island.cpp
         src/adm_audio/audio_handles.cpp
         src/adm_audio/flac_io.cpp
         src/adm_audio/iamf_io.cpp
@@ -483,7 +484,8 @@ set_target_properties(mr_adm_c_api PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 # The Rust C ABI (libmradm_capi.a) calls back into C++ by name: the progress trampolines
-# (adm_c_api.cpp), the platform and device islands (adm_engine) and the audio island (adm_audio).
+# (adm_c_api.cpp), the platform and device islands (adm_engine), the audio island and the APAC
+# encode worker (adm_audio).
 # Those archives come before the Rust staticlib on the link line, so a single-pass linker (GNU ld,
 # lld) takes their objects only if the symbols are already undefined when it reaches them: for a
 # program linking the C ABI statically, and for the shared bundle, which would otherwise be linked
@@ -491,7 +493,7 @@ set_target_properties(mr_adm_c_api PROPERTIES
 set(MR_ADM_CAPI_CALLBACK_LINK_OPTIONS)
 if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
     foreach(_mr_symbol mradm_capi_progress_v1 mradm_capi_progress_v2 mradm_platform_islands mradm_device_islands
-            mradm_audio_island)
+            mradm_audio_island mradm_audio_apac_child)
         list(APPEND MR_ADM_CAPI_CALLBACK_LINK_OPTIONS "LINKER:--undefined=${_mr_symbol}")
     endforeach()
 endif()
@@ -567,32 +569,14 @@ if(APPLE AND MR_ADM_BUILD_HEADMOTION)
 endif()
 
 if(MR_ADM_CORE_BUILD_CLI)
+    # The command line is Rust (mradm-cli through mradm-capi's mradm_cli_main); the executable links
+    # the C ABI library for the islands and the progress trampolines the Rust render driver calls.
     add_executable(mradm_exe)
     set_target_properties(mradm_exe PROPERTIES OUTPUT_NAME mradm)
-    target_sources(mradm_exe
-        PRIVATE
-            src/adm_cli/apac_encode_command.cpp
-            src/adm_cli/backends_command.cpp
-            src/adm_cli/export_command.cpp
-            src/adm_cli/formats_command.cpp
-            src/adm_cli/inspect_command.cpp
-            src/adm_cli/input_layouts_command.cpp
-            src/adm_cli/layouts_command.cpp
-            src/adm_cli/main.cpp
-            src/adm_cli/render_command.cpp
-    )
-    target_link_libraries(
-        mradm_exe
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMIo
-            MacinRender::ADMRenderRoom
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-            CLI11::CLI11
-            spdlog::spdlog
-    )
-    target_include_directories(mradm_exe PRIVATE src/adm_audio)
+    target_sources(mradm_exe PRIVATE src/adm_cli/main.cpp)
+    # A shared ADMCAPI does not reference the private CLI entry and may omit it from its Rust
+    # archive. Retain that entry in the executable without adding it to the public C ABI.
+    target_link_libraries(mradm_exe PRIVATE MacinRender::ADMCAPI MacinRender::ADMAudio mradm_capi)
     if(APPLE)
         target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
         # AudioToolbox's APAC encoder rejects ClientDataFormat on current macOS when

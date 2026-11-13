@@ -100,6 +100,8 @@
 - [五期结项（五期 5.9）](architecture/RUST_ORCHESTRATION_CLOSEOUT.md)
 - [方向与基线（六期 6.1）](architecture/RUST_BOUNDARY_BASELINE.md)
 - [岛改为由 Rust 调用（六期 6.2）](architecture/RUST_BOUNDARY_ISLANDS.md)
+- [C ABI 迁入 Rust（六期 6.3）](architecture/RUST_BOUNDARY_CAPI.md)
+- [CLI 改为 Rust（六期 6.4）](architecture/RUST_BOUNDARY_CLI.md)
 - [room 默认 ramp 按采样率换算（五期 5.7）](architecture/RUST_ROOM_DEFAULT_RAMP.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
@@ -114,7 +116,7 @@
 - [ADR 0003：自有 ADM 领域模型与后端边界](adr/0003-owned-domain-model-and-backend-boundaries.md)
 - [ADR 0004：第三方依赖管理策略](adr/0004-third-party-dependency-management.md)
 - [ADR 0005：错误处理模型与 ABI 错误码翻译](adr/0005-error-handling-model.md)
-- [ADR 0006：CLI 参数解析库采用 CLI11](adr/0006-cli-argument-library.md)
+- [ADR 0006：CLI 参数解析库采用 CLI11](adr/0006-cli-argument-library.md)（已被 ADR 0022 取代）
 - [ADR 0007：C ABI 稳定性承诺与版本策略](adr/0007-c-abi-stability-policy.md)
 - [ADR 0008：Rust 落地方向与 SAF 按模块替换](adr/0008-rust-entry-and-saf-replacement.md)
 - [ADR 0009：外置头部追踪的独立仓库与 OSC 接入边界](adr/0009-head-tracking-input-boundary.md)
@@ -130,6 +132,7 @@
 - [ADR 0019：房间渲染按声源自身的事件网格更新滤波器](adr/0019-room-per-source-update-grid.md)
 - [ADR 0020：房间渲染的精确与实时档位](adr/0020-room-quality-tiers.md)
 - [ADR 0021：项目逆转为 Rust 主导](adr/0021-rust-primary-project.md)
+- [ADR 0022：Rust CLI 参数解析采用 clap，退出码沿用 CLI11](adr/0022-rust-cli-argument-parsing.md)
 
 ## 使用指南
 

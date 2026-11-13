@@ -783,7 +783,7 @@ impl Renderer {
 }
 
 /// `parse_screen_config_json`: the screens as `ScreenGeometry` would hold them.
-unsafe fn screens(
+pub(crate) unsafe fn screens(
     source: &[u8],
 ) -> Result<(Option<RoomScreenGeometry>, Option<RoomScreenGeometry>), Failure> {
     if source.len() > 1024 * 1024 {
