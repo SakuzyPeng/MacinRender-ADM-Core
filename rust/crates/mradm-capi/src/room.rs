@@ -70,17 +70,24 @@ pub unsafe extern "C" fn adm_room_load(
             message.len(),
         );
         if code != 0 {
-            let error = Error::new(code, until_nul(&message), ROOM);
-            return report(context, Failure::Error(error), None);
+            return report(
+                context,
+                Failure::error(code, until_nul(&message), ROOM),
+                None,
+            );
         }
-        let room = try_box(adm_room_t { profile: raw });
-        if room.is_null() {
-            mradm_room_profile_destroy(raw);
-            return guard::INTERNAL;
-        }
-        *out = room;
-        guard::OK
+        publish_room(raw, out)
     })
+}
+
+/// Takes ownership of the loaded profile, including when the ABI handle cannot be allocated.
+unsafe fn publish_room(profile: *mut RoomProfileHandle, out: *mut *mut adm_room_t) -> i32 {
+    let room = try_box(adm_room_t { profile });
+    if room.is_null() {
+        return guard::INTERNAL;
+    }
+    unsafe { *out = room };
+    guard::OK
 }
 
 #[unsafe(no_mangle)]
@@ -106,8 +113,8 @@ struct Config<'a> {
     metres: f64,
 }
 
-unsafe fn config<'a>(config: *const adm_room_config_t) -> Result<Config<'a>, Error> {
-    let invalid = || Error::new(1, "无效的房间配置".as_bytes(), b"");
+unsafe fn config<'a>(config: *const adm_room_config_t) -> Result<Config<'a>, Failure> {
+    let invalid = || Failure::error(1, "无效的房间配置".as_bytes(), b"");
     let Some(header) = (unsafe { config.cast::<u32>().as_ref() }) else {
         return Err(invalid());
     };
@@ -155,7 +162,7 @@ unsafe fn inspect(config: &Config<'_>, quality: i32) -> Result<Vec<u8>, Failure>
         )
     };
     if code != 0 {
-        return Err(Error::new(code, until_nul(&message), ROOM).into());
+        return Err(Error::new(code, until_nul(&message), ROOM)?.into());
     }
     struct Prepared(*mut mradm_ffi::room::RoomPreparedHandle);
     impl Drop for Prepared {
@@ -167,7 +174,7 @@ unsafe fn inspect(config: &Config<'_>, quality: i32) -> Result<Vec<u8>, Failure>
     let mut info = RoomPreparedInfo::default();
     let code = unsafe { mradm_room_prepared_info(prepared.0, &mut info) };
     if code != 0 {
-        return Err(Error::new(code, "房间 DSP 操作失败".as_bytes(), ROOM).into());
+        return Err(Error::new(code, "房间 DSP 操作失败".as_bytes(), ROOM)?.into());
     }
     let json = unsafe { CStr::from_ptr(mradm_room_prepared_json(prepared.0).cast()) }.to_bytes();
     let mut copy = Vec::new();
@@ -203,7 +210,7 @@ pub unsafe extern "C" fn adm_room_inspect_with_quality(
         clear(context);
         let converted = match self::config(config) {
             Ok(converted) => converted,
-            Err(error) => return report(context, Failure::Error(error), None),
+            Err(failure) => return report(context, failure, None),
         };
         let json = match inspect(&converted, quality) {
             Ok(json) => json,
@@ -232,6 +239,61 @@ pub unsafe extern "C" fn mradm_capi_room_profile(room: *const adm_room_t) -> *mu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::{adm_create_context, adm_destroy_context};
+    use crate::test_alloc::with_allocation_failure;
+
+    #[test]
+    fn invalid_config_allocation_failure_returns_internal_and_allows_retry() {
+        let context = adm_create_context();
+        let mut out = ptr::null_mut();
+        let (code, failed) =
+            with_allocation_failure(|| unsafe { adm_room_inspect(context, ptr::null(), &mut out) });
+        assert!(failed);
+        assert_eq!(code, guard::INTERNAL);
+        assert!(out.is_null());
+        assert_eq!(
+            unsafe { adm_room_inspect(context, ptr::null(), &mut out) },
+            guard::INVALID_ARGUMENT
+        );
+        unsafe { adm_destroy_context(context) };
+    }
+
+    #[test]
+    fn handle_allocation_failure_releases_the_profile_once_and_allows_retry() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../tests/fixtures/room/synthetic/room.json");
+        let path = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        let mut profile = ptr::null_mut();
+        let mut message = [0; 512];
+        assert_eq!(
+            unsafe {
+                mradm_room_profile_load(
+                    path.as_ptr().cast(),
+                    path.as_bytes().len(),
+                    &mut profile,
+                    message.as_mut_ptr(),
+                    message.len(),
+                )
+            },
+            guard::OK
+        );
+        assert!(!profile.is_null());
+        let mut out = ptr::null_mut();
+        let (code, failed) = with_allocation_failure(|| unsafe { publish_room(profile, &mut out) });
+        assert!(failed);
+        assert_eq!(code, guard::INTERNAL);
+        assert!(out.is_null());
+        let context = adm_create_context();
+        assert_eq!(
+            unsafe { adm_room_load(context, path.as_ptr(), &mut out) },
+            guard::OK
+        );
+        assert!(!unsafe { adm_room_manifest_json(out) }.is_null());
+        unsafe {
+            adm_room_destroy(out);
+            adm_destroy_context(context);
+        }
+    }
 
     #[test]
     fn invalid_configs_are_rejected_before_any_read() {
@@ -245,8 +307,12 @@ mod tests {
             hrir_manifest: ptr::null(),
             metres_per_unit: 0.0,
         };
-        let check =
-            |c: &adm_room_config_t| unsafe { config(c) }.map(|c| c.metres).map_err(|e| e.code);
+        let check = |c: &adm_room_config_t| {
+            unsafe { config(c) }.map(|c| c.metres).map_err(|e| match e {
+                Failure::Error(e) => e.code,
+                Failure::Exception => guard::INTERNAL,
+            })
+        };
         assert_eq!(check(&valid), Ok(0.0));
         for metres in [0.005, 100.5, f64::NAN, f64::INFINITY, -1.0] {
             let c = adm_room_config_t {

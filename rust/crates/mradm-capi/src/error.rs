@@ -7,6 +7,7 @@ use std::alloc::{Layout, alloc};
 use std::ffi::{CStr, c_char};
 
 /// An `mradm::Error`. `code` is the value the C++ cast to `ErrorCode`, possibly out of range.
+#[derive(Debug)]
 pub(crate) struct Error {
     pub(crate) code: i32,
     pub(crate) message: Vec<u8>,
@@ -14,16 +15,16 @@ pub(crate) struct Error {
 }
 
 impl Error {
-    pub(crate) fn new(code: i32, message: &[u8], context: &[u8]) -> Self {
-        Self {
+    pub(crate) fn new(code: i32, message: &[u8], context: &[u8]) -> Result<Self, Failure> {
+        Ok(Self {
             code,
-            message: message.to_vec(),
-            context: context.to_vec(),
-        }
+            message: concat(&[message])?,
+            context: concat(&[context])?,
+        })
     }
 
     /// `scene_error` / `wav_error`: codes outside 1–6 are `internal_error`.
-    pub(crate) fn clamped(code: i32, message: &[u8], context: &[u8]) -> Self {
+    pub(crate) fn clamped(code: i32, message: &[u8], context: &[u8]) -> Result<Self, Failure> {
         let code = if (1..=6).contains(&code) {
             code
         } else {
@@ -34,16 +35,39 @@ impl Error {
 }
 
 /// What an export body ends in when it does not succeed.
+#[derive(Debug)]
 pub(crate) enum Failure {
     Error(Error),
     /// A C++ exception: the export's catch-all handles it.
     Exception,
 }
 
+impl Failure {
+    pub(crate) fn error(code: i32, message: &[u8], context: &[u8]) -> Self {
+        Error::new(code, message, context).map_or_else(|failure| failure, Self::Error)
+    }
+}
+
 impl From<Error> for Failure {
     fn from(error: Error) -> Self {
         Self::Error(error)
     }
+}
+
+/// Copies message/path fragments without aborting when their allocation fails.
+pub(crate) fn concat(parts: &[&[u8]]) -> Result<Vec<u8>, Failure> {
+    let len = parts
+        .iter()
+        .try_fold(0usize, |len, part| len.checked_add(part.len()))
+        .ok_or(Failure::Exception)?;
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(len)
+        .map_err(|_| Failure::Exception)?;
+    for part in parts {
+        bytes.extend_from_slice(part);
+    }
+    Ok(bytes)
 }
 
 /// `map_error`: `adm_error_code_t` of an `ErrorCode`; unknown values are INTERNAL.
@@ -77,16 +101,14 @@ pub(crate) unsafe fn clear(context: *mut adm_context_t) {
 /// `store_last_error`: `message: locator` (just the message without a locator). False when the
 /// message could not be stored, where the C++ threw `bad_alloc`.
 pub(crate) unsafe fn store(context: *mut adm_context_t, error: &Error) -> bool {
-    let mut text = Vec::new();
-    let len = error.message.len() + 2 + error.context.len();
-    if text.try_reserve_exact(len).is_err() {
+    let separator = if error.context.is_empty() {
+        &b""[..]
+    } else {
+        &b": "[..]
+    };
+    let Ok(text) = concat(&[&error.message, separator, &error.context]) else {
         return false;
-    }
-    text.extend_from_slice(&error.message);
-    if !error.context.is_empty() {
-        text.extend_from_slice(b": ");
-        text.extend_from_slice(&error.context);
-    }
+    };
     unsafe { set(context, &text) }
 }
 
@@ -119,6 +141,7 @@ pub(crate) fn caught(
 }
 
 /// A heap object the caller releases through its destroy export; NULL when out of memory.
+/// On allocation failure, `value` is dropped here; its resources must not be released again.
 pub(crate) fn try_box<T>(value: T) -> *mut T {
     let object = unsafe { alloc(Layout::new::<T>()) }.cast::<T>();
     if !object.is_null() {
@@ -132,10 +155,7 @@ pub(crate) fn try_box<T>(value: T) -> *mut T {
 /// C++ conversion threw.
 #[cfg(not(windows))]
 pub(crate) fn utf8_path(native: &[u8]) -> Option<Vec<u8>> {
-    let mut path = Vec::new();
-    path.try_reserve_exact(native.len()).ok()?;
-    path.extend_from_slice(native);
-    Some(path)
+    concat(&[native]).ok()
 }
 
 #[cfg(windows)]
@@ -199,20 +219,56 @@ pub(crate) fn utf8_path(native: &[u8]) -> Option<Vec<u8>> {
     if written != wide_len {
         return None;
     }
-    String::from_utf16(&wide).ok().map(String::into_bytes)
+    utf16_path(&wide)
+}
+
+#[cfg(any(windows, test))]
+fn utf16_path(wide: &[u16]) -> Option<Vec<u8>> {
+    let mut path = Vec::new();
+    // At most three UTF-8 bytes per UTF-16 code unit (a surrogate pair needs four).
+    path.try_reserve_exact(wide.len().checked_mul(3)?).ok()?;
+    for character in char::decode_utf16(wide.iter().copied()) {
+        let mut bytes = [0u8; 4];
+        path.extend_from_slice(character.ok()?.encode_utf8(&mut bytes).as_bytes());
+    }
+    Some(path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_alloc::{with_allocation_failure, with_allocation_failure_after};
+
+    #[test]
+    fn message_and_locator_allocation_failures_are_exceptions() {
+        for successful in 0..2 {
+            let (error, failed) = with_allocation_failure_after(successful, || {
+                Error::new(3, b"cannot read input", b"input=a.wav")
+            });
+            assert!(failed);
+            assert!(matches!(error, Err(Failure::Exception)));
+        }
+        assert!(Error::new(3, b"cannot read input", b"input=a.wav").is_ok());
+    }
+
+    #[test]
+    fn utf16_conversion_is_fallible_and_preserves_unicode() {
+        let wide: Vec<_> = "房间/\u{1f3a7}.wav".encode_utf16().collect();
+        let (path, failed) = with_allocation_failure(|| utf16_path(&wide));
+        assert!(failed);
+        assert!(path.is_none());
+        assert_eq!(utf16_path(&wide).unwrap(), "房间/\u{1f3a7}.wav".as_bytes());
+        assert!(utf16_path(&[0xd800]).is_none());
+        assert!(utf16_path(&[0xdc00]).is_none());
+    }
 
     #[test]
     fn codes_map_as_map_error_did() {
         assert_eq!((0..=6).map(map).collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5, 6]);
         assert_eq!(map(7), guard::INTERNAL);
         assert_eq!(map(-1), guard::INTERNAL);
-        assert_eq!(Error::clamped(0, b"", b"").code, guard::INTERNAL);
-        assert_eq!(Error::clamped(3, b"", b"").code, 3);
+        assert_eq!(Error::clamped(0, b"", b"").unwrap().code, guard::INTERNAL);
+        assert_eq!(Error::clamped(3, b"", b"").unwrap().code, 3);
     }
 
     #[test]
@@ -230,11 +286,14 @@ mod tests {
                 .to_vec()
         };
         unsafe {
-            assert!(store(context, &Error::new(3, b"io", b"input=a.wav")));
+            assert!(store(
+                context,
+                &Error::new(3, b"io", b"input=a.wav").unwrap()
+            ));
             assert_eq!(message(context), b"io: input=a.wav");
             assert!(store(
                 context,
-                &Error::new(1, "无效的房间配置".as_bytes(), b"")
+                &Error::new(1, "无效的房间配置".as_bytes(), b"").unwrap()
             ));
             assert_eq!(message(context), "无效的房间配置".as_bytes());
             assert_eq!(
@@ -243,7 +302,7 @@ mod tests {
             );
             assert_eq!(message(context), b"unexpected");
             assert_eq!(
-                report(context, Error::new(9, b"x", b"").into(), None),
+                report(context, Error::new(9, b"x", b"").unwrap().into(), None),
                 guard::INTERNAL
             );
             crate::context::adm_destroy_context(context);

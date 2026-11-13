@@ -5,7 +5,7 @@
 //! same message buffers, so messages, locators and truncation are unchanged.
 use crate::context::adm_context_t;
 use crate::error::{
-    Error, Failure, c_str, caught, clear, report, set, try_box, until_nul, utf8_path,
+    Error, Failure, c_str, caught, clear, concat, report, set, try_box, until_nul, utf8_path,
 };
 use crate::guard;
 use crate::string;
@@ -78,16 +78,16 @@ fn import(path: &[u8], routed: bool) -> Result<Scene, Failure> {
     };
     let scene = Scene(raw);
     if code != 0 {
-        return Err(scene_error(code, &message, context, path).into());
+        return Err(scene_error(code, &message, context, path)?.into());
     }
     Ok(scene)
 }
 
 /// `scene_error`: the locator by the import's context (1 the input, 2 a referenced path).
-fn scene_error(code: i32, message: &[u8], context: u32, path: &[u8]) -> Error {
+fn scene_error(code: i32, message: &[u8], context: u32, path: &[u8]) -> Result<Error, Failure> {
     let locator = match context {
-        1 => [b"input=".as_slice(), path].concat(),
-        2 => [b"path=".as_slice(), path].concat(),
+        1 => concat(&[b"input=", path])?,
+        2 => concat(&[b"path=", path])?,
         _ => Vec::new(),
     };
     Error::clamped(code, until_nul(message), &locator)
@@ -132,7 +132,7 @@ fn probe(path: &[u8]) -> Result<adm_scene_info_t, Failure> {
         )
     };
     if code != 0 {
-        return Err(scene_error(code, &message, 1, path).into());
+        return Err(scene_error(code, &message, 1, path)?.into());
     }
     Ok(adm_scene_info_t {
         sample_rate: info.sample_rate,
@@ -312,7 +312,7 @@ pub unsafe extern "C" fn adm_inspect_file_json(
                     message.len(),
                 );
                 if code != 0 {
-                    return Err(Error::new(code, until_nul(&message), b"").into());
+                    return Err(Error::new(code, until_nul(&message), b"")?.into());
                 }
                 owned(output)
             },
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn adm_policy_template_json(
                 let code =
                     mradm_scene_template(scene.0, &mut output, message.as_mut_ptr(), message.len());
                 if code != 0 {
-                    return Err(Error::new(code, until_nul(&message), b"").into());
+                    return Err(Error::new(code, until_nul(&message), b"")?.into());
                 }
                 owned(output)
             },
@@ -361,7 +361,7 @@ pub unsafe extern "C" fn adm_inspect_file_xml(
             context,
             input_path,
             out_xml,
-            |path| axml(path).map_err(Failure::Error),
+            axml,
             "failed to allocate ADM XML",
             "unexpected exception while reading ADM XML",
         )
@@ -375,38 +375,33 @@ const BAD_ALLOC: &[u8] = b"bad allocation";
 const BAD_ALLOC: &[u8] = b"std::bad_alloc";
 
 /// `io::get_axml`: the axml payload, rejecting a CHNA track index 0 and a missing or empty axml.
-fn axml(path: &[u8]) -> Result<Vec<u8>, Error> {
-    let input = [b"input=".as_slice(), path].concat();
+fn axml(path: &[u8]) -> Result<Vec<u8>, Failure> {
+    let input = concat(&[b"input=", path])?;
     let (axml, chna_zero) = match chunks(path) {
         Ok(chunks) => chunks,
         Err(Chunks::Error(mut error)) => {
             error.context = input;
-            return Err(error);
+            return Err(error.into());
         }
         Err(Chunks::OutOfMemory) => {
             return Err(Error::new(
                 3,
-                &["读取 AXML 失败：".as_bytes(), BAD_ALLOC].concat(),
+                &concat(&["读取 AXML 失败：".as_bytes(), BAD_ALLOC])?,
                 &input,
-            ));
+            )?
+            .into());
         }
         Err(Chunks::Path) => {
-            return Err(Error::new(
-                3,
-                "读取 AXML 失败：路径无法转换为 UTF-8".as_bytes(),
-                &input,
-            ));
+            return Err(
+                Error::new(3, "读取 AXML 失败：路径无法转换为 UTF-8".as_bytes(), &input)?.into(),
+            );
         }
     };
     if chna_zero {
-        return Err(Error::new(
-            3,
-            "CHNA trackIndex 必须从 1 开始".as_bytes(),
-            &input,
-        ));
+        return Err(Error::new(3, "CHNA trackIndex 必须从 1 开始".as_bytes(), &input)?.into());
     }
     if axml.is_empty() {
-        return Err(Error::new(3, "axml chunk 缺失或为空".as_bytes(), &input));
+        return Err(Error::new(3, "axml chunk 缺失或为空".as_bytes(), &input)?.into());
     }
     Ok(axml)
 }
@@ -437,11 +432,9 @@ fn alloc_zeroed<T: Clone + Default>(len: usize) -> Result<Vec<T>, Chunks> {
 /// track index 0.
 fn chunks(path: &[u8]) -> Result<(Vec<u8>, bool), Chunks> {
     let wav_error = |code: i32, message: &[u8]| {
-        Chunks::Error(Error::clamped(
-            code,
-            until_nul(message),
-            &[b"path=".as_slice(), path].concat(),
-        ))
+        concat(&[b"path=", path])
+            .and_then(|locator| Error::clamped(code, until_nul(message), &locator))
+            .map_or(Chunks::OutOfMemory, Chunks::Error)
     };
     let utf8 = utf8_path(path).ok_or(Chunks::Path)?;
     let mut message = [0u8; 512];
@@ -480,11 +473,7 @@ fn chunks(path: &[u8]) -> Result<(Vec<u8>, bool), Chunks> {
     let mut axml = Vec::new();
     if found != 0 {
         let Ok(len) = usize::try_from(size) else {
-            return Err(Chunks::Error(Error::new(
-                2,
-                b"WAVE chunk is too large",
-                &[b"path=".as_slice(), path].concat(),
-            )));
+            return Err(wav_error(2, b"WAVE chunk is too large"));
         };
         axml = alloc_zeroed::<u8>(len)?;
         if len != 0 {
@@ -547,6 +536,57 @@ fn chunks(path: &[u8]) -> Result<(Vec<u8>, bool), Chunks> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::{adm_context_last_error_message, adm_create_context, adm_destroy_context};
+    use crate::test_alloc::{with_allocation_failure, with_allocation_failure_after};
+
+    #[test]
+    fn query_error_allocations_return_internal_and_allow_retry() {
+        let context = adm_create_context();
+        for successful in 0..3 {
+            let mut out = ptr::null_mut();
+            let (code, failed) = with_allocation_failure_after(successful, || unsafe {
+                text_query(
+                    context,
+                    c"input.wav".as_ptr(),
+                    &mut out,
+                    |path| Err(scene_error(3, b"cannot read", 1, path)?.into()),
+                    "allocation failed",
+                    "unexpected query failure",
+                )
+            });
+            assert!(failed);
+            assert_eq!(code, guard::INTERNAL);
+            assert!(out.is_null());
+            assert_eq!(
+                unsafe { c_str(adm_context_last_error_message(context)) },
+                b"unexpected query failure"
+            );
+        }
+        let failure = scene_error(3, b"cannot read", 1, b"input.wav").unwrap();
+        assert_eq!(unsafe { report(context, failure.into(), None) }, guard::IO);
+        assert_eq!(
+            unsafe { c_str(adm_context_last_error_message(context)) },
+            b"cannot read: input=input.wav"
+        );
+        unsafe { adm_destroy_context(context) };
+    }
+
+    #[test]
+    fn xml_locator_allocation_failure_returns_internal() {
+        let context = adm_create_context();
+        let mut out = ptr::null_mut();
+        let (code, failed) = with_allocation_failure(|| unsafe {
+            adm_inspect_file_xml(context, c"unused.wav".as_ptr(), &mut out)
+        });
+        assert!(failed);
+        assert_eq!(code, guard::INTERNAL);
+        assert!(out.is_null());
+        assert_eq!(
+            unsafe { c_str(adm_context_last_error_message(context)) },
+            b"unexpected exception while reading ADM XML"
+        );
+        unsafe { adm_destroy_context(context) };
+    }
 
     #[test]
     fn stage_names_map_to_their_values() {
@@ -559,17 +599,17 @@ mod tests {
 
     #[test]
     fn scene_errors_take_the_locator_of_their_context() {
-        let e = scene_error(3, b"m\0junk", 1, b"a.wav");
+        let e = scene_error(3, b"m\0junk", 1, b"a.wav").unwrap();
         assert_eq!(
             (e.code, &e.message[..], &e.context[..]),
             (3, &b"m"[..], &b"input=a.wav"[..])
         );
-        let e = scene_error(9, b"m", 2, b"a.wav");
+        let e = scene_error(9, b"m", 2, b"a.wav").unwrap();
         assert_eq!(
             (e.code, &e.context[..]),
             (guard::INTERNAL, &b"path=a.wav"[..])
         );
-        assert!(scene_error(1, b"", 0, b"a.wav").context.is_empty());
+        assert!(scene_error(1, b"", 0, b"a.wav").unwrap().context.is_empty());
     }
 
     #[test]

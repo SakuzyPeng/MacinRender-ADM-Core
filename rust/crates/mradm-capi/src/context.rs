@@ -89,54 +89,8 @@ pub unsafe extern "C" fn mradm_capi_context_set_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::alloc::{GlobalAlloc, System};
-    use std::cell::Cell;
+    use crate::test_alloc::with_allocation_failure;
     use std::ffi::CStr;
-
-    thread_local! {
-        static FAIL_NEXT_ALLOCATION: Cell<bool> = const { Cell::new(false) };
-    }
-
-    struct FaultAllocator;
-
-    fn fail_allocation() -> bool {
-        FAIL_NEXT_ALLOCATION
-            .try_with(|fail| fail.replace(false))
-            .unwrap_or(false)
-    }
-
-    unsafe impl GlobalAlloc for FaultAllocator {
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            if fail_allocation() {
-                std::ptr::null_mut()
-            } else {
-                unsafe { System.alloc(layout) }
-            }
-        }
-
-        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-            if fail_allocation() {
-                std::ptr::null_mut()
-            } else {
-                unsafe { System.realloc(ptr, layout, size) }
-            }
-        }
-
-        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-            unsafe { System.dealloc(ptr, layout) };
-        }
-    }
-
-    #[global_allocator]
-    static ALLOCATOR: FaultAllocator = FaultAllocator;
-
-    fn with_allocation_failure<T>(body: impl FnOnce() -> T) -> (T, bool) {
-        FAIL_NEXT_ALLOCATION.with(|fail| {
-            assert!(!fail.replace(true));
-            let result = body();
-            (result, !fail.replace(false))
-        })
-    }
 
     fn message(context: *const adm_context_t) -> &'static [u8] {
         unsafe { CStr::from_ptr(adm_context_last_error_message(context)) }.to_bytes()

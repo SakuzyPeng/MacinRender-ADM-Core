@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 104,
-      "lines": 20845
+      "lines": 20841
     },
     "islands": {
       "files": 6,
@@ -18,16 +18,16 @@
       "lines": 988
     },
     "tests": {
-      "files": 195,
-      "lines": 55247
+      "files": 196,
+      "lines": 55331
     },
     "reference": {
       "files": 38,
       "lines": 12026
     },
     "rust": {
-      "files": 349,
-      "lines": 130336
+      "files": 350,
+      "lines": 130523
     },
     "rust-vendor": {
       "files": 175,
@@ -37,7 +37,7 @@
   "modules": {
     "include/adm": 3984,
     "rust/crates/mradm-adm": 2676,
-    "rust/crates/mradm-capi": 1624,
+    "rust/crates/mradm-capi": 1811,
     "rust/crates/mradm-dsp": 40626,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 20787,
@@ -75,7 +75,7 @@
     "src/adm_realtime/device_island.cpp": 160,
     "src/adm_realtime/device_island.h": 23,
     "src/adm_render_common": 2712,
-    "src/adm_render_room": 295,
+    "src/adm_render_room": 291,
     "src/adm_render_room/cuda": 512,
     "src/adm_renderer_factory": 46,
     "src/adm_windows": 709,
@@ -103,7 +103,7 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 8010,
     "tests/tools": 3183,
-    "tests/unit": 41629
+    "tests/unit": 41713
   },
   "island_interfaces": {
     "src/adm_apple/apple_island.cpp": 353,

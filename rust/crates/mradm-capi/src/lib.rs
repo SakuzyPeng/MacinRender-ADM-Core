@@ -14,3 +14,6 @@ mod query;
 mod room;
 mod string;
 mod version;
+
+#[cfg(test)]
+mod test_alloc;

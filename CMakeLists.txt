@@ -997,6 +997,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_make_fixture)
     mr_adm_core_apply_static_analysis(mr_adm_make_fixture)
 
+    add_executable(mr_adm_room_profile_allocation_tests tests/unit/room_profile_allocation_test.cpp)
+    target_link_libraries(mr_adm_room_profile_allocation_tests PRIVATE MacinRender::ADMRenderRoom)
+    target_include_directories(mr_adm_room_profile_allocation_tests PRIVATE src/adm_render_room src/adm_render_common)
+    mr_adm_core_apply_warnings(mr_adm_room_profile_allocation_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_profile_allocation_tests)
+    add_test(NAME mr_adm_room_profile_allocation_tests COMMAND mr_adm_room_profile_allocation_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic/room.json")
+
     # Explicitly built in Release by the baseline workflow; measures state across two renders.
     add_executable(mr_adm_repeat_render EXCLUDE_FROM_ALL tests/tools/repeat_render.cpp)
     target_link_libraries(mr_adm_repeat_render PRIVATE MacinRender::ADMEngine)

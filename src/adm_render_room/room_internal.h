@@ -16,12 +16,8 @@ struct Access {
         if (handle == nullptr) {
             return nullptr;
         }
-        try {
-            return std::shared_ptr<const RoomProfile>{new RoomProfile(handle)};
-        } catch (...) {
-            mradm_room_profile_destroy(handle);
-            throw;
-        }
+        std::unique_ptr<void, decltype(&mradm_room_profile_destroy)> owned{handle, mradm_room_profile_destroy};
+        return std::shared_ptr<const RoomProfile>{new RoomProfile(owned.release())};
     }
 };
 using PreparedHandle = std::unique_ptr<void, decltype(&mradm_room_prepared_destroy)>;
