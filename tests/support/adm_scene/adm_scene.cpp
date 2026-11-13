@@ -9,9 +9,9 @@
 #include <utility>
 
 #include "metadata.h"
-#include "scene_ffi.h"
 #include "scene_handle.h"
 #include "scene_import_internal.h"
+#include "scene_test_ffi.h"
 
 namespace mradm {
 

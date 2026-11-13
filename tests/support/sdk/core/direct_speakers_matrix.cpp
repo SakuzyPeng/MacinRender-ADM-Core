@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-#include "config_ffi.h"
+#include "config_test_ffi.h"
 #include "direct_matrix_records.h"
 
 namespace mradm {

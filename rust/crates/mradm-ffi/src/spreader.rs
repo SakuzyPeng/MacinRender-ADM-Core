@@ -1,9 +1,5 @@
 use super::boundary;
-use mradm_dsp::{
-    Error,
-    filterbank::{DELAY, FRAME},
-    spreader::Spreader,
-};
+use mradm_dsp::{Error, filterbank::FRAME, spreader::Spreader};
 use std::{ptr, slice};
 
 pub struct Handle {
@@ -132,8 +128,4 @@ pub unsafe extern "C" fn mradm_dsp_spreader_process(
         }
         Ok(())
     })
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn mradm_dsp_spreader_delay() -> u32 {
-    DELAY as u32
 }

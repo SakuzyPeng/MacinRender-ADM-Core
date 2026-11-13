@@ -482,6 +482,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # helpers: production uses the Rust C ABI and CLI. The test targets keep their former names.
     # Every target made below sees the SDK headers.
     include_directories(
+        tests/support/ffi
         tests/support/sdk/include
         tests/support/sdk/render_common
         tests/support/sdk/dsp

@@ -15,7 +15,11 @@
 #include <string_view>
 #include <vector>
 
+// The frozen reference calls scene math entries production does not use: declare them first.
+// clang-format off
+#include "scene_math_test_ffi.h"
 #include "../reference/osc_protocol/legacy.h"
+// clang-format on
 #include "osc_head_tracking_protocol.h"
 
 namespace {

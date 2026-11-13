@@ -12,7 +12,6 @@ use std::{
 pub mod adm;
 mod checked;
 mod convolution;
-mod decimal;
 mod ear;
 mod ear_post;
 #[doc(hidden)] // Called by mradm-capi.
@@ -26,7 +25,6 @@ mod hoa;
 #[doc(hidden)] // Called by mradm-capi.
 pub mod hptf;
 mod hrtf;
-mod live_binaural;
 mod live_vbap;
 mod meter;
 mod monitor;
@@ -52,10 +50,8 @@ mod scene_worker;
 mod semantic_policy;
 mod spatial;
 mod spreader;
-mod stream_dsp;
 #[cfg(test)]
 mod test_alloc;
-mod timeline;
 mod triple_balance;
 #[doc(hidden)] // Called by mradm-capi.
 pub mod wav;

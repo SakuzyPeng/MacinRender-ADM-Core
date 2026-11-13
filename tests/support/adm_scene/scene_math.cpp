@@ -6,6 +6,8 @@
 #include <limits>
 
 #include "adm/scene.h"
+
+#include "scene_math_test_ffi.h"
 namespace mradm {
 SceneBlockPosition apply_position_offset(SceneBlockPosition pos, const ScenePositionOffset& off) {
     if (pos.cartesian != off.cartesian) {

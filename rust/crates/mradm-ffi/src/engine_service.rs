@@ -841,25 +841,6 @@ pub unsafe extern "C" fn mradm_engine_render_set_islands(
     0
 }
 
-/// An island's progress event mapped into the render's range; `out.message` borrows `event`'s
-/// unless it was empty.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_map_progress(
-    handle: *const EngineRender,
-    event: *const EngineProgress,
-    output: *mut EngineProgress,
-) -> i32 {
-    let (Some(h), Some(e), Some(out)) = (
-        unsafe { handle.as_ref() },
-        unsafe { event.as_ref() },
-        unsafe { output.as_mut() },
-    ) else {
-        return 1;
-    };
-    *out = mapped_progress(e, &|p| h.render.map_progress(p));
-    0
-}
-
 /// `e` mapped by `map`; the message borrows `e`'s unless it was empty.
 fn mapped_progress(e: &EngineProgress, map: &dyn Fn(&Progress) -> Progress) -> EngineProgress {
     // The range only needs to know whether the message is empty: map with a static stand-in and

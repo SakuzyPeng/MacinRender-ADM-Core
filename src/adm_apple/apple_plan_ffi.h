@@ -1,9 +1,9 @@
-// The Apple AUSpatialMixer recipe in Rust mradm-render `apple`: the Apple
-// island's buses from the policy-applied scene. Objects are point sources (divergence and the
-// extent cloud on parallel buses); DirectSpeakers are beds, host-side direct buses or LFE bypass
-// buses. Events are in AudioUnit convention (azimuth positive to the right). Error buffers:
-// capacity in *len, bytes written out, NUL-terminated; status values follow adm::ErrorCode.
+// Rust mradm-render `apple`: the Apple island's AUSpatialMixer buses from the policy-applied scene.
+// Objects are point sources (divergence and extent clouds on parallel buses); DirectSpeakers are beds,
+// host-side direct buses or LFE bypass buses. Event azimuth is positive to the right (AudioUnit convention).
+// Error buffers: capacity in *len, bytes written out, NUL-terminated; status values follow adm::ErrorCode.
 #pragma once
+#include "../adm_metadata/scene_ffi.h"
 #include "../adm_render_common/routing_ffi.h"
 #ifdef __cplusplus
 extern "C" {

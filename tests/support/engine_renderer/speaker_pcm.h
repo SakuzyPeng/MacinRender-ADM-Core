@@ -18,9 +18,9 @@
 #include "adm/render.h"
 
 #include "capability_records.h"
-#include "engine_ffi.h"
 #include "engine_records.h"
-#include "routing_ffi.h"
+#include "engine_test_ffi.h"
+#include "routing_test_ffi.h"
 
 namespace mradm::render_common {
 

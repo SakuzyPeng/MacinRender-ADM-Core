@@ -6,7 +6,7 @@
 #include "adm/options.h"
 #include "adm/room.h"
 
-#include "routing_ffi.h"
+#include "routing_test_ffi.h"
 
 namespace mradm::room_internal {
 struct Access {

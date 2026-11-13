@@ -485,32 +485,6 @@ pub(crate) fn guarded(
     catch_unwind(AssertUnwindSafe(call)).unwrap_or(6)
 }
 
-unsafe fn input<'a>(data: *const u8, len: usize) -> Option<&'a [u8]> {
-    unsafe { items(data, len) }
-}
-
-/// The canonical id of an output layout, or the input itself when it is not an alias.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_normalize_layout(
-    layout: *const u8,
-    len: usize,
-    out: *mut Text,
-) -> i32 {
-    if out.is_null() {
-        return 1;
-    }
-    let Some(bytes) = (unsafe { input(layout, len) }) else {
-        return 1;
-    };
-    unsafe {
-        *out = match request::canonical_layout(bytes) {
-            Some(id) => Text::new(id),
-            None => Text::bytes(bytes),
-        };
-    }
-    0
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_result_destroy(result: *mut EngineResult) {
     if !result.is_null() {
@@ -535,31 +509,6 @@ mod tests {
             let r = records(expected.clone());
             assert_eq!(unsafe { backend(&r.backend) }.unwrap(), expected);
         }
-    }
-
-    fn text_of(t: Text) -> String {
-        String::from_utf8(unsafe { slice::from_raw_parts(t.data, t.len) }.to_vec()).unwrap()
-    }
-
-    #[test]
-    fn layout_normalization_views() {
-        let mut out = Text::new("");
-        let raw = b"Bogus";
-        assert_eq!(
-            unsafe { mradm_engine_normalize_layout(raw.as_ptr(), raw.len(), &mut out) },
-            0
-        );
-        assert_eq!(
-            out.data,
-            raw.as_ptr(),
-            "an unknown layout borrows the input"
-        );
-        let atmos = b"ATMOS714";
-        assert_eq!(
-            unsafe { mradm_engine_normalize_layout(atmos.as_ptr(), atmos.len(), &mut out) },
-            0
-        );
-        assert_eq!(text_of(out), "4+7+0");
     }
 
     static PROBED: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());

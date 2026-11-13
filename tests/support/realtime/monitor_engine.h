@@ -15,7 +15,7 @@
 #include "adm/scene.h"
 
 #include "audio_output_device.h"
-#include "engine_ffi.h"
+#include "engine_test_ffi.h"
 #include "hptf_eq.h"
 #include "render_stream_factory.h"
 

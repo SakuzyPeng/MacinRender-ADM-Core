@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "scene_ffi.h"
+#include "scene_test_ffi.h"
 
 namespace mradm::metadata {
 namespace {

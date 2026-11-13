@@ -13,9 +13,9 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 
-#include "scene_ffi.h"
 #include "scene_handle.h"
 #include "scene_import_internal.h"
+#include "scene_test_ffi.h"
 #include "wav_backend.h"
 
 namespace mradm::io {

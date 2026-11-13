@@ -4,11 +4,8 @@
 //! Errors carry the stream locator (`MradmRenderLocation`) like the offline driver's.
 use super::room_ffi::{RenderRoomControl, control_handle};
 use super::*;
-use crate::engine::{EngineLog, EngineStatus, Facts, PlatformIslands, platform};
-use crate::engine_render::{FfiHost, log_views, status_of};
-use crate::engine_service::{EngineRenderRequest, request_of};
-use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
-use mradm_engine::stream::{self as engine_stream, Body, Monitor, Settings, Validator};
+use crate::engine_render::FfiHost;
+use mradm_engine::stream::{self as engine_stream, Body, Settings, Validator};
 use mradm_render::binaural::Spread;
 
 /// `RenderPlan`'s input format and stream controls; `spread` is the binaural spread (0 cloud,
@@ -258,142 +255,6 @@ pub unsafe extern "C" fn mradm_engine_stream_control(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_engine_stream_destroy(handle: *mut EngineStream) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-// ── The monitor's stream opening ────────────────────────────────────────────────────────────
-
-/// What `mradm_engine_monitor_open` opened: kind 0 a rejection (status), 1 a stream (info and the
-/// plan's layout; take it with `mradm_engine_monitor_take_stream`), 2 the Apple backend over
-/// `layout` and the matrix.
-/// The texts live until the handle is destroyed.
-#[repr(C)]
-pub struct EngineMonitorView {
-    status: EngineStatus,
-    kind: u32,
-    info: EngineStreamInfo,
-    layout: Text,
-    has_matrix: u32,
-    matrix: DirectMatrixView,
-}
-
-pub struct EngineMonitor {
-    logs: Vec<mradm_engine::request::Log>,
-    log_views: Vec<EngineLog>,
-    error: Option<mradm_engine::request::Error>,
-    stream: Option<Box<EngineStream>>,
-    layout: String,
-    matrix: Option<Box<DirectMatrix>>,
-}
-
-/// Opens the monitor's stream for `request` over the session's policy-applied `scene` (may be
-/// null, which the opening rejects in its order). Returns 1 for invalid arguments (including
-/// paths not encoded as UTF-8 or containing NUL), 6 for a panic, and otherwise 0 with `*output`
-/// and `*view` set; the view's status carries the rejection and the log lines either way.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_monitor_open(
-    request: *const EngineRenderRequest,
-    islands: *const PlatformIslands,
-    scene: *const SceneHandle,
-    system_spatial: u32,
-    output: *mut *mut EngineMonitor,
-    view: *mut EngineMonitorView,
-) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        let (Some(out), Some(view), Some(r), Some(p)) = (
-            unsafe { output.as_mut() },
-            unsafe { view.as_mut() },
-            unsafe { request.as_ref() },
-            unsafe { islands.as_ref() },
-        ) else {
-            return 1;
-        };
-        *out = ptr::null_mut();
-        let (Some(request), Some(platform)) = (unsafe { request_of(r) }, unsafe {
-            platform(p, Facts::Render)
-        }) else {
-            return 1;
-        };
-        let scene = unsafe { scene.as_ref() }.map(SceneHandle::scene);
-        let opened = mradm_engine::stream::open_monitor(
-            &request,
-            system_spatial != 0,
-            scene,
-            platform.apple.is_some(),
-            &FfiHost,
-        );
-        let mut handle = Box::new(EngineMonitor {
-            logs: opened.logs,
-            log_views: Vec::new(),
-            error: None,
-            stream: None,
-            layout: String::new(),
-            matrix: None,
-        });
-        let mut kind = 0;
-        let mut info = EngineStreamInfo {
-            outputs: 0,
-            sample_rate: 0,
-            binaural: 0,
-            requires_preroll: 0,
-        };
-        match opened.result {
-            Err(e) => handle.error = Some(e),
-            Ok(Monitor::Stream {
-                validator,
-                body,
-                info: i,
-                layout,
-            }) => {
-                kind = 1;
-                handle.layout = layout;
-                info = EngineStreamInfo {
-                    outputs: i.outputs,
-                    sample_rate: i.sample_rate,
-                    binaural: u32::from(i.binaural),
-                    requires_preroll: u32::from(i.requires_preroll),
-                };
-                handle.stream = Some(Box::new(EngineStream { validator, body }));
-            }
-            Ok(Monitor::Apple { layout, matrix }) => {
-                kind = 2;
-                handle.layout = layout;
-                handle.matrix = matrix.map(DirectMatrix::new);
-            }
-        }
-        handle.log_views = log_views(&handle.logs);
-        *view = EngineMonitorView {
-            status: status_of(handle.error.as_ref(), &handle.log_views),
-            kind,
-            info,
-            layout: Text::new(&handle.layout),
-            has_matrix: u32::from(handle.matrix.is_some()),
-            matrix: handle
-                .matrix
-                .as_ref()
-                .map_or_else(DirectMatrix::empty_view, |m| m.view()),
-        };
-        *out = Box::into_raw(handle);
-        0
-    }))
-    .unwrap_or(6)
-}
-
-/// The opened stream (null unless the view's kind was 1 and it was not taken yet); destroy it
-/// with `mradm_engine_stream_destroy`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_monitor_take_stream(
-    handle: *mut EngineMonitor,
-) -> *mut EngineStream {
-    unsafe { handle.as_mut() }
-        .and_then(|h| h.stream.take())
-        .map_or(ptr::null_mut(), Box::into_raw)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_monitor_destroy(handle: *mut EngineMonitor) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
     }

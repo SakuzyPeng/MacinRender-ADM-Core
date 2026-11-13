@@ -1,6 +1,6 @@
 # 删除 C++ 外壳与 SDK（六期 6.5）
 
-> 状态：进行中（A 批完成，2026-11-13）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
+> 状态：进行中（A、B 批完成，2026-11-13）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
 
 6.3 / 6.4 之后，公开 C ABI 与 `mradm` CLI 都由 Rust 实现，生产只需要 Rust 按名调用的岛（编码器与容器元数据、APAC worker、
 Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度回调跳板。6.5 把其余 C++（会话外壳、C++ SDK 头、其实现与打包）删出生产：
@@ -45,3 +45,27 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 - ctest 85/85、FFI 头校验、质量脚本测试、参考登记、改动 C/C++ 的 clang-format / clang-tidy / cppcheck（移入的文件更新了 suppression 路径）；
 - 规模：生产 C/C++ 15,314 → 11,380 行（`src/adm_engine` 只剩平台事实岛，`src/adm_io` / `src/adm_renderer_factory` 清空），`tests/support` 8,920 → 12,808 行。
   macOS / Windows 的原生构建待 CI 与维护者。
+
+## B 批：失去调用者的私有 FFI
+
+- **删除 21 个没有调用者的 `mradm-ffi` 导出**（C++、测试、工具与 Rust 都不调用）及其声明：`mradm_engine_normalize_layout`（布局别名，
+  `renderer_factory` 删除后无人调用）、`mradm_engine_render_map_progress`、`mradm_dsp_live_binaural_*` 5 个（整个 `live_binaural.rs` 与
+  `tests/support/binaural/live_binaural_ffi.h`；Rust 双耳 Scene 流式直接用 `mradm-dsp`）、`mradm_engine_monitor_open` / `take_stream` /
+  `destroy`（监听打开 5.5 起在 Rust 会话内）、`mradm_room_prepare`、`mradm_dsp_spreader_delay`、Triple Balance D 模式 5 个与
+  `mradm_dsp_tb_snapshot_capture`，以及 A 批移入后没有任何 include 的 `decimal.h` / `stream_dsp.h` / `timeline.h` 包装和它们的
+  `mradm_dsp_parse_decimal` / `mradm_dsp_live_gain` / `mradm_dsp_seconds_to_frame`（一致性内核直接调用 `mradm-dsp`）。`mradm-ffi`
+  导出 412 → 391 个。
+- **私有 FFI 头按调用者拆分**：`src` 中 8 个手写头（`config_ffi.h`、`dsp_ffi.h`、`room_ffi.h`、`scene_math_ffi.h`、`adm_ffi.h`、
+  `scene_ffi.h`、`engine_ffi.h`、`routing_ffi.h`）只留生产 C/C++（岛与进度跳板）用到的记录与入口，按 include 闭包从生产源码求出；
+  其余声明原样移到 `tests/support/ffi/<名>_test_ffi.h`，测试头先 include 对应的生产头，测试源码改 include 测试头。例如 `dsp_ffi.h`
+  只剩增益组与计量（120 → 10 条声明），`engine_ffi.h` 只剩能力记录、岛事件 / 回复与 Apple / 设备岛表（115 → 20）。
+  冻结参考 `tests/reference/osc_protocol/legacy.h` 不改，由引用它的测试先 include `scene_math_test_ffi.h`。
+- FFI 头校验列入 8 个测试头（391 个函数、163 个结构体）；`CppcheckSuppressions.txt` 对 `tests/support/ffi/*` 照原头抑制
+  `unusedStructMember`。
+
+验证（本机 Linux x64 Release，一致性 config A，参照同 A 批为 main `8e665a5`）：
+- CLI 记录 113 条 0 差异；C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- 共享库比参照小 44 KB（死代码删除），导出 164 个 `adm_*`、未定义符号与参照相同；ctest 85/85、FFI 头校验、Rust fmt / clippy、
+  改动 C/C++ 的 clang-format / clang-tidy / cppcheck；
+- 规模：生产 C/C++ 11,380 → 9,768 行（`src` 的私有 FFI 头 2,676 → 1,063 行），`tests/support` 增加测试头，`mradm-ffi` 25,971 → 25,260 行。

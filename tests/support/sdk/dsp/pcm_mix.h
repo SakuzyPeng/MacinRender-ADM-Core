@@ -12,7 +12,7 @@
 
 #include "adm/errors.h"
 
-#include "dsp_ffi.h"
+#include "dsp_test_ffi.h"
 
 namespace mradm::dsp {
 inline void check_mix(int status, const char* message) {

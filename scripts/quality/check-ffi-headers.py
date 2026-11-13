@@ -39,17 +39,13 @@ CBINDGEN_VERSION = "0.29.2"
 FFI_HEADERS = [
     "tests/unit/ear_ffi.h",
     "src/adm_dsp/dsp_ffi.h",
-    "tests/support/sdk/dsp/decimal_ffi.h",
-    "tests/support/sdk/dsp/timeline_ffi.h",
     "tests/unit/hoa_ffi.h",
-    "tests/support/binaural/live_binaural_ffi.h",
     "src/adm_dsp/room_ffi.h",
     "tests/unit/live_vbap_ffi.h",
     "tests/support/dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
     "tests/support/dsp/scene_transition_ffi.h",
     "tests/support/post_gain/post_gain_ffi.h",
-    "tests/support/sdk/dsp/stream_dsp_ffi.h",
     "tests/support/sdk/dsp/semantic_policy_ffi.h",
     "tests/support/triple_balance/triple_balance_ffi.h",
     "src/adm_render_common/layout_ffi.h",
@@ -62,6 +58,14 @@ FFI_HEADERS = [
     "tests/support/render_test_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
+    "tests/support/ffi/config_test_ffi.h",
+    "tests/support/ffi/dsp_test_ffi.h",
+    "tests/support/ffi/room_test_ffi.h",
+    "tests/support/ffi/scene_math_test_ffi.h",
+    "tests/support/ffi/adm_test_ffi.h",
+    "tests/support/ffi/scene_test_ffi.h",
+    "tests/support/ffi/routing_test_ffi.h",
+    "tests/support/ffi/engine_test_ffi.h",
 ]
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.

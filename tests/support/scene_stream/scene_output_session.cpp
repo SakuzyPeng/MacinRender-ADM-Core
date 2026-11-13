@@ -5,8 +5,9 @@
 #include <utility>
 
 #include "device_island.h"
+#include "engine_test_ffi.h"
 #include "ffi_error.h"
-#include "routing_ffi.h"
+#include "routing_test_ffi.h"
 
 namespace mradm::realtime {
 namespace {

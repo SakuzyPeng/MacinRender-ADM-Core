@@ -8,7 +8,7 @@
 
 #include "adm/errors.h"
 
-#include "dsp_ffi.h"
+#include "dsp_test_ffi.h"
 
 namespace mradm::dsp {
 class EarFilters {

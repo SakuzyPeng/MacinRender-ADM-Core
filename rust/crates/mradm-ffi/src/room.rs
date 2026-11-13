@@ -200,38 +200,6 @@ pub unsafe extern "C" fn mradm_room_profile_json(handle: *const RoomProfileHandl
     }
 }
 
-/// `reuse` pins the existing listener HRIR across a room change. Optional sofa
-/// selects native preparation when no explicit HRIR bank is supplied. If both
-/// inputs are supplied, authenticate their binding as before.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_prepare(
-    profile: *const RoomProfileHandle,
-    hrir_name: *const u8,
-    hrir_length: usize,
-    sofa_name: *const u8,
-    sofa_length: usize,
-    reuse: *const RoomPreparedHandle,
-    out: *mut *mut RoomPreparedHandle,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    unsafe {
-        mradm_room_prepare_quality(
-            profile,
-            hrir_name,
-            hrir_length,
-            sofa_name,
-            sofa_length,
-            reuse,
-            0,
-            0.,
-            out,
-            message,
-            capacity,
-        )
-    }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_room_prepare_quality(
     profile: *const RoomProfileHandle,
