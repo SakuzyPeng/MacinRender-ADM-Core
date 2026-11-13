@@ -37,6 +37,11 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 - **安装**：只装 `c_api.h`、共享库 `mradm_capi`（开启 `MR_ADM_BUILD_CAPI_BUNDLE` 时）与 `mradm`；不再安装 C++ 静态库、C++ 头与 CMake 包
   （用户决定 2026-11-12：直接使用内部 C++ 头的下游不再支持）。
 
-验证：本机 Linux 对照进行中（见下一提交）。
-
-<!-- VERIFY-A -->
+验证（本机 Linux x64 Release，一致性 config A，参照为 main `8e665a5` 的同配置构建）：
+- CLI 记录 102 条 0 差异（3 条 help 只有允许的排版差异）；C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- 共享库与参照大小相同、未定义符号相同，恰好导出 164 个 `adm_*`；关闭测试（`MR_ADM_CORE_BUILD_TESTS=OFF`）的构建单独产出 `mradm` 与共享库，
+  `cmake --install` 只装 `c_api.h`、共享库与 `mradm`（取依赖的 FLAC / opus / fmt / tl-expected 仍带出自己的安装规则，C 批处理）；
+- ctest 85/85、FFI 头校验、质量脚本测试、参考登记、改动 C/C++ 的 clang-format / clang-tidy / cppcheck（移入的文件更新了 suppression 路径）；
+- 规模：生产 C/C++ 15,314 → 11,380 行（`src/adm_engine` 只剩平台事实岛，`src/adm_io` / `src/adm_renderer_factory` 清空），`tests/support` 8,920 → 12,808 行。
+  macOS / Windows 的原生构建待 CI 与维护者。
