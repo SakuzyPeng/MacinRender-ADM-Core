@@ -38,6 +38,7 @@ use mradm_ffi::render::engine_monitor_session::{
 };
 use mradm_ffi::scene::{SceneImportInfo, mradm_scene_view};
 use std::ffi::{c_char, c_void};
+use std::io::Write;
 use std::mem::{MaybeUninit, offset_of};
 use std::ptr;
 use std::sync::Mutex;
@@ -1149,6 +1150,19 @@ struct Profile {
     bands: Vec<Band>,
 }
 
+/// The validation error's locator, formatted on the stack before the fallible copy.
+fn band_locator(index: usize) -> Result<Vec<u8>, Failure> {
+    if index == 0 {
+        return Ok(Vec::new());
+    }
+    let mut buffer = [0u8; b"band=".len() + usize::MAX.ilog10() as usize + 1];
+    let capacity = buffer.len();
+    let mut output = buffer.as_mut_slice();
+    write!(output, "band={index}").map_err(|_| Failure::Exception)?;
+    let written = capacity - output.len();
+    concat(&[&buffer[..written]])
+}
+
 /// `parse_parametric_eq`: the grammar in Rust, the messages and line locators as the C++ wrote them.
 fn parse(text: &[u8]) -> Result<Profile, Failure> {
     let mut bands: Vec<Band> = Vec::new();
@@ -1218,11 +1232,7 @@ fn parse(text: &[u8]) -> Result<Profile, Failure> {
         )
     };
     if status != 0 {
-        let locator = if invalid_band == 0 {
-            Vec::new()
-        } else {
-            concat(&[b"band=", invalid_band.to_string().as_bytes()])?
-        };
+        let locator = band_locator(invalid_band)?;
         return Err(Failure::error(status, error::until_nul(&message), &locator));
     }
     Ok(Profile {
@@ -1313,6 +1323,61 @@ pub unsafe extern "C" fn adm_hptf_parse_parametric_eq(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_alloc::with_allocation_failure;
+
+    #[test]
+    fn band_locators_recover_from_allocation_failure() {
+        let (empty, failed) = with_allocation_failure(|| band_locator(0));
+        assert!(!failed);
+        assert!(empty.unwrap().is_empty());
+        for index in [1, 9, 10, 32, usize::MAX] {
+            let (result, failed) = with_allocation_failure(|| band_locator(index));
+            assert!(failed);
+            assert!(matches!(result, Err(Failure::Exception)));
+            assert_eq!(
+                band_locator(index).unwrap(),
+                format!("band={index}").as_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn parametric_eq_allocation_failure_preserves_outputs_and_allows_retry() {
+        let context = crate::context::adm_create_context();
+        assert!(!context.is_null());
+        let mut preamp = 123.0;
+        let mut count = 456;
+        let invalid = c"Filter 1: ON PK Fc -1 Hz Gain 0 dB Q 1";
+        let parse = |text: *const c_char, preamp: &mut f64, count: &mut u32| unsafe {
+            adm_hptf_parse_parametric_eq(context, text, preamp, ptr::null_mut(), 0, count)
+        };
+        let (code, failed) =
+            with_allocation_failure(|| parse(invalid.as_ptr(), &mut preamp, &mut count));
+        assert!(failed);
+        assert_eq!(code, INTERNAL);
+        assert_eq!((preamp, count), (123.0, 456));
+        assert_eq!(
+            parse(invalid.as_ptr(), &mut preamp, &mut count),
+            INVALID_ARGUMENT
+        );
+        assert_eq!((preamp, count), (123.0, 456));
+        let message = unsafe {
+            std::ffi::CStr::from_ptr(crate::context::adm_context_last_error_message(context))
+        };
+        assert_eq!(
+            message.to_bytes(),
+            "HpTF:滤波器类型必须有效,参数必须为有限数且 Fc/Q 为正: band=1".as_bytes()
+        );
+        assert_eq!(
+            parse(c"Preamp: -6 dB".as_ptr(), &mut preamp, &mut count),
+            OK
+        );
+        assert_eq!((preamp, count), (-6.0, 0));
+        unsafe {
+            assert_eq!(*crate::context::adm_context_last_error_message(context), 0);
+            crate::context::adm_destroy_context(context);
+        }
+    }
 
     #[test]
     fn device_names_escape_only_the_former_characters() {
