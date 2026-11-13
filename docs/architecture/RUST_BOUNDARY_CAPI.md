@@ -132,6 +132,55 @@ B 初版在 Linux x64 Release 上对照 main `620f4e8` 的同配置构建：
   FFI 头校验覆盖 412 个 `mradm-ffi` 函数、171 个结构体、7 个 Rust 公开导出与 2 个私有入口。两平台共享库均恰好导出 164 个 `adm_*`。
 - macOS 的 C API fixture 因多声道监听设备不可用，走测试既有的设备不可用分支。
 
+## C 批：拆分与共享类型
+
+用户决定（2026-11-13）：
+- C 拆成 C1（查询与房间）与 C2（选项、取消、渲染、结果与 export），每批各自对照后提交；
+- D（preview，4 个导出）并入 C2：preview 与离线渲染共用同一条渲染路径（预导入场景、准备缓存），并入后不需要结果对象的桥，
+  也不需要 preview 读选项与取消令牌的桥；
+- E（Scene）、F（Monitor）中仍在 C++ 的导出经 `capi_ffi.h` 的临时私有入口读取 Rust 对象（选项转回 `RenderOptions`、
+  取消令牌转为 `stop_token`、房间转为 `RoomProfile`），E、F 迁走时删除这些入口。
+
+## C1 批：查询与房间
+
+17 个导出改由 `mradm-capi` 实现，`adm_c_api.cpp` 中的定义与 `adm_scene_info_t` / `adm_room_t` 两个 C++ 结构删除：
+`adm_render_stage_from_string`；`adm_probe_file` 与 `adm_destroy_scene_info`、6 个 `adm_scene_info_*`；`adm_inspect_file_json`、
+`adm_inspect_file_xml`、`adm_policy_template_json`；`adm_room_load`、`adm_room_destroy`、`adm_room_manifest_json`、
+`adm_room_inspect`、`adm_room_inspect_with_quality`。
+
+原计划放在 C1 的 5 个能力表 JSON（`adm_capabilities_json` 等）移到 C2：它们要读 C++ 平台岛 `mradm_platform_islands()`，
+是 Rust 第一次按符号名调用 C++。C2 的渲染同样要按名调用音频岛与 Apple 岛，GNU ld 的静态库顺序在 C2 一并处理。
+
+- **同一组调用。** 每个导出照 C++ 服务原来的顺序调用同样的 Rust 入口（`mradm_scene_import`、`mradm_scene_view`、
+  `mradm_scene_inspect_json`、`mradm_scene_template`、`mradm_wav_reader_open`、`mradm_wav_chunks_*`、`mradm_room_*`），
+  消息缓冲同样是 1024 / 512 字节，所以消息、定位（`input=` / `path=` / `room-binaural`）与截断不变。为此 `mradm-ffi` 的
+  `adm`、`room`、`scene`、`wav` 模块与用到的字段改为 `pub`，由 Rust 直接按路径调用，类型由编译器核对。
+- **错误。** `error.rs` 复刻 C++ 的错误形态：`scene_error` / `wav_error` 把 1–6 以外的码归为 `internal_error`，`map_error`
+  把未知码归为 INTERNAL，`store_last_error` 存 `message: locator`；C++ 异常（含消息存不下时的 `bad_alloc`）走各导出原来的
+  catch：probe / inspect / 模板 / XML 写各自的 “unexpected exception …” 消息，房间只返回 INTERNAL。结果对象与复制都用可失败
+  分配，失败按原消息返回 INTERNAL。
+- **probe。** 导入失败时照旧退回原始 WAVE 信息（1–65535 声道），否则返回导入错误；声道数照旧经 `uint16_t` 截断。
+- **XML。** `io::get_axml` 的检查原样移来：CHNA trackIndex 为 0、axml 缺失或为空都报 io_error 并带 `input=` 定位；读取中
+  内存不足时消息为 “读取 AXML 失败：” 加 C++ `bad_alloc::what()` 的平台文字。
+- **Windows 路径。** C++ 把调用方的窄路径按 `std::filesystem::path` 的代码页转成 UTF-8（`wav_path_utf8`）。Rust 照 MSVC STL
+  的 `__std_fs_code_page` 选代码页（C 区域设置为 UTF-8 时用 UTF-8，否则按 `AreFileApisANSI` 取 ACP / OEMCP），
+  `MultiByteToWideChar` 带 `MB_ERR_INVALID_CHARS`；转换失败与 C++ 抛异常同样走 catch。已知差别：XML 查询中转换失败的消息，
+  C++ 附带系统的 `system_error` 文字，Rust 写 “路径无法转换为 UTF-8”。其他平台路径字节不变。
+- **房间桥。** `adm_room_t` 改为持有 `mradm-ffi` 的房间包句柄。仍在 C++ 的 `to_room_config`（Scene 流的房间、Monitor / Scene
+  切房间、C2 前的 `adm_render_options_set_room`）经 `mradm_capi_room_profile` 取得同一房间包的新句柄（`RoomProfileHandle::share`，
+  共享 `Arc`），由 `room_internal::Access::adopt` 包成 `RoomProfile`。
+
+生产 C/C++ 21,098 → 20,845 行（`src/adm_c_api` −265，`room_internal.h` +12）。
+
+本机 Linux x64 Release，参照为 main `0fa10f3` 的同配置构建：
+- C ABI 采集 3,283 行、36 个文件 0 差异（含 probe、缺失输入、房间加载 / 缺失 / 非房间包、两种质量与越界比例的检查，以及带房间的
+  Scene 流），consumer 测试在两个库上都通过；
+- CLI 记录 102 条 0 差异（3 条 help 文本只差可执行文件路径）；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- ctest 85/85、`mr_adm_rust_quality`、FFI 头校验（`c_api.h` 164 个函数中 24 个由 Rust 实现、`adm_room_config_t` 与 Rust
+  一致，私有入口 3 个）、导出校验 164 个、clang-format / clang-tidy、规模棘轮；`mradm-capi` 在 `x86_64-pc-windows-msvc`
+  上 `cargo check` 与 clippy 通过（Windows 路径转换）。本机 cppcheck 2.13 不支持仓库的抑制语法，cppcheck 留给 macOS Quality CI。
+
 ## 下一步
 
-C 批迁移 render / inspect / room / 能力表（80 个导出）。
+C2：选项、取消、渲染、结果、export、能力表 JSON 与 preview（D）。

@@ -726,6 +726,15 @@ B（版本、上下文与内存，7 个导出）完成：版本号由 `build.rs`
 1 条为 Opus MKA 随机 TrackUID 的长度差（重录一致，见 6.3 记录）。context 分配失败保留 NULL / `ADM_ERROR_INTERNAL`
 返回，消息扩容失败保留原消息，清空不分配，故障注入回归覆盖失败后重试。生产 C/C++ 21,121 → 21,098 行。
 
+用户决定（2026-11-13）：C 拆为 C1（查询与房间）与 C2（选项、取消、渲染、结果、export）；D（preview）并入 C2；
+E、F 中仍在 C++ 的导出经 `capi_ffi.h` 的临时私有入口读取 Rust 的选项、取消令牌与房间，迁走时删除。
+
+C1（17 个导出）完成：probe 与 scene info、inspect JSON / XML、策略模板、`adm_render_stage_from_string` 与房间加载 / 检查
+改由 Rust 照原顺序调用同样的 Rust 入口（同样的消息缓冲与定位）；Windows 窄路径按 MSVC STL 的代码页规则转 UTF-8；
+房间经 `mradm_capi_room_profile` 交给仍在 C++ 的调用方。能力表 JSON 因需按名调用 C++ 平台岛移到 C2。本机 Linux 新旧对照：
+C ABI 采集 3,283 行与 36 个文件 0 差异、consumer 测试在两个库上通过、CLI 102 条 0 差异、完整采集相同。
+生产 C/C++ 21,098 → 20,845 行。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
