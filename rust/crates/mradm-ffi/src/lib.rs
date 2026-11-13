@@ -15,9 +15,12 @@ mod convolution;
 mod decimal;
 mod ear;
 mod ear_post;
-mod engine;
-mod engine_render;
-mod engine_service;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine_render;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine_service;
 mod flac;
 mod hoa;
 mod hptf;
@@ -30,7 +33,8 @@ mod osc;
 mod output_dsp;
 mod pcm_mix;
 mod post_gain;
-mod render;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod render;
 mod render_apple;
 mod resampler;
 #[doc(hidden)] // Called by mradm-capi.

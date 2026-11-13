@@ -7,10 +7,11 @@ use crate::context::adm_context_t;
 use crate::error::{Error, Failure, c_str, caught, clear, report, try_box, until_nul};
 use crate::guard;
 use crate::string;
+use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
 use mradm_ffi::room::{
     RoomPreparedInfo, RoomProfileHandle, mradm_room_prepare_quality, mradm_room_prepared_destroy,
     mradm_room_prepared_info, mradm_room_prepared_json, mradm_room_profile_destroy,
-    mradm_room_profile_json, mradm_room_profile_load,
+    mradm_room_profile_json, mradm_room_profile_load, mradm_room_validate_screens,
 };
 use std::ffi::{CStr, c_char, c_void};
 use std::ptr;
@@ -107,13 +108,13 @@ pub unsafe extern "C" fn adm_room_manifest_json(room: *const adm_room_t) -> *con
 }
 
 /// A validated `adm_room_config_t` (`to_room_config`).
-struct Config<'a> {
-    profile: *const RoomProfileHandle,
-    hrir: &'a [u8],
-    metres: f64,
+pub(crate) struct Config<'a> {
+    pub(crate) profile: *const RoomProfileHandle,
+    pub(crate) hrir: &'a [u8],
+    pub(crate) metres: f64,
 }
 
-unsafe fn config<'a>(config: *const adm_room_config_t) -> Result<Config<'a>, Failure> {
+pub(crate) unsafe fn config<'a>(config: *const adm_room_config_t) -> Result<Config<'a>, Failure> {
     let invalid = || Failure::error(1, "无效的房间配置".as_bytes(), b"");
     let Some(header) = (unsafe { config.cast::<u32>().as_ref() }) else {
         return Err(invalid());
@@ -140,6 +141,31 @@ unsafe fn config<'a>(config: *const adm_room_config_t) -> Result<Config<'a>, Fai
         hrir,
         metres,
     })
+}
+
+/// The code a setter returns for a rejected config (`map_error`, no message).
+pub(crate) fn failure_code(failure: Failure) -> i32 {
+    match failure {
+        Failure::Error(error) => crate::error::map(error.code),
+        Failure::Exception => guard::INTERNAL,
+    }
+}
+
+/// `validate_screen_config`: the reference (default when absent) and the reproduction (the
+/// reference when absent) through the room's screen mapping; the code (0 when valid).
+pub(crate) fn validate_screens(
+    reference: Option<RoomScreenGeometry>,
+    reproduction: Option<RoomScreenGeometry>,
+) -> i32 {
+    let reference = reference.unwrap_or_default();
+    let screens = RoomScreens {
+        enabled: 1,
+        reserved: 0,
+        reference,
+        reproduction: reproduction.unwrap_or(reference),
+    };
+    let mut message = [0u8; 512];
+    unsafe { mradm_room_validate_screens(&screens, 1, message.as_mut_ptr(), message.len()) }
 }
 
 /// `inspect_room`: the prepared room's JSON (no SOFA, no reuse).

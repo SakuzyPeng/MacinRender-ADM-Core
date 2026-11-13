@@ -131,6 +131,8 @@ class Header:
 COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 PREPROCESSOR = re.compile(r"^\s*#.*$", re.M)
 EXTERN_OPEN = re.compile(r'extern\s+"C"\s*\{')
+# A Rust import (`unsafe extern "C" { fn … }`) that cbindgen renders as an `extern` declaration: not an export.
+IMPORT = re.compile(r'\bextern\s+(?!")[^;{}]*;', re.S)
 STRUCT_BODY = re.compile(r"(typedef\s+)?struct\s+(\w+)\s*\{(.*?)\}\s*(\w*)\s*;", re.S)
 OPAQUE = re.compile(r"typedef\s+struct\s+(\w+)\s+(\w+)\s*;")
 ARRAY_TYPEDEF = re.compile(r"typedef\s+(\w+)\s+(\w+)\s*\[(\d+)\]\s*;")
@@ -151,6 +153,7 @@ def strip(text: str) -> str:
     text = PUBLIC_MACROS.sub(" ", text)
     text = PREPROCESSOR.sub(" ", text)
     text = EXTERN_OPEN.sub(" ", text)
+    text = IMPORT.sub(" ", text)
     return text.replace("std::", "")
 
 

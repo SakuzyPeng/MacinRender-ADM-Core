@@ -201,6 +201,55 @@ B 初版在 Linux x64 Release 上对照 main `620f4e8` 的同配置构建：
   clang-format／clang-tidy／cppcheck 和规模棘轮通过；生产 C/C++ 20,845 → 20,841 行。
 - 两平台消费者测试中的 Triple Balance 多声道监听设备不可用，走测试既有的设备不可用分支。
 
+## C2 批：选项、取消、渲染、结果、export、能力表与 preview
+
+67 个导出改由 `mradm-capi` 实现，`adm_c_api.cpp` 中的定义与 `adm_render_options_t` / `adm_cancel_token_t` /
+`adm_render_result_t` / `adm_preview_session_t` 四个 C++ 结构、C ABI 的 `RenderService` 单例、进度与日志收集器删除（C++ `RenderService` 留给 CLI）：
+`adm_create_render_options` / `adm_destroy_render_options` 与 39 个 `adm_render_options_set_*`；取消令牌 4 个；
+`adm_render_file` / `_ex` / `_ex2`；`adm_render_result_*` 9 个与 `adm_destroy_render_result`；`adm_export_file`；
+`adm_capabilities_json`、`adm_layouts_json`、`adm_output_formats_json`、`adm_input_layouts_json`、`adm_support_matrix_json`；
+preview 4 个（D 并入）。
+
+- **选项。** Rust `adm_render_options_t` 持有与 C++ `RenderOptions` 相同的缺省值；每个 setter 照原样校验（NULL 选项除
+  `set_room` / `set_room_quality` / `set_screen_config_json` 外返回 OK），逗号列表照 `split_csv_list` 去掉两端空白，
+  输出文件名照 `std::filesystem::path::filename` 的规则（含 Windows 根名）。渲染时转成 `mradm-ffi` 的
+  `EngineRenderRequest`，与 C++ `RenderService` 传给 Rust 状态机的字段一致。
+- **取消。** 令牌复刻 `std::stop_source` 的语义：渲染或 preview 会话开始时取得当前停止状态，`adm_cancel` 可在任意线程置位，
+  `adm_reset_cancel_token` 换上新状态，已取得的状态不受影响、比令牌活得更久。reset 时内存不足与 C++（`noexcept` 中抛出）同样终止进程。
+- **渲染。** `render.rs` 照 `RenderService::render` 驱动同一个 `mradm-engine` 分步状态机（begin / 岛 / next / resume /
+  prepared / result），错误消息与定位不变；音频岛 `mradm_audio_island`、平台岛 `mradm_platform_islands` 与（macOS）
+  Apple 岛 `mradm_apple_islands` 由 Rust 按符号名调用。本机 GNU ld 下没有出现静态库顺序问题：岛与 C ABI 同在共享库 /
+  可执行文件的链接单元内。进度 v1 / v2 的阶段名、fraction 钳位、阶段与操作编号映射与日志级别收集照原样移来。
+- **回调异常。** C++ 调用方可以从进度回调抛异常，原实现返回 `ADM_ERROR_INTERNAL`、不产出结果、保留原输出并清掉临时文件（C ABI 测试
+  覆盖）。C++ 异常不能穿过 Rust 栈帧，所以回调经 `adm_c_api.cpp` 中的 `mradm_capi_progress_v1` / `_v2` 两个 C++ 跳板调用，
+  跳板捕获异常并告诉 Rust 中止；行为不变。是否改变这一语义另行决定，不在本批。
+- **结果。** `adm_render_result_t` 改为 Rust 类型，访问器与销毁照原样；消息、输出路径、日志与报告由 Rust 持有到销毁。
+- **Windows 结果路径。** 引擎给出 UTF-8 输出路径，C++ 经 `std::filesystem::path::string()` 转回窄路径。Rust 照同一代码页规则
+  先转 UTF-16、再以 `WC_NO_BEST_FIT_CHARS` 转窄；转换不了时与 C++ 抛异常同样返回 `ADM_ERROR_INTERNAL`、不产出结果。其他平台字节不变。
+- **export。** 照 `RenderService::export_file` 的顺序：导入（不路由）、视图检查、应用语义策略、写回 AXML、`mradm_wav_replace_axml`，
+  定位字符串不变。
+- **能力表。** 5 个 JSON 由 Rust 经平台岛取事实后调用同样的 `mradm-engine` 发现文档入口；C++ `catalog.cpp` 只剩 CLI 把文档解析回行。
+- **preview。** 会话创建时复制选项并取得取消状态，与原实现一样；窗口渲染（v1 / v2）走同一条渲染路径。
+- **给 E / F 的桥。** 仍在 C++ 的 `adm_create_monitor_ex` 与 `adm_monitor_switch_backend` 经 `capi_ffi.h` 的
+  `mradm_capi_options` 取得选项的只读视图（文本、列表、屏幕与房间包），在 C++ 侧转回 `RenderOptions`，用完以
+  `mradm_capi_options_release` 释放；F 迁走时删除。
+- **`mradm-ffi`。** `engine`、`engine_render`、`engine_service`、`render` 模块与用到的字段改为 `pub`（`doc(hidden)`），
+  由 `mradm-capi` 按路径直接调用，类型由编译器核对。`check-ffi-headers.py` 另剥去 cbindgen 输出中的 `extern` 导入声明
+  （Rust 调用的 C++ 岛与跳板）。
+
+生产 C/C++ 20,841 → 19,855 行（`src/adm_c_api` −986）。
+
+本机 Linux x64 Release，参照为 main `e2fc6ef` 的同配置构建：
+- C ABI 采集 3,283 行、36 个文件 0 差异（含选项 setter 的校验、离线渲染与进度 v1 / v2、取消、结果访问器、export、能力表与
+  preview 窗口），consumer 测试在两个库上都通过；
+- CLI 记录 102 条 0 差异（3 条 help 文本只差可执行文件路径）；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- ctest 86/86、`mr_adm_rust_quality`、FFI 头校验（`c_api.h` 164 个函数中 91 个由 Rust 实现、2 个结构体与 Rust 一致，
+  私有入口 5 个）、导出校验 164 个、clang-format / clang-tidy、规模棘轮；`mradm-capi` 在 `x86_64-pc-windows-msvc` 上
+  `cargo check` 与 clippy 通过（Windows 结果路径转换）。cppcheck 同样留给 macOS Quality CI；macOS（Apple 岛按名调用）与
+  Windows 的原生构建与对照待维护者。
+
 ## 下一步
 
-C2：选项、取消、渲染、结果、export、能力表 JSON 与 preview（D）。
+E（Scene，38 个导出）与 F（Monitor / OSC，35 个导出），需用户确认后开始；迁走时删除 `capi_ffi.h` 中的选项、房间与上下文桥。
+进度回调的 C++ 跳板保留到另行决定回调异常语义。

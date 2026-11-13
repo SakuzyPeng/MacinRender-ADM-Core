@@ -1191,7 +1191,7 @@ mod binaural_ffi;
 mod stream_ffi;
 
 #[path = "apple_island.rs"]
-pub(crate) mod apple_island;
+pub mod apple_island;
 #[path = "device_island.rs"]
 pub(crate) mod device_island;
 #[path = "engine_monitor.rs"]

@@ -12,6 +12,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 mradm-ffi = { path = "../mradm-ffi", default-features = false }
+mradm-dsp = { path = "../mradm-dsp", default-features = false }
 
 [features]
 default = ["sofa"]

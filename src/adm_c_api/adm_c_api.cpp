@@ -4,12 +4,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <optional>
+#include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -33,121 +35,6 @@
 #include "scene_stream_engine.h"
 
 namespace {
-
-std::vector<std::string> split_csv_list(std::string_view csv, bool preserve_empty = false) {
-    std::vector<std::string> out;
-    std::size_t pos = 0;
-    while (pos <= csv.size()) {
-        const std::size_t comma = csv.find(',', pos);
-        const std::size_t end = comma == std::string_view::npos ? csv.size() : comma;
-        std::string_view item = csv.substr(pos, end - pos);
-        const auto first = item.find_first_not_of(" \t\r\n");
-        if (first != std::string_view::npos) {
-            const auto last = item.find_last_not_of(" \t\r\n");
-            out.emplace_back(item.substr(first, last - first + 1));
-        } else if (preserve_empty) {
-            out.emplace_back();
-        }
-        if (comma == std::string_view::npos) {
-            break;
-        }
-        pos = comma + 1;
-    }
-    return out;
-}
-
-// These stage strings are part of the progress callback's documented contract.
-// adm_render_stage_from_string() must recognize every string produced here; the
-// progress-callback test renders end-to-end and asserts no emitted stage maps to
-// ADM_STAGE_UNKNOWN, guarding the two against drift.
-const char* stage_name(mradm::RenderStage stage) noexcept {
-    switch (stage) {
-    case mradm::RenderStage::validating:
-        return "validating";
-    case mradm::RenderStage::probing:
-        return "probing";
-    case mradm::RenderStage::importing_scene:
-        return "importing_scene";
-    case mradm::RenderStage::planning:
-        return "planning";
-    case mradm::RenderStage::rendering:
-        return "rendering";
-    case mradm::RenderStage::post_processing:
-        return "post_processing";
-    case mradm::RenderStage::finished:
-        return "finished";
-    }
-    return "unknown";
-}
-
-adm_render_stage_t to_c_stage(mradm::RenderStage stage) noexcept {
-    switch (stage) {
-    case mradm::RenderStage::validating:
-        return ADM_STAGE_VALIDATING;
-    case mradm::RenderStage::probing:
-        return ADM_STAGE_PROBING;
-    case mradm::RenderStage::importing_scene:
-        return ADM_STAGE_IMPORTING_SCENE;
-    case mradm::RenderStage::planning:
-        return ADM_STAGE_PLANNING;
-    case mradm::RenderStage::rendering:
-        return ADM_STAGE_RENDERING;
-    case mradm::RenderStage::post_processing:
-        return ADM_STAGE_POST_PROCESSING;
-    case mradm::RenderStage::finished:
-        return ADM_STAGE_FINISHED;
-    }
-    return ADM_STAGE_UNKNOWN;
-}
-
-adm_progress_operation_t to_c_operation(mradm::RenderOperation operation) noexcept {
-    switch (operation) {
-    case mradm::RenderOperation::unknown:
-        return ADM_PROGRESS_OPERATION_UNKNOWN;
-    case mradm::RenderOperation::validate_request:
-        return ADM_PROGRESS_OPERATION_VALIDATE_REQUEST;
-    case mradm::RenderOperation::probe_input:
-        return ADM_PROGRESS_OPERATION_PROBE_INPUT;
-    case mradm::RenderOperation::import_scene:
-        return ADM_PROGRESS_OPERATION_IMPORT_SCENE;
-    case mradm::RenderOperation::apply_semantic_policy:
-        return ADM_PROGRESS_OPERATION_APPLY_SEMANTIC_POLICY;
-    case mradm::RenderOperation::plan_render:
-        return ADM_PROGRESS_OPERATION_PLAN_RENDER;
-    case mradm::RenderOperation::prepare_backend:
-        return ADM_PROGRESS_OPERATION_PREPARE_BACKEND;
-    case mradm::RenderOperation::render_audio:
-        return ADM_PROGRESS_OPERATION_RENDER_AUDIO;
-    case mradm::RenderOperation::trim_output:
-        return ADM_PROGRESS_OPERATION_TRIM_OUTPUT;
-    case mradm::RenderOperation::apply_gain:
-        return ADM_PROGRESS_OPERATION_APPLY_GAIN;
-    case mradm::RenderOperation::convert_bit_depth:
-        return ADM_PROGRESS_OPERATION_CONVERT_BIT_DEPTH;
-    case mradm::RenderOperation::encode_flac:
-        return ADM_PROGRESS_OPERATION_ENCODE_FLAC;
-    case mradm::RenderOperation::encode_opus:
-        return ADM_PROGRESS_OPERATION_ENCODE_OPUS;
-    case mradm::RenderOperation::encode_apac:
-        return ADM_PROGRESS_OPERATION_ENCODE_APAC;
-    case mradm::RenderOperation::encode_iamf:
-        return ADM_PROGRESS_OPERATION_ENCODE_IAMF;
-    case mradm::RenderOperation::package_iamf_mp4:
-        return ADM_PROGRESS_OPERATION_PACKAGE_IAMF_MP4;
-    case mradm::RenderOperation::write_metadata:
-        return ADM_PROGRESS_OPERATION_WRITE_METADATA;
-    case mradm::RenderOperation::finish:
-        return ADM_PROGRESS_OPERATION_FINISH;
-    }
-    return ADM_PROGRESS_OPERATION_UNKNOWN;
-}
-
-[[nodiscard]] double clamp_fraction(double value) noexcept {
-    if (!std::isfinite(value)) {
-        return 0.0;
-    }
-    return std::clamp(value, 0.0, 1.0);
-}
 
 // Directly pin the C++ ErrorCode enum to the stable C ABI enum. errors.h asserts
 // the ErrorCode values independently; these cross-checks ensure the two enums stay
@@ -261,99 +148,7 @@ adm_error_code_t map_error(mradm::ErrorCode code) noexcept {
     return ADM_ERROR_INTERNAL;
 }
 
-class CallbackProgressSink final : public mradm::ProgressSink {
-  public:
-    CallbackProgressSink(adm_progress_cb callback, void* user_data) : callback_(callback), user_data_(user_data) {}
-
-    void on_progress(const mradm::ProgressEvent& event) override {
-        if (callback_ == nullptr) {
-            return;
-        }
-        const std::string message(event.message);
-        callback_(clamp_fraction(event.fraction), stage_name(event.stage), message.c_str(), user_data_);
-    }
-
-  private:
-    adm_progress_cb callback_{nullptr};
-    void* user_data_{nullptr};
-};
-
-class CallbackProgressSinkV2 final : public mradm::ProgressSink {
-  public:
-    CallbackProgressSinkV2(adm_progress_v2_cb callback, void* user_data) : callback_(callback), user_data_(user_data) {}
-
-    void on_progress(const mradm::ProgressEvent& event) override {
-        if (callback_ == nullptr) {
-            return;
-        }
-        const std::string message(event.message);
-        adm_progress_event_v2_t c_event{};
-        c_event.struct_size = static_cast<uint32_t>(sizeof(adm_progress_event_v2_t));
-        c_event.stage = to_c_stage(event.stage);
-        c_event.operation = to_c_operation(event.operation);
-        c_event.overall_fraction = clamp_fraction(event.fraction);
-        c_event.stage_fraction = clamp_fraction(event.stage_fraction);
-        c_event.current_frame = event.current_frame;
-        c_event.total_frames = event.total_frames;
-        c_event.message = message.c_str();
-        callback_(&c_event, user_data_);
-    }
-
-  private:
-    adm_progress_v2_cb callback_{nullptr};
-    void* user_data_{nullptr};
-};
-
-// Internal storage for a single captured diagnostic log line.
-struct CLogEntry {
-    adm_log_level_t level{ADM_LOG_INFO};
-    std::string module;
-    std::string message;
-};
-
-// LogSink that captures every log line into a caller-owned vector. The mutex is
-// cheap insurance: renderer backends may log from worker threads (parallel
-// binaural spreaders), and log calls are rare relative to per-sample work.
-class CollectingLogSink final : public mradm::LogSink {
-  public:
-    explicit CollectingLogSink(std::vector<CLogEntry>& out) : out_(out) {}
-
-    void log(mradm::LogLevel level, std::string_view module, std::string_view message) override {
-        const std::lock_guard<std::mutex> lock(mutex_);
-        out_.push_back({to_c_log_level(level), std::string(module), std::string(message)});
-    }
-
-  private:
-    std::vector<CLogEntry>& out_;
-    std::mutex mutex_;
-};
-
 } // namespace
-
-struct adm_cancel_token_t {
-    // request_stop() (via adm_cancel) is safe to call from a thread other than the
-    // one running the render that holds a token from this source. Resetting swaps
-    // in a fresh source; the engine always pulls a token at render start.
-    std::stop_source source;
-};
-
-struct adm_render_result_t {
-    adm_error_code_t code{ADM_ERROR_OK};
-    std::string message;
-    std::string output_path;                         // v1.1
-    std::optional<double> loudness_lufs;             // v1.1
-    std::optional<double> peak_dbtp;                 // v1.1
-    std::vector<CLogEntry> logs;                     // v1.1
-    std::optional<std::string> semantic_report_json; // v1.5
-};
-
-struct adm_render_options_t {
-    mradm::RenderOptions opts;
-    // Borrowed (non-owning) cancel token. The live std::stop_token is resolved
-    // from this at render time so that adm_reset_cancel_token (which swaps in a
-    // fresh stop_source) is always observed. nullptr = non-cancellable.
-    adm_cancel_token_t* cancel_token{nullptr};
-};
 
 namespace {
 static_assert(ADM_ROOM_QUALITY_EXACT == static_cast<int>(mradm::RoomQuality::exact));
@@ -394,18 +189,109 @@ void owned_string(const std::string& text, char** out) {
     }
 }
 
-// The engine entries the context-taking exports call; the service holds no state.
-const mradm::RenderService& service() {
-    static const mradm::RenderService instance;
-    return instance;
+std::string capi_text(MradmCapiText t) {
+    return {reinterpret_cast<const char*>(t.data), t.len};
 }
-} // namespace
 
-struct adm_preview_session_t {
-    mradm::PreviewSession session;
-};
+std::filesystem::path capi_path(MradmCapiText t) {
+    return {std::u8string(reinterpret_cast<const char8_t*>(t.data), t.len)};
+}
 
-namespace {
+std::vector<std::string> capi_texts(const MradmCapiText* items, std::size_t len) {
+    std::vector<std::string> out;
+    for (const auto& item : std::span{items, len}) {
+        out.push_back(capi_text(item));
+    }
+    return out;
+}
+
+// The texts, paths, room and screens of the Rust render options.
+void capi_text_options(mradm::RenderOptions& o, const MradmCapiOptions& v) {
+    o.output_layout = capi_text(v.output_layout);
+    if (v.has_input_layout != 0U) {
+        o.input_layout = capi_text(v.input_layout);
+    }
+    o.input_channel_labels = capi_texts(v.input_channel_labels, v.input_channel_labels_len);
+    if (v.has_sofa != 0U) {
+        o.sofa_path = capi_path(v.sofa);
+    }
+    if (v.has_policy_path != 0U) {
+        o.semantic_policy_path = capi_path(v.policy_path);
+    }
+    if (v.has_policy_json != 0U) {
+        o.semantic_policy_json = capi_text(v.policy_json);
+    }
+    if (v.has_matrix_path != 0U) {
+        o.direct_speakers_matrix_path = capi_path(v.matrix_path);
+    }
+    if (v.has_matrix_json != 0U) {
+        o.direct_speakers_matrix_json = capi_text(v.matrix_json);
+    }
+    if (v.has_report_path != 0U) {
+        o.semantic_report_path = capi_path(v.report_path);
+    }
+    o.iamf_layers = capi_texts(v.iamf_layers, v.iamf_layers_len);
+    o.room.hrir_manifest = capi_path(v.room_hrir);
+    o.room.metres_per_unit = v.room_metres;
+    o.room.quality = static_cast<mradm::RoomQuality>(v.room_quality);
+    const auto screen = [](const MradmCapiScreen& s) {
+        return mradm::ScreenGeometry{
+            s.cartesian != 0U, s.aspect_ratio, {s.centre[0], s.centre[1], s.centre[2]}, s.width};
+    };
+    if (v.has_reference != 0U) {
+        o.screens.reference = screen(v.reference);
+    }
+    if (v.has_reproduction != 0U) {
+        o.screens.reproduction = screen(v.reproduction);
+    }
+}
+
+// The Rust render options as the C++ RenderOptions the Monitor sessions take.
+mradm::RenderOptions render_options(const adm_render_options_t* opts) {
+    mradm::RenderOptions o;
+    if (opts == nullptr) {
+        return o;
+    }
+    MradmCapiOptions v{};
+    const std::unique_ptr<MradmCapiOptionsLists, decltype(&mradm_capi_options_release)> lists(
+        mradm_capi_options(opts, &v), &mradm_capi_options_release);
+    if (!lists) {
+        throw std::bad_alloc();
+    }
+    o.room.profile = mradm::room_internal::Access::adopt(v.room_profile);
+    capi_text_options(o, v);
+    o.renderer = static_cast<mradm::RendererSelection>(v.renderer);
+    o.monitor_system_spatial = v.monitor_system_spatial != 0U;
+    o.measure_loudness = v.measure_loudness != 0U;
+    o.loudness_target_lufs = v.loudness_target_lufs;
+    o.peak_limit = v.peak_limit != 0U;
+    o.peak_limit_dbtp = v.peak_limit_dbtp;
+    o.peak_normalize_to_limit = v.peak_normalize_to_limit != 0U;
+    o.final_gain_db = v.final_gain_db;
+    o.output_bit_depth = static_cast<mradm::OutputBitDepth>(v.output_bit_depth);
+    o.opus_bitrate_per_ch_kbps = v.opus_bitrate_per_ch_kbps;
+    o.apac_bitrate_kbps = v.apac_bitrate_kbps;
+    o.apac_drc_music = v.apac_drc_music != 0U;
+    o.apac_container =
+        v.apac_caf != 0U ? mradm::RenderOptions::ApacContainer::caf : mradm::RenderOptions::ApacContainer::mpeg4;
+    o.capture_semantic_report = v.capture_report != 0U;
+    o.default_interp_ms = v.default_interp_ms;
+    o.object_smoothing_frames = v.object_smoothing_frames;
+    o.speaker_geometry = static_cast<mradm::SpeakerGeometry>(v.speaker_geometry);
+    o.direct_speakers_routing_mode = static_cast<mradm::DirectSpeakersRoutingMode>(v.routing);
+    o.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(v.speaker_spread);
+    o.triple_balance_mode = static_cast<mradm::TripleBalanceMode>(v.triple_balance_mode);
+    o.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(v.binaural_spread);
+    o.lfe_routing_mode = static_cast<mradm::LfeRoutingMode>(v.lfe_routing);
+    o.apple_speaker_rendering_flags = v.apple_speaker_rendering_flags != 0U;
+    o.render_start_sec = v.render_start_sec;
+    if (v.has_end != 0U) {
+        o.render_end_sec = v.render_end_sec;
+    }
+    o.iamf_container =
+        v.iamf_mp4 != 0U ? mradm::RenderOptions::IamfContainer::mp4 : mradm::RenderOptions::IamfContainer::obu;
+    return o;
+}
 
 bool set_last_error(adm_context_t* context, std::string_view message) noexcept {
     return mradm_capi_context_set_error(
@@ -681,29 +567,6 @@ static_assert(static_cast<int>(mradm::realtime::SceneStreamState::draining) == A
 static_assert(static_cast<int>(mradm::realtime::SceneStreamState::ended) == ADM_SCENE_STREAM_ENDED);
 static_assert(static_cast<int>(mradm::realtime::SceneStreamState::failed) == ADM_SCENE_STREAM_FAILED);
 
-// Build an owned C result handle from a finished render. Shared by adm_render_file_ex
-// and adm_preview_render_window. Returns nullptr on allocation failure.
-// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
-adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector<CLogEntry>&& captured) {
-    // cppcheck-suppress unreadVariable -- c is used via operator-> and release()
-    auto c = std::unique_ptr<adm_render_result_t>(new (std::nothrow) adm_render_result_t{});
-    if (!c) {
-        return nullptr;
-    }
-    c->code = map_error(cpp_result.error.code);
-    c->message = cpp_result.error.message;
-    if (cpp_result.output_path.has_value()) {
-        c->output_path = cpp_result.output_path->string();
-    }
-    if (cpp_result.metrics.has_value()) {
-        c->loudness_lufs = cpp_result.metrics->measured_lufs;
-        c->peak_dbtp = cpp_result.metrics->measured_peak_dbtp;
-    }
-    c->semantic_report_json = std::move(cpp_result.semantic_report_json);
-    c->logs = std::move(captured);
-    return c.release();
-}
-
 adm_head_tracking_pose_t head_tracking_pose(const mradm::OscHeadTrackingSnapshot& snapshot) noexcept {
     adm_head_tracking_pose_t result{};
     result.struct_size = sizeof(result);
@@ -734,6 +597,28 @@ adm_head_tracking_pose_t head_tracking_pose(const mradm::OscHeadTrackingSnapshot
 }
 
 } // namespace
+
+// The caller's progress callbacks as the Rust render calls them (mradm-capi `render`): an exception a
+// C++ caller throws from one ends that render with ADM_ERROR_INTERNAL instead of unwinding into Rust.
+extern "C" uint32_t mradm_capi_progress_v1(
+    adm_progress_cb callback, double fraction, const char* stage, const char* message, void* user) noexcept {
+    try {
+        callback(fraction, stage, message, user);
+        return 0U;
+    } catch (...) {
+        return 1U;
+    }
+}
+
+extern "C" uint32_t
+mradm_capi_progress_v2(adm_progress_v2_cb callback, const adm_progress_event_v2_t* event, void* user) noexcept {
+    try {
+        callback(event, user);
+        return 0U;
+    } catch (...) {
+        return 1U;
+    }
+}
 
 /* ── Version ──────────────────────────────────────────────────────────────── */
 
@@ -870,686 +755,11 @@ const char* adm_osc_head_tracking_last_error_message(adm_osc_head_tracking_t* re
 
 /* ── Options builder ─────────────────────────────────────────────────────── */
 
-adm_render_options_t* adm_create_render_options(void) noexcept {
-    try {
-        return new adm_render_options_t{};
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-void adm_destroy_render_options(adm_render_options_t* opts) noexcept {
-    delete opts;
-}
-
-adm_error_code_t adm_render_options_set_renderer(adm_render_options_t* opts, adm_renderer_t renderer) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(renderer) < ADM_RENDERER_AUTOMATIC ||
-        static_cast<int>(renderer) > ADM_RENDERER_ROOM_BINAURAL) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.renderer = static_cast<mradm::RendererSelection>(renderer);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_output_layout(adm_render_options_t* opts, const char* layout) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (layout == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        opts->opts.output_layout = layout;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_input_layout(adm_render_options_t* opts, const char* layout) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (layout == nullptr || layout[0] == '\0' || std::string_view{layout} == "auto") {
-            opts->opts.input_layout = std::nullopt;
-        } else {
-            opts->opts.input_layout = std::string{layout};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_input_channel_labels(adm_render_options_t* opts,
-                                                             const char* labels_csv) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (labels_csv == nullptr || labels_csv[0] == '\0') {
-            opts->opts.input_channel_labels.clear();
-        } else {
-            opts->opts.input_channel_labels = split_csv_list(labels_csv, true);
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_output_bit_depth(adm_render_options_t* opts,
-                                                         adm_output_bit_depth_t depth) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(depth) < ADM_BIT_DEPTH_F32 || static_cast<int>(depth) > ADM_BIT_DEPTH_I16) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.output_bit_depth = static_cast<mradm::OutputBitDepth>(depth);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_loudness_target(adm_render_options_t* opts, double lufs) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (!std::isfinite(lufs) || lufs < -70.0 || lufs > 0.0) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.loudness_target_lufs = static_cast<float>(lufs);
-    opts->opts.measure_loudness = true;
-    return ADM_ERROR_OK;
-}
-
-void adm_render_options_set_peak_limit(adm_render_options_t* opts, int enabled) noexcept {
-    if (opts == nullptr) {
-        return;
-    }
-    opts->opts.peak_limit = (enabled != 0);
-}
-
-void adm_render_options_set_monitor_system_spatial(adm_render_options_t* opts, int enabled) noexcept {
-    if (opts == nullptr) {
-        return;
-    }
-    opts->opts.monitor_system_spatial = (enabled != 0);
-}
-
-adm_error_code_t adm_render_options_set_peak_limit_dbtp(adm_render_options_t* opts, double dbtp) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (!std::isfinite(dbtp) || dbtp < -60.0 || dbtp > 0.0) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.peak_limit_dbtp = static_cast<float>(dbtp);
-    return ADM_ERROR_OK;
-}
-
-void adm_render_options_set_peak_normalize_to_limit(adm_render_options_t* opts, int enabled) noexcept {
-    if (opts == nullptr) {
-        return;
-    }
-    opts->opts.peak_normalize_to_limit = (enabled != 0);
-}
-
-adm_error_code_t adm_render_options_set_opus_bitrate_per_ch_kbps(adm_render_options_t* opts, uint32_t kbps) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (kbps != 0 && (kbps < 6 || kbps > 320)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.opus_bitrate_per_ch_kbps = kbps;
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* opts, uint32_t kbps) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (kbps != 0 && (kbps < 64 || kbps > 32768)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.apac_bitrate_kbps = kbps;
-    return ADM_ERROR_OK;
-}
-
-void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabled) noexcept {
-    if (opts == nullptr) {
-        return;
-    }
-    opts->opts.apac_drc_music = (enabled != 0);
-}
-
-void adm_render_options_set_apple_speaker_rendering_flags(adm_render_options_t* opts, int enabled) noexcept {
-    if (opts == nullptr) {
-        return;
-    }
-    opts->opts.apple_speaker_rendering_flags = (enabled != 0);
-}
-
-adm_error_code_t adm_render_options_set_apac_container(adm_render_options_t* opts,
-                                                       adm_apac_container_t container) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(container) < ADM_APAC_CONTAINER_MPEG4 ||
-        static_cast<int>(container) > ADM_APAC_CONTAINER_CAF) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.apac_container = static_cast<mradm::RenderOptions::ApacContainer>(container);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_sofa_path(adm_render_options_t* opts, const char* sofa_path) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (sofa_path == nullptr || sofa_path[0] == '\0') {
-            opts->opts.sofa_path = std::nullopt;
-        } else {
-            opts->opts.sofa_path = std::filesystem::path{sofa_path};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_semantic_policy_path(adm_render_options_t* opts, const char* path) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (path == nullptr || path[0] == '\0') {
-            opts->opts.semantic_policy_path = std::nullopt;
-        } else {
-            opts->opts.semantic_policy_path = std::filesystem::path{path};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_semantic_report_path(adm_render_options_t* opts, const char* path) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (path == nullptr || path[0] == '\0') {
-            opts->opts.semantic_report_path = std::nullopt;
-        } else {
-            opts->opts.semantic_report_path = std::filesystem::path{path};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_semantic_policy_json(adm_render_options_t* opts, const char* json) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (json == nullptr || json[0] == '\0') {
-            opts->opts.semantic_policy_json = std::nullopt;
-        } else {
-            opts->opts.semantic_policy_json = std::string{json};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-void adm_render_options_set_capture_semantic_report(adm_render_options_t* opts, int enabled) noexcept {
-    if (opts != nullptr) {
-        opts->opts.capture_semantic_report = (enabled != 0);
-    }
-}
-
-adm_error_code_t adm_render_options_set_default_interp_ms(adm_render_options_t* opts, uint32_t ms) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (ms > 500) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.default_interp_ms = ms;
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_object_smoothing_frames(adm_render_options_t* opts, uint32_t frames) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (frames > 48000) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.object_smoothing_frames = frames;
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_speaker_spread_mode(adm_render_options_t* opts,
-                                                            adm_speaker_spread_mode_t mode) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(mode) < ADM_SPEAKER_SPREAD_AUTOMATIC || static_cast<int>(mode) > ADM_SPEAKER_SPREAD_MDAP) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(mode);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_triple_balance_mode(adm_render_options_t* opts,
-                                                            adm_triple_balance_mode_t mode) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (mode != ADM_TRIPLE_BALANCE_STANDARD && mode != ADM_TRIPLE_BALANCE_D) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.triple_balance_mode = static_cast<mradm::TripleBalanceMode>(mode);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_t* opts,
-                                                             adm_binaural_spread_mode_t mode) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(mode) < ADM_BINAURAL_SPREAD_AUTOMATIC ||
-        static_cast<int>(mode) > ADM_BINAURAL_SPREAD_SAF_SPREADER) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(mode);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_speaker_geometry(adm_render_options_t* opts,
-                                                         adm_speaker_geometry_t geometry) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(geometry) < ADM_SPEAKER_GEOMETRY_STANDARD ||
-        static_cast<int>(geometry) > ADM_SPEAKER_GEOMETRY_APPLE) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.speaker_geometry = static_cast<mradm::SpeakerGeometry>(geometry);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_direct_speakers_routing_mode(adm_render_options_t* opts,
-                                                                     adm_direct_speakers_routing_mode_t mode) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(mode) < ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC ||
-        static_cast<int>(mode) > ADM_DIRECT_SPEAKERS_ROUTING_MATRIX) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.direct_speakers_routing_mode = static_cast<mradm::DirectSpeakersRoutingMode>(mode);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_direct_speakers_matrix_path(adm_render_options_t* opts,
-                                                                    const char* path) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (path == nullptr || path[0] == '\0') {
-            opts->opts.direct_speakers_matrix_path = std::nullopt;
-        } else {
-            opts->opts.direct_speakers_matrix_path = std::filesystem::path{path};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_direct_speakers_matrix_json(adm_render_options_t* opts,
-                                                                    const char* json) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        if (json == nullptr || json[0] == '\0') {
-            opts->opts.direct_speakers_matrix_json = std::nullopt;
-        } else {
-            opts->opts.direct_speakers_matrix_json = std::string{json};
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_lfe_routing_mode(adm_render_options_t* opts,
-                                                         adm_lfe_routing_mode_t mode) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(mode) < ADM_LFE_ROUTING_DIRECT || static_cast<int>(mode) > ADM_LFE_ROUTING_SPLIT_POWER) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.lfe_routing_mode = static_cast<mradm::LfeRoutingMode>(mode);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opts,
-                                                       adm_iamf_container_t container) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (static_cast<int>(container) < ADM_IAMF_CONTAINER_OBU || static_cast<int>(container) > ADM_IAMF_CONTAINER_MP4) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.iamf_container = static_cast<mradm::RenderOptions::IamfContainer>(container);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_iamf_layers(adm_render_options_t* opts, const char* iamf_layers_csv) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    try {
-        opts->opts.iamf_layers =
-            iamf_layers_csv == nullptr ? std::vector<std::string>{} : split_csv_list(iamf_layers_csv);
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_render_start_sec(adm_render_options_t* opts, double sec) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (!std::isfinite(sec) || sec < 0.0) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.render_start_sec = sec;
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_render_end_sec(adm_render_options_t* opts, double sec) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    if (!std::isfinite(sec)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    // sec <= 0 clears the end (render to the end); a positive end is validated
-    // against start at render time.
-    if (sec <= 0.0) {
-        opts->opts.render_end_sec = std::nullopt;
-    } else {
-        opts->opts.render_end_sec = sec;
-    }
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_final_gain_db(adm_render_options_t* opts, double db) noexcept {
-    if (opts == nullptr) {
-        return ADM_ERROR_OK;
-    }
-    // Unconstrained by design: no range limit, but reject non-finite values.
-    if (!std::isfinite(db)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    opts->opts.final_gain_db = db;
-    return ADM_ERROR_OK;
-}
-
 /* ── Cancellation (v1.4) ──────────────────────────────────────────────────── */
-
-adm_cancel_token_t* adm_create_cancel_token(void) noexcept {
-    try {
-        return new adm_cancel_token_t{};
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-void adm_destroy_cancel_token(adm_cancel_token_t* token) noexcept {
-    delete token;
-}
-
-void adm_cancel(adm_cancel_token_t* token) noexcept {
-    if (token != nullptr) {
-        // std::stop_source::request_stop is thread-safe and idempotent.
-        token->source.request_stop();
-    }
-}
-
-void adm_reset_cancel_token(adm_cancel_token_t* token) noexcept {
-    if (token != nullptr) {
-        // A stop_source cannot be un-requested; swap in a fresh one. Any render in
-        // progress already holds its own stop_token copy, so this only affects the
-        // next render that resolves a token from this source.
-        token->source = std::stop_source{};
-    }
-}
-
-void adm_render_options_set_cancel_token(adm_render_options_t* opts, adm_cancel_token_t* token) noexcept {
-    if (opts != nullptr) {
-        opts->cancel_token = token;
-    }
-}
 
 /* ── Render ──────────────────────────────────────────────────────────────── */
 
-// NOLINTNEXTLINE(misc-use-anonymous-namespace)
-static adm_error_code_t render_file_impl(const adm_context_t* context,
-                                         const char* input_path,
-                                         const char* output_path,
-                                         const adm_render_options_t* opts,
-                                         mradm::ProgressSink& progress_sink,
-                                         adm_render_result_t** result) noexcept {
-    if (result != nullptr) {
-        *result = nullptr;
-    }
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        mradm::RenderRequest request;
-        request.input_path = input_path;
-        if (output_path != nullptr && output_path[0] != '\0') {
-            request.output_path = output_path;
-        }
-        if (opts != nullptr) {
-            request.options = opts->opts;
-            if (opts->cancel_token != nullptr) {
-                request.options.cancel_token = opts->cancel_token->source.get_token();
-            }
-        }
-
-        // Only collect logs when the caller asked for a result handle to read them from.
-        std::vector<CLogEntry> captured;
-        CollectingLogSink collecting(captured);
-        mradm::NullLogSink null_sink;
-        mradm::LogSink& log_sink =
-            (result != nullptr) ? static_cast<mradm::LogSink&>(collecting) : static_cast<mradm::LogSink&>(null_sink);
-        mradm::RenderResult cpp_result = service().render(request, progress_sink, log_sink);
-
-        const adm_error_code_t code = map_error(cpp_result.error.code);
-        if (result == nullptr) {
-            return code;
-        }
-        auto* c_result = make_c_result(std::move(cpp_result), std::move(captured));
-        if (c_result == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *result = c_result;
-        return code;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-// cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
-adm_error_code_t adm_render_file_ex(adm_context_t* context,
-                                    const char* input_path,
-                                    const char* output_path,
-                                    const adm_render_options_t* opts,
-                                    adm_progress_cb progress,
-                                    void* user_data,
-                                    adm_render_result_t** result) noexcept {
-    CallbackProgressSink progress_sink(progress, user_data);
-    return render_file_impl(context, input_path, output_path, opts, progress_sink, result);
-}
-
-// cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
-adm_error_code_t adm_render_file_ex2(adm_context_t* context,
-                                     const char* input_path,
-                                     const char* output_path,
-                                     const adm_render_options_t* opts,
-                                     adm_progress_v2_cb progress,
-                                     void* user_data,
-                                     adm_render_result_t** result) noexcept {
-    CallbackProgressSinkV2 progress_sink(progress, user_data);
-    return render_file_impl(context, input_path, output_path, opts, progress_sink, result);
-}
-
-adm_error_code_t adm_render_file(adm_context_t* context,
-                                 const char* input_path,
-                                 const char* output_path,
-                                 adm_progress_cb progress,
-                                 void* user_data,
-                                 adm_render_result_t** result) noexcept {
-    return adm_render_file_ex(context, input_path, output_path, nullptr, progress, user_data, result);
-}
-
 /* ── Preview session (v1.8) ──────────────────────────────────────────────── */
-
-// cppcheck-suppress constParameterPointer -- context is non-const by the stable C ABI signature
-adm_error_code_t adm_create_preview_session(adm_context_t* context,
-                                            const char* input_path,
-                                            const adm_render_options_t* opts,
-                                            adm_preview_session_t** out) noexcept {
-    if (out != nullptr) {
-        *out = nullptr;
-    }
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0' || out == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        clear_last_error(context);
-        mradm::RenderOptions options;
-        if (opts != nullptr) {
-            options = opts->opts;
-            if (opts->cancel_token != nullptr) {
-                options.cancel_token = opts->cancel_token->source.get_token();
-            }
-        }
-        mradm::NullLogSink null_sink;
-        auto created = mradm::PreviewSession::create(input_path, std::move(options), null_sink);
-        if (!created) {
-            store_last_error(context, created.error());
-            return map_error(created.error().code);
-        }
-        // cppcheck-suppress unreadVariable -- session is used (*out = session)
-        auto* session = new (std::nothrow) adm_preview_session_t{std::move(*created)};
-        if (session == nullptr) {
-            set_last_error(context, "failed to allocate preview session handle");
-            return ADM_ERROR_INTERNAL;
-        }
-        *out = session;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        set_last_error(context, "unexpected exception while creating preview session");
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-void adm_destroy_preview_session(adm_preview_session_t* session) noexcept {
-    delete session;
-}
-
-// NOLINTNEXTLINE(misc-use-anonymous-namespace)
-static adm_error_code_t preview_render_window_impl(const adm_preview_session_t* session,
-                                                   double start_sec,
-                                                   double end_sec,
-                                                   const char* output_path,
-                                                   mradm::ProgressSink& progress_sink,
-                                                   adm_render_result_t** result) noexcept {
-    if (result != nullptr) {
-        *result = nullptr;
-    }
-    if (session == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    if (!std::isfinite(start_sec) || start_sec < 0.0 || !std::isfinite(end_sec)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        // end_sec <= 0 means "to the end" (nullopt), matching set_render_end_sec.
-        const std::optional<double> end = (end_sec > 0.0) ? std::optional<double>{end_sec} : std::nullopt;
-        std::optional<std::filesystem::path> out_path;
-        if (output_path != nullptr && output_path[0] != '\0') {
-            out_path = std::filesystem::path{output_path};
-        }
-
-        std::vector<CLogEntry> captured;
-        CollectingLogSink collecting(captured);
-        mradm::NullLogSink null_sink;
-        mradm::LogSink& log_sink =
-            (result != nullptr) ? static_cast<mradm::LogSink&>(collecting) : static_cast<mradm::LogSink&>(null_sink);
-        mradm::RenderResult cpp_result =
-            session->session.render_window(start_sec, end, std::move(out_path), progress_sink, log_sink);
-
-        const adm_error_code_t code = map_error(cpp_result.error.code);
-        if (result == nullptr) {
-            return code;
-        }
-        auto* c_result = make_c_result(std::move(cpp_result), std::move(captured));
-        if (c_result == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *result = c_result;
-        return code;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-// cppcheck-suppress constParameterPointer ; session is part of the fixed C ABI signature.
-adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
-                                           double start_sec,
-                                           double end_sec,
-                                           const char* output_path,
-                                           adm_progress_cb progress,
-                                           void* user_data,
-                                           adm_render_result_t** result) noexcept {
-    CallbackProgressSink progress_sink(progress, user_data);
-    return preview_render_window_impl(session, start_sec, end_sec, output_path, progress_sink, result);
-}
-
-// cppcheck-suppress constParameterPointer ; session is part of the fixed C ABI signature.
-adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
-                                              double start_sec,
-                                              double end_sec,
-                                              const char* output_path,
-                                              adm_progress_v2_cb progress,
-                                              void* user_data,
-                                              adm_render_result_t** result) noexcept {
-    CallbackProgressSinkV2 progress_sink(progress, user_data);
-    return preview_render_window_impl(session, start_sec, end_sec, output_path, progress_sink, result);
-}
 
 /* ── Realtime monitor (v1.15) ──────────────────────────────────────────────── */
 
@@ -1567,13 +777,7 @@ adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
     }
     try {
         clear_last_error(context);
-        mradm::RenderOptions options;
-        if (opts != nullptr) {
-            options = opts->opts;
-            if (opts->cancel_token != nullptr) {
-                options.cancel_token = opts->cancel_token->source.get_token();
-            }
-        }
+        const auto options = render_options(opts);
         const std::string device = device_id != nullptr ? std::string{device_id} : std::string{};
         auto created = mradm::MonitorSession::create(input_path, options, device);
         if (!created) {
@@ -1842,11 +1046,7 @@ adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_re
     }
     try {
         clear_last_error(monitor);
-        mradm::RenderOptions options;
-        if (opts != nullptr) {
-            options = opts->opts;
-        }
-        auto result = monitor->session->switch_backend(options);
+        auto result = monitor->session->switch_backend(render_options(opts));
         if (!result) {
             store_last_error(monitor, result.error());
             return map_error(result.error().code);
@@ -2140,227 +1340,11 @@ int adm_monitor_log_entry(adm_monitor_t* monitor,
 
 /* ── Result ──────────────────────────────────────────────────────────────── */
 
-void adm_destroy_render_result(adm_render_result_t* result) noexcept {
-    delete result;
-}
-
-adm_error_code_t adm_render_result_error_code(const adm_render_result_t* result) noexcept {
-    if (result == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    return result->code;
-}
-
-const char* adm_render_result_message(const adm_render_result_t* result) noexcept {
-    if (result == nullptr) {
-        return "result is null";
-    }
-    return result->message.c_str();
-}
-
-const char* adm_render_result_output_path(const adm_render_result_t* result) noexcept {
-    if (result == nullptr) {
-        return nullptr;
-    }
-    return result->output_path.c_str();
-}
-
-int adm_render_result_loudness_lufs(const adm_render_result_t* result, double* out_value) noexcept {
-    if (result == nullptr || !result->loudness_lufs.has_value()) {
-        return 0;
-    }
-    if (out_value != nullptr) {
-        *out_value = *result->loudness_lufs;
-    }
-    return 1;
-}
-
-int adm_render_result_peak_dbtp(const adm_render_result_t* result, double* out_value) noexcept {
-    if (result == nullptr || !result->peak_dbtp.has_value()) {
-        return 0;
-    }
-    if (out_value != nullptr) {
-        *out_value = *result->peak_dbtp;
-    }
-    return 1;
-}
-
-const char* adm_render_result_semantic_report_json(const adm_render_result_t* result) noexcept {
-    if (result == nullptr || !result->semantic_report_json.has_value()) {
-        return nullptr;
-    }
-    return result->semantic_report_json->c_str();
-}
-
-uint32_t adm_render_result_log_count(const adm_render_result_t* result) noexcept {
-    if (result == nullptr) {
-        return 0;
-    }
-    // Saturate rather than truncate: a count narrowed by the high bits would make
-    // the caller stop iterating early and silently miss the remaining entries.
-    const std::size_t n = result->logs.size();
-    return (n > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(n);
-}
-
-int adm_render_result_log_entry(const adm_render_result_t* result,
-                                uint32_t index,
-                                adm_log_level_t* out_level,
-                                const char** out_module,
-                                const char** out_message) noexcept {
-    if (result == nullptr || index >= result->logs.size()) {
-        return 0;
-    }
-    const CLogEntry& entry = result->logs[index];
-    if (out_level != nullptr) {
-        *out_level = entry.level;
-    }
-    if (out_module != nullptr) {
-        *out_module = entry.module.c_str();
-    }
-    if (out_message != nullptr) {
-        *out_message = entry.message.c_str();
-    }
-    return 1;
-}
-
 /* ── Probe ───────────────────────────────────────────────────────────────── */
 
 /* ── Scene inspect (JSON) ────────────────────────────────────────────────── */
 
-adm_error_code_t adm_export_file(adm_context_t* context,
-                                 const char* input_path,
-                                 const char* output_path,
-                                 const adm_render_options_t* opts) noexcept {
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0' || output_path == nullptr ||
-        output_path[0] == '\0') {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        clear_last_error(context);
-        mradm::NullLogSink logs;
-        const mradm::RenderOptions default_options;
-        const mradm::RenderOptions& options = (opts != nullptr) ? opts->opts : default_options;
-        auto result = service().export_file(input_path, output_path, options, logs);
-        if (!result) {
-            store_last_error(context, result.error());
-            return map_error(result.error().code);
-        }
-        return ADM_ERROR_OK;
-    } catch (...) {
-        set_last_error(context, "unexpected exception while exporting ADM file");
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
 /* ── Capabilities (JSON) ─────────────────────────────────────────────────── */
-
-// ADR 0007 freezes these public signatures, including the mutable context pointer.
-// cppcheck-suppress-begin constParameterPointer
-adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || out_json == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        const std::string json = service().capabilities_json();
-        auto* buffer = c_string(json);
-        if (buffer == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || out_json == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        const std::string json = service().layouts_json();
-        auto* buffer = c_string(json);
-        if (buffer == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_input_layouts_json(adm_context_t* context, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || out_json == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        const std::string json = service().input_layouts_json();
-        auto* buffer = c_string(json);
-        if (buffer == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || out_json == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        const std::string json = service().output_formats_json();
-        auto* buffer = c_string(json);
-        if (buffer == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || out_json == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        const std::string json = service().render_support_matrix_json();
-        auto* buffer = c_string(json);
-        if (buffer == nullptr) {
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
 
 // cppcheck-suppress-end constParameterPointer
 
@@ -3062,57 +2046,6 @@ adm_error_code_t room_source_json(const std::shared_ptr<mradm::IRoomControl>& co
 }
 } // namespace
 
-adm_error_code_t adm_render_options_set_screen_config_json(adm_render_options_t* options, const char* json) noexcept {
-    if (options == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        if (json == nullptr) {
-            options->opts.screens = {};
-            return ADM_ERROR_OK;
-        }
-        auto screens = mradm::parse_screen_config_json(json);
-        if (!screens) {
-            return map_error(screens.error().code);
-        }
-        options->opts.screens = *screens;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_render_options_set_room_quality(adm_render_options_t* options,
-                                                     adm_room_quality_t quality) noexcept {
-    if (options == nullptr || !valid_room_quality(quality)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    options->opts.room.quality = static_cast<mradm::RoomQuality>(quality);
-    return ADM_ERROR_OK;
-}
-
-adm_error_code_t adm_render_options_set_room(adm_render_options_t* options, const adm_room_config_t* config) noexcept {
-    if (options == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        const auto quality = options->opts.room.quality;
-        if (config == nullptr) {
-            options->opts.room = {};
-            options->opts.room.quality = quality;
-            return ADM_ERROR_OK;
-        }
-        auto converted = to_room_config(config);
-        if (!converted) {
-            return map_error(converted.error().code);
-        }
-        converted->quality = quality;
-        options->opts.room = std::move(*converted);
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
 adm_error_code_t adm_monitor_switch_room(adm_monitor_t* monitor,
                                          const adm_room_config_t* config,
                                          uint64_t* out_request,

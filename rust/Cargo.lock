@@ -276,6 +276,7 @@ dependencies = [
 name = "mradm-capi"
 version = "0.1.0"
 dependencies = [
+ "mradm-dsp",
  "mradm-ffi",
 ]
 

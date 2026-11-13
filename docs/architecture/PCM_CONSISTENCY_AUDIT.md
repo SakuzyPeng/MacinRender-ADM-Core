@@ -740,6 +740,13 @@ C1 审查修正 `c96d155d` 消除房间句柄与 C++ 房间桥分配失败时的
 Windows Release 查询、房间与离线渲染家族对照 2,293 行／23 个文件无差异，生产 C/C++ 收紧到 20,841 行
 （见 [C ABI 审查记录](RUST_BOUNDARY_CAPI.md#c1-审查修正与原生验证)）。
 
+C2（67 个导出，含并入的 preview）完成：渲染选项与 39 个 setter、取消令牌、`adm_render_file*`、结果对象、export、5 个能力表
+JSON 与 preview 会话改由 Rust 实现，照 `RenderService` 驱动同一个 `mradm-engine` 分步状态机，并按符号名调用 C++ 的音频岛、
+平台岛与 Apple 岛；C ABI 不再经 C++ `RenderService`（CLI 仍用），C ABI 中的服务单例与 C++ 选项 / 取消 / 结果结构删除。进度回调抛出的 C++ 异常经 C++ 跳板照旧转为
+`ADM_ERROR_INTERNAL`；仍在 C++ 的 Monitor 创建与切换经 `mradm_capi_options` 读取 Rust 选项。本机 Linux 新旧对照：
+C ABI 采集 3,283 行与 36 个文件 0 差异、consumer 测试在两个库上通过、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。
+生产 C/C++ 20,841 → 19,855 行。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
