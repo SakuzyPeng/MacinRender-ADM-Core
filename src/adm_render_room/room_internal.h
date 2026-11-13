@@ -11,6 +11,14 @@
 namespace mradm::room_internal {
 struct Access {
     static const void* get(const RoomProfile& profile) { return profile.handle_; }
+    // Owns a profile handle from the Rust C ABI's rooms; nullptr for nullptr.
+    static std::shared_ptr<const RoomProfile> adopt(void* handle) {
+        if (handle == nullptr) {
+            return nullptr;
+        }
+        std::unique_ptr<void, decltype(&mradm_room_profile_destroy)> owned{handle, mradm_room_profile_destroy};
+        return std::shared_ptr<const RoomProfile>{new RoomProfile(owned.release())};
+    }
 };
 using PreparedHandle = std::unique_ptr<void, decltype(&mradm_room_prepared_destroy)>;
 // cppcheck-suppress-begin unusedStructMember

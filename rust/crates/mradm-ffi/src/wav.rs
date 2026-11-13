@@ -24,9 +24,9 @@ pub struct WriteHandle {
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Info {
-    pub(crate) frames: u64,
-    pub(crate) channels: u32,
-    pub(crate) rate: u32,
+    pub frames: u64,
+    pub channels: u32,
+    pub rate: u32,
     /// WAVE_FORMAT_EXTENSIBLE speaker mask; 0 for plain WAVEFORMAT headers.
     pub(crate) channel_mask: u32,
     /// Container bits per sample (fmt `wBitsPerSample`).

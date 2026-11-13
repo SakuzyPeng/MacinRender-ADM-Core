@@ -276,6 +276,8 @@ class CapiPrivateEntryTests(unittest.TestCase):
         "typedef struct adm_context_t adm_context_t;\n"
         "int32_t mradm_capi_context_set_error(struct adm_context_t *context, const uint8_t *message, uintptr_t len);\n"
         "char *mradm_capi_string(const uint8_t *text, uintptr_t len);\n"
+        "typedef struct adm_room_t adm_room_t;\n"
+        "void *mradm_capi_room_profile(const struct adm_room_t *room);\n"
     )
 
     def compare(self, generated_text):

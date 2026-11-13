@@ -8,7 +8,8 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
 };
-mod adm;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod adm;
 mod checked;
 mod convolution;
 mod decimal;
@@ -32,10 +33,12 @@ mod post_gain;
 mod render;
 mod render_apple;
 mod resampler;
-mod room;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod room;
 mod room_cuda_selection;
 mod room_environment;
-mod scene;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod scene;
 mod scene_math;
 mod scene_transition;
 #[cfg(windows)]
@@ -48,7 +51,8 @@ mod stream_dsp;
 mod test_alloc;
 mod timeline;
 mod triple_balance;
-mod wav;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod wav;
 
 /// The engine host the C++ shell and the Rust consistency tools share; Rust visibility
 /// only, no C symbol.

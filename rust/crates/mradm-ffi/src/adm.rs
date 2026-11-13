@@ -8,14 +8,14 @@ use std::{
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Text {
-    pub(crate) data: *const u8,
-    pub(crate) len: usize,
+    pub data: *const u8,
+    pub len: usize,
 }
 impl Text {
-    pub(crate) fn new(s: &str) -> Self {
+    pub fn new(s: &str) -> Self {
         Self::bytes(s.as_bytes())
     }
-    pub(crate) fn bytes(s: &[u8]) -> Self {
+    pub fn bytes(s: &[u8]) -> Self {
         Self {
             data: s.as_ptr(),
             len: s.len(),
@@ -36,11 +36,11 @@ pub struct View {
     indices: *const u32,
     indices_len: usize,
     programmes: *const Programme,
-    programmes_len: usize,
+    pub programmes_len: usize,
     contents: *const Content,
     contents_len: usize,
     objects: *const Object,
-    objects_len: usize,
+    pub objects_len: usize,
     tracks: *const Track,
     tracks_len: usize,
     object_blocks: *const ObjectBlock,

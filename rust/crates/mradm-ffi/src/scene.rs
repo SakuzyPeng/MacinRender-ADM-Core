@@ -122,9 +122,9 @@ pub unsafe extern "C" fn mradm_scene_layouts(
 
 #[repr(C)]
 pub struct SceneImportInfo {
-    sample_rate: u32,
-    channels: u32,
-    frames: u64,
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub frames: u64,
     /// 0 = ADM, 1 = channel bed.
     source_kind: u32,
     input_layout: Text,
