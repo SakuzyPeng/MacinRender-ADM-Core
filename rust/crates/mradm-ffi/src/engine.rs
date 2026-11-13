@@ -403,19 +403,19 @@ pub unsafe extern "C" fn mradm_engine_text_destroy(text: *mut EngineText) {
 
 #[repr(C)]
 pub struct EngineLog {
-    pub(crate) level: u32,
-    pub(crate) module: Text,
-    pub(crate) message: Text,
+    pub level: u32,
+    pub module: Text,
+    pub message: Text,
 }
 
 /// `code` 0 is success; the views stay valid until `mradm_engine_result_destroy`.
 #[repr(C)]
 pub struct EngineStatus {
-    pub(crate) code: i32,
-    pub(crate) message: Text,
-    pub(crate) context: Text,
-    pub(crate) logs: *const EngineLog,
-    pub(crate) logs_len: usize,
+    pub code: i32,
+    pub message: Text,
+    pub context: Text,
+    pub logs: *const EngineLog,
+    pub logs_len: usize,
 }
 
 /// The status and log lines of one engine call.

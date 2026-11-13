@@ -798,10 +798,10 @@ pub unsafe extern "C" fn mradm_scene_direct_matrix_destroy(handle: *mut DirectMa
 
 #[repr(C)]
 pub struct ScreenConfigView {
-    has_reference: u32,
-    has_reproduction: u32,
-    reference: RoomScreenGeometry,
-    reproduction: RoomScreenGeometry,
+    pub has_reference: u32,
+    pub has_reproduction: u32,
+    pub reference: RoomScreenGeometry,
+    pub reproduction: RoomScreenGeometry,
 }
 
 /// Parses `mradm.screen-config` version 1 without validating the geometry; errors have no context.

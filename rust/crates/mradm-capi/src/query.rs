@@ -41,7 +41,7 @@ pub unsafe extern "C" fn adm_render_stage_from_string(stage: *const c_char) -> i
 }
 
 /// An imported scene, destroyed with its handle.
-struct Scene(*mut SceneHandle);
+pub(crate) struct Scene(pub(crate) *mut SceneHandle);
 
 impl Drop for Scene {
     fn drop(&mut self) {
@@ -57,7 +57,22 @@ const EMPTY: Text = Text {
 /// `RenderScene::import` without a layout or labels; `routed` is whether the caller passed
 /// import options (the template does not).
 fn import(path: &[u8], routed: bool) -> Result<Scene, Failure> {
+    import_with(path, routed, None, &[])
+}
+
+/// `RenderScene::import` with the caller's input layout and channel labels (a preview session).
+pub(crate) fn import_with(
+    path: &[u8],
+    routed: bool,
+    layout: Option<&[u8]>,
+    labels: &[Vec<u8>],
+) -> Result<Scene, Failure> {
     let utf8 = utf8_path(path).ok_or(Failure::Exception)?;
+    let mut views = Vec::new();
+    views
+        .try_reserve_exact(labels.len())
+        .map_err(|_| Failure::Exception)?;
+    views.extend(labels.iter().map(|l| Text::bytes(l)));
     let mut message = [0u8; 1024];
     let mut context = 0u32;
     let mut raw = ptr::null_mut();
@@ -66,10 +81,14 @@ fn import(path: &[u8], routed: bool) -> Result<Scene, Failure> {
             utf8.as_ptr(),
             utf8.len(),
             u32::from(routed),
-            0,
-            EMPTY,
-            ptr::null(),
-            0,
+            u32::from(layout.is_some()),
+            layout.map_or(EMPTY, Text::bytes),
+            if views.is_empty() {
+                ptr::null()
+            } else {
+                views.as_ptr()
+            },
+            views.len(),
             &mut raw,
             &mut context,
             message.as_mut_ptr(),
@@ -84,7 +103,12 @@ fn import(path: &[u8], routed: bool) -> Result<Scene, Failure> {
 }
 
 /// `scene_error`: the locator by the import's context (1 the input, 2 a referenced path).
-fn scene_error(code: i32, message: &[u8], context: u32, path: &[u8]) -> Result<Error, Failure> {
+pub(crate) fn scene_error(
+    code: i32,
+    message: &[u8],
+    context: u32,
+    path: &[u8],
+) -> Result<Error, Failure> {
     let locator = match context {
         1 => concat(&[b"input=", path])?,
         2 => concat(&[b"path=", path])?,
@@ -141,6 +165,27 @@ fn probe(path: &[u8]) -> Result<adm_scene_info_t, Failure> {
         programme_count: view.programmes_len as u32,
         object_count: view.objects_len as u32,
     })
+}
+
+/// `log_import_warnings`: the scene view the warnings come from, for its error only (the preview and
+/// export log sinks discard the lines).
+pub(crate) fn check_view(scene: &Scene, path: &[u8]) -> Result<(), Failure> {
+    let mut message = [0u8; 1024];
+    let mut info = unsafe { MaybeUninit::<SceneImportInfo>::zeroed().assume_init() };
+    let mut view = unsafe { MaybeUninit::<View>::zeroed().assume_init() };
+    let code = unsafe {
+        mradm_scene_view(
+            scene.0,
+            &mut info,
+            &mut view,
+            message.as_mut_ptr(),
+            message.len(),
+        )
+    };
+    if code != 0 {
+        return Err(scene_error(code, &message, 1, path)?.into());
+    }
+    Ok(())
 }
 
 fn wave_facts(path: &[u8]) -> Option<adm_scene_info_t> {
@@ -375,7 +420,7 @@ const BAD_ALLOC: &[u8] = b"bad allocation";
 const BAD_ALLOC: &[u8] = b"std::bad_alloc";
 
 /// `io::get_axml`: the axml payload, rejecting a CHNA track index 0 and a missing or empty axml.
-fn axml(path: &[u8]) -> Result<Vec<u8>, Failure> {
+pub(crate) fn axml(path: &[u8]) -> Result<Vec<u8>, Failure> {
     let input = concat(&[b"input=", path])?;
     let (axml, chna_zero) = match chunks(path) {
         Ok(chunks) => chunks,

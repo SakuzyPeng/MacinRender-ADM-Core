@@ -7,10 +7,13 @@
 //! the C++ shells and islands still call.
 #![allow(clippy::missing_safety_doc)]
 
+mod cancel;
 mod context;
 mod error;
 mod guard;
+mod options;
 mod query;
+mod render;
 mod room;
 mod string;
 mod version;
