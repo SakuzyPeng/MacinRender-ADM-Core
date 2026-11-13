@@ -249,7 +249,54 @@ preview 4 个（D 并入）。
   `cargo check` 与 clippy 通过（Windows 结果路径转换）。cppcheck 同样留给 macOS Quality CI；macOS（Apple 岛按名调用）与
   Windows 的原生构建与对照待维护者。
 
+## E 批：Scene 流与 Scene 输出
+
+38 个导出改由 `mradm-capi` 的 `scene.rs` 实现：Scene 流的创建（4 个入口，含房间、屏幕 JSON 与房间档位）、销毁、消息、输出格式、
+epoch、generation、提交帧、结束、拉取、状态、切换后端（含 `_ex`）、听者朝向、语义策略 JSON 与诊断（2 个）；Scene 流的房间切换、
+房间状态与声源 JSON；Scene 输出的创建、销毁、消息、播放 / 暂停、epoch、音量、状态与 HpTF（8 个设置 / 查询）。
+`adm_c_api.cpp` 中的定义、`adm_scene_stream_t` / `adm_scene_output_t` 两个 C++ 结构与只服务它们的辅助函数删除。
+
+- **同一组调用。** 每个导出照原来的 C++ 薄壳（`SceneStreamEngine`、`SceneOutputSession`、`SceneRendererRequest`、
+  `RoomControl`、`prepare_hptf`）的顺序调用同样的 `mradm-ffi` 入口（`mradm_engine_scene_*`、`mradm_engine_scene_output_*`、
+  `mradm_room_control_*`、`mradm_dsp_hptf_settings_*`、`mradm_scene_screen_parse`、`mradm_room_validate_screens`），消息缓冲与
+  原来相同（512 字节起，配置 generation 与语义策略另加 1024，渲染器请求另加布局与路径长度，输出设备另加 4096，屏幕 JSON 另加输入长度），
+  所以消息、定位与截断不变。为此 `mradm-ffi` 的 `engine_scene`、`engine_scene_output`、`room_ffi`、`device_island`、`hptf` 与
+  `hptf::settings` 模块及用到的记录字段改为 `pub`（`doc(hidden)`），由 `mradm-capi` 按路径调用。
+- **校验与消息。** 记录的 `struct_size` 与数组步长照 `load_sized_array` / `output_struct_valid` / `write_sized_output` 处理；各项校验的
+  顺序与消息照原样（例如渲染器配置先查 `struct_size`，再查取值，再查布局与 SOFA）。Scene 流的消息与诊断文本在锁内保存，返回的
+  `const char*` 有效期不变；Scene 输出的错误消息照旧只存消息、不带定位，`_ex` 入口不加锁、错误消息由调用方释放。
+- **设备岛。** Scene 输出经 `mradm_device_islands()` 打开设备，由 Rust 按符号名调用；设备抛出异常（代码 100）照旧返回
+  `ADM_ERROR_INTERNAL`、不写上下文消息。
+- **房间 JSON。** 状态与声源文档由 `mradm-json` 写出，键序、数字与转义与 nlohmann `dump()` 相同；未知状态或非 UTF-8 消息照旧返回
+  `ADM_ERROR_INTERNAL`（nlohmann 抛异常的情形）。
+- **HpTF 信息。** 左右是否相同照 `HptfCoefficients::operator==` 逐项比较（IEEE 浮点相等）；单声道查询在左右不同时照旧返回
+  `ADM_ERROR_UNSUPPORTED` 与原消息。
+- **输入队列预算。** 引擎按 C++ `live_scene` 记录的 `sizeof` 计入输入字节（帧 104、平面 40、初始状态 80、更新 120 字节）。
+  Rust 取 64 位标准库（libstdc++ / libc++ / MSVC 发布配置）下的这组值。已知差别：MSVC 调试配置开启迭代器调试后
+  `std::vector` 为 32 字节，原 C++ 在该配置下计入的帧与平面字节更大，Rust 不再随 C++ 调试配置变化。
+- **Windows SOFA 路径。** C++ 把调用方的窄路径交给 `std::filesystem::path`；Rust 照 C1 的代码页规则转 UTF-8。转换失败时原消息
+  附带系统的 `system_error` 文字，Rust 写 “路径无法转换为 UTF-8”（与 C1 的 XML 查询相同）。
+- **静态链接。** 只使用 C ABI 的静态链接程序（两个 Scene C ABI 测试）不再引用 `adm_c_api.cpp` 中的任何 C++ 定义，而 Rust 库按名
+  调用 C++ 的进度跳板与各岛；这些静态库在链接行上位于 Rust 库之前，单遍链接器（GNU ld、lld）不会回头取。`mr_adm_c_api` 静态库因此
+  在支持 `LINK_GROUP:RESCAN` 的平台上向使用方加 `--undefined=` 这五个符号，链接器在扫描对应静态库时即取出它们。共享库与
+  macOS / Windows 的链接器不受影响。
+- **薄壳移出生产。** C ABI 不再使用 `SceneStreamEngine`、`SceneOutputSession` 与 `SceneRendererRequest`，它们只剩测试与手动
+  benchmark 使用，移到 `tests/support/scene_stream` 与 `tests/support/live_scene`（新测试支持库 `mr_adm_scene_stream_test_support`），
+  算法不变。顺带修正 `hptf_parameters_test.cpp` 中局部变量与成员函数同名（cppcheck `shadowFunction`）。
+
+生产 C/C++ 19,835 → 18,018 行（`src/adm_c_api` −907，三个薄壳移出 −910）。
+
+本机 Linux x64 Release，参照为迁移前的同配置构建（源码 `2ca9aff`，与 main `6ab5ab9` 只差注释与抑制清单）：
+- C ABI 采集 3,283 行、36 个文件 0 差异（含 Scene 流的创建、配置、提交、拉取、状态、诊断、切换、策略，房间流与 NULL 设备输出），
+  consumer 测试（含 Scene 流 consumer）在两个库上都通过；薄壳移动、格式与单元测试加入后重录仍为 0 差异；
+- CLI 记录 102 条 0 差异（3 条 help 文本只差可执行文件路径；首次记录中 1 条为 Opus MKA 随机 TrackUID 的长度差，重录一致）；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- ctest 86/86、`mradm-capi` 单测 42 个（新增 7 个：渲染器配置校验顺序、步长数组、`struct_size` 输出、房间 JSON、HpTF 左右比较、
+  空句柄、消息分配失败）、FFI 头校验（`c_api.h` 164 个函数中 129 个由 Rust 实现、25 个结构体与 Rust 一致）、导出校验 164 个、
+  clang-format、clang-tidy、本机 cppcheck（改动文件）、规模棘轮、许可证；`mradm-capi` 在 `x86_64-pc-windows-msvc` 上 clippy 通过。
+  macOS / Windows 的原生构建与对照待维护者。
+
 ## 下一步
 
-E（Scene，38 个导出）与 F（Monitor / OSC，35 个导出），需用户确认后开始；迁走时删除 `capi_ffi.h` 中的选项、房间与上下文桥。
+F（Monitor / OSC，35 个导出），需用户确认后开始；迁走时删除 `capi_ffi.h` 中的选项、房间与上下文桥。
 进度回调的 C++ 跳板保留到另行决定回调异常语义。
