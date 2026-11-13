@@ -38,7 +38,7 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
   （用户决定 2026-11-12：直接使用内部 C++ 头的下游不再支持）。
 
 验证（本机 Linux x64 Release，一致性 config A，参照为 main `8e665a5` 的同配置构建）：
-- CLI 记录 102 条 0 差异（3 条 help 只有允许的排版差异）；C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
+- CLI 记录 113 条 0 差异（参照已是 Rust CLI，help 文本也相同）；C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
 - 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
 - 共享库与参照大小相同、未定义符号相同，恰好导出 164 个 `adm_*`；关闭测试（`MR_ADM_CORE_BUILD_TESTS=OFF`）的构建单独产出 `mradm` 与共享库，
   `cmake --install` 只装 `c_api.h`、共享库与 `mradm`（取依赖的 FLAC / opus / fmt / tl-expected 仍带出自己的安装规则，C 批处理）；
