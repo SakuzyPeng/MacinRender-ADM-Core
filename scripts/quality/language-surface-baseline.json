@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 97,
-      "lines": 16705
+      "files": 88,
+      "lines": 15314
     },
     "islands": {
       "files": 6,
@@ -14,8 +14,8 @@
       "lines": 512
     },
     "island-interfaces": {
-      "files": 9,
-      "lines": 988
+      "files": 11,
+      "lines": 1026
     },
     "tests": {
       "files": 202,
@@ -26,8 +26,8 @@
       "lines": 12026
     },
     "rust": {
-      "files": 357,
-      "lines": 137687
+      "files": 364,
+      "lines": 140977
     },
     "rust-vendor": {
       "files": 175,
@@ -37,11 +37,12 @@
   "modules": {
     "include/adm": 3984,
     "rust/crates/mradm-adm": 2676,
-    "rust/crates/mradm-capi": 8884,
+    "rust/crates/mradm-capi": 9487,
+    "rust/crates/mradm-cli": 2685,
     "rust/crates/mradm-dsp": 40626,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 20787,
-    "rust/crates/mradm-ffi": 25969,
+    "rust/crates/mradm-ffi": 25971,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 1757,
@@ -59,11 +60,13 @@
     "src/adm_apple/apple_island.cpp": 353,
     "src/adm_apple/apple_island.h": 14,
     "src/adm_audio": 4169,
+    "src/adm_audio/apac_worker_island.cpp": 23,
+    "src/adm_audio/apac_worker_island.h": 15,
     "src/adm_audio/island.cpp": 117,
     "src/adm_audio/island_driver.h": 113,
     "src/adm_audio/island_ffi.h": 17,
     "src/adm_c_api": 27,
-    "src/adm_cli": 1410,
+    "src/adm_cli": 19,
     "src/adm_core": 200,
     "src/adm_dsp": 1535,
     "src/adm_engine": 1029,
@@ -108,6 +111,8 @@
   "island_interfaces": {
     "src/adm_apple/apple_island.cpp": 353,
     "src/adm_apple/apple_island.h": 14,
+    "src/adm_audio/apac_worker_island.cpp": 23,
+    "src/adm_audio/apac_worker_island.h": 15,
     "src/adm_audio/island.cpp": 117,
     "src/adm_audio/island_driver.h": 113,
     "src/adm_audio/island_ffi.h": 17,

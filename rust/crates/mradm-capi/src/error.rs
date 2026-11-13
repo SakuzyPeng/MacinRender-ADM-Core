@@ -158,8 +158,35 @@ pub(crate) fn utf8_path(native: &[u8]) -> Option<Vec<u8>> {
     concat(&[native]).ok()
 }
 
+/// Runs `body` with the paths it passes to [`utf8_path`] already UTF-8: the command line reads
+/// its arguments from the wide command line on Windows, so they are not in the code page.
+#[cfg(not(windows))]
+pub(crate) fn with_utf8_paths<R>(body: impl FnOnce() -> R) -> R {
+    body()
+}
+
+#[cfg(windows)]
+thread_local! {
+    static UTF8_PATHS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(windows)]
+pub(crate) fn with_utf8_paths<R>(body: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            UTF8_PATHS.with(|flag| flag.set(self.0));
+        }
+    }
+    let _reset = Reset(UTF8_PATHS.with(|flag| flag.replace(true)));
+    body()
+}
+
 #[cfg(windows)]
 pub(crate) fn utf8_path(native: &[u8]) -> Option<Vec<u8>> {
+    if UTF8_PATHS.with(std::cell::Cell::get) {
+        return concat(&[native]).ok();
+    }
     unsafe extern "system" {
         fn AreFileApisANSI() -> i32;
         fn MultiByteToWideChar(

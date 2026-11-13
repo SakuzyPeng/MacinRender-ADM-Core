@@ -23,10 +23,10 @@ use mradm_ffi::engine::{
 use mradm_ffi::engine_render::mradm_render_prepared_destroy;
 use mradm_ffi::engine_service::{
     EngineIslandReply, EnginePath, EngineProgress, EngineRender, EngineRenderEvent,
-    EngineRenderResult, IslandContext, IslandRunner, mradm_engine_apply_policy,
-    mradm_engine_render_begin, mradm_engine_render_destroy, mradm_engine_render_next,
-    mradm_engine_render_result, mradm_engine_render_resume, mradm_engine_render_set_islands,
-    mradm_engine_render_take_prepared,
+    EngineRenderRequest, EngineRenderResult, IslandContext, IslandRunner,
+    mradm_engine_apply_policy, mradm_engine_render_begin, mradm_engine_render_destroy,
+    mradm_engine_render_next, mradm_engine_render_result, mradm_engine_render_resume,
+    mradm_engine_render_set_islands, mradm_engine_render_take_prepared,
 };
 use mradm_ffi::render::RenderPrepared;
 use mradm_ffi::render::apple_island::AppleIslands;
@@ -270,10 +270,10 @@ impl Logs {
 // ── The render ───────────────────────────────────────────────────────────────────
 
 /// `RenderResult`: the error (code 0 on success), output path (UTF-8), metrics and report.
-struct Outcome {
-    code: i32,
-    message: Vec<u8>,
-    output_path: Option<Vec<u8>>,
+pub(crate) struct Outcome {
+    pub(crate) code: i32,
+    pub(crate) message: Vec<u8>,
+    pub(crate) output_path: Option<Vec<u8>>,
     loudness_lufs: Option<f64>,
     peak_dbtp: Option<f64>,
     report: Option<Vec<u8>>,
@@ -301,18 +301,45 @@ fn error_code(code: i32) -> i32 {
     }
 }
 
-/// The caller's side of the islands (`IslandDriver`): cancellation, progress and logs; a failed
-/// callback copy stops the islands and ends the render as the C++ rethrow did.
-struct Driver<'a> {
+/// A render's caller: its stop flag, progress and log lines (`ProgressSink`, `LogSink` and the stop
+/// token). An `Err` is the exception the C++ sink threw; it ends the render.
+pub(crate) trait Sink {
+    fn cancelled(&self) -> bool;
+    fn progress(&self, event: &EngineProgress) -> Result<(), Failure>;
+    fn log(&self, level: u32, module: &[u8], message: &[u8]) -> Result<(), Failure>;
+}
+
+/// A C ABI caller: the options' cancel token, the progress callback and the result's log lines.
+struct Callbacks<'a> {
     cancel: Option<&'a Flag>,
     progress: Progress,
     logs: &'a Logs,
+}
+
+impl Sink for Callbacks<'_> {
+    fn cancelled(&self) -> bool {
+        self.cancel.is_some_and(Flag::stop_requested)
+    }
+
+    fn progress(&self, event: &EngineProgress) -> Result<(), Failure> {
+        self.progress.deliver(event)
+    }
+
+    fn log(&self, level: u32, module: &[u8], message: &[u8]) -> Result<(), Failure> {
+        self.logs.log(level, module, message)
+    }
+}
+
+/// The caller's side of the islands (`IslandDriver`); a failed sink call stops the islands and
+/// ends the render as the C++ rethrow did.
+struct Driver<'a> {
+    sink: &'a dyn Sink,
     failed: AtomicBool,
 }
 
 impl Driver<'_> {
     fn cancelled(&self) -> bool {
-        self.cancel.is_some_and(Flag::stop_requested)
+        self.sink.cancelled()
     }
 
     fn fail(&self, result: Result<(), Failure>) {
@@ -330,14 +357,14 @@ unsafe extern "C" fn island_cancelled(user: *mut c_void) -> u32 {
 unsafe extern "C" fn island_progress(user: *mut c_void, event: *const EngineProgress) {
     let driver = unsafe { &*user.cast::<Driver<'_>>() };
     if !driver.failed.load(Ordering::Acquire) {
-        driver.fail(driver.progress.deliver(unsafe { &*event }));
+        driver.fail(driver.sink.progress(unsafe { &*event }));
     }
 }
 
 unsafe extern "C" fn island_log(user: *mut c_void, level: u32, module: Text, message: Text) {
     let driver = unsafe { &*user.cast::<Driver<'_>>() };
     if !driver.failed.load(Ordering::Acquire) {
-        driver.fail(driver.logs.log(level, bytes(&module), bytes(&message)));
+        driver.fail(driver.sink.log(level, bytes(&module), bytes(&message)));
     }
 }
 
@@ -350,7 +377,7 @@ impl Drop for RenderHandle {
 }
 
 /// A preview session's cached preparation.
-struct Prepared(*mut RenderPrepared);
+pub(crate) struct Prepared(*mut RenderPrepared);
 
 impl Drop for Prepared {
     fn drop(&mut self) {
@@ -371,6 +398,22 @@ fn render(
     cache: Option<&mut Option<Prepared>>,
 ) -> Result<Outcome, Failure> {
     let request = options.request(input, output)?;
+    let callbacks = Callbacks {
+        cancel,
+        progress,
+        logs,
+    };
+    drive(&request.record, &callbacks, preimported, cache)
+}
+
+/// `RenderService::render` of a request record: the engine's steps with the islands, reported to
+/// `sink`.
+pub(crate) fn drive(
+    record: &EngineRenderRequest,
+    sink: &dyn Sink,
+    preimported: Option<&Scene>,
+    cache: Option<&mut Option<Prepared>>,
+) -> Result<Outcome, Failure> {
     let cached = cache
         .as_ref()
         .and_then(|c| c.as_ref())
@@ -378,7 +421,7 @@ fn render(
     let mut raw = ptr::null_mut();
     let code = unsafe {
         mradm_engine_render_begin(
-            &request.record,
+            record,
             islands::mradm_platform_islands(),
             preimported.map_or(ptr::null(), |s| s.0.cast_const()),
             cached,
@@ -393,9 +436,7 @@ fn render(
     }
     let handle = RenderHandle(raw);
     let driver = Driver {
-        cancel,
-        progress,
-        logs,
+        sink,
         failed: AtomicBool::new(false),
     };
     let runner = IslandRunner {
@@ -423,8 +464,8 @@ fn render(
             return Outcome::error(guard::INTERNAL, b"render step failed");
         }
         match event.kind {
-            1 => progress.deliver(&event.progress)?,
-            2 => logs.log(event.level, bytes(&event.module), bytes(&event.message))?,
+            1 => sink.progress(&event.progress)?,
+            2 => sink.log(event.level, bytes(&event.module), bytes(&event.message))?,
             3 => {
                 // Every island runs inside the step; one returned here has no runner in this build.
                 let mut reply = unsafe { MaybeUninit::<EngineIslandReply>::zeroed().assume_init() };
@@ -1106,10 +1147,20 @@ pub unsafe extern "C" fn adm_preview_render_window_v2(
 
 /// `RenderService::export_file`: the input's AXML rewritten with the options' policy.
 fn export(input: &[u8], output: &[u8], options: &adm_render_options_t) -> Result<(), Failure> {
+    export_logged(input, output, options, |_, _, _| {})
+}
+
+/// `export` with the policy's log lines (the import warnings go to a sink that discards them).
+pub(crate) fn export_logged(
+    input: &[u8],
+    output: &[u8],
+    options: &adm_render_options_t,
+    log: impl FnMut(u32, &[u8], &[u8]),
+) -> Result<(), Failure> {
     let scene = import_with(input, false, None, &[])?;
     check_view(&scene, input)?;
     let display = utf8_path(input).ok_or(Failure::Exception)?;
-    apply_policy(&scene, &display, options)?;
+    apply_policy_logged(&scene, &display, options, log)?;
     let xml = axml(input)?;
     let locator = concat(&[b"input=", input, b" output=", output])?;
     let mut message = [0u8; 1024];

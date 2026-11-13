@@ -19,30 +19,6 @@
   "components": [
     {
       "type": "library",
-      "name": "CLI11",
-      "version": "v2.5.0",
-      "description": "CLI 参数解析",
-      "licenses": [
-        {
-          "license": {
-            "id": "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:github/CLIUtils/CLI11@v2.5.0",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "nlohmann_json",
       "version": "v3.12.0",
       "description": "JSON 解析/序列化（语义策略、SBOM 内部）",
@@ -78,30 +54,6 @@
         }
       ],
       "purl": "pkg:github/fmtlib/fmt@11.2.0",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "spdlog",
-      "version": "v1.15.3",
-      "description": "日志库",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:github/gabime/spdlog@v1.15.3",
       "properties": [
         {
           "name": "mradm:distribution",
@@ -633,6 +585,28 @@
     },
     {
       "type": "library",
+      "name": "rust-anstyle-1.0.11",
+      "version": "1.0.11",
+      "description": "clap 帮助文本的样式描述",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/anstyle@1.0.11",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-approx-0.5.1",
       "version": "0.5.1",
       "description": "Rust DSP 的锁定依赖",
@@ -754,6 +728,72 @@
         }
       ],
       "purl": "pkg:cargo/bytemuck@1.25.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-clap-4.5.41",
+      "version": "4.5.41",
+      "description": "mradm 命令行的参数解析（mradm-cli）",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/clap@4.5.41",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-clap_builder-4.5.41",
+      "version": "4.5.41",
+      "description": "clap 的解析与帮助实现",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/clap_builder@4.5.41",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-clap_lex-0.7.5",
+      "version": "0.7.5",
+      "description": "clap 的命令行分词",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/clap_lex@0.7.5",
       "properties": [
         {
           "name": "mradm:distribution",

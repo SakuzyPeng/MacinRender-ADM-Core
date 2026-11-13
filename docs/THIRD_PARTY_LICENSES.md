@@ -31,10 +31,8 @@
 
 | 依赖 | 用途 | 许可证 (SPDX) | 默认发行可用性 | 备注 |
 |---|---|---|---|---|
-| `CLI11` @ v2.5.0 | CLI 参数解析 | BSD-3-Clause | 可用 |  |
 | `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（语义策略、SBOM 内部） | MIT | 可用 |  |
 | `fmt` @ 11.2.0 | 格式化与日志辅助 | MIT | 可用 | 若动态链接系统库，仍需记录版本与许可证 |
-| `spdlog` @ v1.15.3 | 日志库 | MIT | 可用 | 使用 external fmt |
 | `tl-expected` @ v1.1.0 | Result<T> 基础类型 | CC0-1.0 | 可用 | header-only；FetchContent 目标目录名为 expected-src |
 | `libebur128` @ v1.2.6 | 历史响度/True Peak 参考（测试专用） | MIT | opt-in（默认关闭） | 仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。 |
 | `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | FLAC 解码（dr_flac）；dr_wav 仅用于显式启用的 WAVE 参考测试 | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
@@ -57,12 +55,16 @@
 | `Corrosion` @ v0.6.1 | CMake/Cargo 构建集成 | MIT | 可用 | 仅构建时使用。 |
 | `saf-derived-rust-dsp` @ v1.3.4-subset | Rust afSTFT、去相关/OM 算法及 KEMAR/滤波器/HOA 数据来源 | ISC AND MIT | 可用 | 保留原作者及许可证；不链接 SAF。资源哈希由 check_cargo.py 校验。 |
 | `rust-adler2-2.0.1` @ 2.0.1 | Rust DSP 的锁定依赖 | 0BSD OR MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-anstyle-1.0.11` @ 1.0.11 | clap 帮助文本的样式描述 | MIT OR Apache-2.0 | 可用 | 经 clap 引入；未启用 color，不输出 ANSI 样式。 |
 | `rust-approx-0.5.1` @ 0.5.1 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-arrayvec-0.7.8` @ 0.7.8 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-autocfg-1.5.1` @ 1.5.1 | Rust DSP 的锁定依赖 | Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-bitflags-1.3.2` @ 1.3.2 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 |
 | `rust-bitflags-2.13.2` @ 2.13.2 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-bytemuck-1.25.2` @ 1.25.2 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-clap-4.5.41` @ 4.5.41 | mradm 命令行的参数解析（mradm-cli） | MIT OR Apache-2.0 | 可用 | 只用 builder API；关闭默认 features，只开 std、help、usage、error-context（不启用 derive、color、suggestions、wrap_help）。 |
+| `rust-clap_builder-4.5.41` @ 4.5.41 | clap 的解析与帮助实现 | MIT OR Apache-2.0 | 可用 | 经 clap 引入，features 同 clap。 |
+| `rust-clap_lex-0.7.5` @ 0.7.5 | clap 的命令行分词 | MIT OR Apache-2.0 | 可用 | 经 clap 引入。 |
 | `rust-dasp_frame-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-dasp_sample-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-ebur128-0.1.10` @ 0.1.10 | Rust 响度/True Peak 计量的锁定依赖 | MIT | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）；K-weighting 的 tan/pow、门控系数的 pow 与 LUFS 换算的 log10 改用 libm，x86 不再设置 MXCSR flush-to-zero，所有架构统一在每次调用后清零低于 f64::EPSILON 的滤波器状态（二期 2.2）。 |

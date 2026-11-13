@@ -7,7 +7,6 @@
 |---|---|---|---|
 | aom-iamf-tools-bridge | external-sdk | BSD-3-Clause-Clear AND AOM-PL-1.0 | `NOTICE.txt` |
 | apple-system-frameworks | platform-sdk | LicenseRef-Apple-SDK | `NOTICE.txt` |
-| CLI11 | v2.5.0 | BSD-3-Clause | `LICENSE` |
 | Corrosion | v0.6.1 | MIT | `LICENSE` |
 | dr_libs | 47a4f08e777faddf59a8955c4ea84f69f41020d5 | Unlicense OR MIT-0 | `LICENSE` |
 | Eigen | bundled-in-libear@2db69f8f | MPL-2.0 | `COPYING.MPL2` |
@@ -28,6 +27,7 @@
 | nlohmann-derived-rust-json | nlohmann-3.12.0-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann_json | v3.12.0 | MIT | `LICENSE.MIT` |
 | rust-adler2-2.0.1 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-anstyle-1.0.11 | 1.0.11 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |
 | rust-arrayvec-0.7.8 | 0.7.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-audio-codec-algorithms-0.8.1 | 0.8.1 | 0BSD OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE` |
@@ -40,6 +40,9 @@
 | rust-block-buffer-0.10.4 | 0.10.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bytemuck-1.25.2 | 1.25.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
 | rust-cfg-if-1.0.5 | 1.0.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-clap-4.5.41 | 4.5.41 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-clap_builder-4.5.41 | 4.5.41 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-clap_lex-0.7.5 | 0.7.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-cpufeatures-0.2.17 | 0.2.17 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-crossbeam-deque-0.8.8 | 0.8.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-crossbeam-epoch-0.9.21 | 0.9.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -107,7 +110,6 @@
 | rust-winnow-0.7.15 | 0.7.15 | MIT | `LICENSE-MIT` |
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |
 | Spatial_Audio_Framework | v1.3.4 | ISC | `LICENSE.md` |
-| spdlog | v1.15.3 | MIT | `LICENSE` |
 | spreader_mr | fork-of-SAF-examples@v1.3.4 | ISC | `NOTICE.txt` |
 | tl-expected | v1.1.0 | CC0-1.0 | `COPYING` |
 | xsimd | bundled-in-libear@2db69f8f | BSD-3-Clause | `LICENSE` |

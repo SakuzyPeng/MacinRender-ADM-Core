@@ -11,6 +11,7 @@ license.workspace = true
 crate-type = ["staticlib"]
 
 [dependencies]
+mradm-cli = { path = "../mradm-cli" }
 mradm-ffi = { path = "../mradm-ffi", default-features = false }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-json = { path = "../mradm-json" }

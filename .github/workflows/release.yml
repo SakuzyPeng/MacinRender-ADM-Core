@@ -68,8 +68,6 @@ jobs:
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
           -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
           -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
-          -DCMAKE_DISABLE_FIND_PACKAGE_spdlog=TRUE
-          -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
@@ -97,7 +95,7 @@ jobs:
           --binary "${{ matrix.binary }}"
           --platform "${{ matrix.platform }}"
           --arch "${{ matrix.arch }}"
-          --cmake-options "release; fmt/spdlog/CLI11 FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF"
+          --cmake-options "release; fmt FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF"
 
       - name: Package smoke
         run: |
@@ -164,8 +162,6 @@ jobs:
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
           -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
           -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
-          -DCMAKE_DISABLE_FIND_PACKAGE_spdlog=TRUE
-          -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF

@@ -41,13 +41,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         add_library(mr_adm_corrosion INTERFACE)
         add_library(Corrosion::Corrosion ALIAS mr_adm_corrosion)
         return()
-    elseif(package_name STREQUAL "CLI11")
-        FetchContent_Declare(
-            CLI11
-            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-            GIT_TAG v2.5.0
-            GIT_SHALLOW TRUE
-        )
     elseif(package_name STREQUAL "nlohmann_json")
         set(JSON_BuildTests OFF CACHE INTERNAL "")
         FetchContent_Declare(
@@ -61,14 +54,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             fmt
             GIT_REPOSITORY https://github.com/fmtlib/fmt.git
             GIT_TAG 11.2.0
-            GIT_SHALLOW TRUE
-        )
-    elseif(package_name STREQUAL "spdlog")
-        set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "Use external fmt with spdlog" FORCE)
-        FetchContent_Declare(
-            spdlog
-            GIT_REPOSITORY https://github.com/gabime/spdlog.git
-            GIT_TAG v1.15.3
             GIT_SHALLOW TRUE
         )
     elseif(package_name STREQUAL "tl-expected")
@@ -554,8 +539,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
 endfunction()
 
 mr_adm_core_find_or_fetch(fmt fmt::fmt)
-mr_adm_core_find_or_fetch(spdlog spdlog::spdlog)
-mr_adm_core_find_or_fetch(CLI11 CLI11::CLI11)
 mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
 mr_adm_core_find_or_fetch(tl-expected tl::expected)
 if(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS)

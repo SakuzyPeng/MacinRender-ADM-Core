@@ -166,7 +166,7 @@ pub(crate) fn validate_screens(
 }
 
 /// `inspect_room`: the prepared room's JSON (no SOFA, no reuse).
-unsafe fn inspect(config: &Config<'_>, quality: i32) -> Result<Vec<u8>, Failure> {
+pub(crate) unsafe fn inspect(config: &Config<'_>, quality: i32) -> Result<Vec<u8>, Failure> {
     let mut message = [0u8; 512];
     let mut raw = ptr::null_mut();
     let code = unsafe {
