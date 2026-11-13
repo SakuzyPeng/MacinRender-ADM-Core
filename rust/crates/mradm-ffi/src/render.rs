@@ -679,22 +679,22 @@ pub struct RenderLiveElement {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RenderLiveState {
-    valid_fields: u64,
-    active: u32,
-    linear_gain: f32,
-    position: [f32; 3],
-    width: f32,
-    height: f32,
-    depth: f32,
-    diffuse: f32,
-    divergence: f32,
-    channel_lock: u32,
-    screen_reference: u32,
-    head_locked: u32,
-    divergence_azimuth_range: f32,
-    divergence_position_range: f32,
-    has_max_distance: u32,
-    max_distance: f32,
+    pub valid_fields: u64,
+    pub active: u32,
+    pub linear_gain: f32,
+    pub position: [f32; 3],
+    pub width: f32,
+    pub height: f32,
+    pub depth: f32,
+    pub diffuse: f32,
+    pub divergence: f32,
+    pub channel_lock: u32,
+    pub screen_reference: u32,
+    pub head_locked: u32,
+    pub divergence_azimuth_range: f32,
+    pub divergence_position_range: f32,
+    pub has_max_distance: u32,
+    pub max_distance: f32,
 }
 
 /// A PCM plane; the samples are read only with a signal.
@@ -740,19 +740,19 @@ impl live::PlaneSource for LivePlanes<'_> {
 
 #[repr(C)]
 pub struct RenderLiveEntry {
-    element_id: u64,
-    state: RenderLiveState,
+    pub element_id: u64,
+    pub state: RenderLiveState,
 }
 
 #[repr(C)]
 pub struct RenderLiveUpdate {
-    element_id: u64,
-    offset: u32,
-    ramp: u32,
-    jump: u32,
-    changed: u64,
-    cleared: u64,
-    state: RenderLiveState,
+    pub element_id: u64,
+    pub offset: u32,
+    pub ramp: u32,
+    pub jump: u32,
+    pub changed: u64,
+    pub cleared: u64,
+    pub state: RenderLiveState,
 }
 
 /// One `live_scene::Frame`; `trace` is the checkpoint prefix, empty for none.
@@ -860,26 +860,26 @@ unsafe fn live_renderer<'a>(handle: *mut RenderLive) -> Result<&'a mut RenderLiv
 /// null; `sink` is whether the caller publishes diagnostics.
 #[repr(C)]
 pub struct EngineSceneRendererRequest {
-    selection: u32,
-    layout_id: Text,
-    apple_geometry: u32,
-    speaker_spread: u32,
-    binaural_spread: u32,
-    split_power: u32,
-    smoothing_frames: u32,
-    sample_rate: u32,
-    has_sofa: u32,
-    sofa_path: Text,
-    sofa_file_name: Text,
-    has_reference: u32,
-    reference: mradm_dsp::room::screen::RoomScreenGeometry,
-    has_reproduction: u32,
-    reproduction: mradm_dsp::room::screen::RoomScreenGeometry,
-    room_profile: *const crate::room::RoomProfileHandle,
-    room_hrir: Text,
-    room_metres: f64,
-    room_quality: u32,
-    sink: u32,
+    pub selection: u32,
+    pub layout_id: Text,
+    pub apple_geometry: u32,
+    pub speaker_spread: u32,
+    pub binaural_spread: u32,
+    pub split_power: u32,
+    pub smoothing_frames: u32,
+    pub sample_rate: u32,
+    pub has_sofa: u32,
+    pub sofa_path: Text,
+    pub sofa_file_name: Text,
+    pub has_reference: u32,
+    pub reference: mradm_dsp::room::screen::RoomScreenGeometry,
+    pub has_reproduction: u32,
+    pub reproduction: mradm_dsp::room::screen::RoomScreenGeometry,
+    pub room_profile: *const crate::room::RoomProfileHandle,
+    pub room_hrir: Text,
+    pub room_metres: f64,
+    pub room_quality: u32,
+    pub sink: u32,
 }
 
 /// The renderer configuration of a request; also the Scene stream's (`engine_scene`).
@@ -967,9 +967,11 @@ pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
 }
 
 #[path = "engine_scene.rs"]
-mod engine_scene;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine_scene;
 #[path = "engine_scene_output.rs"]
-mod engine_scene_output;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine_scene_output;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_render_live_destroy(handle: *mut RenderLive) {
@@ -1182,7 +1184,8 @@ pub unsafe extern "C" fn mradm_render_live_render(
 }
 
 #[path = "render_room.rs"]
-pub(crate) mod room_ffi;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod room_ffi;
 
 #[path = "render_binaural.rs"]
 mod binaural_ffi;
@@ -1193,7 +1196,8 @@ mod stream_ffi;
 #[path = "apple_island.rs"]
 pub mod apple_island;
 #[path = "device_island.rs"]
-pub(crate) mod device_island;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod device_island;
 #[path = "engine_monitor.rs"]
 mod engine_monitor;
 #[path = "engine_monitor_session.rs"]

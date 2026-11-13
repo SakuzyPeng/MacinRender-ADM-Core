@@ -92,12 +92,12 @@ pub struct RoomPreparedHandle {
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct RoomSourceInfo {
-    pub(crate) id: u64,
-    pub(crate) position: [f64; 3],
-    pub(crate) direction: [f64; 3],
-    pub(crate) distance: f64,
-    pub(crate) constrained: u32,
-    pub(crate) present: u32,
+    pub id: u64,
+    pub position: [f64; 3],
+    pub direction: [f64; 3],
+    pub distance: f64,
+    pub constrained: u32,
+    pub present: u32,
 }
 #[derive(Clone, Copy, Default)]
 #[repr(C)]

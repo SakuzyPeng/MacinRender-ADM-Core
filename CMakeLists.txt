@@ -237,7 +237,6 @@ add_library(mr_adm_render_room)
 add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
 target_sources(mr_adm_render_room PRIVATE
     src/adm_render_room/room.cpp
-    src/adm_render_room/scene_renderer_request.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h)
 target_include_directories(mr_adm_render_room PRIVATE src/adm_render_room)
 target_link_libraries(mr_adm_render_room PUBLIC MacinRender::ADMCore
@@ -399,7 +398,6 @@ target_sources(
     PRIVATE
         src/adm_engine/render_service.cpp
         src/adm_engine/monitor_session.cpp
-        src/adm_engine/scene_output_session.cpp
         src/adm_engine/catalog.cpp
         src/adm_engine/platform_island.cpp
         # The output devices' island interface reaches all three device islands (miniaudio in
@@ -439,7 +437,6 @@ add_library(mr_adm_realtime)
 add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
 target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/miniaudio_device.cpp
-    src/adm_realtime/scene_stream_engine.cpp
     src/adm_realtime/osc_head_tracking.cpp
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
@@ -484,6 +481,19 @@ set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
+# The Rust C ABI (libmradm_capi.a) calls back into C++ by name: the progress trampolines
+# (adm_c_api.cpp), the platform and device islands (adm_engine) and the audio island (adm_audio).
+# Those archives come before the Rust staticlib on the link line, so a single-pass linker (GNU ld,
+# lld) takes their objects only if the symbols are already undefined when it reaches them.
+get_target_property(_mr_c_api_type mr_adm_c_api TYPE)
+if(_mr_c_api_type STREQUAL "STATIC_LIBRARY" AND CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
+    target_link_options(mr_adm_c_api INTERFACE
+        "LINKER:--undefined=mradm_capi_progress_v1"
+        "LINKER:--undefined=mradm_capi_progress_v2"
+        "LINKER:--undefined=mradm_platform_islands"
+        "LINKER:--undefined=mradm_device_islands"
+        "LINKER:--undefined=mradm_audio_island")
+endif()
 mr_adm_core_apply_warnings(mr_adm_c_api)
 mr_adm_core_apply_static_analysis(mr_adm_c_api)
 
@@ -796,7 +806,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(
         mr_adm_stereo_peak_guard_tests
         PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
-        mr_adm_output_dsp_test_support
+        mr_adm_output_dsp_test_support mr_adm_scene_stream_test_support
     )
     mr_adm_core_apply_warnings(mr_adm_stereo_peak_guard_tests)
     mr_adm_core_apply_static_analysis(mr_adm_stereo_peak_guard_tests)
@@ -808,7 +818,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(
         mr_adm_scene_callback_alloc_tests
         PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
-        mr_adm_output_dsp_test_support
+        mr_adm_output_dsp_test_support mr_adm_scene_stream_test_support
     )
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
         target_compile_definitions(mr_adm_scene_callback_alloc_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
@@ -833,7 +843,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_library(mr_adm_live_scene_test_support STATIC
         tests/support/live_scene/live_renderer.cpp
         tests/support/live_scene/live_renderer_adapter.cpp
-        tests/support/live_scene/live_scene_trace.cpp)
+        tests/support/live_scene/live_scene_trace.cpp
+        tests/support/live_scene/scene_renderer_request.cpp)
     target_include_directories(mr_adm_live_scene_test_support PUBLIC tests/support/live_scene src/adm_render_room)
     target_link_libraries(mr_adm_live_scene_test_support PUBLIC MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon
         MacinRender::ADMDsp)
@@ -842,6 +853,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
     mr_adm_core_apply_warnings(mr_adm_live_scene_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_live_scene_test_support)
+
+    # The C++ Scene stream and Scene output shells over the Rust engine (mradm-engine `scene`), not
+    # in production since the C ABI calls the engine from Rust: the device, HpTF and allocation tests
+    # and the manual benchmarks drive the engine through them.
+    add_library(mr_adm_scene_stream_test_support STATIC
+        tests/support/scene_stream/scene_stream_engine.cpp
+        tests/support/scene_stream/scene_output_session.cpp)
+    target_include_directories(mr_adm_scene_stream_test_support PUBLIC
+        tests/support/scene_stream src/adm_realtime src/adm_render_common src/adm_render_room)
+    target_link_libraries(mr_adm_scene_stream_test_support PUBLIC MacinRender::ADMEngine MacinRender::ADMRealtime
+        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_live_scene_test_support)
+    mr_adm_core_apply_warnings(mr_adm_scene_stream_test_support)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_stream_test_support)
 
     add_executable(mr_adm_live_binaural_parity_tests tests/unit/live_binaural_parity_test.cpp)
     target_link_libraries(mr_adm_live_binaural_parity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
@@ -1250,7 +1274,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/manual/triple_balance_scene_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
         MacinRender::ADMEngine MacinRender::ADMRealtime mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon mr_adm_live_scene_test_support)
+        MacinRender::ADMRenderCommon mr_adm_live_scene_test_support mr_adm_scene_stream_test_support)
     target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine
         src/adm_render_room)
     if(WIN32)
@@ -1264,7 +1288,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/realtime/room_worker_wait.cpp)
     target_link_libraries(mr_adm_room_scene_benchmark PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
         MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json miniaudio
-        mr_adm_live_scene_test_support)
+        mr_adm_live_scene_test_support mr_adm_scene_stream_test_support)
     target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room
         tests/support/realtime)
     if(WIN32)
@@ -1411,7 +1435,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
     target_link_libraries(mr_adm_hptf_parameters_tests
         PRIVATE MacinRender::ADMCAPI MacinRender::ADMEngine MacinRender::ADMRealtime
-                MacinRender::ADMRenderCommon Threads::Threads)
+                MacinRender::ADMRenderCommon Threads::Threads mr_adm_scene_stream_test_support)
     mr_adm_core_apply_warnings(mr_adm_hptf_parameters_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_parameters_tests)
     add_test(NAME mr_adm_hptf_parameters_tests COMMAND mr_adm_hptf_parameters_tests)

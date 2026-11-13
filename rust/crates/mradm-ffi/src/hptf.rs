@@ -1,4 +1,5 @@
-pub(crate) mod settings;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod settings;
 use crate::{boundary, ptr, slice};
 use mradm_dsp::{Error, Result, hptf as dsp};
 
@@ -13,30 +14,30 @@ pub struct Band {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Biquad {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
+    pub b0: f32,
+    pub b1: f32,
+    pub b2: f32,
+    pub a1: f32,
+    pub a2: f32,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Coefficients {
-    sample_rate: u32,
-    band_count: u32,
-    preamp_gain: f32,
-    sections: [Biquad; dsp::MAX_BANDS],
-    max_response_db: f32,
-    auto_trim_db: f32,
-    preamp_db: f32,
+    pub sample_rate: u32,
+    pub band_count: u32,
+    pub preamp_gain: f32,
+    pub sections: [Biquad; dsp::MAX_BANDS],
+    pub max_response_db: f32,
+    pub auto_trim_db: f32,
+    pub preamp_db: f32,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Snapshot {
-    coefficients: Coefficients,
-    revision: u64,
-    right: Coefficients,
-    independent: u32,
+    pub coefficients: Coefficients,
+    pub revision: u64,
+    pub right: Coefficients,
+    pub independent: u32,
 }
 
 impl From<dsp::Coefficients> for Coefficients {

@@ -23,7 +23,8 @@ pub mod engine_render;
 pub mod engine_service;
 mod flac;
 mod hoa;
-mod hptf;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod hptf;
 mod hrtf;
 mod live_binaural;
 mod live_vbap;

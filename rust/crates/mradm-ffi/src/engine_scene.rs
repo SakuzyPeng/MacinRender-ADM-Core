@@ -19,119 +19,119 @@ use std::sync::Arc;
 /// `clock_ns`; the `*_bytes` are the C++ `sizeof` the input budget counts.
 #[repr(C)]
 pub struct EngineSceneConfig {
-    output_sample_rate: u32,
-    input_queue_samples: u32,
-    input_queue_bytes: u64,
-    output_ring_frames: u32,
-    startup_watermark_frames: u32,
-    manual_clock: u32,
-    clock_ns: i64,
-    frame_bytes: usize,
-    plane_bytes: usize,
-    entry_bytes: usize,
-    update_bytes: usize,
+    pub output_sample_rate: u32,
+    pub input_queue_samples: u32,
+    pub input_queue_bytes: u64,
+    pub output_ring_frames: u32,
+    pub startup_watermark_frames: u32,
+    pub manual_clock: u32,
+    pub clock_ns: i64,
+    pub frame_bytes: usize,
+    pub plane_bytes: usize,
+    pub entry_bytes: usize,
+    pub update_bytes: usize,
 }
 
 #[repr(C)]
 pub struct EngineSceneEntity {
-    id: Text,
-    name: Text,
+    pub id: Text,
+    pub name: Text,
 }
 
 /// `live_scene::SemanticIdentity`; `present` is 0 for none.
 #[repr(C)]
 pub struct EngineSceneIdentity {
-    present: u32,
-    object_id: Text,
-    object_name: Text,
-    track_uid: Text,
-    has_importance: u32,
-    importance: i32,
-    has_dialogue_id: u32,
-    dialogue_id: i32,
-    contents: *const EngineSceneEntity,
-    contents_len: usize,
-    programmes: *const EngineSceneEntity,
-    programmes_len: usize,
+    pub present: u32,
+    pub object_id: Text,
+    pub object_name: Text,
+    pub track_uid: Text,
+    pub has_importance: u32,
+    pub importance: i32,
+    pub has_dialogue_id: u32,
+    pub dialogue_id: i32,
+    pub contents: *const EngineSceneEntity,
+    pub contents_len: usize,
+    pub programmes: *const EngineSceneEntity,
+    pub programmes_len: usize,
 }
 
 /// `live_scene::ElementDescriptor`; `role` is the C++ enum value.
 #[repr(C)]
 pub struct EngineSceneElement {
-    element_id: u64,
-    role: u32,
-    speaker_label: Text,
-    has_position: u32,
-    position: [f32; 3],
-    flags: u64,
-    identity: EngineSceneIdentity,
+    pub element_id: u64,
+    pub role: u32,
+    pub speaker_label: Text,
+    pub has_position: u32,
+    pub position: [f32; 3],
+    pub flags: u64,
+    pub identity: EngineSceneIdentity,
 }
 
 /// `ScenePcmPlaneView`: `samples[k * stride]` is sample `k`.
 #[repr(C)]
 pub struct EngineScenePlane {
-    element_id: u64,
-    samples: *const f32,
-    sample_count: u32,
-    stride: u32,
-    has_signal: u32,
+    pub element_id: u64,
+    pub samples: *const f32,
+    pub sample_count: u32,
+    pub stride: u32,
+    pub has_signal: u32,
 }
 
 /// `SceneFrameView`.
 #[repr(C)]
 pub struct EngineSceneFrame {
-    epoch: u64,
-    generation: u64,
-    start: i64,
-    duration: u32,
-    flags: u32,
-    planes: *const EngineScenePlane,
-    planes_len: usize,
-    initial: *const RenderLiveEntry,
-    initial_len: usize,
-    updates: *const RenderLiveUpdate,
-    updates_len: usize,
+    pub epoch: u64,
+    pub generation: u64,
+    pub start: i64,
+    pub duration: u32,
+    pub flags: u32,
+    pub planes: *const EngineScenePlane,
+    pub planes_len: usize,
+    pub initial: *const RenderLiveEntry,
+    pub initial_len: usize,
+    pub updates: *const RenderLiveUpdate,
+    pub updates_len: usize,
 }
 
 /// `ScenePullResult`.
 #[repr(C)]
 pub struct EngineScenePull {
-    flags: u32,
-    epoch: u64,
-    first_media_frame: u64,
-    media_frames: u32,
-    requested_frames: u32,
+    pub flags: u32,
+    pub epoch: u64,
+    pub first_media_frame: u64,
+    pub media_frames: u32,
+    pub requested_frames: u32,
 }
 
 /// `SceneStreamStatus`; `state` is the `SceneStreamState` value.
 #[repr(C)]
 pub struct EngineSceneStatus {
-    state: u32,
-    epoch: u64,
-    generation: u64,
-    queued_input_samples: u64,
-    queued_input_bytes: u64,
-    buffered_output_frames: u64,
-    media_frames_pulled: u64,
-    underruns: u64,
-    semantic_degradations: u64,
-    semantic_policy_revision: u64,
-    ring_fill: f32,
-    ended: u32,
-    failed: u32,
-    production_complete: u32,
+    pub state: u32,
+    pub epoch: u64,
+    pub generation: u64,
+    pub queued_input_samples: u64,
+    pub queued_input_bytes: u64,
+    pub buffered_output_frames: u64,
+    pub media_frames_pulled: u64,
+    pub underruns: u64,
+    pub semantic_degradations: u64,
+    pub semantic_policy_revision: u64,
+    pub ring_fill: f32,
+    pub ended: u32,
+    pub failed: u32,
+    pub production_complete: u32,
 }
 
 /// `live_scene::Diagnostic` without its text; `message_len` is the text's full length.
 #[repr(C)]
 pub struct EngineSceneDiagnostic {
-    level: u32,
-    code: u32,
-    epoch: u64,
-    generation: u64,
-    element: u64,
-    field: u64,
-    message_len: usize,
+    pub level: u32,
+    pub code: u32,
+    pub epoch: u64,
+    pub generation: u64,
+    pub element: u64,
+    pub field: u64,
+    pub message_len: usize,
 }
 
 /// A Scene stream handle.

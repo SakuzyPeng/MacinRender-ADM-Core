@@ -18,8 +18,8 @@
 #include <malloc.h>
 #endif
 
-#include "../../src/adm_engine/scene_output_session.h"
 #include "hptf_cascade.h"
+#include "scene_output_session.h"
 
 // These replacements need CRT storage and shared counters; C++ containers would recurse into operator new.
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables, cppcoreguidelines-no-malloc)

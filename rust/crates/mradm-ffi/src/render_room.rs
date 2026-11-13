@@ -9,27 +9,27 @@ use mradm_render::room_runtime::{Config, Control, Prepare};
 /// the quality (0 exact, 1 realtime).
 #[repr(C)]
 pub struct RenderRoomConfig {
-    profile: *const RoomProfileHandle,
-    hrir: Text,
-    metres: f64,
-    quality: u32,
+    pub profile: *const RoomProfileHandle,
+    pub hrir: Text,
+    pub metres: f64,
+    pub quality: u32,
 }
 
 /// `RoomStatus`; `message` lives until the next status call on the control handle.
 #[repr(C)]
 pub struct RenderRoomStatus {
-    state: u32,
-    constrained_sources: u32,
-    requested_revision: u64,
-    applied_revision: u64,
-    transition_sample: u64,
-    material_frames: u64,
-    tail_frames: u64,
-    buffer_frames: u64,
-    material_filter_guard_frames: u64,
-    quality: u32,
-    reflection_update_frames: u32,
-    message: Text,
+    pub state: u32,
+    pub constrained_sources: u32,
+    pub requested_revision: u64,
+    pub applied_revision: u64,
+    pub transition_sample: u64,
+    pub material_frames: u64,
+    pub tail_frames: u64,
+    pub buffer_frames: u64,
+    pub material_filter_guard_frames: u64,
+    pub quality: u32,
+    pub reflection_update_frames: u32,
+    pub message: Text,
 }
 
 /// `IRoomControl`, independent of the stream or renderer that issued it.

@@ -13,7 +13,7 @@
 #include "adm/errors.h"
 #include "adm/options.h"
 
-#include "../adm_render_common/live_scene_renderer.h"
+#include "live_scene_renderer.h"
 
 namespace mradm::realtime {
 

@@ -357,7 +357,7 @@ fn split_csv(csv: &[u8], preserve_empty: bool) -> Result<Vec<Vec<u8>>, Failure> 
 }
 
 /// `path.filename()` of a UTF-8 path, by the rules of the platform's `std::filesystem`.
-fn file_name(path: &[u8]) -> &[u8] {
+pub(crate) fn file_name(path: &[u8]) -> &[u8] {
     let separator = |b: u8| b == b'/' || (cfg!(windows) && b == b'\\');
     let mut start = 0;
     if cfg!(windows) {
