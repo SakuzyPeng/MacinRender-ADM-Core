@@ -459,7 +459,8 @@ mr_adm_core_apply_warnings(mr_adm_realtime)
 mr_adm_core_apply_static_analysis(mr_adm_realtime)
 
 # ── adm_c_api ─────────────────────────────────────────────────────────────────
-# C ABI wrapper. Links to ADMEngine to get RenderService::render() symbol.
+# The public C ABI: the Rust mradm-capi implementation, with the C++ progress-callback trampolines and
+# the libraries of the islands it calls.
 
 add_library(mr_adm_c_api)
 add_library(MacinRender::ADMCAPI ALIAS mr_adm_c_api)
@@ -476,7 +477,7 @@ target_sources(
 )
 
 target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon
-    MacinRender::ADMRenderRoom nlohmann_json::nlohmann_json)
+    MacinRender::ADMRenderRoom)
 set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -484,15 +485,19 @@ set_target_properties(mr_adm_c_api PROPERTIES
 # The Rust C ABI (libmradm_capi.a) calls back into C++ by name: the progress trampolines
 # (adm_c_api.cpp), the platform and device islands (adm_engine) and the audio island (adm_audio).
 # Those archives come before the Rust staticlib on the link line, so a single-pass linker (GNU ld,
-# lld) takes their objects only if the symbols are already undefined when it reaches them.
+# lld) takes their objects only if the symbols are already undefined when it reaches them: for a
+# program linking the C ABI statically, and for the shared bundle, which would otherwise be linked
+# with the islands left undefined.
+set(MR_ADM_CAPI_CALLBACK_LINK_OPTIONS)
+if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
+    foreach(_mr_symbol mradm_capi_progress_v1 mradm_capi_progress_v2 mradm_platform_islands mradm_device_islands
+            mradm_audio_island)
+        list(APPEND MR_ADM_CAPI_CALLBACK_LINK_OPTIONS "LINKER:--undefined=${_mr_symbol}")
+    endforeach()
+endif()
 get_target_property(_mr_c_api_type mr_adm_c_api TYPE)
-if(_mr_c_api_type STREQUAL "STATIC_LIBRARY" AND CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
-    target_link_options(mr_adm_c_api INTERFACE
-        "LINKER:--undefined=mradm_capi_progress_v1"
-        "LINKER:--undefined=mradm_capi_progress_v2"
-        "LINKER:--undefined=mradm_platform_islands"
-        "LINKER:--undefined=mradm_device_islands"
-        "LINKER:--undefined=mradm_audio_island")
+if(_mr_c_api_type STREQUAL "STATIC_LIBRARY")
+    target_link_options(mr_adm_c_api INTERFACE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
 endif()
 mr_adm_core_apply_warnings(mr_adm_c_api)
 mr_adm_core_apply_static_analysis(mr_adm_c_api)
@@ -511,7 +516,8 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         SOVERSION ${PROJECT_VERSION_MAJOR}
     )
     target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom nlohmann_json::nlohmann_json)
+        MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom)
+    target_link_options(mradm_capi_bundle PRIVATE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
     # A table naming every function c_api.h declares: the exports implemented in Rust live in
     # the mradm-capi staticlib, and nothing else in this DSO calls them.
     find_package(Python3 REQUIRED COMPONENTS Interpreter)

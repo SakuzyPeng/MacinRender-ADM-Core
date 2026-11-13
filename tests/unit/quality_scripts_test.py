@@ -272,41 +272,25 @@ class PublicHeaderTests(unittest.TestCase):
 
 
 class CapiPrivateEntryTests(unittest.TestCase):
+    # A private mradm-capi entry as cbindgen renders it, and as a header in CAPI_FFI_HEADERS declares
+    # it with c_api.h types. The Rust imports of C++ functions (`extern`) are not entries.
     GENERATED = (
         "typedef struct adm_context_t adm_context_t;\n"
         "int32_t mradm_capi_context_set_error(struct adm_context_t *context, const uint8_t *message, uintptr_t len);\n"
         "char *mradm_capi_string(const uint8_t *text, uintptr_t len);\n"
-        "typedef struct adm_room_t adm_room_t;\n"
-        "void *mradm_capi_room_profile(const struct adm_room_t *room);\n"
-        "typedef struct adm_render_options_t adm_render_options_t;\n"
-        "typedef struct CapiText { const uint8_t *data; uintptr_t len; } CapiText;\n"
-        "typedef struct CapiScreen { uint32_t cartesian; double aspect_ratio; double centre[3]; double width; } CapiScreen;\n"
-        "typedef struct CapiOptions { uint32_t renderer; CapiText output_layout; uint32_t has_input_layout;"
-        " CapiText input_layout; const CapiText *input_channel_labels; uintptr_t input_channel_labels_len;"
-        " uint32_t monitor_system_spatial; uint32_t measure_loudness; float loudness_target_lufs; uint32_t peak_limit;"
-        " float peak_limit_dbtp; uint32_t peak_normalize_to_limit; double final_gain_db; uint32_t output_bit_depth;"
-        " uint32_t opus_bitrate_per_ch_kbps; uint32_t apac_bitrate_kbps; uint32_t apac_drc_music; uint32_t apac_caf;"
-        " uint32_t has_sofa; CapiText sofa; uint32_t has_policy_path; CapiText policy_path; uint32_t has_policy_json;"
-        " CapiText policy_json; uint32_t has_matrix_path; CapiText matrix_path; uint32_t has_matrix_json;"
-        " CapiText matrix_json; uint32_t has_report_path; CapiText report_path; uint32_t capture_report;"
-        " uint32_t default_interp_ms; uint32_t object_smoothing_frames; uint32_t speaker_geometry; uint32_t routing;"
-        " uint32_t speaker_spread; uint32_t triple_balance_mode; uint32_t binaural_spread; uint32_t lfe_routing;"
-        " uint32_t apple_speaker_rendering_flags; double render_start_sec; uint32_t has_end; double render_end_sec;"
-        " uint32_t iamf_mp4; const CapiText *iamf_layers; uintptr_t iamf_layers_len; void *room_profile;"
-        " CapiText room_hrir; double room_metres; uint32_t room_quality; uint32_t has_reference; CapiScreen reference;"
-        " uint32_t has_reproduction; CapiScreen reproduction; } CapiOptions;\n"
-        "typedef struct CapiOptionsLists CapiOptionsLists;\n"
-        "CapiOptionsLists *mradm_capi_options(const adm_render_options_t *opts, CapiOptions *out);\n"
-        "void mradm_capi_options_release(CapiOptionsLists *lists);\n"
         "extern uint32_t mradm_capi_progress_v1(void (*callback)(double), double fraction);\n"
     )
+    HAND = (
+        "#include <stddef.h>\n#include <stdint.h>\n"
+        "adm_error_code_t mradm_capi_context_set_error(adm_context_t* context, const uint8_t* message, size_t len);\n"
+        "char* mradm_capi_string(const uint8_t* text, size_t len);\n"
+    )
 
-    def compare(self, generated_text):
+    def compare(self, generated_text, hand_text=HAND):
         hand = ffi.Header({}, {}, {}, {})
         ffi.parse_header((REPO / ffi.CAPI_HEADER).read_text(encoding="utf-8"), ffi.CAPI_HEADER, hand,
                          function_prefix="mradm_")
-        for relative in ffi.CAPI_FFI_HEADERS:
-            ffi.parse_header((REPO / relative).read_text(encoding="utf-8"), relative, hand, function_prefix="mradm_")
+        ffi.parse_header(hand_text, "private.h", hand, function_prefix="mradm_")
         generated = ffi.Header({}, {}, {}, {})
         ffi.parse_header(generated_text, "generated.h", generated, function_prefix="mradm_")
         checker = ffi.Checker(hand, generated, all_structs=False)
@@ -322,6 +306,12 @@ class CapiPrivateEntryTests(unittest.TestCase):
         extra = self.GENERATED + "void mradm_capi_unlisted(void);\n"
         self.assertIn("mradm_capi_unlisted", "\n".join(self.compare(extra)))
         self.assertTrue(self.compare(self.GENERATED.replace("uintptr_t len);\nchar", "uint32_t len);\nchar")))
+
+    def test_the_repository_declares_every_private_entry(self):
+        # The whole C ABI is in Rust: no private entry, only the imported C++ trampolines.
+        hand_text = "".join((REPO / relative).read_text(encoding="utf-8") for relative in ffi.CAPI_FFI_HEADERS)
+        imports_only = "extern uint32_t mradm_capi_progress_v1(void (*callback)(double), double fraction);\n"
+        self.assertEqual(self.compare(imports_only, hand_text), [])
 
 
 class ReferenceRetirementTests(unittest.TestCase):

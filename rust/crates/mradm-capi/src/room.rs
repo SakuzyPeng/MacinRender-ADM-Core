@@ -1,8 +1,5 @@
 //! Room packages: `adm_room_load` / `adm_room_destroy` / `adm_room_manifest_json` and
 //! `adm_room_inspect(_with_quality)`, through the room entries the C++ `RoomProfile` used.
-//!
-//! The exports still in `src/adm_c_api/adm_c_api.cpp` that take an `adm_room_config_t` read the
-//! package through `mradm_capi_room_profile` (`src/adm_c_api/capi_ffi.h`).
 use crate::context::adm_context_t;
 use crate::error::{Error, Failure, c_str, caught, clear, report, try_box, until_nul};
 use crate::guard;
@@ -13,7 +10,7 @@ use mradm_ffi::room::{
     mradm_room_prepared_info, mradm_room_prepared_json, mradm_room_profile_destroy,
     mradm_room_profile_json, mradm_room_profile_load, mradm_room_validate_screens,
 };
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::{CStr, c_char};
 use std::ptr;
 
 /// A loaded room package.
@@ -251,17 +248,6 @@ pub unsafe extern "C" fn adm_room_inspect_with_quality(
     })
 }
 
-/// A new owner of the room's package, for a C++ `RoomProfile` (destroyed with
-/// `mradm_room_profile_destroy`); NULL for a NULL room or when out of memory.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_capi_room_profile(room: *const adm_room_t) -> *mut c_void {
-    guard::pointer(|| {
-        unsafe { room.as_ref() }
-            .and_then(|room| unsafe { &*room.profile }.share())
-            .map_or(ptr::null_mut(), |handle| handle.cast())
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,7 +368,6 @@ mod tests {
     #[test]
     fn null_rooms_have_no_manifest_or_profile() {
         assert!(unsafe { adm_room_manifest_json(ptr::null()) }.is_null());
-        assert!(unsafe { mradm_capi_room_profile(ptr::null()) }.is_null());
         unsafe { adm_room_destroy(ptr::null_mut()) };
     }
 }

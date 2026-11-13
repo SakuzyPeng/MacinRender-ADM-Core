@@ -31,8 +31,8 @@ pub struct OutputChna {
 }
 #[repr(C)]
 pub struct View {
-    strings: *const Text,
-    strings_len: usize,
+    pub strings: *const Text,
+    pub strings_len: usize,
     indices: *const u32,
     indices_len: usize,
     programmes: *const Programme,
@@ -53,8 +53,8 @@ pub struct View {
     hoa_channels_len: usize,
     hoa_blocks: *const HoaBlock,
     hoa_blocks_len: usize,
-    warnings: *const u32,
-    warnings_len: usize,
+    pub warnings: *const u32,
+    pub warnings_len: usize,
 }
 impl View {
     /// Borrows `snapshot` and its string views; valid while both stay alive and unmodified.

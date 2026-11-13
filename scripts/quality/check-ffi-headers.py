@@ -30,8 +30,9 @@ FFI_CRATE = RUST_ROOT / "crates" / "mradm-ffi"
 CBINDGEN_CONFIG = FFI_CRATE / "cbindgen.toml"
 CAPI_CRATE = RUST_ROOT / "crates" / "mradm-capi"
 CAPI_HEADER = "include/adm/c_api.h"
-# The private entries of mradm-capi that the exports still in C++ call (types from c_api.h).
-CAPI_FFI_HEADERS = ["src/adm_c_api/capi_ffi.h"]
+# Headers of private mradm-capi entries called from C++ (types from c_api.h); none since the whole
+# C ABI is in Rust. A new private entry must be declared in a header listed here.
+CAPI_FFI_HEADERS: list[str] = []
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [

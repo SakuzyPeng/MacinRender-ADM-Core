@@ -1,9 +1,6 @@
 //! `adm_context_t`: the caller's handle for the render, inspect, preview and monitor entries, holding
 //! the message of the last failed call (`adm_context_last_error_message`). A context is used by one
 //! thread at a time, as before.
-//!
-//! The exports still in `src/adm_c_api/adm_c_api.cpp` set the message through
-//! `mradm_capi_context_set_error` (`src/adm_c_api/capi_ffi.h`).
 use crate::guard;
 use std::alloc::{Layout, alloc};
 use std::ffi::c_char;
@@ -53,8 +50,7 @@ pub unsafe extern "C" fn adm_context_last_error_message(
 
 /// Replaces the last-error message with `len` bytes of `message` (0 clears it). NULL context: no-op.
 /// Allocation failure returns INTERNAL and preserves the previous message.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_capi_context_set_error(
+pub(crate) unsafe fn mradm_capi_context_set_error(
     context: *mut adm_context_t,
     message: *const u8,
     len: usize,
@@ -184,9 +180,8 @@ mod tests {
 
     #[test]
     fn output_string_allocation_failure_returns_null() {
-        let (text, failed) = with_allocation_failure(|| unsafe {
-            crate::string::mradm_capi_string(b"text".as_ptr(), 4)
-        });
+        let (text, failed) =
+            with_allocation_failure(|| unsafe { crate::string::copy(b"text".as_ptr(), 4) });
         assert!(failed);
         assert!(text.is_null());
     }

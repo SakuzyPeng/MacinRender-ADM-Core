@@ -41,10 +41,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 // ── The C++ islands ──────────────────────────────────────────────────────────────
 
 #[cfg(not(test))]
-mod islands {
+pub(crate) mod islands {
     use super::*;
     unsafe extern "C" {
-        pub(super) fn mradm_platform_islands() -> *const PlatformIslands;
+        pub(crate) fn mradm_platform_islands() -> *const PlatformIslands;
         pub(super) fn mradm_audio_island(
             request: *const EngineRenderEvent,
             context: *const IslandContext,
@@ -55,7 +55,7 @@ mod islands {
     unsafe extern "C" {
         fn mradm_apple_islands() -> *const AppleIslands;
     }
-    pub(super) fn apple() -> *const AppleIslands {
+    pub(crate) fn apple() -> *const AppleIslands {
         #[cfg(target_os = "macos")]
         return unsafe { mradm_apple_islands() };
         #[cfg(not(target_os = "macos"))]
@@ -81,9 +81,9 @@ mod islands {
 
 // Unit tests link without the C++ islands.
 #[cfg(test)]
-mod islands {
+pub(crate) mod islands {
     use super::*;
-    pub(super) unsafe fn mradm_platform_islands() -> *const PlatformIslands {
+    pub(crate) unsafe fn mradm_platform_islands() -> *const PlatformIslands {
         ptr::null()
     }
     pub(super) unsafe extern "C" fn mradm_audio_island(
@@ -93,7 +93,7 @@ mod islands {
     ) -> i32 {
         1
     }
-    pub(super) fn apple() -> *const AppleIslands {
+    pub(crate) fn apple() -> *const AppleIslands {
         ptr::null()
     }
     pub(super) unsafe fn mradm_capi_progress_v1(
@@ -876,6 +876,17 @@ fn apply_policy(
     input: &[u8],
     options: &adm_render_options_t,
 ) -> Result<(), Failure> {
+    apply_policy_logged(scene, input, options, |_, _, _| {})
+}
+
+/// `apply_policy` with its log lines (`EngineOutcome::emit` under `semantic-policy`), passed to
+/// `log` in order, also before an error.
+pub(crate) fn apply_policy_logged(
+    scene: &Scene,
+    input: &[u8],
+    options: &adm_render_options_t,
+    mut log: impl FnMut(u32, &[u8], &[u8]),
+) -> Result<(), Failure> {
     let json = options.semantic_policy_json.as_deref();
     let path = options
         .semantic_policy_path
@@ -901,6 +912,20 @@ fn apply_policy(
     let result = PolicyResult(raw);
     if code != 0 || result.0.is_null() {
         return Err(Failure::Exception);
+    }
+    let lines = if status.logs_len == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(status.logs, status.logs_len) }
+    };
+    for line in lines {
+        let module = bytes(&line.module);
+        let module = if module.is_empty() {
+            &b"semantic-policy"[..]
+        } else {
+            module
+        };
+        log(line.level, module, bytes(&line.message));
     }
     if status.code != 0 {
         return Err(

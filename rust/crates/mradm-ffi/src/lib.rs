@@ -30,7 +30,8 @@ mod live_binaural;
 mod live_vbap;
 mod meter;
 mod monitor;
-mod osc;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod osc;
 mod output_dsp;
 mod pcm_mix;
 mod post_gain;

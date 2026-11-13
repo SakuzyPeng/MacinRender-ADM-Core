@@ -318,7 +318,68 @@ clang-format／clang-tidy／cppcheck、规模棘轮与许可证检查通过。
 FFI 头检查确认 164 个公开函数中 129 个由 Rust 实现，25 个公开结构体一致；两平台共享库均恰好导出 164 个 `adm_*`。
 验证范围为上述正确性与错误恢复检查，不作为性能或完整节目 PCM 对照结论。
 
+## F 批：Monitor、HpTF 文本解析与 OSC 头追踪
+
+最后 35 个导出改由 `mradm-capi` 实现，`c_api.h` 的 164 个函数全部在 Rust：
+- `monitor.rs`：Monitor 的创建（2 个）、输出设备 JSON、销毁、消息、播放 / 暂停 / 定位 / 循环、实时覆盖、听者朝向、切换后端、
+  HpTF 设置（4 个）与查询（2 个）、输出设备切换、状态、电平、日志（2 个）、房间切换与房间状态 / 声源 JSON，以及
+  `adm_hptf_parse_parametric_eq`；
+- `osc.rs`：OSC 头追踪接收器的创建、销毁、启动、停止、姿态、状态、快照 JSON 与错误消息。
+
+`adm_c_api.cpp` 只剩两个进度回调跳板（27 行）；`capi_ffi.h` 删除，`mradm-capi` 不再导出任何私有入口
+（`mradm_capi_options`、`mradm_capi_room_profile`、`mradm_capi_context_set_error`、`mradm_capi_string` 改为 crate 内函数），
+C ABI 目标不再链接 nlohmann_json。
+
+- **同一组调用。** Monitor 照 C++ `MonitorSession` 的顺序：照预览导入场景（`prepare_preview_scene`：导入、`importer` 警告、
+  语义策略及其 `semantic-policy` 日志）、读场景格式、创建会话并回放这些日志行、以同一请求记录启动；之后各操作调用同样的
+  `mradm_engine_monitor_session_*` 入口，消息缓冲同为 64 KiB（覆盖的定位另按最长对象 ID 加长），岛抛出（代码 100）照旧落到各导出的
+  “unexpected exception …” 消息。HpTF 设置与查询、房间切换与 JSON 复用 E 批的 Rust 函数（房间 JSON 含 `fbe5b554` 的可失败分配）；
+  会话没有 HpTF 快照时照旧报告默认的旁路信息。
+- **消息与怪癖照旧。** Monitor 的错误消息为 `message: locator`；实时覆盖失败照原样总写 `message: locator`（即使定位为空）并返回未映射的
+  错误码；`adm_monitor_log_count` 照原样截断为 32 位；输出设备 JSON 只转义 `"`、`\`、`\n`、`\r`、`\t`；HpTF 文本解析的
+  错误消息、行定位与 `band=N` 定位照 `parse_parametric_eq`；OSC 的姿态与状态照原样写满结构并把 `struct_size` 设为本库大小。
+- **共享库的岛符号。** 原来 C++ 的 Monitor 导出会把引擎静态库中的设备岛与平台岛对象带进 `libmradm_capi`；F 之后共享库内只有
+  Rust 引用它们，GNU ld 链接共享库时允许未定义符号，于是 `mradm_device_islands` 在加载时才报缺失（`room_96k` / HpTF 立体声的
+  Python C ABI 测试发现）。E 批给静态 C ABI 使用方加的 `--undefined=` 列表改为共用，共享库同样加上；新库的未定义符号与迁移前相比只少不多
+  （不再拉进 C++ 的 JSON、异常与文件系统代码）。
+- **C++ SDK。** `MonitorSession`、`OscHeadTrackingReceiver` 与 `parse_hptf_parametric_eq` 不再被 C ABI 使用，只剩手动探针与测试；
+  它们声明在公开 C++ 头 `include/adm/monitor.h` / `head_tracking.h` / `hptf.h` 中，按路线留到 6.5（删除 C++ 外壳与 SDK）。
+- **校验脚本。** `check-ffi-headers.py` 的 `CAPI_FFI_HEADERS` 为空：`mradm-capi` 没有私有入口，只有对 C++ 跳板的 `extern` 导入；
+  `quality_scripts_test.py` 改用自带的私有头测试双向核对，并断言仓库当前没有私有入口。
+
+生产 C/C++ 18,018 → 16,705 行（`src/adm_c_api` 1,340 → 27）。
+
+本机 Linux x64 Release，参照为 main `cad0993` 的同配置构建：
+- C ABI 采集 3,283 行、36 个文件 0 差异（Monitor 与 OSC 按采集范围只到参数校验），consumer 测试在两个库上都通过；
+- 差异探测（临时脚本，未入库）在同一进程分别加载两个库，59 项 0 差异：本机 Monitor 能落到无硬件的后备设备创建，因此覆盖了
+  7 种渲染器 / 布局的创建与失败消息、语义策略错误、缺失输入、输出设备 JSON，以及已创建 Monitor 的覆盖（新旧结构尺寸与非法值）、
+  朝向、定位、循环、HpTF 参数设置与查询、状态、电平、房间 JSON 与切换、切换后端（成功与失败）、切换设备与日志；HpTF 文本解析
+  7 种输入 × 3 种容量；OSC 接收器的 5 种配置、状态、姿态、错误消息与快照 JSON；
+- CLI 记录 102 条 0 差异（3 条 help 文本只差可执行文件路径）；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- ctest 86/86、`mradm-capi` 单测 48 个（新增 4 个：设备名转义、HpTF 文本解析消息、覆盖结构的旧尺寸、空 Monitor）、
+  FFI 头校验（`c_api.h` 164 个函数全部由 Rust 实现、31 个结构体与 Rust 一致、私有入口 0 个）、导出校验 164 个、共享库未定义符号对照、
+  clang-format、clang-tidy、本机 cppcheck、规模棘轮、质量脚本测试；`mradm-capi` 在 `x86_64-pc-windows-msvc` 上 clippy 通过。
+  两平台的原生构建与定向验证见下。
+
+### F 审查修正与原生验证
+
+复核提交 `889454cd`，修正提交 `3bcef796`（2026-11-13）。HpTF 文本解析的 `band=N` 错误定位原先通过
+`usize::to_string` 分配临时字符串，分配失败会直接终止宿主。现在先在栈缓冲中格式化，再通过可失败的复制生成定位。
+新增故障注入测试覆盖编号定位的分配失败及重试，并验证公开解析接口返回 `ADM_ERROR_INTERNAL`、保留输出值且可继续使用。
+
+| 平台与配置 | `mradm-capi` 单测 | 定向 CTest |
+| --- | ---: | ---: |
+| macOS arm64 Debug，SOFA on | 50/50 | 10/10 |
+| Windows x64 canonical MSVC/Ninja Release，SOFA/IAMF off | 49/49 | 11/11 |
+
+定向 CTest 覆盖 OSC 收发与协议参考、Scene 流式渲染与 Scene 输出 C ABI、HpTF 参数与双耳接口、文本解析参考、
+C 头及质量脚本，Windows 另含完整 C ABI fixture。Windows 的两组共享库消费者测试通过。
+两平台的 Monitor／OSC 参数与空句柄采集均为 90 行，与主线 `cad0993a` 逐字节一致，共享库均恰好导出 164 个 `adm_*`。
+两平台 `mradm-capi --all-targets` clippy 通过，macOS 的 Rust fmt、FFI 头校验、改动 C/C++ 的
+clang-format／clang-tidy／cppcheck 与规模棘轮通过。构建复用既有 Cargo、FetchContent 与 canonical 缓存。
+
 ## 下一步
 
-F（Monitor / OSC，35 个导出），需用户确认后开始；迁走时删除 `capi_ffi.h` 中的选项、房间与上下文桥。
-进度回调的 C++ 跳板保留到另行决定回调异常语义。
+6.3 的 C ABI 迁移完成。后续：进度回调的 C++ 跳板保留到另行决定回调异常语义；`MonitorSession` / `OscHeadTrackingReceiver`
+等 C++ SDK 外壳在 6.5 删除；6.6 改为 cdylib 时再核对 SONAME / install_name / `.def` 与 GUI 打包。

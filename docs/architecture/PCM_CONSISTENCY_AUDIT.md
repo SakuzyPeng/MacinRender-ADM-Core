@@ -759,6 +759,14 @@ E 审查修正 `fbe5b554` 恢复房间状态／声源 JSON 在构造或 C ABI �
 Rust C ABI 单测分别 44/44、43/43，JSON 测试各 7/7；本轮未重录 CLI／PCM 全量对照
 （见 [E 审查记录](RUST_BOUNDARY_CAPI.md#e-审查修正与原生验证)）。
 
+F（Monitor、HpTF 文本解析与 OSC 头追踪，35 个导出）完成，`c_api.h` 的 164 个函数全部由 Rust 实现：Monitor 照 `MonitorSession`
+的顺序导入场景、回放导入与语义策略日志、创建并启动会话，之后调用同样的会话入口；OSC 接收器调用同样的 `mradm-osc` 入口。
+`adm_c_api.cpp` 只剩两个进度回调跳板，`capi_ffi.h` 与 `mradm-capi` 的私有入口删除，C ABI 不再链接 nlohmann_json。共享库在 GNU ld 下
+也以 `--undefined=` 取出 Rust 按名调用的岛（否则 `mradm_device_islands` 在加载时缺失）。`MonitorSession` / `OscHeadTrackingReceiver`
+等 C++ SDK 外壳留到 6.5。本机 Linux 新旧对照：C ABI 采集 3,283 行与 36 个文件 0 差异、consumer 测试在两个库上通过、Monitor / HpTF /
+OSC 差异探测 59 项 0 差异、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。生产 C/C++ 18,018 → 16,705 行
+（见 [F 批记录](RUST_BOUNDARY_CAPI.md#f-批monitorhptf-文本解析与-osc-头追踪)）。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
