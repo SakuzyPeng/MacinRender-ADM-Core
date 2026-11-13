@@ -1,6 +1,6 @@
 # CLI 改为 Rust（六期 6.4）
 
-> 状态：已完成（2026-11-13），本机 Linux x64 验收；macOS / Windows 原生验证待维护者。
+> 状态：已完成（2026-11-13），macOS arm64／Windows x64 原生复核通过；原提交的 Linux x64 验收记录保留。
 > 路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，解析器决定见 [ADR 0022](../adr/0022-rust-cli-argument-parsing.md)。
 
 `mradm` 的全部子命令（`render`、`inspect`、`backends`、`layouts`、`input-layouts`、`formats`、`export`、`room-check` 与内部的
@@ -42,7 +42,7 @@ CLI11 与 spdlog 移出构建与许可证清单，新增 clap 4.5.41（及 `clap
 
 ## 验证
 
-本机 Linux x64 Release（一致性 config A），参照为 main `cad0993` 的同配置构建（`d05e869` 之前只多 Monitor 的 C ABI 修正，CLI 不变）：
+原提交记录的 Linux x64 Release（一致性 config A）验收，参照为 main `cad0993` 的同配置构建（`d05e869` 之前只多 Monitor 的 C ABI 修正，CLI 不变）：
 
 - **CLI 记录**（`cli-transcript.py`，`--tool mradm=参照`）：102 条命令 0 差异，退出码与全部工作目录文件变化相同；只有 3 条 help
   （`help`、`backends-help`、`render-help`）文本不同，属允许的排版变化；
@@ -58,7 +58,20 @@ CLI11 与 spdlog 移出构建与许可证清单，新增 clap 4.5.41（及 `clap
   `x86_64-pc-windows-msvc`）、改动 C/C++ 的 clang-format / clang-tidy / cppcheck；
 - 规模：生产 C/C++ 16,705 → 15,314 行（`src/adm_cli` 1,410 → 19），`island-interfaces` 988 → 1,026 行（新增 `apac_worker_island` 38 行）。
 
+### macOS／Windows 原生复核
+
+维护者复核修正了组合短选项的路径字面值、空等号后的取值、多余参数与已消费名称同名时的定位、
+Windows 文本流换行，以及 macOS／Windows 的二进制数值转换。另补齐共享库配置下 CLI 私有入口的直接链接。
+`cli-commands.json` 增加 11 条对照命令，`mradm-cli` 增加 6 个回归单测。
+
+- macOS arm64：共享库配置的 Release CLI 构建与 `mr_adm_apac_smoke_tests` 通过，Debug 静态库配置的
+  CLI／C ABI／边界工具相关 CTest 8/8 通过。Rust 单测 65 个、fmt／clippy、FFI 头、164 个 C ABI 导出与许可证校验通过。
+- Windows x64：canonical MSVC／Ninja Release 构建、相关 CTest 8/8、Rust 单测 65 个与 clippy 通过，
+  含中文和当前代码页之外字符的 WAVE 输入／输出路径验证通过。
+- 两端分别以 main `d05e8691` 的 CLI 为参照运行扩充后的 113 条命令。退出码、stdout／stderr、生成与删除的文件
+  均为 0 差异，仅原有 3 条帮助命令保留允许的排版差异。Windows 对照保留原始 CRLF 字节。
+  macOS 另有 765 条参数探针对照 0 差异。
+
 ## 下一步
 
-macOS：`mr_adm_apac_smoke_tests`（APAC 经 `__apac-encode` worker）与 CLI 对照；Windows：canonical 构建上的 CLI 对照与非 ASCII 路径。
 6.5 删除 C++ 外壳与 SDK；6.6 改由 Cargo 产出 `mradm` 时去掉 `main.cpp`。
