@@ -502,8 +502,8 @@ jobs:
               --jq '.artifacts[] | select(.name | test("^(consistency-(macos|linux|windows)-(a|b)(-diagnostic)?|fft-performance-(macos|linux|windows))$")) | .id' \
               > "$obsolete"
           fi
-          gh api --paginate --slurp "repos/$REPO/actions/artifacts?name=consistency-report&per_page=100" \
-            --jq '[.[].artifacts[] | select(.name == "consistency-report")] | sort_by([.created_at, .id]) | reverse | .[1:][] | .id' \
+          gh api --paginate --slurp "repos/$REPO/actions/artifacts?name=consistency-report&per_page=100" | \
+            jq -r '[.[].artifacts[] | select(.name == "consistency-report")] | sort_by([.created_at, .id]) | reverse | .[1:][] | .id' \
             >> "$obsolete"
 
           while IFS= read -r id; do
