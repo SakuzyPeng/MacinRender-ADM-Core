@@ -168,7 +168,7 @@ mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
 GUI (C#) ──→ ADMCAPI ──→ ADMEngine
 ADMEngine ──→ ADMRendererFactory / ADMRenderRoom / ADMRenderApple
           ──→ ADMRealtime / ADMIo / ADMAudio
-C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render / mradm-engine
+C++ modules ──→ ADMDsp ──→ mradm-capi (Rust staticlib, with mradm-ffi) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav / mradm-osc / mradm-scene / mradm-json / mradm-render / mradm-engine
 All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
 
