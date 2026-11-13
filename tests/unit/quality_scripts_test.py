@@ -213,6 +213,38 @@ class PublicHeaderTests(unittest.TestCase):
     def test_rust_exports_match_by_what_typedefs_name(self):
         self.assertEqual(self.compare(self.RUST), [])
 
+    def test_inline_callbacks_match_typedefs(self):
+        for name in ("progress", ""):
+            with self.subTest(name=name):
+                generated = self.RUST.replace(
+                    "adm_progress_cb progress", f"void (*{name})(double, const char*, void*)"
+                )
+                self.assertEqual(self.compare(generated), [])
+
+    def test_inline_callback_mismatches_are_rejected(self):
+        for callback in (
+            "void (*progress)(float, const char*, void*)",
+            "void (*progress)(double, char*, void*)",
+            "void (*progress)(double, const char*)",
+            "int32_t (*progress)(double, const char*, void*)",
+        ):
+            with self.subTest(callback=callback):
+                errors = self.compare(self.RUST.replace("adm_progress_cb progress", callback))
+                self.assertTrue(errors)
+                self.assertIn("adm_run", "\n".join(errors))
+
+    def test_unknown_export_with_inline_callback_is_rejected(self):
+        self.assertEqual(
+            self.compare("void adm_unknown(void (*callback)(int32_t, void*), void* data);"),
+            ["adm_unknown: Rust 导出了但手写 FFI 头没有声明"],
+        )
+
+    def test_unparsed_export_is_rejected(self):
+        for declaration in ("void (*adm_unparsed(void))(int32_t);", "int32_t adm_unparsed(void)"):
+            with self.subTest(declaration=declaration):
+                with self.assertRaisesRegex(ValueError, "adm_unparsed"):
+                    self.compare(declaration)
+
     def test_functions_still_in_cpp_are_not_errors(self):
         self.assertEqual(self.compare("void adm_nothing_else_here(void);"), ["adm_nothing_else_here: Rust 导出了但手写 FFI 头没有声明"])
         self.assertEqual(self.compare(""), [])

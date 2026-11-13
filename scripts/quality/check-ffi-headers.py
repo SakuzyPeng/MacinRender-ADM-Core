@@ -132,7 +132,7 @@ EXTERN_OPEN = re.compile(r'extern\s+"C"\s*\{')
 STRUCT_BODY = re.compile(r"(typedef\s+)?struct\s+(\w+)\s*\{(.*?)\}\s*(\w*)\s*;", re.S)
 OPAQUE = re.compile(r"typedef\s+struct\s+(\w+)\s+(\w+)\s*;")
 ARRAY_TYPEDEF = re.compile(r"typedef\s+(\w+)\s+(\w+)\s*\[(\d+)\]\s*;")
-FUNCTION_POINTER = re.compile(r"^(.*?)\(\s*\*\s*(\w+)\s*\)\s*\((.*)\)$", re.S)
+FUNCTION_POINTER = re.compile(r"^(.*?)\(\s*\*\s*(\w*)\s*\)\s*\((.*)\)$", re.S)
 ENUM_TYPEDEF = re.compile(r"typedef\s+enum\s*\w*\s*\{[^{}]*\}\s*(\w+)\s*;", re.S)
 CALLBACK_TYPEDEF = re.compile(r"typedef\s+([\w\s\*]+?)\(\s*\*\s*(\w+)\s*\)\s*\(([^()]*)\)\s*;", re.S)
 SCALAR_TYPEDEF = re.compile(r"typedef\s+(\w+)\s+(\w+)\s*;")
@@ -141,7 +141,7 @@ PUBLIC_MACROS = re.compile(r'ADM_API_DEPRECATED\s*\(\s*"(?:[^"\\]|\\.)*"\s*\)|\b
 
 
 def function_pattern(prefix: str) -> re.Pattern[str]:
-    return re.compile(r"([\w\s\*]+?)\b(" + prefix + r"\w+)\s*\(([^()]*)\)\s*;", re.S)
+    return re.compile(r"([\w\s\*]+?)\b(" + re.escape(prefix) + r"\w+)\s*\(([^;{}]*)\)\s*;", re.S)
 
 
 def strip(text: str) -> str:
@@ -152,15 +152,42 @@ def strip(text: str) -> str:
     return text.replace("std::", "")
 
 
+def split_parameters(text: str) -> list[str]:
+    """Split at commas outside callback parameter lists."""
+    parameters = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                raise ValueError(f"unbalanced parameter list: {text!r}")
+        elif char == "," and depth == 0:
+            parameters.append(text[start:index])
+            start = index + 1
+    if depth:
+        raise ValueError(f"unbalanced parameter list: {text!r}")
+    parameters.append(text[start:])
+    return parameters
+
+
 def parse_parameters(text: str, known: set[str]) -> tuple[CType, ...]:
     text = text.strip()
     if not text or text == "void":
         return ()
-    return tuple(parse_type(part, known)[0] for part in text.split(","))
+    parameters = []
+    for declaration in split_parameters(text):
+        parsed = parse_function_pointer(declaration, known)
+        if parsed is None:
+            parsed = parse_type(declaration, known)
+        parameters.append(parsed[0])
+    return tuple(parameters)
 
 
 def parse_function_pointer(text: str, known: set[str]) -> tuple[CType, str] | None:
-    """`RET (*name)(PARAMS)`: a struct field holding a C callback."""
+    """`RET (*name)(PARAMS)`: a callback field or parameter (optionally unnamed)."""
     match = FUNCTION_POINTER.match(text.strip())
     if match is None:
         return None
@@ -287,17 +314,23 @@ def parse_header(
         header.structs[name] = fields
     text = STRUCT_BODY.sub(" ", text)
     text = OPAQUE.sub(" ", text)
+    declared_names = set(re.findall(r"\b(" + re.escape(function_prefix) + r"\w+)\s*\(", text))
+    parsed_names = set()
     for match in function_pattern(function_prefix).finditer(text):
         name = match.group(2)
         if name in header.functions:
             raise ValueError(f"{origin}: duplicate declaration of {name}")
-        ret, _ = parse_type(match.group(1).strip(), known)
-        params_text = match.group(3).strip()
-        params = []
-        if params_text and params_text != "void":
-            params = [parse_type(part, known)[0] for part in params_text.split(",")]
+        try:
+            ret, _ = parse_type(match.group(1).strip(), known)
+            params = list(parse_parameters(match.group(3), known))
+        except ValueError as error:
+            raise ValueError(f"{origin}: {name}: {error}") from error
         header.functions[name] = (ret, params, origin)
         header.origin[name] = origin
+        parsed_names.add(name)
+    unparsed = declared_names - parsed_names
+    if unparsed:
+        raise ValueError(f"{origin}: unsupported function declaration: {', '.join(sorted(unparsed))}")
     aliases = header.aliases
     for name, (ret, params, where) in header.functions.items():
         header.functions[name] = (resolve(ret, aliases), [resolve(p, aliases) for p in params], where)
