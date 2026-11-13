@@ -19,7 +19,7 @@
     },
     "tests": {
       "files": 239,
-      "lines": 61672
+      "lines": 61671
     },
     "reference": {
       "files": 38,
@@ -102,7 +102,7 @@
     "tests/reference/wav_container": 1456,
     "tests/support": 14345,
     "tests/tools": 3183,
-    "tests/unit": 41719
+    "tests/unit": 41718
   },
   "island_interfaces": {
     "src/adm_apple/apple_island.cpp": 353,
