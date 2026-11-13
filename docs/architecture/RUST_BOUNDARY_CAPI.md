@@ -181,6 +181,26 @@ B 初版在 Linux x64 Release 上对照 main `620f4e8` 的同配置构建：
   一致，私有入口 3 个）、导出校验 164 个、clang-format / clang-tidy、规模棘轮；`mradm-capi` 在 `x86_64-pc-windows-msvc`
   上 `cargo check` 与 clippy 通过（Windows 路径转换）。本机 cppcheck 2.13 不支持仓库的抑制语法，cppcheck 留给 macOS Quality CI。
 
+### C1 审查修正与原生验证
+
+复核目标为 `9ddeed2a`，分配失败修正为 `c96d155d`：
+- Rust 房间句柄分配失败时，由传入值的析构负责释放已加载的房间包，不再二次释放；C++ 房间桥在分配
+  `RoomProfile` 和 `shared_ptr` 控制块期间分别由唯一所有者负责清理。
+- 错误消息、定位字符串及 Windows UTF-16 到 UTF-8 的复制使用可失败分配；失败沿原有异常分支返回
+  `ADM_ERROR_INTERNAL`，不通过 Rust 的不可恢复分配入口。正常消息、定位和路径编码规则保持不变。
+- 新增故障注入回归覆盖消息与定位复制、XML 定位、非法房间配置、房间句柄和 C++ 共享所有者分配，
+  验证返回值、空输出和失败后的重试。C++ 回归在修复前的房间桥上发生段错误，修复后通过。
+
+两平台构建并验证修正提交，复用原有 Cargo 与 FetchContent 缓存：
+- **macOS arm64 Debug：** `mradm-capi` 26 个单测、C ABI／房间／质量脚本的 8 项定向 CTest、
+  两组共享库消费者测试通过；141 项 probe／inspect／策略模板／房间查询与 main `0fa10f3f` 对照无差异。
+- **Windows x64 canonical MSVC/Ninja Release（SOFA/IAMF off）：** `mradm-capi` 25 个单测、相同的
+  8 项定向 CTest 和两组消费者测试通过；以 main `0fa10f3f` 的 DLL 为参照，在同一修正构建中运行
+  `capi-capture.py --family render`，2,293 行与 23 个文件无差异，包含查询、房间、选项与离线渲染。
+- 两平台共享库均恰好导出 164 个 `adm_*`。macOS 的 FFI 头校验、Rust fmt／clippy、
+  clang-format／clang-tidy／cppcheck 和规模棘轮通过；生产 C/C++ 20,845 → 20,841 行。
+- 两平台消费者测试中的 Triple Balance 多声道监听设备不可用，走测试既有的设备不可用分支。
+
 ## 下一步
 
 C2：选项、取消、渲染、结果、export、能力表 JSON 与 preview（D）。
