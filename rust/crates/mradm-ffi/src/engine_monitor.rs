@@ -114,25 +114,25 @@ pub struct EngineLiveMonitorSource {
 /// `MonitorStatus`; `state`: 0 stopped, 1 playing, 2 paused.
 #[repr(C)]
 pub struct EngineLiveMonitorStatus {
-    pub(super) state: u32,
-    pub(super) playhead_frames: u64,
-    pub(super) underruns: u64,
-    pub(super) buffered_frames: u64,
-    pub(super) ring_fill: f32,
-    pub(super) ended: u32,
-    pub(super) failed: u32,
-    pub(super) override_revision: u64,
+    pub state: u32,
+    pub playhead_frames: u64,
+    pub underruns: u64,
+    pub buffered_frames: u64,
+    pub ring_fill: f32,
+    pub ended: u32,
+    pub failed: u32,
+    pub override_revision: u64,
 }
 
 /// `MonitorLevels`.
 #[repr(C)]
 pub struct EngineLiveMonitorLevels {
-    pub(super) channels: u32,
-    pub(super) peak: [f32; LEVEL_CHANNELS],
-    pub(super) rms: [f32; LEVEL_CHANNELS],
-    pub(super) momentary_lufs: f32,
-    pub(super) shortterm_lufs: f32,
-    pub(super) integrated_lufs: f32,
+    pub channels: u32,
+    pub peak: [f32; LEVEL_CHANNELS],
+    pub rms: [f32; LEVEL_CHANNELS],
+    pub momentary_lufs: f32,
+    pub shortterm_lufs: f32,
+    pub integrated_lufs: f32,
 }
 
 /// One callback's result: frames taken from the ring; `mark_end` asks the device to mark the end.

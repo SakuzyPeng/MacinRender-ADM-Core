@@ -26,7 +26,6 @@ unusedStructMember:*/src/adm_render_common/speaker_layouts.h
 # Private FFI records are shared with Rust; cppcheck cannot see their foreign consumers.
 unusedStructMember:*/src/adm_render_common/engine_ffi.h
 unusedStructMember:*/src/adm_metadata/scene_ffi.h
-unusedStructMember:*/src/adm_c_api/capi_ffi.h
 # Apple capability storage is consumed by catalog.cpp, outside the standalone header scan.
 unusedStructMember:*/src/adm_engine/catalog.h
 # Room geometry and per-object DSP state are consumed by their implementation

@@ -56,12 +56,12 @@ pub struct RenderMatrixView {
 
 #[repr(C)]
 pub struct RenderOverride {
-    object_id: Text,
-    speaker_label: Text,
-    mute: u32,
-    gain_db: f32,
-    has_head_locked: u32,
-    head_locked: u32,
+    pub object_id: Text,
+    pub speaker_label: Text,
+    pub mute: u32,
+    pub gain_db: f32,
+    pub has_head_locked: u32,
+    pub head_locked: u32,
 }
 
 /// level: 1 info, 2 warning (`adm::LogLevel`); the message is static text.
@@ -617,13 +617,13 @@ pub(crate) unsafe fn matrix_routes<'a>(
 /// A live edit (`LiveObjectOverride`): the common override and the topology scales.
 #[repr(C)]
 pub struct RenderLiveOverride {
-    base: RenderOverride,
-    extent_scale: f32,
-    extent_width_scale: f32,
-    extent_height_scale: f32,
-    extent_depth_scale: f32,
-    diffuse_scale: f32,
-    divergence_scale: f32,
+    pub base: RenderOverride,
+    pub extent_scale: f32,
+    pub extent_width_scale: f32,
+    pub extent_height_scale: f32,
+    pub extent_depth_scale: f32,
+    pub diffuse_scale: f32,
+    pub divergence_scale: f32,
 }
 
 unsafe fn live_overrides<'a>(
@@ -1199,9 +1199,11 @@ pub mod apple_island;
 #[doc(hidden)] // Called by mradm-capi.
 pub mod device_island;
 #[path = "engine_monitor.rs"]
-mod engine_monitor;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine_monitor;
 #[path = "engine_monitor_session.rs"]
-mod engine_monitor_session;
+#[doc(hidden)] // Called by mradm-capi.
+pub mod engine_monitor_session;
 
 #[cfg(test)]
 #[path = "../../mradm-render/tests/common/mod.rs"]

@@ -5,11 +5,11 @@ use mradm_dsp::{Error, Result, hptf as dsp};
 
 #[repr(C)]
 pub struct Band {
-    kind: u32,
-    enabled: u32,
-    frequency: f64,
-    gain_db: f64,
-    q: f64,
+    pub kind: u32,
+    pub enabled: u32,
+    pub frequency: f64,
+    pub gain_db: f64,
+    pub q: f64,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -345,11 +345,11 @@ pub unsafe extern "C" fn mradm_dsp_hptf_live_snapshot(value: *const dsp::Live, o
 /// line_offset/line_len index the offending trimmed line of the caller's text.
 #[repr(C)]
 pub struct ParseResult {
-    error: u32,
-    preamp_db: f64,
-    band_count: usize,
-    line_offset: usize,
-    line_len: usize,
+    pub error: u32,
+    pub preamp_db: f64,
+    pub band_count: usize,
+    pub line_offset: usize,
+    pub line_len: usize,
 }
 
 /// Parses AutoEq ParametricEQ text. Writes at most `capacity` bands and always reports the

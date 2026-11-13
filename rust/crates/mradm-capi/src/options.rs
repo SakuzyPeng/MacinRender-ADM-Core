@@ -3,8 +3,6 @@
 //!
 //! Paths are kept as the UTF-8 the C++ `std::filesystem::path` produced when a setter stored them
 //! (on Windows from the code page, `error::utf8_path`), with the SOFA file name the record needs.
-//! The Monitor exports still in `src/adm_c_api/adm_c_api.cpp` read the options through
-//! `mradm_capi_options` (`src/adm_c_api/capi_ffi.h`).
 use crate::cancel::adm_cancel_token_t;
 use crate::error::{Failure, c_str, concat, try_box, utf8_path};
 use crate::guard;
@@ -14,7 +12,7 @@ use mradm_ffi::adm::Text;
 use mradm_ffi::engine_service::{EnginePath, EngineRenderRequest};
 use mradm_ffi::room::{RoomProfileHandle, mradm_room_profile_destroy};
 use mradm_ffi::scene::{ScreenConfigView, mradm_scene_screen_parse};
-use std::ffi::{c_char, c_void};
+use std::ffi::c_char;
 use std::ptr;
 
 /// A stored path: its UTF-8 text.
@@ -41,7 +39,7 @@ pub struct adm_render_options_t {
     output_layout: Vec<u8>,
     input_layout: Option<Vec<u8>>,
     input_channel_labels: Vec<Vec<u8>>,
-    monitor_system_spatial: bool,
+    pub(crate) monitor_system_spatial: bool,
     measure_loudness: bool,
     loudness_target_lufs: f32,
     peak_limit: bool,
@@ -945,212 +943,6 @@ pub unsafe extern "C" fn adm_render_options_set_screen_config_json(
         o.screen_reproduction = reproduction;
         guard::OK
     })
-}
-
-/// `MradmCapiText`: bytes the options own.
-#[repr(C)]
-pub struct CapiText {
-    data: *const u8,
-    len: usize,
-}
-
-fn view(bytes: &[u8]) -> CapiText {
-    CapiText {
-        data: bytes.as_ptr(),
-        len: bytes.len(),
-    }
-}
-
-/// `MradmCapiScreen`: a screen geometry (`ScreenGeometry`).
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CapiScreen {
-    cartesian: u32,
-    aspect_ratio: f64,
-    centre: [f64; 3],
-    width: f64,
-}
-
-fn screen(s: Option<RoomScreenGeometry>) -> CapiScreen {
-    let s = s.unwrap_or_default();
-    CapiScreen {
-        cartesian: s.cartesian,
-        aspect_ratio: s.aspect_ratio,
-        centre: s.centre,
-        width: s.width,
-    }
-}
-
-/// `MradmCapiOptions`: the options as the C++ `RenderOptions` the Monitor exports still build.
-#[repr(C)]
-pub struct CapiOptions {
-    renderer: u32,
-    output_layout: CapiText,
-    has_input_layout: u32,
-    input_layout: CapiText,
-    input_channel_labels: *const CapiText,
-    input_channel_labels_len: usize,
-    monitor_system_spatial: u32,
-    measure_loudness: u32,
-    loudness_target_lufs: f32,
-    peak_limit: u32,
-    peak_limit_dbtp: f32,
-    peak_normalize_to_limit: u32,
-    final_gain_db: f64,
-    output_bit_depth: u32,
-    opus_bitrate_per_ch_kbps: u32,
-    apac_bitrate_kbps: u32,
-    apac_drc_music: u32,
-    apac_caf: u32,
-    has_sofa: u32,
-    sofa: CapiText,
-    has_policy_path: u32,
-    policy_path: CapiText,
-    has_policy_json: u32,
-    policy_json: CapiText,
-    has_matrix_path: u32,
-    matrix_path: CapiText,
-    has_matrix_json: u32,
-    matrix_json: CapiText,
-    has_report_path: u32,
-    report_path: CapiText,
-    capture_report: u32,
-    default_interp_ms: u32,
-    object_smoothing_frames: u32,
-    speaker_geometry: u32,
-    routing: u32,
-    speaker_spread: u32,
-    triple_balance_mode: u32,
-    binaural_spread: u32,
-    lfe_routing: u32,
-    apple_speaker_rendering_flags: u32,
-    render_start_sec: f64,
-    has_end: u32,
-    render_end_sec: f64,
-    iamf_mp4: u32,
-    iamf_layers: *const CapiText,
-    iamf_layers_len: usize,
-    /// A new owner of the room's package (`mradm_room_profile_destroy`), or NULL for no room.
-    room_profile: *mut c_void,
-    room_hrir: CapiText,
-    room_metres: f64,
-    room_quality: u32,
-    has_reference: u32,
-    reference: CapiScreen,
-    has_reproduction: u32,
-    reproduction: CapiScreen,
-}
-
-/// The views `mradm_capi_options` hands out, alive until `mradm_capi_options_release`.
-pub struct CapiOptionsLists {
-    labels: Vec<CapiText>,
-    layers: Vec<CapiText>,
-}
-
-/// Fills `out` with views of `opts` for a C++ `RenderOptions` and returns the lists they point
-/// at (release with `mradm_capi_options_release`); NULL when out of memory. `out->room_profile`
-/// is a new owner the caller takes over.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_capi_options(
-    opts: *const adm_render_options_t,
-    out: *mut CapiOptions,
-) -> *mut CapiOptionsLists {
-    guard::pointer(|| {
-        let (Some(o), Some(out)) = (unsafe { opts.as_ref() }, unsafe { out.as_mut() }) else {
-            return ptr::null_mut();
-        };
-        let list = |items: &[Vec<u8>]| -> Option<Vec<CapiText>> {
-            let mut v = Vec::new();
-            v.try_reserve_exact(items.len()).ok()?;
-            v.extend(items.iter().map(|i| view(i)));
-            Some(v)
-        };
-        let (Some(labels), Some(layers)) = (list(&o.input_channel_labels), list(&o.iamf_layers))
-        else {
-            return ptr::null_mut();
-        };
-        let lists = try_box(CapiOptionsLists { labels, layers });
-        if lists.is_null() {
-            return ptr::null_mut();
-        }
-        let room_profile = match &o.room {
-            None => ptr::null_mut(),
-            Some(r) => match unsafe { &*r.profile }.share() {
-                Some(p) => p.cast::<c_void>(),
-                None => {
-                    drop(unsafe { Box::from_raw(lists) });
-                    return ptr::null_mut();
-                }
-            },
-        };
-        let path_of = |p: &Option<Path>| view(path_bytes(p));
-        let text_of = |t: &Option<Vec<u8>>| view(t.as_deref().unwrap_or(&[]));
-        let l = unsafe { &*lists };
-        *out = CapiOptions {
-            renderer: o.renderer,
-            output_layout: view(&o.output_layout),
-            has_input_layout: u32::from(o.input_layout.is_some()),
-            input_layout: text_of(&o.input_layout),
-            input_channel_labels: l.labels.as_ptr(),
-            input_channel_labels_len: l.labels.len(),
-            monitor_system_spatial: u32::from(o.monitor_system_spatial),
-            measure_loudness: u32::from(o.measure_loudness),
-            loudness_target_lufs: o.loudness_target_lufs,
-            peak_limit: u32::from(o.peak_limit),
-            peak_limit_dbtp: o.peak_limit_dbtp,
-            peak_normalize_to_limit: u32::from(o.peak_normalize_to_limit),
-            final_gain_db: o.final_gain_db,
-            output_bit_depth: o.output_bit_depth,
-            opus_bitrate_per_ch_kbps: o.opus_bitrate_per_ch_kbps,
-            apac_bitrate_kbps: o.apac_bitrate_kbps,
-            apac_drc_music: u32::from(o.apac_drc_music),
-            apac_caf: u32::from(o.apac_caf),
-            has_sofa: u32::from(o.sofa.is_some()),
-            sofa: path_of(&o.sofa),
-            has_policy_path: u32::from(o.semantic_policy_path.is_some()),
-            policy_path: path_of(&o.semantic_policy_path),
-            has_policy_json: u32::from(o.semantic_policy_json.is_some()),
-            policy_json: text_of(&o.semantic_policy_json),
-            has_matrix_path: u32::from(o.direct_speakers_matrix_path.is_some()),
-            matrix_path: path_of(&o.direct_speakers_matrix_path),
-            has_matrix_json: u32::from(o.direct_speakers_matrix_json.is_some()),
-            matrix_json: text_of(&o.direct_speakers_matrix_json),
-            has_report_path: u32::from(o.semantic_report_path.is_some()),
-            report_path: path_of(&o.semantic_report_path),
-            capture_report: u32::from(o.capture_semantic_report),
-            default_interp_ms: o.default_interp_ms,
-            object_smoothing_frames: o.object_smoothing_frames,
-            speaker_geometry: o.speaker_geometry,
-            routing: o.direct_speakers_routing_mode,
-            speaker_spread: o.speaker_spread_mode,
-            triple_balance_mode: o.triple_balance_mode,
-            binaural_spread: o.binaural_spread_mode,
-            lfe_routing: o.lfe_routing_mode,
-            apple_speaker_rendering_flags: u32::from(o.apple_speaker_rendering_flags),
-            render_start_sec: o.render_start_sec,
-            has_end: u32::from(o.render_end_sec.is_some()),
-            render_end_sec: o.render_end_sec.unwrap_or(0.0),
-            iamf_mp4: u32::from(o.iamf_mp4),
-            iamf_layers: l.layers.as_ptr(),
-            iamf_layers_len: l.layers.len(),
-            room_profile,
-            room_hrir: view(o.room.as_ref().map_or(&[][..], |r| &r.hrir[..])),
-            room_metres: o.room.as_ref().map_or(0.0, |r| r.metres),
-            room_quality: o.room_quality,
-            has_reference: u32::from(o.screen_reference.is_some()),
-            reference: screen(o.screen_reference),
-            has_reproduction: u32::from(o.screen_reproduction.is_some()),
-            reproduction: screen(o.screen_reproduction),
-        };
-        lists
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_capi_options_release(lists: *mut CapiOptionsLists) {
-    if !lists.is_null() {
-        drop(unsafe { Box::from_raw(lists) });
-    }
 }
 
 #[cfg(test)]

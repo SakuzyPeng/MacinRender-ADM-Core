@@ -188,6 +188,45 @@ pub(crate) fn check_view(scene: &Scene, path: &[u8]) -> Result<(), Failure> {
     Ok(())
 }
 
+/// `log_import_warnings`: the scene's import warnings, or the view's error as `check_view` reports
+/// it.
+pub(crate) fn import_warnings(scene: &Scene, path: &[u8]) -> Result<Vec<Vec<u8>>, Failure> {
+    let mut message = [0u8; 1024];
+    let mut info = unsafe { MaybeUninit::<SceneImportInfo>::zeroed().assume_init() };
+    let mut view = unsafe { MaybeUninit::<View>::zeroed().assume_init() };
+    let code = unsafe {
+        mradm_scene_view(
+            scene.0,
+            &mut info,
+            &mut view,
+            message.as_mut_ptr(),
+            message.len(),
+        )
+    };
+    if code != 0 {
+        return Err(scene_error(code, &message, 1, path)?.into());
+    }
+    let strings = slice(view.strings, view.strings_len);
+    let ids = slice(view.warnings, view.warnings_len);
+    let mut warnings = Vec::new();
+    warnings
+        .try_reserve_exact(ids.len())
+        .map_err(|_| Failure::Exception)?;
+    for &id in ids {
+        let text = strings.get(id as usize).ok_or(Failure::Exception)?;
+        warnings.push(concat(&[slice(text.data, text.len)])?);
+    }
+    Ok(warnings)
+}
+
+fn slice<'a, T>(data: *const T, len: usize) -> &'a [T] {
+    if len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(data, len) }
+    }
+}
+
 fn wave_facts(path: &[u8]) -> Option<adm_scene_info_t> {
     let utf8 = utf8_path(path)?;
     let mut message = [0u8; 512];

@@ -21,8 +21,8 @@ pub struct DevicePull {
 /// One playback device per `each` call (`enumerate`).
 #[repr(C)]
 pub struct DeviceEnumeration {
-    user: *mut c_void,
-    each: Option<unsafe extern "C" fn(*mut c_void, Text, Text, u32)>,
+    pub user: *mut c_void,
+    pub each: Option<unsafe extern "C" fn(*mut c_void, Text, Text, u32)>,
 }
 
 /// An opened output device (`IAudioOutputDevice`); `destroy` releases it after `stop`.
@@ -55,8 +55,8 @@ pub struct DeviceTable {
 /// 2 the null backend; `system_spatial` is 1 where the platform has that sink.
 #[repr(C)]
 pub struct DeviceIslands {
-    system_spatial: u32,
-    open: Option<
+    pub system_spatial: u32,
+    pub open: Option<
         unsafe extern "C" fn(
             u32,
             Text,
@@ -66,7 +66,7 @@ pub struct DeviceIslands {
             *const EngineIslandError,
         ) -> i32,
     >,
-    enumerate: Option<unsafe extern "C" fn(*const DeviceEnumeration)>,
+    pub enumerate: Option<unsafe extern "C" fn(*const DeviceEnumeration)>,
 }
 
 /// `open` kinds.

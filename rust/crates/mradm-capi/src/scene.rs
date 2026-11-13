@@ -52,12 +52,12 @@ use std::sync::{Mutex, MutexGuard};
 
 #[cfg(not(test))]
 unsafe extern "C" {
-    fn mradm_device_islands() -> *const DeviceIslands;
+    pub(crate) fn mradm_device_islands() -> *const DeviceIslands;
 }
 
 // Unit tests link without the C++ device islands.
 #[cfg(test)]
-unsafe fn mradm_device_islands() -> *const DeviceIslands {
+pub(crate) unsafe fn mradm_device_islands() -> *const DeviceIslands {
     ptr::null()
 }
 
@@ -337,6 +337,23 @@ pub struct adm_hptf_info_t {
     applied_revision: u64,
 }
 
+impl adm_hptf_info_t {
+    /// The info of a default `HptfInfo` (bypassed, no curve).
+    pub(crate) fn empty() -> Self {
+        Self {
+            struct_size: size_of::<Self>() as u32,
+            enabled: 0,
+            band_count: 0,
+            sample_rate: 0,
+            preamp_db: 0.0,
+            auto_trim_db: 0.0,
+            max_response_db: 0.0,
+            reserved_v1_37: 0,
+            applied_revision: 0,
+        }
+    }
+}
+
 /// `adm_hptf_stereo_info_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
@@ -410,6 +427,32 @@ pub struct adm_hptf_stereo_parameters_t {
     revision: u64,
 }
 
+impl adm_hptf_stereo_info_t {
+    pub(crate) fn of(left: adm_hptf_info_t, right: adm_hptf_info_t) -> Self {
+        Self {
+            struct_size: size_of::<Self>() as u32,
+            reserved_v1_50: 0,
+            left,
+            right,
+        }
+    }
+}
+
+impl adm_hptf_band_t {
+    /// A parsed band with the caller's `stride` as its `struct_size`; the type as `HptfBandType`.
+    pub(crate) fn of(stride: u32, band: &mradm_ffi::hptf::Band) -> Self {
+        Self {
+            struct_size: stride,
+            r#type: i32::from(band.kind as u8),
+            enabled: i32::from(band.enabled != 0),
+            reserved_v1_38: 0,
+            fc_hz: band.frequency,
+            gain_db: band.gain_db,
+            q: band.q,
+        }
+    }
+}
+
 // ── Shared helpers ───────────────────────────────────────────────────────────────
 
 const RENDERER_SAF: i32 = 2;
@@ -431,10 +474,10 @@ const SIZES: (usize, usize, usize, usize) = (104, 40, 80, 120);
 
 /// A message returned as `const char*`: empty, or the bytes with their NUL.
 #[derive(Default)]
-struct Message(Vec<u8>);
+pub(crate) struct Message(Vec<u8>);
 
 impl Message {
-    fn as_ptr(&self) -> *const c_char {
+    pub(crate) fn as_ptr(&self) -> *const c_char {
         if self.0.is_empty() {
             c"".as_ptr()
         } else {
@@ -442,12 +485,12 @@ impl Message {
         }
     }
 
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.0 = Vec::new();
     }
 
     /// False when the copy could not be allocated (the C++ `bad_alloc`).
-    fn set(&mut self, text: &[u8]) -> bool {
+    pub(crate) fn set(&mut self, text: &[u8]) -> bool {
         if text.is_empty() {
             self.clear();
             return true;
@@ -462,12 +505,12 @@ impl Message {
     }
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// A caller's optional C string; empty for NULL.
-unsafe fn text<'a>(value: *const c_char) -> &'a [u8] {
+pub(crate) unsafe fn text<'a>(value: *const c_char) -> &'a [u8] {
     if value.is_null() {
         &[]
     } else {
@@ -475,7 +518,7 @@ unsafe fn text<'a>(value: *const c_char) -> &'a [u8] {
     }
 }
 
-fn ffi_text(bytes: &[u8]) -> Text {
+pub(crate) fn ffi_text(bytes: &[u8]) -> Text {
     Text {
         data: bytes.as_ptr(),
         len: bytes.len(),
@@ -483,13 +526,13 @@ fn ffi_text(bytes: &[u8]) -> Text {
 }
 
 /// `make_error(code, message)`.
-fn invalid(code: i32, message: &str) -> Failure {
+pub(crate) fn invalid(code: i32, message: &str) -> Failure {
     Failure::error(code, message.as_bytes(), b"")
 }
 
 /// The message and context buffers of a private FFI call (`FfiError`): 512 bytes plus `extra`
 /// (`context_extra` for the context).
-struct Buffers {
+pub(crate) struct Buffers {
     message: Vec<u8>,
     context: Vec<u8>,
     message_len: usize,
@@ -497,7 +540,7 @@ struct Buffers {
 }
 
 impl Buffers {
-    fn new(extra: usize, context_extra: usize) -> Result<Self, Failure> {
+    pub(crate) fn new(extra: usize, context_extra: usize) -> Result<Self, Failure> {
         let zeroed = |len: usize| -> Result<Vec<u8>, Failure> {
             let len = len.checked_add(512).ok_or(Failure::Exception)?;
             let mut bytes = Vec::new();
@@ -518,7 +561,7 @@ impl Buffers {
     }
 
     /// Runs `call` with the buffers; a non-zero code is the error it wrote.
-    fn run(
+    pub(crate) fn run(
         mut self,
         call: impl FnOnce(*mut u8, *mut usize, *mut u8, *mut usize) -> i32,
     ) -> Result<(), Failure> {
@@ -540,7 +583,10 @@ impl Buffers {
 /// `load_sized_array`: `count` records `stride` bytes apart, `stride` the first record's
 /// `struct_size`, which every record repeats and which is at least `size_of::<T>()`. `None` for an
 /// invalid array.
-unsafe fn sized<T: Copy>(source: *const T, count: u32) -> Result<Option<Vec<T>>, Failure> {
+pub(crate) unsafe fn sized<T: Copy>(
+    source: *const T,
+    count: u32,
+) -> Result<Option<Vec<T>>, Failure> {
     if count == 0 {
         return Ok(Some(Vec::new()));
     }
@@ -567,12 +613,12 @@ unsafe fn sized<T: Copy>(source: *const T, count: u32) -> Result<Option<Vec<T>>,
 }
 
 /// `output_struct_valid`.
-unsafe fn output_valid<T>(output: *const T) -> bool {
+pub(crate) unsafe fn output_valid<T>(output: *const T) -> bool {
     !output.is_null() && unsafe { output.cast::<u32>().read_unaligned() } >= 4
 }
 
 /// `write_sized_output`: `value` with the caller's `struct_size`, up to the smaller size.
-unsafe fn write_sized<T>(output: *mut T, value: T) {
+pub(crate) unsafe fn write_sized<T>(output: *mut T, value: T) {
     let caller = unsafe { output.cast::<u32>().read_unaligned() };
     let mut value = value;
     unsafe { ptr::from_mut(&mut value).cast::<u32>().write(caller) };
@@ -581,7 +627,7 @@ unsafe fn write_sized<T>(output: *mut T, value: T) {
 }
 
 /// `owned_string`: a string the caller releases with `adm_free_string`.
-unsafe fn owned(text: &[u8], out: *mut *mut c_char) -> Result<(), Failure> {
+pub(crate) unsafe fn owned(text: &[u8], out: *mut *mut c_char) -> Result<(), Failure> {
     let copy = unsafe { string::copy(text.as_ptr(), text.len()) };
     if copy.is_null() {
         return Err(Failure::Exception);
@@ -1296,7 +1342,7 @@ fn state(s: &adm_scene_object_state_t) -> RenderLiveState {
     }
 }
 
-fn reserve<T>(len: usize) -> Result<Vec<T>, Failure> {
+pub(crate) fn reserve<T>(len: usize) -> Result<Vec<T>, Failure> {
     let mut items = Vec::new();
     items
         .try_reserve_exact(len)
@@ -1695,8 +1741,15 @@ pub unsafe extern "C" fn adm_scene_stream_log_entry(
 
 // ── Scene stream rooms ───────────────────────────────────────────────────────────
 
-/// A room control handle of the stream's current backend; `None` without a room renderer.
-struct Control(*mut RenderRoomControl);
+/// A room control handle of a Scene stream's or a monitor's current backend.
+pub(crate) struct Control(*mut RenderRoomControl);
+
+impl Control {
+    /// `None` for a null handle (a backend without a room renderer).
+    pub(crate) fn new(raw: *mut RenderRoomControl) -> Option<Self> {
+        (!raw.is_null()).then_some(Self(raw))
+    }
+}
 
 impl Drop for Control {
     fn drop(&mut self) {
@@ -1705,8 +1758,7 @@ impl Drop for Control {
 }
 
 fn control(s: &adm_scene_stream_t) -> Option<Control> {
-    let raw = unsafe { mradm_engine_scene_room_control(s.handle) };
-    (!raw.is_null()).then_some(Control(raw))
+    Control::new(unsafe { mradm_engine_scene_room_control(s.handle) })
 }
 
 fn room_status(control: &Control) -> RenderRoomStatus {
@@ -1734,8 +1786,19 @@ pub unsafe extern "C" fn adm_scene_stream_switch_room(
     if out_request.is_null() || out_error.is_null() {
         return INVALID_ARGUMENT;
     }
-    guard::code(|| {
-        let Some(control) = control(s) else {
+    guard::code(|| unsafe { switch_room(control(s), config, out_request, out_error) })
+}
+
+/// `room_switch` once the outputs are checked and cleared: request the room of `config` at the
+/// current quality.
+pub(crate) unsafe fn switch_room(
+    control: Option<Control>,
+    config: *const adm_room_config_t,
+    out_request: *mut u64,
+    out_error: *mut *mut c_char,
+) -> i32 {
+    {
+        let Some(control) = control else {
             return UNSUPPORTED;
         };
         let fail = |e: Error| match unsafe { owned(&e.message, out_error) } {
@@ -1778,7 +1841,7 @@ pub unsafe extern "C" fn adm_scene_stream_switch_room(
         }
         unsafe { *out_request = revision };
         OK
-    })
+    }
 }
 
 /// A JSON sink whose growth can fail without aborting the host. The scalar writers allocate
@@ -1901,12 +1964,15 @@ pub unsafe extern "C" fn adm_scene_stream_room_status_json(
     if out_json.is_null() {
         return INVALID_ARGUMENT;
     }
-    guard::code(|| {
-        let Some(control) = control(s) else {
-            return UNSUPPORTED;
-        };
-        unsafe { room_json(out_json, || status_json(&room_status(&control))) }
-    })
+    guard::code(|| unsafe { room_status_json(control(s), out_json) })
+}
+
+/// `room_status_json` once the output is checked and cleared.
+pub(crate) unsafe fn room_status_json(control: Option<Control>, out_json: *mut *mut c_char) -> i32 {
+    let Some(control) = control else {
+        return UNSUPPORTED;
+    };
+    unsafe { room_json(out_json, || status_json(&room_status(&control))) }
 }
 
 #[unsafe(no_mangle)]
@@ -1924,14 +1990,21 @@ pub unsafe extern "C" fn adm_scene_stream_room_source_json(
     if out_json.is_null() {
         return INVALID_ARGUMENT;
     }
-    guard::code(|| {
-        let Some(control) = control(s) else {
-            return UNSUPPORTED;
-        };
-        let mut source: RoomSourceInfo = unsafe { std::mem::zeroed() };
-        unsafe { mradm_room_control_source(control.0, element_id, &mut source) };
-        unsafe { room_json(out_json, || source_json(element_id, &source)) }
-    })
+    guard::code(|| unsafe { room_source_json(control(s), element_id, out_json) })
+}
+
+/// `room_source_json` once the output is checked and cleared.
+pub(crate) unsafe fn room_source_json(
+    control: Option<Control>,
+    element_id: u64,
+    out_json: *mut *mut c_char,
+) -> i32 {
+    let Some(control) = control else {
+        return UNSUPPORTED;
+    };
+    let mut source: RoomSourceInfo = unsafe { std::mem::zeroed() };
+    unsafe { mradm_room_control_source(control.0, element_id, &mut source) };
+    unsafe { room_json(out_json, || source_json(element_id, &source)) }
 }
 
 // ── Scene outputs ────────────────────────────────────────────────────────────────
@@ -2109,7 +2182,7 @@ pub unsafe extern "C" fn adm_scene_output_set_volume(
 
 /// `apply_hptf_request`: the caller's request of `kind` (0 file, 1 parameters, 2 stereo files,
 /// 3 stereo parameters) as Rust settings, designed and published for the output.
-unsafe fn apply_hptf(
+pub(crate) unsafe fn apply_hptf(
     output: *mut EngineSceneOutput,
     config: *const c_void,
     kind: u32,
@@ -2162,12 +2235,12 @@ unsafe fn scene_hptf_ex(
 }
 
 /// `HptfCoefficients::is_bypass`.
-fn bypass(c: &Coefficients) -> bool {
+pub(crate) fn bypass(c: &Coefficients) -> bool {
     c.band_count == 0 && c.preamp_gain == 1.0
 }
 
 /// `HptfCoefficients::operator==` (IEEE comparison of every float).
-fn same(a: &Coefficients, b: &Coefficients) -> bool {
+pub(crate) fn same(a: &Coefficients, b: &Coefficients) -> bool {
     a.sample_rate == b.sample_rate
         && a.band_count == b.band_count
         && a.preamp_gain == b.preamp_gain
@@ -2181,7 +2254,7 @@ fn same(a: &Coefficients, b: &Coefficients) -> bool {
 
 /// `hptf_snapshot_info` and `to_hptf_info`: the left and right infos and whether they are the
 /// same curve.
-fn hptf_infos(snapshot: &Snapshot) -> (adm_hptf_info_t, adm_hptf_info_t, bool) {
+pub(crate) fn hptf_infos(snapshot: &Snapshot) -> (adm_hptf_info_t, adm_hptf_info_t, bool) {
     let info = |c: &Coefficients| adm_hptf_info_t {
         struct_size: size_of::<adm_hptf_info_t>() as u32,
         enabled: i32::from(!bypass(c)),

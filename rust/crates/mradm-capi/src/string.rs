@@ -1,9 +1,7 @@
 //! Strings the C ABI hands to the caller through `char**` outputs, released with `adm_free_string`
-//! (`c_api.h`: never `free()` / `delete`). Every such string, from Rust or from the exports still in
-//! `src/adm_c_api/adm_c_api.cpp` (`mradm_capi_string`, `src/adm_c_api/capi_ffi.h`), comes from here,
-//! so allocation and release use the same allocator. The allocation keeps its size in a header
+//! (`c_api.h`: never `free()` / `delete`). Every such string comes from here, so allocation and
+//! release use the same allocator. The allocation keeps its size in a header
 //! before the text.
-use crate::guard;
 use std::alloc::{Layout, alloc, dealloc};
 use std::ffi::c_char;
 
@@ -15,11 +13,6 @@ const HEADER: usize = if size_of::<usize>() > ALIGN {
 };
 
 /// A copy of `len` bytes of `text` and a terminating NUL; NULL when out of memory.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_capi_string(text: *const u8, len: usize) -> *mut c_char {
-    guard::pointer(|| unsafe { copy(text, len) })
-}
-
 pub(crate) unsafe fn copy(text: *const u8, len: usize) -> *mut c_char {
     let Some(size) = len.checked_add(HEADER + 1) else {
         return std::ptr::null_mut();
@@ -62,14 +55,14 @@ mod tests {
     #[test]
     fn strings_round_trip_through_free() {
         for text in ["", "{}", "无效的房间配置", &"x".repeat(100_000)] {
-            let s = unsafe { mradm_capi_string(text.as_ptr(), text.len()) };
+            let s = unsafe { copy(text.as_ptr(), text.len()) };
             assert!(!s.is_null());
             assert_eq!(unsafe { CStr::from_ptr(s) }.to_bytes(), text.as_bytes());
             assert_eq!(s.align_offset(ALIGN), 0);
             unsafe { adm_free_string(s) };
         }
         // Embedded NULs are copied; the length comes from the caller.
-        let s = unsafe { mradm_capi_string(b"a\0b".as_ptr(), 3) };
+        let s = unsafe { copy(b"a\0b".as_ptr(), 3) };
         assert_eq!(
             unsafe { std::slice::from_raw_parts(s.cast::<u8>(), 4) },
             b"a\0b\0"
@@ -80,7 +73,7 @@ mod tests {
 
     #[test]
     fn impossible_lengths_are_null() {
-        assert!(unsafe { mradm_capi_string(b"x".as_ptr(), usize::MAX) }.is_null());
-        assert!(unsafe { mradm_capi_string(b"x".as_ptr(), isize::MAX as usize) }.is_null());
+        assert!(unsafe { copy(b"x".as_ptr(), usize::MAX) }.is_null());
+        assert!(unsafe { copy(b"x".as_ptr(), isize::MAX as usize) }.is_null());
     }
 }

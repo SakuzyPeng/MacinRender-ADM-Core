@@ -28,8 +28,8 @@ use std::sync::{Arc, Mutex};
 /// The shell's islands: the output devices and the Apple backend (either may be null).
 #[repr(C)]
 pub struct EngineMonitorSessionHost {
-    devices: *const DeviceIslands,
-    apple: *const AppleIslands,
+    pub devices: *const DeviceIslands,
+    pub apple: *const AppleIslands,
 }
 
 pub struct EngineMonitorSession {
