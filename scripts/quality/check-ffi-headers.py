@@ -30,6 +30,8 @@ FFI_CRATE = RUST_ROOT / "crates" / "mradm-ffi"
 CBINDGEN_CONFIG = FFI_CRATE / "cbindgen.toml"
 CAPI_CRATE = RUST_ROOT / "crates" / "mradm-capi"
 CAPI_HEADER = "include/adm/c_api.h"
+# The private entries of mradm-capi that the exports still in C++ call (types from c_api.h).
+CAPI_FFI_HEADERS = ["src/adm_c_api/capi_ffi.h"]
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [
@@ -344,11 +346,14 @@ def is_handle(hand: CType, generated: CType, gen: Header) -> bool:
 
 
 class Checker:
-    def __init__(self, hand: Header, gen: Header, partial: bool = False) -> None:
+    def __init__(self, hand: Header, gen: Header, partial: bool = False, all_structs: bool = True) -> None:
         self.hand = hand
         self.gen = gen
         # The public header: declared functions and structs not (yet) in Rust are not errors.
         self.partial = partial
+        # Whether every hand-written struct must be used by a Rust export (not for headers that
+        # take their types from c_api.h).
+        self.all_structs = all_structs and not partial
         self.errors: list[str] = []
         self.pairs: dict[str, str] = {}  # hand struct -> generated struct
         self.reverse: dict[str, str] = {}
@@ -431,7 +436,7 @@ class Checker:
                     continue
                 checked.add(hand_name)
                 self.compare_struct(hand_name, gen_name)
-        for name, fields in sorted(self.hand.structs.items()) if not self.partial else ():
+        for name, fields in sorted(self.hand.structs.items()) if self.all_structs else ():
             if fields is not None and name not in self.pairs:
                 self.error(f"{self.hand.origin[name]}: 结构体 {name} 没有被任何 Rust 导出签名使用")
 
@@ -504,7 +509,17 @@ def main() -> int:
     capi = Checker(capi_hand, capi_gen, partial=True)
     capi.run()
 
-    errors = checker.errors + capi.errors
+    # mradm-capi's private entries: complete in both directions, types from c_api.h.
+    private_gen = Header({}, {}, {}, {})
+    parse_header(generated_capi.read_text(encoding="utf-8"), str(generated_capi), private_gen, function_prefix="mradm_")
+    private_hand = Header({}, {}, {}, {})
+    parse_header((REPO_ROOT / CAPI_HEADER).read_text(encoding="utf-8"), CAPI_HEADER, private_hand, function_prefix="mradm_")
+    for relative in CAPI_FFI_HEADERS:
+        parse_header((REPO_ROOT / relative).read_text(encoding="utf-8"), relative, private_hand, function_prefix="mradm_")
+    private = Checker(private_hand, private_gen, all_structs=False)
+    private.run()
+
+    errors = checker.errors + capi.errors + private.errors
     if errors:
         for message in errors:
             print(f"error: {message}", file=sys.stderr)
@@ -512,7 +527,7 @@ def main() -> int:
         return 1
     print(f"FFI 头校验通过：{len(hand.functions)} 个函数、{len(checker.pairs)} 个结构体与 Rust 一致；"
           f"c_api.h 的 {len(capi_hand.functions)} 个函数中 {len(capi_gen.functions)} 个由 Rust 实现、"
-          f"{len(capi.pairs)} 个结构体与 Rust 一致")
+          f"{len(capi.pairs)} 个结构体与 Rust 一致；mradm-capi 私有入口 {len(private_hand.functions)} 个")
     return 0
 
 

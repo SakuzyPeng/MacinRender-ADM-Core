@@ -2,7 +2,9 @@
 //! does in the C++ exports (`catch (...)`): the export returns its fallback, normally
 //! `ADM_ERROR_INTERNAL`, NULL or nothing. Callback threads and reentrancy are the caller's, as
 //! before; the guard holds no state.
-// The exports that use it move here family by family.
+//!
+//! Exports whose body cannot panic (a constant, a null check and a release) do without it.
+// Not every fallback has a caller yet; the remaining families bring them.
 #![allow(dead_code)]
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
