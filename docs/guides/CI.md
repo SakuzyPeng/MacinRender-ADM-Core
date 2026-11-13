@@ -57,6 +57,8 @@ clang-tidy 脚本已经包含 macOS SDK 参数处理，且项目当前主要开�
 （`src/adm_dsp/*_ffi.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`）逐项比较：导出符号集合、
 参数个数/顺序/指针层级/const、返回值，以及被签名引用的 `#[repr(C)]` 结构体字段类型与顺序（含数组长度）。
 `void*` 句柄与 Rust 侧任意结构体指针视为兼容；字段名不比较。生成头不入库、也不被 C++ include。
+同一目标再把 `mradm-capi` 渲染成第二个一次性头，与公开的 `include/adm/c_api.h` 单向比较：Rust 实现的每个 `adm_*`
+都须在 `c_api.h` 中以相同签名声明（枚举 typedef 按 `int`、回调 typedef 按签名比较），仍在 C++ 的函数交给下面的导出面检查。
 
 C ABI 导出面（`scripts/quality/check-capi-exports.py`）在 ci 的三个构建 job、release 的三个 CLI job 和两个 GUI
 打包脚本中检查 `mradm_capi` 共享库恰好导出 `include/adm/c_api.h` 声明的 `adm_*` 函数：ELF / Mach-O 用 `nm`，

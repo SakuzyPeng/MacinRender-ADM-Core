@@ -4,7 +4,8 @@
 Private Rust (`mradm_*`), allocator, panic and C++ symbols must stay inside the shared library.
 ELF/Mach-O exports come from `nm`; PE exports are read directly from the DLL export table so the
 check does not need a Visual Studio environment. `--write-def` emits the Windows module-definition
-file that the bundle links with.
+file that the bundle links with; `--write-references` emits the C table that names every declared
+function, so the linker takes the exports implemented in Rust from the Rust staticlib.
 """
 
 from __future__ import annotations
@@ -27,6 +28,30 @@ def declared_functions(header: Path = C_API_HEADER) -> list[str]:
     if len(names) != len(set(names)):
         sys.exit(f"{header}: 函数声明重复")
     return names
+
+
+def write_if_changed(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists() or path.read_text(encoding="ascii") != content:
+        path.write_text(content, encoding="ascii")
+
+
+def references(declared: list[str]) -> str:
+    entries = "".join(f"    (mradm_capi_entry){name},\n" for name in declared)
+    return (
+        "/* Generated from include/adm/c_api.h by scripts/quality/check-capi-exports.py. */\n"
+        "/* Every declared export, whichever side defines it: a Rust export is otherwise not taken from\n"
+        "   the Rust staticlib, since nothing inside the shared library calls it. */\n"
+        "#if defined(__GNUC__) || defined(__clang__)\n"
+        "#pragma GCC diagnostic ignored \"-Wdeprecated-declarations\"\n"
+        "#elif defined(_MSC_VER)\n"
+        "#pragma warning(disable : 4996)\n"
+        "#endif\n"
+        "#include \"adm/c_api.h\"\n\n"
+        "typedef void (*mradm_capi_entry)(void);\n"
+        "extern const mradm_capi_entry mradm_capi_entries[];\n"
+        f"const mradm_capi_entry mradm_capi_entries[{len(declared)}] = {{\n{entries}}};\n"
+    )
 
 
 def pe_exports(path: Path) -> list[str]:
@@ -77,14 +102,15 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("library", nargs="?", type=Path, help="mradm_capi 共享库（.so/.dylib/.dll）")
     group.add_argument("--write-def", type=Path, help="写出 Windows .def 导出文件")
+    group.add_argument("--write-references", type=Path, help="写出引用全部导出函数的 C 表")
     args = parser.parse_args()
 
     declared = declared_functions()
     if args.write_def:
-        args.write_def.parent.mkdir(parents=True, exist_ok=True)
-        content = "EXPORTS\n" + "".join(f"    {name}\n" for name in declared)
-        if not args.write_def.exists() or args.write_def.read_text(encoding="ascii") != content:
-            args.write_def.write_text(content, encoding="ascii")
+        write_if_changed(args.write_def, "EXPORTS\n" + "".join(f"    {name}\n" for name in declared))
+        return 0
+    if args.write_references:
+        write_if_changed(args.write_references, references(declared))
         return 0
 
     library = args.library.resolve()

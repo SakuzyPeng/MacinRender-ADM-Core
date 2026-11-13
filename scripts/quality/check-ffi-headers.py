@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""Check the hand-written private FFI headers against the Rust `mradm-ffi` exports.
+"""Check the hand-written private FFI headers against the Rust `mradm-ffi` exports, and the public
+`c_api.h` against the exports `mradm-capi` implements.
 
 cbindgen renders the Rust side into a throwaway C header; both headers are then reduced to
 function signatures and struct field sequences and compared structurally. The generated header is
 never included by C++ code. Opaque handles are `void*` on the C++ side and any struct pointer on
-the Rust side; everything else must match in base type, pointer depth and constness.
+the Rust side; everything else must match in base type, pointer depth and constness. Typedefs of
+scalars, enums (`int`-sized, as `c_api.h` asserts) and callbacks are compared by what they name.
+
+`c_api.h` is checked one way only: every Rust `adm_*` export must be declared there with the same
+signature, and the functions still defined in `src/adm_c_api/adm_c_api.cpp` are left to
+`check-capi-exports.py`, which checks that the shared library exports all of them.
 """
 
 from __future__ import annotations
@@ -22,6 +28,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUST_ROOT = REPO_ROOT / "rust"
 FFI_CRATE = RUST_ROOT / "crates" / "mradm-ffi"
 CBINDGEN_CONFIG = FFI_CRATE / "cbindgen.toml"
+CAPI_CRATE = RUST_ROOT / "crates" / "mradm-capi"
+CAPI_HEADER = "include/adm/c_api.h"
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [
@@ -111,6 +119,11 @@ class Header:
     structs: dict[str, list[tuple[CType, tuple[int, ...], str]] | None]  # None = opaque
     arrays: dict[str, tuple[str, int]]  # typedef T name[N]
     origin: dict[str, str]
+    aliases: dict[str, CType] = None  # typedef of a scalar, an enum or a callback
+
+    def __post_init__(self) -> None:
+        if self.aliases is None:
+            self.aliases = {}
 
 
 COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
@@ -119,26 +132,62 @@ EXTERN_OPEN = re.compile(r'extern\s+"C"\s*\{')
 STRUCT_BODY = re.compile(r"(typedef\s+)?struct\s+(\w+)\s*\{(.*?)\}\s*(\w*)\s*;", re.S)
 OPAQUE = re.compile(r"typedef\s+struct\s+(\w+)\s+(\w+)\s*;")
 ARRAY_TYPEDEF = re.compile(r"typedef\s+(\w+)\s+(\w+)\s*\[(\d+)\]\s*;")
-FUNCTION = re.compile(r"([\w\s\*]+?)\b(mradm_\w+)\s*\(([^()]*)\)\s*;", re.S)
-FUNCTION_POINTER = re.compile(r"^(.*?)\(\s*\*\s*(\w+)\s*\)\s*\((.*)\)$", re.S)
+FUNCTION_POINTER = re.compile(r"^(.*?)\(\s*\*\s*(\w*)\s*\)\s*\((.*)\)$", re.S)
+ENUM_TYPEDEF = re.compile(r"typedef\s+enum\s*\w*\s*\{[^{}]*\}\s*(\w+)\s*;", re.S)
+CALLBACK_TYPEDEF = re.compile(r"typedef\s+([\w\s\*]+?)\(\s*\*\s*(\w+)\s*\)\s*\(([^()]*)\)\s*;", re.S)
+SCALAR_TYPEDEF = re.compile(r"typedef\s+(\w+)\s+(\w+)\s*;")
+# The public header's attribute macros.
+PUBLIC_MACROS = re.compile(r'ADM_API_DEPRECATED\s*\(\s*"(?:[^"\\]|\\.)*"\s*\)|\bADM_API_NOEXCEPT\b')
+
+
+def function_pattern(prefix: str) -> re.Pattern[str]:
+    return re.compile(r"([\w\s\*]+?)\b(" + re.escape(prefix) + r"\w+)\s*\(([^;{}]*)\)\s*;", re.S)
 
 
 def strip(text: str) -> str:
     text = COMMENT.sub(" ", text)
+    text = PUBLIC_MACROS.sub(" ", text)
     text = PREPROCESSOR.sub(" ", text)
     text = EXTERN_OPEN.sub(" ", text)
     return text.replace("std::", "")
+
+
+def split_parameters(text: str) -> list[str]:
+    """Split at commas outside callback parameter lists."""
+    parameters = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                raise ValueError(f"unbalanced parameter list: {text!r}")
+        elif char == "," and depth == 0:
+            parameters.append(text[start:index])
+            start = index + 1
+    if depth:
+        raise ValueError(f"unbalanced parameter list: {text!r}")
+    parameters.append(text[start:])
+    return parameters
 
 
 def parse_parameters(text: str, known: set[str]) -> tuple[CType, ...]:
     text = text.strip()
     if not text or text == "void":
         return ()
-    return tuple(parse_type(part, known)[0] for part in text.split(","))
+    parameters = []
+    for declaration in split_parameters(text):
+        parsed = parse_function_pointer(declaration, known)
+        if parsed is None:
+            parsed = parse_type(declaration, known)
+        parameters.append(parsed[0])
+    return tuple(parameters)
 
 
 def parse_function_pointer(text: str, known: set[str]) -> tuple[CType, str] | None:
-    """`RET (*name)(PARAMS)`: a struct field holding a C callback."""
+    """`RET (*name)(PARAMS)`: a callback field or parameter (optionally unnamed)."""
     match = FUNCTION_POINTER.match(text.strip())
     if match is None:
         return None
@@ -191,7 +240,26 @@ def rust_constants() -> dict[str, str]:
     return constants
 
 
-def parse_header(text: str, origin: str, header: Header, constants: dict[str, str] | None = None) -> None:
+def resolve(ctype: CType, aliases: dict[str, CType]) -> CType:
+    """Replace typedef names by what they name (a callback typedef only where used by value)."""
+    if ctype.signature is not None:
+        ret, params = ctype.signature
+        return CType("fn", False, ctype.pointers, (resolve(ret, aliases), tuple(resolve(p, aliases) for p in params)))
+    alias = aliases.get(ctype.base)
+    if alias is None:
+        return ctype
+    if alias.signature is not None:
+        return alias if not ctype.pointers else ctype
+    return CType(alias.base, ctype.const or alias.const, alias.pointers + ctype.pointers)
+
+
+def parse_header(
+    text: str,
+    origin: str,
+    header: Header,
+    constants: dict[str, str] | None = None,
+    function_prefix: str = "mradm_",
+) -> None:
     defines = dict(constants or {})
     defines.update(DEFINE.findall(text))
     text = strip(text)
@@ -199,6 +267,10 @@ def parse_header(text: str, origin: str, header: Header, constants: dict[str, st
     for match in ARRAY_TYPEDEF.finditer(text):
         header.arrays[match.group(2)] = (SCALARS.get(match.group(1), match.group(1)), int(match.group(3)))
     text = ARRAY_TYPEDEF.sub(" ", text)
+    for match in ENUM_TYPEDEF.finditer(text):
+        header.aliases[match.group(1)] = CType("i32", False, ())
+        header.origin.setdefault(match.group(1), origin)
+    text = ENUM_TYPEDEF.sub(" ", text)
     bodies = []
     for match in STRUCT_BODY.finditer(text):
         name = match.group(2)
@@ -208,7 +280,18 @@ def parse_header(text: str, origin: str, header: Header, constants: dict[str, st
     for match in OPAQUE.finditer(text):
         header.structs.setdefault(match.group(2), None)
         header.origin.setdefault(match.group(2), origin)
-    known = set(header.structs) | set(header.arrays)
+    for match in SCALAR_TYPEDEF.finditer(text):
+        if match.group(1) in SCALARS:
+            header.aliases[match.group(2)] = CType(SCALARS[match.group(1)], False, ())
+    text = SCALAR_TYPEDEF.sub(lambda m: " " if m.group(1) in SCALARS else m.group(0), text)
+    known = set(header.structs) | set(header.arrays) | set(header.aliases)
+    callbacks = list(CALLBACK_TYPEDEF.finditer(text))
+    known |= {match.group(2) for match in callbacks}
+    for match in callbacks:
+        ret, _ = parse_type(match.group(1), known)
+        header.aliases[match.group(2)] = CType("fn", False, (False,), (ret, parse_parameters(match.group(3), known)))
+        header.origin.setdefault(match.group(2), origin)
+    text = CALLBACK_TYPEDEF.sub(" ", text)
     for name, body in bodies:
         fields = []
         for declaration in body.split(";"):
@@ -231,17 +314,29 @@ def parse_header(text: str, origin: str, header: Header, constants: dict[str, st
         header.structs[name] = fields
     text = STRUCT_BODY.sub(" ", text)
     text = OPAQUE.sub(" ", text)
-    for match in FUNCTION.finditer(text):
+    declared_names = set(re.findall(r"\b(" + re.escape(function_prefix) + r"\w+)\s*\(", text))
+    parsed_names = set()
+    for match in function_pattern(function_prefix).finditer(text):
         name = match.group(2)
         if name in header.functions:
             raise ValueError(f"{origin}: duplicate declaration of {name}")
-        ret, _ = parse_type(match.group(1).strip(), known)
-        params_text = match.group(3).strip()
-        params = []
-        if params_text and params_text != "void":
-            params = [parse_type(part, known)[0] for part in params_text.split(",")]
+        try:
+            ret, _ = parse_type(match.group(1).strip(), known)
+            params = list(parse_parameters(match.group(3), known))
+        except ValueError as error:
+            raise ValueError(f"{origin}: {name}: {error}") from error
         header.functions[name] = (ret, params, origin)
         header.origin[name] = origin
+        parsed_names.add(name)
+    unparsed = declared_names - parsed_names
+    if unparsed:
+        raise ValueError(f"{origin}: unsupported function declaration: {', '.join(sorted(unparsed))}")
+    aliases = header.aliases
+    for name, (ret, params, where) in header.functions.items():
+        header.functions[name] = (resolve(ret, aliases), [resolve(p, aliases) for p in params], where)
+    for name, fields in header.structs.items():
+        if fields is not None:
+            header.structs[name] = [(resolve(c, aliases), dims, field) for c, dims, field in fields]
 
 
 def is_handle(hand: CType, generated: CType, gen: Header) -> bool:
@@ -249,9 +344,11 @@ def is_handle(hand: CType, generated: CType, gen: Header) -> bool:
 
 
 class Checker:
-    def __init__(self, hand: Header, gen: Header) -> None:
+    def __init__(self, hand: Header, gen: Header, partial: bool = False) -> None:
         self.hand = hand
         self.gen = gen
+        # The public header: declared functions and structs not (yet) in Rust are not errors.
+        self.partial = partial
         self.errors: list[str] = []
         self.pairs: dict[str, str] = {}  # hand struct -> generated struct
         self.reverse: dict[str, str] = {}
@@ -302,7 +399,7 @@ class Checker:
         gen_names = set(self.gen.functions)
         for name in sorted(gen_names - hand_names):
             self.error(f"{name}: Rust 导出了但手写 FFI 头没有声明")
-        for name in sorted(hand_names - gen_names):
+        for name in sorted(hand_names - gen_names) if not self.partial else ():
             self.error(f"{name}: {self.hand.functions[name][2]} 声明了但 Rust 没有导出")
         for name in sorted(hand_names & gen_names):
             hand_ret, hand_params, origin = self.hand.functions[name]
@@ -334,7 +431,7 @@ class Checker:
                     continue
                 checked.add(hand_name)
                 self.compare_struct(hand_name, gen_name)
-        for name, fields in sorted(self.hand.structs.items()):
+        for name, fields in sorted(self.hand.structs.items()) if not self.partial else ():
             if fields is not None and name not in self.pairs:
                 self.error(f"{self.hand.origin[name]}: 结构体 {name} 没有被任何 Rust 导出签名使用")
 
@@ -353,14 +450,15 @@ class Checker:
                 self.error(f"{where}: 字段 C++ `{h} {h_name}{list(h_dims) or ''}` / Rust `{g} {g_name}{list(g_dims) or ''}`")
 
 
-def run_cbindgen(cbindgen: str, output: Path) -> None:
+def run_cbindgen(cbindgen: str, output: Path, crate: Path = FFI_CRATE) -> None:
     version = subprocess.run([cbindgen, "--version"], capture_output=True, text=True, check=True).stdout.split()[-1]
     if version != CBINDGEN_VERSION:
         sys.exit(f"需要 cbindgen {CBINDGEN_VERSION}，当前为 {version}："
                  f"cargo install cbindgen --locked --version {CBINDGEN_VERSION}")
     output.parent.mkdir(parents=True, exist_ok=True)
+    config = crate / "cbindgen.toml"
     result = subprocess.run(
-        [cbindgen, "--config", str(CBINDGEN_CONFIG), "--crate", "mradm-ffi", "--output", str(output), str(FFI_CRATE)],
+        [cbindgen, "--config", str(config), "--crate", crate.name, "--output", str(output), str(crate)],
         cwd=RUST_ROOT,
         capture_output=True,
         text=True,
@@ -375,14 +473,20 @@ def main() -> int:
     parser.add_argument("--cbindgen", default=shutil.which("cbindgen") or "cbindgen")
     parser.add_argument("--output", type=Path, default=REPO_ROOT / "build" / "rust" / "ffi-check" / "mradm_ffi.h")
     parser.add_argument("--generated", type=Path, help="比较已有的生成头，不运行 cbindgen")
+    parser.add_argument("--generated-capi", type=Path, help="比较已有的 mradm-capi 生成头，不运行 cbindgen")
     args = parser.parse_args()
 
     generated = args.generated
-    if generated is None:
+    generated_capi = args.generated_capi
+    if generated is None or generated_capi is None:
         if shutil.which(args.cbindgen) is None:
             sys.exit(f"找不到 cbindgen：cargo install cbindgen --locked --version {CBINDGEN_VERSION}")
+    if generated is None:
         run_cbindgen(args.cbindgen, args.output)
         generated = args.output
+    if generated_capi is None:
+        generated_capi = args.output.with_name("mradm_capi.h")
+        run_cbindgen(args.cbindgen, generated_capi, CAPI_CRATE)
 
     gen = Header({}, {}, {}, {})
     parse_header(generated.read_text(encoding="utf-8"), str(generated), gen, rust_constants())
@@ -392,12 +496,23 @@ def main() -> int:
 
     checker = Checker(hand, gen)
     checker.run()
-    if checker.errors:
-        for message in checker.errors:
+
+    capi_gen = Header({}, {}, {}, {})
+    parse_header(generated_capi.read_text(encoding="utf-8"), str(generated_capi), capi_gen, function_prefix="adm_")
+    capi_hand = Header({}, {}, {}, {})
+    parse_header((REPO_ROOT / CAPI_HEADER).read_text(encoding="utf-8"), CAPI_HEADER, capi_hand, function_prefix="adm_")
+    capi = Checker(capi_hand, capi_gen, partial=True)
+    capi.run()
+
+    errors = checker.errors + capi.errors
+    if errors:
+        for message in errors:
             print(f"error: {message}", file=sys.stderr)
-        print(f"FFI 头校验失败：{len(checker.errors)} 处不一致", file=sys.stderr)
+        print(f"FFI 头校验失败：{len(errors)} 处不一致", file=sys.stderr)
         return 1
-    print(f"FFI 头校验通过：{len(hand.functions)} 个函数、{len(checker.pairs)} 个结构体与 Rust 一致")
+    print(f"FFI 头校验通过：{len(hand.functions)} 个函数、{len(checker.pairs)} 个结构体与 Rust 一致；"
+          f"c_api.h 的 {len(capi_hand.functions)} 个函数中 {len(capi_gen.functions)} 个由 Rust 实现、"
+          f"{len(capi.pairs)} 个结构体与 Rust 一致")
     return 0
 
 
