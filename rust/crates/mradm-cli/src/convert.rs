@@ -43,7 +43,10 @@ fn scan(text: &[u8], base: u32, limit: u128) -> Scan {
                 .get(i + 2)
                 .and_then(|&b| digit(b))
                 .is_some_and(|d| d < 16);
-        let binary = i + 1 < text.len()
+        // CLI11's base-0 scan on macOS and Windows stops at `b`. Only its unsigned
+        // conversion has a separate binary-prefix fallback below.
+        let binary = !cfg!(any(windows, target_os = "macos"))
+            && i + 1 < text.len()
             && text[i] == b'0'
             && (text[i + 1] | 0x20) == b'b'
             && text
@@ -289,5 +292,19 @@ mod tests {
         assert_eq!(flag_text(b"2", true), b"-2");
         assert_eq!(flag_text(b"x", true), b"x");
         assert_eq!(flag_text(b"x", false), b"x");
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn binary_prefixes_follow_the_native_cli11_conversions() {
+        assert_eq!(uint32(b"0b11"), Some(3));
+        assert_eq!(uint32(b"0B11 "), Some(3));
+        for text in [b"+0b11".as_slice(), b" 0b11", b"-0b11"] {
+            assert_eq!(uint32(text), None, "{text:?}");
+        }
+        for text in [b"0b1".as_slice(), b"0B0", b"+0b1", b" 0b1", b"-0b1"] {
+            assert_eq!(boolean(text), None, "{text:?}");
+            assert_eq!(flag_text(text, true), text, "{text:?}");
+        }
     }
 }

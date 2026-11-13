@@ -574,7 +574,9 @@ if(MR_ADM_CORE_BUILD_CLI)
     add_executable(mradm_exe)
     set_target_properties(mradm_exe PROPERTIES OUTPUT_NAME mradm)
     target_sources(mradm_exe PRIVATE src/adm_cli/main.cpp)
-    target_link_libraries(mradm_exe PRIVATE MacinRender::ADMCAPI MacinRender::ADMAudio)
+    # A shared ADMCAPI does not reference the private CLI entry and may omit it from its Rust
+    # archive. Retain that entry in the executable without adding it to the public C ABI.
+    target_link_libraries(mradm_exe PRIVATE MacinRender::ADMCAPI MacinRender::ADMAudio mradm_capi)
     if(APPLE)
         target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
         # AudioToolbox's APAC encoder rejects ClientDataFormat on current macOS when

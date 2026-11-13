@@ -11,8 +11,9 @@ CLI11 与 spdlog 移出构建与许可证清单，新增 clap 4.5.41（及 `clap
 
 - **`mradm-cli`**（rlib，`#![forbid(unsafe_code)]`）：
   - `args.rs`：每个子命令的选项表（名字、别名、类型、取值集或范围、必选、依赖、互斥），由表生成 clap 命令，再照 CLI11 2.5.0 的顺序检查：
-    行尾缺值 / `--x=` 空值 114 → 帮助 0 → `--version` 与按表序的取值检查（105 / 104 / 114）→ 缺子命令与必选、依赖、互斥（106 / 107 / 108）→
-    多余参数 109。`-x=值` 照 CLI11 把 `=值` 当作值（clap 会去掉 `=`），错误消息沿用 CLI11 的措辞。
+    行尾缺值 114 → 帮助 0 → `--version` 与按表序的取值检查（105 / 104 / 114）→ 缺子命令与必选、依赖、互斥（106 / 107 / 108）→
+    多余参数 109。`--x=` 后仍有参数时消费下一个参数。`-x=值`（含组合短选项）照 CLI11 把 `=值` 当作值
+    （clap 会去掉 `=`），错误消息沿用 CLI11 的措辞。
   - `convert.rs`：CLI11 的整数（`strtoull` 进制规则、数字分隔符、尾部空白、`0o` / `0b`）、布尔与 flag 取值转换。
   - `catalog.rs`：`backends`、`layouts`、`formats`、`input-layouts` 直接读 `mradm-engine` 的目录与表、`mradm-scene` 的输入布局表，
     排版照 fmt（宽字符按两列补齐）。
@@ -25,7 +26,8 @@ CLI11 与 spdlog 移出构建与许可证清单，新增 clap 4.5.41（及 `clap
   新导出 `mradm_cli_main`（私有入口，声明在 `src/adm_cli/cli_ffi.h`，`check-ffi-headers.py` 核对）。
 - **APAC 编码 worker**：`run_apac_encode_child` 经新的岛接口 `src/adm_audio/apac_worker_island.{h,cpp}`（`mradm_audio_apac_child`，
   登记在 `island-interfaces`）调用，心跳协议行仍由 C++ 写出。单遍链接器的 `--undefined=` 列表加上这个符号；`mradm` 可执行文件改为链接
-  `mr_adm_c_api`（进度回调跳板与 `--undefined=` 选项都在那里）。
+  `mr_adm_c_api`（进度回调跳板与 `--undefined=` 选项都在那里），并直接链接 Rust staticlib，确保共享库配置下
+  未被 C ABI 库引用的 CLI 私有入口仍被链接进可执行文件。
 - **Windows 路径**：参数从宽字符命令行读出，以 UTF-8 交给引擎；C ABI 的辅助函数把调用方路径视为代码页窄字符串，CLI 调用它们时经
   `error::with_utf8_paths` 跳过这次转换。
 
@@ -34,6 +36,8 @@ CLI11 与 spdlog 移出构建与许可证清单，新增 clap 4.5.41（及 `clap
 - `mradm` 由 Rust 实现；子命令、选项名与取值、默认值、stdout、输出文件、退出码与领域错误消息不变。
 - `--help` 改为 clap 的排版（选项与说明文字不变，`__apac-encode` 仍不显示）。
 - Windows：命令行参数不再经过当前代码页（以前无法用代码页表示的字符被替换），日志与消息以 UTF-8 写出；控制台日志不再着色。
+- Windows stdout／stderr 沿用 CRT 文本流的 LF → CRLF 转换。macOS／Windows 的布尔数值转换不接受 `0b`，
+  无符号整数保留 CLI11 独立支持的 `0b` 写法。
 - 构建不再获取 CLI11 与 spdlog。
 
 ## 验证

@@ -1,7 +1,7 @@
 //! The command-line grammar: the option table of every subcommand, parsed with clap and checked in
 //! the order of the CLI11 parser the CLI used before, so that the exit codes stay the same:
 //!
-//! 1. a value option without its value at the end of the line or with an empty `=` value: 114;
+//! 1. a value option without its value at the end of the line: 114;
 //! 2. `-h` / `--help`: the help text, 0;
 //! 3. `--version`, then every option of the subcommand in table order: a value outside its set or
 //!    range 105, a value that does not convert 104, a single-valued option given twice 114;
@@ -944,9 +944,8 @@ fn os(bytes: Vec<u8>) -> OsString {
     }
 }
 
-/// Phase 1: a value option at the end of the line, or with an empty `=` value, ends the parse.
-/// The line is returned with `-x=value` of a short value option split into `-x` and `=value`,
-/// which CLI11 took as the value (clap would drop the `=`).
+/// Phase 1: a value option at the end of the line ends the parse. CLI11 takes the next token after
+/// an empty `--name=` and keeps the `=` in a short option's attached value, including in a cluster.
 fn prescan(args: Vec<OsString>, subs: &[Sub]) -> Result<Vec<OsString>, Exit> {
     let tokens: Vec<Vec<u8>> = args.iter().map(|a| bytes(a)).collect();
     let mut i = 1;
@@ -976,11 +975,6 @@ fn prescan(args: Vec<OsString>, subs: &[Sub]) -> Result<Vec<OsString>, Exit> {
                         .any(|a| a.trim_start_matches('-').as_bytes() == name))
         })
     };
-    let find_short = |c: u8| {
-        sub.options
-            .iter()
-            .find(|o| o.short == Some(c as char) && o.takes_value())
-    };
     let missing = |o: &Opt| {
         Exit::error(
             114,
@@ -1000,35 +994,54 @@ fn prescan(args: Vec<OsString>, subs: &[Sub]) -> Result<Vec<OsString>, Exit> {
                 Some(p) => (&long[..p], Some(&long[p + 1..])),
                 None => (long, None),
             };
-            out.push(os(t.clone()));
             if let Some(o) = find_long(name).filter(|o| o.takes_value()) {
                 match value {
-                    Some([]) => return Err(missing(o)),
-                    Some(_) => {}
-                    None if i >= tokens.len() => return Err(missing(o)),
-                    None => {
+                    Some([]) | None => {
+                        if i >= tokens.len() {
+                            return Err(missing(o));
+                        }
+                        out.push(os([b"--", name].concat()));
                         out.push(os(tokens[i].clone()));
                         i += 1;
                     }
+                    Some(_) => out.push(os(t.clone())),
                 }
-            }
-        } else if t.len() >= 2 && t[0] == b'-' && find_short(t[1]).is_some() {
-            let o = find_short(t[1]).expect("a short value option");
-            if t.len() == 2 {
-                if i >= tokens.len() {
-                    return Err(missing(o));
-                }
-                out.push(os(t.clone()));
-                out.push(os(tokens[i].clone()));
-                i += 1;
-            } else if t[2] == b'=' {
-                out.push(os(t[..2].to_vec()));
-                out.push(os(t[2..].to_vec()));
             } else {
                 out.push(os(t.clone()));
             }
         } else {
-            out.push(os(t.clone()));
+            let mut short_value = None;
+            if t.starts_with(b"-") {
+                for (position, &c) in t.iter().enumerate().skip(1) {
+                    if c == b'h' {
+                        continue;
+                    }
+                    let Some(o) = sub.options.iter().find(|o| o.short == Some(c as char)) else {
+                        break;
+                    };
+                    if o.takes_value() {
+                        short_value = Some((position, o));
+                        break;
+                    }
+                }
+            }
+            let Some((position, o)) = short_value else {
+                out.push(os(t.clone()));
+                continue;
+            };
+            if position > 1 {
+                out.push(os(t[..position].to_vec()));
+            }
+            out.push(os(vec![b'-', t[position]]));
+            if position + 1 < t.len() {
+                out.push(os(t[position + 1..].to_vec()));
+            } else {
+                if i >= tokens.len() {
+                    return Err(missing(o));
+                }
+                out.push(os(tokens[i].clone()));
+                i += 1;
+            }
         }
     }
     Ok(out)
@@ -1068,20 +1081,20 @@ pub(crate) fn parse(args: Vec<OsString>, version: &str) -> Result<Parsed, Exit> 
                 let Some(invalid) = invalid_argument(&e) else {
                     return Err(Exit::error(109, e.to_string()));
                 };
-                let equals = format!("{invalid}=");
-                let position = args.iter().skip(1).position(|a| {
-                    let a = a.to_string_lossy();
-                    a == invalid || a.starts_with(&equals)
-                });
-                let position = position.or_else(|| {
-                    args.iter()
-                        .skip(1)
-                        .position(|a| a.to_string_lossy().starts_with(&invalid))
+                // Locate the rejected occurrence with clap's grammar. Its spelling can also name
+                // a valid subcommand or an already consumed option value earlier in the line.
+                let position = (1..args.len()).find(|&end| {
+                    command(&subs)
+                        .try_get_matches_from(&args[..=end])
+                        .is_err_and(|prefix| {
+                            prefix.kind() == e.kind()
+                                && invalid_argument(&prefix).as_deref() == Some(&invalid)
+                        })
                 });
                 let Some(position) = position else {
                     return Err(Exit::error(109, e.to_string()));
                 };
-                let removed = args.remove(position + 1);
+                let removed = args.remove(position);
                 extras.push(removed.to_string_lossy().into_owned());
             }
             Err(e) if matches!(e.kind(), ErrorKind::InvalidValue) => {
@@ -1166,6 +1179,16 @@ pub(crate) fn parse(args: Vec<OsString>, version: &str) -> Result<Parsed, Exit> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_words(words: &[&str]) -> Result<Parsed, Exit> {
+        parse(
+            std::iter::once("mradm")
+                .chain(words.iter().copied())
+                .map(OsString::from)
+                .collect(),
+            "0",
+        )
+    }
 
     fn code(line: &str) -> i32 {
         let args: Vec<OsString> = std::iter::once("mradm")
@@ -1253,5 +1276,68 @@ mod tests {
         assert_eq!(bound(0.01), "0.01");
         assert_eq!(bound(100.0), "100");
         assert_eq!(bound32(-60.0), "-60");
+    }
+
+    #[test]
+    fn clustered_short_options_keep_their_attached_path_values() {
+        for args in [
+            ["render", "-vi=input.wav", "-o=out.wav"],
+            ["render", "-vvi=input.wav", "-vvo=out.wav"],
+        ] {
+            let parsed = parse_words(&args).unwrap_or_else(|e| panic!("{}", e.stderr));
+            let (_, values) = parsed.command();
+            assert_eq!(values.text("--input").unwrap(), b"=input.wav");
+            assert_eq!(values.text("--output").unwrap(), b"=out.wav");
+            assert!(values.flag("--verbose", false));
+        }
+        let parsed = parse_words(&["render", "-vvi", "input.wav", "-vvo", "out.wav"])
+            .unwrap_or_else(|e| panic!("{}", e.stderr));
+        let (_, values) = parsed.command();
+        assert_eq!(values.text("--input").unwrap(), b"input.wav");
+        assert_eq!(values.text("--output").unwrap(), b"out.wav");
+        assert_eq!(code("render -vvi"), 114);
+        assert_eq!(code("render -vhi"), 114);
+    }
+
+    #[test]
+    fn empty_long_equals_consumes_the_following_token() {
+        for value in ["input.wav", "--verbose", "", "--"] {
+            let parsed = parse_words(&["render", "--input=", value])
+                .unwrap_or_else(|e| panic!("{}", e.stderr));
+            let (_, values) = parsed.command();
+            assert_eq!(values.text("--input").unwrap(), value.as_bytes());
+        }
+        assert_eq!(code("layouts --format= wav"), 0);
+        assert_eq!(code("layouts --format="), 114);
+        assert_eq!(code("layouts --format= --help"), 105);
+        let parsed = parse_words(&["room-check", "room.json", "--sofa=", "hrir.sofa"])
+            .unwrap_or_else(|e| panic!("{}", e.stderr));
+        assert_eq!(parsed.command().1.text("--hrir").unwrap(), b"hrir.sofa");
+    }
+
+    #[test]
+    fn unexpected_arguments_do_not_remove_consumed_names_or_values() {
+        for (line, expected) in [
+            ("layouts --format wav layouts", 109),
+            ("render -i a render", 109),
+            ("render -i a --start bad render", 105),
+            ("render -i a --room-quality realtime render", 107),
+            ("render -i render -o render render", 109),
+            ("render -i a a -o a", 109),
+            ("render -i --unknown --unknown", 109),
+            ("inspect inspect inspect", 109),
+        ] {
+            assert_eq!(code(line), expected, "{line:?}");
+        }
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn native_binary_boolean_values_are_rejected_before_rendering() {
+        assert_eq!(code("render -i a --verbose=0b1"), 104);
+        assert_eq!(code("render -i a --apac-drc-none=0b1"), 104);
+        assert_eq!(code("--version=0b1"), 104);
+        assert_eq!(code("render -i a --interp-ms +0b11"), 105);
+        assert_eq!(code("render -i a --interp-ms 0b11"), 0);
     }
 }

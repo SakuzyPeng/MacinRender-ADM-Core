@@ -17,13 +17,15 @@
    （不引入过程宏依赖），不用 color、suggestions、wrap_help。依赖只多 `clap_builder`、`clap_lex`、`anstyle`，均为 MIT OR Apache-2.0。
 2. **选项表单独描述，clap 只负责分词与帮助。** 每个子命令的选项写成一张表（名字、别名、类型、取值集或范围、必选、依赖、互斥），
    由表生成 clap 命令；所有值以原始字节交给 clap，取值检查、转换与必选关系按 CLI11 2.5.0 的顺序在表上进行：
-   - 行尾缺值或 `--x=` 空值：114；
+   - 行尾缺值：114；`--x=` 后仍有参数时，照 CLI11 消费下一个参数；
    - `-h` / `--help`：帮助，0；
    - `--version`，然后按表序逐个选项：不在取值集或范围内 105、无法转换 104、单值选项给了两次 114；
    - 缺子命令 106，再按表序：缺必选项 106、缺所需选项 107、互斥 108；
    - 多余参数：109（clap 报出的未知参数逐个移出后重新解析，留到最后报告）。
    整数照 CLI11 的 `strtoull` 进制规则（`0x`、前导 `0` 八进制、`0o`、`0b`、数字分隔符、尾部空白），布尔照 `to_flag_value`，
-   小数照 `mradm-dsp` `decimal`（与原 CLI 同一解析器）。错误消息沿用 CLI11 的措辞。
+   小数照 `mradm-dsp` `decimal`（与原 CLI 同一解析器）。组合短选项中的 `-x=值` 同样保留前导 `=`。
+   macOS／Windows 的 base-0 转换不自动识别 `0b`，无符号整数保留 CLI11 的独立二进制前缀处理。
+   错误消息沿用 CLI11 的措辞，Windows stdout／stderr 保留 CRT 文本流的 LF → CRLF 转换。
 3. **CLI 只构造请求。** `mradm-cli` 保持 `#![forbid(unsafe_code)]`，需要引擎的操作经 `Service` trait：渲染、场景导入与检查、AXML、
    策略模板、export、房间包、APAC 编码 worker 与 SIGINT。`mradm-capi` 实现它，用的是 C ABI 导出同样的入口（渲染驱动、岛、
    消息缓冲），CLI 与 C ABI 因此不会各自漂移。目录、布局与格式表直接读 `mradm-engine` / `mradm-scene`。

@@ -2,16 +2,36 @@
 //! before (`[level] message` on stdout, the level coloured on a colour terminal).
 use std::io::{IsTerminal, Write};
 
+/// Match the CRT text streams the C++ CLI used, including their LF-to-CRLF conversion on Windows.
+fn write_text(out: &mut impl Write, bytes: &[u8]) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        for part in bytes.split_inclusive(|&b| b == b'\n') {
+            if let Some(line) = part.strip_suffix(b"\n") {
+                out.write_all(line)?;
+                out.write_all(b"\r\n")?;
+            } else {
+                out.write_all(part)?;
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        out.write_all(bytes)
+    }
+}
+
 /// Writes `bytes` to stdout and flushes, as each `fmt::print` / spdlog line reached the stream.
 pub(crate) fn stdout(bytes: &[u8]) {
     let mut out = std::io::stdout().lock();
-    let _ = out.write_all(bytes);
+    let _ = write_text(&mut out, bytes);
     let _ = out.flush();
 }
 
 pub(crate) fn stderr(bytes: &[u8]) {
     let mut err = std::io::stderr().lock();
-    let _ = err.write_all(bytes);
+    let _ = write_text(&mut err, bytes);
     let _ = err.flush();
 }
 
@@ -180,6 +200,18 @@ pub(crate) fn right(text: &str, n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_streams_preserve_the_native_cpp_line_endings() {
+        let mut out = Vec::new();
+        write_text(&mut out, b"first\n\nlast\r\npartial").unwrap();
+        if cfg!(windows) {
+            assert_eq!(out, b"first\r\n\r\nlast\r\r\npartial");
+        } else {
+            assert_eq!(out, b"first\n\nlast\r\npartial");
+        }
+        write_text(&mut out, b"").unwrap();
+    }
 
     #[test]
     fn padding_counts_wide_characters_twice() {
