@@ -4,6 +4,8 @@
 //! match nlohmann byte for byte; Grisu2 is not always shortest and may pick a different last digit
 //! than Ryu, so serde_json's output is not interchangeable.
 
+use std::fmt::{self, Write};
+
 #[derive(Clone, Copy)]
 struct DiyFp {
     f: u64,
@@ -255,67 +257,71 @@ fn grisu2(buf: &mut [u8], value: f64) -> (usize, i32) {
     (len, decimal_exponent)
 }
 
-fn append_exponent(out: &mut String, mut e: i32) {
+fn append_exponent(out: &mut impl Write, mut e: i32) -> fmt::Result {
     if e < 0 {
         e = -e;
-        out.push('-');
+        out.write_char('-')?;
     } else {
-        out.push('+');
+        out.write_char('+')?;
     }
     let k = e as u32;
     if k < 10 {
-        out.push('0');
+        out.write_char('0')?;
     }
-    out.push_str(&k.to_string());
+    write!(out, "{k}")
 }
 
 /// Fixed notation for 10^min_exp <= v < 10^max_exp, exponent notation otherwise.
 fn format_buffer(
-    out: &mut String,
+    out: &mut impl Write,
     digits: &[u8],
     decimal_exponent: i32,
     min_exp: i32,
     max_exp: i32,
-) {
+) -> fmt::Result {
     let k = digits.len() as i32;
     let n = k + decimal_exponent;
     let digits = std::str::from_utf8(digits).expect("ASCII digits");
     if k <= n && n <= max_exp {
-        out.push_str(digits);
-        out.extend(std::iter::repeat_n('0', (n - k) as usize));
-        out.push_str(".0");
-    } else if 0 < n && n <= max_exp {
-        out.push_str(&digits[..n as usize]);
-        out.push('.');
-        out.push_str(&digits[n as usize..]);
-    } else if min_exp < n && n <= 0 {
-        out.push_str("0.");
-        out.extend(std::iter::repeat_n('0', (-n) as usize));
-        out.push_str(digits);
-    } else {
-        out.push_str(&digits[..1]);
-        if k > 1 {
-            out.push('.');
-            out.push_str(&digits[1..]);
+        out.write_str(digits)?;
+        for _ in 0..n - k {
+            out.write_char('0')?;
         }
-        out.push('e');
-        append_exponent(out, n - 1);
+        out.write_str(".0")?;
+    } else if 0 < n && n <= max_exp {
+        out.write_str(&digits[..n as usize])?;
+        out.write_char('.')?;
+        out.write_str(&digits[n as usize..])?;
+    } else if min_exp < n && n <= 0 {
+        out.write_str("0.")?;
+        for _ in 0..-n {
+            out.write_char('0')?;
+        }
+        out.write_str(digits)?;
+    } else {
+        out.write_str(&digits[..1])?;
+        if k > 1 {
+            out.write_char('.')?;
+            out.write_str(&digits[1..])?;
+        }
+        out.write_char('e')?;
+        append_exponent(out, n - 1)?;
     }
+    Ok(())
 }
 
 /// Appends nlohmann's representation of a finite double (`detail::to_chars<double>`).
-pub(crate) fn write_f64(out: &mut String, mut value: f64) {
+pub(crate) fn write_f64(out: &mut impl Write, mut value: f64) -> fmt::Result {
     debug_assert!(value.is_finite());
     if value.is_sign_negative() {
         value = -value;
-        out.push('-');
+        out.write_char('-')?;
     }
     if value == 0.0 {
-        out.push_str("0.0");
-        return;
+        return out.write_str("0.0");
     }
     let mut buf = [0u8; 32];
     let (len, decimal_exponent) = grisu2(&mut buf, value);
     // kMinExp = -4, kMaxExp = std::numeric_limits<double>::digits10 = 15.
-    format_buffer(out, &buf[..len], decimal_exponent, -4, 15);
+    format_buffer(out, &buf[..len], decimal_exponent, -4, 15)
 }

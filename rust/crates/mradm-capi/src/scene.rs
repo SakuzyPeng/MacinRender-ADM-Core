@@ -46,6 +46,7 @@ use mradm_ffi::scene::{ScreenConfigView, mradm_scene_screen_parse};
 #[cfg(test)]
 use std::ffi::CStr;
 use std::ffi::{c_char, c_void};
+use std::fmt::{self, Write};
 use std::ptr;
 use std::sync::{Mutex, MutexGuard};
 
@@ -1780,8 +1781,21 @@ pub unsafe extern "C" fn adm_scene_stream_switch_room(
     })
 }
 
-/// `room_status_json`'s document; `None` where nlohmann threw (an unknown state, a message that is
-/// not UTF-8).
+/// A JSON sink whose growth can fail without aborting the host. The scalar writers allocate
+/// only through this sink; no owned JSON tree or temporary formatted strings are needed.
+#[derive(Default)]
+struct JsonText(String);
+
+impl Write for JsonText {
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        self.0.try_reserve(text.len()).map_err(|_| fmt::Error)?;
+        self.0.push_str(text);
+        Ok(())
+    }
+}
+
+/// `room_status_json`'s document; `None` where nlohmann threw (an unknown state, invalid UTF-8,
+/// or an allocation failure). Keep keys in the former map's byte order.
 fn status_json(status: &RenderRoomStatus) -> Option<String> {
     const STATES: [&str; 5] = [
         "applied",
@@ -1802,48 +1816,75 @@ fn status_json(status: &RenderRoomStatus) -> Option<String> {
         unsafe { std::slice::from_raw_parts(status.message.data, status.message.len) }
     };
     let message = std::str::from_utf8(message).ok()?;
-    let mut json = mradm_json::Map::new();
-    json.insert("schema".into(), "mradm.room-status".into());
-    json.insert("version".into(), 1i32.into());
-    json.insert("quality".into(), quality.into());
-    json.insert(
-        "reflection_update_frames".into(),
-        status.reflection_update_frames.into(),
-    );
-    json.insert("state".into(), state.into());
-    json.insert(
-        "requested_revision".into(),
-        status.requested_revision.into(),
-    );
-    json.insert("applied_revision".into(), status.applied_revision.into());
-    json.insert("transition_sample".into(), status.transition_sample.into());
-    json.insert("material_frames".into(), status.material_frames.into());
-    json.insert("tail_frames".into(), status.tail_frames.into());
-    json.insert("buffer_frames".into(), status.buffer_frames.into());
-    json.insert(
-        "material_filter_guard_frames".into(),
-        status.material_filter_guard_frames.into(),
-    );
-    json.insert(
-        "constrained_sources".into(),
-        status.constrained_sources.into(),
-    );
-    json.insert("message".into(), message.into());
-    Some(mradm_json::dump(&json.into(), None))
+    let mut json = JsonText::default();
+    write!(
+        json,
+        "{{\"applied_revision\":{},\"buffer_frames\":{},\"constrained_sources\":{},\
+         \"material_filter_guard_frames\":{},\"material_frames\":{},\"message\":",
+        status.applied_revision,
+        status.buffer_frames,
+        status.constrained_sources,
+        status.material_filter_guard_frames,
+        status.material_frames,
+    )
+    .ok()?;
+    mradm_json::write_string(&mut json, message).ok()?;
+    write!(
+        json,
+        ",\"quality\":\"{quality}\",\"reflection_update_frames\":{},\"requested_revision\":{},\
+         \"schema\":\"mradm.room-status\",\"state\":\"{state}\",\"tail_frames\":{},\
+         \"transition_sample\":{},\"version\":1}}",
+        status.reflection_update_frames,
+        status.requested_revision,
+        status.tail_frames,
+        status.transition_sample,
+    )
+    .ok()?;
+    Some(json.0)
 }
 
-fn source_json(id: u64, source: &RoomSourceInfo) -> String {
-    let triple = |v: [f64; 3]| mradm_json::Value::Array(v.iter().map(|&x| x.into()).collect());
-    let mut json = mradm_json::Map::new();
-    json.insert("schema".into(), "mradm.room-source".into());
-    json.insert("version".into(), 1i32.into());
-    json.insert("element_id".into(), id.into());
-    json.insert("position_metres".into(), triple(source.position));
-    json.insert("direction".into(), triple(source.direction));
-    json.insert("distance_metres".into(), source.distance.into());
-    json.insert("constrained".into(), (source.constrained != 0).into());
-    json.insert("present".into(), (source.present != 0).into());
-    mradm_json::dump(&json.into(), None)
+fn source_json(id: u64, source: &RoomSourceInfo) -> Option<String> {
+    let triple = |json: &mut JsonText, values: [f64; 3]| -> fmt::Result {
+        json.write_char('[')?;
+        for (index, value) in values.into_iter().enumerate() {
+            if index != 0 {
+                json.write_char(',')?;
+            }
+            mradm_json::write_f64(json, value)?;
+        }
+        json.write_char(']')
+    };
+    let mut json = JsonText::default();
+    write!(
+        json,
+        "{{\"constrained\":{},\"direction\":",
+        source.constrained != 0
+    )
+    .ok()?;
+    triple(&mut json, source.direction).ok()?;
+    json.write_str(",\"distance_metres\":").ok()?;
+    mradm_json::write_f64(&mut json, source.distance).ok()?;
+    write!(json, ",\"element_id\":{id},\"position_metres\":").ok()?;
+    triple(&mut json, source.position).ok()?;
+    write!(
+        json,
+        ",\"present\":{},\"schema\":\"mradm.room-source\",\"version\":1}}",
+        source.present != 0,
+    )
+    .ok()?;
+    Some(json.0)
+}
+
+/// Publish only a complete document, including when the final ABI-owned copy cannot allocate.
+unsafe fn room_json(out: *mut *mut c_char, build: impl FnOnce() -> Option<String>) -> i32 {
+    unsafe { *out = ptr::null_mut() };
+    let Some(json) = build() else {
+        return INTERNAL;
+    };
+    match unsafe { owned(json.as_bytes(), out) } {
+        Ok(()) => OK,
+        Err(_) => INTERNAL,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1864,13 +1905,7 @@ pub unsafe extern "C" fn adm_scene_stream_room_status_json(
         let Some(control) = control(s) else {
             return UNSUPPORTED;
         };
-        let Some(json) = status_json(&room_status(&control)) else {
-            return INTERNAL;
-        };
-        match unsafe { owned(json.as_bytes(), out_json) } {
-            Ok(()) => OK,
-            Err(_) => INTERNAL,
-        }
+        unsafe { room_json(out_json, || status_json(&room_status(&control))) }
     })
 }
 
@@ -1895,11 +1930,7 @@ pub unsafe extern "C" fn adm_scene_stream_room_source_json(
         };
         let mut source: RoomSourceInfo = unsafe { std::mem::zeroed() };
         unsafe { mradm_room_control_source(control.0, element_id, &mut source) };
-        let json = source_json(element_id, &source);
-        match unsafe { owned(json.as_bytes(), out_json) } {
-            Ok(()) => OK,
-            Err(_) => INTERNAL,
-        }
+        unsafe { room_json(out_json, || source_json(element_id, &source)) }
     })
 }
 
@@ -2514,11 +2545,79 @@ mod tests {
             present: 1,
         };
         assert_eq!(
-            source_json(4, &source),
+            source_json(4, &source).unwrap(),
             "{\"constrained\":false,\"direction\":[0.0,1.0,0.0],\"distance_metres\":1.25,\
              \"element_id\":4,\"position_metres\":[1.0,0.5,0.0],\"present\":true,\
              \"schema\":\"mradm.room-source\",\"version\":1}"
         );
+    }
+
+    #[test]
+    fn room_json_allocation_failures_return_internal_and_allow_retry() {
+        fn check(build: impl Fn() -> Option<String>) {
+            let expected = build().unwrap();
+            let check_output = |out: *mut c_char| unsafe {
+                assert_eq!(CStr::from_ptr(out).to_bytes(), expected.as_bytes());
+                string::adm_free_string(out);
+            };
+            for successful in 0..128 {
+                let mut out = ptr::dangling_mut();
+                let (code, failed) =
+                    crate::test_alloc::with_allocation_failure_after(successful, || {
+                        guard::code(|| unsafe { room_json(&mut out, &build) })
+                    });
+                if !failed {
+                    assert!(
+                        successful > 1,
+                        "must cover construction and the ABI-owned copy"
+                    );
+                    assert_eq!(code, OK);
+                    check_output(out);
+                    return;
+                }
+                assert_eq!(code, INTERNAL, "allocation {successful}");
+                assert!(
+                    out.is_null(),
+                    "allocation {successful} published a partial JSON"
+                );
+                assert_eq!(unsafe { room_json(&mut out, &build) }, OK);
+                check_output(out);
+            }
+            panic!("did not reach the end of JSON allocations");
+        }
+
+        let message = "\"\\\0\u{1}\u{8}\t\n\u{c}\r准备中/\u{2028}".repeat(256);
+        let mut status: RenderRoomStatus = unsafe { std::mem::zeroed() };
+        status.message = ffi_text(message.as_bytes());
+        status.requested_revision = u64::MAX;
+        check(|| status_json(&status));
+
+        // Scientific notation must not allocate a temporary exponent string. Both finite
+        // extremes and non-finite values follow the original nlohmann formatting rules.
+        let source = RoomSourceInfo {
+            id: 1,
+            position: [-0.0, f64::from_bits(1), f64::MAX],
+            direction: [f64::NAN, f64::INFINITY, f64::NEG_INFINITY],
+            distance: 1e-9,
+            constrained: 1,
+            present: 1,
+        };
+        check(|| source_json(u64::MAX, &source));
+    }
+
+    #[test]
+    fn room_json_rejects_invalid_status_without_publishing() {
+        let mut status: RenderRoomStatus = unsafe { std::mem::zeroed() };
+        for (state, message) in [(5, &b""[..]), (0, &b"\xff"[..])] {
+            status.state = state;
+            status.message = ffi_text(message);
+            let mut out = ptr::dangling_mut();
+            assert_eq!(
+                unsafe { room_json(&mut out, || status_json(&status)) },
+                INTERNAL
+            );
+            assert!(out.is_null());
+        }
     }
 
     #[test]

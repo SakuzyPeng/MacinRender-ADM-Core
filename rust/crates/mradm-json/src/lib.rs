@@ -591,19 +591,38 @@ pub fn parse(text: &[u8]) -> Result<Value, ParseError> {
     .parse()
 }
 
-fn escape_into(out: &mut String, s: &str) {
+fn escape_into(out: &mut impl fmt::Write, s: &str) -> fmt::Result {
     for c in s.chars() {
         match c {
-            '\u{8}' => out.push_str("\\b"),
-            '\t' => out.push_str("\\t"),
-            '\n' => out.push_str("\\n"),
-            '\u{c}' => out.push_str("\\f"),
-            '\r' => out.push_str("\\r"),
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            c if u32::from(c) <= 0x1F => out.push_str(&format!("\\u{:04x}", u32::from(c))),
-            c => out.push(c),
-        }
+            '\u{8}' => out.write_str("\\b"),
+            '\t' => out.write_str("\\t"),
+            '\n' => out.write_str("\\n"),
+            '\u{c}' => out.write_str("\\f"),
+            '\r' => out.write_str("\\r"),
+            '"' => out.write_str("\\\""),
+            '\\' => out.write_str("\\\\"),
+            c if u32::from(c) <= 0x1F => write!(out, "\\u{:04x}", u32::from(c)),
+            c => out.write_char(c),
+        }?;
+    }
+    Ok(())
+}
+
+/// Appends a quoted JSON string without allocating outside `out`. A sink error is returned
+/// immediately; the sink may contain a partial value and must be discarded on failure.
+pub fn write_string(out: &mut impl fmt::Write, value: &str) -> fmt::Result {
+    out.write_char('"')?;
+    escape_into(out, value)?;
+    out.write_char('"')
+}
+
+/// Appends nlohmann's double representation (`null` for non-finite values) without allocating
+/// outside `out`. Like [`write_string`], propagates sink errors, including allocation failures.
+pub fn write_f64(out: &mut impl fmt::Write, value: f64) -> fmt::Result {
+    if value.is_finite() {
+        dtoa::write_f64(out, value)
+    } else {
+        out.write_str("null")
     }
 }
 
@@ -614,13 +633,8 @@ fn write_scalar(out: &mut String, value: &Value) {
         Value::Bool(false) => out.push_str("false"),
         Value::Unsigned(u) => out.push_str(&u.to_string()),
         Value::Integer(i) => out.push_str(&i.to_string()),
-        Value::Float(f) if f.is_finite() => dtoa::write_f64(out, *f),
-        Value::Float(_) => out.push_str("null"),
-        Value::String(s) => {
-            out.push('"');
-            escape_into(out, s);
-            out.push('"');
-        }
+        Value::Float(f) => write_f64(out, *f).expect("String writes do not return errors"),
+        Value::String(s) => write_string(out, s).expect("String writes do not return errors"),
         Value::Array(_) | Value::Object(_) => unreachable!("containers are written by dump"),
     }
 }
@@ -653,9 +667,8 @@ fn write_value(out: &mut String, value: &Value, indent: Option<usize>, level: us
                     out.push(',');
                 }
                 newline(out, level + 1);
-                out.push('"');
-                escape_into(out, key);
-                out.push_str(if indent.is_some() { "\": " } else { "\":" });
+                write_string(out, key).expect("String writes do not return errors");
+                out.push_str(if indent.is_some() { ": " } else { ":" });
                 write_value(out, item, indent, level + 1);
             }
             newline(out, level);
