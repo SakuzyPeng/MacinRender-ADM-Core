@@ -754,6 +754,11 @@ E（Scene 流与 Scene 输出，38 个导出）完成：照原 C++ 薄壳的顺�
 36 个文件 0 差异、consumer 测试在两个库上通过、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。
 生产 C/C++ 19,835 → 18,018 行（见 [E 批记录](RUST_BOUNDARY_CAPI.md#e-批scene-流与-scene-输出)）。
 
+E 审查修正 `fbe5b554` 恢复房间状态／声源 JSON 在构造或 C ABI 字符串复制分配失败时的错误返回与重试，
+保留 nlohmann 兼容的键序、数值和转义。macOS arm64 Debug 与 Windows x64 canonical Release 的定向 CTest 各 10/10，
+Rust C ABI 单测分别 44/44、43/43，JSON 测试各 7/7；本轮未重录 CLI／PCM 全量对照
+（见 [E 审查记录](RUST_BOUNDARY_CAPI.md#e-审查修正与原生验证)）。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

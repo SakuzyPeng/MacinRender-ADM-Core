@@ -294,7 +294,29 @@ epoch、generation、提交帧、结束、拉取、状态、切换后端（含 `
 - ctest 86/86、`mradm-capi` 单测 42 个（新增 7 个：渲染器配置校验顺序、步长数组、`struct_size` 输出、房间 JSON、HpTF 左右比较、
   空句柄、消息分配失败）、FFI 头校验（`c_api.h` 164 个函数中 129 个由 Rust 实现、25 个结构体与 Rust 一致）、导出校验 164 个、
   clang-format、clang-tidy、本机 cppcheck（改动文件）、规模棘轮、许可证；`mradm-capi` 在 `x86_64-pc-windows-msvc` 上 clippy 通过。
-  macOS / Windows 的原生构建与对照待维护者。
+  两平台的后续原生构建与定向测试见下；本轮未重录 CLI／PCM 全量对照。
+
+### E 审查修正与原生验证
+
+复核提交 `20ceee14`，修正提交 `fbe5b554`（2026-11-13）：房间状态与声源 JSON 的普通堆分配在失败时会直接终止宿主，
+外围 `catch_unwind` 无法恢复。改为通过 `try_reserve` 扩展输出缓冲；字符串转义与 Grisu2 浮点格式仍由 `mradm-json`
+写出，其标量写入器现在接受可失败的 `fmt::Write`，不再分配临时转义／指数字符串。键序、数字和转义保持原输出。
+
+- 逐次注入 JSON 构造及最终 C ABI 字符串复制的分配失败，验证返回 `ADM_ERROR_INTERNAL`、输出保持 `NULL`，随后重试成功。
+  覆盖长 Unicode／控制字符消息、最大整数、科学计数法、有限浮点极值及非有限值；未知状态和非法 UTF-8 仍不发布输出。
+- 复用原有 Cargo 与 FetchContent 缓存，重新构建 C ABI 共享库、Scene／房间／HpTF 相关目标和迁移后的测试支持库。
+
+| 平台与配置 | `mradm-capi` 单测 | `mradm-json` 测试 | 定向 CTest |
+| --- | ---: | ---: | ---: |
+| macOS arm64 Debug，SOFA on | 44/44 | 7/7 | 10/10 |
+| Windows x64 canonical MSVC/Ninja Release，SOFA/IAMF off | 43/43 | 7/7 | 10/10 |
+
+JSON 测试包含 nlohmann/json 3.12.0 的约 400 万组浮点黄金对照、解析／转义回归与可失败输出器测试。
+定向 CTest 覆盖 C ABI fixture／C 头、Scene 流式渲染／Scene 输出、房间、HpTF 参数与双耳接口、峰值保护、回调分配和质量脚本。
+两平台的 `mradm-capi`／`mradm-json --all-targets` clippy 通过；macOS 的 Rust fmt、改动 C/C++ 的
+clang-format／clang-tidy／cppcheck、规模棘轮与许可证检查通过。
+FFI 头检查确认 164 个公开函数中 129 个由 Rust 实现，25 个公开结构体一致；两平台共享库均恰好导出 164 个 `adm_*`。
+验证范围为上述正确性与错误恢复检查，不作为性能或完整节目 PCM 对照结论。
 
 ## 下一步
 
