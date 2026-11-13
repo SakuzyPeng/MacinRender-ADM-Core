@@ -27,6 +27,7 @@
 #include "adm/room.h"
 
 #include "../adm_engine/scene_output_session.h"
+#include "../adm_render_room/room_internal.h"
 #include "capi_ffi.h"
 #include "osc_ffi.h"
 #include "scene_stream_engine.h"
@@ -354,11 +355,6 @@ struct adm_render_options_t {
     adm_cancel_token_t* cancel_token{nullptr};
 };
 
-struct adm_room_t {
-    std::shared_ptr<const mradm::RoomProfile> profile;
-    std::string manifest;
-};
-
 namespace {
 static_assert(ADM_ROOM_QUALITY_EXACT == static_cast<int>(mradm::RoomQuality::exact));
 static_assert(ADM_ROOM_QUALITY_REALTIME == static_cast<int>(mradm::RoomQuality::realtime));
@@ -375,7 +371,10 @@ mradm::Result<mradm::RoomConfig> to_room_config(const adm_room_config_t* config)
         return mradm::make_error(mradm::ErrorCode::invalid_argument, "无效的房间配置");
     }
     mradm::RoomConfig result;
-    result.profile = config->room->profile;
+    result.profile = mradm::room_internal::Access::adopt(mradm_capi_room_profile(config->room));
+    if (!result.profile) {
+        throw std::bad_alloc();
+    }
     result.metres_per_unit = config->metres_per_unit;
     if (config->hrir_manifest != nullptr) {
         result.hrir_manifest =
@@ -736,14 +735,6 @@ adm_head_tracking_pose_t head_tracking_pose(const mradm::OscHeadTrackingSnapshot
 
 } // namespace
 
-struct adm_scene_info_t {
-    uint32_t sample_rate{0};
-    uint32_t channels{0};
-    uint64_t frames{0};
-    uint32_t programme_count{0};
-    uint32_t object_count{0};
-};
-
 /* ── Version ──────────────────────────────────────────────────────────────── */
 
 adm_error_code_t adm_create_osc_head_tracking(const adm_osc_head_tracking_config_t* config,
@@ -876,36 +867,6 @@ const char* adm_osc_head_tracking_last_error_message(adm_osc_head_tracking_t* re
 }
 
 /* ── Progress stage (v1.7) ──────────────────────────────────────────────────── */
-
-adm_render_stage_t adm_render_stage_from_string(const char* stage) noexcept {
-    if (stage == nullptr) {
-        return ADM_STAGE_UNKNOWN;
-    }
-    // Must mirror stage_name() above (kept in sync via the progress-callback test).
-    const std::string_view s{stage};
-    if (s == "validating") {
-        return ADM_STAGE_VALIDATING;
-    }
-    if (s == "probing") {
-        return ADM_STAGE_PROBING;
-    }
-    if (s == "importing_scene") {
-        return ADM_STAGE_IMPORTING_SCENE;
-    }
-    if (s == "planning") {
-        return ADM_STAGE_PLANNING;
-    }
-    if (s == "rendering") {
-        return ADM_STAGE_RENDERING;
-    }
-    if (s == "post_processing") {
-        return ADM_STAGE_POST_PROCESSING;
-    }
-    if (s == "finished") {
-        return ADM_STAGE_FINISHED;
-    }
-    return ADM_STAGE_UNKNOWN;
-}
 
 /* ── Options builder ─────────────────────────────────────────────────────── */
 
@@ -2264,173 +2225,7 @@ int adm_render_result_log_entry(const adm_render_result_t* result,
 
 /* ── Probe ───────────────────────────────────────────────────────────────── */
 
-adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, adm_scene_info_t** out) noexcept {
-    if (out != nullptr) {
-        *out = nullptr;
-    }
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        clear_last_error(context);
-        auto probe_result = service().probe(input_path);
-        if (!probe_result) {
-            store_last_error(context, probe_result.error());
-            return map_error(probe_result.error().code);
-        }
-
-        if (out == nullptr) {
-            return ADM_ERROR_OK;
-        }
-
-        // cppcheck-suppress unreadVariable -- info is read via *out = info below
-        auto* info = new (std::nothrow) adm_scene_info_t{};
-        if (info == nullptr) {
-            set_last_error(context, "failed to allocate scene info handle");
-            return ADM_ERROR_INTERNAL;
-        }
-        info->sample_rate = probe_result->sample_rate;
-        info->channels = probe_result->num_channels;
-        info->frames = probe_result->num_frames;
-        info->programme_count = probe_result->programme_count;
-        info->object_count = probe_result->object_count;
-        *out = info;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        set_last_error(context, "unexpected exception while probing ADM file");
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-void adm_destroy_scene_info(adm_scene_info_t* info) noexcept {
-    delete info;
-}
-
-uint32_t adm_scene_info_sample_rate(const adm_scene_info_t* info) noexcept {
-    return info != nullptr ? info->sample_rate : 0U;
-}
-
-uint32_t adm_scene_info_channels(const adm_scene_info_t* info) noexcept {
-    return info != nullptr ? info->channels : 0U;
-}
-
-uint64_t adm_scene_info_frames(const adm_scene_info_t* info) noexcept {
-    return info != nullptr ? info->frames : 0ULL;
-}
-
-double adm_scene_info_duration_seconds(const adm_scene_info_t* info) noexcept {
-    if (info == nullptr || info->sample_rate == 0U) {
-        return 0.0;
-    }
-    return static_cast<double>(info->frames) / static_cast<double>(info->sample_rate);
-}
-
-uint32_t adm_scene_info_programme_count(const adm_scene_info_t* info) noexcept {
-    return info != nullptr ? info->programme_count : 0U;
-}
-
-uint32_t adm_scene_info_object_count(const adm_scene_info_t* info) noexcept {
-    return info != nullptr ? info->object_count : 0U;
-}
-
 /* ── Scene inspect (JSON) ────────────────────────────────────────────────── */
-
-adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input_path, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        clear_last_error(context);
-        auto json_result = service().inspect_json(input_path);
-        if (!json_result) {
-            store_last_error(context, json_result.error());
-            return map_error(json_result.error().code);
-        }
-        if (out_json == nullptr) {
-            return ADM_ERROR_OK; // validate-only: parsed successfully, allocate nothing
-        }
-        const std::string& json = *json_result;
-        auto* buffer = c_string(json);
-        if (buffer == nullptr) {
-            set_last_error(context, "failed to allocate ADM inspect JSON");
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        set_last_error(context, "unexpected exception while inspecting ADM file");
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_path, char** out_xml) noexcept {
-    if (out_xml != nullptr) {
-        *out_xml = nullptr;
-    }
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        clear_last_error(context);
-        auto xml_result = service().axml(input_path);
-        if (!xml_result) {
-            store_last_error(context, xml_result.error());
-            return map_error(xml_result.error().code);
-        }
-        if (out_xml == nullptr) {
-            return ADM_ERROR_OK; // validate-only: chunk readable, allocate nothing
-        }
-        const std::string& xml = *xml_result;
-        auto* buffer = c_string(xml);
-        if (buffer == nullptr) {
-            set_last_error(context, "failed to allocate ADM XML");
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_xml = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        set_last_error(context, "unexpected exception while reading ADM XML");
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
-adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* input_path, char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-
-    try {
-        clear_last_error(context);
-        auto tmpl_result = service().policy_template_json(input_path);
-        if (!tmpl_result) {
-            store_last_error(context, tmpl_result.error());
-            return map_error(tmpl_result.error().code);
-        }
-        if (out_json == nullptr) {
-            return ADM_ERROR_OK; // validate-only: scene parsed, allocate nothing
-        }
-        const std::string& tmpl = *tmpl_result;
-        auto* buffer = c_string(tmpl);
-        if (buffer == nullptr) {
-            set_last_error(context, "failed to allocate semantic-policy template JSON");
-            return ADM_ERROR_INTERNAL;
-        }
-        *out_json = buffer;
-        return ADM_ERROR_OK;
-    } catch (...) {
-        set_last_error(context, "unexpected exception while building semantic-policy template");
-        return ADM_ERROR_INTERNAL;
-    }
-}
 
 adm_error_code_t adm_export_file(adm_context_t* context,
                                  const char* input_path,
@@ -3267,69 +3062,6 @@ adm_error_code_t room_source_json(const std::shared_ptr<mradm::IRoomControl>& co
 }
 } // namespace
 
-adm_error_code_t adm_room_load(adm_context_t* context, const char* manifest, adm_room_t** out) noexcept {
-    if (out != nullptr) {
-        *out = nullptr;
-    }
-    if (context == nullptr || manifest == nullptr || out == nullptr) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        clear_last_error(context);
-        auto loaded = mradm::RoomProfile::load(
-            std::filesystem::path{std::u8string_view{reinterpret_cast<const char8_t*>(manifest)}});
-        if (!loaded) {
-            store_last_error(context, loaded.error());
-            return map_error(loaded.error().code);
-        }
-        auto value = std::make_unique<adm_room_t>();
-        value->profile = *loaded;
-        value->manifest = (*loaded)->manifest_json();
-        *out = value.release();
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-void adm_room_destroy(adm_room_t* room) noexcept {
-    delete room;
-}
-const char* adm_room_manifest_json(const adm_room_t* room) noexcept {
-    return room != nullptr ? room->manifest.c_str() : nullptr;
-}
-adm_error_code_t adm_room_inspect(adm_context_t* context, const adm_room_config_t* config, char** out_json) noexcept {
-    return adm_room_inspect_with_quality(context, config, ADM_ROOM_QUALITY_EXACT, out_json);
-}
-
-adm_error_code_t adm_room_inspect_with_quality(adm_context_t* context,
-                                               const adm_room_config_t* config,
-                                               adm_room_quality_t quality,
-                                               char** out_json) noexcept {
-    if (out_json != nullptr) {
-        *out_json = nullptr;
-    }
-    if (context == nullptr || out_json == nullptr || !valid_room_quality(quality)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        clear_last_error(context);
-        auto converted = to_room_config(config);
-        if (!converted) {
-            store_last_error(context, converted.error());
-            return map_error(converted.error().code);
-        }
-        converted->quality = static_cast<mradm::RoomQuality>(quality);
-        auto inspected = mradm::inspect_room(*converted);
-        if (!inspected) {
-            store_last_error(context, inspected.error());
-            return map_error(inspected.error().code);
-        }
-        owned_string(*inspected, out_json);
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
 adm_error_code_t adm_render_options_set_screen_config_json(adm_render_options_t* options, const char* json) noexcept {
     if (options == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;

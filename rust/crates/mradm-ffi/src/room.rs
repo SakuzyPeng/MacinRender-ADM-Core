@@ -60,6 +60,29 @@ pub struct RoomProfileHandle {
     package: Arc<Package>,
     json: CString,
 }
+impl RoomProfileHandle {
+    /// A second handle on the same loaded package (destroyed with `mradm_room_profile_destroy`);
+    /// `None` when out of memory.
+    pub fn share(&self) -> Option<*mut RoomProfileHandle> {
+        let manifest = self.json.as_bytes_with_nul();
+        let mut json = Vec::new();
+        json.try_reserve_exact(manifest.len()).ok()?;
+        json.extend_from_slice(manifest);
+        let json = CString::from_vec_with_nul(json).ok()?;
+        let layout = std::alloc::Layout::new::<RoomProfileHandle>();
+        let handle = unsafe { std::alloc::alloc(layout) }.cast::<RoomProfileHandle>();
+        if handle.is_null() {
+            return None;
+        }
+        unsafe {
+            handle.write(RoomProfileHandle {
+                package: Arc::clone(&self.package),
+                json,
+            })
+        };
+        Some(handle)
+    }
+}
 pub struct RoomPreparedHandle {
     prepared: Arc<PreparedSet>,
     json: CString,

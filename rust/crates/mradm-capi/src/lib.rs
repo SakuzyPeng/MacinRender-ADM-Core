@@ -7,10 +7,10 @@
 //! the C++ shells and islands still call.
 #![allow(clippy::missing_safety_doc)]
 
-// Linked for its `mradm_*` symbols, which nothing in this crate names.
-use mradm_ffi as _;
-
 mod context;
+mod error;
 mod guard;
+mod query;
+mod room;
 mod string;
 mod version;
