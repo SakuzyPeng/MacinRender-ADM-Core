@@ -23,10 +23,8 @@
 - **crate。** `rust/crates/mradm-capi`（staticlib）依赖 `mradm-ffi`，并转发其 `sofa` / `diagnostics` / `room-cuda` 特性；`mradm-ffi` 的
   crate-type 改为 `rlib`。`use mradm_ffi as _;` 保证 staticlib 带上 `mradm-ffi` 的全部 `mradm_*` 符号（edition 2018 起未被引用的
   依赖不会链接）。`build.rs` 与 `mradm-ffi` 相同，只把 CMake 选定的 libFLAC 交给 Cargo 自己链接的测试。
-- **CMake。** `MRRust.cmake` 经 Corrosion 导入 `mradm-capi`。库名定为 `mradm_rust`（不同于共享库的 `mradm_capi`：Corrosion
-  把 staticlib 复制进 CMake 构建目录，Windows 上它与 DLL 的导入库都叫 `mradm_capi.lib`，Ninja 报 “multiple rules generate”；
-  CI 43344955147 的 Windows debug 因此失败），目标随之为 `mradm_rust` / `mradm_rust-static` / `cargo-build_mradm_rust`，
-  其余规则（PIC、FLAC 链接顺序、macOS SDK 路径、环境变量）照搬。6.6 改为 cdylib 时库名改回 `mradm_capi`。安装的 Rust 归档仍改名为
+- **CMake。** `MRRust.cmake` 经 Corrosion 导入 `mradm-capi`，目标随之改名为 `mradm_capi` / `mradm_capi-static` /
+  `cargo-build_mradm_capi`，其余规则（PIC、FLAC 链接顺序、macOS SDK 路径、环境变量）照搬。安装的 Rust 归档仍改名为
   `libmradm_ffi.a` / `mradm_ffi.lib`，`MacinRenderADMCoreConfig` 不变，6.5 随 SDK 删除。
 - **入口表。** 共享库内没有代码调用 Rust 实现的导出，链接器不会从 staticlib 中取出它们。`check-capi-exports.py --write-references`
   从 `c_api.h` 生成 `generated/mradm_capi_entries.c`：一张引用全部 164 个声明函数的表，编进 `mradm_capi_bundle`。表名

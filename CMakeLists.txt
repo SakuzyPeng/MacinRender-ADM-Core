@@ -204,7 +204,7 @@ target_sources(
 target_include_directories(mr_adm_io PRIVATE src/adm_metadata src/adm_audio)
 target_link_libraries(mr_adm_io
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp mradm_rust
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp mradm_capi
 )
 mr_adm_core_apply_warnings(mr_adm_io)
 mr_adm_core_apply_static_analysis(mr_adm_io)
@@ -291,7 +291,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus mradm_rust
+    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus mradm_capi
 )
 target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
 if(MR_ADM_ENABLE_IAMF)
@@ -615,7 +615,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS)
         add_executable(mr_adm_libbw64_reference_tests tests/reference/libbw64/reference_test.cpp)
         target_include_directories(mr_adm_libbw64_reference_tests PRIVATE src/adm_audio)
-        target_link_libraries(mr_adm_libbw64_reference_tests PRIVATE MacinRender::ADMAudio mradm_rust libbw64)
+        target_link_libraries(mr_adm_libbw64_reference_tests PRIVATE MacinRender::ADMAudio mradm_capi libbw64)
         mr_adm_core_apply_warnings(mr_adm_libbw64_reference_tests)
         add_test(NAME mr_adm_libbw64_reference_tests COMMAND mr_adm_libbw64_reference_tests)
     endif()
@@ -623,7 +623,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS)
         add_executable(mr_adm_drwav_reference_tests tests/reference/dr_wav_reference_test.cpp)
         target_include_directories(mr_adm_drwav_reference_tests PRIVATE src/adm_audio)
-        target_link_libraries(mr_adm_drwav_reference_tests PRIVATE MacinRender::ADMAudio mradm_rust dr_wav::dr_wav)
+        target_link_libraries(mr_adm_drwav_reference_tests PRIVATE MacinRender::ADMAudio mradm_capi dr_wav::dr_wav)
         mr_adm_core_apply_warnings(mr_adm_drwav_reference_tests)
         add_test(NAME mr_adm_drwav_reference_tests COMMAND mr_adm_drwav_reference_tests)
     endif()
@@ -746,7 +746,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/adm_scene src/adm_metadata src/adm_audio src/adm_render_common)
     target_include_directories(mr_adm_scene_test_support PRIVATE src/adm_io)
     target_link_libraries(mr_adm_scene_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMIo
-        MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp mradm_rust)
+        MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp mradm_capi)
     mr_adm_core_apply_warnings(mr_adm_scene_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_scene_test_support)
 
@@ -1584,7 +1584,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_custom_target(mr_adm_rust_test_binaries ALL
         COMMAND ${_mr_rust_unit_test_command} --no-run
         COMMAND ${_mr_room_trace_test_command} --no-run
-        DEPENDS mradm_rust-static
+        DEPENDS mradm_capi-static
         USES_TERMINAL VERBATIM)
 
     add_test(NAME mr_adm_rust_unit_tests COMMAND ${_mr_rust_unit_test_command})
@@ -1798,7 +1798,7 @@ endif()
 configure_package_config_file(cmake/MacinRenderADMCoreConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/MacinRenderADMCoreConfig.cmake"
     INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore")
-install(FILES "$<TARGET_FILE:mradm_rust-static>" DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+install(FILES "$<TARGET_FILE:mradm_capi-static>" DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RENAME "${MR_ADM_INSTALLED_RUST_ARCHIVE}")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MacinRenderADMCoreConfig.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore")

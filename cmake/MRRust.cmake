@@ -34,30 +34,30 @@ function(mr_adm_import_rust)
 endfunction()
 mr_adm_import_rust()
 # The FLAC validation boundary reuses the provider selected for the encoder. The dependency sits on
-# the imported staticlib itself, so single-pass linkers (GNU ld) see libFLAC after libmradm_rust.a;
+# the imported staticlib itself, so single-pass linkers (GNU ld) see libFLAC after libmradm_capi.a;
 # on the INTERFACE wrapper CMake may order an earlier FLAC::FLAC (from ADMAudio) first.
-target_link_libraries(mradm_rust-static INTERFACE FLAC::FLAC)
+target_link_libraries(mradm_capi-static INTERFACE FLAC::FLAC)
 # Cargo links its own examples and tests without CMake's target link interface.
 # Pass the selected provider's linker file (the import library for a Windows DLL)
 # to the build scripts of mradm-ffi and mradm-capi. A build-script link argument preserves paths with spaces
 # and leaves dependency crates' Rust flags and the shared Cargo cache unchanged.
 set(MR_ADM_RUST_NATIVE_ENV "MR_ADM_FLAC_LINK_FILE=$<TARGET_LINKER_FILE:FLAC::FLAC>")
-add_dependencies(cargo-build_mradm_rust FLAC::FLAC)
+add_dependencies(cargo-build_mradm_capi FLAC::FLAC)
 if(MR_ADM_ENABLE_ROOM_CUDA)
-    add_dependencies(mradm_rust-static mr_adm_room_cuda)
+    add_dependencies(mradm_capi-static mr_adm_room_cuda)
 endif()
 include(MRRustLink)
-mr_adm_rust_use_platform_sdk(mradm_rust-static)
-corrosion_set_env_vars(mradm_rust
+mr_adm_rust_use_platform_sdk(mradm_capi-static)
+corrosion_set_env_vars(mradm_capi
     "CARGO_TARGET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/build/rust"
     "CARGO_INCREMENTAL=0"
     "${MR_ADM_RUST_NATIVE_ENV}"
 )
-corrosion_add_target_rustflags(mradm_rust "-Crelocation-model=pic")
+corrosion_add_target_rustflags(mradm_capi "-Crelocation-model=pic")
 
 add_library(mr_adm_dsp INTERFACE)
 add_library(MacinRender::ADMDsp ALIAS mr_adm_dsp)
-target_link_libraries(mr_adm_dsp INTERFACE mradm_rust)
+target_link_libraries(mr_adm_dsp INTERFACE mradm_capi)
 if(WIN32)
     # Dedicated room DSP workers register with the system Audio scheduling task.
     target_link_libraries(mr_adm_dsp INTERFACE avrt)

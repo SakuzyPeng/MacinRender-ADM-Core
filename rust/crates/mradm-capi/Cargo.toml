@@ -7,10 +7,7 @@ license.workspace = true
 
 # The one Rust library CMake links: the public C ABI exports implemented in Rust, together with
 # every private `mradm_*` entry of mradm-ffi that the C++ shells and islands call.
-# The library name differs from the shared library's (`mradm_capi`): on Windows the staticlib and the
-# DLL's import library would both be `mradm_capi.lib` in the CMake build directory.
 [lib]
-name = "mradm_rust"
 crate-type = ["staticlib"]
 
 [dependencies]
