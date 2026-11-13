@@ -31,8 +31,8 @@
 #include "adm/room.h"
 
 #include "live_renderer.h"
-#include "room_ffi.h"
 #include "room_probe_metrics.h"
+#include "room_test_ffi.h"
 #include "room_worker_wait.h"
 #include "scene_output_session.h"
 #include "scene_stream_engine.h"

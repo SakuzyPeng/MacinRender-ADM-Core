@@ -40,30 +40,6 @@ typedef struct MradmTbObjectStatus {
     int32_t quantized[4];
     uint32_t flags;
 } MradmTbObjectStatus;
-int mradm_dsp_tb_d_plan_create(size_t inputs,
-                               uint32_t layout,
-                               uint64_t total,
-                               const MradmTbRow* rows,
-                               size_t n,
-                               const MradmTbEvent* events,
-                               size_t en,
-                               const float* bed,
-                               size_t bn,
-                               void** out,
-                               char* message,
-                               size_t capacity);
-void mradm_dsp_tb_d_plan_destroy(void* p);
-int mradm_dsp_tb_d_create(const void* plan, void** out, char* message, size_t capacity);
-void mradm_dsp_tb_d_destroy(void* p);
-int mradm_dsp_tb_d_process(void* state,
-                           const float* src,
-                           size_t src_len,
-                           float* out,
-                           size_t out_len,
-                           uint64_t start,
-                           size_t frames,
-                           char* message,
-                           size_t capacity);
 int mradm_dsp_tb_object_status(const void* p, MradmTbObjectStatus* out, char* message, size_t capacity);
 int mradm_dsp_tb_gains(
     uint32_t layout, const MradmTbQuery* queries, size_t n, float* out, size_t len, char* message, size_t capacity);
@@ -124,7 +100,6 @@ int mradm_dsp_tb_point(void* p,
 int mradm_dsp_tb_snapshot_bytes(const void* p, size_t* out, char* message, size_t capacity);
 int mradm_dsp_tb_snapshot_create(const void* p, void** out, char* message, size_t capacity);
 void mradm_dsp_tb_snapshot_destroy(void* p);
-int mradm_dsp_tb_snapshot_capture(const void* p, void* out, char* message, size_t capacity);
 int mradm_dsp_tb_snapshot_restore(void* p, const void* state, char* message, size_t capacity);
 int mradm_dsp_tb_object_create(
     const MradmTbEvent* events, size_t len, uint32_t layout, uint32_t rate, void** out, char* message, size_t capacity);

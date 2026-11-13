@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "config_ffi.h"
+#include "config_test_ffi.h"
 
 namespace mradm {
 namespace {

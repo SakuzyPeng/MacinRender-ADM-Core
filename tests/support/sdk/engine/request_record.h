@@ -11,9 +11,9 @@
 #include "adm/render.h"
 
 #include "../room/room_internal.h"
-#include "engine_ffi.h"
 #include "engine_records.h"
 #include "engine_result.h"
+#include "engine_test_ffi.h"
 
 // The engine request record (MradmEngineRenderRequest) of a RenderRequest, shared by the offline
 // render service and the monitor's stream opening.

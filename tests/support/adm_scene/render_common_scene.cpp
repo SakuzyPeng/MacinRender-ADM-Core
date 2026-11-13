@@ -11,6 +11,7 @@
 
 #include "engine_records.h"
 #include "scene_math.h"
+#include "scene_math_test_ffi.h"
 
 namespace mradm::render_common {
 

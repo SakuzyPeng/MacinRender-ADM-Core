@@ -70,6 +70,9 @@ unusedStructMember:*/tests/unit/hoa_ffi.h
 # Private ADM records are populated by Rust and copied across implementation units.
 unusedStructMember:*/src/adm_metadata/adm_ffi.h
 
+# The test-only part of the private FFI records (6.5 B) is read by Rust across the boundary.
+unusedStructMember:*/tests/support/ffi/*
+
 # The test-side AdmScene, its plan and the C++ routing wrappers over it (out of production, PCM
 # consistency 5.6 C) are consumed across the tests and the frozen references.
 unusedStructMember:*/tests/support/adm_scene/adm/scene.h

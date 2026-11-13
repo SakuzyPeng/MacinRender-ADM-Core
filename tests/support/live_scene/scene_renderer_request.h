@@ -5,7 +5,7 @@
 
 #include "ffi_error.h"
 #include "live_scene_renderer.h"
-#include "routing_ffi.h"
+#include "routing_test_ffi.h"
 
 namespace mradm::live_scene {
 

@@ -15,11 +15,12 @@
 
 #include "../reference/scene_numeric/spatial.h"
 #include "../reference/scene_numeric/transitions.h"
-#include "dsp_ffi.h"
+#include "dsp_test_ffi.h"
 #include "head_rotation.h"
 #include "render_common.h"
 #include "render_common_scene.h"
 #include "scene_math.h"
+#include "scene_math_test_ffi.h"
 #include "scene_transition.h"
 
 namespace {

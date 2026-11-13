@@ -26,7 +26,6 @@ mod hoa;
 #[doc(hidden)] // Called by mradm-capi.
 pub mod hptf;
 mod hrtf;
-mod live_binaural;
 mod live_vbap;
 mod meter;
 mod monitor;

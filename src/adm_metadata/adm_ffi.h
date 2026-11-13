@@ -1,5 +1,5 @@
-// Private ADM metadata boundary: the record view of a render scene (scene_ffi.h) and generated
-// metadata buffers, which are borrowed until mradm_adm_buffer_destroy.
+// Private ADM metadata boundary: the record view of a render scene (scene_ffi.h). The metadata
+// buffers and entries only tests call are in tests/support/ffi/adm_test_ffi.h.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -195,18 +195,6 @@ typedef struct MradmAdmHoaBlock {
     uint64_t end;
 } MradmAdmHoaBlock;
 
-typedef struct MradmAdmSpeaker {
-    uint32_t label;
-    float azimuth;
-    float elevation;
-    uint32_t lfe;
-    uint32_t ranges;
-    float azimuth_min;
-    float azimuth_max;
-    float elevation_min;
-    float elevation_max;
-} MradmAdmSpeaker;
-
 typedef struct MradmAdmText {
     const uint8_t* data;
     size_t len;
@@ -237,28 +225,6 @@ typedef struct MradmAdmView {
     const uint32_t* warnings;
     size_t warnings_len;
 } MradmAdmView;
-typedef struct MradmAdmBuffer MradmAdmBuffer;
-typedef struct MradmAdmOutputChna {
-    uint16_t track;
-    MradmAdmText uid;
-    MradmAdmText format;
-    MradmAdmText pack;
-} MradmAdmOutputChna;
-int32_t mradm_adm_generate(uint32_t kind,
-                           MradmAdmText name,
-                           const MradmAdmSpeaker* speakers,
-                           const MradmAdmText* labels,
-                           size_t count,
-                           MradmAdmBuffer** output,
-                           uint8_t* error,
-                           size_t capacity);
-int32_t mradm_adm_buffer_view(const MradmAdmBuffer* handle,
-                              MradmAdmText* xml,
-                              const MradmAdmOutputChna** chna,
-                              size_t* length,
-                              uint8_t* error,
-                              size_t capacity);
-void mradm_adm_buffer_destroy(MradmAdmBuffer* handle);
 #ifdef __cplusplus
 }
 #endif

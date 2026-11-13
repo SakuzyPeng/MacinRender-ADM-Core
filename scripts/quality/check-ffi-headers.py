@@ -42,7 +42,6 @@ FFI_HEADERS = [
     "tests/support/sdk/dsp/decimal_ffi.h",
     "tests/support/sdk/dsp/timeline_ffi.h",
     "tests/unit/hoa_ffi.h",
-    "tests/support/binaural/live_binaural_ffi.h",
     "src/adm_dsp/room_ffi.h",
     "tests/unit/live_vbap_ffi.h",
     "tests/support/dsp/monitor_ffi.h",
@@ -62,6 +61,14 @@ FFI_HEADERS = [
     "tests/support/render_test_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
+    "tests/support/ffi/config_test_ffi.h",
+    "tests/support/ffi/dsp_test_ffi.h",
+    "tests/support/ffi/room_test_ffi.h",
+    "tests/support/ffi/scene_math_test_ffi.h",
+    "tests/support/ffi/adm_test_ffi.h",
+    "tests/support/ffi/scene_test_ffi.h",
+    "tests/support/ffi/routing_test_ffi.h",
+    "tests/support/ffi/engine_test_ffi.h",
 ]
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.

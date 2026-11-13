@@ -10,7 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "dsp_ffi.h"
+#include "dsp_test_ffi.h"
 
 namespace {
 std::uint64_t bit_hash(const std::vector<float>& samples) {

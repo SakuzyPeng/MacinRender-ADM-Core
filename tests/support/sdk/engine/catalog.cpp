@@ -8,7 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "engine_ffi.h"
+#include "engine_test_ffi.h"
 #include "platform_island.h"
 
 namespace mradm::engine {

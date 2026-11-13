@@ -6,7 +6,7 @@
 
 #include "adm/render.h"
 
-#include "engine_ffi.h"
+#include "engine_test_ffi.h"
 
 namespace mradm::engine {
 

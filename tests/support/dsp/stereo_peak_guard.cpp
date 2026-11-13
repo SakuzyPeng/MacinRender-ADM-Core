@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "dsp_ffi.h"
+#include "dsp_test_ffi.h"
 
 namespace mradm::realtime {
 namespace {

@@ -9,7 +9,7 @@
 #include "adm/errors.h"
 #include "adm/logging.h"
 
-#include "engine_ffi.h"
+#include "engine_test_ffi.h"
 
 namespace mradm::render_common {
 
