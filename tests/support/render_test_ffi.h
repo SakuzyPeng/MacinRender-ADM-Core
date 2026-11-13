@@ -4,7 +4,7 @@
 // renderer outside the stream engine (tests/support/live_scene) and the binaural HRTF view
 // (tests/support/binaural). Conventions as in routing_ffi.h.
 #pragma once
-#include "routing_test_ffi.h"
+#include "ffi/routing_test_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif

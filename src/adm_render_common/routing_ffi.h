@@ -5,6 +5,7 @@
 // adm::ErrorCode.
 #pragma once
 #include "../adm_metadata/adm_ffi.h"
+#include "../adm_metadata/scene_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
