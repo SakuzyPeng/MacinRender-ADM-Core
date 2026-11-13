@@ -39,8 +39,6 @@ CBINDGEN_VERSION = "0.29.2"
 FFI_HEADERS = [
     "tests/unit/ear_ffi.h",
     "src/adm_dsp/dsp_ffi.h",
-    "tests/support/sdk/dsp/decimal_ffi.h",
-    "tests/support/sdk/dsp/timeline_ffi.h",
     "tests/unit/hoa_ffi.h",
     "src/adm_dsp/room_ffi.h",
     "tests/unit/live_vbap_ffi.h",
@@ -48,7 +46,6 @@ FFI_HEADERS = [
     "src/adm_dsp/scene_math_ffi.h",
     "tests/support/dsp/scene_transition_ffi.h",
     "tests/support/post_gain/post_gain_ffi.h",
-    "tests/support/sdk/dsp/stream_dsp_ffi.h",
     "tests/support/sdk/dsp/semantic_policy_ffi.h",
     "tests/support/triple_balance/triple_balance_ffi.h",
     "src/adm_render_common/layout_ffi.h",
