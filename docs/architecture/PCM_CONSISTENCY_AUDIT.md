@@ -745,7 +745,19 @@ JSON 与 preview 会话改由 Rust 实现，照 `RenderService` 驱动同一个 
 平台岛与 Apple 岛；C ABI 不再经 C++ `RenderService`（CLI 仍用），C ABI 中的服务单例与 C++ 选项 / 取消 / 结果结构删除。进度回调抛出的 C++ 异常经 C++ 跳板照旧转为
 `ADM_ERROR_INTERNAL`；仍在 C++ 的 Monitor 创建与切换经 `mradm_capi_options` 读取 Rust 选项。本机 Linux 新旧对照：
 C ABI 采集 3,283 行与 36 个文件 0 差异、consumer 测试在两个库上通过、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。
-生产 C/C++ 20,841 → 19,855 行。
+生产 C/C++ 20,841 → 19,835 行（含 Quality CI 的 cppcheck 修正）。
+
+E（Scene 流与 Scene 输出，38 个导出）完成：照原 C++ 薄壳的顺序调用同样的 `mradm-engine` Scene 入口、设备岛与 HpTF 设置，
+消息缓冲不变；房间状态与声源 JSON 由 `mradm-json` 写出。`SceneStreamEngine`、`SceneOutputSession` 与 `SceneRendererRequest`
+只剩测试使用，移到 `tests/support`。单遍链接器上，只用 C ABI 的静态链接程序经 `--undefined=` 取出 Rust 按名调用的 C++ 符号。
+已知差别：输入队列字节预算取 64 位发布配置的 C++ 记录大小，不再随 MSVC 迭代器调试变化。本机 Linux 新旧对照：C ABI 采集 3,283 行与
+36 个文件 0 差异、consumer 测试在两个库上通过、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。
+生产 C/C++ 19,835 → 18,018 行（见 [E 批记录](RUST_BOUNDARY_CAPI.md#e-批scene-流与-scene-输出)）。
+
+E 审查修正 `fbe5b554` 恢复房间状态／声源 JSON 在构造或 C ABI 字符串复制分配失败时的错误返回与重试，
+保留 nlohmann 兼容的键序、数值和转义。macOS arm64 Debug 与 Windows x64 canonical Release 的定向 CTest 各 10/10，
+Rust C ABI 单测分别 44/44、43/43，JSON 测试各 7/7；本轮未重录 CLI／PCM 全量对照
+（见 [E 审查记录](RUST_BOUNDARY_CAPI.md#e-审查修正与原生验证)）。
 
 ## 每个迁移切片的验证
 

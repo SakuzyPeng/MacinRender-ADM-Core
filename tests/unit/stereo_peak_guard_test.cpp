@@ -16,8 +16,8 @@
 #include <thread>
 #include <vector>
 
-#include "../../src/adm_engine/scene_output_session.h"
 #include "hptf_cascade.h"
+#include "scene_output_session.h"
 #include "stereo_peak_guard.h"
 
 namespace {

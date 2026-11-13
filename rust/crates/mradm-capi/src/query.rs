@@ -415,9 +415,9 @@ pub unsafe extern "C" fn adm_inspect_file_xml(
 
 /// The C++ `std::bad_alloc::what()` the AXML reader appended to its message.
 #[cfg(windows)]
-const BAD_ALLOC: &[u8] = b"bad allocation";
+pub(crate) const BAD_ALLOC: &[u8] = b"bad allocation";
 #[cfg(not(windows))]
-const BAD_ALLOC: &[u8] = b"std::bad_alloc";
+pub(crate) const BAD_ALLOC: &[u8] = b"std::bad_alloc";
 
 /// `io::get_axml`: the axml payload, rejecting a CHNA track index 0 and a missing or empty axml.
 pub(crate) fn axml(path: &[u8]) -> Result<Vec<u8>, Failure> {

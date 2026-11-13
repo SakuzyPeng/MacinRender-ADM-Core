@@ -19,8 +19,8 @@
 #include "adm/c_api.h"
 #include "adm/hptf.h"
 
-#include "../../src/adm_engine/scene_output_session.h"
 #include "hptf_eq.h"
+#include "scene_output_session.h"
 
 namespace {
 constexpr const char* k_text = "Preamp: -6 dB\n"
@@ -84,10 +84,10 @@ class ApiScene {
         adm_scene_output_config_t device{};
         device.struct_size = sizeof(device);
         device.kind = ADM_SCENE_OUTPUT_NULL;
-        adm_scene_output_t* output = nullptr;
-        require(adm_create_scene_output(context_.get(), stream_.get(), &device, &output) == ADM_ERROR_OK,
+        adm_scene_output_t* created = nullptr;
+        require(adm_create_scene_output(context_.get(), stream_.get(), &device, &created) == ADM_ERROR_OK,
                 "create headless stereo output");
-        output_.reset(output);
+        output_.reset(created);
     }
 
     [[nodiscard]] adm_scene_output_t* output() const { return output_.get(); }

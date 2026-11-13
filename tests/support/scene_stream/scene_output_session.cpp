@@ -4,9 +4,9 @@
 #include <string>
 #include <utility>
 
-#include "../adm_render_common/ffi_error.h"
-#include "../adm_render_common/routing_ffi.h"
 #include "device_island.h"
+#include "ffi_error.h"
+#include "routing_ffi.h"
 
 namespace mradm::realtime {
 namespace {

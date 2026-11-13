@@ -10,8 +10,8 @@
 #include "adm/monitor.h" // HptfInfo（两条实时路径共用）
 #include "adm/options.h"
 
-#include "../adm_render_common/hptf_eq.h"
 #include "audio_output_device.h"
+#include "hptf_eq.h"
 #include "scene_stream_engine.h"
 
 namespace mradm::realtime {
