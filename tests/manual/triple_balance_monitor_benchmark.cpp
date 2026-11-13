@@ -18,12 +18,12 @@
 #include "adm/render_triple_balance.h"
 
 #include "../adm_audio/audio_io_internal.h"
-#include "../adm_io/scene_import_internal.h"
 #include "adm_fixture.h"
 #include "adm_scene.h"
 #include "audio_output_device.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
+#include "scene_import_internal.h"
 
 namespace {
 using Clock = std::chrono::steady_clock;

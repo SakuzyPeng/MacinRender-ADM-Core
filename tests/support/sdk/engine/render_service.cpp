@@ -20,11 +20,11 @@
 #ifdef __APPLE__
 #include "adm/render_apple.h"
 
-#include "../adm_apple/apple_island.h"
+#include "adm_apple/apple_island.h"
 #endif
-#include "../adm_audio/island_ffi.h"
-#include "../adm_io/scene_import_internal.h"
-#include "../adm_render_room/room_internal.h"
+#include "../io/scene_import_internal.h"
+#include "../room/room_internal.h"
+#include "adm_audio/island_ffi.h"
 #include "capability_records.h"
 #include "catalog.h"
 #include "engine_records.h"

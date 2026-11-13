@@ -774,6 +774,13 @@ OSC 差异探测 59 项 0 差异、CLI 102 条 0 差异、完整采集相同；m
 （只有 3 条 help 排版不同）、约 150 条解析探针的退出码、文件与输出全部相同、C ABI 采集 3,283 行与 36 个文件 0 差异、完整采集相同；
 macOS APAC smoke 与 Windows 待维护者。生产 C/C++ 16,705 → 15,314 行，`island-interfaces` 988 → 1,026 行（见 [6.4 记录](RUST_BOUNDARY_CLI.md)）。
 
+**6.5 状态**：分 A（测试专用的外壳与 SDK 移出生产、SDK 打包删除）、B（失去调用者的私有 FFI）、C（岛的自有头，tl-expected / fmt /
+nlohmann_json 移出生产）、D（Apple 岛内部去 `IRenderer` / `IRenderStream`）、E（三平台验收）五批。A 已完成：`RenderService` /
+`PreviewSession`、`MonitorSession`、`OscHeadTrackingReceiver`、场景导入、房间包、屏幕与 DS 矩阵加载、能力记录、HpTF 辅助、版本串与
+`include/adm` 中只供它们使用的 5 个头移到 `tests/support/sdk`（测试目标名不变），`renderer_factory` 删除，生产的岛集中到 `mr_adm_islands`，
+只安装 `c_api.h`、共享库与 `mradm`，`MacinRenderADMCoreConfig` 与其测试删除；生产 C/C++ 15,314 → 11,380 行
+（见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

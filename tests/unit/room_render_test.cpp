@@ -17,9 +17,9 @@
 #include "adm/c_api.h"
 #include "adm/render_room.h"
 
-#include "../adm_io/scene_import_internal.h"
 #include "adm_scene.h"
 #include "live_renderer.h"
+#include "scene_import_internal.h"
 #include "speaker_pcm.h"
 #include "wav_fixture.h"
 

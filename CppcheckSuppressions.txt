@@ -5,7 +5,7 @@
 
 missingIncludeSystem
 functionStatic:*/src/adm_core/render_service.cpp
-functionStatic:*/src/adm_engine/render_service.cpp
+functionStatic:*/tests/support/sdk/engine/render_service.cpp
 *:*/_deps/*
 # Public API structs are consumed across translation units; cppcheck sees the
 # header alone and reports false positives for metadata fields.
@@ -27,7 +27,7 @@ unusedStructMember:*/src/adm_render_common/speaker_layouts.h
 unusedStructMember:*/src/adm_render_common/engine_ffi.h
 unusedStructMember:*/src/adm_metadata/scene_ffi.h
 # Apple capability storage is consumed by catalog.cpp, outside the standalone header scan.
-unusedStructMember:*/src/adm_engine/catalog.h
+unusedStructMember:*/tests/support/sdk/engine/catalog.h
 # Room geometry and per-object DSP state are consumed by their implementation
 # units; standalone header checks cannot see those uses.
 unusedStructMember:*/tests/support/triple_balance/layout_222.h
@@ -35,7 +35,7 @@ unusedStructMember:*/tests/support/triple_balance_size_filter.h
 unusedStructMember:*/tests/support/triple_balance/size_panner.h
 unusedStructMember:*/tests/support/triple_balance/size_processor.h
 # HpTF coefficient/status aggregates and test cascade state cross translation units.
-unusedStructMember:*/src/adm_render_common/hptf_eq.h
+unusedStructMember:*/tests/support/sdk/render_common/hptf_eq.h
 unusedStructMember:*/tests/support/dsp/hptf_cascade.h
 unusedStructMember:*src/adm_audio/audio_io_internal.h
 # ResolvedRenderer is built in renderer_factory.cpp and read in render_service.cpp.
@@ -78,7 +78,7 @@ unusedStructMember:*/tests/support/adm_scene/metadata.h
 unusedStructMember:*/tests/support/adm_scene/render_common_scene.h
 
 # SemanticReportOptions fields are read by scene_importer.cpp, outside the standalone header scan.
-unusedStructMember:*/src/adm_io/scene_import_internal.h
+unusedStructMember:*/tests/support/sdk/io/scene_import_internal.h
 
 # Frozen migration references retain their original loops and registered hashes.
 # Only stylistic STL-rewrite suggestions are excluded; safety checks stay enabled.

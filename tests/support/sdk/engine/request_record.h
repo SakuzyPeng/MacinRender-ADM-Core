@@ -10,7 +10,7 @@
 #include "adm/options.h"
 #include "adm/render.h"
 
-#include "../adm_render_room/room_internal.h"
+#include "../room/room_internal.h"
 #include "engine_ffi.h"
 #include "engine_records.h"
 #include "engine_result.h"
