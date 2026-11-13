@@ -21,6 +21,7 @@
 
 #include "../../src/adm_apple/apple_island.h"
 #include "../support/adm_fixture.h"
+#include "../support/ffi/scene_test_ffi.h"
 #include "../support/wav_fixture.h"
 
 namespace {

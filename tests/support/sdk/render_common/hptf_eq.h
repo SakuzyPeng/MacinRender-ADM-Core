@@ -25,6 +25,8 @@
 #include "adm/monitor.h"
 #include "adm/options.h" // HptfPreampMode(公共选项枚举,GUI / C ABI 共用)
 
+#include "../../ffi/dsp_test_ffi.h"
+
 // The private Rust records (dsp_ffi.h), for callers that hand coefficients to another Rust owner.
 struct MradmDspHptfCoefficients;
 struct MradmDspHptfSnapshot;
