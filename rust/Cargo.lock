@@ -273,6 +273,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mradm-capi"
+version = "0.1.0"
+dependencies = [
+ "mradm-ffi",
+]
+
+[[package]]
 name = "mradm-dsp"
 version = "0.1.0"
 dependencies = [

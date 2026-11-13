@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 104,
-      "lines": 21124
+      "files": 103,
+      "lines": 21121
     },
     "islands": {
       "files": 6,
@@ -26,8 +26,8 @@
       "lines": 12026
     },
     "rust": {
-      "files": 340,
-      "lines": 128685
+      "files": 343,
+      "lines": 128788
     },
     "rust-vendor": {
       "files": 175,
@@ -37,6 +37,7 @@
   "modules": {
     "include/adm": 3983,
     "rust/crates/mradm-adm": 2676,
+    "rust/crates/mradm-capi": 103,
     "rust/crates/mradm-dsp": 40626,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 20787,
@@ -61,7 +62,7 @@
     "src/adm_audio/island.cpp": 117,
     "src/adm_audio/island_driver.h": 113,
     "src/adm_audio/island_ffi.h": 17,
-    "src/adm_c_api": 3545,
+    "src/adm_c_api": 3542,
     "src/adm_cli": 1410,
     "src/adm_core": 200,
     "src/adm_dsp": 1535,

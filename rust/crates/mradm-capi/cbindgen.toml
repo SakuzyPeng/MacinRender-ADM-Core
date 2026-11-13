@@ -1,0 +1,4 @@
+# Used only by scripts/quality/check-ffi-headers.py to render the public C ABI exports implemented
+# in Rust into a throwaway C header for comparison with include/adm/c_api.h.
+language = "C"
+documentation = false

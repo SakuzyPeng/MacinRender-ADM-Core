@@ -1,0 +1,20 @@
+[package]
+name = "mradm-capi"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# The one Rust library CMake links: the public C ABI exports implemented in Rust, together with
+# every private `mradm_*` entry of mradm-ffi that the C++ shells and islands call.
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+mradm-ffi = { path = "../mradm-ffi", default-features = false }
+
+[features]
+default = ["sofa"]
+sofa = ["mradm-ffi/sofa"]
+diagnostics = ["mradm-ffi/diagnostics"]
+room-cuda = ["mradm-ffi/room-cuda"]
