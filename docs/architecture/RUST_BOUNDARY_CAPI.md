@@ -104,14 +104,14 @@ macOS 的 `mr_adm_rust_quality`（fmt + clippy）、FFI 头校验、Cargo 许可
   写上下文消息，`mradm_capi_string` 分配输出字符串（失败时返回 NULL，C++ 照旧返回 `ADM_ERROR_INTERNAL` 或抛 `bad_alloc`）。
   `check-ffi-headers.py` 按 `c_api.h` 的类型双向核对这些入口与 Rust 导出，`quality_scripts_test.py` 新增对应测试。
 - **兜底。** `adm_create_context` 与 `mradm_capi_context_set_error` 经 `guard`；版本、读消息、销毁与释放的函数体不会 panic，
-  不另包一层。context 句柄使用可失败分配，创建失败返回 NULL；空消息与清空操作不分配内存。
+  不另包一层。context 句柄使用可失败分配，创建失败返回 NULL，空消息与清空操作不分配内存。
   消息更新先用 `try_reserve` 预留内容与结尾 NUL，失败返回 `ADM_ERROR_INTERNAL` 并保留原消息，成功后再替换。
-  C++ 的 `store_last_error` 将失败转成 `bad_alloc`，由既有边界返回 `ADM_ERROR_INTERNAL`；catch 内的消息更新为尽力写入。
+  C++ 的 `store_last_error` 将失败转成 `bad_alloc`，由既有边界返回 `ADM_ERROR_INTERNAL`，catch 内的消息更新为尽力写入。
   故障注入回归覆盖句柄、消息扩容与输出字符串的分配失败、重试、消息保留、无分配清空与超长消息拒绝。
 
-生产 C/C++ 21,121 → 21,098 行（B 初版为 21,100 行；`capi_ffi.h` 计入 production）。
+生产 C/C++ 21,121 → 21,098 行（B 初版为 21,100 行，`capi_ffi.h` 计入 production）。
 
-本机 Linux x64 Release，参照为 main `620f4e8` 的同配置构建：
+B 初版在 Linux x64 Release 上对照 main `620f4e8` 的同配置构建：
 - C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
 - CLI 记录 102 条中 101 条相同，`render-vbap-714-mka` 的 MKA 少 1 字节：候选这次随机得到的 TrackUID 只有 7 字节
   （最高字节为 0，概率约 1/256），归一化把 UID 清零但不能抹平长度，上层 Tracks / TrackEntry 的大小随之各减 1。
@@ -119,6 +119,18 @@ macOS 的 `mr_adm_rust_quality`（fmt + clippy）、FFI 头校验、Cargo 许可
 - 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
 - ctest 85/85、`mr_adm_rust_quality`、FFI 头校验（`c_api.h` 164 个函数中 7 个由 Rust 实现，私有入口 2 个）、导出校验 164 个、
   clang-format / clang-tidy、规模棘轮。本机 cppcheck 2.13 不支持仓库的抑制语法，cppcheck 留给 macOS Quality CI。
+
+### B 批原生复核与分配失败修正
+
+复核目标为 `566390b6`，分配失败修正为 `4939cfc3`。两平台构建并测试该修正提交，复用各自的原有 Cargo 与 FetchContent 缓存。
+
+- macOS arm64 Debug（SOFA 开启）与 Windows x64 canonical MSVC/Ninja Release（SOFA/IAMF 关闭）均完成 C ABI 共享库、
+  静态链接测试与消费者目标构建。定向 CTest 各 7/7，换库消费者测试各 2/2，`mradm-capi` 单元测试各 11/11。
+- 新增的 5 个故障注入回归验证句柄和输出字符串分配失败返回 NULL、错误消息扩容失败返回 `ADM_ERROR_INTERNAL`、
+  原消息与借用指针保留、失败后重试、无分配清空及超长消息拒绝。
+- macOS 的 Rust fmt、`mradm-capi --all-targets` clippy、改动 C/C++ 的 clang-format / clang-tidy / cppcheck 与规模棘轮通过。
+  FFI 头校验覆盖 412 个 `mradm-ffi` 函数、171 个结构体、7 个 Rust 公开导出与 2 个私有入口。两平台共享库均恰好导出 164 个 `adm_*`。
+- macOS 的 C API fixture 因多声道监听设备不可用，走测试既有的设备不可用分支。
 
 ## 下一步
 
