@@ -767,6 +767,13 @@ F（Monitor、HpTF 文本解析与 OSC 头追踪，35 个导出）完成，`c_ap
 OSC 差异探测 59 项 0 差异、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。生产 C/C++ 18,018 → 16,705 行
 （见 [F 批记录](RUST_BOUNDARY_CAPI.md#f-批monitorhptf-文本解析与-osc-头追踪)）。
 
+**6.4 状态**：已完成。`mradm` 由新 crate `mradm-cli` 实现：clap builder 解析，选项表照 CLI11 2.5.0 的检查顺序给出同样的退出码与错误措辞
+（[ADR 0022](../adr/0022-rust-cli-argument-parsing.md) 取代 ADR 0006）；引擎操作经 `Service` trait 由 `mradm-capi` `cli.rs` 用 C ABI 同样的
+入口实现（渲染驱动抽出 `drive` / `Sink` 两边共用）；`src/adm_cli` 只剩调用 `mradm_cli_main` 的 `main`；APAC 编码 worker 经新岛接口
+`apac_worker_island`；CLI11 与 spdlog 移出构建与许可证清单，新增 clap 及其三个依赖。本机 Linux 新旧对照：CLI 记录 102 条 0 差异
+（只有 3 条 help 排版不同）、约 150 条解析探针的退出码、文件与输出全部相同、C ABI 采集 3,283 行与 36 个文件 0 差异、完整采集相同；
+macOS APAC smoke 与 Windows 待维护者。生产 C/C++ 16,705 → 15,314 行，`island-interfaces` 988 → 1,026 行（见 [6.4 记录](RUST_BOUNDARY_CLI.md)）。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
