@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 104,
-      "lines": 19855
+      "lines": 19835
     },
     "islands": {
       "files": 6,
@@ -62,7 +62,7 @@
     "src/adm_audio/island.cpp": 117,
     "src/adm_audio/island_driver.h": 113,
     "src/adm_audio/island_ffi.h": 17,
-    "src/adm_c_api": 2267,
+    "src/adm_c_api": 2247,
     "src/adm_cli": 1410,
     "src/adm_core": 200,
     "src/adm_dsp": 1535,

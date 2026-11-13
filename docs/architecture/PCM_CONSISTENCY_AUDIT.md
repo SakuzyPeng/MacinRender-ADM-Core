@@ -745,7 +745,7 @@ JSON 与 preview 会话改由 Rust 实现，照 `RenderService` 驱动同一个 
 平台岛与 Apple 岛；C ABI 不再经 C++ `RenderService`（CLI 仍用），C ABI 中的服务单例与 C++ 选项 / 取消 / 结果结构删除。进度回调抛出的 C++ 异常经 C++ 跳板照旧转为
 `ADM_ERROR_INTERNAL`；仍在 C++ 的 Monitor 创建与切换经 `mradm_capi_options` 读取 Rust 选项。本机 Linux 新旧对照：
 C ABI 采集 3,283 行与 36 个文件 0 差异、consumer 测试在两个库上通过、CLI 102 条 0 差异、完整采集相同；macOS / Windows 待维护者。
-生产 C/C++ 20,841 → 19,855 行。
+生产 C/C++ 20,841 → 19,835 行（含 Quality CI 的 cppcheck 修正）。
 
 ## 每个迁移切片的验证
 

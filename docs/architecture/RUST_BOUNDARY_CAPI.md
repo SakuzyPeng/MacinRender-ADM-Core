@@ -237,7 +237,7 @@ preview 4 个（D 并入）。
   由 `mradm-capi` 按路径直接调用，类型由编译器核对。`check-ffi-headers.py` 另剥去 cbindgen 输出中的 `extern` 导入声明
   （Rust 调用的 C++ 岛与跳板）。
 
-生产 C/C++ 20,841 → 19,855 行（`src/adm_c_api` −986）。
+生产 C/C++ 20,841 → 19,855 行（`src/adm_c_api` −986）；Quality CI 的 cppcheck 修正（`capi_ffi.h` 登记为私有 FFI 记录、删去迁走导出留下的 `cppcheck-suppress-end` 与空分节注释）后为 19,835 行。
 
 本机 Linux x64 Release，参照为 main `e2fc6ef` 的同配置构建：
 - C ABI 采集 3,283 行、36 个文件 0 差异（含选项 setter 的校验、离线渲染与进度 v1 / v2、取消、结果访问器、export、能力表与

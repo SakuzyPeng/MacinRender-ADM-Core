@@ -751,16 +751,6 @@ const char* adm_osc_head_tracking_last_error_message(adm_osc_head_tracking_t* re
     }
 }
 
-/* ── Progress stage (v1.7) ──────────────────────────────────────────────────── */
-
-/* ── Options builder ─────────────────────────────────────────────────────── */
-
-/* ── Cancellation (v1.4) ──────────────────────────────────────────────────── */
-
-/* ── Render ──────────────────────────────────────────────────────────────── */
-
-/* ── Preview session (v1.8) ──────────────────────────────────────────────── */
-
 /* ── Realtime monitor (v1.15) ──────────────────────────────────────────────── */
 
 // cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
@@ -1337,16 +1327,6 @@ int adm_monitor_log_entry(adm_monitor_t* monitor,
         return 0;
     }
 }
-
-/* ── Result ──────────────────────────────────────────────────────────────── */
-
-/* ── Probe ───────────────────────────────────────────────────────────────── */
-
-/* ── Scene inspect (JSON) ────────────────────────────────────────────────── */
-
-/* ── Capabilities (JSON) ─────────────────────────────────────────────────── */
-
-// cppcheck-suppress-end constParameterPointer
 
 /* ── Producer-neutral realtime Scene stream (v1.35) ─────────────────────── */
 
