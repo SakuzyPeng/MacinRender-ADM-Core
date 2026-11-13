@@ -84,7 +84,8 @@ config A 使用与 `release.yml` 相同的构建选项（含 `MR_ADM_BUILD_CAPI_
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
 二期结项后的扩展继续使用 `collect.py`，当前收集 80 个离线场景、88 个 Scene 流式渲染配置（各含两个 epoch）、38 个文件流式重放（`mr_adm_consistency_stream`，三期 3.1 双耳、3.2 EAR、3.3 HOA、3.4 Triple Balance，四期 4.2 `room-binaural`、4.9 开平滑的 VBAP / HOA / EAR / 双耳，五期 5.7 96 kHz `room-binaural`）及
 255 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM、spreader、HpTF 设计与左右独立 HpTF、生产计量及其验收节目、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化与 `room-binaural` exact 档准备），再在原构建树启用诊断并验证 PCM 无扰动。`compare-evidence.py`
-验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
+在各运行器本地验证输入完整性、有限数值、重复性、帧数和无扰动性，再导出包含源码／构建身份、用例清单、
+尺寸与 SHA-256 的 `summary.json`。默认跨平台比较只传递这些摘要，逐用例输出一致性 JSON；
 `scripts/consistency/gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计、生产计量、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化、EAR 布局、Scene 空间数学与 `room-binaural` 准备内核及全部 294 个 PCM 用例）必须三平台逐位相同；
 新增用例必须同时按精确 id 加入门禁（`collection_tools_test.py` 校验）。四期 4.2 起 25 个内核模式覆盖全部内核
 文件（`6a62513` 加入左右独立 HpTF 后为 255 个），不再有观察项。一期 1.3 起两个 FFT crate 的 twiddle 都取自 `libm`，
@@ -192,8 +193,12 @@ Rust 构建生成。
 `.github/workflows/cache-maintenance.yml` 每周一 03:23 UTC（也可手动）运行，按 key 族只保留最近
 访问的一代缓存，删除旧代以控制仓库缓存配额。
 
-Consistency 的完整 PCM／诊断包用于同次运行的跨平台比较。汇总报告上传成功后删除该次运行的大包与 FFT 临时结果，
-并清理旧的 `consistency-report`，只保留最新一份汇总。未完成清理的中断运行使用 1 天的产物保留期限。
+Consistency 默认只上传每组的 `summary.json` 与小型 FFT 性能 JSON。重复性、分块一致性和诊断无扰动比较在各运行器本地完成，
+跨平台门禁比较完整数值数据的尺寸与 SHA-256，继续严格要求逐位一致。摘要比较使用
+`mradm.consistency.summary-comparison.v1`，其中 `numeric_statistics_available=false`，不填写最大误差／ULP 等数值统计。
+手动触发时选择 `full_evidence=true` 才上传完整 PCM／检查点，并调用原有数值比较路径生成误差统计，原始下载保留 1 天。
+汇总报告上传成功后清理默认运行用完的摘要和 FFT 临时结果，并删除旧的 `consistency-report`，只保留最新一份汇总。
+中断运行的临时摘要同样保留 1 天。
 发行工作流的 CLI／GUI 产物沿用各自的保留设置。
 
 ## 依赖安装建议

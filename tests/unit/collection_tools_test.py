@@ -2,6 +2,7 @@
 """Evidence corruption must fail independently of numerical gate policy."""
 import importlib.util
 import copy
+from contextlib import ExitStack
 import fnmatch
 import io
 import json
@@ -869,6 +870,144 @@ class RenderSceneCheckpointTests(unittest.TestCase):
                         patch.object(common, 'validate_room_fixtures'), \
                         self.assertRaisesRegex(ValueError, 'render-scene checkpoint'):
                     comparator.validate(root)
+
+
+class SummaryTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.case = {'id': 'case'}
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        for name, value in [('offline_cases', [self.case]), ('scene_cases', []), ('stream_cases', []),
+                            ('kernel_outputs', ['probe.f32'])]:
+            stack.enter_context(patch.object(common, name, return_value=value))
+        for name in ('validate_sofa_fixtures', 'validate_json_fixtures', 'validate_room_fixtures'):
+            stack.enter_context(patch.object(common, name))
+
+    def collection(self, name, word=0, kernel=0x3f800000):
+        root = self.root / name
+        (root / 'pcm').mkdir(parents=True)
+        (root / 'kernels').mkdir()
+        (root / 'fixtures').mkdir()
+        samples = struct.pack('<II', word, 0)
+        (root / 'pcm/case.pcmbits').write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, 2, 48000, 1) + samples)
+        (root / 'kernels/probe.f32').write_bytes(struct.pack('<I', kernel))
+        (root / 'fixtures/input.bin').write_bytes(b'input')
+        common.save(root / 'cases/case.json', self.case)
+        manifest = {
+            'schema': 'mradm.consistency.collection.v1', 'complete': True, 'config': 'a', 'diagnostics': False,
+            'source': {'files': {}, 'sha256': common.json_digest({})},
+            'offline': [self.case], 'scene': [], 'stream': [], 'sofa': common.SOFA_FIXTURES,
+            'json_fixtures': common.JSON_FIXTURES, 'room': common.ROOM_FIXTURES, 'room_96k': common.ROOM_96K_FIXTURES,
+            'outputs': {'case': {'path': 'pcm/case.pcmbits', 'shape': [2, 48000, 1], 'sha256': common.digest(samples)}},
+            'fixtures': {'input.bin': common.digest(b'input')},
+            'artifacts': {'kernels/probe.f32': common.digest(struct.pack('<I', kernel))},
+            'comparisons': {'case' + suffix: {'identical': True}
+                            for suffix in ('-new-process', '-same-process-1', '-same-process-2')},
+            'replay_status': {},
+            'build': {'cmake.CMAKE_BUILD_TYPE': 'Release', 'cmake.MR_ADM_ENABLE_SOFA': 'ON',
+                      'rust.compiler_verbose': 'release: 1.98.0\ncommit-hash: abc\nLLVM version: 22.1.8',
+                      'rust.resolved_features': json.dumps({'mradm-dsp': ['sofa'], 'mradm-ffi': ['sofa']}),
+                      'rust.fft_features': json.dumps({'rustfft': [], 'realfft': []}),
+                      'platform.system': 'Darwin', 'platform.machine': 'arm64'},
+        }
+        common.save(root / 'manifest.json', manifest)
+        return root
+
+    def save_summary(self, path, value):
+        value['sha256'] = common.json_digest({k: value[k] for k in ('manifest', 'numeric_bytes')})
+        common.save(path, value)
+
+    def test_summary_preserves_exact_bit_gates_without_raw_files(self):
+        a = self.collection('a', word=0x80000000)
+        b = self.collection('b', kernel=0x3f800001)
+        gates = [{'kind': 'case', 'pattern': 'case', 'reason': 'test'},
+                 {'kind': 'kernel', 'pattern': 'probe*', 'reason': 'test'}]
+        full = comparator.compare([a, b], require_platforms=False, gates=gates)
+        for root in (a, b):
+            common.save(root / 'summary.json', comparator.summarize(root))
+            for folder in ('pcm', 'kernels', 'fixtures', 'cases'):
+                shutil.rmtree(root / folder)
+        compact = comparator.compare([a / 'summary.json', b / 'summary.json'], require_platforms=False,
+                                     gates=gates, summaries=True)
+        self.assertEqual(compact['numerical_gate'], full['numerical_gate'])
+        self.assertEqual(compact['differing_cases'], full['differing_cases'])
+        self.assertEqual(full['pairs'][0]['kernels'][0]['max_ulp'], 1)
+        self.assertNotIn('max_ulp', compact['pairs'][0]['kernels'][0])
+        self.assertFalse(compact['numeric_statistics_available'])
+
+    def test_export_still_checks_raw_values_before_writing_summary(self):
+        root = self.collection('bad', kernel=0x7fc00000)
+        output = root / 'summary.json'
+        with patch.object(sys, 'argv', ['compare-evidence', '--write-summary', '--output', str(output), str(root)]):
+            with self.assertRaisesRegex(ValueError, 'non-finite checkpoint'):
+                comparator.main()
+        self.assertFalse(output.exists())
+
+    def test_export_cli_and_identical_summaries(self):
+        roots = [self.collection(name) for name in ('a', 'b')]
+        for root in roots:
+            output = root / 'summary.json'
+            with patch.object(sys, 'argv', ['compare-evidence', '--write-summary', '--output', str(output), str(root)]):
+                comparator.main()
+            self.assertEqual(comparator.load_summary(output)['schema'], comparator.SUMMARY_SCHEMA)
+        report = comparator.compare([root / 'summary.json' for root in roots], require_platforms=False, summaries=True)
+        self.assertEqual(report['identical_cases'], ['case'])
+
+    def test_missing_checks_shapes_and_corruption_cannot_pass(self):
+        root = self.collection('valid')
+        original = comparator.summarize(root)
+        output = root / 'summary.json'
+        corrupt = copy.deepcopy(original)
+        corrupt['numeric_bytes']['kernels/probe.f32'] += 4
+        common.save(output, corrupt)
+        with self.assertRaisesRegex(ValueError, 'summary integrity'):
+            comparator.load_summary(output)
+        for mutation, error in [
+            (lambda s: s['manifest']['comparisons'].pop('case-new-process'), 'repeat/partition'),
+            (lambda s: s['numeric_bytes'].pop('kernels/probe.f32'), 'inventory'),
+            (lambda s: s['numeric_bytes'].__setitem__('pcm/case.pcmbits', 12), 'PCM shape'),
+            (lambda s: s['manifest'].__setitem__('tool_overrides', {'mradm': {}}), 'replay tools were replaced'),
+        ]:
+            corrupt = copy.deepcopy(original)
+            mutation(corrupt)
+            self.save_summary(output, corrupt)
+            with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
+                comparator.load_summary(output)
+
+    def test_summary_cli_fails_a_changed_bit_gate_and_writes_the_report(self):
+        roots = [self.collection('a'), self.collection('b', word=1)]
+        for root in roots:
+            common.save(root / 'summary.json', comparator.summarize(root))
+        gate = self.root / 'gates.json'
+        common.save(gate, {'schema': 'mradm.consistency.gates.v1',
+                           'gates': [{'kind': 'case', 'pattern': 'case', 'reason': 'test'}]})
+        output = self.root / 'report.json'
+        args = ['compare-evidence', '--summaries', '--allow-partial', '--gates', str(gate), '--output', str(output),
+                *[str(root / 'summary.json') for root in roots]]
+        with patch.object(sys, 'argv', args), patch.object(sys, 'stdout', io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                comparator.main()
+        self.assertEqual(raised.exception.code, 1)
+        self.assertEqual(len(json.loads(output.read_text())['numerical_gate']['failures']), 1)
+
+    def test_checkpoint_fingerprints_preserve_double_width_order_and_missing_data(self):
+        prefix = 'checkpoints/case/'
+        names = [prefix + 'scene/e1-s0.15-producer.f64', prefix + 'scene/e1-s0.40-render.f32']
+        a = {'numeric_bytes': dict.fromkeys(names, 8), 'manifest': {'artifacts': dict.fromkeys(names, '0' * 64)}}
+        b = copy.deepcopy(a)
+        b['manifest']['artifacts'][names[0]] = '1' * 64
+        rows = comparator.fingerprint_checkpoints(a, b, prefix)
+        self.assertEqual([r['checkpoint'] for r in rows], [name[len(prefix):] for name in names])
+        self.assertEqual(rows[0]['words'], [1, 1])
+        self.assertFalse(rows[0]['identical'])
+        b['numeric_bytes'][names[0]] = 16
+        with self.assertRaisesRegex(ValueError, 'shape mismatch'):
+            comparator.fingerprint_checkpoints(a, b, prefix)
+        b['numeric_bytes'].pop(names[0])
+        self.assertEqual(comparator.fingerprint_checkpoints(a, b, prefix)[0]['status'], 'different-observation-topology')
 
 
 class ReplayTests(unittest.TestCase):

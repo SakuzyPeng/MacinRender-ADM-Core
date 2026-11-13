@@ -10,6 +10,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      full_evidence:
+        description: Full numerical diagnostics with one-day raw PCM/checkpoint downloads
+        type: boolean
+        default: false
 
 concurrency:
   group: consistency-${{ github.ref }}
@@ -172,13 +177,18 @@ jobs:
             build/consistency-${{ matrix.config }}/mradm \
             out/${{ matrix.platform }}/scan-fp.txt
 
-      # Record the baseline before these sequential, explicitly labelled build interventions.
+      - name: Validate and summarize baseline locally
+        run: >
+          python3 scripts/consistency/compare-evidence.py --write-summary
+          --output out/${{ matrix.platform }}/summary.json out/${{ matrix.platform }}
+
+      # Cross-platform equality needs fingerprints; raw samples are an explicit manual option.
       - name: Upload baseline
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: consistency-${{ matrix.platform }}-${{ matrix.config }}
-          path: out/${{ matrix.platform }}
+          path: ${{ inputs.full_evidence && format('out/{0}', matrix.platform) || format('out/{0}/summary.json', matrix.platform) }}
           if-no-files-found: error
           retention-days: 1
 
@@ -188,12 +198,17 @@ jobs:
           cmake --build build/consistency-${{ matrix.config }} --target mr_adm_consistency_tools
           python3 scripts/consistency/collect.py build/consistency-${{ matrix.config }} out/${{ matrix.platform }}-diagnostic --config ${{ matrix.config }} --baseline out/${{ matrix.platform }}
 
+      - name: Validate and summarize diagnostics locally
+        run: >
+          python3 scripts/consistency/compare-evidence.py --write-summary
+          --output out/${{ matrix.platform }}-diagnostic/summary.json out/${{ matrix.platform }}-diagnostic
+
       - name: Upload diagnostic baseline
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: consistency-${{ matrix.platform }}-${{ matrix.config }}-diagnostic
-          path: out/${{ matrix.platform }}-diagnostic
+          path: ${{ inputs.full_evidence && format('out/{0}-diagnostic', matrix.platform) || format('out/{0}-diagnostic/summary.json', matrix.platform) }}
           if-no-files-found: error
           retention-days: 1
 
@@ -373,12 +388,16 @@ jobs:
           bash scripts/consistency/build-info.sh build/win-canon out/windows/build-info.txt
           bash scripts/consistency/scan-fp.sh build/win-canon/mradm.exe out/windows/scan-fp.txt
 
+      - name: Validate and summarize baseline locally
+        shell: pwsh
+        run: python scripts/consistency/compare-evidence.py --write-summary --output out/windows/summary.json out/windows
+
       - name: Upload baseline
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: consistency-windows-${{ matrix.config }}
-          path: out/windows
+          path: ${{ inputs.full_evidence && 'out/windows' || 'out/windows/summary.json' }}
           if-no-files-found: error
           retention-days: 1
 
@@ -392,12 +411,16 @@ jobs:
           if errorlevel 1 exit /b 1
           python scripts/consistency/collect.py build/win-canon out/windows-diagnostic --config ${{ matrix.config }} --baseline out/windows
 
+      - name: Validate and summarize diagnostics locally
+        shell: pwsh
+        run: python scripts/consistency/compare-evidence.py --write-summary --output out/windows-diagnostic/summary.json out/windows-diagnostic
+
       - name: Upload diagnostic baseline
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: consistency-windows-${{ matrix.config }}-diagnostic
-          path: out/windows-diagnostic
+          path: ${{ inputs.full_evidence && 'out/windows-diagnostic' || 'out/windows-diagnostic/summary.json' }}
           if-no-files-found: error
           retention-days: 1
 
@@ -412,6 +435,8 @@ jobs:
     permissions:
       contents: read
       actions: write
+    env:
+      FULL_EVIDENCE: ${{ inputs.full_evidence || false }}
     needs:
       - render
       - render-windows
@@ -433,13 +458,19 @@ jobs:
         shell: bash
         run: |
           status=0
+          mode=()
+          summary=""
+          if [[ "$FULL_EVIDENCE" != true ]]; then
+            mode=(--summaries)
+            summary="/summary.json"
+          fi
           for config in a b; do
             for suffix in "" "-diagnostic"; do
-              python3 scripts/consistency/compare-evidence.py \
+              python3 scripts/consistency/compare-evidence.py "${mode[@]}" \
                 --output "consistency-report-${config}${suffix}.json" \
-                "baselines/consistency-macos-${config}${suffix}" \
-                "baselines/consistency-linux-${config}${suffix}" \
-                "baselines/consistency-windows-${config}${suffix}" || status=1
+                "baselines/consistency-macos-${config}${suffix}${summary}" \
+                "baselines/consistency-linux-${config}${suffix}${summary}" \
+                "baselines/consistency-windows-${config}${suffix}${summary}" || status=1
             done
           done
           exit "$status"
@@ -454,8 +485,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # The full PCM/checkpoint archives have served their cross-platform comparison. Keep the
-      # latest summary; interrupted runs fall back to the one-day archive retention above.
+      # Default runs discard consumed summaries. Explicit full-evidence runs retain their raw
+      # downloads for one day; the final report is always pruned to the latest one.
       - name: Delete compared archives and superseded reports
         if: always() && steps.report.outcome == 'success'
         env:
@@ -466,9 +497,11 @@ jobs:
           set -euo pipefail
           obsolete="$(mktemp)"
 
-          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name | test("^(consistency-(macos|linux|windows)-(a|b)(-diagnostic)?|fft-performance-(macos|linux|windows))$")) | .id' \
-            > "$obsolete"
+          if [[ "$FULL_EVIDENCE" != true ]]; then
+            gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+              --jq '.artifacts[] | select(.name | test("^(consistency-(macos|linux|windows)-(a|b)(-diagnostic)?|fft-performance-(macos|linux|windows))$")) | .id' \
+              > "$obsolete"
+          fi
           gh api --paginate --slurp "repos/$REPO/actions/artifacts?name=consistency-report&per_page=100" \
             --jq '[.[].artifacts[] | select(.name == "consistency-report")] | sort_by([.created_at, .id]) | reverse | .[1:][] | .id' \
             >> "$obsolete"

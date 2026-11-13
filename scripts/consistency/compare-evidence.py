@@ -114,8 +114,7 @@ def validate_scene_status(manifest):
                 raise ValueError('invalid Scene state/frame-count evidence')
 
 
-def validate(root, *, allow_tool_overrides=False):
-    manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+def validate_header(manifest, *, allow_tool_overrides=False):
     if not isinstance(manifest, dict) or manifest.get('schema') != 'mradm.consistency.collection.v1' or manifest.get('complete') is not True:
         raise ValueError('incomplete or unsupported baseline')
     if manifest.get('tool_overrides') and not allow_tool_overrides:
@@ -127,20 +126,25 @@ def validate(root, *, allow_tool_overrides=False):
         raise ValueError('baseline does not cover the versioned case catalog')
     if manifest.get('sofa') != common.SOFA_FIXTURES:
         raise ValueError('baseline does not cover the pinned SOFA inputs')
-    common.validate_sofa_fixtures(root / 'fixtures')
     if manifest.get('json_fixtures') != common.JSON_FIXTURES:
         raise ValueError('baseline does not cover the versioned JSON inputs')
-    common.validate_json_fixtures(root / 'fixtures')
     if manifest.get('room') != common.ROOM_FIXTURES:
         raise ValueError('baseline does not cover the pinned room pack')
-    common.validate_room_fixtures(root / 'fixtures/room')
     if manifest.get('room_96k') != common.ROOM_96K_FIXTURES:
         raise ValueError('baseline does not cover the pinned 96 kHz room pack')
-    common.validate_room_fixtures(root / 'fixtures/room-96k', common.ROOM_96K_FIXTURES)
     expected = ([c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
                 + [c['id'] for c in manifest['stream']])
     if not expected or len(set(expected)) != len(expected) or set(expected) != set(manifest['outputs']):
         raise ValueError('missing or duplicate case outputs')
+
+
+def validate(root, *, allow_tool_overrides=False):
+    manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+    validate_header(manifest, allow_tool_overrides=allow_tool_overrides)
+    common.validate_sofa_fixtures(root / 'fixtures')
+    common.validate_json_fixtures(root / 'fixtures')
+    common.validate_room_fixtures(root / 'fixtures/room')
+    common.validate_room_fixtures(root / 'fixtures/room-96k', common.ROOM_96K_FIXTURES)
     disk_pcm = {p.name for p in (root / 'pcm').glob('*.pcmbits')}
     if disk_pcm != {Path(v['path']).name for v in manifest['outputs'].values()}:
         raise ValueError('PCM inventory differs from manifest')
@@ -184,6 +188,11 @@ def validate(root, *, allow_tool_overrides=False):
         for row in manifest['offline']:
             require_render_scene_checkpoints(root / 'checkpoints' / row['id'], row['id'])
         validate_experiments(root, manifest)
+    validate_checks(manifest)
+    return manifest
+
+
+def validate_checks(manifest):
     build = manifest['build']
     validate_sofa_build(build)
     compiler_identity(build)
@@ -204,7 +213,6 @@ def validate(root, *, allow_tool_overrides=False):
     for name, row in manifest['comparisons'].items():
         if ('-partition-' not in name or row.get('required')) and not row['identical']:
             raise ValueError('repeatability failure was marked complete')
-    return manifest
 
 
 def checkpoint_order(name):
@@ -245,8 +253,88 @@ def scene_checkpoint_summary(cases, catalog):
     return {'comparisons': len(observations), 'differing': sum(not row['identical'] for row in observations)}
 
 
-def compare(directories, require_platforms=True, gates=()):
-    manifests = [validate(p) for p in directories]
+SUMMARY_SCHEMA = 'mradm.consistency.summary.v1'
+
+
+def summarize(root):
+    """Validate all raw evidence on its producing runner before exporting fingerprints."""
+    manifest = validate(root)
+    sizes = {row['path']: safe_file(root, row['path']).stat().st_size - 24
+             for row in manifest['outputs'].values()}
+    sizes.update({name: safe_file(root, name).stat().st_size for name in manifest['artifacts']
+                  if Path(name).suffix in common.FORMATS})
+    # These records describe local files and tools; the comparison uses the validated source,
+    # build, case/fixture inventories, local checks and numerical fingerprints.
+    manifest = {k: v for k, v in manifest.items()
+                if k not in {'logs', 'binaries', 'build_identity', 'collection_root'}}
+    payload = {'manifest': manifest, 'numeric_bytes': sizes}
+    return {'schema': SUMMARY_SCHEMA, 'sha256': common.json_digest(payload), **payload}
+
+
+def load_summary(path):
+    summary = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(summary, dict) or summary.get('schema') != SUMMARY_SCHEMA:
+        raise ValueError('unsupported consistency summary')
+    payload = {k: summary[k] for k in ('manifest', 'numeric_bytes')}
+    if summary.get('sha256') != common.json_digest(payload):
+        raise ValueError('summary integrity failure')
+    manifest = summary['manifest']
+    validate_header(manifest)
+    validate_checks(manifest)
+    if manifest['diagnostics'] and not manifest.get('noninterference', {}).get('passed'):
+        raise ValueError('diagnostic noninterference was not verified')
+    outputs = {row['path']: row for row in manifest['outputs'].values()}
+    if len(outputs) != len(manifest['outputs']):
+        raise ValueError('duplicate PCM paths in summary')
+    numeric = {name for name in manifest['artifacts'] if Path(name).suffix in common.FORMATS}
+    if set(summary['numeric_bytes']) != set(outputs) | numeric:
+        raise ValueError('summary numerical inventory is incomplete')
+    if {name for name in numeric if name.startswith('kernels/')} != {
+            'kernels/' + name for name in common.kernel_outputs()}:
+        raise ValueError('production-kernel measurements differ from the inventory')
+    for name, size in summary['numeric_bytes'].items():
+        if name.startswith('/') or '\\' in name or '..' in name.split('/'):
+            raise ValueError('escaping summary path: ' + name)
+        row = outputs.get(name)
+        width = 4 if row is not None else common.FORMATS[Path(name).suffix][0]
+        sha = row['sha256'] if row is not None else manifest['artifacts'][name]
+        if not isinstance(sha, str) or not re.fullmatch('[0-9a-f]{64}', sha):
+            raise ValueError('invalid numerical fingerprint: ' + name)
+        if type(size) is not int or size <= 0 or size % width or (name.endswith('.c32') and size % 8):
+            raise ValueError('invalid numerical byte count: ' + name)
+        if row is not None:
+            shape = row['shape']
+            if (len(shape) != 3 or any(type(v) is not int or v <= 0 for v in shape)
+                    or shape[0] > 256 or size != shape[0] * shape[2] * 4):
+                raise ValueError('PCM shape differs from summary byte count')
+    return summary
+
+
+def fingerprint_row(a, b, sha_a, sha_b, name_a, name_b):
+    sizes = [a['numeric_bytes'][name_a], b['numeric_bytes'][name_b]]
+    if sizes[0] != sizes[1]:
+        raise ValueError('numerical shape mismatch')
+    width = common.FORMATS.get(Path(name_a).suffix, (4,))[0]
+    return {'identical': sha_a == sha_b, 'sha256': [sha_a, sha_b], 'words': [n // width for n in sizes]}
+
+
+def fingerprint_checkpoints(a, b, prefix):
+    paths = [{name[len(prefix):] for name in s['numeric_bytes'] if name.startswith(prefix)} for s in (a, b)]
+    rows = []
+    for name in sorted(paths[0] | paths[1], key=checkpoint_order):
+        if name not in paths[0] or name not in paths[1]:
+            row = {'status': 'different-observation-topology', 'identical': False}
+        else:
+            key = prefix + name
+            row = fingerprint_row(a, b, a['manifest']['artifacts'][key], b['manifest']['artifacts'][key], key, key)
+            row['status'] = 'identical' if row['identical'] else 'different'
+        rows.append(dict(row, checkpoint=name))
+    return rows
+
+
+def compare(directories, require_platforms=True, gates=(), *, summaries=False):
+    compact = [load_summary(p) for p in directories] if summaries else None
+    manifests = [row['manifest'] for row in compact] if summaries else [validate(p) for p in directories]
     first = manifests[0]
     for manifest in manifests[1:]:
         for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'stream', 'sofa', 'json_fixtures', 'room',
@@ -271,15 +359,29 @@ def compare(directories, require_platforms=True, gates=()):
               'full_platform_set': platforms == REQUIRED_PLATFORMS,
               'platforms': sorted(platforms), 'pairs': [],
               'interpretation': 'first_observed is an observation boundary, not a proven root cause'}
+    if summaries:
+        report.update(schema='mradm.consistency.summary-comparison.v1', comparison_mode='sha256',
+                      numeric_statistics_available=False)
     for i, j in itertools.combinations(range(len(directories)), 2):
         a, b = directories[i], directories[j]
-        pair = {'platforms': [a.name, b.name], 'cases': {}, 'kernels': checkpoints(a / 'kernels', b / 'kernels'),
-                'kernel_checkpoints': checkpoints(a / 'kernel-checkpoints', b / 'kernel-checkpoints')}
+        pair = {'platforms': [a.parent.name, b.parent.name] if summaries else [a.name, b.name], 'cases': {},
+                'kernels': fingerprint_checkpoints(compact[i], compact[j], 'kernels/') if summaries
+                else checkpoints(a / 'kernels', b / 'kernels'),
+                'kernel_checkpoints': fingerprint_checkpoints(compact[i], compact[j], 'kernel-checkpoints/') if summaries
+                else checkpoints(a / 'kernel-checkpoints', b / 'kernel-checkpoints')}
         for name in sorted(first['outputs']):
-            row = common.compare_pcm(a / first['outputs'][name]['path'], b / first['outputs'][name]['path'])
+            if summaries:
+                left, right = (manifests[k]['outputs'][name] for k in (i, j))
+                if left['shape'] != right['shape']:
+                    raise ValueError('PCM shape mismatch')
+                row = fingerprint_row(compact[i], compact[j], left['sha256'], right['sha256'], left['path'], right['path'])
+                row['shape'] = left['shape']
+            else:
+                row = common.compare_pcm(a / first['outputs'][name]['path'], b / first['outputs'][name]['path'])
             if first['diagnostics']:
                 case = re.sub(r'-epoch[12]$', '', name)
-                observations = checkpoints(a / 'checkpoints' / case, b / 'checkpoints' / case)
+                observations = (fingerprint_checkpoints(compact[i], compact[j], f'checkpoints/{case}/') if summaries
+                                else checkpoints(a / 'checkpoints' / case, b / 'checkpoints' / case))
                 if name.endswith(('-epoch1', '-epoch2')):
                     epoch_marker = '/e' + name[-1] + '-'
                     observations = [r for r in observations if not r['checkpoint'].startswith(('scene/', 'device/')) or epoch_marker in r['checkpoint'] or ('/e' + name[-1] + '.') in r['checkpoint']]
@@ -304,11 +406,19 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--allow-partial', action='store_true', help='diagnostic comparisons only; report cannot claim three-platform acceptance')
     parser.add_argument('--gates', type=Path, default=DEFAULT_GATES, help='cross-platform bit-equality gates')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--write-summary', action='store_true', help='validate one local collection and export SHA-256 evidence')
+    mode.add_argument('--summaries', action='store_true', help='compare validated summary JSON files without transferring raw samples')
     parser.add_argument('directories', nargs='+', type=Path)
     args = parser.parse_args()
+    if args.write_summary:
+        if len(args.directories) != 1:
+            parser.error('--write-summary requires one local collection')
+        common.save(args.output, summarize(args.directories[0]))
+        return
     if len(args.directories) < 2:
         parser.error('at least two baselines required')
-    result = compare(args.directories, not args.allow_partial, load_gates(args.gates))
+    result = compare(args.directories, not args.allow_partial, load_gates(args.gates), summaries=args.summaries)
     common.save(args.output, result)
     failures = result['numerical_gate']['failures']
     print(f"identical={len(result['identical_cases'])} differing={len(result['differing_cases'])} "
