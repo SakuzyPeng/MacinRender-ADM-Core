@@ -192,6 +192,10 @@ Rust 构建生成。
 `.github/workflows/cache-maintenance.yml` 每周一 03:23 UTC（也可手动）运行，按 key 族只保留最近
 访问的一代缓存，删除旧代以控制仓库缓存配额。
 
+Consistency 的完整 PCM／诊断包用于同次运行的跨平台比较。汇总报告上传成功后删除该次运行的大包与 FFT 临时结果，
+并清理旧的 `consistency-report`，只保留最新一份汇总。未完成清理的中断运行使用 1 天的产物保留期限。
+发行工作流的 CLI／GUI 产物沿用各自的保留设置。
+
 ## 依赖安装建议
 
 所有平台都需要 Rust 1.98.0（含 rustfmt / clippy）：

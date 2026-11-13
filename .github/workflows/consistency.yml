@@ -134,7 +134,7 @@ jobs:
           name: fft-performance-${{ matrix.platform }}
           path: out/fft-performance-${{ matrix.platform }}.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: Test vector length rounding
         run: build/consistency-${{ matrix.config }}/mr_adm_render_common_numeric_tests
@@ -180,7 +180,7 @@ jobs:
           name: consistency-${{ matrix.platform }}-${{ matrix.config }}
           path: out/${{ matrix.platform }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: Rebuild and collect diagnostics
         run: |
@@ -195,7 +195,7 @@ jobs:
           name: consistency-${{ matrix.platform }}-${{ matrix.config }}-diagnostic
           path: out/${{ matrix.platform }}-diagnostic
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: ccache stats
         if: always()
@@ -328,7 +328,7 @@ jobs:
           name: fft-performance-windows
           path: out/fft-performance-windows.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: Test vector length rounding
         shell: cmd
@@ -380,7 +380,7 @@ jobs:
           name: consistency-windows-${{ matrix.config }}
           path: out/windows
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: Rebuild and collect diagnostics
         shell: cmd
@@ -399,7 +399,7 @@ jobs:
           name: consistency-windows-${{ matrix.config }}-diagnostic
           path: out/windows-diagnostic
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: sccache stats
         if: always()
@@ -409,6 +409,9 @@ jobs:
   compare:
     name: Compare platforms
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
     needs:
       - render
       - render-windows
@@ -442,6 +445,7 @@ jobs:
           exit "$status"
 
       - name: Upload report
+        id: report
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -449,3 +453,33 @@ jobs:
           path: consistency-report-*.json
           if-no-files-found: error
           retention-days: 90
+
+      # The full PCM/checkpoint archives have served their cross-platform comparison. Keep the
+      # latest summary; interrupted runs fall back to the one-day archive retention above.
+      - name: Delete compared archives and superseded reports
+        if: always() && steps.report.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          obsolete="$(mktemp)"
+
+          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | test("^(consistency-(macos|linux|windows)-(a|b)(-diagnostic)?|fft-performance-(macos|linux|windows))$")) | .id' \
+            > "$obsolete"
+          gh api --paginate --slurp "repos/$REPO/actions/artifacts?name=consistency-report&per_page=100" \
+            --jq '[.[].artifacts[] | select(.name == "consistency-report")] | sort_by([.created_at, .id]) | reverse | .[1:][] | .id' \
+            >> "$obsolete"
+
+          while IFS= read -r id; do
+            echo "Deleting consumed consistency artifact $id"
+            if ! error="$(gh api --method DELETE "repos/$REPO/actions/artifacts/$id" 2>&1)"; then
+              # Another completed run may have pruned the same old report already.
+              if [[ "$error" != *"(HTTP 404)"* ]]; then
+                printf '%s\n' "$error" >&2
+                exit 1
+              fi
+            fi
+          done < "$obsolete"
