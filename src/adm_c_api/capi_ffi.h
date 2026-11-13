@@ -10,8 +10,8 @@
 extern "C" {
 #endif
 
-/* Replaces the context's last-error message with len bytes of message (0 clears it). NULL context: no-op. */
-void mradm_capi_context_set_error(adm_context_t* context, const uint8_t* message, size_t len);
+/* Copies len bytes (0 clears it). NULL context: OK. Allocation failure: INTERNAL, previous message retained. */
+adm_error_code_t mradm_capi_context_set_error(adm_context_t* context, const uint8_t* message, size_t len);
 
 /* A copy of len bytes of text and a terminating NUL, released with adm_free_string; NULL when out of memory. */
 char* mradm_capi_string(const uint8_t* text, size_t len);

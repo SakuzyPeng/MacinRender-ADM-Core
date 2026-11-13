@@ -408,8 +408,9 @@ struct adm_preview_session_t {
 
 namespace {
 
-void set_last_error(adm_context_t* context, std::string_view message) noexcept {
-    mradm_capi_context_set_error(context, reinterpret_cast<const std::uint8_t*>(message.data()), message.size());
+bool set_last_error(adm_context_t* context, std::string_view message) noexcept {
+    return mradm_capi_context_set_error(
+               context, reinterpret_cast<const std::uint8_t*>(message.data()), message.size()) == ADM_ERROR_OK;
 }
 
 void clear_last_error(adm_context_t* context) noexcept {
@@ -425,7 +426,9 @@ void store_last_error(adm_context_t* context, const mradm::Error& error) {
         message += ": ";
         message += error.context;
     }
-    set_last_error(context, message);
+    if (!set_last_error(context, message)) {
+        throw std::bad_alloc();
+    }
 }
 
 } // namespace
@@ -1507,9 +1510,7 @@ adm_error_code_t adm_create_preview_session(adm_context_t* context,
         *out = session;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            set_last_error(context, "unexpected exception while creating preview session");
-        }
+        set_last_error(context, "unexpected exception while creating preview session");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1627,9 +1628,7 @@ adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
         *out = monitor;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            set_last_error(context, "unexpected exception while creating realtime monitor");
-        }
+        set_last_error(context, "unexpected exception while creating realtime monitor");
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -2299,9 +2298,7 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
         *out = info;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            set_last_error(context, "unexpected exception while probing ADM file");
-        }
+        set_last_error(context, "unexpected exception while probing ADM file");
         return ADM_ERROR_INTERNAL;
     }
 }

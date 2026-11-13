@@ -436,6 +436,7 @@ int adm_api_version_patch(void) ADM_API_NOEXCEPT;
 /* ── Context lifecycle ───────────────────────────────────────────────────── */
 /*
  * adm_create_context / adm_destroy_context must be strictly paired.
+ * Creation returns NULL when allocation fails.
  * A single context is not thread-safe; use one context per thread or
  * serialize access externally.
  */

@@ -274,7 +274,7 @@ class PublicHeaderTests(unittest.TestCase):
 class CapiPrivateEntryTests(unittest.TestCase):
     GENERATED = (
         "typedef struct adm_context_t adm_context_t;\n"
-        "void mradm_capi_context_set_error(struct adm_context_t *context, const uint8_t *message, uintptr_t len);\n"
+        "int32_t mradm_capi_context_set_error(struct adm_context_t *context, const uint8_t *message, uintptr_t len);\n"
         "char *mradm_capi_string(const uint8_t *text, uintptr_t len);\n"
     )
 

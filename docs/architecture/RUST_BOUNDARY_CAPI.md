@@ -104,9 +104,12 @@ macOS 的 `mr_adm_rust_quality`（fmt + clippy）、FFI 头校验、Cargo 许可
   写上下文消息，`mradm_capi_string` 分配输出字符串（失败时返回 NULL，C++ 照旧返回 `ADM_ERROR_INTERNAL` 或抛 `bad_alloc`）。
   `check-ffi-headers.py` 按 `c_api.h` 的类型双向核对这些入口与 Rust 导出，`quality_scripts_test.py` 新增对应测试。
 - **兜底。** `adm_create_context` 与 `mradm_capi_context_set_error` 经 `guard`；版本、读消息、销毁与释放的函数体不会 panic，
-  不另包一层。消息分配失败时 Rust 终止进程（C++ 会抛 `bad_alloc`、在外层转成 `ADM_ERROR_INTERNAL`）。
+  不另包一层。context 句柄使用可失败分配，创建失败返回 NULL；空消息与清空操作不分配内存。
+  消息更新先用 `try_reserve` 预留内容与结尾 NUL，失败返回 `ADM_ERROR_INTERNAL` 并保留原消息，成功后再替换。
+  C++ 的 `store_last_error` 将失败转成 `bad_alloc`，由既有边界返回 `ADM_ERROR_INTERNAL`；catch 内的消息更新为尽力写入。
+  故障注入回归覆盖句柄、消息扩容与输出字符串的分配失败、重试、消息保留、无分配清空与超长消息拒绝。
 
-生产 C/C++ 21,121 → 21,100 行（`adm_c_api.cpp` −21；`capi_ffi.h` 计入 production）。
+生产 C/C++ 21,121 → 21,098 行（B 初版为 21,100 行；`capi_ffi.h` 计入 production）。
 
 本机 Linux x64 Release，参照为 main `620f4e8` 的同配置构建：
 - C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
