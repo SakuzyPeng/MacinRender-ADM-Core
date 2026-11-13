@@ -33,6 +33,11 @@ function(mr_adm_import_rust)
     )
 endfunction()
 mr_adm_import_rust()
+if(WIN32)
+    # The C API bundle's import library is also named mradm_capi.lib on MSVC.
+    set_target_properties(mradm_capi PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rust-static")
+endif()
 # The FLAC validation boundary reuses the provider selected for the encoder. The dependency sits on
 # the imported staticlib itself, so single-pass linkers (GNU ld) see libFLAC after libmradm_capi.a;
 # on the INTERFACE wrapper CMake may order an earlier FLAC::FLAC (from ADMAudio) first.
