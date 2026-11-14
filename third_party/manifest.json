@@ -1446,13 +1446,14 @@
       "distribution": "available",
       "source": {
         "type": "local",
-        "repo_dir": "rust/crates/mradm-adm/assets",
+        "repo_dir": "assets",
         "deps_dir": null,
         "parent": null,
         "license_files": [
           "LICENSE",
           "NOTICE.txt"
-        ]
+        ],
+        "cargo_package": "macin-adm"
       },
       "notes": "资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。"
     },

@@ -271,6 +271,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "macin-adm"
+version = "0.1.0"
+source = "git+https://github.com/SakuzyPeng/MacinFormat-ADM-Core?rev=158b1760e22ca87dc5a8a6b4a56d511581d4c86f#158b1760e22ca87dc5a8a6b4a56d511581d4c86f"
+dependencies = [
+ "libm",
+ "quick-xml",
+]
+
+[[package]]
+name = "macin-bwf"
+version = "0.1.0"
+source = "git+https://github.com/SakuzyPeng/MacinFormat-ADM-Core?rev=158b1760e22ca87dc5a8a6b4a56d511581d4c86f#158b1760e22ca87dc5a8a6b4a56d511581d4c86f"
+
+[[package]]
 name = "matrixmultiply"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -296,18 +310,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "mradm-adm"
-version = "0.1.0"
-dependencies = [
- "libm",
- "quick-xml",
-]
-
-[[package]]
 name = "mradm-capi"
 version = "0.1.0"
 dependencies = [
- "mradm-adm",
+ "macin-adm",
  "mradm-cli",
  "mradm-dsp",
  "mradm-engine",
@@ -360,7 +366,7 @@ dependencies = [
 name = "mradm-engine"
 version = "0.1.0"
 dependencies = [
- "mradm-adm",
+ "macin-adm",
  "mradm-dsp",
  "mradm-json",
  "mradm-render",
@@ -373,7 +379,7 @@ name = "mradm-ffi"
 version = "0.1.0"
 dependencies = [
  "libm",
- "mradm-adm",
+ "macin-adm",
  "mradm-dsp",
  "mradm-ear",
  "mradm-engine",
@@ -409,7 +415,7 @@ dependencies = [
 name = "mradm-render"
 version = "0.1.0"
 dependencies = [
- "mradm-adm",
+ "macin-adm",
  "mradm-dsp",
  "mradm-ear",
  "mradm-json",
@@ -431,7 +437,7 @@ dependencies = [
 name = "mradm-scene"
 version = "0.1.0"
 dependencies = [
- "mradm-adm",
+ "macin-adm",
  "mradm-dsp",
  "mradm-json",
  "mradm-wav",
@@ -441,6 +447,7 @@ dependencies = [
 name = "mradm-wav"
 version = "0.1.0"
 dependencies = [
+ "macin-bwf",
  "mradm-json",
 ]
 

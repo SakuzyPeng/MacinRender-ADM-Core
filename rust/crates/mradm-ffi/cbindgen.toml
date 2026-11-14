@@ -5,4 +5,4 @@ documentation = false
 
 [parse]
 parse_deps = true
-include = ["mradm-dsp", "mradm-adm", "mradm-wav", "mradm-ear"]
+include = ["mradm-dsp", "macin-adm", "macin-bwf", "mradm-wav", "mradm-ear"]

@@ -7,7 +7,7 @@ license.workspace = true
 description = "Loudspeaker and HOA backends, routing rules and the offline render driver"
 
 [dependencies]
-mradm-adm = { path = "../mradm-adm" }
+mradm-adm = { package = "macin-adm", git = "https://github.com/SakuzyPeng/MacinFormat-ADM-Core", rev = "158b1760e22ca87dc5a8a6b4a56d511581d4c86f" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-ear = { path = "../mradm-ear" }
 mradm-json = { path = "../mradm-json" }

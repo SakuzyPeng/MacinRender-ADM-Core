@@ -33,6 +33,8 @@ def license_text_bytes(path: Path) -> bytes:
 
 def component_root(component: dict, build_dir: Path) -> Path | None:
     source = component['source']
+    if source.get('cargo_package'):
+        return _common.cargo_package_root(source['cargo_package']) / source['repo_dir']
     if source['type'] == 'local':
         return _common.repo_root() / source['repo_dir']
     if source['type'] == 'cargo':
