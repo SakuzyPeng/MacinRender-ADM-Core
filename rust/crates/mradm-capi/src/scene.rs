@@ -24,7 +24,7 @@ use mradm_ffi::hptf::{Coefficients, Snapshot};
 use mradm_ffi::render::device_island::DeviceIslands;
 use mradm_ffi::render::engine_scene::{EngineSceneStream, create_stream};
 use mradm_ffi::render::engine_scene_output::EngineSceneOutput;
-use mradm_ffi::render::room_ffi::{RenderRoomControl, switch_config};
+use mradm_ffi::render::room_ffi::switch_config;
 use mradm_render::live;
 use mradm_render::room_runtime::{self, SourcePosition, Status as RoomStatus};
 use mradm_render::routing::Error as EngineError;
@@ -1563,15 +1563,7 @@ pub unsafe extern "C" fn adm_scene_stream_log_entry(
 // ── Scene stream rooms ───────────────────────────────────────────────────────────
 
 /// A room control handle of a Scene stream's or a monitor's current backend.
-pub(crate) struct Control(room_runtime::Control);
-
-impl Control {
-    /// The control behind a private handle; `None` for null (a backend without a room renderer).
-    pub(crate) fn new(raw: *mut RenderRoomControl) -> Option<Self> {
-        // SAFETY: `raw` comes straight from a `*_room_control` entry and is used only here.
-        unsafe { RenderRoomControl::take(raw) }.map(Self)
-    }
-}
+pub(crate) struct Control(pub(crate) room_runtime::Control);
 
 fn control(s: &adm_scene_stream_t) -> Option<Control> {
     s.stream().room_control().map(Control)

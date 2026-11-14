@@ -61,18 +61,6 @@ pub(crate) fn switch() -> Prepare {
     Arc::new(prepare_switch)
 }
 
-impl RenderRoomControl {
-    /// The control behind a handle from `mradm_engine_*_room_control`, releasing the handle; `None`
-    /// for null.
-    ///
-    /// # Safety
-    ///
-    /// `handle` is null or a handle those entries returned that nothing else uses or destroys.
-    pub unsafe fn take(handle: *mut Self) -> Option<Control> {
-        (!handle.is_null()).then(|| unsafe { Box::from_raw(handle) }.control)
-    }
-}
-
 /// The room configuration of a switch request (`RenderRoomConfig` on Rust types): `None` without a
 /// room package.
 pub fn switch_config(
