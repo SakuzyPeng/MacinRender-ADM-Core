@@ -4,17 +4,12 @@ include(MRDependencyRecord)
 function(mr_adm_core_find_or_fetch package_name target_name)
     set_property(GLOBAL APPEND PROPERTY MR_ADM_DEPENDENCY_NAMES "${package_name}")
     set_property(GLOBAL PROPERTY "MR_ADM_DEPENDENCY_TARGET_${package_name}" "${target_name}")
-    if(package_name STREQUAL "libear")
-        set(MR_ADM_EAR_SIMD_EFFECTIVE "external" CACHE INTERNAL "Actual libear SIMD selection" FORCE)
-    endif()
     if(TARGET ${target_name})
         return()
     endif()
 
     if(MR_ADM_CORE_USE_INSTALLED_DEPS AND NOT package_name STREQUAL "FLAC" AND NOT package_name STREQUAL "Opus")
-        if(package_name STREQUAL "SampleRate")
-            find_package(SampleRate 0.2.2 EXACT CONFIG QUIET)
-        elseif(package_name STREQUAL "Corrosion")
+        if(package_name STREQUAL "Corrosion")
             find_package(Corrosion 0.6.1 EXACT CONFIG QUIET)
         else()
             find_package(${package_name} CONFIG QUIET)
@@ -56,60 +51,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG 11.2.0
             GIT_SHALLOW TRUE
         )
-    elseif(package_name STREQUAL "libebur128")
-        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-        set(_mr_adm_core_restore_shared_ebur TRUE)
-        if(DEFINED BUILD_SHARED_LIBS)
-            set(_mr_adm_core_had_shared_ebur TRUE)
-            set(_mr_adm_core_saved_shared_ebur "${BUILD_SHARED_LIBS}")
-        else()
-            set(_mr_adm_core_had_shared_ebur FALSE)
-        endif()
-        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-        FetchContent_Declare(
-            libebur128
-            GIT_REPOSITORY https://github.com/jiixyj/libebur128.git
-            GIT_TAG v1.2.6
-            GIT_SHALLOW TRUE
-        )
-        # libebur128 v1.2.6 declares cmake_minimum_required(VERSION 2.x), which
-        # CMake 4.0 rejects without this policy fallback.
-        set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-        FetchContent_GetProperties(libebur128)
-        if(NOT libebur128_POPULATED)
-            cmake_policy(PUSH)
-            if(POLICY CMP0169)
-                cmake_policy(SET CMP0169 OLD)
-            endif()
-            FetchContent_Populate(libebur128)
-            cmake_policy(POP)
-            add_subdirectory("${libebur128_SOURCE_DIR}" "${libebur128_BINARY_DIR}" EXCLUDE_FROM_ALL)
-        endif()
-        if(_mr_adm_core_had_shared_ebur)
-            set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_ebur}" CACHE BOOL "" FORCE)
-        else()
-            unset(BUILD_SHARED_LIBS CACHE)
-            unset(BUILD_SHARED_LIBS)
-        endif()
-        return()
-    elseif(package_name STREQUAL "SampleRate")
-        set(LIBSAMPLERATE_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(LIBSAMPLERATE_TESTS OFF CACHE BOOL "" FORCE)
-        set(LIBSAMPLERATE_INSTALL OFF CACHE BOOL "" FORCE)
-        FetchContent_Declare(
-            SampleRate
-            GIT_REPOSITORY https://github.com/libsndfile/libsamplerate.git
-            GIT_TAG 0.2.2
-            GIT_SHALLOW TRUE
-        )
-        FetchContent_MakeAvailable(SampleRate)
-        if(TARGET samplerate AND NOT TARGET SampleRate::samplerate)
-            add_library(SampleRate::samplerate ALIAS samplerate)
-        endif()
-        if(NOT TARGET SampleRate::samplerate)
-            message(FATAL_ERROR "libsamplerate 0.2.2 did not provide SampleRate::samplerate")
-        endif()
-        return()
     elseif(package_name STREQUAL "dr_libs")
         FetchContent_Declare(
             dr_libs
@@ -124,12 +65,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             endif()
             FetchContent_Populate(dr_libs)
             cmake_policy(POP)
-        endif()
-        # dr_wav is only the reference for the Rust WAVE reader/writer; production uses dr_flac.
-        if(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS AND NOT TARGET dr_wav::dr_wav)
-            add_library(mr_dr_wav INTERFACE)
-            add_library(dr_wav::dr_wav ALIAS mr_dr_wav)
-            target_include_directories(mr_dr_wav SYSTEM INTERFACE "${dr_libs_SOURCE_DIR}")
         endif()
         if(NOT TARGET dr_flac::dr_flac)
             add_library(mr_dr_flac INTERFACE)
@@ -287,114 +222,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         endif()
         message(STATUS "Using vendored static libFLAC")
         return()
-    elseif(package_name STREQUAL "libbw64")
-        set(EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(UNIT_TESTS OFF CACHE BOOL "" FORCE)
-        FetchContent_Declare(
-            libbw64
-            GIT_REPOSITORY https://github.com/ebu/libbw64.git
-            GIT_TAG 0.10.0
-            GIT_SHALLOW TRUE
-        )
-        FetchContent_GetProperties(libbw64)
-        if(NOT libbw64_POPULATED)
-            cmake_policy(PUSH)
-            if(POLICY CMP0169)
-                cmake_policy(SET CMP0169 OLD)
-            endif()
-            FetchContent_Populate(libbw64)
-            cmake_policy(POP)
-            set(_mr_libbw64_cmake "${libbw64_SOURCE_DIR}/src/CMakeLists.txt")
-            file(READ "${_mr_libbw64_cmake}" _mr_libbw64_src_cmake)
-            string(REPLACE "\${CMAKE_SOURCE_DIR}/config/libbw64Config.cmake.in"
-                           "\${PROJECT_SOURCE_DIR}/config/libbw64Config.cmake.in"
-                           _mr_libbw64_src_cmake "${_mr_libbw64_src_cmake}")
-            string(REPLACE "\${CMAKE_BINARY_DIR}/libbw64Config"
-                           "\${PROJECT_BINARY_DIR}/libbw64Config"
-                           _mr_libbw64_src_cmake "${_mr_libbw64_src_cmake}")
-            file(WRITE "${_mr_libbw64_cmake}" "${_mr_libbw64_src_cmake}")
-            add_subdirectory("${libbw64_SOURCE_DIR}" "${libbw64_BINARY_DIR}" EXCLUDE_FROM_ALL)
-        endif()
-        return()
-    elseif(package_name STREQUAL "libadm")
-        set(ADM_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-        set(ADM_EXAMPLES OFF CACHE BOOL "" FORCE)
-        FetchContent_Declare(
-            libadm
-            GIT_REPOSITORY https://github.com/ebu/libadm.git
-            GIT_TAG 0.14.0
-            GIT_SHALLOW TRUE
-        )
-    elseif(package_name STREQUAL "libear")
-        # libear has no official release tags; pin to a known-good commit (2026-04-09).
-        # libear vendors Eigen and xsimd by default; only Boost headers are required externally.
-        set(EAR_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-        set(EAR_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(EAR_USE_INTERNAL_EIGEN ON CACHE BOOL "" FORCE)
-        set(EAR_USE_INTERNAL_XSIMD ON CACHE BOOL "" FORCE)
-        if(MR_ADM_EAR_SCALAR_REFERENCE)
-            # 受控标量参考（路线图 §5.1 第 4 项）。关掉 per-arch 目标后 libear 的
-            # XSIMD_ARCHS 只剩 xsimd::generic_for_dispatch，运行时分派进标量实现。
-            # 注意 ear_default_arch 不是标量——它是 PolarExtentCoreSimd<xsimd::default_arch>，
-            # 随目标架构变化（x86_64 上通常是 SSE2，arm64 上是 NEON）。
-            # Override only this function/add_subdirectory scope. CMP0077 makes libear's
-            # legacy option() honor the normal variable while preserving the user's cache.
-            set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-            set(EAR_SIMD OFF)
-        endif()
-        FetchContent_Declare(
-            libear
-            GIT_REPOSITORY https://github.com/ebu/libear.git
-            GIT_TAG 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15
-            GIT_SHALLOW FALSE
-        )
-    elseif(package_name STREQUAL "Spatial_Audio_Framework")
-        # SAF exposes target 'saf'. Keep GPL modules off; SOFA uses libmysofa/zlib
-        # when MR_ADM_ENABLE_SOFA is ON, and NetCDF stays disabled.
-        #
-        # 发行许可硬约束：以下 SAF 模块/后端引入 GPL 或专有再分发义务，禁止进入默认构建。
-        # 这里显式 FATAL 而非靠后面的 set(... OFF FORCE) 静默覆盖——避免有人 -D...=ON 后
-        # 误以为已启用。详见 docs/THIRD_PARTY_LICENSES.md『禁止或需单独审批的选项』。
-        foreach(_mr_saf_forbidden
-                SAF_ENABLE_TRACKER_MODULE SAF_ENABLE_HADES_MODULE
-                SAF_USE_FFTW SAF_ENABLE_NETCDF SAF_USE_INTEL_IPP)
-            if(${_mr_saf_forbidden})
-                message(FATAL_ERROR
-                    "${_mr_saf_forbidden}=ON 被禁止：该 SAF 模块/后端引入 GPL 或专有再分发义务，"
-                    "违反默认发行策略（见 docs/THIRD_PARTY_LICENSES.md）。如确需启用，须先走 ADR/许可评审。")
-            endif()
-        endforeach()
-        set(_mr_adm_core_restore_build_shared_libs TRUE)
-        if(DEFINED BUILD_SHARED_LIBS)
-            set(_mr_adm_core_had_build_shared_libs TRUE)
-            set(_mr_adm_core_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
-        else()
-            set(_mr_adm_core_had_build_shared_libs FALSE)
-        endif()
-        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_SOFA_READER_MODULE ${MR_ADM_ENABLE_SOFA} CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_TRACKER_MODULE OFF CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_HADES_MODULE OFF CACHE BOOL "" FORCE)
-        set(SAF_USE_INTEL_IPP OFF CACHE BOOL "" FORCE)
-        set(SAF_USE_FFTW OFF CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_SIMD OFF CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_NETCDF OFF CACHE BOOL "" FORCE)
-        set(SAF_USE_FAST_MATH_FLAG OFF CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_FAST_MATH_FLAG OFF CACHE BOOL "" FORCE)
-        if(NOT DEFINED SAF_PERFORMANCE_LIB)
-            if(APPLE)
-                set(SAF_PERFORMANCE_LIB "SAF_USE_APPLE_ACCELERATE_ILP64" CACHE STRING "" FORCE)
-            else()
-                set(SAF_PERFORMANCE_LIB "SAF_USE_OPEN_BLAS_AND_LAPACKE" CACHE STRING "" FORCE)
-            endif()
-        endif()
-        FetchContent_Declare(
-            Spatial_Audio_Framework
-            GIT_REPOSITORY https://github.com/leomccormack/Spatial_Audio_Framework.git
-            GIT_TAG v1.3.4
-            GIT_SHALLOW TRUE
-            SOURCE_SUBDIR framework
-        )
     elseif(package_name STREQUAL "Opus")
         string(TOUPPER "${MR_ADM_OPUS_PROVIDER}" _mr_opus_requested_provider)
         if(MR_ADM_USE_SYSTEM_OPUS)
@@ -490,83 +317,15 @@ function(mr_adm_core_find_or_fetch package_name target_name)
     endif()
 
     FetchContent_MakeAvailable(${package_name})
-    if(_mr_adm_core_restore_build_shared_libs)
-        if(_mr_adm_core_had_build_shared_libs)
-            set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_build_shared_libs}" CACHE BOOL "" FORCE)
-        else()
-            unset(BUILD_SHARED_LIBS CACHE)
-            unset(BUILD_SHARED_LIBS)
-        endif()
-    endif()
-    if(package_name STREQUAL "Spatial_Audio_Framework" AND TARGET saf)
-        target_compile_options(saf PRIVATE $<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang>:-Wno-deprecated-declarations>)
-    endif()
-    if(package_name STREQUAL "libear" AND TARGET ear)
-        if(EAR_SIMD)
-            set(MR_ADM_EAR_SIMD_EFFECTIVE ON CACHE INTERNAL "Actual libear SIMD selection" FORCE)
-        else()
-            set(MR_ADM_EAR_SIMD_EFFECTIVE OFF CACHE INTERNAL "Actual libear SIMD selection" FORCE)
-        endif()
-        # 许可硬约束：强制 libear 内部 Eigen 只走 MPL-2.0 代码路径，把误用 LGPL-only
-        # Eigen 模块变成编译期错误（见 docs/THIRD_PARTY_LICENSES.md）。
-        # libear 会按架构拆出 ear / ear_default_arch / ear_<simd> 等多个 OBJECT 目标，
-        # 逐个覆盖（只加在 'ear' 上会漏掉 per-arch SIMD 目标的 Eigen TU）。
-        set(_mr_ear_targets "")
-        if(DEFINED libear_SOURCE_DIR)
-            get_property(_mr_ear_targets DIRECTORY "${libear_SOURCE_DIR}/src"
-                PROPERTY BUILDSYSTEM_TARGETS)
-        endif()
-        if(NOT _mr_ear_targets)
-            set(_mr_ear_targets ear)
-        endif()
-        foreach(_mr_ear_tgt IN LISTS _mr_ear_targets)
-            get_target_property(_mr_ear_type ${_mr_ear_tgt} TYPE)
-            if(NOT _mr_ear_type STREQUAL "INTERFACE_LIBRARY" AND NOT _mr_ear_type STREQUAL "UTILITY")
-                target_compile_definitions(${_mr_ear_tgt} PRIVATE EIGEN_MPL2_ONLY)
-            endif()
-        endforeach()
-    endif()
 endfunction()
 
-# fmt and nlohmann_json are test-only since 6.5 C (frozen references, test SDK and tools).
+# fmt and nlohmann_json are test-only since 6.5 C (test SDK and tools).
 if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_find_or_fetch(fmt fmt::fmt)
     mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
 endif()
-if(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS)
-    mr_adm_core_find_or_fetch(libebur128 ebur128)
-endif()
 mr_adm_core_find_or_fetch(dr_libs dr_flac::dr_flac)
 mr_adm_core_find_or_fetch(FLAC FLAC::FLAC)
-if(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS OR MR_ADM_BUILD_LIBADM_REFERENCE_TESTS)
-    mr_adm_core_find_or_fetch(libbw64 libbw64)
-endif()
-if(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS)
-    mr_adm_core_find_or_fetch(libadm adm)
-endif()
-if(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS)
-    mr_adm_core_find_or_fetch(libear ear)
-else()
-    set(MR_ADM_EAR_SIMD_EFFECTIVE "not-linked" CACHE INTERNAL "Actual libear SIMD selection" FORCE)
-endif()
-if(MR_ADM_EAR_SCALAR_REFERENCE AND MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS)
-    # <name>_SOURCE_DIR 是 FetchContent 在函数作用域里设的普通变量，这里读不到；
-    # FetchContent_GetProperties 从全局属性重新取，跨作用域可用。
-    FetchContent_GetProperties(libear)
-    if(NOT libear_POPULATED OR NOT MR_ADM_EAR_SIMD_EFFECTIVE STREQUAL "OFF")
-        # 装好的 libear 是别人用自己的 EAR_SIMD 编的，本项目的开关对它无效。静默沿用会让
-        # 配置 B 的「标量参考」结论完全站不住，所以直接失败而不是降级。
-        message(FATAL_ERROR
-            "MR_ADM_EAR_SCALAR_REFERENCE=ON 需要由本项目配置 libear 的标量实现，但当前复用了外部目标。"
-            "请加 -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF 重新配置。")
-    endif()
-endif()
-if(MR_ADM_BUILD_SAF_REFERENCE_TESTS)
-    mr_adm_core_find_or_fetch(Spatial_Audio_Framework saf)
-endif()
 mr_adm_core_find_or_fetch(Opus Opus::opus)
 mr_adm_core_find_or_fetch(miniaudio miniaudio)
-if(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS)
-    mr_adm_core_find_or_fetch(SampleRate SampleRate::samplerate)
-endif()
 mr_adm_core_write_dependency_record()

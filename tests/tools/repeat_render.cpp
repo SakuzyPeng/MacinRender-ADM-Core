@@ -10,10 +10,6 @@
 #include "adm/render.h"
 #include "adm/render_service.h"
 
-#ifdef MR_ADM_DIAGNOSTIC_PORTABLE_RNG
-extern "C" void mr_adm_diagnostic_seed(unsigned int seed);
-#endif
-
 namespace {
 class MeasurementLog final : public mradm::LogSink {
   public:
@@ -73,9 +69,6 @@ int main(int argc, char** argv) {
         // and process-global reseeding is unsuitable for concurrent production rendering.
         if (reset_rng) {
             std::srand(1);
-#ifdef MR_ADM_DIAGNOSTIC_PORTABLE_RNG
-            mr_adm_diagnostic_seed(1);
-#endif
         }
         request.output_path = std::string{args[2]} + "-" + std::to_string(pass) + ".wav";
         std::cout << "same_process_pass=" << pass << "\n";

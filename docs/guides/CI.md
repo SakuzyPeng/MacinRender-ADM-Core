@@ -21,7 +21,7 @@
 
 | Job | Runner | 内容 | 说明 |
 |---|---|---|---|
-| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`check-reference-retention.py`、`language-surface.py --check --base-ref <基准提交>` | 见下文版本与 GUI 国际化门禁；参考代码登记见 `docs/architecture/RUST_REFERENCE_RETENTION.md`；C/C++ 规模棘轮校验实测行数与基线一致，并拒绝相对目标提交放宽上限，见 `docs/architecture/RUST_INVERSION_ROADMAP.md` |
+| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`language-surface.py --check --base-ref <基准提交>` | 见下文版本与 GUI 国际化门禁；C/C++ 规模棘轮校验实测行数与基线一致，并拒绝相对目标提交放宽上限，见 `docs/architecture/RUST_INVERSION_ROADMAP.md` |
 | `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`check-capi-exports.py`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
 | `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | 生产构建无需 Boost；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
@@ -30,13 +30,12 @@
 `MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED`、`MR_ADM_ENABLE_IAMF=OFF`
 和 `MR_ADM_BUILD_CAPI_BUNDLE=ON`：减少系统包差异，避免普通 PR 构建 AOM `iamf-tools` bridge，
 同时验证 GUI 使用的自包含 C ABI bundle 可以链接。系统仍需安装 CMake、Ninja、
-ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（libear、FLAC、Opus、miniaudio 等）
+ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（FLAC、Opus、miniaudio 等）
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
-生产构建不再需要 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64 或 dr_wav（dr_libs 仍为 dr_flac 获取）；
-它们只在默认关闭的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下作为维护对照获取，必需 CI 不开启这些开关；
-手动的 `.github/workflows/reference-tests.yml` 在 Release 下逐个开启并运行对应 ctest，防止这些对照无声腐烂
-（SAF 对照保持在其验收所用的 macOS + Accelerate 数值环境；其余跑在 Linux）。失败的处理见 `docs/architecture/RUST_REFERENCE_RETENTION.md`。
+构建不获取 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64、libear 或 dr_wav
+（dr_libs 只为 dr_flac 获取）。这些旧库的对照测试、`MR_ADM_BUILD_*_REFERENCE_TESTS` 开关与手动的
+`reference-tests.yml` 已随 R1 删除（用户决定 2026-11-14，见 `docs/architecture/RUST_REFERENCE_RETENTION.md`）。
 
 ### 第二阶段：质量 CI
 
@@ -242,7 +241,7 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 
 Visual Studio（含 VC x64 工具）、Ninja 和锁定的 Rust 工具链即可。
 在 `vcvars64.bat` 环境中配置；维护者本机验证使用规范构建树 `build\win-canon`。
-生产构建无需 Boost、vcpkg 或 OpenBLAS。只有显式启用历史 libear/libadm 参考测试时需要 Boost。
+构建无需 Boost、vcpkg 或 OpenBLAS。
 
 ## 需要注意的边界
 
@@ -279,10 +278,6 @@ Visual Studio（含 VC x64 工具）、Ninja 和锁定的 Rust 工具链即可�
 .github/workflows/windows-bringup.yml
   workflow_dispatch
   Windows Release probe build + CLI artifact
-
-.github/workflows/reference-tests.yml
-  workflow_dispatch
-  Release × each default-OFF third-party migration reference (SAF on macOS, others on Linux)
 
 .github/workflows/iamf-bridge-prebuild.yml
   workflow_dispatch / bridge-related pull_request

@@ -9,15 +9,7 @@ project(
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
-option(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS "Build optional legacy libear numerical reference tests" OFF)
-option(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS "Build optional legacy libbw64 I/O reference tests" OFF)
-option(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS "Build optional legacy libadm metadata reference tools" OFF)
-option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
-option(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS "Build optional C libebur128 meter reference tests" OFF)
-option(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS "Build optional C libsamplerate reference tests" OFF)
-option(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS "Build optional dr_wav float WAVE I/O reference tests" OFF)
 option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
-option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MR_ADM_CORE_FETCH_DEPS "Fetch the C/C++ dependencies when not found" ON)
 option(MR_ADM_CORE_USE_INSTALLED_DEPS "Use installed CMake package configs before FetchContent dependencies" ON)
@@ -193,20 +185,6 @@ mr_adm_core_apply_static_analysis(mr_adm_render_common)
 
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
     target_compile_definitions(mr_adm_render_common PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-endif()
-if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
-    if(NOT MR_ADM_BUILD_SAF_REFERENCE_TESTS)
-        message(FATAL_ERROR "MR_ADM_DIAGNOSTIC_PORTABLE_RNG requires MR_ADM_BUILD_SAF_REFERENCE_TESTS")
-    endif()
-    if(NOT MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        message(FATAL_ERROR "MR_ADM_DIAGNOSTIC_PORTABLE_RNG requires MR_ADM_CONSISTENCY_DIAGNOSTICS=ON")
-    endif()
-    target_sources(saf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.c")
-    if(MSVC)
-        target_compile_options(saf PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.h")
-    else()
-        target_compile_options(saf PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.h")
-    endif()
 endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
@@ -578,22 +556,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_wav_container_tests)
     add_test(NAME mr_adm_wav_container_tests COMMAND mr_adm_wav_container_tests)
 
-    if(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS)
-        add_executable(mr_adm_libbw64_reference_tests tests/reference/libbw64/reference_test.cpp)
-        target_include_directories(mr_adm_libbw64_reference_tests PRIVATE src/adm_audio)
-        target_link_libraries(mr_adm_libbw64_reference_tests PRIVATE MacinRender::ADMAudio mradm_capi libbw64)
-        mr_adm_core_apply_warnings(mr_adm_libbw64_reference_tests)
-        add_test(NAME mr_adm_libbw64_reference_tests COMMAND mr_adm_libbw64_reference_tests)
-    endif()
-
-    if(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS)
-        add_executable(mr_adm_drwav_reference_tests tests/reference/dr_wav_reference_test.cpp)
-        target_include_directories(mr_adm_drwav_reference_tests PRIVATE src/adm_audio)
-        target_link_libraries(mr_adm_drwav_reference_tests PRIVATE MacinRender::ADMAudio mradm_capi dr_wav::dr_wav)
-        mr_adm_core_apply_warnings(mr_adm_drwav_reference_tests)
-        add_test(NAME mr_adm_drwav_reference_tests COMMAND mr_adm_drwav_reference_tests)
-    endif()
-
     # The format-erased reader is used only by test/consistency tools.
     add_library(mr_adm_audio_test_support STATIC tests/support/audio_reader.cpp)
     target_include_directories(mr_adm_audio_test_support PUBLIC tests/support)
@@ -891,19 +853,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)
     set_tests_properties(mr_adm_pcm_mix_tests PROPERTIES TIMEOUT 60)
 
-    if(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS)
-        add_executable(mr_adm_libear_reference_tests tests/reference/libear/reference_test.cpp)
-        target_link_libraries(mr_adm_libear_reference_tests PRIVATE ear MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-        target_include_directories(mr_adm_libear_reference_tests PRIVATE tests/unit)
-        mr_adm_core_apply_warnings(mr_adm_libear_reference_tests)
-        add_test(NAME mr_adm_libear_reference_tests COMMAND mr_adm_libear_reference_tests)
-        set_tests_properties(mr_adm_libear_reference_tests PROPERTIES TIMEOUT 300)
-        add_executable(mr_adm_libear_benchmark EXCLUDE_FROM_ALL tests/reference/libear/benchmark.cpp)
-        target_link_libraries(mr_adm_libear_benchmark PRIVATE ear MacinRender::ADMDsp MacinRender::ADMCore)
-        target_include_directories(mr_adm_libear_benchmark PRIVATE tests/unit)
-        mr_adm_core_apply_warnings(mr_adm_libear_benchmark)
-    endif()
-
     add_executable(mr_adm_ear_post_tests tests/unit/ear_post_test.cpp)
     target_link_libraries(mr_adm_ear_post_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_ear_post_tests)
@@ -929,27 +878,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_pcm_bits PRIVATE mr_adm_audio_test_support)
     mr_adm_core_apply_warnings(mr_adm_pcm_bits)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
-
-    # Deterministic baseline inputs. Bit-exact by construction so the three runners can be shown
-    # to render the same bytes before their outputs are compared.
-    if(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS)
-        find_package(Python3 REQUIRED COMPONENTS Interpreter)
-        add_library(mr_adm_libadm_reference STATIC tests/reference/libadm/scene_importer.cpp)
-        target_link_libraries(mr_adm_libadm_reference PRIVATE
-            mr_adm_scene_test_support MacinRender::ADMIo MacinRender::ADMAudio adm)
-        add_executable(mr_adm_make_libadm_fixture tests/reference/libadm/make_fixture.cpp)
-        target_link_libraries(mr_adm_make_libadm_fixture PRIVATE libbw64 adm)
-        # The frozen comparison serializes both AdmScene copies with the former C++ inspect writer,
-        # kept as test support; the production document is Rust.
-        add_executable(mr_adm_libadm_reference_tests tests/reference/libadm/reference_test.cpp
-            tests/support/scene_json/scene_json.cpp)
-        target_include_directories(mr_adm_libadm_reference_tests PRIVATE tests/support/scene_json)
-        target_link_libraries(mr_adm_libadm_reference_tests PRIVATE mr_adm_libadm_reference
-            mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMRenderCommon libbw64 adm nlohmann_json::nlohmann_json)
-        add_test(NAME mr_adm_libadm_reference_tests COMMAND "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/reference/libadm/run.py"
-            $<TARGET_FILE:mr_adm_make_libadm_fixture> $<TARGET_FILE:mr_adm_libadm_reference_tests>)
-    endif()
 
     # C ABI consumers for the same-build comparison of two C ABI implementations (phase 6): they link the
     # shared libmradm_capi and load whichever copy sits next to them (an $ORIGIN / @loader_path rpath; on
@@ -1092,52 +1020,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_audio mr_adm_render_common)
             target_compile_definitions(${_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
         endforeach()
-    endif()
-
-    if(MR_ADM_BUILD_SAF_REFERENCE_TESTS)
-    add_executable(mr_adm_export_saf_hoa_matrix EXCLUDE_FROM_ALL tests/tools/export_saf_hoa_matrix.cpp)
-    target_link_libraries(mr_adm_export_saf_hoa_matrix PRIVATE saf)
-    target_include_directories(mr_adm_export_saf_hoa_matrix SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_hoa")
-    add_library(mr_adm_saf_spreader_reference STATIC tests/reference/spreader_mr.c)
-    target_link_libraries(mr_adm_saf_spreader_reference PRIVATE saf)
-    target_include_directories(mr_adm_saf_spreader_reference PRIVATE
-        "${saf_SOURCE_DIR}/../examples/include")
-    add_executable(mr_adm_saf_reference_tests tests/reference/saf_reference_test.cpp)
-    target_link_libraries(mr_adm_saf_reference_tests PRIVATE MacinRender::ADMDsp saf mr_adm_saf_spreader_reference)
-    target_include_directories(mr_adm_saf_reference_tests SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_vbap"
-        "${saf_SOURCE_DIR}/modules/saf_hrir" "${saf_SOURCE_DIR}/../examples/include")
-    add_test(NAME mr_adm_saf_reference_tests COMMAND mr_adm_saf_reference_tests)
-
-    add_executable(mr_adm_numeric_probe EXCLUDE_FROM_ALL tests/tools/numeric_probe.cpp)
-    target_link_libraries(mr_adm_numeric_probe PRIVATE saf)
-    target_include_directories(mr_adm_numeric_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
-    target_include_directories(mr_adm_numeric_probe SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
-    target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    mr_adm_core_apply_warnings(mr_adm_numeric_probe)
-    mr_adm_core_apply_static_analysis(mr_adm_numeric_probe)
-    add_executable(mr_adm_vbap_probe EXCLUDE_FROM_ALL
-        tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c)
-    target_link_libraries(mr_adm_vbap_probe PRIVATE saf)
-    target_include_directories(mr_adm_vbap_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
-    target_include_directories(mr_adm_vbap_probe SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_vbap")
-    target_compile_definitions(mr_adm_vbap_probe PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    mr_adm_core_apply_warnings(mr_adm_vbap_probe)
-    mr_adm_core_apply_static_analysis(mr_adm_vbap_probe)
-    add_executable(mr_adm_fft_lifecycle_probe EXCLUDE_FROM_ALL tests/tools/fft_lifecycle_probe.cpp)
-    target_link_libraries(mr_adm_fft_lifecycle_probe PRIVATE saf)
-    target_include_directories(mr_adm_fft_lifecycle_probe SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
-    mr_adm_core_apply_warnings(mr_adm_fft_lifecycle_probe)
-    mr_adm_core_apply_static_analysis(mr_adm_fft_lifecycle_probe)
-    if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
-        target_compile_definitions(mr_adm_repeat_render PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
-        target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
-        target_compile_definitions(mr_adm_vbap_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
-        target_link_libraries(mr_adm_repeat_render PRIVATE saf)
-    endif()
-
     endif()
 
     # Standard-library-only Python tests exercise the actual executable and shell exit codes.
@@ -1620,32 +1502,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_resampler_tests)
     add_test(NAME mr_adm_resampler_tests COMMAND mr_adm_resampler_tests)
 
-    if(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS)
-        add_executable(mr_adm_resampler_reference_tests tests/reference/resampler_reference_test.cpp)
-        target_link_libraries(mr_adm_resampler_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp SampleRate::samplerate)
-        target_include_directories(mr_adm_resampler_reference_tests PRIVATE tests/support/dsp)
-        mr_adm_core_apply_warnings(mr_adm_resampler_reference_tests)
-        mr_adm_core_apply_static_analysis(mr_adm_resampler_reference_tests)
-        add_test(NAME mr_adm_resampler_reference_tests COMMAND mr_adm_resampler_reference_tests)
-        set_tests_properties(mr_adm_resampler_reference_tests PROPERTIES TIMEOUT 120)
-    endif()
-
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
     target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_meter_tests)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
-
-    if(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS)
-        add_executable(mr_adm_ebur128_reference_tests tests/reference/ebur128_reference_test.cpp)
-        target_link_libraries(mr_adm_ebur128_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp ebur128)
-        target_include_directories(mr_adm_ebur128_reference_tests SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
-        target_include_directories(mr_adm_ebur128_reference_tests PRIVATE tests/support/post_gain)
-        mr_adm_core_apply_warnings(mr_adm_ebur128_reference_tests)
-        mr_adm_core_apply_static_analysis(mr_adm_ebur128_reference_tests)
-        add_test(NAME mr_adm_ebur128_reference_tests COMMAND mr_adm_ebur128_reference_tests)
-        set_tests_properties(mr_adm_ebur128_reference_tests PROPERTIES TIMEOUT 120)
-    endif()
 
     # Fixture test: integrated loudness normalization — RenderService renders a loud sine → -23 LUFS.
     add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)

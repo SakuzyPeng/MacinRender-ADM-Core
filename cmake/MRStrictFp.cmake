@@ -22,8 +22,6 @@
 
 option(MR_ADM_STRICT_FP
     "Controlled numeric build: disable FP contraction and fast-math (measurement only)" OFF)
-option(MR_ADM_EAR_SCALAR_REFERENCE
-    "Test-only libear reference: disable SIMD dispatch (requires MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS)" OFF)
 
 function(mr_adm_core_check_fp_flags variable_name)
     separate_arguments(flags NATIVE_COMMAND "${${variable_name}}")

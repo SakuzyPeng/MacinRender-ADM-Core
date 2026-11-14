@@ -46,11 +46,6 @@ unusedStructMember:*/src/adm_renderer_factory/renderer_factory.h
 # and consumers; cppcheck sees the header alone.
 unusedStructMember:*/src/adm_realtime/audio_output_device.h
 unusedStructMember:*/tests/support/realtime/monitor_engine.h
-# SAF spreader is a local C fork of the upstream SAF example; keep cppcheck from
-# treating third-party C idioms as project C++ style issues.
-*:*/tests/reference/spreader_mr.c
-unusedStructMember:*/tests/reference/spreader_mr_internal.h
-
 // OSC protocol header is also analyzed alone; these fields are used by the parser, receiver and contract tests.
 unusedStructMember:*tests/support/osc/osc_head_tracking_protocol.h
 

@@ -10,27 +10,6 @@ if ! command -v cppcheck >/dev/null 2>&1; then
 fi
 
 # Windows COM and the optional CUDA SDK boundary require native SDK headers.
-reference_excludes=()
-if ! grep -q '^MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    reference_excludes+=(-i "$repo_root/tests/reference/libear")
-fi
-if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    reference_excludes+=(-i "$repo_root/tests/reference/libbw64")
-fi
-if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    reference_excludes+=(-i "$repo_root/tests/reference/libadm" -i "$repo_root/tests/support/scene_json")
-fi
-if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    for file in tests/reference/saf_reference_test.cpp tests/reference/spreader_mr.c tests/reference/spreader_mr.h tests/reference/spreader_mr_internal.h tests/tools/export_saf_hoa_matrix.cpp tests/tools/numeric_probe.cpp tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c tests/tools/fft_lifecycle_probe.cpp; do
-        reference_excludes+=(-i "$repo_root/$file")
-    done
-fi
-if ! grep -q '^MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    reference_excludes+=(-i "$repo_root/tests/reference/resampler_reference_test.cpp")
-fi
-if ! grep -q '^MR_ADM_BUILD_EBUR128_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    reference_excludes+=(-i "$repo_root/tests/reference/ebur128_reference_test.cpp")
-fi
 cppcheck \
     --enable=warning,style,performance,portability \
     --std=c++20 \
@@ -43,5 +22,4 @@ cppcheck \
     -I "$repo_root/tests/support/sdk/include" \
     -i "$repo_root/src/adm_windows" \
     -i "$repo_root/src/adm_render_room/cuda" \
-    "${reference_excludes[@]}" \
     "$repo_root/include" "$repo_root/src" "$repo_root/tests"

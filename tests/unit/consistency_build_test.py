@@ -80,28 +80,16 @@ probe_rust_link_paths(Windows windows)
         self.assertEqual(result.stdout, '编译器诊断')
         self.assertIn('\ufffd', result.stderr)
 
-    def project(self, ear=False, flac=False):
+    def project(self, deps=False, flac=False):
         source = self.root / 'source with spaces'
         source.mkdir()
         text = ('cmake_minimum_required(VERSION 3.24)\nproject(probe LANGUAGES C CXX)\n'
                 'set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n'
                 f'list(APPEND CMAKE_MODULE_PATH "{(REPO / "cmake").as_posix()}")\n'
                 'include(MRStrictFp)\n')
-        if ear:
-            fixture = source / 'ear fixture'
-            (fixture / 'src').mkdir(parents=True)
-            (fixture / 'CMakeLists.txt').write_text(
-                'cmake_minimum_required(VERSION 3.5)\nproject(ear_fixture LANGUAGES CXX)\n'
-                'option(EAR_SIMD "upstream default" ON)\nadd_subdirectory(src)\n')
-            (fixture / 'src/CMakeLists.txt').write_text(
-                'add_library(ear STATIC ear.cpp)\nif(EAR_SIMD)\n'
-                'target_compile_definitions(ear PRIVATE XSIMD_ARCHS=xsimd::default_arch)\nelse()\n'
-                'target_compile_definitions(ear PRIVATE XSIMD_ARCHS=xsimd::generic_for_dispatch)\nendif()\n')
-            (fixture / 'src/ear.cpp').write_text('int ear_fixture() { return 0; }\n')
-            # Stub unrelated packages so the real MRDependencies libear branch can run offline.
-            targets = ('fmt::fmt nlohmann_json::nlohmann_json '
-                       'ebur128 dr_wav::dr_wav FLAC::FLAC libbw64 adm saf '
-                       'Opus::opus miniaudio')
+        if deps:
+            # Stub the packages so the real MRDependencies can run offline.
+            targets = 'fmt::fmt nlohmann_json::nlohmann_json dr_flac::dr_flac FLAC::FLAC Opus::opus miniaudio'
             if flac:
                 targets = targets.replace(' FLAC::FLAC', '')
                 flac_dir = source / 'flac fixture'
@@ -116,13 +104,9 @@ probe_rust_link_paths(Windows windows)
                          'set(MR_ADM_FLAC_PROVIDER VENDORED)\n')
             text += ('set(MR_ADM_CORE_FETCH_DEPS ON)\nset(MR_ADM_CORE_USE_INSTALLED_DEPS OFF)\n'
                      'set(FETCHCONTENT_FULLY_DISCONNECTED ON)\n'
-                     'set(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS ON)\n'
-                     f'set(FETCHCONTENT_SOURCE_DIR_LIBEAR "{fixture.as_posix()}")\n'
                      f'foreach(target IN ITEMS {targets})\n'
                      'add_library(${target} INTERFACE IMPORTED)\nendforeach()\n'
-                     'include(MRDependencies)\n'
-                     'get_target_property(mode ear COMPILE_DEFINITIONS)\n'
-                     'file(WRITE "${CMAKE_BINARY_DIR}/ear-mode.txt" "${mode}")\n')
+                     'include(MRDependencies)\n')
             if flac:
                 text += ('get_target_property(flac_options FLAC COMPILE_OPTIONS)\n'
                          'file(WRITE "${CMAKE_BINARY_DIR}/flac-options.txt" "${flac_options}")\n')
@@ -150,46 +134,17 @@ probe_rust_link_paths(Windows windows)
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
-    def test_scalar_reference_does_not_overwrite_user_cache(self):
-        source = self.project(ear=True)
-        build = self.root / 'build'
-        for scalar, preference, expected in [
-            ('ON', None, 'generic_for_dispatch'), ('OFF', None, 'default_arch'),
-            ('OFF', 'ON', 'default_arch'), ('ON', None, 'generic_for_dispatch'),
-            ('OFF', None, 'default_arch'), ('ON', 'OFF', 'generic_for_dispatch'),
-            ('OFF', None, 'generic_for_dispatch'), ('ON', 'ON', 'generic_for_dispatch'),
-            ('OFF', None, 'default_arch'),
-        ]:
-            with self.subTest(scalar=scalar, preference=preference):
-                flags = ['-DMR_ADM_EAR_SCALAR_REFERENCE=' + scalar]
-                if preference:
-                    flags.append('-DEAR_SIMD=' + preference)
-                self.configure(source, build, *flags)
-                self.assertIn('XSIMD_ARCHS=xsimd::' + expected, (build / 'ear-mode.txt').read_text())
-                if preference:
-                    line = next(line for line in (build / 'CMakeCache.txt').read_text().splitlines()
-                                if line.startswith('EAR_SIMD:'))
-                    self.assertEqual(line.split('=', 1)[1], preference)
-        manifest = json.loads((build / 'consistency-dependencies.json').read_text())
-        ear = next(d for d in manifest['dependencies'] if d['name'] == 'libear')
-        self.assertEqual(Path(ear['source_dir']).resolve(), (source / 'ear fixture').resolve())
-        self.assertEqual(ear['provider'], 'source')
-        self.assertEqual(next(d for d in manifest['dependencies'] if d['name'] == 'miniaudio')['provider'], 'external')
-
     def test_default_preset_clears_experimental_overrides(self):
-        source = self.project(ear=True)
+        source = self.project(deps=True)
         shutil.copyfile(REPO / 'CMakePresets.json', source / 'CMakePresets.json')
         build = self.root / 'preset-build'
-        self.configure(source, build, '-DMR_ADM_STRICT_FP=ON', '-DMR_ADM_EAR_SCALAR_REFERENCE=ON',
-                       preset='consistency-a')
+        self.configure(source, build, '-DMR_ADM_STRICT_FP=ON', preset='consistency-a')
         self.configure(source, build, preset='consistency-a')
         cache = (build / 'CMakeCache.txt').read_text()
         self.assertIn('MR_ADM_STRICT_FP:BOOL=OFF', cache)
-        self.assertIn('MR_ADM_EAR_SCALAR_REFERENCE:BOOL=OFF', cache)
-        self.assertIn('default_arch', (build / 'ear-mode.txt').read_text())
 
     def test_flac_target_overrides_are_removed_only_when_controlled(self):
-        source = self.project(ear=True, flac=True)
+        source = self.project(deps=True, flac=True)
         build = self.root / 'flac-build'
         self.configure(source, build, '-DMR_ADM_STRICT_FP=OFF')
         baseline = (build / 'flac-options.txt').read_text()
@@ -199,21 +154,6 @@ probe_rust_link_paths(Windows windows)
         self.run_ok([OPTIONS.cmake, '--build', build, '--target', 'FLAC'])
         self.configure(source, build, '-DMR_ADM_STRICT_FP=OFF')
         self.assertEqual((build / 'flac-options.txt').read_text(), baseline)
-
-    def test_scene_reference_arithmetic_is_scoped_and_default_on(self):
-        source = self.project()
-        with (source / 'CMakeLists.txt').open('a') as out:
-            out.write('add_executable(scene_reference probe.cpp)\n'
-                      'mr_adm_core_scene_reference_fp(scene_reference)\n')
-        build = self.root / 'scene-reference-build'
-        self.configure(source, build, '-DMR_ADM_STRICT_FP=OFF')
-        rows = json.loads((build / 'compile_commands.json').read_text())
-        reference = next(row['command'] for row in rows if 'scene_reference.dir' in row['command'])
-        production = next(row['command'] for row in rows if 'probe.dir' in row['command'])
-        flag = '/fp:strict' if sys.platform == 'win32' else '-ffp-contract=off'
-        self.assertIn(flag, reference)
-        self.assertNotIn(flag, production)
-        self.run_ok([OPTIONS.cmake, '--build', build])
 
     def test_strict_fp_rejects_common_and_release_conflicts(self):
         source = self.project()
@@ -248,7 +188,7 @@ class ReleaseParityTests(unittest.TestCase):
     IGNORED = {'CMAKE_C_COMPILER_LAUNCHER', 'CMAKE_CXX_COMPILER_LAUNCHER', 'FETCHCONTENT_BASE_DIR'}
     # Options only the consistency build spells out; each must equal what release builds get by default.
     DEFAULTED = {'MR_ADM_CORE_BUILD_TESTS', 'MR_ADM_CONSISTENCY_DIAGNOSTICS', 'MR_ADM_STRICT_FP',
-                 'MR_ADM_EAR_SCALAR_REFERENCE', 'MR_ADM_ENABLE_SOFA'}
+                 'MR_ADM_ENABLE_SOFA'}
 
     @staticmethod
     def configure_steps(path):
@@ -282,8 +222,6 @@ class ReleaseParityTests(unittest.TestCase):
         for key, value in release.items():
             self.assertEqual(candidate.get(key), value, f'{platform}: {key}')
         for key in candidate.keys() - release.keys():
-            if key == 'EAR_SIMD':
-                continue  # Only the opt-in libear reference build reads it; production EAR is Rust.
             self.assertIn(key, self.DEFAULTED, f'{platform}: consistency-only option {key}')
             self.assertEqual(candidate[key], defaults[key], f'{platform}: {key} differs from the release default')
 
@@ -360,22 +298,22 @@ class BuildInfoTests(Harness):
         (archive / 'source.c').write_text('int untracked();\n')
         self.manifest['project_source_dir'] = str(project)
         self.manifest['dependencies'] = [
-            {'name': 'libear', 'provider': 'source', 'source_dir': str(source)},
+            {'name': 'libopus', 'provider': 'source', 'source_dir': str(source)},
             {'name': 'archive', 'provider': 'source', 'source_dir': str(archive)},
             {'name': 'installed', 'provider': 'external', 'config_dir': 'package config'},
         ]
         self.write_manifest()
         self.git_source('different cache/stale-src')
         fields, result = self.record()
-        self.assertEqual(fields['dep.libear'], sha)
-        self.assertEqual(fields['dep.libear.dirty'], 'false')
+        self.assertEqual(fields['dep.libopus'], sha)
+        self.assertEqual(fields['dep.libopus.dirty'], 'false')
         self.assertEqual(fields['dep.count'], '3')
         self.assertEqual(fields['dep.archive'], 'unavailable')
         self.assertEqual(fields['dep.installed'], 'unavailable')
         self.assertIn('warning: archive', result.stderr)
         self.assertFalse(any('stale' in key for key in fields))
         (source / 'source.c').write_text('int modified();\n')
-        self.assertEqual(self.record()[0]['dep.libear.dirty'], 'true')
+        self.assertEqual(self.record()[0]['dep.libopus.dirty'], 'true')
 
     def test_missing_manifest_fails_explicitly(self):
         (self.build / 'consistency-dependencies.json').unlink()
@@ -401,19 +339,6 @@ class BuildInfoTests(Harness):
         self.assertEqual(self.record()[0]['validation.strict_fp'], 'passed')
         self.write_commands(['/fp:precise', '/fp:fast'])
         self.record(status=2)
-
-    def test_rust_ear_ignores_stale_reference_simd_but_checks_linked_oracle(self):
-        self.manifest['ear_implementation'] = 'rust'
-        self.write_manifest()
-        with (self.build / 'CMakeCache.txt').open('a') as out:
-            out.write('MR_ADM_EAR_SCALAR_REFERENCE:BOOL=ON\nMR_ADM_EAR_SIMD_EFFECTIVE:STRING=ON\n')
-        fields, _ = self.record()
-        self.assertEqual(fields['ear.implementation'], 'rust')
-        self.assertEqual(fields['validation.ear_scalar'], 'not-linked')
-        self.manifest['dependencies'] = [{'name': 'libear', 'provider': 'external'}]
-        self.write_manifest()
-        fields, _ = self.record(status=2)
-        self.assertEqual(fields['validation.ear_scalar'], 'failed')
 
     def test_sample_command_uses_json_keys_not_field_order(self):
         # Deliberately put file before command and put an unrelated command after it.

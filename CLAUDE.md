@@ -166,8 +166,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 - `MR_ADM_ENABLE_IAMF=OFF`（默认）— IAMF 编码，需配合 `MR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk` 指向预构建的官方 AOM iamf-tools bridge SDK（提供 `lib/libmr_iamf_aom_bridge.*`）。关闭时 `.iamf` 输出直接返回 `unsupported`，**不**回退到任何手写 OBU writer
 - `MR_ADM_CORE_BUILD_CLI=ON`、`MR_ADM_CORE_BUILD_TESTS=ON`
 - `MR_ADM_BUILD_CAPI_BUNDLE=OFF` — 打开后生成自包含 `libmradm_capi` 共享库（target `mradm_capi_bundle`），供 GUI P/Invoke 加载
-- `MR_ADM_BUILD_{SAF,LIBADM,LIBBW64,LIBEAR,EBUR128,SAMPLERATE,DRWAV}_REFERENCE_TESTS=OFF`（默认）— 只为维护对照获取/构建旧库参考工具，**不改变生产实现**；SAF 参考只用 Release；libear / libadm 参考需要 Boost
-- `MR_ADM_STRICT_FP` / `MR_ADM_EAR_SCALAR_REFERENCE` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` / `MR_ADM_DIAGNOSTIC_PORTABLE_RNG` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建。生产 Scene 算术不依赖这些开关：C++ 生产入口固定用私有非融合标志（`scene-separate-v1`，ADR 0014），冻结的 Scene / Live 双耳 / Live VBAP / HOA 参考测试目标单独加 `-ffp-contract=off`（MSVC `/fp:strict`）
+- `MR_ADM_STRICT_FP` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建。生产 Scene 算术不依赖这些开关：C++ 生产入口固定用私有非融合标志（`scene-separate-v1`，ADR 0014），冻结的 Scene / Live 双耳 / Live VBAP / HOA 参考测试目标单独加 `-ffp-contract=off`（MSVC `/fp:strict`）
 
 CI 显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 与 `MR_ADM_OPUS_PROVIDER=VENDORED` 以消除 runner 差异（见 `docs/guides/CI.md`）。
 
@@ -275,7 +274,7 @@ Rust/C++ 边界规则：
 ### 绝对边界（ADR 0003，按迁移现状更新）
 
 - `include/adm/` 只有 `c_api.h`（6.5 C）；它与岛共用的 `src/adm_core/adm/*` 都不得 `#include` 任何第三方 ADM/renderer 头（Apple 框架等）或 Rust FFI 头
-- libear / libadm / libbw64 / SAF / libebur128 / libsamplerate / dr_wav **已不是生产依赖**，只能出现在对应 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下的参考测试与工具中；不得重新引入生产路径
+- libear / libadm / libbw64 / SAF / libebur128 / libsamplerate / dr_wav **不是依赖**：生产不用，对照测试与 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关也已随 R1 删除（2026-11-14）；不得重新引入
 - CLI 不直接调用任何 renderer 或 IO 库；只构造 `RenderRequest`，调用 `RenderService`
 - Apple 框架（AudioToolbox、CoreAudio、CoreFoundation、AVFoundation）只允许出现在 `src/adm_audio/` 与 `src/adm_apple/`（`if(APPLE)` 门控）
 - Windows COM / SpatialAudio（`spatialaudioclient.h`、`mmdeviceapi.h`、WRL）只允许出现在 `src/adm_windows/`（Windows-only 系统空间监听 sink，`if(WIN32)` 门控）；工厂返回第三方无关的 `IAudioOutputDevice`
@@ -309,7 +308,7 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 - binaural 默认使用内置 KEMAR HRTF（已提交的二进制资源 `rust/crates/mradm-dsp/assets/`，`manifest.json` 记录来源与 SHA-256，构建不再从 SAF 提取）；`--sofa <path>` 支持 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、**不重采样**
 - `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
 - 系统空间音频监听（`monitor_system_spatial`，仅实时监听非离线）：把多声道床交 OS 做 HRTF。**macOS** 经 `AVSampleBufferAudioRenderer`（`src/adm_apple/avsamplebuffer_device.mm`，含动态头追踪）；**Windows** 经 `ISpatialAudioClient`（`src/adm_windows/spatialaudioclient_device.cpp`，Windows Sonic / Dolby Atmos / DTS 头戴，**静态空间化无 OS 头追**，需声音设置启用某空间格式否则返回 `unsupported`）。布局白名单各自由 `apple_layouts` / `windows_layouts` 定义，经 capabilities JSON 的 `system_spatial_layouts` 字段统一暴露给 GUI（**唯一权威源，勿在 GUI 硬编码**）。sink 选择在 `monitor_session.cpp::make_monitor_device`
-- FLAC 解码在 `flac_io.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`（dr_flac），编码用 `libFLAC`；dr_wav 只在 `MR_ADM_BUILD_DRWAV_REFERENCE_TESTS` 对照中使用
+- FLAC 解码在 `flac_io.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`（dr_flac），编码用 `libFLAC`
 - WAV / BW64 IO 是 64-bit clean（支持 >4GB 母版与输出）：**所有 WAV 样本读写经 Rust `mradm-wav`**（C++ 包装在 `src/adm_audio/wav_backend.h`；`FloatWavReader`/`FloatWavWriter`/`RenderInputReader` 均基于它，只接受 PCM16/24/32 与 float32）：**f32 WAV 固定写 RF64**（流式写无法预知总大小，统一用 `ds64` 承载真实大小，小文件也是 RF64），`FloatWavWriter` 覆盖已有文件，析构尽力收尾、先写后改名的路径须显式 `finish()`；整数输出默认先写 RIFF、需要 64 位长度时升级 BW64，整数转换写排他临时文件、成功 `finish()` 后才安装，失败/取消保留原文件；reader 以 u64 帧 `seek_frame` 定位（不再有 libbw64 的 2^31 帧上限）。容器元数据也全部经 `mradm-wav`（见 `RUST_WAV_CONTAINER_MIGRATION.md`）：`write_wav_metadata`（bext/ambi 追加，按 RIFF/RF64/BW64 更新顶层 size 或 `ds64.bw64Size`）、`finalize_wav_layout`（声道置换/掩码/ADM chunk/容器选择；四期 4.8 起由 Rust `postprocess` 按 2048 帧分步并负责备份替换，C++ 只检查取消与发进度）、ADM 导入的 AXML/CHNA 读取、export 的 axml 替换和 channel-bed 路由探测；C++ 不再手写 RIFF chunk 解析，冻结的旧实现在 `tests/reference/wav_container/` 由 `mr_adm_wav_container_tests` 逐字节对照。CAF 也经 Rust（`mradm-wav::caf`，只写 float32，`.caf` 终稿要求 `i16` / `i24` 时报 invalid_argument）；增益改写、trim、降位与 AXML 替换的临时文件命名、安装与失败恢复都在 Rust `postprocess`，增益改写与 trim 保留源 CAF 的布局标签、不接受 FLAC 输入（见 `RUST_INVERSION_OUTPUT.md`）。Windows 私有 FFI 路径先按当前进程代码页把原生窄路径转 UTF-8，**不要**靠字节是否为合法 UTF-8 猜编码。回归守卫用稀疏文件造 >4GB / 跨 2^31 帧 fixture（`core_smoke_test` / `render_trim_fixture_test`，不真烧盘）；真实 >4GiB 写入测试默认忽略，需设 `MRADM_WAV_LARGE_TEST_DIR`
 
 ## GUI（gui/MacinRender.Gui）
@@ -354,7 +353,6 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
-- `.github/workflows/reference-tests.yml` — 手动触发：Release 逐个打开（SAF 在 macOS，其余 Linux） `MR_ADM_BUILD_*_REFERENCE_TESTS` 跑第三方对照，防止默认 OFF 的参考腐烂
 - `.github/workflows/iamf-bridge-prebuild.yml` — 预构建 AOM iamf-tools bridge SDK；`cache-maintenance.yml` — FetchContent/ccache 缓存维护
 
 详见 `docs/guides/CI.md`。

@@ -2,8 +2,9 @@
 
 These resources contain unchanged binary32 values extracted from SAF v1.3.4.
 The runtime contains no SAF implementation. Regenerate using
-`scripts/maintenance/extract_saf_assets.py` and, for the metering matrix,
-`tests/tools/export_saf_hoa_matrix.cpp`. The committed manifest records hashes.
+`scripts/maintenance/extract_saf_assets.py`; the metering matrix came from
+`tests/tools/export_saf_hoa_matrix.cpp`, removed with the SAF reference build on
+2026-11-14 and kept in the git history. The committed manifest records hashes.
 
 KEMAR: Genelec Aural ID, 836 directions, 2 ears, 256 taps, 48 kHz.
 Kindly provided to SAF by Aki Makivirta and Jaan Johansson.
