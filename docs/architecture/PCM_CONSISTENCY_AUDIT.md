@@ -785,7 +785,9 @@ nlohmann_json 移出生产）、D（Apple 岛内部去 `IRenderer` / `IRenderStr
 `c_api.h`、共享库与 `mradm`；生产 C/C++ 9,768 → 9,674 行。D 已完成：Apple 岛直接调用 `apple::prepare` / `render_window` /
 `open_stream`（`src/adm_apple/apple_backend.h`，新登记的岛接口，流直接建成 Rust 调用的岛表），`IRenderer` / `IRenderStream` /
 `IPreparedRender` 与只剩测试使用的结果记录移到测试 SDK，Apple 测试经 `tests/support/apple_renderer` 驱动岛表；生产 C/C++ 9,674 → 9,432 行，
-岛 3,045 → 3,028 行（见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
+岛 3,045 → 3,028 行。E 已完成：main `55cd757` 的 CI、Consistency、Quality full、Reference tests 与 Release Build（修正
+macOS CLI 打包对 Objective-C 运行时的白名单）三平台通过；6.5 生产 C/C++ 合计 15,314 → 9,432 行，macOS / Windows 原生复核待维护者
+（见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
 
 ## 每个迁移切片的验证
 
