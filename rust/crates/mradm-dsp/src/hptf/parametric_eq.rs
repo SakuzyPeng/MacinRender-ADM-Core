@@ -1,7 +1,7 @@
 //! AutoEq ParametricEQ text import. The input is user-supplied text (a file or a GUI paste),
 //! decoded as bytes in the C locale: ASCII whitespace and case folding only, `.` decimal point.
-//! The accepted grammar is the frozen C++ parser's (`tests/reference/hptf_parse/`); range
-//! validation of the parsed bands stays with the caller.
+//! The accepted grammar is the retired C++ parser's, pinned by `tests/hptf_parse_golden.rs`;
+//! range validation of the parsed bands stays with the caller.
 use super::{Band, BandKind};
 use std::ops::Range;
 

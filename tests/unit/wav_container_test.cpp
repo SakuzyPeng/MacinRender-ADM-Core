@@ -458,7 +458,11 @@ void scan_case(const fs::path& path, const std::string& label) {
     const auto actual = mradm::audio::wav_has_chunk(path.string(), "axml");
     auto& digest = goldens().scan;
     digest.text("scan " + label);
-    digest.number(actual ? (*actual ? 2U : 1U) : 0U);
+    uint64_t state = 0U;
+    if (actual) {
+        state = *actual ? 2U : 1U;
+    }
+    digest.number(state);
     ++case_count();
 }
 

@@ -90,7 +90,6 @@ cmake --build --preset release
 | `MR_ADM_ENABLE_SOFA` | User SOFA HRIR support for the binaural backend | `ON` |
 | `MR_ADM_ENABLE_IAMF` | IAMF encoding; needs `MR_ADM_IAMF_AOM_ROOT` pointing at the official AOM iamf-tools bridge SDK | `OFF` |
 | `MR_ADM_BUILD_CAPI_BUNDLE` | Build the self-contained `libmradm_capi` shared library loaded by the GUI | `OFF` |
-| `MR_ADM_BUILD_*_REFERENCE_TESTS` | Build legacy-library reference comparisons (SAF, libear, libadm, ...) without changing production code | `OFF` |
 
 ## Basic Usage
 
