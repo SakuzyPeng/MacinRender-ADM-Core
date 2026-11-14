@@ -166,6 +166,10 @@ target_sources(
 
 target_include_directories(mr_adm_core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core")
+if(MSVC)
+    # Shared headers and their consuming sources use UTF-8, regardless of the Windows code page.
+    target_compile_options(mr_adm_core INTERFACE /utf-8)
+endif()
 
 # ── adm_render_common ─────────────────────────────────────────────────────────
 # Backend-agnostic object preprocessing and block timeline helpers used by
