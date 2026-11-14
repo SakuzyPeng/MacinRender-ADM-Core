@@ -3,18 +3,19 @@
 //! export and room package entries the C ABI exports use), the APAC encode worker of the audio
 //! island and a SIGINT handler.
 use crate::error::{Failure, with_utf8_paths};
-use crate::options::{Path, adm_render_options_t, file_name};
+use crate::options::{Path, adm_render_options_t, file_name, lossy, path_text};
 use crate::query::{BAD_ALLOC, axml, import_with, owned};
 use crate::render::{Sink, drive, export_logged, islands};
 use crate::room::{Config, inspect};
 use crate::scene::screens;
 use mradm_cli::{Event, Facts, Interrupt, Outcome, Platform, Request, Screens, Service};
+use mradm_engine::backend::Screens as EngineScreens;
+use mradm_engine::render::{PathText, Request as EngineRequest, RoomOptions, SofaPath};
 use mradm_ffi::adm::Text;
-use mradm_ffi::engine_service::{EnginePath, EngineProgress, EngineRenderRequest};
+use mradm_ffi::engine_service::EngineProgress;
 use mradm_ffi::room::RoomProfileHandle;
 use std::ffi::{CString, c_char, c_int};
 use std::io::{Read, Write};
-use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The message of a failure the C++ would have thrown (an allocation failure).
@@ -139,88 +140,80 @@ impl Sink for Events<'_> {
     }
 }
 
-fn engine_path(bytes: &[u8]) -> EnginePath {
-    EnginePath {
-        utf8: Text::bytes(bytes),
-        display: Text::bytes(bytes),
-    }
-}
-
-/// `RequestTexts::record` of a command-line request; the views borrow `request` and `views`.
-fn record<'a>(
-    request: &'a Request<'_, RoomPackage>,
-    labels: &'a [Text],
-    layers: &'a [Text],
-) -> EngineRenderRequest {
-    let optional = |p: Option<&'a [u8]>| (u32::from(p.is_some()), engine_path(p.unwrap_or(&[])));
-    let (has_sofa, sofa) = optional(request.sofa);
-    let (has_policy, policy) = optional(request.semantic_policy);
-    let (has_matrix, matrix) = optional(request.matrix);
-    let (has_report, report) = optional(request.semantic_report);
+/// The engine request of a command-line request; `None` when a path is not UTF-8 or contains NUL.
+fn engine_request(request: &Request<'_, RoomPackage>) -> Option<EngineRequest> {
+    let optional = |p: Option<&[u8]>| -> Option<Option<PathText>> {
+        match p {
+            None => Some(None),
+            Some(p) => path_text(p).map(Some),
+        }
+    };
     let room = request.room.as_ref();
     let screens = request.screens;
-    EngineRenderRequest {
-        input: engine_path(request.input),
-        has_output: u32::from(request.output.is_some()),
-        output: engine_path(request.output.unwrap_or(&[])),
+    Some(EngineRequest {
+        input: path_text(request.input)?,
+        output: optional(request.output)?,
         renderer: request.renderer,
-        output_layout: Text::bytes(request.output_layout),
-        has_input_layout: u32::from(request.input_layout.is_some()),
-        input_layout: Text::bytes(request.input_layout.unwrap_or(&[])),
-        input_channel_labels: labels.as_ptr(),
-        input_channel_labels_len: labels.len(),
-        measure_loudness: u32::from(request.measure_loudness),
+        output_layout: lossy(request.output_layout),
+        input_layout: request.input_layout.map(lossy),
+        input_channel_labels: request
+            .input_channel_labels
+            .iter()
+            .map(|l| lossy(l))
+            .collect(),
+        measure_loudness: request.measure_loudness,
         loudness_target_lufs: request.loudness_target_lufs,
-        peak_limit: u32::from(request.peak_limit),
+        peak_limit: request.peak_limit,
         peak_limit_dbtp: request.peak_limit_dbtp,
-        peak_normalize_to_limit: u32::from(request.peak_normalize_to_limit),
+        peak_normalize_to_limit: request.peak_normalize_to_limit,
         final_gain_db: request.final_gain_db,
         output_bit_depth: request.output_bit_depth,
         opus_bitrate_per_ch_kbps: request.opus_bitrate_per_ch_kbps,
         apac_bitrate_kbps: request.apac_bitrate_kbps,
-        apac_drc_music: u32::from(request.apac_drc_music),
-        apac_caf: u32::from(request.apac_caf),
-        has_sofa,
-        sofa,
-        sofa_file_name: Text::bytes(file_name(request.sofa.unwrap_or(&[]))),
-        has_policy_path: has_policy,
-        policy_path: policy,
-        has_policy_json: 0,
-        policy_json: Text::bytes(&[]),
-        has_matrix_path: has_matrix,
-        matrix_path: matrix,
-        has_matrix_json: 0,
-        matrix_json: Text::bytes(&[]),
-        has_report_path: has_report,
-        report_path: report,
-        capture_report: 0,
+        apac_drc_music: request.apac_drc_music,
+        apac_caf: request.apac_caf,
+        sofa: match request.sofa {
+            None => None,
+            Some(p) => Some(SofaPath {
+                path: path_text(p)?,
+                file_name: file_name(p).to_vec(),
+            }),
+        },
+        semantic_policy_path: optional(request.semantic_policy)?,
+        semantic_policy_json: None,
+        matrix_path: optional(request.matrix)?,
+        matrix_json: None,
+        semantic_report_path: optional(request.semantic_report)?,
+        capture_semantic_report: false,
         default_interp_ms: request.default_interp_ms,
         object_smoothing_frames: request.object_smoothing_frames,
-        apple_geometry: u32::from(request.apple_geometry),
+        apple_geometry: request.apple_geometry,
         routing: request.routing,
         speaker_spread: request.speaker_spread,
         triple_balance_mode: request.triple_balance_mode,
         binaural_spread: request.binaural_spread,
-        split_power: u32::from(request.split_power),
+        split_power: request.split_power,
         apple_spatial_preset: request.apple_spatial_preset,
-        apple_speaker_rendering_flags: u32::from(request.apple_speaker_rendering_flags),
+        apple_speaker_rendering_flags: request.apple_speaker_rendering_flags,
         listener_orientation: request.listener_orientation,
         render_start_sec: request.render_start_sec,
-        has_end: u32::from(request.render_end_sec.is_some()),
-        render_end_sec: request.render_end_sec.unwrap_or(0.0),
-        room_profile: room.map_or(ptr::null(), |r| r.package.0.cast_const()),
-        room_hrir: Text::bytes(room.map_or(&[][..], |r| r.hrir)),
-        room_metres: room.map_or(0.0, |r| r.metres),
-        room_quality: room.map_or(0, |r| r.quality),
-        has_reference: u32::from(screens.reference.is_some()),
-        reference: screens.reference.unwrap_or_default(),
-        has_reproduction: u32::from(screens.reproduction.is_some()),
-        reproduction: screens.reproduction.unwrap_or_default(),
-        internal_allow_speaker_stereo: 0,
-        iamf_mp4: u32::from(request.iamf_mp4),
-        iamf_layers: layers.as_ptr(),
-        iamf_layers_len: layers.len(),
-    }
+        render_end_sec: request.render_end_sec,
+        room: room.map_or_else(RoomOptions::default, |r| RoomOptions {
+            package: unsafe { r.package.0.as_ref() }.map(RoomProfileHandle::package),
+            hrir: r.hrir.to_vec(),
+            metres: r.metres,
+            quality: r.quality,
+        }),
+        screens: EngineScreens {
+            has_reference: screens.reference.is_some(),
+            reference: screens.reference.unwrap_or_default(),
+            has_reproduction: screens.reproduction.is_some(),
+            reproduction: screens.reproduction.unwrap_or_default(),
+        },
+        internal_allow_speaker_stereo: false,
+        iamf_mp4: request.iamf_mp4,
+        iamf_layers: request.iamf_layers.iter().map(|l| lossy(l)).collect(),
+    })
 }
 
 /// The engine behind the command line.
@@ -281,15 +274,8 @@ impl Service for Engine {
         cancelled: &(dyn Fn() -> bool + Sync),
         events: &(dyn Fn(Event<'_>) + Sync),
     ) -> Outcome {
-        let labels: Vec<Text> = request
-            .input_channel_labels
-            .iter()
-            .map(|l| Text::bytes(l))
-            .collect();
-        let layers: Vec<Text> = request.iamf_layers.iter().map(|l| Text::bytes(l)).collect();
-        let record = record(request, &labels, &layers);
         let sink = Events { cancelled, events };
-        match drive(&record, &sink, None, None) {
+        match drive(engine_request(request), &sink, None, None) {
             Ok(outcome) => Outcome {
                 code: outcome.code,
                 message: outcome.message,

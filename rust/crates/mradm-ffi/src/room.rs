@@ -104,6 +104,11 @@ impl RoomProfileHandle {
         &self.json
     }
 
+    /// The loaded package, shared with the handle.
+    pub fn package(&self) -> Arc<Package> {
+        Arc::clone(&self.package)
+    }
+
     /// A second handle on the same loaded package (destroyed with `mradm_room_profile_destroy`);
     /// `None` when out of memory.
     pub fn share(&self) -> Option<*mut RoomProfileHandle> {

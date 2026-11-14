@@ -2,10 +2,10 @@
 //! accessors, the preview session (`adm_create_preview_session`, `adm_preview_render_window(_v2)`),
 //! `adm_export_file` and the discovery documents (`adm_capabilities_json` and the others).
 //!
-//! The render drives the same engine step machine the C++ `RenderService` drove
-//! (`mradm_engine_render_begin` / `_next` / `_resume` / `_result`), with the C++ islands
-//! (`mradm_audio_island`, the Apple islands) run inside each step, the caller's cancellation polled
-//! before every step and by the islands, and the progress and log lines forwarded as before.
+//! The render steps `mradm-engine`'s render state machine through `mradm-ffi`'s `RenderDriver`
+//! (R2), with the C++ islands (`mradm_audio_island`, the Apple islands) run inside each step, the
+//! caller's cancellation polled before every step and by the islands, and the progress and log
+//! lines forwarded as before.
 use crate::cancel::Flag;
 use crate::context::adm_context_t;
 use crate::error::{Error, Failure, c_str, caught, clear, concat, report, set, try_box, utf8_path};
@@ -13,23 +13,15 @@ use crate::guard;
 use crate::options::adm_render_options_t;
 use crate::query::{Scene, axml, check_view, import_with};
 use crate::string;
+use mradm_engine::render::{Event, Reply, Request as EngineRequest};
 use mradm_ffi::adm::Text;
-use mradm_ffi::engine::{
-    EngineResult, EngineStatus, PlatformIslands, mradm_engine_document,
-    mradm_engine_result_destroy, mradm_engine_text_destroy,
-};
-use mradm_ffi::engine_render::mradm_render_prepared_destroy;
+use mradm_ffi::engine::{Facts, PlatformIslands};
 use mradm_ffi::engine_service::{
-    EngineIslandReply, EnginePath, EngineProgress, EngineRender, EngineRenderEvent,
-    EngineRenderRequest, EngineRenderResult, IslandContext, IslandRunner,
-    mradm_engine_apply_policy, mradm_engine_render_begin, mradm_engine_render_destroy,
-    mradm_engine_render_next, mradm_engine_render_result, mradm_engine_render_resume,
-    mradm_engine_render_set_islands, mradm_engine_render_take_prepared,
+    EngineIslandReply, EngineProgress, EngineRenderEvent, IslandContext, IslandRunner, RenderDriver,
 };
 use mradm_ffi::render::RenderPrepared;
 use mradm_ffi::render::apple_island::AppleIslands;
 use std::ffi::{c_char, c_void};
-use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -364,20 +356,19 @@ unsafe extern "C" fn island_log(user: *mut c_void, level: u32, module: Text, mes
     }
 }
 
-struct RenderHandle(*mut EngineRender);
-
-impl Drop for RenderHandle {
-    fn drop(&mut self) {
-        unsafe { mradm_engine_render_destroy(self.0) };
-    }
-}
-
 /// A preview session's cached preparation.
-pub(crate) struct Prepared(*mut RenderPrepared);
+pub(crate) struct Prepared(Box<RenderPrepared>);
 
-impl Drop for Prepared {
-    fn drop(&mut self) {
-        unsafe { mradm_render_prepared_destroy(self.0) };
+/// The C record of an engine progress event (the islands report the same record).
+fn progress_record(p: &mradm_engine::offline::Progress) -> EngineProgress {
+    EngineProgress {
+        stage: p.stage,
+        operation: p.operation,
+        fraction: p.fraction,
+        stage_fraction: p.stage_fraction,
+        current: p.current,
+        total: p.total,
+        message: Text::new(p.message),
     }
 }
 
@@ -393,44 +384,31 @@ fn render(
     preimported: Option<&Scene>,
     cache: Option<&mut Option<Prepared>>,
 ) -> Result<Outcome, Failure> {
-    let request = options.request(input, output)?;
+    let request = options.engine_request(input, output)?;
     let callbacks = Callbacks {
         cancel,
         progress,
         logs,
     };
-    drive(&request.record, &callbacks, preimported, cache)
+    drive(request, &callbacks, preimported, cache)
 }
 
-/// `RenderService::render` of a request record: the engine's steps with the islands, reported to
-/// `sink`.
+/// `RenderService::render` of an engine request (`None`: a path is not UTF-8 or contains NUL):
+/// the engine's steps with the islands, reported to `sink`.
 pub(crate) fn drive(
-    record: &EngineRenderRequest,
+    request: Option<EngineRequest>,
     sink: &dyn Sink,
     preimported: Option<&Scene>,
     cache: Option<&mut Option<Prepared>>,
 ) -> Result<Outcome, Failure> {
-    let cached = cache
-        .as_ref()
-        .and_then(|c| c.as_ref())
-        .map_or(ptr::null(), |p| p.0.cast_const());
-    let mut raw = ptr::null_mut();
-    let code = unsafe {
-        mradm_engine_render_begin(
-            record,
-            islands::mradm_platform_islands(),
-            preimported.map_or(ptr::null(), |s| s.0.cast_const()),
-            cached,
-            &mut raw,
-        )
-    };
-    if code != 0 {
+    let platform = unsafe { islands::mradm_platform_islands().as_ref() }
+        .and_then(|p| unsafe { mradm_ffi::engine::platform(p, Facts::Render) });
+    let (Some(request), Some(platform)) = (request, platform) else {
         return Outcome::error(
-            error_code(code),
+            error_code(1),
             b"invalid render request (UTF-8 paths without NUL required)",
         );
-    }
-    let handle = RenderHandle(raw);
+    };
     let driver = Driver {
         sink,
         failed: AtomicBool::new(false),
@@ -445,62 +423,60 @@ pub(crate) fn drive(
         },
         apple: islands::apple(),
     };
-    if unsafe { mradm_engine_render_set_islands(handle.0, &runner) } != 0 {
-        return Outcome::error(guard::INTERNAL, b"render islands unavailable");
-    }
+    let cached = cache.as_ref().and_then(|c| c.as_ref()).map(|p| &*p.0);
+    let mut render = RenderDriver::new(
+        request,
+        platform,
+        preimported.map(|s| unsafe { &*s.0 }),
+        cached,
+        runner,
+    );
     loop {
-        let mut event = unsafe { MaybeUninit::<EngineRenderEvent>::zeroed().assume_init() };
-        let status = unsafe {
-            mradm_engine_render_next(handle.0, u32::from(driver.cancelled()), &mut event)
-        };
+        let event = render.next(driver.cancelled());
         if driver.failed.load(Ordering::Acquire) {
             return Err(Failure::Exception);
         }
-        if status != 0 {
-            return Outcome::error(guard::INTERNAL, b"render step failed");
-        }
-        match event.kind {
-            1 => sink.progress(&event.progress)?,
-            2 => sink.log(event.level, bytes(&event.module), bytes(&event.message))?,
-            3 => {
-                // Every island runs inside the step; one returned here has no runner in this build.
-                let mut reply = unsafe { MaybeUninit::<EngineIslandReply>::zeroed().assume_init() };
-                reply.code = guard::INTERNAL;
-                reply.message = Text::new("unknown render island");
-                reply.ffmpeg_major = -1;
-                if unsafe { mradm_engine_render_resume(handle.0, &reply) } != 0 {
-                    return Outcome::error(guard::INTERNAL, b"render island reply failed");
-                }
-            }
-            4 => break,
-            _ => {}
+        match event {
+            Event::Progress(p) => sink.progress(&progress_record(&p))?,
+            Event::Log(l) => sink.log(l.level as u32, l.module.as_bytes(), l.message.as_bytes())?,
+            // Every island runs inside the step; one returned here has no runner in this build.
+            Event::Island(_) => render.resume(Reply {
+                error: Some(mradm_engine::request::Error::new(
+                    guard::INTERNAL,
+                    "unknown render island",
+                    "",
+                )),
+                ffmpeg_major: -1,
+                ..Reply::default()
+            }),
+            Event::Done => break,
+            Event::Continue => {}
         }
     }
-    if let Some(slot) = cache {
-        let made = unsafe { mradm_engine_render_take_prepared(handle.0) };
-        if !made.is_null() {
-            *slot = Some(Prepared(made));
-        }
+    if let Some(slot) = cache
+        && let Some(made) = render.take_prepared()
+    {
+        *slot = Some(Prepared(made));
     }
-    let mut r = unsafe { MaybeUninit::<EngineRenderResult>::zeroed().assume_init() };
-    if unsafe { mradm_engine_render_result(handle.0, &mut r) } != 0 {
+    let Some(outcome) = render.outcome() else {
         return Outcome::error(guard::INTERNAL, b"render result is unavailable");
-    }
-    let has_metrics = r.has_metrics != 0;
+    };
+    let metrics = outcome.metrics;
     Ok(Outcome {
-        code: error_code(r.code),
-        message: concat(&[bytes(&r.message)])?,
-        output_path: if r.has_output != 0 {
-            Some(concat(&[bytes(&r.output_path)])?)
-        } else {
-            None
+        code: error_code(outcome.error.as_ref().map_or(0, |e| e.code)),
+        message: concat(&[outcome
+            .error
+            .as_ref()
+            .map_or(&b""[..], |e| e.message.as_bytes())])?,
+        output_path: match &outcome.output_path {
+            Some(path) => Some(concat(&[path.as_bytes()])?),
+            None => None,
         },
-        loudness_lufs: (has_metrics && r.has_lufs != 0).then_some(r.lufs),
-        peak_dbtp: (has_metrics && r.has_peak != 0).then_some(r.peak_dbtp),
-        report: if r.has_report != 0 {
-            Some(concat(&[bytes(&r.report), b"\0"])?)
-        } else {
-            None
+        loudness_lufs: metrics.and_then(|m| m.lufs),
+        peak_dbtp: metrics.and_then(|m| m.peak_dbtp),
+        report: match &outcome.semantic_report {
+            Some(report) => Some(concat(&[report.as_bytes(), b"\0"])?),
+            None => None,
         },
     })
 }
@@ -899,14 +875,6 @@ pub unsafe extern "C" fn adm_render_result_log_entry(
 
 // ── Policy, preview and export ───────────────────────────────────────────────────
 
-struct PolicyResult(*mut EngineResult);
-
-impl Drop for PolicyResult {
-    fn drop(&mut self) {
-        unsafe { mradm_engine_result_destroy(self.0) };
-    }
-}
-
 /// `apply_policy`: the options' semantic policy on an imported scene (its log lines discarded).
 fn apply_policy(
     scene: &Scene,
@@ -925,49 +893,43 @@ pub(crate) fn apply_policy_logged(
     mut log: impl FnMut(u32, &[u8], &[u8]),
 ) -> Result<(), Failure> {
     let json = options.semantic_policy_json.as_deref();
-    let path = options
-        .semantic_policy_path
-        .as_ref()
-        .map_or(&[][..], |p| &p.utf8[..]);
-    let mut raw = ptr::null_mut();
-    let mut status = unsafe { MaybeUninit::<EngineStatus>::zeroed().assume_init() };
-    let code = unsafe {
-        mradm_engine_apply_policy(
-            scene.0,
-            u32::from(json.is_some()),
-            Text::bytes(json.unwrap_or(&[])),
-            u32::from(options.semantic_policy_path.is_some()),
-            EnginePath {
-                utf8: Text::bytes(path),
-                display: Text::bytes(path),
-            },
-            Text::bytes(input),
-            &mut raw,
-            &mut status,
-        )
+    let path = match &options.semantic_policy_path {
+        None => None,
+        Some(p) => match crate::options::path_text(&p.utf8) {
+            Some(path) => Some(path),
+            None => {
+                return Err(Error::new(
+                    mradm_engine::request::code::INVALID_ARGUMENT,
+                    b"semantic policy path must use UTF-8 without NUL",
+                    b"",
+                )?
+                .into());
+            }
+        },
     };
-    let result = PolicyResult(raw);
-    if code != 0 || result.0.is_null() {
-        return Err(Failure::Exception);
-    }
-    let lines = if status.logs_len == 0 {
-        &[][..]
-    } else {
-        unsafe { std::slice::from_raw_parts(status.logs, status.logs_len) }
-    };
-    for line in lines {
-        let module = bytes(&line.module);
-        let module = if module.is_empty() {
-            &b"semantic-policy"[..]
+    let display = String::from_utf8_lossy(input);
+    // The pointer is the scene's boxed handle, exclusively used by this call.
+    let handle = unsafe { &mut *scene.0 };
+    let outcome = handle.apply_policy(json, path.as_ref(), &display);
+    for line in &outcome.logs {
+        let module = if line.module.is_empty() {
+            "semantic-policy"
         } else {
-            module
+            line.module
         };
-        log(line.level, module, bytes(&line.message));
-    }
-    if status.code != 0 {
-        return Err(
-            Error::new(status.code, bytes(&status.message), bytes(&status.context))?.into(),
+        log(
+            line.level as u32,
+            module.as_bytes(),
+            line.message.as_bytes(),
         );
+    }
+    if let Err(error) = &outcome.result {
+        return Err(Error::new(
+            error.code,
+            error.message.as_bytes(),
+            error.context.as_bytes(),
+        )?
+        .into());
     }
     Ok(())
 }
@@ -1212,14 +1174,22 @@ unsafe fn document(context: *mut adm_context_t, kind: u32, out_json: *mut *mut c
         return guard::INVALID_ARGUMENT;
     }
     guard::code(|| unsafe {
-        let mut raw = ptr::null_mut();
-        let mut json = Text::bytes(&[]);
-        if mradm_engine_document(kind, islands::mradm_platform_islands(), &mut raw, &mut json) != 0
-        {
+        let platform = islands::mradm_platform_islands()
+            .as_ref()
+            .and_then(|p| mradm_ffi::engine::platform(p, Facts::Document(kind)));
+        let Some(platform) = platform else {
             return guard::INTERNAL;
-        }
-        let copy = string::copy(json.data, json.len);
-        mradm_engine_text_destroy(raw);
+        };
+        use mradm_engine::tables;
+        let json = match kind {
+            0 => tables::capabilities_json(&platform),
+            1 => tables::layouts_json(&platform),
+            2 => tables::output_formats_json(&platform),
+            3 => tables::input_layouts_json(),
+            4 => tables::support_matrix_json(&platform),
+            _ => return guard::INTERNAL,
+        };
+        let copy = string::copy(json.as_ptr(), json.len());
         if copy.is_null() {
             return guard::INTERNAL;
         }

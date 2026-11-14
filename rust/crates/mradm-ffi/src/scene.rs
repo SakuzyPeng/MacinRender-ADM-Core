@@ -179,6 +179,19 @@ impl SceneHandle {
     pub fn scene(&self) -> &RenderScene {
         &self.scene
     }
+    /// A render request's semantic policy applied to the scene (`mradm_engine_apply_policy`): the
+    /// in-memory JSON preferred over the file, with the warnings as log lines.
+    pub fn apply_policy(
+        &mut self,
+        json: Option<&[u8]>,
+        path: Option<&mradm_engine::render::PathText>,
+        display: &str,
+    ) -> mradm_engine::request::Outcome<()> {
+        let outcome = mradm_engine::render::apply_policy(&mut self.scene, json, path, display);
+        self.refresh();
+        outcome
+    }
+
     /// The import `mradm_scene_import` makes: `routed` false imports ADM BW64 only; true routes to
     /// ADM or a channel bed by the layout and labels. `path` is UTF-8.
     pub fn import(
