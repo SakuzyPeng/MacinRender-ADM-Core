@@ -10,3 +10,6 @@ description = "PoseBridge protocol 3 OSC head-tracking datagram decoding and loo
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-json = { path = "../mradm-json" }
 serde_json.workspace = true
+
+[dev-dependencies]
+sha2 = "=0.10.9"

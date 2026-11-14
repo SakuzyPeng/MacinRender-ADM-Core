@@ -396,6 +396,7 @@ dependencies = [
  "mradm-dsp",
  "mradm-json",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
