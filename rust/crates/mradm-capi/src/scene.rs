@@ -32,6 +32,7 @@ use mradm_render::routing::Error as EngineError;
 use std::ffi::CStr;
 use std::ffi::{c_char, c_void};
 use std::fmt::{self, Write};
+use std::pin::Pin;
 use std::ptr;
 use std::sync::{Mutex, MutexGuard};
 
@@ -1803,7 +1804,8 @@ pub(crate) unsafe fn room_source_json(
 
 #[allow(non_camel_case_types)] // The `c_api.h` name.
 pub struct adm_scene_output_t {
-    handle: Box<EngineSceneOutput>,
+    /// Pinned: the device callback holds the session's address.
+    handle: Pin<Box<EngineSceneOutput>>,
     /// Serialises the calls and holds the last error message.
     message: Mutex<Message>,
 }

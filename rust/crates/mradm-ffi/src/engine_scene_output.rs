@@ -11,22 +11,40 @@ use crate::hptf::{Coefficients, Snapshot, settings::Settings};
 use mradm_engine::scene::output::Session;
 use mradm_scene::layouts::{self, Geometry};
 use std::ffi::c_void;
+use std::marker::PhantomPinned;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::pin::Pin;
 use std::ptr;
 use std::sync::{Mutex, MutexGuard};
 
 /// A Scene output session handle; `session` drops before `device`.
+///
+/// The started device's callback holds this object's address, so it is `!Unpin` and handed out
+/// only pinned: safe code cannot move it while the audio thread may still call back.
+///
+/// ```compile_fail,E0277
+/// use mradm_ffi::render::engine_scene_output::EngineSceneOutput;
+/// use std::pin::Pin;
+///
+/// fn unpin(output: Pin<Box<EngineSceneOutput>>) -> Box<EngineSceneOutput> {
+///     Pin::into_inner(output)
+/// }
+/// ```
 pub struct EngineSceneOutput {
     session: Session,
     device: Device,
     /// Serialises the control calls (play, pause, epochs, volume, HpTF, status).
     control: Mutex<()>,
+    _pinned: PhantomPinned,
 }
 
 impl EngineSceneOutput {
     /// Opens the device of `kind` (`SceneOutputKind`: 0 system spatial over `layout` in `geometry`,
     /// 1 the stereo hardware device `device_id`, 2 the null backend) and the session over it
     /// (`mradm_engine_scene_output_open`).
+    ///
+    /// The output is returned pinned: the device callback keeps its address until the drop,
+    /// which parks the session and then stops the device.
     ///
     /// # Safety
     ///
@@ -38,7 +56,7 @@ impl EngineSceneOutput {
         geometry: u32,
         device_id: &[u8],
         devices: *const DeviceIslands,
-    ) -> Result<Box<Self>, Error> {
+    ) -> Result<Pin<Box<Self>>, Error> {
         let devices = Devices::new(devices).ok_or_else(|| bad("无效设备表"))?;
         let layout = String::from_utf8_lossy(layout).into_owned();
         let (_, channels) = stream.stream.output_format();
@@ -229,14 +247,16 @@ fn start(
     stream: &EngineSceneStream,
     device: Device,
     protect_stereo: bool,
-) -> Result<Box<EngineSceneOutput>, Error> {
+) -> Result<Pin<Box<EngineSceneOutput>>, Error> {
     let session = Session::new(stream.stream.clone(), protect_stereo, device.has_volume())?;
     let (channels, rate) = (session.channels(), session.sample_rate());
-    let output = Box::new(EngineSceneOutput {
+    let output = Box::pin(EngineSceneOutput {
         session,
         device,
         control: Mutex::new(()),
+        _pinned: PhantomPinned,
     });
+    // The address is taken only after pinning; it stays valid until the output drops.
     let user = ptr::from_ref::<EngineSceneOutput>(&output)
         .cast_mut()
         .cast();
@@ -278,7 +298,9 @@ pub unsafe extern "C" fn mradm_engine_scene_output_open(
         let device_id = unsafe { super::bytes(&device_id)? };
         let output =
             unsafe { EngineSceneOutput::open(stream, kind, layout, geometry, device_id, devices)? };
-        *out = Box::into_raw(output);
+        // SAFETY: The C caller uses the output only through this pointer and releases it in place
+        // with `mradm_engine_scene_output_destroy`; it is never moved.
+        *out = Box::into_raw(unsafe { Pin::into_inner_unchecked(output) });
         Ok(())
     })
 }
@@ -301,7 +323,10 @@ pub unsafe extern "C" fn mradm_engine_scene_output_create(
         *out = ptr::null_mut();
         let stream = unsafe { stream.as_ref() }.ok_or_else(|| bad("无效 Scene 流句柄"))?;
         let device = device.ok_or_else(|| bad("无效设备"))?;
-        *out = Box::into_raw(start(stream, device, protect_stereo != 0)?);
+        let output = start(stream, device, protect_stereo != 0)?;
+        // SAFETY: As in `mradm_engine_scene_output_open`: used only through the pointer and
+        // released in place, never moved.
+        *out = Box::into_raw(unsafe { Pin::into_inner_unchecked(output) });
         Ok(())
     })
 }
