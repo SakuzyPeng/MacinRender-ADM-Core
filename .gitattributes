@@ -7,8 +7,6 @@
 # Build provenance compares these exact bytes across all native checkouts.
 /rust/Cargo.lock text eol=lf
 /rust/rust-toolchain.toml text eol=lf
-# Frozen migration references are pinned by SHA-256 in tests/reference/retention.json.
-/tests/reference/** -text
 # Rust layout/policy goldens are compared byte for byte with the C++ output.
 /rust/crates/mradm-scene/tests/layouts-v1.txt -text
 /rust/crates/mradm-scene/tests/policy-v1/** -text

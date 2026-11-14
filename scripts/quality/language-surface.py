@@ -4,8 +4,8 @@
 Lines are newline counts (as `wc -l`). Production C/C++ is `src/` plus `include/`, excluding the
 platform islands; islands and the optional CUDA SDK boundary are ratcheted separately. The narrow C
 interfaces through which Rust calls the islands are listed file by file (`ISLAND_INTERFACES`); each
-is registered at its measured size when it is introduced and may only shrink afterwards. Tests,
-frozen references and Rust are reported only. `--check` requires an up-to-date baseline;
+is registered at its measured size when it is introduced and may only shrink afterwards. Tests
+and Rust are reported only. `--check` requires an up-to-date baseline;
 after deleting C++, run `--update` in the same
 commit to tighten it. Existing limits cannot be raised by `--update`. CI also uses `--base-ref`
 to reject limits raised in the candidate commit. See docs/architecture/RUST_INVERSION_ROADMAP.md.
@@ -70,14 +70,12 @@ def area_of(relative: str) -> str:
         return "islands"
     if relative.startswith(("src/", "include/")):
         return "production"
-    if relative.startswith("tests/reference/"):
-        return "reference"
     return "tests"
 
 
 def measure(root: Path = REPO_ROOT) -> dict:
     areas = {name: {"files": 0, "lines": 0}
-             for name in (*RATCHETED, "island-interfaces", "tests", "reference", "rust", "rust-vendor")}
+             for name in (*RATCHETED, "island-interfaces", "tests", "rust", "rust-vendor")}
     modules: dict[str, int] = {}
     interfaces: dict[str, int] = {}
 
@@ -95,8 +93,7 @@ def measure(root: Path = REPO_ROOT) -> dict:
                 interfaces[relative] = lines(path)
                 add("island-interfaces", relative, path)
                 continue
-            module = (CUDA_ISLAND if area_of(relative) == "cuda" else
-                      "/".join(parts[:2]) if top != "tests" or parts[1] != "reference" else "/".join(parts[:3]))
+            module = CUDA_ISLAND if area_of(relative) == "cuda" else "/".join(parts[:2])
             add(area_of(relative), module, path)
     for top, area in (("rust/crates", "rust"), ("rust/vendor", "rust-vendor")):
         for path in files(root, top, {".rs"}):

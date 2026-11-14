@@ -94,13 +94,12 @@ class AnalysisScopeTests(unittest.TestCase):
     def test_sources_are_analyzed_unconditionally(self):
         args = self.run_quality("clang-tidy.sh")["clang-tidy"]
         calls = self.run_quality("check-changed.sh")
-        cppcheck = self.run_quality("cppcheck.sh")["cppcheck"]
+        self.run_quality("cppcheck.sh")
         for name in self.sources:
             path = str(self.root / name)
             self.assertIn(path, args, name)
             for tool in ("clang-format", "clang-tidy", "cppcheck"):
                 self.assertIn(path, calls[tool], name)
-        self.assertNotIn(str(self.root / "tests/reference"), cppcheck)
 
     def test_full_tidy_analyzes_capi_consumer_only_with_bundle(self):
         for enabled in (False, True):
@@ -307,7 +306,6 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.write("src/adm_apple/b.mm", 4)
         self.write("src/adm_render_room/cuda/backend.cpp", 4)
         self.write("tests/unit/c.cpp", 7)
-        self.write("tests/reference/hoa/d.h", 3)
         self.write("rust/crates/mradm-dsp/src/lib.rs", 5)
         self.baseline = self.root / "baseline.json"
         self.run_surface("--update")
@@ -329,7 +327,6 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.assertEqual(areas["islands"]["lines"], 4)
         self.assertEqual(areas["cuda"]["lines"], 4)
         self.assertEqual(areas["tests"]["lines"], 7)
-        self.assertEqual(areas["reference"]["lines"], 3)
         self.assertEqual(areas["rust"]["lines"], 5)
 
     def test_unchanged_surface_passes(self):

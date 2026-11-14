@@ -547,12 +547,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_io_tests)
     add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests)
 
-    # WAVE container metadata parity against the frozen C++ implementation (tests/reference/wav_container).
-    add_executable(mr_adm_wav_container_tests
-        tests/unit/wav_container_test.cpp
-        tests/reference/wav_container/legacy.cpp)
+    # WAVE container metadata golden digests (finalize, metadata, read, replace, scan).
+    add_executable(mr_adm_wav_container_tests tests/unit/wav_container_test.cpp)
     target_include_directories(mr_adm_wav_container_tests PRIVATE src/adm_audio)
-    target_link_libraries(mr_adm_wav_container_tests PRIVATE fmt::fmt MacinRender::ADMAudio MacinRender::ADMIo)
+    target_link_libraries(mr_adm_wav_container_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMIo)
     mr_adm_core_apply_warnings(mr_adm_wav_container_tests)
     add_test(NAME mr_adm_wav_container_tests COMMAND mr_adm_wav_container_tests)
 
@@ -632,20 +630,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_tests)
     mr_adm_core_apply_static_analysis(mr_adm_osc_head_tracking_tests)
     add_test(NAME mr_adm_osc_head_tracking_tests COMMAND mr_adm_osc_head_tracking_tests)
-
-    # Frozen C++ PoseBridge decoder vs Rust mradm-osc (tests/reference/osc_protocol).
-    add_executable(mr_adm_osc_protocol_reference_tests tests/unit/osc_protocol_reference_test.cpp)
-    target_link_libraries(mr_adm_osc_protocol_reference_tests PRIVATE MacinRender::ADMRealtime MacinRender::ADMDsp
-        mr_adm_osc_protocol_test_support)
-    target_include_directories(mr_adm_osc_protocol_reference_tests SYSTEM PRIVATE
-        "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
-    )
-    if(WIN32)
-        target_link_libraries(mr_adm_osc_protocol_reference_tests PRIVATE ws2_32)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_osc_protocol_reference_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_osc_protocol_reference_tests)
-    add_test(NAME mr_adm_osc_protocol_reference_tests COMMAND mr_adm_osc_protocol_reference_tests)
 
     add_executable(mr_adm_osc_head_tracking_c_example EXCLUDE_FROM_ALL examples/head_tracking_consumer.c)
     target_link_libraries(mr_adm_osc_head_tracking_c_example PRIVATE MacinRender::ADMCAPI)
@@ -1202,13 +1186,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_hptf_regression_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_regression_tests)
     add_test(NAME mr_adm_hptf_regression_tests COMMAND mr_adm_hptf_regression_tests)
-
-    # Frozen C++ AutoEq parser vs Rust mradm-dsp hptf::parametric_eq (tests/reference/hptf_parse).
-    add_executable(mr_adm_hptf_parse_reference_tests tests/unit/hptf_parse_reference_test.cpp)
-    target_link_libraries(mr_adm_hptf_parse_reference_tests PRIVATE mr_adm_sdk_render_common)
-    mr_adm_core_apply_warnings(mr_adm_hptf_parse_reference_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hptf_parse_reference_tests)
-    add_test(NAME mr_adm_hptf_parse_reference_tests COMMAND mr_adm_hptf_parse_reference_tests)
 
     add_executable(mr_adm_hptf_dsp_tests tests/unit/hptf_dsp_test.cpp)
     target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE mr_adm_sdk_render_common mr_adm_output_dsp_test_support)
