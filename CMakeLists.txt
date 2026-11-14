@@ -797,54 +797,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_stream_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_test_support)
 
-    add_executable(mr_adm_live_binaural_parity_tests tests/unit/live_binaural_parity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_parity_tests PRIVATE fmt::fmt mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
-    # The frozen reference includes the former creation header (tests/support/frozen_includes) and the
-    # resampler wrapper (tests/support/dsp).
-    target_include_directories(mr_adm_live_binaural_parity_tests PRIVATE src/adm_render_room
-        tests/support/frozen_includes tests/support/dsp)
-    mr_adm_core_apply_warnings(mr_adm_live_binaural_parity_tests)
-    mr_adm_core_scene_reference_fp(mr_adm_live_binaural_parity_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_live_binaural_parity_tests)
-    add_test(NAME mr_adm_live_binaural_parity_tests COMMAND mr_adm_live_binaural_parity_tests)
-
-    add_executable(mr_adm_scene_numeric_parity_tests tests/unit/scene_numeric_parity_test.cpp)
-    target_link_libraries(mr_adm_scene_numeric_parity_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    target_include_directories(mr_adm_scene_numeric_parity_tests PRIVATE tests/support tests/support/dsp)
-    mr_adm_core_apply_warnings(mr_adm_scene_numeric_parity_tests)
-    mr_adm_core_scene_reference_fp(mr_adm_scene_numeric_parity_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_parity_tests)
-    add_test(NAME mr_adm_scene_numeric_parity_tests COMMAND mr_adm_scene_numeric_parity_tests)
-
-    add_executable(mr_adm_live_vbap_parity_tests tests/unit/live_vbap_parity_test.cpp)
-    target_link_libraries(mr_adm_live_vbap_parity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt mr_adm_live_scene_test_support)
-    # The frozen reference includes the former creation header (tests/support/frozen_includes).
-    target_include_directories(mr_adm_live_vbap_parity_tests PRIVATE src/adm_render_room src/adm_render_common
-        tests/unit tests/support/frozen_includes)
-    mr_adm_core_apply_warnings(mr_adm_live_vbap_parity_tests)
-    mr_adm_core_scene_reference_fp(mr_adm_live_vbap_parity_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_live_vbap_parity_tests)
-    add_test(NAME mr_adm_live_vbap_parity_tests COMMAND mr_adm_live_vbap_parity_tests)
-    set_tests_properties(mr_adm_live_vbap_parity_tests PROPERTIES TIMEOUT 60)
-
-    add_executable(mr_adm_monitor_dsp_tests tests/unit/monitor_dsp_test.cpp)
-    target_link_libraries(mr_adm_monitor_dsp_tests PRIVATE MacinRender::ADMDsp)
-    target_include_directories(mr_adm_monitor_dsp_tests PRIVATE tests/support/dsp)
-    mr_adm_core_apply_warnings(mr_adm_monitor_dsp_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_monitor_dsp_tests)
-    add_test(NAME mr_adm_monitor_dsp_tests COMMAND mr_adm_monitor_dsp_tests)
-    set_tests_properties(mr_adm_monitor_dsp_tests PROPERTIES TIMEOUT 60)
-
-    add_executable(mr_adm_output_dsp_tests tests/unit/output_dsp_test.cpp)
-    target_link_libraries(mr_adm_output_dsp_tests
-        PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon mr_adm_output_dsp_test_support)
-    mr_adm_core_apply_warnings(mr_adm_output_dsp_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_output_dsp_tests)
-    add_test(NAME mr_adm_output_dsp_tests COMMAND mr_adm_output_dsp_tests)
-    set_tests_properties(mr_adm_output_dsp_tests PROPERTIES TIMEOUT 60)
-
     add_executable(mr_adm_pcm_mix_tests tests/unit/pcm_mix_test.cpp)
     target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     target_include_directories(mr_adm_pcm_mix_tests PRIVATE tests/support)
@@ -1170,18 +1122,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_test_support)
 
-    add_executable(mr_adm_triple_balance_parity_tests tests/unit/triple_balance_parity_test.cpp
-        tests/reference/triple_balance/panner.cpp tests/reference/triple_balance/layout_222.cpp
-        tests/reference/triple_balance/size_panner.cpp tests/reference/triple_balance/size_processor.cpp
-        tests/reference/triple_balance/render_state.cpp)
-    target_link_libraries(mr_adm_triple_balance_parity_tests PRIVATE mr_adm_engine_renderer_test_support
-        MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_triple_balance_test_support nlohmann_json::nlohmann_json)
-    target_include_directories(mr_adm_triple_balance_parity_tests BEFORE PRIVATE tests/support/legacy_speaker_pcm)
-    target_include_directories(mr_adm_triple_balance_parity_tests PRIVATE src/adm_render_common)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_parity_tests)
-    add_test(NAME mr_adm_triple_balance_parity_tests COMMAND mr_adm_triple_balance_parity_tests)
-    set_tests_properties(mr_adm_triple_balance_parity_tests PROPERTIES TIMEOUT 120)
-
     add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
     target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon mr_adm_triple_balance_test_support mr_adm_live_scene_test_support)
@@ -1374,16 +1314,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_peak_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_peak_fixture_tests)
     add_test(NAME mr_adm_peak_fixture_tests COMMAND mr_adm_peak_fixture_tests)
-
-    # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
-    add_executable(mr_adm_hoa_parity_tests tests/unit/hoa_parity_test.cpp)
-    target_link_libraries(mr_adm_hoa_parity_tests PRIVATE fmt::fmt mr_adm_engine_renderer_test_support MacinRender::ADMRenderCommon
-        MacinRender::ADMDsp nlohmann_json::nlohmann_json)
-    target_include_directories(mr_adm_hoa_parity_tests PRIVATE src/adm_render_common)
-    mr_adm_core_apply_warnings(mr_adm_hoa_parity_tests)
-    mr_adm_core_scene_reference_fp(mr_adm_hoa_parity_tests)
-    add_test(NAME mr_adm_hoa_parity_tests COMMAND mr_adm_hoa_parity_tests)
-    set_tests_properties(mr_adm_hoa_parity_tests PROPERTIES TIMEOUT 120)
 
     add_executable(mr_adm_hoa_encode_fixture_tests tests/unit/hoa_encode_fixture_test.cpp)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests

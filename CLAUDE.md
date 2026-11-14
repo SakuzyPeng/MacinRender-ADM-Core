@@ -166,7 +166,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 - `MR_ADM_ENABLE_IAMF=OFF`（默认）— IAMF 编码，需配合 `MR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk` 指向预构建的官方 AOM iamf-tools bridge SDK（提供 `lib/libmr_iamf_aom_bridge.*`）。关闭时 `.iamf` 输出直接返回 `unsupported`，**不**回退到任何手写 OBU writer
 - `MR_ADM_CORE_BUILD_CLI=ON`、`MR_ADM_CORE_BUILD_TESTS=ON`
 - `MR_ADM_BUILD_CAPI_BUNDLE=OFF` — 打开后生成自包含 `libmradm_capi` 共享库（target `mradm_capi_bundle`），供 GUI P/Invoke 加载
-- `MR_ADM_STRICT_FP` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建。生产 Scene 算术不依赖这些开关：C++ 生产入口固定用私有非融合标志（`scene-separate-v1`，ADR 0014），冻结的 Scene / Live 双耳 / Live VBAP / HOA 参考测试目标单独加 `-ffp-contract=off`（MSVC `/fp:strict`）
+- `MR_ADM_STRICT_FP` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建。生产 Scene 算术不依赖这些开关：Scene 全在 Rust（`scene-separate-v1`，ADR 0014）
 
 CI 显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 与 `MR_ADM_OPUS_PROVIDER=VENDORED` 以消除 runner 差异（见 `docs/guides/CI.md`）。
 
@@ -348,7 +348,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 
 ## CI 与发布
 
-- `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；生产构建无需 Boost/vcpkg；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败；另有 Linux ARM64 Release job（`ubuntu-24.04-arm`，显式 `MR_ADM_STRICT_FP=OFF`）守护 Scene 算术规则在优化构建下不漂移
+- `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；生产构建无需 Boost/vcpkg；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败；另有 Linux ARM64 Release job（`ubuntu-24.04-arm`）以 `cargo test --release` 运行 Rust 回归（`mradm-ffi` / `mradm-capi` 除外）
 - `.github/workflows/consistency.yml` — push main / manual：Rust 二期三平台 A/B 采集；门禁输入完整性、同进程/新进程重复性、诊断无扰动，以及 `scripts/consistency/gates.json` 列出的跨平台位相等项（当前为 FFT 及其 f32/f64 twiddle、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA、HpTF 设计内核、生产计量的系数、True Peak 与响度、计量验收节目、离线后处理增益、文件流式与监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化、EAR 布局、Scene 空间数学、`room-binaural` 准备内核及全部 294 个 PCM 用例，含 38 个文件流式重放）；全部 255 个内核文件设为门禁
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建

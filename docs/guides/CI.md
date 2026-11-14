@@ -311,9 +311,9 @@ Windows GUI 普通包和 CUDA 试用包都启用 `MR_ADM_ENABLE_SOFA=ON`，保�
 3. 视 Windows release 耗时与稳定性，决定是否扩大 Release 下运行的测试集，或在 macOS / Linux release 中加入同样的优化构建 fixture。
 4. 二期及后续扩展的 118 个用例已全部设为位相等门禁。后续扩展 renderer / 布局 / 语义组合时，明确新增范围并同时登记用例；数值、资源、工具链或相关依赖改动合入前，在分支手动触发 Consistency 并保留结果。
 
-### Scene 算术的 ARM64 Release 回归
+### ARM64 Release 的 Rust 回归
 
-`scene-arm64-release` 在 `ubuntu-24.04-arm` 运行 Scene、Live 双耳、Live VBAP 和 HOA
-四组 Release 对照，显式设置 `MR_ADM_STRICT_FP=OFF`。参考目标局部采用固定乘加规则，
-生产构建保持默认选项；独立位模式、极点、channel-lock 与 HRTF 网格断言随目标执行。
+`rust-arm64-release` 在 `ubuntu-24.04-arm` 以 `cargo test --release` 运行 workspace 的 Rust 测试，覆盖一致性矩阵之外的
+aarch64 Linux 优化构建；`mradm-ffi` / `mradm-capi` 的测试链接 CMake 构建的 libFLAC，留在 debug job。它取代原来的
+Scene / Live 双耳 / Live VBAP / HOA 冻结 C++ 对照（R1，用户决定 2026-11-14）：生产 Scene 算术全在 Rust，rustc 不做浮点收缩。
 Cargo 缓存键包含体系结构，避免把 ARM64 和 x64 产物作为相同缓存使用。

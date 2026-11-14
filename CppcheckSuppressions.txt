@@ -79,8 +79,3 @@ unusedStructMember:*/tests/support/adm_scene/render_common_scene.h
 
 # SemanticReportOptions fields are read by scene_importer.cpp, outside the standalone header scan.
 unusedStructMember:*/tests/support/sdk/io/scene_import_internal.h
-
-# Frozen migration references retain their original loops and registered hashes.
-# Only stylistic STL-rewrite suggestions are excluded; safety checks stay enabled.
-useStlAlgorithm:*/tests/reference/scene_numeric/live_binaural.h
-useStlAlgorithm:*/tests/reference/live_vbap/legacy.h

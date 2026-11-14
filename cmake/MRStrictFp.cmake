@@ -89,20 +89,3 @@ function(mr_adm_core_apply_strict_fp)
 endfunction()
 
 mr_adm_core_apply_strict_fp()
-
-# The migrated Scene kernels use separately rounded Rust operations on all hosts.
-# Freeze the arithmetic of their independent C++ oracle, too: an optimizer's
-# native contraction choices are not the phase-2 numerical specification.
-# Only reference-test targets use these flags; MR_ADM_STRICT_FP stays optional.
-function(mr_adm_core_scene_reference_fp target_name)
-    if(MSVC)
-        target_compile_options(${target_name} PRIVATE /fp:strict)
-    else()
-        include(CheckCompilerFlag)
-        check_compiler_flag(CXX "-ffp-contract=off" MR_ADM_HAVE_SCENE_REFERENCE_CONTRACT_OFF)
-        if(NOT MR_ADM_HAVE_SCENE_REFERENCE_CONTRACT_OFF)
-            message(FATAL_ERROR "Scene reference tests require separately rounded multiply/add operations")
-        endif()
-        target_compile_options(${target_name} PRIVATE -fno-fast-math -ffp-contract=off)
-    endif()
-endfunction()
