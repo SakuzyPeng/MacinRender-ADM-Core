@@ -254,6 +254,12 @@ const BIND: receiver::Bind = receiver::bind_loopback;
 #[cfg(windows)]
 const BIND: receiver::Bind = winsock::bind;
 
+/// A loopback receiver on `port` for `source` (may be empty; `start` checks it), bound as the
+/// platform requires (Windows: `SO_EXCLUSIVEADDRUSE`).
+pub fn receiver(port: u16, source: &[u8]) -> receiver::Receiver {
+    receiver::Receiver::new(port, source, BIND)
+}
+
 /// Null for an invalid argument or a panic. `source` (may be empty) is checked by `start`,
 /// as the C++ receiver did.
 #[unsafe(no_mangle)]
@@ -271,9 +277,7 @@ pub unsafe extern "C" fn mradm_osc_receiver_create(
         } else {
             unsafe { slice::from_raw_parts(source, source_len) }
         };
-        Box::into_raw(Box::new(OscReceiver(receiver::Receiver::new(
-            port, bytes, BIND,
-        ))))
+        Box::into_raw(Box::new(OscReceiver(receiver(port, bytes))))
     }))
     .unwrap_or(std::ptr::null_mut())
 }

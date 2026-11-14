@@ -3,6 +3,7 @@
 //! The accepted grammar is the retired C++ parser's, pinned by `tests/hptf_parse_golden.rs`;
 //! range validation of the parsed bands stays with the caller.
 use super::{Band, BandKind};
+use std::collections::TryReserveError;
 use std::ops::Range;
 
 const DEFAULT_Q: f64 = 0.707;
@@ -49,10 +50,14 @@ fn trim(text: &[u8], range: Range<usize>) -> Range<usize> {
     start..end
 }
 
-fn tokens(line: &[u8]) -> Vec<&[u8]> {
-    line.split(|&b| space(b))
-        .filter(|t| !t.is_empty())
-        .collect()
+/// Replaces `out` with the whitespace-separated tokens of `line`.
+fn tokens<'a>(line: &'a [u8], out: &mut Vec<&'a [u8]>) -> Result<(), TryReserveError> {
+    out.clear();
+    for token in line.split(|&b| space(b)).filter(|t| !t.is_empty()) {
+        out.try_reserve(1)?;
+        out.push(token);
+    }
+    Ok(())
 }
 
 /// The whole token must be one finite decimal number; units are separate tokens in AutoEq,
@@ -119,11 +124,22 @@ fn band_kind(token: &[u8]) -> Option<BandKind> {
     })
 }
 
+/// Parses AutoEq ParametricEQ text.
+///
+/// # Panics
+///
+/// When an allocation fails; [`try_parse`] reports that instead.
 pub fn parse(text: &[u8]) -> Result<Profile, ParseError> {
+    try_parse(text).expect("HpTF: ParametricEQ allocation failed")
+}
+
+/// [`parse`] with fallible allocation: the outer `Err` when the token or band buffers cannot grow.
+pub fn try_parse(text: &[u8]) -> Result<Result<Profile, ParseError>, TryReserveError> {
     let mut profile = Profile {
         preamp_db: 0.,
         bands: Vec::new(),
     };
+    let mut tokens: Vec<&[u8]> = Vec::new();
     let mut saw_any_line = false;
     let mut start = 0;
     for raw in text.split(|&b| b == b'\n') {
@@ -134,12 +150,12 @@ pub fn parse(text: &[u8]) -> Result<Profile, ParseError> {
             continue;
         }
         let fail = |kind| {
-            Err(ParseError {
+            Ok(Err(ParseError {
                 kind,
                 line: range.clone(),
-            })
+            }))
         };
-        let tokens = tokens(line);
+        self::tokens(line, &mut tokens)?;
         let first = tokens[0];
         if first.eq_ignore_ascii_case(b"Preamp:") || first.eq_ignore_ascii_case(b"Preamp") {
             match tokens.get(1).and_then(|t| number(t)) {
@@ -174,6 +190,7 @@ pub fn parse(text: &[u8]) -> Result<Profile, ParseError> {
         ) else {
             return fail(ParseErrorKind::GainOrQ);
         };
+        profile.bands.try_reserve(1)?;
         profile.bands.push(Band {
             kind,
             enabled: tokens[switch].eq_ignore_ascii_case(b"ON"),
@@ -184,12 +201,12 @@ pub fn parse(text: &[u8]) -> Result<Profile, ParseError> {
         saw_any_line = true;
     }
     if !saw_any_line {
-        return Err(ParseError {
+        return Ok(Err(ParseError {
             kind: ParseErrorKind::Empty,
             line: 0..0,
-        });
+        }));
     }
-    Ok(profile)
+    Ok(Ok(profile))
 }
 
 #[cfg(test)]

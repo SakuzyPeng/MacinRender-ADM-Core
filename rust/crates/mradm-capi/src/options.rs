@@ -10,8 +10,6 @@ use crate::room::{self, adm_room_config_t};
 use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_engine::backend::Screens as EngineScreens;
 use mradm_engine::render::{PathText, Request as EngineRequest, RoomOptions, SofaPath};
-use mradm_ffi::adm::Text;
-use mradm_ffi::engine_service::{EnginePath, EngineRenderRequest};
 use mradm_ffi::room::RoomProfileHandle;
 use std::ffi::c_char;
 use std::ptr;
@@ -232,113 +230,6 @@ impl adm_render_options_t {
 
     pub(crate) fn input_channel_labels(&self) -> &[Vec<u8>] {
         &self.input_channel_labels
-    }
-}
-
-fn text(bytes: &[u8]) -> Text {
-    Text::bytes(bytes)
-}
-
-fn engine_path(bytes: &[u8]) -> EnginePath {
-    EnginePath {
-        utf8: text(bytes),
-        display: text(bytes),
-    }
-}
-
-/// The request record of a render of `input` (and `output`) with these options, and the views it
-/// borrows; valid while the options and the paths live.
-pub(crate) struct Request {
-    pub(crate) record: EngineRenderRequest,
-    _labels: Vec<Text>,
-    _layers: Vec<Text>,
-}
-
-fn path_bytes(p: &Option<Path>) -> &[u8] {
-    p.as_ref().map_or(&[][..], |p| &p.utf8[..])
-}
-
-fn texts(list: &[Vec<u8>]) -> Result<Vec<Text>, Failure> {
-    let mut out = Vec::new();
-    out.try_reserve_exact(list.len())
-        .map_err(|_| Failure::Exception)?;
-    out.extend(list.iter().map(|l| text(l)));
-    Ok(out)
-}
-
-impl adm_render_options_t {
-    /// `RequestTexts::record`.
-    pub(crate) fn request(&self, input: &[u8], output: Option<&[u8]>) -> Result<Request, Failure> {
-        let labels = texts(&self.input_channel_labels)?;
-        let layers = texts(&self.iamf_layers)?;
-        let room = self.room.as_ref();
-        let record = EngineRenderRequest {
-            input: engine_path(input),
-            has_output: u32::from(output.is_some()),
-            output: engine_path(output.unwrap_or(&[])),
-            renderer: self.renderer,
-            output_layout: text(&self.output_layout),
-            has_input_layout: u32::from(self.input_layout.is_some()),
-            input_layout: text(self.input_layout.as_deref().unwrap_or(&[])),
-            input_channel_labels: labels.as_ptr(),
-            input_channel_labels_len: labels.len(),
-            measure_loudness: u32::from(self.measure_loudness),
-            loudness_target_lufs: self.loudness_target_lufs,
-            peak_limit: u32::from(self.peak_limit),
-            peak_limit_dbtp: self.peak_limit_dbtp,
-            peak_normalize_to_limit: u32::from(self.peak_normalize_to_limit),
-            final_gain_db: self.final_gain_db,
-            output_bit_depth: self.output_bit_depth,
-            opus_bitrate_per_ch_kbps: self.opus_bitrate_per_ch_kbps,
-            apac_bitrate_kbps: self.apac_bitrate_kbps,
-            apac_drc_music: u32::from(self.apac_drc_music),
-            apac_caf: u32::from(self.apac_caf),
-            has_sofa: u32::from(self.sofa.is_some()),
-            sofa: engine_path(path_bytes(&self.sofa)),
-            sofa_file_name: text(&self.sofa_file_name),
-            has_policy_path: u32::from(self.semantic_policy_path.is_some()),
-            policy_path: engine_path(path_bytes(&self.semantic_policy_path)),
-            has_policy_json: u32::from(self.semantic_policy_json.is_some()),
-            policy_json: text(self.semantic_policy_json.as_deref().unwrap_or(&[])),
-            has_matrix_path: u32::from(self.direct_speakers_matrix_path.is_some()),
-            matrix_path: engine_path(path_bytes(&self.direct_speakers_matrix_path)),
-            has_matrix_json: u32::from(self.direct_speakers_matrix_json.is_some()),
-            matrix_json: text(self.direct_speakers_matrix_json.as_deref().unwrap_or(&[])),
-            has_report_path: u32::from(self.semantic_report_path.is_some()),
-            report_path: engine_path(path_bytes(&self.semantic_report_path)),
-            capture_report: u32::from(self.capture_semantic_report),
-            default_interp_ms: self.default_interp_ms,
-            object_smoothing_frames: self.object_smoothing_frames,
-            apple_geometry: u32::from(self.speaker_geometry == 1),
-            routing: self.direct_speakers_routing_mode,
-            speaker_spread: self.speaker_spread_mode,
-            triple_balance_mode: self.triple_balance_mode,
-            binaural_spread: self.binaural_spread_mode,
-            split_power: u32::from(self.lfe_routing_mode == 1),
-            apple_spatial_preset: 0,
-            apple_speaker_rendering_flags: u32::from(self.apple_speaker_rendering_flags),
-            listener_orientation: [0.0; 3],
-            render_start_sec: self.render_start_sec,
-            has_end: u32::from(self.render_end_sec.is_some()),
-            render_end_sec: self.render_end_sec.unwrap_or(0.0),
-            room_profile: room.map_or(ptr::null(), |r| r.profile.cast_const()),
-            room_hrir: text(room.map_or(&[][..], |r| &r.hrir[..])),
-            room_metres: room.map_or(0.0, |r| r.metres),
-            room_quality: self.room_quality,
-            has_reference: u32::from(self.screen_reference.is_some()),
-            reference: self.screen_reference.unwrap_or_default(),
-            has_reproduction: u32::from(self.screen_reproduction.is_some()),
-            reproduction: self.screen_reproduction.unwrap_or_default(),
-            internal_allow_speaker_stereo: 0,
-            iamf_mp4: u32::from(self.iamf_mp4),
-            iamf_layers: layers.as_ptr(),
-            iamf_layers_len: layers.len(),
-        };
-        Ok(Request {
-            record,
-            _labels: labels,
-            _layers: layers,
-        })
     }
 }
 
