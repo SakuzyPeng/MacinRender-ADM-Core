@@ -1,8 +1,7 @@
 #pragma once
 
 // Test-only: the C++ HRTF state the binaural renderers used before PCM consistency 4.7 A, kept for
-// the frozen live binaural reference (tests/reference/scene_numeric/live_binaural.h) and the HRTF
-// interpolation tests. Production prepares the state in Rust (src/adm_render_binaural/hrtf_state.h).
+// the HRTF interpolation tests. Production prepares the state in Rust (src/adm_render_binaural/hrtf_state.h).
 // The kernels are the production Rust DSP; only this C++ preparation is a copy.
 
 #include <cstdint>

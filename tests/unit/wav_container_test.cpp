@@ -1,5 +1,8 @@
-// WAVE container metadata parity: every case runs the frozen C++ implementation and the mradm-wav
-// path on separate copies of the same fixture and requires identical bytes (or the same error code).
+// WAVE container metadata golden: every case runs the production path (mradm-wav and the mradm-render
+// post-processing pass behind the C++ wrappers) on a generated fixture and folds the error code and the
+// resulting bytes into one digest per operation. The digests were recorded while the frozen C++
+// implementation still produced identical results for every case; that reference was retired with the
+// user decision of 2026-11-14.
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -20,14 +23,54 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 
-#include "../reference/wav_container/legacy.h"
 #include "audio_io_internal.h"
 
 namespace {
 
 namespace fs = std::filesystem;
-namespace legacy = mradm::wav_container_legacy;
 using Bytes = std::vector<uint8_t>;
+
+// FNV-1a over a framed record stream; a regression digest, not a security property.
+class Digest {
+  public:
+    void bytes(const uint8_t* data, std::size_t size) {
+        number(size);
+        for (std::size_t i = 0; i < size; ++i) {
+            state_ = (state_ ^ data[i]) * 0x100000001b3ULL;
+        }
+    }
+    void bytes(const Bytes& data) { bytes(data.data(), data.size()); }
+    void text(std::string_view value) { bytes(reinterpret_cast<const uint8_t*>(value.data()), value.size()); }
+    void number(uint64_t value) {
+        for (int shift = 0; shift < 64; shift += 8) {
+            state_ = (state_ ^ ((value >> static_cast<unsigned>(shift)) & 0xFFU)) * 0x100000001b3ULL;
+        }
+    }
+    [[nodiscard]] uint64_t value() const { return state_; }
+
+  private:
+    uint64_t state_{0xcbf29ce484222325ULL};
+};
+
+struct Goldens {
+    Digest finalize;
+    Digest metadata;
+    Digest read;
+    Digest replace;
+    Digest scan;
+};
+Goldens& goldens() {
+    static Goldens value;
+    return value;
+}
+
+// Recorded on 2026-11-14 (see the file comment). A mismatch prints the new values.
+constexpr uint64_t k_finalize_digest = 0x229d928e3e6c85e8ULL;
+constexpr uint64_t k_metadata_digest = 0xf3b1b4ac3939711aULL;
+constexpr uint64_t k_read_digest = 0x2937fb9efa3bbe6dULL;
+constexpr uint64_t k_replace_digest = 0x06e81fb9b4828b35ULL;
+constexpr uint64_t k_scan_digest = 0x947c5d73ba37d933ULL;
+constexpr int k_case_count = 320;
 
 void require(bool condition, const std::string& message) {
     if (!condition) {
@@ -243,17 +286,16 @@ int& case_count() {
     return count;
 }
 
-void expect_same(const std::string& name, const Outcome& expected, const Outcome& actual, bool compare_bytes = true) {
-    require(expected.first == actual.first,
-            name + ": error code differs (legacy " + std::to_string(expected.first) + ", rust " +
-                std::to_string(actual.first) + ")");
-    if (expected.first == 0 && compare_bytes) {
-        require(expected.second == actual.second, name + ": output bytes differ");
+void record(Digest& digest, const std::string& name, const Outcome& outcome) {
+    digest.text(name);
+    digest.number(static_cast<uint64_t>(static_cast<int64_t>(outcome.first)));
+    if (outcome.first == 0) {
+        digest.bytes(outcome.second);
     }
     ++case_count();
 }
 
-// Runs an in-place operation on two copies of `source`.
+// Runs an in-place operation on a copy of `source`.
 template <typename Operation> Outcome run_in_place(const fs::path& path, const Bytes& source, Operation op) {
     save(path, source);
     const int code = op(path.string());
@@ -284,7 +326,7 @@ std::vector<std::pair<std::string, mradm::audio::WavLayoutFinalization>> layouts
         adm_riff.prefer_riff = true;
         adm_riff.axml += ' '; // odd AXML length
         out.emplace_back("adm-odd-riff", adm_riff);
-        // Error cases: both implementations must reject them with the same code.
+        // Error cases: the digest records their error codes.
         WavLayoutFinalization bad_mask;
         bad_mask.channel_mask = 0x7U;
         out.emplace_back("bad-mask", bad_mask);
@@ -318,17 +360,14 @@ std::vector<std::pair<std::string, mradm::audio::WavLayoutFinalization>> layouts
     return out;
 }
 
-void finalize_parity(const fs::path& root, const Fixture& fixture) {
+void finalize_golden(const fs::path& root, const Fixture& fixture) {
     for (const auto& item : layouts(fixture.channels)) {
         const auto& layout = item.second;
         const auto label = "finalize " + fixture.name + " " + item.first;
-        const auto expected = run_in_place(root / "legacy.wav", fixture.bytes, [&](const std::string& path) {
-            return code_of(legacy::finalize_wav_layout(path, layout));
-        });
-        const auto actual = run_in_place(root / "rust.wav", fixture.bytes, [&](const std::string& path) {
+        const auto actual = run_in_place(root / "case.wav", fixture.bytes, [&](const std::string& path) {
             return code_of(mradm::audio::finalize_wav_layout(path, layout));
         });
-        expect_same(label, expected, actual);
+        record(goldens().finalize, label, actual);
     }
 }
 
@@ -351,20 +390,16 @@ std::vector<std::pair<std::string, mradm::audio::MetadataFields>> metadata_cases
     return out;
 }
 
-void metadata_parity(const fs::path& root, const Fixture& fixture) {
+void metadata_golden(const fs::path& root, const Fixture& fixture) {
     for (const auto& item : metadata_cases()) {
         const auto& meta = item.second;
         const auto label = "metadata " + fixture.name + " " + item.first;
         // Apply twice so a second bext and an existing ambi are covered too.
-        const auto expected = run_in_place(root / "legacy.wav", fixture.bytes, [&](const std::string& path) {
-            const int first = code_of(legacy::write_wav_metadata(path, meta));
-            return first != 0 ? first : code_of(legacy::write_wav_metadata(path, meta));
-        });
-        const auto actual = run_in_place(root / "rust.wav", fixture.bytes, [&](const std::string& path) {
+        const auto actual = run_in_place(root / "case.wav", fixture.bytes, [&](const std::string& path) {
             const int first = code_of(mradm::audio::write_wav_metadata(path, meta));
             return first != 0 ? first : code_of(mradm::audio::write_wav_metadata(path, meta));
         });
-        expect_same(label, expected, actual);
+        record(goldens().metadata, label, actual);
     }
 }
 
@@ -376,14 +411,15 @@ std::string normalize_uid(std::string raw) {
     return raw;
 }
 
-void read_parity(const fs::path& root, const Fixture& fixture) {
+void read_golden(const fs::path& root, const Fixture& fixture) {
     const auto path = root / "read.wav";
     save(path, fixture.bytes);
-    const auto expected = legacy::read_wave_adm_metadata(path.string());
     const auto actual = mradm::audio::read_wav_adm_chunks(path.string());
-    require(code_of(expected) == code_of(actual), "read " + fixture.name + ": error code differs");
-    if (expected) {
-        require(expected->axml == actual->axml, "read " + fixture.name + ": AXML differs");
+    auto& digest = goldens().read;
+    digest.text("read " + fixture.name);
+    digest.number(static_cast<uint64_t>(static_cast<int64_t>(code_of(actual))));
+    if (actual) {
+        digest.text(actual->axml);
         std::map<std::string, uint16_t> uid_to_channel;
         for (const auto& record : actual->chna) {
             require(record.track_index != 0U, "read " + fixture.name + ": unexpected track index 0");
@@ -391,45 +427,46 @@ void read_parity(const fs::path& root, const Fixture& fixture) {
                 uid_to_channel[uid] = static_cast<uint16_t>(record.track_index - 1U);
             }
         }
-        require(expected->uid_to_channel == uid_to_channel, "read " + fixture.name + ": CHNA map differs");
-        if (!expected->axml.empty()) {
+        digest.number(uid_to_channel.size());
+        for (const auto& [uid, channel] : uid_to_channel) {
+            digest.text(uid);
+            digest.number(channel);
+        }
+        if (!actual->axml.empty()) {
             const auto axml = mradm::io::get_axml(path.string());
-            require(axml && *axml == expected->axml, "read " + fixture.name + ": get_axml differs");
+            require(axml && *axml == actual->axml, "read " + fixture.name + ": get_axml differs");
         }
     }
     ++case_count();
 }
 
-void replace_parity(const fs::path& root, const Fixture& fixture) {
+void replace_golden(const fs::path& root, const Fixture& fixture) {
     for (const std::size_t size : {0U, 1U, 2U, 4097U}) {
         const auto label = "replace " + fixture.name + " " + std::to_string(size);
         const auto axml = axml_text(size);
         const auto source = root / "source.wav";
         save(source, fixture.bytes);
-        const auto legacy_out = root / "legacy-out.wav";
-        const auto rust_out = root / "rust-out.wav";
-        const int expected = code_of(legacy::rewrite_bwf_replacing_axml(source.string(), legacy_out.string(), axml));
-        const int actual = code_of(mradm::audio::replace_wav_axml(source.string(), rust_out.string(), axml));
-        expect_same(label,
-                    {expected, expected == 0 ? load(legacy_out) : Bytes{}},
-                    {actual, actual == 0 ? load(rust_out) : Bytes{}});
-        fs::remove(legacy_out);
-        fs::remove(rust_out);
+        const auto output = root / "output.wav";
+        const int actual = code_of(mradm::audio::replace_wav_axml(source.string(), output.string(), axml));
+        record(goldens().replace, label, {actual, actual == 0 ? load(output) : Bytes{}});
+        fs::remove(output);
     }
 }
 
+// The routing state the channel-bed probe derives: 0 invalid WAVE, 1 no AXML, 2 AXML present.
 void scan_case(const fs::path& path, const std::string& label) {
-    const auto expected = legacy::scan_axml(path.string());
     const auto actual = mradm::audio::wav_has_chunk(path.string(), "axml");
-    legacy::AxmlState state = legacy::AxmlState::invalid_wave;
+    auto& digest = goldens().scan;
+    digest.text("scan " + label);
+    uint64_t state = 0U;
     if (actual) {
-        state = *actual ? legacy::AxmlState::present : legacy::AxmlState::absent;
+        state = *actual ? 2U : 1U;
     }
-    require(expected == state, "scan " + label + ": routing differs");
+    digest.number(state);
     ++case_count();
 }
 
-void scan_parity(const fs::path& root, const std::vector<Fixture>& all) {
+void scan_golden(const fs::path& root, const std::vector<Fixture>& all) {
     const auto path = root / "scan.wav";
     for (const auto& fixture : all) {
         save(path, fixture.bytes);
@@ -456,7 +493,7 @@ void scan_parity(const fs::path& root, const std::vector<Fixture>& all) {
     scan_case(root / "missing.wav", "missing");
 }
 
-// Behaviour that intentionally differs from the frozen implementation.
+// Behaviour that intentionally differed from the retired frozen implementation.
 void rust_only_checks(const fs::path& root, const std::vector<Fixture>& all) {
     const auto path = root / "rust-only.wav";
     // An invalid existing ambi is rejected before anything is written (the old code had already appended bext).
@@ -596,7 +633,7 @@ int main() {
         const auto all = fixtures();
         for (const auto& fixture : all) {
             if (fixture.audio_supported) {
-                finalize_parity(root, fixture);
+                finalize_golden(root, fixture);
             } else {
                 const auto path = root / "metadata-only.wav";
                 save(path, fixture.bytes);
@@ -604,16 +641,36 @@ int main() {
                 require(code_of(reader) == static_cast<int>(mradm::ErrorCode::unsupported),
                         "metadata-only encoding unexpectedly accepted for audio decoding");
             }
-            metadata_parity(root, fixture);
-            read_parity(root, fixture);
-            replace_parity(root, fixture);
+            metadata_golden(root, fixture);
+            read_golden(root, fixture);
+            replace_golden(root, fixture);
         }
-        scan_parity(root, all);
+        scan_golden(root, all);
         rust_only_checks(root, all);
         progress_exception_checks(root);
         replace_alias_checks(root);
         fs::remove_all(root);
-        std::cout << case_count() << " WAVE container cases match the frozen C++ implementation\n";
+        const std::array<std::pair<std::string_view, std::pair<uint64_t, uint64_t>>, 5> digests{{
+            {"finalize", {goldens().finalize.value(), k_finalize_digest}},
+            {"metadata", {goldens().metadata.value(), k_metadata_digest}},
+            {"read", {goldens().read.value(), k_read_digest}},
+            {"replace", {goldens().replace.value(), k_replace_digest}},
+            {"scan", {goldens().scan.value(), k_scan_digest}},
+        }};
+        bool same = case_count() == k_case_count;
+        for (const auto& [name, values] : digests) {
+            same = same && values.first == values.second;
+        }
+        if (!same) {
+            std::cerr << "WAVE container golden mismatch: " << case_count() << " cases (expected " << k_case_count
+                      << ")\n";
+            for (const auto& [name, values] : digests) {
+                std::cerr << "  " << name << " 0x" << std::hex << values.first << " (expected 0x" << values.second
+                          << ")" << std::dec << '\n';
+            }
+            return 1;
+        }
+        std::cout << case_count() << " WAVE container cases match the golden digests\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

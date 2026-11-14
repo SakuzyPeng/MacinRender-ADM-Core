@@ -20,16 +20,10 @@ FP_SUFFIXES = {'.c', '.cc', '.cpp', '.cxx', '.m', '.mm'}
 CACHE_KEYS = (
     'CMAKE_BUILD_TYPE', 'CMAKE_CXX_COMPILER', 'CMAKE_C_COMPILER',
     'CMAKE_C_FLAGS', 'CMAKE_CXX_FLAGS', 'CMAKE_C_FLAGS_RELEASE', 'CMAKE_CXX_FLAGS_RELEASE',
-    'CMAKE_OSX_ARCHITECTURES', 'MR_ADM_STRICT_FP', 'MR_ADM_EAR_SCALAR_REFERENCE',
-    'MR_ADM_EAR_SIMD_EFFECTIVE', 'MR_ADM_HAVE_MSVC_FP_CONTRACT_OFF',
-    'MR_ADM_CONSISTENCY_DIAGNOSTICS', 'MR_ADM_DIAGNOSTIC_PORTABLE_RNG',
-    'MR_ADM_BUILD_SAF_REFERENCE_TESTS', 'MR_ADM_BUILD_EBUR128_REFERENCE_TESTS',
-    'MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS', 'MR_ADM_BUILD_LIBADM_REFERENCE_TESTS',
-    'MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS', 'MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS',
-    'Rust_TOOLCHAIN', 'Rust_CARGO_TARGET_CACHED',
+    'CMAKE_OSX_ARCHITECTURES', 'MR_ADM_STRICT_FP', 'MR_ADM_HAVE_MSVC_FP_CONTRACT_OFF',
+    'MR_ADM_CONSISTENCY_DIAGNOSTICS', 'Rust_TOOLCHAIN', 'Rust_CARGO_TARGET_CACHED',
     'MR_ADM_CORE_USE_INSTALLED_DEPS', 'MR_ADM_FLAC_PROVIDER', 'MR_ADM_OPUS_PROVIDER',
-    'MR_ADM_ENABLE_SOFA', 'MR_ADM_ENABLE_IAMF', 'EAR_SIMD', 'SAF_PERFORMANCE_LIB',
-    'SAF_ENABLE_SIMD', 'SAF_USE_FAST_MATH_FLAG', 'SAF_ENABLE_FAST_MATH_FLAG', 'FETCHCONTENT_BASE_DIR',
+    'MR_ADM_ENABLE_SOFA', 'MR_ADM_ENABLE_IAMF', 'FETCHCONTENT_BASE_DIR',
 )
 
 
@@ -213,16 +207,6 @@ def collect(build):
         record['validation.strict_fp'] = 'failed' if errors else 'passed'
     else:
         record['validation.strict_fp'] = 'not-requested'
-    record['validation.ear_scalar'] = 'not-requested'
-    if enabled(cache.get('MR_ADM_EAR_SCALAR_REFERENCE', 'OFF')):
-        linked = any(dep['name'] == 'libear' for dep in manifest['dependencies'])
-        if record['ear.implementation'] == 'rust' and not linked:
-            record['validation.ear_scalar'] = 'not-linked'
-        elif cache.get('MR_ADM_EAR_SIMD_EFFECTIVE') != 'OFF':
-            record['validation.ear_scalar'] = 'failed'
-            errors.append('libear scalar reference was not established by this configuration')
-        else:
-            record['validation.ear_scalar'] = 'passed'
 
     project_source = Path(manifest['project_source_dir'])
     revision, dirty, reason = source_revision(project_source)

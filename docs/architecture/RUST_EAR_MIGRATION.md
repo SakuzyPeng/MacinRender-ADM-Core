@@ -36,6 +36,8 @@ FIR 设计使用 MT19937、整数除 2^32 的映射和声道名称排序种子�
 移植算法、静态表及采样数据的许可证和来源分别登记在 crate 的 LICENSE、NOTICE.txt、
 PROVENANCE.json 和发行依赖清单；资源哈希纳入许可检查。
 
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `libear`（含 `MR_ADM_EAR_SCALAR_REFERENCE`）在 `da4c781` 删除，上文为历史记录。覆盖依据：EAR 布局、增益与去相关 FIR 内核门禁、EAR PCM 用例与 mradm-ear 测试。
+
 ## 验证
 
 验证摘要与平台证据存放于 `evidence/rust-ear/`。算法对照覆盖标准/Apple geometry 共 16 组

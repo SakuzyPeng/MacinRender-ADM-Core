@@ -93,3 +93,5 @@ ctest --test-dir build/release -R '(output_dsp|stereo_peak_guard|hptf|scene_.*c_
 - 单元 `output_dsp`（`tests/reference/output_dsp_legacy.h`）：随默认测试构建编译，由 `mr_adm_output_dsp_tests` 比较。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `output_dsp` 在 `c263686` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/output_dsp.rs`、HpTF / 峰值保护内核门禁与 Scene 设备回放 PCM 门禁。

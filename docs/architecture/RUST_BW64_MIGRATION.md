@@ -48,3 +48,5 @@ Release 共享库全量构建还补齐了 C API bundle、core/EAR/channel-bed �
 - 单元 `libbw64`（`tests/reference/libbw64/`）：在默认 OFF 的 `MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS` 下编译，由 `mr_adm_libbw64_reference_tests` 比较。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `libbw64` 在 `da4c781` 删除，上文为历史记录。覆盖依据：mradm-wav 测试、整数 WAVE 量化门禁与 `final-*` PCM 用例。

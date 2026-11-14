@@ -1,5 +1,7 @@
 # 3D VBAP 数值差异定位：2026-09-09
 
+> 2026-11-14：本文用到的 SAF 探针（`mr_adm_numeric_probe`、`mr_adm_vbap_probe`、`mr_adm_fft_lifecycle_probe`）、`MR_ADM_DIAGNOSTIC_PORTABLE_RNG` 与定位脚本（`run-localization.py`、`localize.py`、`localize-vbap.py`）已随 R1 删除，只能从 git 历史恢复；本文为历史记录。
+
 `saf-5_1_4-extent` 的 Linux/Windows 原始 PCM 差异，已通过逐位复核的重放定位到 `tanf`：只替换这一个返回值，即可复原 Windows 的全部 480,000 个输出采样。macOS 侧还存在独立的 BLAS 旋转、点积和求逆差异；三角化 RNG 也会改变索引顺序乃至几何拓扑。
 
 ## 证据来源与校验

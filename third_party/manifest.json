@@ -41,31 +41,12 @@
       "notes": "若动态链接系统库，仍需记录版本与许可证"
     },
     {
-      "name": "libebur128",
-      "version": "v1.2.6",
-      "cmake_key": "libebur128",
-      "purl": "pkg:github/jiixyj/libebur128@v1.2.6",
-      "license": "MIT",
-      "purpose": "历史响度/True Peak 参考（测试专用）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "libebur128-src",
-        "parent": null,
-        "license_files": [
-          "COPYING"
-        ],
-        "cmake_option": "MR_ADM_BUILD_EBUR128_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。"
-    },
-    {
       "name": "dr_libs",
       "version": "47a4f08e777faddf59a8955c4ea84f69f41020d5",
       "cmake_key": "dr_libs",
       "purl": "pkg:github/mackron/dr_libs@47a4f08e777faddf59a8955c4ea84f69f41020d5",
       "license": "Unlicense OR MIT-0",
-      "purpose": "FLAC 解码（dr_flac）；dr_wav 仅用于显式启用的 WAVE 参考测试",
+      "purpose": "FLAC 解码（dr_flac）",
       "distribution": "available",
       "source": {
         "type": "fetchcontent",
@@ -96,25 +77,6 @@
       "notes": "header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox"
     },
     {
-      "name": "libsamplerate",
-      "version": "0.2.2",
-      "cmake_key": "SampleRate",
-      "purl": "pkg:github/libsndfile/libsamplerate@0.2.2",
-      "license": "BSD-2-Clause",
-      "purpose": "历史采样率转换参考（测试专用）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "samplerate-src",
-        "parent": null,
-        "license_files": [
-          "COPYING"
-        ],
-        "cmake_option": "MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。"
-    },
-    {
       "name": "libFLAC",
       "version": "1.5.0",
       "cmake_key": "FLAC",
@@ -131,85 +93,6 @@
         ]
       },
       "notes": "默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及"
-    },
-    {
-      "name": "libbw64",
-      "version": "0.10.0",
-      "cmake_key": "libbw64",
-      "purl": "pkg:github/ebu/libbw64@0.10.0",
-      "license": "Apache-2.0",
-      "purpose": "历史 BW64/PCM 参考（测试专用）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "libbw64-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ],
-        "cmake_option": [
-          "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS",
-          "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS"
-        ]
-      },
-      "notes": "仅用于显式启用的 libbw64/libadm 对照测试；生产整数 PCM 读写由 Rust mradm-wav 实现。"
-    },
-    {
-      "name": "libadm",
-      "version": "0.14.0",
-      "cmake_key": "libadm",
-      "purl": "pkg:github/ebu/libadm@0.14.0",
-      "license": "Apache-2.0",
-      "purpose": "历史 ADM 元数据参考（测试专用）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "libadm-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ],
-        "cmake_option": "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式启用的对照工具；生产 ADM 读写由 Rust mradm-adm 实现。"
-    },
-    {
-      "name": "libear",
-      "version": "2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
-      "cmake_key": "libear",
-      "purl": "pkg:github/ebu/libear@2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
-      "license": "Apache-2.0",
-      "purpose": "BS.2127/EAR 增益计算",
-      "distribution": "opt-in",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "libear-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ],
-        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
-      },
-      "notes": "内嵌 vendored Eigen/xsimd/kissfft，单列于下 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
-    },
-    {
-      "name": "Spatial_Audio_Framework",
-      "version": "v1.3.4",
-      "cmake_key": "Spatial_Audio_Framework",
-      "purl": "pkg:github/leomccormack/Spatial_Audio_Framework@v1.3.4",
-      "license": "ISC",
-      "purpose": "历史 DSP 数值参考（测试专用）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "spatial_audio_framework-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE.md"
-        ],
-        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
     },
     {
       "name": "libopus",
@@ -229,119 +112,6 @@
         ]
       },
       "notes": "发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt）"
-    },
-    {
-      "name": "Eigen",
-      "version": "bundled-in-libear@2db69f8f",
-      "cmake_key": null,
-      "purl": "pkg:generic/eigen",
-      "license": "MPL-2.0",
-      "purpose": "线性代数（libear 内嵌子模块）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "nested",
-        "deps_dir": "libear-src",
-        "parent": "libear",
-        "license_files": [
-          "submodules/eigen/COPYING.MPL2"
-        ],
-        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
-      },
-      "notes": "libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
-    },
-    {
-      "name": "xsimd",
-      "version": "bundled-in-libear@2db69f8f",
-      "cmake_key": null,
-      "purl": "pkg:generic/xsimd",
-      "license": "BSD-3-Clause",
-      "purpose": "SIMD 抽象（libear 内嵌子模块）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "nested",
-        "deps_dir": "libear-src",
-        "parent": "libear",
-        "license_files": [
-          "submodules/xsimd/LICENSE"
-        ],
-        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
-      },
-      "notes": " 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
-    },
-    {
-      "name": "kissfft",
-      "version": "bundled-in-libear@2db69f8f",
-      "cmake_key": null,
-      "purl": "pkg:generic/kissfft",
-      "license": "BSD-3-Clause",
-      "purpose": "FFT（libear/SAF 内嵌子模块）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "nested",
-        "deps_dir": "libear-src",
-        "parent": "libear",
-        "license_files": [
-          "submodules/kissfft/COPYING"
-        ],
-        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
-      },
-      "notes": " 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
-    },
-    {
-      "name": "libmysofa",
-      "version": "bundled-in-SAF@v1.3.4",
-      "cmake_key": null,
-      "purl": "pkg:generic/libmysofa",
-      "license": "BSD-3-Clause",
-      "purpose": "SOFA 解析（SAF saf_sofa_reader 内嵌）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "nested",
-        "deps_dir": "spatial_audio_framework-src",
-        "parent": "Spatial_Audio_Framework",
-        "license_files": [
-          "framework/modules/saf_sofa_reader/libmysofa/LICENSE"
-        ],
-        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
-    },
-    {
-      "name": "zlib",
-      "version": "bundled-in-SAF@v1.3.4",
-      "cmake_key": null,
-      "purl": "pkg:generic/zlib",
-      "license": "Zlib",
-      "purpose": "压缩支持（SAF SOFA reader 内嵌）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "nested",
-        "deps_dir": "spatial_audio_framework-src",
-        "parent": "Spatial_Audio_Framework",
-        "license_files": [
-          "framework/resources/zlib/zlib.h"
-        ],
-        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
-    },
-    {
-      "name": "spreader_mr",
-      "version": "fork-of-SAF-examples@v1.3.4",
-      "cmake_key": null,
-      "purl": "pkg:generic/spreader_mr",
-      "license": "ISC",
-      "purpose": "saf_spreader 双耳扩散渲染（实验性 fork）",
-      "distribution": "opt-in",
-      "source": {
-        "type": "vendored",
-        "repo_path": "tests/reference/spreader_mr.h",
-        "license_files": [
-          "NOTICE.txt"
-        ],
-        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
-      },
-      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
     },
     {
       "name": "aom-iamf-tools-bridge",

@@ -127,3 +127,5 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 五期 5.6 C 把 C++ 路由与对象预处理包装移到测试侧 `tests/support/adm_scene/render_common_scene.h` 后，`tests/reference/hoa/legacy.h` 只多一行该头的 include，算法未改，`retention.json` 的哈希已更新。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `hoa` 在 `c263686` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/hoa.rs`、HOA 编解码内核与 HOA 离线 / 文件流式 PCM 门禁。

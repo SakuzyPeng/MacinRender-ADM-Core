@@ -3,8 +3,8 @@
 //! Every byte comes from the network, so decoding is total: malformed input yields `None`
 //! and never panics. One complete OSC message per datagram, at most 8 KiB. Telemetry JSON
 //! and owned strings allocate, so this runs on the background receiver, never in an audio
-//! callback. The accepted grammar is the frozen C++ decoder's
-//! (`tests/reference/osc_protocol/`), checked field by field by a differential test.
+//! callback. The accepted grammar is the retired C++ decoder's; `tests/decode_golden.rs` pins
+//! every decision and decoded field of its differential corpus.
 #![forbid(unsafe_code)]
 
 use mradm_dsp::scene_math;

@@ -2,6 +2,10 @@
 
 > 2026-10-06：落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md)"按单元记录退出条件与移除参考实现的时机"。登记表为 [`tests/reference/retention.json`](../../tests/reference/retention.json)，由 `scripts/quality/check-reference-retention.py` 校验。
 
+> 2026-11-14：用户决定不为对照长期保留旧实现（[PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)）。下文三条退役条件由一条取代：
+> **行为已被门禁矩阵或独立的 Rust 回归覆盖**；门禁覆盖不到的不可信输入与错误路径先固化为 Rust golden 再删。R1 删除全部 18 个单元、
+> 登记表与校验脚本，本文件此后只作历史记录。
+
 ## 两类参考
 
 每个迁移批次都会保留旧实现，用来比较 Rust 版本。参考分两类：
@@ -29,7 +33,7 @@
 
 ## 退役条件
 
-一个单元同时满足以下三条才可以删除。条件 ID 与 `retention.json` 的 `conditions` 字段对应。
+（2026-11-14 起由上文的一条取代，下面是原规则。）一个单元同时满足以下三条才可以删除。条件 ID 与 `retention.json` 的 `conditions` 字段对应。
 
 1. **`released`**：该批次的 Rust 实现已随至少一个正式 `v*` tag 发布。截至 2026-10-06，最新 tag 为 `v1.9.1`，所有批次都还没有发布。
 2. **`independent-regression`**：比较测试守护的行为已固化为不依赖旧实现的回归，并在必需 CI 运行。形式可以是 golden 输出或哈希、误差阈值，或运行时生成的 fixture。只证明"与旧实现一致"的测试不算。
@@ -49,6 +53,33 @@
 3. 在对应 `RUST_*_MIGRATION.md` 的"参考实现退出"小节记录删除提交、满足条件的证据（发布 tag、独立回归测试名、二期结论）。`evidence/` 保持不动。
 
 ## 当前状态
+
+**2026-11-14：全部 18 个单元已退役（R1），`tests/reference/`、`retention.json`、`check-reference-retention.py`、
+`MR_ADM_BUILD_*_REFERENCE_TESTS` 与 `reference-tests.yml` 均已删除。** 本文件此后只作历史记录；下面的旧状态保留原文。
+
+| 单元 | 类别 | 删除提交 | 覆盖依据 |
+|---|---|---|---|
+| `saf`（含 `spreader_mr`、SAF 探针） | third-party | `da4c781` | FFT、OM / spreader、HRTF、SOFA、HpTF 设计内核门禁与双耳 PCM 门禁 |
+| `libadm` | third-party | `da4c781` | ADM 导入换算门禁、`params-*` 用例、mradm-adm 测试 |
+| `libbw64` | third-party | `da4c781` | mradm-wav 测试、整数 WAVE 量化门禁、`final-*` 用例 |
+| `resampler` | third-party | `da4c781` | 重采样门禁、96 / 192 kHz 用例、`tests/resampler.rs` |
+| `ebur128` | third-party | `da4c781` | True Peak、响度与计量验收门禁、`tests/meter_acceptance.rs` |
+| `dr_wav` | third-party | `da4c781` | mradm-wav 测试、整数 WAVE 量化门禁 |
+| `libear` | third-party | `da4c781` | EAR 布局 / 增益 / 去相关 FIR 门禁、EAR 用例、mradm-ear 测试 |
+| `ear_post` | frozen | `c263686` | `tests/ear_post.rs`、EAR 门禁；C++ 保留时域 FIR 校验 |
+| `output_dsp` | frozen | `c263686` | `tests/output_dsp.rs`、HpTF / 峰值保护门禁 |
+| `pcm_mix` | frozen | `c263686` | `tests/pcm_mix.rs`、扬声器 PCM 门禁；C++ 保留裁剪块时间线回归 |
+| `scene_numeric` | frozen | `c263686` | `tests/scene_math.rs`、`scene_transition.rs`、`live_binaural.rs`、Scene 门禁 |
+| `hoa` | frozen | `c263686` | `tests/hoa.rs`、HOA 编解码门禁与用例 |
+| `live_vbap` | frozen | `c263686` | `tests/live_vbap.rs`、Scene VBAP 用例 |
+| `monitor` | frozen | `c263686` | `tests/monitor.rs`、文件流式 / 监听运算门禁 |
+| `triple_balance` | frozen | `c263686` | `tests/triple_balance.rs`、`triple_balance_d.rs`、Triple Balance 门禁 |
+| `wav_container` | frozen | `0bf8627` | `mr_adm_wav_container_tests` golden 摘要（`48fbd0b`） |
+| `osc_protocol` | frozen | `0bf8627` | mradm-osc `tests/decode_golden.rs`（`48fbd0b`） |
+| `hptf_parse` | frozen | `0bf8627` | mradm-dsp `tests/hptf_parse_golden.rs`（`48fbd0b`） |
+
+`48fbd0b` 的三份 golden 在记录时与冻结实现对照：语料从 C++ 差分测试与 Rust 测试各导出一份逐字节相同，且原差分测试在同一树上通过。
+Linux ARM64 Release job 改为 `cargo test --release`，取代原来的 Scene 冻结对照。
 
 2026-10-16：登记表现有 18 个单元、49 个文件（下文 2026-10-07 之后新增 `osc_protocol` 与 `hptf_parse`），全部保留，
 三个退役条件均未解除。[ADR 0021](../adr/0021-rust-primary-project.md) 起，冻结参考引用的生产头（如 `render_common.h`、

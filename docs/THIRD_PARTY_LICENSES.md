@@ -33,22 +33,10 @@
 |---|---|---|---|---|
 | `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（测试专用：测试 SDK、工具与冻结参考，6.5 C 起不进生产） | MIT | 测试专用（不进生产） |  |
 | `fmt` @ 11.2.0 | 格式化（测试专用：冻结参考与测试 SDK，6.5 C 起不进生产） | MIT | 测试专用（不进生产） | 若动态链接系统库，仍需记录版本与许可证 |
-| `libebur128` @ v1.2.6 | 历史响度/True Peak 参考（测试专用） | MIT | opt-in（默认关闭） | 仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。 |
-| `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | FLAC 解码（dr_flac）；dr_wav 仅用于显式启用的 WAVE 参考测试 | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
+| `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | FLAC 解码（dr_flac） | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
-| `libsamplerate` @ 0.2.2 | 历史采样率转换参考（测试专用） | BSD-2-Clause | opt-in（默认关闭） | 仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。 |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
-| `libbw64` @ 0.10.0 | 历史 BW64/PCM 参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的 libbw64/libadm 对照测试；生产整数 PCM 读写由 Rust mradm-wav 实现。 |
-| `libadm` @ 0.14.0 | 历史 ADM 元数据参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的对照工具；生产 ADM 读写由 Rust mradm-adm 实现。 |
-| `libear` @ 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | BS.2127/EAR 增益计算 | Apache-2.0 | opt-in（默认关闭） | 内嵌 vendored Eigen/xsimd/kissfft，单列于下 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
-| `Spatial_Audio_Framework` @ v1.3.4 | 历史 DSP 数值参考（测试专用） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `libopus` @ v1.5.2 | Opus MKA 编码 | BSD-3-Clause | 可用 | 发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt） |
-| `Eigen` @ bundled-in-libear@2db69f8f | 线性代数（libear 内嵌子模块） | MPL-2.0 | opt-in（默认关闭） | libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
-| `xsimd` @ bundled-in-libear@2db69f8f | SIMD 抽象（libear 内嵌子模块） | BSD-3-Clause | opt-in（默认关闭） |  仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
-| `kissfft` @ bundled-in-libear@2db69f8f | FFT（libear/SAF 内嵌子模块） | BSD-3-Clause | opt-in（默认关闭） |  仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
-| `libmysofa` @ bundled-in-SAF@v1.3.4 | SOFA 解析（SAF saf_sofa_reader 内嵌） | BSD-3-Clause | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
-| `zlib` @ bundled-in-SAF@v1.3.4 | 压缩支持（SAF SOFA reader 内嵌） | Zlib | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
-| `spreader_mr` @ fork-of-SAF-examples@v1.3.4 | saf_spreader 双耳扩散渲染（实验性 fork） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `aom-iamf-tools-bridge` @ external-sdk | IAMF raw OBU 编码（opt-in，MR_ADM_ENABLE_IAMF） | BSD-3-Clause-Clear AND AOM-PL-1.0 | opt-in（默认关闭） | 预构建 SDK 形式接入；启用时发行包须随实际 SDK 记录其内部依赖许可证。bundle NOTICE.txt 为手写声明，实际包须补全文本 |
 | `apple-system-frameworks` @ platform-sdk | APAC/CAF layout/Accelerate（AudioToolbox/CoreFoundation/Accelerate） | LicenseRef-Apple-SDK | 平台 SDK（不再分发） | macOS-only；Apple 平台 framework 不随本项目二进制再分发。bundle NOTICE.txt 为手写声明 |
 | `Corrosion` @ v0.6.1 | CMake/Cargo 构建集成 | MIT | 可用 | 仅构建时使用。 |
@@ -148,11 +136,6 @@
 
 | 选项 / 依赖 | 风险 | 当前策略 |
 |---|---|---|
-| `SAF_ENABLE_TRACKER_MODULE=ON` | SAF tracker 模块为 GPLv2 | 默认强制 OFF |
-| `SAF_ENABLE_HADES_MODULE=ON` | SAF HADES 模块为 GPLv2 | 默认强制 OFF |
-| `SAF_USE_FFTW=ON` | FFTW 为 GPL/商业双许可，默认分发会复杂化 | 默认强制 OFF |
-| `SAF_ENABLE_NETCDF=ON` | 依赖链和大文件 reader 发行审计复杂 | 默认强制 OFF；SOFA 走 libmysofa/zlib |
-| `SAF_USE_INTEL_IPP=ON` | 专有 SDK/redistribution 条款需单独审计 | 默认强制 OFF |
 | FFmpeg/libavformat provider | LGPL/GPL 配置差异大 | 不进入默认核心；若未来实现需独立 ADR |
 
 ## 发行包 notice 要求
@@ -178,7 +161,5 @@ macOS GUI 发行包还会把 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`licenses/` 
 
 ## 推荐后续防线
 
-- 在 CMake 中对 GPL 风险 SAF 开关做显式 fatal guard，防止本地 cache 覆盖。
-- 给 libear 编译定义 `EIGEN_MPL2_ONLY`，将 Eigen LGPL-only 代码路径变为构建期错误。
 - ~~增加 release checklist：生成 `otool -L` / `ldd` 依赖清单并逐项核对~~ —— 已由
   `scripts/quality/check-licenses.sh` 的 manifest↔CMake 一致性校验 + bundle 漂移校验自动化替代。

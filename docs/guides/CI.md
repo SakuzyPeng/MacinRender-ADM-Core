@@ -21,7 +21,7 @@
 
 | Job | Runner | 内容 | 说明 |
 |---|---|---|---|
-| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`check-reference-retention.py`、`language-surface.py --check --base-ref <基准提交>` | 见下文版本与 GUI 国际化门禁；参考代码登记见 `docs/architecture/RUST_REFERENCE_RETENTION.md`；C/C++ 规模棘轮校验实测行数与基线一致，并拒绝相对目标提交放宽上限，见 `docs/architecture/RUST_INVERSION_ROADMAP.md` |
+| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`language-surface.py --check --base-ref <基准提交>` | 见下文版本与 GUI 国际化门禁；C/C++ 规模棘轮校验实测行数与基线一致，并拒绝相对目标提交放宽上限，见 `docs/architecture/RUST_INVERSION_ROADMAP.md` |
 | `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`check-capi-exports.py`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
 | `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | 生产构建无需 Boost；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
@@ -30,13 +30,12 @@
 `MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED`、`MR_ADM_ENABLE_IAMF=OFF`
 和 `MR_ADM_BUILD_CAPI_BUNDLE=ON`：减少系统包差异，避免普通 PR 构建 AOM `iamf-tools` bridge，
 同时验证 GUI 使用的自包含 C ABI bundle 可以链接。系统仍需安装 CMake、Ninja、
-ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（libear、FLAC、Opus、miniaudio 等）
+ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（FLAC、Opus、miniaudio 等）
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
-生产构建不再需要 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64 或 dr_wav（dr_libs 仍为 dr_flac 获取）；
-它们只在默认关闭的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下作为维护对照获取，必需 CI 不开启这些开关；
-手动的 `.github/workflows/reference-tests.yml` 在 Release 下逐个开启并运行对应 ctest，防止这些对照无声腐烂
-（SAF 对照保持在其验收所用的 macOS + Accelerate 数值环境；其余跑在 Linux）。失败的处理见 `docs/architecture/RUST_REFERENCE_RETENTION.md`。
+构建不获取 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64、libear 或 dr_wav
+（dr_libs 只为 dr_flac 获取）。这些旧库的对照测试、`MR_ADM_BUILD_*_REFERENCE_TESTS` 开关与手动的
+`reference-tests.yml` 已随 R1 删除（用户决定 2026-11-14，见 `docs/architecture/RUST_REFERENCE_RETENTION.md`）。
 
 ### 第二阶段：质量 CI
 
@@ -113,7 +112,7 @@ A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹�
 两者只做 `boundary.py` 列出的六条归一化（包括 MP4 头中的创建／修改时间）；CLI v2 记录全部工作目录文件变化，
 help / parse-error 只豁免文字差异。见 `docs/architecture/RUST_BOUNDARY_BASELINE.md`。
 原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
-历史 SAF 清单和定位脚本保留原始边界。
+历史 SAF 清单保留原始边界；SAF 定位脚本与探针已随 R1 删除（git 历史可查）。
 
 ### 第三阶段：发布构建
 
@@ -242,7 +241,7 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 
 Visual Studio（含 VC x64 工具）、Ninja 和锁定的 Rust 工具链即可。
 在 `vcvars64.bat` 环境中配置；维护者本机验证使用规范构建树 `build\win-canon`。
-生产构建无需 Boost、vcpkg 或 OpenBLAS。只有显式启用历史 libear/libadm 参考测试时需要 Boost。
+构建无需 Boost、vcpkg 或 OpenBLAS。
 
 ## 需要注意的边界
 
@@ -280,10 +279,6 @@ Visual Studio（含 VC x64 工具）、Ninja 和锁定的 Rust 工具链即可�
   workflow_dispatch
   Windows Release probe build + CLI artifact
 
-.github/workflows/reference-tests.yml
-  workflow_dispatch
-  Release × each default-OFF third-party migration reference (SAF on macOS, others on Linux)
-
 .github/workflows/iamf-bridge-prebuild.yml
   workflow_dispatch / bridge-related pull_request
   macOS/Linux/Windows prebuilt AOM IAMF bridge SDK artifact
@@ -316,9 +311,9 @@ Windows GUI 普通包和 CUDA 试用包都启用 `MR_ADM_ENABLE_SOFA=ON`，保�
 3. 视 Windows release 耗时与稳定性，决定是否扩大 Release 下运行的测试集，或在 macOS / Linux release 中加入同样的优化构建 fixture。
 4. 二期及后续扩展的 118 个用例已全部设为位相等门禁。后续扩展 renderer / 布局 / 语义组合时，明确新增范围并同时登记用例；数值、资源、工具链或相关依赖改动合入前，在分支手动触发 Consistency 并保留结果。
 
-### Scene 算术的 ARM64 Release 回归
+### ARM64 Release 的 Rust 回归
 
-`scene-arm64-release` 在 `ubuntu-24.04-arm` 运行 Scene、Live 双耳、Live VBAP 和 HOA
-四组 Release 对照，显式设置 `MR_ADM_STRICT_FP=OFF`。参考目标局部采用固定乘加规则，
-生产构建保持默认选项；独立位模式、极点、channel-lock 与 HRTF 网格断言随目标执行。
+`rust-arm64-release` 在 `ubuntu-24.04-arm` 以 `cargo test --release` 运行 workspace 的 Rust 测试，覆盖一致性矩阵之外的
+aarch64 Linux 优化构建；`mradm-ffi` / `mradm-capi` 的测试链接 CMake 构建的 libFLAC，留在 debug job。它取代原来的
+Scene / Live 双耳 / Live VBAP / HOA 冻结 C++ 对照（R1，用户决定 2026-11-14）：生产 Scene 算术全在 Rust，rustc 不做浮点收缩。
 Cargo 缓存键包含体系结构，避免把 ARM64 和 x64 产物作为相同缓存使用。

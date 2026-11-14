@@ -86,7 +86,6 @@ cmake --build --preset release
 | `MR_ADM_ENABLE_SOFA` | 双耳后端的用户 SOFA HRIR 支持 | `ON` |
 | `MR_ADM_ENABLE_IAMF` | IAMF 编码，需 `MR_ADM_IAMF_AOM_ROOT` 指向官方 AOM iamf-tools bridge SDK | `OFF` |
 | `MR_ADM_BUILD_CAPI_BUNDLE` | 生成自包含 `libmradm_capi` 共享库，供 GUI 加载 | `OFF` |
-| `MR_ADM_BUILD_*_REFERENCE_TESTS` | 构建旧库参考对照（SAF、libear、libadm 等），不改变生产实现 | `OFF` |
 
 ## 基础用法
 

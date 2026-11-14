@@ -224,9 +224,9 @@ jobs:
       matrix:
         include:
           - config: a
-            numeric_flags: "-DMR_ADM_STRICT_FP=OFF -DMR_ADM_EAR_SCALAR_REFERENCE=OFF -DEAR_SIMD=ON"
+            numeric_flags: "-DMR_ADM_STRICT_FP=OFF"
           - config: b
-            numeric_flags: "-DMR_ADM_STRICT_FP=ON -DMR_ADM_EAR_SCALAR_REFERENCE=ON -DEAR_SIMD=ON"
+            numeric_flags: "-DMR_ADM_STRICT_FP=ON"
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache

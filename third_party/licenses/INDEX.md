@@ -9,19 +9,11 @@
 | apple-system-frameworks | platform-sdk | LicenseRef-Apple-SDK | `NOTICE.txt` |
 | Corrosion | v0.6.1 | MIT | `LICENSE` |
 | dr_libs | 47a4f08e777faddf59a8955c4ea84f69f41020d5 | Unlicense OR MIT-0 | `LICENSE` |
-| Eigen | bundled-in-libear@2db69f8f | MPL-2.0 | `COPYING.MPL2` |
 | fmt | 11.2.0 | MIT | `LICENSE` |
-| kissfft | bundled-in-libear@2db69f8f | BSD-3-Clause | `COPYING` |
-| libadm | 0.14.0 | Apache-2.0 | `LICENSE` |
 | libadm-common-definitions | 0.14.0 | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
-| libbw64 | 0.10.0 | Apache-2.0 | `LICENSE` |
-| libear | 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | Apache-2.0 | `LICENSE` |
 | libear-derived-rust-ear | 2db69f8f-subset | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
-| libebur128 | v1.2.6 | MIT | `COPYING` |
 | libFLAC | 1.5.0 | BSD-3-Clause | `COPYING.Xiph` |
-| libmysofa | bundled-in-SAF@v1.3.4 | BSD-3-Clause | `LICENSE` |
 | libopus | v1.5.2 | BSD-3-Clause | `COPYING`, `LICENSE_PLEASE_READ.txt` |
-| libsamplerate | 0.2.2 | BSD-2-Clause | `COPYING` |
 | miniaudio | 0.11.21 | Unlicense OR MIT-0 | `LICENSE` |
 | musl-derived-rust-math | musl-1.2.5-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann-derived-rust-json | nlohmann-3.12.0-subset | MIT | `LICENSE`, `NOTICE.txt` |
@@ -109,7 +101,3 @@
 | rust-wide-1.7.1 | 1.7.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.txt`, `LICENSE-MIT.txt`, `LICENSE-ZLIB.txt` |
 | rust-winnow-0.7.15 | 0.7.15 | MIT | `LICENSE-MIT` |
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |
-| Spatial_Audio_Framework | v1.3.4 | ISC | `LICENSE.md` |
-| spreader_mr | fork-of-SAF-examples@v1.3.4 | ISC | `NOTICE.txt` |
-| xsimd | bundled-in-libear@2db69f8f | BSD-3-Clause | `LICENSE` |
-| zlib | bundled-in-SAF@v1.3.4 | Zlib | `zlib.h` |

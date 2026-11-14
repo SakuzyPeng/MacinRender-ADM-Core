@@ -30,10 +30,6 @@ jobs:
       - name: Verify Ubuntu build tool setup
         run: python3 -B tests/unit/ci_dependencies_test.py
 
-      # Frozen Rust-migration references must stay registered and byte-identical.
-      - name: Verify migration references
-        run: python3 scripts/quality/check-reference-retention.py
-
       # ADR 0021: production C/C++ and the platform islands only shrink.
       - name: Verify C/C++ surface ratchet
         env:
@@ -131,50 +127,33 @@ jobs:
         if: always()
         run: ccache --show-stats || true
 
-  scene-arm64-release:
-    name: Linux ARM64 Scene arithmetic (Release)
+  rust-arm64-release:
+    name: Linux ARM64 Rust tests (Release)
     runs-on: ubuntu-24.04-arm
-    env:
-      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Install toolchains
-        run: |
-          rustup toolchain install 1.98.0 --profile minimal
-          python3 scripts/ci/setup-ubuntu-build.py
-      - name: Restore source and Cargo caches
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Restore Cargo caches
         uses: actions/cache@v5
         with:
           path: |
-            .fc-cache
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
-            build/rust/
-          key: scene-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', 'cmake/MRDependencies.cmake') }}
+            build/rust-release/
+          key: rust-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}
           restore-keys: |
-            scene-release-${{ runner.os }}-${{ runner.arch }}-
-      # GCC contraction only becomes visible in optimized builds. The production
-      # global strict-FP switch must remain OFF for this regression to be useful.
-      - name: Configure default arithmetic
+            rust-release-${{ runner.os }}-${{ runner.arch }}-
+      # aarch64 Linux is not in the consistency matrix; run the Rust regressions with optimizations
+      # there. mradm-ffi / mradm-capi tests link CMake's libFLAC and run in the debug jobs.
+      - name: Test optimized Rust crates
+        working-directory: rust
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/build/rust-release
         run: >
-          cmake -S . -B build/scene-release -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
-          -DMR_ADM_STRICT_FP=OFF
-          -DMR_ADM_BUILD_LIBEAR_REFERENCE_TESTS=OFF
-          -DMR_ADM_FLAC_PROVIDER=VENDORED
-          -DMR_ADM_OPUS_PROVIDER=VENDORED
-          -DMR_ADM_ENABLE_IAMF=OFF
-      - name: Build Scene references
-        run: >
-          cmake --build build/scene-release --parallel 4
-          --target mr_adm_scene_numeric_parity_tests mr_adm_live_binaural_parity_tests
-          mr_adm_live_vbap_parity_tests mr_adm_hoa_parity_tests
-      - name: Validate arithmetic and semantic boundaries
-        run: >
-          ctest --test-dir build/scene-release --parallel 4 --output-on-failure
-          -R '^(mr_adm_scene_numeric_parity_tests|mr_adm_live_binaural_parity_tests|mr_adm_live_vbap_parity_tests|mr_adm_hoa_parity_tests)$'
+          cargo test --release --locked --workspace
+          --exclude mradm-ffi --exclude mradm-capi --exclude mradm-room-cuda
 
   windows-debug:
     name: Windows debug

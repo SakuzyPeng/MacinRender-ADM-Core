@@ -18,16 +18,12 @@
       "lines": 1057
     },
     "tests": {
-      "files": 244,
-      "lines": 62400
-    },
-    "reference": {
-      "files": 38,
-      "lines": 12027
+      "files": 222,
+      "lines": 57767
     },
     "rust": {
-      "files": 360,
-      "lines": 140401
+      "files": 362,
+      "lines": 141318
     },
     "rust-vendor": {
       "files": 175,
@@ -39,13 +35,13 @@
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-capi": 9487,
     "rust/crates/mradm-cli": 2820,
-    "rust/crates/mradm-dsp": 40626,
+    "rust/crates/mradm-dsp": 40915,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 20787,
     "rust/crates/mradm-ffi": 25260,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
-    "rust/crates/mradm-osc": 1757,
+    "rust/crates/mradm-osc": 2385,
     "rust/crates/mradm-render": 22082,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5679,
@@ -80,30 +76,9 @@
     "src/adm_render_room/cuda": 512,
     "src/adm_windows": 709,
     "tests/manual": 2425,
-    "tests/reference/dr_wav_reference_test.cpp": 274,
-    "tests/reference/ear_post_legacy.h": 147,
-    "tests/reference/ebur128_reference_test.cpp": 187,
-    "tests/reference/hoa": 655,
-    "tests/reference/hptf_parse": 243,
-    "tests/reference/libadm": 1995,
-    "tests/reference/libbw64": 168,
-    "tests/reference/libear": 402,
-    "tests/reference/live_vbap": 661,
-    "tests/reference/monitor": 108,
-    "tests/reference/osc_protocol": 407,
-    "tests/reference/output_dsp_legacy.h": 222,
-    "tests/reference/pcm_mix_legacy.h": 438,
-    "tests/reference/resampler_reference_test.cpp": 167,
-    "tests/reference/saf_reference_test.cpp": 152,
-    "tests/reference/scene_numeric": 1531,
-    "tests/reference/spreader_mr.c": 955,
-    "tests/reference/spreader_mr.h": 85,
-    "tests/reference/spreader_mr_internal.h": 153,
-    "tests/reference/triple_balance": 1621,
-    "tests/reference/wav_container": 1456,
-    "tests/support": 15052,
-    "tests/tools": 3184,
-    "tests/unit": 41739
+    "tests/support": 14734,
+    "tests/tools": 2553,
+    "tests/unit": 38055
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,

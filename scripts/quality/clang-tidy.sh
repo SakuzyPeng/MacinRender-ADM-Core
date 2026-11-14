@@ -53,46 +53,6 @@ while IFS= read -r -d '' file; do
             continue
         fi
     fi
-    if [[ "$file" == */tests/reference/libbw64/* ]]; then
-        if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-            continue
-        fi
-        files+=("$file")
-        continue
-    fi
-    if [[ "$file" == */tests/reference/libear/* ]]; then
-        if ! grep -q '^MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-            continue
-        fi
-        files+=("$file")
-        continue
-    fi
-    if [[ "$file" == */tests/reference/libadm/* || "$file" == */tests/support/scene_json/* ]]; then
-        if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-            continue
-        fi
-        files+=("$file")
-        continue
-    fi
-    if [[ "$file" == */tests/reference/resampler_reference_test.cpp ]]; then
-        if ! grep -q '^MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-            continue
-        fi
-        files+=("$file")
-        continue
-    fi
-    if [[ "$file" == */tests/reference/ebur128_reference_test.cpp ]]; then
-        if ! grep -q '^MR_ADM_BUILD_EBUR128_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-            continue
-        fi
-        files+=("$file")
-        continue
-    fi
-    if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-        case "$file" in
-            */tests/reference/*|*/tests/tools/export_saf_hoa_matrix.cpp|*/tests/tools/numeric_probe.cpp|*/tests/tools/vbap_probe.cpp|*/tests/tools/fft_lifecycle_probe.cpp) continue ;;
-        esac
-    fi
     files+=("$file")
 done < <(
     find "$repo_root/src" "$repo_root/tests" \

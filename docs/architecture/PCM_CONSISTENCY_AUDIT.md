@@ -638,8 +638,8 @@ CI 43058944168 与 Quality 43058944517 通过；main `2207538`（只多结项文
 | 6.3 | C ABI 由 Rust 实现 | 新 crate `mradm-capi`（staticlib）实现 `adm_*`，取代 `mradm-ffi` 成为 CMake 链接的唯一 Rust 库；`mradm_capi` 共享库仍由 CMake 链接，导出控制不变（用户决定 2026-11-13，见下）。A：骨架——panic 兜底、按 `c_api.h` 生成的入口表把 Rust 实现的导出拉进共享库、cbindgen 核对 `c_api.h`，不迁移实现。B–F 按家族迁移，每迁一个家族删去对应 C++：B 版本、上下文与内存（7）；C render / inspect / room / 能力表（80）；D preview（4）；E Scene（38）；F Monitor / OSC（35）。每个导出以 `catch_unwind` 兜住 panic，回调线程与重入语义、`struct_size` 兼容保持不变；以现有 cbindgen 校验核对 `c_api.h` 与 Rust `#[repr(C)]`。 |
 | 6.4 | CLI 改为 Rust | 新 crate `mradm-cli` 产出 `mradm`：8 个公开子命令（`render`、`inspect`、`backends`、`layouts`、`input-layouts`、`formats`、`export`、`room-check`）与内部命令 `__apac-encode`，解析器用 clap，退出码映射为与 CLI11 相同，`-v` 日志改由 Rust 写出。CLI 只构造请求并调用 `mradm-engine`。验收：`collect.py --tool mradm=<新>` 与旧 CLI 0 差异、CLI 记录对照（覆盖全部公开子命令，补齐 `room-check` 的成功与错误路径）、`adm_cli_smoke_test` 与 macOS APAC smoke。 |
 | 6.5 | 删除 C++ 外壳与 SDK | 删除会话外壳（`RenderService`、`PreviewSession`、`MonitorSession`、`SceneOutputSession`、`SceneStreamEngine`、`OscHeadTrackingReceiver`）、`include/adm` 中 `c_api.h` 以外的头、`src/adm_core` / `adm_io` / `adm_metadata` 的残余与失去调用者的私有 FFI 头，以及 `mr_adm_c_api` 静态库、安装规则与 `MacinRenderADMCoreConfig`。测试仍要用的部分照 5.6 移到 `tests/support`，`RenderService` 改为直接调用 Rust 引擎的测试门面。CLI11、spdlog/fmt、nlohmann_json、tl-expected 移出生产，更新许可证清单。 |
-| 6.6 | 构建以 Cargo 为主 | `cargo build` 产出 `mradm` 与 `mradm_capi`（`mradm-capi` 改为 cdylib，核对导出、SONAME / install_name / `.def` 与 GUI 打包）；一个 `-sys` crate 的 `build.rs` 经 `cmake` crate 构建只含岛与第三方 C 库（libFLAC、libopus 等）的 CMake 工程；去掉 Corrosion。CMake 只保留岛、第三方 C 库与 C++ 测试；七期清退 C++ 测试及不再使用的测试依赖，libFLAC、libopus 等第三方 C 库按 ADR 0021 保留在岛中。CI、Release、presets 与打包脚本随之切换。 |
-| 6.7 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收，Consistency、CI、Quality、Release Build 与 Reference tests，两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化，准备七期。 |
+| 6.6 | 构建以 Cargo 为主 | `cargo build` 产出 `mradm` 与 `mradm_capi`（`mradm-capi` 改为 cdylib，核对导出、SONAME / install_name / `.def` 与 GUI 打包）；一个 `-sys` crate 的 `build.rs` 经 `cmake` crate 构建只含岛与第三方 C 库（libFLAC、libopus 等）的 CMake 工程；去掉 Corrosion。CMake 只保留岛、第三方 C 库与 R3 之后剩下的 C++ 测试（C++ 测试清退由七期提前到 R3，用户决定 2026-11-14），libFLAC、libopus 等第三方 C 库按 ADR 0021 保留在岛中。CI、Release、presets 与打包脚本随之切换。 |
+| 6.7 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收，Consistency、CI、Quality 与 Release Build（Reference tests 随 R1 删除），两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化，准备七期。 |
 
 用户决定（2026-11-12）：
 1. **CLI 契约**：选项名、取值与默认值、stdout、输出文件、退出码、领域错误的中文消息不变；`--help` 的排版与参数解析错误的措辞可以变化，写进发布说明。解析器用 clap（新依赖，登记许可证），退出码另行映射为与 CLI11 相同。
@@ -649,6 +649,22 @@ CI 43058944168 与 Quality 43058944517 通过；main `2207538`（只多结项文
 5. **SDK**：只剩 `c_api.h` 与 `mradm_capi`；C++ 静态库与 CMake 包配置删除，直接使用内部 C++ 头的下游不再支持。
 
 用户决定（2026-11-13）：6.3 不产出 rustc 链接的 cdylib，6.6 再换。rustc 的 cdylib 会导出依赖 crate 中所有 `#[no_mangle]` 函数，另加的版本脚本也压不住（Linux 实测）；6.5 删除外壳之前，C++ 外壳与岛仍调用 `mradm-ffi` 的约 412 个 `mradm_*` 入口，cdylib 做不到只导出 164 个 `adm_*`。6.3 期间共享库照旧由 CMake 链接，沿用版本脚本 / `-exported_symbols_list` / `.def`；`mradm-capi` 取代 `mradm-ffi` 成为唯一的 Rust staticlib。6.6 外壳已删、构建改以 Cargo 为主时换成 cdylib，并在那时核对 SONAME / install_name / `.def` 与 GUI 打包。6.3 A 因此改为骨架，不迁移实现。
+
+用户决定（2026-11-14）：**不为对照长期保留旧实现。** 参考实现、新旧对照与「照原样迁移」只是迁移期间的验证手段，不是永久资产；
+为它们长期保留旧代码、外壳与工具会让项目混杂。规则：
+1. **契约只有三样**：`c_api.h` 的二进制兼容、CLI 的退出码与输出、门禁矩阵（PCM 用例与内核测量）。这三样要求逐字节不变。
+2. **其他都不是契约**：错误消息的截断、固定缓冲区大小、内部调用顺序与旧实现的怪癖可以改，改了记进发布说明，不需要 0 差异对照。
+3. **对照对象在切片验收后删除**：被对照的旧实现、外壳与工具在验收通过的同一批或下一批删除，不再长期保留。
+
+据此在 6.6 之前插入三批，R3 由七期提前：
+- **R1 冻结参考退役**：`tests/reference` 的 18 个单元全部删除。退役条件由原来的三条改为一条——行为已被门禁矩阵或独立的 Rust 回归覆盖；
+  只对照不可信输入与错误路径、门禁覆盖不到的单元（wav_container、osc_protocol、hptf_parse）先把语料与当前输出固化为 Rust golden 再删。
+  `MR_ADM_BUILD_*_REFERENCE_TESTS`、`reference-tests.yml`、`retention.json` 与其校验一并删除；Linux ARM64 Release job 改跑 Rust release 测试。
+  见 [参考实现的保留与退役](RUST_REFERENCE_RETENTION.md)。
+- **R2 Rust 直接调用 Rust**：`mradm-capi` / `mradm-cli` 不再经 `mradm-ffi` 的 C 签名入口调用 Rust，改为直接调用 `mradm-engine`、
+  `mradm-scene`、`mradm-osc` 等 crate；`mradm-ffi` 只留 C++ 岛用的入口，测试专用导出删除。这也是 6.6 cdylib 只导出 `adm_*` 的前提。
+- **R3 C++ 测试移植**：测试覆盖的行为移植为各 crate 的 Rust 集成测试，C ABI 只保留一个精简的 C 消费者测试，`tests/support` 的外壳、SDK
+  与新旧对照工具删除。
 
 排序依据：
 - 岛先于入口：C ABI 与 CLI 改为 Rust 之前，Rust 必须能直接调用岛。
@@ -788,6 +804,12 @@ nlohmann_json 移出生产）、D（Apple 岛内部去 `IRenderer` / `IRenderStr
 岛 3,045 → 3,028 行。E 已完成：main `55cd757` 的 CI、Consistency、Quality full、Reference tests 与 Release Build（修正
 macOS CLI 打包对 Objective-C 运行时的白名单）三平台通过；6.5 生产 C/C++ 合计 15,314 → 9,432 行，macOS / Windows 原生复核待维护者
 （见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
+
+**R1 状态**：已完成（2026-11-14，本机 Linux x64）。先把 wav_container、osc_protocol、hptf_parse 的语料与当前输出固化为 golden
+（`48fbd0b`，语料与结果和冻结实现逐字节相同），再分三批删除：第三方参考、`MR_ADM_BUILD_*_REFERENCE_TESTS`、SAF 探针、登记表与
+校验脚本（`da4c781`）；已有 Rust 回归的 8 个冻结单元，ARM64 Release job 改跑 `cargo test --release`（`c263686`）；最后三个单元与
+`tests/reference/`（`0bf8627`）。测试 C/C++ 由 62,403 行降到 57,767 行、冻结参考 12,027 行归零，生产 C/C++ 不变（9,432 行）。
+逐单元依据见[参考实现的保留与退役](RUST_REFERENCE_RETENTION.md#当前状态)。下一步 R2。
 
 ## 每个迁移切片的验证
 

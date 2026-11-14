@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressions for FFI contracts, optional reference analysis, retirement and the C/C++ surface ratchet."""
+"""Regressions for FFI contracts, analysis scope and the C/C++ surface ratchet."""
 
 from contextlib import redirect_stderr, redirect_stdout
 import hashlib
@@ -13,7 +13,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -28,12 +27,11 @@ def load_check(name):
 
 
 ffi = load_check("check-ffi-headers")
-retention = load_check("check-reference-retention")
 surface = load_check("language-surface")
 
 
 @unittest.skipIf(sys.platform == "win32", "Quality shell scripts run on the macOS quality host")
-class OptionalReferenceAnalysisTests(unittest.TestCase):
+class AnalysisScopeTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="mradm-quality-scope-")
         self.addCleanup(temporary.cleanup)
@@ -62,10 +60,7 @@ class OptionalReferenceAnalysisTests(unittest.TestCase):
         (self.root / "README.md").write_text("Quality scope fixture.\n", encoding="utf-8")
         self.git("add", "README.md")
         self.git("commit", "-qm", "baseline")
-        self.sources = (
-            "src/adm_core/module.cpp", "tests/reference/libadm/reference_test.cpp",
-            "tests/support/scene_json/scene_json.cpp", "tests/support/unconditional.cpp",
-        )
+        self.sources = ("src/adm_core/module.cpp", "tests/support/unconditional.cpp")
         self.capi_source = "tests/tools/capi_capture.cpp"
         for name in (*self.sources, self.capi_source):
             path = self.root / name
@@ -84,9 +79,8 @@ class OptionalReferenceAnalysisTests(unittest.TestCase):
                         "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={self.root / 'no-hooks'}",
                         *args], cwd=self.root, check=True, capture_output=True, text=True)
 
-    def run_quality(self, script, enabled, bundle_enabled=False):
+    def run_quality(self, script, bundle_enabled=False):
         (self.build / "CMakeCache.txt").write_text(
-            f"MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL={'ON' if enabled else 'OFF'}\n"
             f"MR_ADM_BUILD_CAPI_BUNDLE:BOOL={'ON' if bundle_enabled else 'OFF'}\n", encoding="utf-8",
         )
         self.log.unlink(missing_ok=True)
@@ -97,40 +91,26 @@ class OptionalReferenceAnalysisTests(unittest.TestCase):
         return {Path(call[0]).name: call[1:] for call in
                 (json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines())}
 
-    def test_full_tidy_analyzes_reference_sources_only_when_enabled(self):
-        for enabled in (False, True):
-            with self.subTest(enabled=enabled):
-                args = self.run_quality("clang-tidy.sh", enabled)["clang-tidy"]
-                for index, name in enumerate(self.sources):
-                    self.assertEqual(str(self.root / name) in args, enabled or index in (0, 3), name)
-
-    def test_changed_checks_keep_formatting_optional_reference_sources(self):
-        for enabled in (False, True):
-            with self.subTest(enabled=enabled):
-                calls = self.run_quality("check-changed.sh", enabled)
-                for index, name in enumerate(self.sources):
-                    self.assertIn(str(self.root / name), calls["clang-format"])
-                    for tool in ("clang-tidy", "cppcheck"):
-                        self.assertEqual(str(self.root / name) in calls[tool], enabled or index in (0, 3), name)
-
-    def test_full_cppcheck_excludes_disabled_reference_support(self):
-        for enabled in (False, True):
-            with self.subTest(enabled=enabled):
-                args = self.run_quality("cppcheck.sh", enabled)["cppcheck"]
-                excludes = [args[index + 1] for index, arg in enumerate(args[:-1]) if arg == "-i"]
-                for name in ("tests/reference/libadm", "tests/support/scene_json"):
-                    self.assertEqual(str(self.root / name) in excludes, not enabled, name)
+    def test_sources_are_analyzed_unconditionally(self):
+        args = self.run_quality("clang-tidy.sh")["clang-tidy"]
+        calls = self.run_quality("check-changed.sh")
+        self.run_quality("cppcheck.sh")
+        for name in self.sources:
+            path = str(self.root / name)
+            self.assertIn(path, args, name)
+            for tool in ("clang-format", "clang-tidy", "cppcheck"):
+                self.assertIn(path, calls[tool], name)
 
     def test_full_tidy_analyzes_capi_consumer_only_with_bundle(self):
         for enabled in (False, True):
             with self.subTest(enabled=enabled):
-                calls = self.run_quality("clang-tidy.sh", False, bundle_enabled=enabled)
+                calls = self.run_quality("clang-tidy.sh", bundle_enabled=enabled)
                 self.assertEqual(str(self.root / self.capi_source) in calls["clang-tidy"], enabled)
 
     def test_changed_checks_format_capi_consumer_with_or_without_bundle(self):
         for enabled in (False, True):
             with self.subTest(enabled=enabled):
-                calls = self.run_quality("check-changed.sh", False, bundle_enabled=enabled)
+                calls = self.run_quality("check-changed.sh", bundle_enabled=enabled)
                 source = str(self.root / self.capi_source)
                 self.assertIn(source, calls["clang-format"])
                 for tool in ("clang-tidy", "cppcheck"):
@@ -316,84 +296,6 @@ class CapiPrivateEntryTests(unittest.TestCase):
         self.assertEqual(self.compare(generated, hand_text), [])
 
 
-class ReferenceRetirementTests(unittest.TestCase):
-    def setUp(self):
-        temp = tempfile.TemporaryDirectory(prefix="mradm-quality-test-")
-        self.addCleanup(temp.cleanup)
-        self.root = Path(temp.name)
-        self.reference = self.root / "tests/reference"
-        self.provenance = "tests/reference/monitor/provenance.json"
-        self.doc = "docs/migration.md"
-        files = {
-            "tests/reference/monitor/legacy.h": b"// Frozen implementation.\n",
-            self.provenance: b'{"baseline": "1234567"}\n',
-        }
-        for relative, data in {
-            **files,
-            self.doc: b"Migration acceptance and retirement evidence.\n",
-            "docs/policy.md": b"Reference retention policy.\n",
-            "CMakeLists.txt": b"add_test(NAME monitor_reference_test COMMAND monitor_reference_test)\n",
-        }.items():
-            path = self.root / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(data)
-        self.unit = {
-            "id": "monitor", "kind": "frozen", "status": "retained", "accepted": "2026-10-06",
-            "migration_doc": self.doc, "provenance": self.provenance,
-            "tests": ["monitor_reference_test"], "depends_on": [], "open_conditions": ["released"],
-            "files": {name: hashlib.sha256(data).hexdigest() for name, data in files.items()},
-        }
-        self.registry = {
-            "schema": "mradm.reference-retention.v1", "policy": "docs/policy.md",
-            "conditions": {"released": "The implementation has shipped."}, "units": [self.unit],
-        }
-
-    def check(self):
-        registry_path = self.reference / "retention.json"
-        registry_path.write_text(json.dumps(self.registry), encoding="utf-8")
-        output = io.StringIO()
-        with patch.multiple(retention, REPO_ROOT=self.root, REFERENCE_ROOT=self.reference, REGISTRY=registry_path):
-            with redirect_stdout(output), redirect_stderr(output):
-                result = retention.main()
-        return result, output.getvalue()
-
-    def retire(self):
-        for relative in self.unit["files"]:
-            (self.root / relative).unlink()
-        self.unit.update(status="retired", retired_in="1234567", files={}, open_conditions=[])
-        (self.root / "CMakeLists.txt").write_text("", encoding="utf-8")
-
-    def test_retained_unit_passes(self):
-        result, output = self.check()
-        self.assertEqual(result, 0, output)
-
-    def test_retained_unit_still_requires_provenance(self):
-        (self.root / self.provenance).unlink()
-        result, output = self.check()
-        self.assertEqual(result, 1)
-        self.assertIn("provenance", output)
-
-    def test_documented_retirement_keeps_historical_provenance_path(self):
-        self.retire()
-        result, output = self.check()
-        self.assertEqual(result, 0, output)
-        self.assertEqual(self.unit["provenance"], self.provenance)
-
-    def test_retired_unit_still_requires_migration_document(self):
-        self.retire()
-        (self.root / self.doc).unlink()
-        result, output = self.check()
-        self.assertEqual(result, 1)
-        self.assertIn("migration_doc", output)
-
-    def test_retired_unit_cannot_leave_unregistered_files(self):
-        self.retire()
-        (self.root / self.provenance).write_text("{}", encoding="utf-8")
-        result, output = self.check()
-        self.assertEqual(result, 1)
-        self.assertIn(self.provenance, output)
-
-
 class LanguageSurfaceTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -404,7 +306,6 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.write("src/adm_apple/b.mm", 4)
         self.write("src/adm_render_room/cuda/backend.cpp", 4)
         self.write("tests/unit/c.cpp", 7)
-        self.write("tests/reference/hoa/d.h", 3)
         self.write("rust/crates/mradm-dsp/src/lib.rs", 5)
         self.baseline = self.root / "baseline.json"
         self.run_surface("--update")
@@ -426,7 +327,6 @@ class LanguageSurfaceTests(unittest.TestCase):
         self.assertEqual(areas["islands"]["lines"], 4)
         self.assertEqual(areas["cuda"]["lines"], 4)
         self.assertEqual(areas["tests"]["lines"], 7)
-        self.assertEqual(areas["reference"]["lines"], 3)
         self.assertEqual(areas["rust"]["lines"], 5)
 
     def test_unchanged_surface_passes(self):

@@ -203,8 +203,7 @@ if (!$SkipNative) {
         "-DMR_ADM_OPUS_PROVIDER=VENDORED",
         "-DMR_ADM_ENABLE_IAMF=OFF",
         "-DMR_ADM_ENABLE_SOFA=ON",
-        "-DMR_ADM_ENABLE_ROOM_CUDA=$(if ($RoomCuda) { 'ON' } else { 'OFF' })",
-        "-DMR_ADM_BUILD_SAF_REFERENCE_TESTS=OFF"
+        "-DMR_ADM_ENABLE_ROOM_CUDA=$(if ($RoomCuda) { 'ON' } else { 'OFF' })"
     )
     if ($RoomCuda) {
         $cmakeArgs += @(

@@ -138,3 +138,5 @@ float32 PCM，已在锁定的 78 个用例中达成。完成项包括：
 2026-10-06 修复参考测试在新版 Xcode 上的头文件兼容性：SAF 的 `saf_hrir.h` 在 `extern "C"` 内包含 `<complex>`，测试入口现显式提前包含该标准头。只调整包含依赖，参考算法、输入和误差阈值均不变；同步更新登记表中测试文件的 SHA-256。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布；独立回归与逐单元退役审查仍须完成，二期结项不自动解除退出条件）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `saf`（含 `spreader_mr` 与 SAF 探针、`MR_ADM_DIAGNOSTIC_PORTABLE_RNG`）在 `da4c781` 删除，上文为历史记录。覆盖依据：FFT、OM / spreader、HRTF、SOFA、HpTF 设计内核门禁与双耳 PCM 门禁，以及 mradm-dsp 集成测试。
