@@ -24,6 +24,7 @@
 
 namespace mradm {
 
+// cppcheck-suppress-begin unusedStructMember
 struct Diagnostic {
     LogLevel level{LogLevel::info};
     std::string message;
@@ -47,6 +48,7 @@ struct RenderResult {
 struct PreparedScene {
     std::shared_ptr<const detail::RenderSceneHandle> handle;
 };
+// cppcheck-suppress-end unusedStructMember
 
 // Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,
 // HRTF tables, decoders). Opaque base; each backend returns its own derived type and

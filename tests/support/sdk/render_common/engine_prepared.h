@@ -12,6 +12,7 @@ namespace mradm::render_common {
 // across offline windows and file streams (PreviewSession scrubbing). The Rust preparation keeps
 // the input format the stream checks compare.
 struct EnginePrepared final : IPreparedRender {
+    // cppcheck-suppress unusedStructMember
     std::unique_ptr<MradmRenderPrepared, decltype(&mradm_render_prepared_destroy)> handle{
         nullptr, &mradm_render_prepared_destroy};
 };
