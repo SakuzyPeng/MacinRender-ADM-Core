@@ -29,6 +29,7 @@
 #include "adm/render_service.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/apple_renderer/apple_renderer.h"
 #include "../support/wav_fixture.h"
 #include "adm_scene.h"
 #include "render_common.h"

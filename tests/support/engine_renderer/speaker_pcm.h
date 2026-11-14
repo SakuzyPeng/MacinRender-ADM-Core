@@ -16,8 +16,10 @@
 #include "adm/direct_speakers_matrix.h"
 #include "adm/live_override.h"
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 #include "capability_records.h"
+#include "engine_prepared.h"
 #include "engine_records.h"
 #include "engine_test_ffi.h"
 #include "routing_test_ffi.h"

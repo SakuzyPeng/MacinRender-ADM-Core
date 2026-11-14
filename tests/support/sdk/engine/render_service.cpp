@@ -29,6 +29,7 @@
 #include "adm_audio/island_ffi.h"
 #include "capability_records.h"
 #include "catalog.h"
+#include "engine_prepared.h"
 #include "engine_records.h"
 #include "engine_result.h"
 #include "platform_island.h"

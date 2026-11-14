@@ -3,27 +3,27 @@
   "areas": {
     "production": {
       "files": 50,
-      "lines": 9674
+      "lines": 9456
     },
     "islands": {
       "files": 6,
-      "lines": 3045
+      "lines": 3028
     },
     "cuda": {
       "files": 4,
       "lines": 512
     },
     "island-interfaces": {
-      "files": 11,
-      "lines": 1026
+      "files": 12,
+      "lines": 1057
     },
     "tests": {
-      "files": 240,
-      "lines": 61919
+      "files": 244,
+      "lines": 62371
     },
     "reference": {
       "files": 38,
-      "lines": 12026
+      "lines": 12027
     },
     "rust": {
       "files": 360,
@@ -56,8 +56,9 @@
     "rust/vendor/rubato": 9711,
     "rust/vendor/rustfft": 59632,
     "rust/vendor/sofar": 6647,
-    "src/adm_apple": 2336,
-    "src/adm_apple/apple_island.cpp": 353,
+    "src/adm_apple": 2319,
+    "src/adm_apple/apple_backend.h": 218,
+    "src/adm_apple/apple_island.cpp": 166,
     "src/adm_apple/apple_island.h": 14,
     "src/adm_audio": 4181,
     "src/adm_audio/apac_worker_island.cpp": 23,
@@ -67,7 +68,7 @@
     "src/adm_audio/island_ffi.h": 17,
     "src/adm_c_api": 27,
     "src/adm_cli": 19,
-    "src/adm_core": 1555,
+    "src/adm_core": 1350,
     "src/adm_dsp": 312,
     "src/adm_engine/platform_island.cpp": 176,
     "src/adm_engine/platform_island.h": 15,
@@ -75,7 +76,7 @@
     "src/adm_realtime": 405,
     "src/adm_realtime/device_island.cpp": 160,
     "src/adm_realtime/device_island.h": 23,
-    "src/adm_render_common": 908,
+    "src/adm_render_common": 895,
     "src/adm_render_room/cuda": 512,
     "src/adm_windows": 709,
     "tests/manual": 2425,
@@ -98,14 +99,15 @@
     "tests/reference/spreader_mr.c": 955,
     "tests/reference/spreader_mr.h": 85,
     "tests/reference/spreader_mr_internal.h": 153,
-    "tests/reference/triple_balance": 1620,
+    "tests/reference/triple_balance": 1621,
     "tests/reference/wav_container": 1456,
-    "tests/support": 14574,
+    "tests/support": 15023,
     "tests/tools": 3184,
-    "tests/unit": 41736
+    "tests/unit": 41739
   },
   "island_interfaces": {
-    "src/adm_apple/apple_island.cpp": 353,
+    "src/adm_apple/apple_backend.h": 218,
+    "src/adm_apple/apple_island.cpp": 166,
     "src/adm_apple/apple_island.h": 14,
     "src/adm_audio/apac_worker_island.cpp": 23,
     "src/adm_audio/apac_worker_island.h": 15,

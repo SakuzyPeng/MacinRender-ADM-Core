@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 namespace mradm {
 

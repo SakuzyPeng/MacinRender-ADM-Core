@@ -1,5 +1,6 @@
 #pragma once
 #include "adm/render.h"
+#include "adm/renderer.h"
 #include "adm/room.h"
 
 namespace mradm {

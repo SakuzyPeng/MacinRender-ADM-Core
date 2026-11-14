@@ -23,6 +23,9 @@ extern "C" {
 #endif
 
 typedef struct MradmEngineText MradmEngineText;
+// A backend preparation (mradm_engine_prepare).
+typedef struct MradmRenderPrepared MradmRenderPrepared;
+void mradm_render_prepared_destroy(MradmRenderPrepared* handle);
 
 // index: 0 ear, 1 saf, 2 triple-balance, 3 hoa, 4 saf-binaural, 5 room-binaural.
 int32_t mradm_engine_backend(uint32_t index, const MradmEngineBackend** out);

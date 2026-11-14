@@ -154,7 +154,7 @@ typedef struct MradmEngineIslandError {
     size_t* context_len;
 } MradmEngineIslandError;
 
-// A C++ IRenderStream. validate and cancel_request may run on any thread, render_output and
+// A C++ stream (the Apple backend). validate and cancel_request may run on any thread, render_output and
 // loop_render_reset on the device callback, everything else on the worker. cancel_begin starts a
 // fresh stop source for the next seek_cancellable. intermediate_channels is nonzero for an
 // output-stage stream. destroy releases the stream.
