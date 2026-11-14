@@ -1,4 +1,3 @@
-#[doc(hidden)] // Called by mradm-capi.
 pub mod settings;
 use crate::{boundary, ptr, slice};
 use mradm_dsp::{Error, Result, hptf as dsp};

@@ -6,7 +6,7 @@ use crate::error::{Error, Failure, c_str, caught, clear, report, try_box};
 use crate::guard;
 use crate::string;
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
-use mradm_ffi::room::{RoomPreparedHandle, RoomProfileHandle, error_code};
+use mradm_ffi::api::room::{RoomPreparedHandle, RoomProfileHandle, error_code};
 use std::ffi::c_char;
 use std::ptr;
 
@@ -152,7 +152,7 @@ pub(crate) fn validate_screens(
         reference,
         reproduction: reproduction.unwrap_or(reference),
     };
-    match mradm_ffi::room::validate_screens(&[screens]) {
+    match mradm_ffi::api::room::validate_screens(&[screens]) {
         Ok(()) => 0,
         Err(error) => error_code(&error).0,
     }

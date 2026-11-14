@@ -1,48 +1,41 @@
 //! Private C boundary. Pointers must be valid, aligned, disjoint and live for the
 //! call. A mutable handle may only be used by one thread at a time. Each handle
 //! is destroyed by its matching Rust destructor, never by the caller's allocator.
-#![allow(clippy::missing_safety_doc)]
+//!
+//! The `mradm_*` entries serve the C++ islands and tests; Rust callers use only [`api`].
 
 use mradm_dsp::{Error, Result, fft::RealFft};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
 };
-#[doc(hidden)] // Called by mradm-capi.
-pub mod adm;
+mod adm;
+pub mod api;
 mod checked;
 mod convolution;
 mod ear;
 mod ear_post;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod engine;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod engine_render;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod engine_service;
+mod engine;
+mod engine_render;
+mod engine_service;
 mod flac;
 mod hoa;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod hptf;
+mod hptf;
 mod hrtf;
 mod live_vbap;
 mod meter;
 mod monitor;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod osc;
+mod osc;
 mod output_dsp;
 mod pcm_mix;
 mod post_gain;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod render;
+mod render;
 mod render_apple;
 mod resampler;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod room;
+mod room;
 mod room_cuda_selection;
 mod room_environment;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod scene;
+mod scene;
 mod scene_math;
 mod scene_transition;
 #[cfg(windows)]
@@ -53,13 +46,7 @@ mod spreader;
 #[cfg(test)]
 mod test_alloc;
 mod triple_balance;
-#[doc(hidden)] // Called by mradm-capi.
-pub mod wav;
-
-/// The engine host the C++ shell and the Rust consistency tools share; Rust visibility
-/// only, no C symbol.
-#[doc(hidden)]
-pub use engine_render::FfiHost;
+mod wav;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to
 /// the caller, making error reporting reentrant without thread-local allocation.
@@ -86,6 +73,11 @@ fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -
     code
 }
 
+/// A real FFT plan of `length` samples in `*output`, destroyed with `mradm_dsp_fft_destroy`.
+///
+/// # Safety
+///
+/// `output` must be null or writable; `message` must be null or hold `capacity` writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_fft_create(
     length: usize,
@@ -108,6 +100,9 @@ pub unsafe extern "C" fn mradm_dsp_fft_create(
     })
 }
 
+/// # Safety
+///
+/// `handle` must be null or a plan from `mradm_dsp_fft_create` that is not used afterwards.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_fft_destroy(handle: *mut RealFft) {
     if !handle.is_null() {
@@ -117,6 +112,10 @@ pub unsafe extern "C" fn mradm_dsp_fft_destroy(handle: *mut RealFft) {
     }
 }
 
+/// # Safety
+///
+/// `handle` must be null or a live plan used by one thread at a time; `input` and `output` must be
+/// null or hold `input_len` samples in, `output_len` interleaved bins out (not overlapping); `message` must be null or hold `capacity` writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_fft_forward(
     handle: *mut RealFft,
@@ -141,6 +140,10 @@ pub unsafe extern "C" fn mradm_dsp_fft_forward(
     })
 }
 
+/// # Safety
+///
+/// `handle` must be null or a live plan used by one thread at a time; `input` and `output` must be
+/// null or hold `input_len` interleaved bins in, `output_len` samples out (not overlapping); `message` must be null or hold `capacity` writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_fft_inverse(
     handle: *mut RealFft,

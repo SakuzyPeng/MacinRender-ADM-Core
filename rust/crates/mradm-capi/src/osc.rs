@@ -102,7 +102,7 @@ pub unsafe extern "C" fn adm_create_osc_head_tracking(
     }
     guard::code(|| {
         let port = config.map_or(9000, |c| c.listen_port) as u16;
-        let receiver = mradm_ffi::osc::receiver(port, source);
+        let receiver = mradm_ffi::api::osc::receiver(port, source);
         let handle = crate::error::try_box(adm_osc_head_tracking_t {
             receiver,
             error_copy: Mutex::new(Message::default()),

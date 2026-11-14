@@ -23,7 +23,7 @@ use std::sync::{Mutex, MutexGuard};
 /// only pinned: safe code cannot move it while the audio thread may still call back.
 ///
 /// ```compile_fail,E0277
-/// use mradm_ffi::render::engine_scene_output::EngineSceneOutput;
+/// use mradm_ffi::api::scene_stream::EngineSceneOutput;
 /// use std::pin::Pin;
 ///
 /// fn unpin(output: Pin<Box<EngineSceneOutput>>) -> Box<EngineSceneOutput> {
@@ -131,8 +131,8 @@ impl EngineSceneOutput {
         s.publish_hptf(snapshot)
     }
 
-    pub fn hptf_snapshot(&self) -> Snapshot {
-        self.session.hptf_snapshot().into()
+    pub fn hptf_snapshot(&self) -> mradm_dsp::hptf::StereoSnapshot {
+        self.session.hptf_snapshot()
     }
 
     pub fn status(&self) -> EngineSceneOutputStatus {

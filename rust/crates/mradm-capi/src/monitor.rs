@@ -17,11 +17,10 @@ use crate::scene::{
 use mradm_dsp::hptf::{ParseErrorKind, Profile, try_parse_parametric_eq};
 use mradm_engine::monitor::session::{Session, THROWN};
 use mradm_engine::monitor::{LEVEL_CHANNELS, Levels, ObjectOverride, Overrides};
-use mradm_ffi::adm::Text;
-use mradm_ffi::hptf::Snapshot;
-use mradm_ffi::hptf::settings::profile_error;
-use mradm_ffi::render::device_island::DeviceEnumeration;
-use mradm_ffi::render::engine_monitor_session::{
+use mradm_ffi::api::hptf::profile_error;
+use mradm_ffi::api::islands::DeviceEnumeration;
+use mradm_ffi::api::islands::Text;
+use mradm_ffi::api::monitor::{
     EngineMonitorSession, EngineMonitorSessionHost, choice, hptf_design,
 };
 use mradm_render::routing::Error as EngineError;
@@ -726,7 +725,7 @@ fn stereo_info(m: &adm_monitor_t) -> (adm_hptf_info_t, adm_hptf_info_t, bool) {
         let empty = adm_hptf_info_t::empty();
         return (empty, empty, true);
     };
-    hptf_infos(&Snapshot::from(snapshot))
+    hptf_infos(&snapshot)
 }
 
 /// `monitor_hptf_info`: no clear, and only a failed query stores its message.

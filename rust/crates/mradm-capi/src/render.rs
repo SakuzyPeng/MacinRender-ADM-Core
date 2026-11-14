@@ -2,7 +2,7 @@
 //! accessors, the preview session (`adm_create_preview_session`, `adm_preview_render_window(_v2)`),
 //! `adm_export_file` and the discovery documents (`adm_capabilities_json` and the others).
 //!
-//! The render steps `mradm-engine`'s render state machine through `mradm-ffi`'s `RenderDriver`
+//! The render steps `mradm-engine`'s render state machine through `mradm_ffi::api::render::RenderDriver`
 //! (R2), with the C++ islands (`mradm_audio_island`, the Apple islands) run inside each step, the
 //! caller's cancellation polled before every step and by the islands, and the progress and log
 //! lines forwarded as before.
@@ -14,13 +14,13 @@ use crate::options::adm_render_options_t;
 use crate::query::{Scene, axml, check_view, import_with};
 use crate::string;
 use mradm_engine::render::{Event, Reply, Request as EngineRequest};
-use mradm_ffi::adm::Text;
-use mradm_ffi::engine::{Facts, PlatformIslands};
-use mradm_ffi::engine_service::{
+use mradm_ffi::api::islands::AppleIslands;
+use mradm_ffi::api::islands::Text;
+use mradm_ffi::api::islands::{Facts, PlatformIslands};
+use mradm_ffi::api::render::RenderPrepared;
+use mradm_ffi::api::render::{
     EngineIslandReply, EngineProgress, EngineRenderEvent, IslandContext, IslandRunner, RenderDriver,
 };
-use mradm_ffi::render::RenderPrepared;
-use mradm_ffi::render::apple_island::AppleIslands;
 use std::ffi::{c_char, c_void};
 use std::ptr;
 use std::sync::Mutex;
@@ -402,7 +402,7 @@ pub(crate) fn drive(
     cache: Option<&mut Option<Prepared>>,
 ) -> Result<Outcome, Failure> {
     let platform = unsafe { islands::mradm_platform_islands().as_ref() }
-        .and_then(|p| unsafe { mradm_ffi::engine::platform(p, Facts::Render) });
+        .and_then(|p| unsafe { mradm_ffi::api::islands::platform(p, Facts::Render) });
     let (Some(request), Some(platform)) = (request, platform) else {
         return Outcome::error(
             error_code(1),
@@ -1180,7 +1180,7 @@ unsafe fn document(context: *mut adm_context_t, kind: u32, out_json: *mut *mut c
     guard::code(|| unsafe {
         let platform = islands::mradm_platform_islands()
             .as_ref()
-            .and_then(|p| mradm_ffi::engine::platform(p, Facts::Document(kind)));
+            .and_then(|p| mradm_ffi::api::islands::platform(p, Facts::Document(kind)));
         let Some(platform) = platform else {
             return guard::INTERNAL;
         };

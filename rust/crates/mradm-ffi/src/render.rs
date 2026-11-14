@@ -967,10 +967,8 @@ pub unsafe extern "C" fn mradm_engine_scene_renderer_create(
 }
 
 #[path = "engine_scene.rs"]
-#[doc(hidden)] // Called by mradm-capi.
 pub mod engine_scene;
 #[path = "engine_scene_output.rs"]
-#[doc(hidden)] // Called by mradm-capi.
 pub mod engine_scene_output;
 
 #[unsafe(no_mangle)]
@@ -1184,7 +1182,6 @@ pub unsafe extern "C" fn mradm_render_live_render(
 }
 
 #[path = "render_room.rs"]
-#[doc(hidden)] // Called by mradm-capi.
 pub mod room_ffi;
 
 #[path = "render_binaural.rs"]
@@ -1196,13 +1193,10 @@ mod stream_ffi;
 #[path = "apple_island.rs"]
 pub mod apple_island;
 #[path = "device_island.rs"]
-#[doc(hidden)] // Called by mradm-capi.
 pub mod device_island;
 #[path = "engine_monitor.rs"]
-#[doc(hidden)] // Called by mradm-capi.
 pub mod engine_monitor;
 #[path = "engine_monitor_session.rs"]
-#[doc(hidden)] // Called by mradm-capi.
 pub mod engine_monitor_session;
 
 #[cfg(test)]

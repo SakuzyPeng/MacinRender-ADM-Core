@@ -291,7 +291,7 @@ impl RenderDriver {
     ///
     /// ```compile_fail,E0133
     /// use mradm_engine::{catalog::Platform, render::Request};
-    /// use mradm_ffi::engine_service::{IslandRunner, RenderDriver};
+    /// use mradm_ffi::api::render::{IslandRunner, RenderDriver};
     ///
     /// fn create(request: Request, platform: Platform, islands: IslandRunner) {
     ///     RenderDriver::new(request, platform, None, None, islands);
