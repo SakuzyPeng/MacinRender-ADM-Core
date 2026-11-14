@@ -6,7 +6,10 @@ mod parametric_eq;
 use crate::{Error, Result};
 pub use design::{design, design_stereo};
 pub use live::{Live, Mailbox};
-pub use parametric_eq::{ParseError, ParseErrorKind, Profile, parse as parse_parametric_eq};
+pub use parametric_eq::{
+    ParseError, ParseErrorKind, Profile, parse as parse_parametric_eq,
+    try_parse as try_parse_parametric_eq,
+};
 
 pub const MAX_BANDS: usize = 32;
 pub const BLEND_FRAMES: usize = 2048;

@@ -79,12 +79,6 @@ pub(crate) fn map(code: i32) -> i32 {
     }
 }
 
-/// The bytes of a message buffer up to its NUL, as `reinterpret_cast<const char*>` read it.
-pub(crate) fn until_nul(buffer: &[u8]) -> &[u8] {
-    let end = buffer.iter().position(|&b| b == 0).unwrap_or(buffer.len());
-    &buffer[..end]
-}
-
 /// A caller's NUL-terminated string.
 pub(crate) unsafe fn c_str<'a>(text: *const c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(text) }.to_bytes()
@@ -296,12 +290,6 @@ mod tests {
         assert_eq!(map(-1), guard::INTERNAL);
         assert_eq!(Error::clamped(0, b"", b"").unwrap().code, guard::INTERNAL);
         assert_eq!(Error::clamped(3, b"", b"").unwrap().code, 3);
-    }
-
-    #[test]
-    fn messages_stop_at_the_nul() {
-        assert_eq!(until_nul(b"abc\0def"), b"abc");
-        assert_eq!(until_nul(b"abc"), b"abc");
     }
 
     #[test]

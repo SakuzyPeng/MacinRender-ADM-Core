@@ -118,7 +118,9 @@ unsafe fn sized<T: Copy + Default>(source: *const c_void, minimum: usize) -> Res
 fn mode(value: i32) -> Result<dsp::PreampMode> {
     dsp::PreampMode::try_from(value as u32).map_err(dsp_error)
 }
-fn profile_error(profile: &dsp::Profile) -> Option<(usize, &'static str)> {
+/// The first range error of a parsed profile: the 1-based band (0 for the profile itself) and the
+/// message; `None` for a valid profile.
+pub fn profile_error(profile: &dsp::Profile) -> Option<(usize, &'static str)> {
     if !profile.preamp_db.is_finite() {
         return Some((0, "HpTF:Preamp 必须是有限数"));
     }

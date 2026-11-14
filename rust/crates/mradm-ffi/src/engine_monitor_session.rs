@@ -32,9 +32,80 @@ pub struct EngineMonitorSessionHost {
     pub apple: *const AppleIslands,
 }
 
+/// The monitor session behind `adm_monitor_t`.
+///
+/// Unlike [`EngineSceneOutput`](super::engine_scene_output::EngineSceneOutput) it is not pinned:
+/// a device callback reads a `Puller` that points into the session's `Box<Monitor>` and into the
+/// device's own allocation (`Arc<dyn Device>`), never into this struct, and the session stops the
+/// device before it replaces or frees the monitor. Moving the session moves only those pointers.
+/// Keep the monitor and the devices in their own allocations if the engine session changes.
 pub struct EngineMonitorSession {
     session: Session,
     entry: Mutex<Option<Entry>>,
+}
+
+impl EngineMonitorSession {
+    /// A session without an engine over `scene` (`mradm_engine_monitor_session_new`); `None` for
+    /// a null or invalid platform table. Start it with [`Session::start`] on [`Self::session`].
+    ///
+    /// # Safety
+    ///
+    /// `islands` must be null or point to a valid platform island table (read only here). The
+    /// host's device and Apple tables (each may be null) must point to immutable, thread-safe
+    /// tables, and `scene` must be null or point to a scene handle that is not changed; all of them
+    /// must remain valid until the session is dropped.
+    ///
+    /// ```compile_fail,E0133
+    /// use mradm_ffi::render::engine_monitor_session::{
+    ///     EngineMonitorSession, EngineMonitorSessionHost,
+    /// };
+    ///
+    /// fn create(host: &EngineMonitorSessionHost) {
+    ///     EngineMonitorSession::new(std::ptr::null(), std::ptr::null(), 48_000, 0, host);
+    /// }
+    /// ```
+    pub unsafe fn new(
+        islands: *const PlatformIslands,
+        scene: *const SceneHandle,
+        sample_rate: u32,
+        total_frames: u64,
+        host: &EngineMonitorSessionHost,
+    ) -> Option<Self> {
+        // SAFETY: the caller's contract for `islands`.
+        let apple = unsafe { islands.as_ref() }
+            .and_then(|p| unsafe { platform(p, Facts::Render) })
+            .map(|p| p.apple.is_some())?;
+        let shell = Arc::new(ShellHost {
+            devices: Devices::new(host.devices),
+            apple_islands: host.apple,
+            scene,
+            apple,
+        });
+        Some(Self {
+            session: Session::new(sample_rate, total_frames, shell),
+            entry: Mutex::new(None),
+        })
+    }
+
+    /// The engine session.
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+}
+
+/// One backend choice of a session: the request and whether it asks for the system-spatial sink.
+pub fn choice(request: mradm_engine::render::Request, system_spatial: bool) -> Choice {
+    Choice {
+        request,
+        system_spatial,
+        token: Arc::new(()),
+    }
+}
+
+/// The HpTF profile of [`Session::set_hptf`] (copied); design errors keep the former 512-byte
+/// message buffer.
+pub fn hptf_design(settings: &Settings) -> Arc<dyn HptfDesign> {
+    Arc::new(Design(settings.clone()))
 }
 
 /// A session device: an opened device table, or the error opening it gave (reported by `start`).
@@ -249,18 +320,14 @@ fn device_choice<'a>(
 }
 
 /// One backend choice from a request record.
-unsafe fn choice(
+unsafe fn choice_of(
     request: *const EngineRenderRequest,
     system_spatial: u32,
 ) -> Result<Choice, Error> {
     let request = unsafe { request.as_ref() }
         .and_then(|r| unsafe { request_of(r) })
         .ok_or_else(|| bad("invalid monitor request (UTF-8 paths without NUL required)"))?;
-    Ok(Choice {
-        request,
-        system_spatial: system_spatial != 0,
-        token: Arc::new(()),
-    })
+    Ok(choice(request, system_spatial != 0))
 }
 
 unsafe fn session<'a>(handle: *const EngineMonitorSession) -> Option<&'a EngineMonitorSession> {
@@ -277,24 +344,11 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_new(
     host: *const EngineMonitorSessionHost,
 ) -> *mut EngineMonitorSession {
     catch_unwind(AssertUnwindSafe(|| {
-        let (Some(host), Some(apple)) = (
-            unsafe { host.as_ref() },
-            unsafe { islands.as_ref() }
-                .and_then(|p| unsafe { platform(p, Facts::Render) })
-                .map(|p| p.apple.is_some()),
-        ) else {
+        let Some(host) = (unsafe { host.as_ref() }) else {
             return ptr::null_mut();
         };
-        let shell = Arc::new(ShellHost {
-            devices: Devices::new(host.devices),
-            apple_islands: host.apple,
-            scene,
-            apple,
-        });
-        Box::into_raw(Box::new(EngineMonitorSession {
-            session: Session::new(sample_rate, total_frames, shell),
-            entry: Mutex::new(None),
-        }))
+        unsafe { EngineMonitorSession::new(islands, scene, sample_rate, total_frames, host) }
+            .map_or(ptr::null_mut(), |s| Box::into_raw(Box::new(s)))
     }))
     .unwrap_or(ptr::null_mut())
 }
@@ -336,7 +390,7 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_start(
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
         let h = unsafe { session(handle) }.ok_or_else(|| bad("无效监听句柄"))?;
-        let choice = unsafe { choice(request, system_spatial)? };
+        let choice = unsafe { choice_of(request, system_spatial)? };
         h.session
             .start(choice, unsafe { input(device_id, device_id_len)? })
     })
@@ -432,7 +486,7 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_switch(
 ) -> i32 {
     boundary(message, message_len, context, context_len, || {
         let h = unsafe { session(handle) }.ok_or_else(|| bad("无效监听句柄"))?;
-        let choice = unsafe { choice(request, system_spatial)? };
+        let choice = unsafe { choice_of(request, system_spatial)? };
         h.session.switch_backend(choice)
     })
 }
@@ -468,7 +522,7 @@ pub unsafe extern "C" fn mradm_engine_monitor_session_hptf(
         let h = unsafe { session(handle) }.ok_or_else(|| bad("无效监听句柄"))?;
         let settings = unsafe { settings.cast::<Settings>().as_ref() }
             .ok_or_else(|| bad("HpTF:配置指针无效"))?;
-        h.session.set_hptf(Arc::new(Design(settings.clone())))
+        h.session.set_hptf(hptf_design(settings))
     })
 }
 

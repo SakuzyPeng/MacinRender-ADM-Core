@@ -1,13 +1,9 @@
-//! OSC head tracking (`adm_osc_head_tracking_*`): the loopback receiver of `mradm-osc` behind the
-//! entries the C++ `OscHeadTrackingReceiver` called.
+//! OSC head tracking (`adm_osc_head_tracking_*`): the loopback receiver of `mradm-osc`
+//! (`receiver::Receiver`), bound by `mradm-ffi` as the platform requires.
 use crate::guard::{self, INTERNAL, INVALID_ARGUMENT, OK};
 use crate::scene::{Message, lock, owned};
-use mradm_ffi::osc::{
-    OscReceiver, OscSnapshot, OscText, mradm_osc_receiver_create, mradm_osc_receiver_destroy,
-    mradm_osc_receiver_last_error, mradm_osc_receiver_snapshot, mradm_osc_receiver_snapshot_json,
-    mradm_osc_receiver_start, mradm_osc_receiver_stop, mradm_osc_text_destroy, mradm_osc_text_view,
-    mradm_osc_valid_source_id,
-};
+use mradm_osc::receiver::Receiver;
+use mradm_osc::valid_source_id;
 use std::ffi::{CStr, c_char};
 use std::ptr;
 use std::sync::Mutex;
@@ -76,40 +72,9 @@ pub struct adm_osc_head_tracking_status_t {
 
 #[allow(non_camel_case_types)] // The `c_api.h` name.
 pub struct adm_osc_head_tracking_t {
-    receiver: *mut OscReceiver,
+    receiver: Receiver,
     /// Backs `adm_osc_head_tracking_last_error_message` until the next call.
     error_copy: Mutex<Message>,
-}
-
-// SAFETY: The receiver serialises its own state (the C++ receiver was shared the same way).
-unsafe impl Send for adm_osc_head_tracking_t {}
-unsafe impl Sync for adm_osc_head_tracking_t {}
-
-impl Drop for adm_osc_head_tracking_t {
-    fn drop(&mut self) {
-        unsafe { mradm_osc_receiver_destroy(self.receiver) };
-    }
-}
-
-/// A receiver text, released on drop.
-struct Owned(*mut OscText);
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        unsafe { mradm_osc_text_destroy(self.0) };
-    }
-}
-
-impl Owned {
-    fn bytes(&self) -> &[u8] {
-        let mut data = ptr::null();
-        let len = unsafe { mradm_osc_text_view(self.0, &mut data) };
-        if len == 0 {
-            &[]
-        } else {
-            unsafe { std::slice::from_raw_parts(data, len) }
-        }
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -132,17 +97,12 @@ pub unsafe extern "C" fn adm_create_osc_head_tracking(
         Some(c) if !c.source_id.is_null() => unsafe { CStr::from_ptr(c.source_id) }.to_bytes(),
         _ => &[][..],
     };
-    if !source.is_empty()
-        && unsafe { mradm_osc_valid_source_id(source.as_ptr(), source.len()) } == 0
-    {
+    if !source.is_empty() && !valid_source_id(source) {
         return INVALID_ARGUMENT;
     }
     guard::code(|| {
         let port = config.map_or(9000, |c| c.listen_port) as u16;
-        let receiver = unsafe { mradm_osc_receiver_create(port, source.as_ptr(), source.len()) };
-        if receiver.is_null() {
-            return INTERNAL;
-        }
+        let receiver = mradm_ffi::osc::receiver(port, source);
         let handle = crate::error::try_box(adm_osc_head_tracking_t {
             receiver,
             error_copy: Mutex::new(Message::default()),
@@ -169,25 +129,17 @@ pub unsafe extern "C" fn adm_osc_head_tracking_start(
     let Some(r) = (unsafe { receiver.as_ref() }) else {
         return INVALID_ARGUMENT;
     };
-    guard::code(|| {
-        let mut message = ptr::null_mut();
-        let code = unsafe { mradm_osc_receiver_start(r.receiver, &mut message) };
-        drop(Owned(message));
-        crate::error::map(code)
+    guard::code(|| match r.receiver.start() {
+        Ok(()) => OK,
+        Err(e) => crate::error::map(e.code),
     })
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn adm_osc_head_tracking_stop(receiver: *mut adm_osc_head_tracking_t) {
     if let Some(r) = unsafe { receiver.as_ref() } {
-        guard::unit(|| unsafe { mradm_osc_receiver_stop(r.receiver) });
+        guard::unit(|| r.receiver.stop());
     }
-}
-
-/// The receiver's snapshot; `None` where the C++ threw.
-fn snapshot(r: &adm_osc_head_tracking_t) -> Option<OscSnapshot> {
-    let mut raw: OscSnapshot = unsafe { std::mem::zeroed() };
-    (unsafe { mradm_osc_receiver_snapshot(r.receiver, &mut raw) } == 0).then_some(raw)
 }
 
 /// A caller's output record of at least `size_of::<T>()` bytes.
@@ -205,15 +157,13 @@ pub unsafe extern "C" fn adm_osc_head_tracking_get_pose(
         return INVALID_ARGUMENT;
     };
     guard::code(|| {
-        let Some(s) = snapshot(r) else {
-            return INTERNAL;
-        };
+        let s = r.receiver.snapshot();
         let t = &s.timing;
         *out = adm_head_tracking_pose_t {
             struct_size: size_of::<adm_head_tracking_pose_t>() as u32,
             protocol_version: t.protocol_version,
-            has_pose: u32::from(s.has_pose != 0),
-            fresh: u32::from(s.fresh != 0),
+            has_pose: u32::from(s.has_pose),
+            fresh: u32::from(s.fresh),
             receiver_session_id: s.session_id,
             receiver_sequence: s.sequence,
             receiver_received_ns: s.received_ns,
@@ -247,15 +197,12 @@ pub unsafe extern "C" fn adm_osc_head_tracking_get_status(
         return INVALID_ARGUMENT;
     };
     guard::code(|| {
-        let Some(s) = snapshot(r) else {
-            return INTERNAL;
-        };
+        let s = r.receiver.snapshot();
         *out = adm_osc_head_tracking_status_t {
             struct_size: size_of::<adm_osc_head_tracking_status_t>() as u32,
-            state: s.state,
-            // `static_cast<std::uint16_t>` of the bound port.
-            bound_port: u32::from(s.bound_port as u16),
-            has_pose: u32::from(s.has_pose != 0),
+            state: s.state as i32,
+            bound_port: u32::from(s.bound_port),
+            has_pose: u32::from(s.has_pose),
             session_id: s.session_id,
             sequence: s.sequence,
             packets_received: s.packets_received,
@@ -267,8 +214,8 @@ pub unsafe extern "C" fn adm_osc_head_tracking_get_status(
             ignored_sources: s.ignored_sources,
             protocol_mismatches: s.protocol_mismatches,
             missing_tx_packets: s.missing_tx_packets,
-            has_heartbeat: u32::from(s.has_heartbeat != 0),
-            heartbeat_alive: u32::from(s.heartbeat_alive != 0),
+            has_heartbeat: u32::from(s.has_heartbeat),
+            heartbeat_alive: u32::from(s.heartbeat_alive),
             heartbeat_age_ms: s.heartbeat_age_ms,
         };
         OK
@@ -290,13 +237,10 @@ pub unsafe extern "C" fn adm_osc_head_tracking_snapshot_json(
         return INVALID_ARGUMENT;
     }
     guard::code(|| {
-        let mut text = ptr::null_mut();
-        let code = unsafe { mradm_osc_receiver_snapshot_json(r.receiver, &mut text) };
-        let text = Owned(text);
-        if code != 0 {
+        let Ok(json) = r.receiver.snapshot_json() else {
             return INTERNAL;
-        }
-        match unsafe { owned(text.bytes(), out_json) } {
+        };
+        match unsafe { owned(json.as_bytes(), out_json) } {
             Ok(()) => OK,
             Err(_) => INTERNAL,
         }
@@ -314,14 +258,9 @@ pub unsafe extern "C" fn adm_osc_head_tracking_last_error_message(
         return c"".as_ptr();
     };
     guard::guard(QUERY_FAILED.as_ptr(), || {
-        let mut text = ptr::null_mut();
-        let code = unsafe { mradm_osc_receiver_last_error(r.receiver, &mut text) };
-        let text = Owned(text);
-        if code != 0 {
-            return QUERY_FAILED.as_ptr();
-        }
+        let text = r.receiver.last_error();
         let mut copy = lock(&r.error_copy);
-        if copy.set(text.bytes()) {
+        if copy.set(text.as_bytes()) {
             copy.as_ptr()
         } else {
             QUERY_FAILED.as_ptr()

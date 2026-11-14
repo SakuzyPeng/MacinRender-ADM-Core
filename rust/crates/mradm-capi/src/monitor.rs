@@ -1,42 +1,30 @@
 //! Realtime monitors (`adm_monitor_*`) and `adm_hptf_parse_parametric_eq`. Each export validates
-//! the caller's records as the C++ did and calls the same `mradm-ffi` monitor session, HpTF and
-//! room entries the C++ `MonitorSession` shell called, with the same message buffers.
+//! the caller's records as the C++ did and drives the engine monitor session
+//! (`mradm_engine::monitor::session`) over the `mradm-ffi` device and Apple islands.
 use crate::context::adm_context_t;
 use crate::error::{self, Error, Failure, c_str, caught, clear, concat, report, set, utf8_path};
 use crate::guard::{self, INTERNAL, INVALID_ARGUMENT, OK};
-use crate::options::adm_render_options_t;
+use crate::options::{adm_render_options_t, lossy};
 use crate::query::{Scene, import_warnings, import_with};
 use crate::render::{apply_policy_logged, islands};
 use crate::room::adm_room_config_t;
 use crate::scene::{
     Control, Message, adm_hptf_band_t, adm_hptf_config_t, adm_hptf_info_t, adm_hptf_parameters_t,
-    adm_hptf_stereo_config_t, adm_hptf_stereo_info_t, adm_hptf_stereo_parameters_t, hptf_infos,
-    lock, mradm_device_islands, owned, room_source_json, room_status_json, switch_room, text,
-    write_sized,
+    adm_hptf_stereo_config_t, adm_hptf_stereo_info_t, adm_hptf_stereo_parameters_t, engine_failure,
+    hptf_infos, hptf_settings, lock, mradm_device_islands, owned, room_source_json,
+    room_status_json, switch_room, text, write_sized,
 };
+use mradm_dsp::hptf::{ParseErrorKind, Profile, try_parse_parametric_eq};
+use mradm_engine::monitor::session::{Session, THROWN};
+use mradm_engine::monitor::{LEVEL_CHANNELS, Levels, ObjectOverride, Overrides};
 use mradm_ffi::adm::Text;
-use mradm_ffi::hptf::settings::{
-    Settings, mradm_dsp_hptf_settings_create, mradm_dsp_hptf_settings_destroy,
-    mradm_dsp_hptf_validate,
-};
-use mradm_ffi::hptf::{Band, ParseResult, Snapshot, mradm_dsp_hptf_parse};
-use mradm_ffi::render::RenderLiveOverride;
-use mradm_ffi::render::RenderOverride;
+use mradm_ffi::hptf::Snapshot;
+use mradm_ffi::hptf::settings::profile_error;
 use mradm_ffi::render::device_island::DeviceEnumeration;
-use mradm_ffi::render::engine_monitor::{EngineLiveMonitorLevels, EngineLiveMonitorStatus};
 use mradm_ffi::render::engine_monitor_session::{
-    EngineMonitorSession, EngineMonitorSessionHost, mradm_engine_monitor_session_destroy,
-    mradm_engine_monitor_session_hptf, mradm_engine_monitor_session_hptf_snapshot,
-    mradm_engine_monitor_session_levels, mradm_engine_monitor_session_log,
-    mradm_engine_monitor_session_log_count, mradm_engine_monitor_session_log_entry,
-    mradm_engine_monitor_session_new, mradm_engine_monitor_session_orientation,
-    mradm_engine_monitor_session_output_device, mradm_engine_monitor_session_overrides,
-    mradm_engine_monitor_session_pause, mradm_engine_monitor_session_play,
-    mradm_engine_monitor_session_room_control, mradm_engine_monitor_session_seek,
-    mradm_engine_monitor_session_set_loop, mradm_engine_monitor_session_start,
-    mradm_engine_monitor_session_status, mradm_engine_monitor_session_switch,
+    EngineMonitorSession, EngineMonitorSessionHost, choice, hptf_design,
 };
-use mradm_ffi::scene::{SceneImportInfo, mradm_scene_view};
+use mradm_render::routing::Error as EngineError;
 use std::ffi::{c_char, c_void};
 use std::io::Write;
 use std::mem::{MaybeUninit, offset_of};
@@ -98,61 +86,12 @@ pub struct adm_monitor_levels_t {
 
 // ── Session errors ───────────────────────────────────────────────────────────────
 
-/// The session's code for an island or device that threw: the C++ rethrew it.
-const THROWN: i32 = 100;
-/// The message and context capacity of one session call (large enough for any path in a message).
-const TEXT_CAPACITY: usize = 65536;
-
-/// The message and context buffers of one session call (the shell's `Texts`).
-struct Texts {
-    message: Vec<u8>,
-    context: Vec<u8>,
-    message_len: usize,
-    context_len: usize,
-}
-
-fn zeroed(len: usize) -> Result<Vec<u8>, Failure> {
-    let mut bytes = Vec::new();
-    bytes
-        .try_reserve_exact(len)
-        .map_err(|_| Failure::Exception)?;
-    bytes.resize(len, 0);
-    Ok(bytes)
-}
-
-impl Texts {
-    fn new(context_capacity: usize) -> Result<Self, Failure> {
-        let message = zeroed(TEXT_CAPACITY)?;
-        let context = zeroed(context_capacity.max(TEXT_CAPACITY))?;
-        Ok(Self {
-            message_len: message.len(),
-            context_len: context.len(),
-            message,
-            context,
-        })
-    }
-
-    /// Runs `call` with the buffers; a non-zero code is the error it wrote, and a thrown island
-    /// is an exception.
-    fn run(
-        mut self,
-        call: impl FnOnce(*mut u8, *mut usize, *mut u8, *mut usize) -> i32,
-    ) -> Result<(), Failure> {
-        let code = call(
-            self.message.as_mut_ptr(),
-            &mut self.message_len,
-            self.context.as_mut_ptr(),
-            &mut self.context_len,
-        );
-        if code == 0 {
-            return Ok(());
-        }
-        if code == THROWN {
-            return Err(Failure::Exception);
-        }
-        let message = &self.message[..self.message_len.min(self.message.len())];
-        let context = &self.context[..self.context_len.min(self.context.len())];
-        Err(Error::new(code, message, context)?.into())
+/// A session error: a code the C++ session threw (`THROWN`) is an exception, as the shell rethrew it.
+fn session_failure(error: EngineError) -> Failure {
+    if error.code == THROWN {
+        Failure::Exception
+    } else {
+        engine_failure(error)
     }
 }
 
@@ -160,7 +99,8 @@ impl Texts {
 
 #[allow(non_camel_case_types)] // The `c_api.h` name.
 pub struct adm_monitor_t {
-    session: *mut EngineMonitorSession,
+    /// Declared first: dropped (devices stopped) before the scene it borrows.
+    session: Box<EngineMonitorSession>,
     /// The imported scene the session borrows; dropped after the session.
     _scene: Scene,
     /// The UTF-8 input path of the session's requests.
@@ -170,17 +110,16 @@ pub struct adm_monitor_t {
     log: Mutex<(Message, Message)>,
 }
 
-// SAFETY: The session is thread-safe (the C++ shell was used from any thread).
+// SAFETY: The session is thread-safe (the C++ shell was used from any thread), and the scene it
+// borrows is only read.
 unsafe impl Send for adm_monitor_t {}
 unsafe impl Sync for adm_monitor_t {}
 
-impl Drop for adm_monitor_t {
-    fn drop(&mut self) {
-        unsafe { mradm_engine_monitor_session_destroy(self.session) };
-    }
-}
-
 impl adm_monitor_t {
+    fn session(&self) -> &Session {
+        self.session.session()
+    }
+
     fn clear(&self) {
         lock(&self.last_error).clear();
     }
@@ -328,68 +267,52 @@ unsafe fn create(
         return Err(Failure::Exception);
     }
     applied?;
-    let mut info = unsafe { MaybeUninit::<SceneImportInfo>::zeroed().assume_init() };
-    let mut view = unsafe { MaybeUninit::<mradm_ffi::adm::View>::zeroed().assume_init() };
-    let mut message = [0u8; 256];
-    if unsafe {
-        mradm_scene_view(
-            scene.0,
-            &mut info,
-            &mut view,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    } != 0
-    {
-        return Err(Failure::error(6, b"invalid monitor scene", b""));
-    }
+    let info = &scene.render_scene().info;
+    let (sample_rate, frames) = (info.sample_rate, info.frames);
     let host = host();
+    // SAFETY: the island tables are static, and the session is dropped before the scene handle
+    // (field order of `adm_monitor_t`), which the session only reads.
     let session = unsafe {
-        mradm_engine_monitor_session_new(
+        EngineMonitorSession::new(
             islands::mradm_platform_islands(),
             scene.0,
-            info.sample_rate,
-            info.frames,
+            sample_rate,
+            frames,
             &host,
         )
-    };
-    if session.is_null() {
-        return Err(Failure::error(6, b"invalid monitor session", b""));
     }
+    .ok_or_else(|| Failure::error(6, b"invalid monitor session", b""))?;
     let monitor = adm_monitor_t {
-        session,
+        session: Box::new(session),
         _scene: scene,
         input,
         last_error: Mutex::new(Message::default()),
         log: Mutex::new((Message::default(), Message::default())),
     };
     for (level, module, message) in &lines {
-        unsafe {
-            mradm_engine_monitor_session_log(
-                session,
-                *level,
-                module.as_ptr(),
-                module.len(),
-                message.as_ptr(),
-                message.len(),
-            )
-        };
+        monitor.session().log(*level, &lossy(module), message);
     }
-    let request = options.request(&monitor.input, None)?;
-    Texts::new(0)?.run(|m, ml, c, cl| unsafe {
-        mradm_engine_monitor_session_start(
-            session,
-            &request.record,
-            u32::from(options.monitor_system_spatial),
-            device.as_ptr(),
-            device.len(),
-            m,
-            ml,
-            c,
-            cl,
+    let request = monitor_choice(options, &monitor.input)?;
+    monitor
+        .session()
+        .start(request, device)
+        .map_err(session_failure)?;
+    Ok(monitor)
+}
+
+/// The session choice of `options` over the monitor's input.
+fn monitor_choice(
+    options: &adm_render_options_t,
+    input: &[u8],
+) -> Result<mradm_engine::monitor::session::Choice, Failure> {
+    let request = options.engine_request(input, None)?.ok_or_else(|| {
+        Failure::error(
+            1,
+            b"invalid monitor request (UTF-8 paths without NUL required)",
+            b"",
         )
     })?;
-    Ok(monitor)
+    Ok(choice(request, options.monitor_system_spatial))
 }
 
 #[unsafe(no_mangle)]
@@ -520,7 +443,7 @@ pub unsafe extern "C" fn adm_monitor_play(monitor: *mut adm_monitor_t) -> i32 {
     m.call(
         Some("unexpected exception while starting realtime monitor playback"),
         || {
-            unsafe { mradm_engine_monitor_session_play(m.session) };
+            m.session().play();
             Ok(OK)
         },
     )
@@ -534,7 +457,7 @@ pub unsafe extern "C" fn adm_monitor_pause(monitor: *mut adm_monitor_t) -> i32 {
     m.call(
         Some("unexpected exception while pausing realtime monitor playback"),
         || {
-            unsafe { mradm_engine_monitor_session_pause(m.session) };
+            m.session().pause();
             Ok(OK)
         },
     )
@@ -551,9 +474,7 @@ pub unsafe extern "C" fn adm_monitor_seek(monitor: *mut adm_monitor_t, seconds: 
     m.call(
         Some("unexpected exception while seeking realtime monitor"),
         || {
-            Texts::new(0)?.run(|ms, ml, c, cl| unsafe {
-                mradm_engine_monitor_session_seek(m.session, seconds, ms, ml, c, cl)
-            })?;
+            m.session().seek_seconds(seconds).map_err(session_failure)?;
             Ok(OK)
         },
     )
@@ -574,7 +495,7 @@ pub unsafe extern "C" fn adm_monitor_set_loop(
     m.call(
         Some("unexpected exception while setting realtime monitor loop"),
         || {
-            unsafe { mradm_engine_monitor_session_set_loop(m.session, start_seconds, end_seconds) };
+            m.session().set_loop_seconds(start_seconds, end_seconds);
             Ok(OK)
         },
     )
@@ -662,24 +583,18 @@ pub unsafe extern "C" fn adm_monitor_set_overrides(
                 None => return Ok(INVALID_ARGUMENT),
             }
         }
-        let mut records: Vec<RenderLiveOverride> = Vec::new();
-        records
+        let mut objects: Vec<ObjectOverride> = Vec::new();
+        objects
             .try_reserve_exact(entries.len())
             .map_err(|_| Failure::Exception)?;
-        let mut capacity = 0usize;
         for e in &entries {
-            let object_id = text(e.object_id);
-            capacity = capacity.max(object_id.len() + 1);
-            let head_locked = e.head_locked_valid != 0;
-            records.push(RenderLiveOverride {
-                base: RenderOverride {
-                    object_id: Text::bytes(object_id),
-                    speaker_label: Text::bytes(text(e.speaker_label)),
-                    mute: u32::from(e.mute != 0),
-                    gain_db: e.gain_db,
-                    has_head_locked: u32::from(head_locked),
-                    head_locked: u32::from(head_locked && e.head_locked != 0),
-                },
+            objects.push(ObjectOverride {
+                object_id: concat(&[text(e.object_id)])?,
+                speaker_label: concat(&[text(e.speaker_label)])?,
+                mute: e.mute != 0,
+                gain_db: e.gain_db,
+                // A caller without `head_locked_valid` inherits the lock.
+                head_locked: (e.head_locked_valid != 0).then_some(e.head_locked != 0),
                 extent_scale: e.extent_scale,
                 extent_width_scale: e.extent_width_scale,
                 extent_height_scale: e.extent_height_scale,
@@ -688,18 +603,9 @@ pub unsafe extern "C" fn adm_monitor_set_overrides(
                 divergence_scale: e.divergence_scale,
             });
         }
-        Texts::new(capacity)?.run(|ms, ml, c, cl| {
-            mradm_engine_monitor_session_overrides(
-                m.session,
-                records.as_ptr(),
-                records.len(),
-                revision,
-                ms,
-                ml,
-                c,
-                cl,
-            )
-        })?;
+        m.session()
+            .set_overrides(Overrides { objects, revision })
+            .map_err(session_failure)?;
         Ok(OK)
     });
     match result {
@@ -734,9 +640,7 @@ pub unsafe extern "C" fn adm_monitor_set_listener_orientation(
     m.call(
         Some("unexpected exception while setting realtime monitor listener orientation"),
         || {
-            unsafe {
-                mradm_engine_monitor_session_orientation(m.session, yaw_deg, pitch_deg, roll_deg)
-            };
+            m.session().set_orientation([yaw_deg, pitch_deg, roll_deg]);
             Ok(OK)
         },
     )
@@ -755,18 +659,10 @@ pub unsafe extern "C" fn adm_monitor_switch_backend(
         || {
             let options = unsafe { Options::of(opts)? };
             let options = options.get();
-            let request = options.request(&m.input, None)?;
-            Texts::new(0)?.run(|ms, ml, c, cl| unsafe {
-                mradm_engine_monitor_session_switch(
-                    m.session,
-                    &request.record,
-                    u32::from(options.monitor_system_spatial),
-                    ms,
-                    ml,
-                    c,
-                    cl,
-                )
-            })?;
+            let choice = monitor_choice(options, &m.input)?;
+            m.session()
+                .switch_backend(choice)
+                .map_err(session_failure)?;
             Ok(OK)
         },
     )
@@ -775,24 +671,10 @@ pub unsafe extern "C" fn adm_monitor_switch_backend(
 /// `prepare_hptf` and `set_hptf_prepared`: the request of `kind` (0 file, 1 parameters, 2 stereo
 /// files, 3 stereo parameters) as Rust settings, designed and published by the session.
 unsafe fn apply_hptf(m: &adm_monitor_t, config: *const c_void, kind: u32) -> Result<(), Failure> {
-    let mut message = [0u8; 512];
-    let mut raw: *mut Settings = ptr::null_mut();
-    let status = unsafe {
-        mradm_dsp_hptf_settings_create(config, kind, &mut raw, message.as_mut_ptr(), message.len())
-    };
-    if status != 0 {
-        return Err(Error::new(status, error::until_nul(&message), b"")?.into());
-    }
-    struct Owned(*mut Settings);
-    impl Drop for Owned {
-        fn drop(&mut self) {
-            unsafe { mradm_dsp_hptf_settings_destroy(self.0) };
-        }
-    }
-    let settings = Owned(raw);
-    Texts::new(0)?.run(|ms, ml, c, cl| unsafe {
-        mradm_engine_monitor_session_hptf(m.session, settings.0.cast(), ms, ml, c, cl)
-    })
+    let settings = unsafe { hptf_settings(config, kind)? };
+    m.session()
+        .set_hptf(hptf_design(&settings))
+        .map_err(session_failure)
 }
 
 fn monitor_hptf(monitor: *mut adm_monitor_t, config: *const c_void, kind: u32) -> i32 {
@@ -840,12 +722,11 @@ pub unsafe extern "C" fn adm_monitor_set_hptf_stereo_parameters(
 /// `hptf_stereo_info`: the left and right infos and whether they are the same curve; a session
 /// without a snapshot reports the default (bypassed, symmetric) infos.
 fn stereo_info(m: &adm_monitor_t) -> (adm_hptf_info_t, adm_hptf_info_t, bool) {
-    let mut snapshot: Snapshot = unsafe { std::mem::zeroed() };
-    if unsafe { mradm_engine_monitor_session_hptf_snapshot(m.session, &mut snapshot) } == 0 {
+    let Some(snapshot) = m.session().hptf_snapshot() else {
         let empty = adm_hptf_info_t::empty();
         return (empty, empty, true);
-    }
-    hptf_infos(&snapshot)
+    };
+    hptf_infos(&Snapshot::from(snapshot))
 }
 
 /// `monitor_hptf_info`: no clear, and only a failed query stores its message.
@@ -914,17 +795,9 @@ pub unsafe extern "C" fn adm_monitor_set_output_device(
         Some("unexpected exception while switching realtime monitor output device"),
         || {
             let device = unsafe { text(device_id) };
-            Texts::new(0)?.run(|ms, ml, c, cl| unsafe {
-                mradm_engine_monitor_session_output_device(
-                    m.session,
-                    device.as_ptr(),
-                    device.len(),
-                    ms,
-                    ml,
-                    c,
-                    cl,
-                )
-            })?;
+            m.session()
+                .set_output_device(device)
+                .map_err(session_failure)?;
             Ok(OK)
         },
     )
@@ -942,11 +815,10 @@ pub unsafe extern "C" fn adm_monitor_get_status(
         return INVALID_ARGUMENT;
     }
     guard::code(|| {
-        let mut s: EngineLiveMonitorStatus = unsafe { std::mem::zeroed() };
         let caller = unsafe { out.cast::<u32>().read_unaligned() };
-        let filled = if unsafe { mradm_engine_monitor_session_status(m.session, &mut s) } == 0 {
+        let filled = match m.session().status() {
             // An invalid session is a stopped, failed snapshot.
-            adm_monitor_status_t {
+            None => adm_monitor_status_t {
                 struct_size: caller,
                 state: 0,
                 playhead_frames: 0,
@@ -956,19 +828,18 @@ pub unsafe extern "C" fn adm_monitor_get_status(
                 ended: 0,
                 failed: 1,
                 override_revision: 0,
-            }
-        } else {
-            adm_monitor_status_t {
+            },
+            Some(s) => adm_monitor_status_t {
                 struct_size: caller,
                 state: i32::from(s.state as u8),
                 playhead_frames: s.playhead_frames,
                 underruns: s.underruns,
                 buffered_frames: s.buffered_frames,
                 ring_fill: s.ring_fill,
-                ended: i32::from(s.ended != 0),
-                failed: i32::from(s.failed != 0),
+                ended: i32::from(s.ended),
+                failed: i32::from(s.failed),
                 override_revision: s.override_revision,
-            }
+            },
         };
         // struct_size forward-compat: copy only the bytes the caller's struct holds.
         let len = (caller as usize).min(size_of::<adm_monitor_status_t>());
@@ -989,11 +860,15 @@ pub unsafe extern "C" fn adm_monitor_get_levels(
         return INVALID_ARGUMENT;
     };
     guard::code(|| {
-        let mut l: EngineLiveMonitorLevels = unsafe { std::mem::zeroed() };
         // An invalid session reports silent levels (no channels).
-        if unsafe { mradm_engine_monitor_session_levels(m.session, &mut l) } == 0 {
-            l = unsafe { std::mem::zeroed() };
-        }
+        let l = m.session().levels().unwrap_or(Levels {
+            channels: 0,
+            peak: [0.0; LEVEL_CHANNELS],
+            rms: [0.0; LEVEL_CHANNELS],
+            momentary_lufs: 0.0,
+            shortterm_lufs: 0.0,
+            integrated_lufs: 0.0,
+        });
         out.out_count = l.channels;
         for c in 0..out.capacity.min(l.channels) as usize {
             // `std::array::at` past the meter's channels threw.
@@ -1023,10 +898,7 @@ pub unsafe extern "C" fn adm_monitor_log_count(monitor: *mut adm_monitor_t) -> u
         return 0;
     };
     // The former `static_cast<uint32_t>` of the count.
-    guard::guard(
-        0,
-        || unsafe { mradm_engine_monitor_session_log_count(m.session) } as u32,
-    )
+    guard::guard(0, || m.session().log_count() as u32)
 }
 
 #[unsafe(no_mangle)]
@@ -1042,28 +914,10 @@ pub unsafe extern "C" fn adm_monitor_log_entry(
     };
     guard::guard(0, || {
         let mut log = lock(&m.log);
-        let mut level = 0u32;
-        let (mut module, mut message) = (Text::bytes(b""), Text::bytes(b""));
-        if unsafe {
-            mradm_engine_monitor_session_log_entry(
-                m.session,
-                index as usize,
-                &mut level,
-                &mut module,
-                &mut message,
-            )
-        } == 0
-        {
+        let Some((level, module, message)) = m.session().log_entry(index as usize) else {
             return 0;
-        }
-        let bytes = |t: &Text| {
-            if t.len == 0 {
-                &[][..]
-            } else {
-                unsafe { std::slice::from_raw_parts(t.data, t.len) }
-            }
         };
-        if !log.0.set(bytes(&module)) || !log.1.set(bytes(&message)) {
+        if !log.0.set(module.as_bytes()) || !log.1.set(&message) {
             return 0;
         }
         unsafe {
@@ -1082,7 +936,7 @@ pub unsafe extern "C" fn adm_monitor_log_entry(
 }
 
 fn control(m: &adm_monitor_t) -> Option<Control> {
-    Control::new(unsafe { mradm_engine_monitor_session_room_control(m.session) })
+    m.session().room_control().map(Control)
 }
 
 #[unsafe(no_mangle)]
@@ -1144,12 +998,6 @@ pub unsafe extern "C" fn adm_monitor_room_source_json(
 
 // ── AutoEq ParametricEQ text ─────────────────────────────────────────────────────
 
-/// A parsed profile: the preamp and the bands.
-struct Profile {
-    preamp_db: f64,
-    bands: Vec<Band>,
-}
-
 /// The validation error's locator, formatted on the stack before the fallible copy.
 fn band_locator(index: usize) -> Result<Vec<u8>, Failure> {
     if index == 0 {
@@ -1165,80 +1013,21 @@ fn band_locator(index: usize) -> Result<Vec<u8>, Failure> {
 
 /// `parse_parametric_eq`: the grammar in Rust, the messages and line locators as the C++ wrote them.
 fn parse(text: &[u8]) -> Result<Profile, Failure> {
-    let mut bands: Vec<Band> = Vec::new();
-    let grow = |bands: &mut Vec<Band>, len: usize| -> Result<(), Failure> {
-        bands
-            .try_reserve_exact(len.saturating_sub(bands.len()))
-            .map_err(|_| Failure::Exception)?;
-        while bands.len() < len {
-            bands.push(unsafe { std::mem::zeroed() });
+    let parsed = try_parse_parametric_eq(text).map_err(|_| Failure::Exception)?;
+    let invalid = |message: &str, locator: &[u8]| Failure::error(1, message.as_bytes(), locator);
+    let profile = parsed.map_err(|e| {
+        let line = &text[e.line];
+        match e.kind {
+            ParseErrorKind::Preamp => invalid("HpTF:Preamp 行数值无法解析", line),
+            ParseErrorKind::Frequency => invalid("HpTF:滤波器行缺少可解析的 Fc", line),
+            ParseErrorKind::GainOrQ => invalid("HpTF:Gain 或 Q 数值无法解析", line),
+            ParseErrorKind::Empty => invalid("HpTF:没有可用的 ParametricEQ 参数", b""),
         }
-        Ok(())
-    };
-    grow(&mut bands, 16)?;
-    let mut result: ParseResult = unsafe { std::mem::zeroed() };
-    loop {
-        let mut message = [0u8; 256];
-        if unsafe {
-            mradm_dsp_hptf_parse(
-                text.as_ptr(),
-                text.len(),
-                bands.as_mut_ptr(),
-                bands.len(),
-                &mut result,
-                message.as_mut_ptr(),
-                message.len(),
-            )
-        } != 0
-        {
-            return Err(Failure::error(
-                6,
-                "HpTF:ParametricEQ 解析失败".as_bytes(),
-                error::until_nul(&message),
-            ));
-        }
-        if result.error != 0 || result.band_count <= bands.len() {
-            break;
-        }
-        grow(&mut bands, result.band_count)?;
+    })?;
+    if let Some((index, message)) = profile_error(&profile) {
+        return Err(Failure::error(1, message.as_bytes(), &band_locator(index)?));
     }
-    let line = || {
-        if result.line_offset > text.len() || result.line_len > text.len() - result.line_offset {
-            &[][..]
-        } else {
-            &text[result.line_offset..result.line_offset + result.line_len]
-        }
-    };
-    let invalid =
-        |message: &str, locator: &[u8]| Err(Failure::error(1, message.as_bytes(), locator));
-    match result.error {
-        0 => {}
-        1 => return invalid("HpTF:Preamp 行数值无法解析", line()),
-        2 => return invalid("HpTF:滤波器行缺少可解析的 Fc", line()),
-        3 => return invalid("HpTF:Gain 或 Q 数值无法解析", line()),
-        _ => return invalid("HpTF:没有可用的 ParametricEQ 参数", b""),
-    }
-    bands.truncate(result.band_count);
-    let mut message = [0u8; 256];
-    let mut invalid_band = 0usize;
-    let status = unsafe {
-        mradm_dsp_hptf_validate(
-            bands.as_ptr(),
-            bands.len(),
-            result.preamp_db,
-            &mut invalid_band,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if status != 0 {
-        let locator = band_locator(invalid_band)?;
-        return Err(Failure::error(status, error::until_nul(&message), &locator));
-    }
-    Ok(Profile {
-        preamp_db: result.preamp_db,
-        bands,
-    })
+    Ok(profile)
 }
 
 /// `hptf_output_stride`: the caller's band array stride (the first band's `struct_size`, which
