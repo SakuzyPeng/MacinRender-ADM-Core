@@ -169,5 +169,5 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 （56,241 → 62,400 行），只供测试的 SDK、头与适配器都在 `tests/support`。
 
 移交 6.6（构建以 Cargo 为主、cdylib）：生产 C/C++ 只剩岛、编码器与容器元数据、两个进度回调跳板（`adm_c_api.cpp`，仍待另行决定）与
-`src/adm_core/adm` 中岛共用的头（`render.h` 只剩 Apple 岛用的计划、计量与窗口记录）；`mradm-ffi` 的私有 C 边界只剩生产调用的入口
-（391 个函数）。
+`src/adm_core/adm` 中岛共用的头（`render.h` 只剩 Apple 岛用的计划、计量与窗口记录）。`src` 的私有 FFI 头只保留生产 C/C++ 使用的记录与入口，
+其余声明位于 `tests/support`、`tests/unit` 等测试目录。`mradm-ffi` 共保留 391 个函数导出，其中包含测试与工具使用的入口。
