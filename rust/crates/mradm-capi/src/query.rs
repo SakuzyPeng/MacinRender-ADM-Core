@@ -1,25 +1,18 @@
 //! Queries of an input file: `adm_probe_file` and its `adm_scene_info_t`, `adm_inspect_file_json`,
 //! `adm_inspect_file_xml` and `adm_policy_template_json`, plus `adm_render_stage_from_string`.
 //!
-//! Each export makes the calls the C++ service made (the scene import, the WAVE readers), with the
-//! same message buffers, so messages, locators and truncation are unchanged.
+//! Each export calls `mradm-scene`, `mradm-wav` and `mradm-engine` directly (R2); messages are the
+//! Rust errors' full text, no longer cut to the former FFI buffers.
 use crate::context::adm_context_t;
-use crate::error::{
-    Error, Failure, c_str, caught, clear, concat, report, set, try_box, until_nul, utf8_path,
-};
+use crate::error::{Error, Failure, c_str, caught, clear, concat, report, set, try_box, utf8_path};
 use crate::guard;
 use crate::string;
-use mradm_ffi::adm::{Text, View};
-use mradm_ffi::scene::{
-    SceneHandle, SceneImportInfo, mradm_scene_destroy, mradm_scene_import,
-    mradm_scene_inspect_json, mradm_scene_template, mradm_scene_view,
-};
-use mradm_ffi::wav::{
-    ChunkReadHandle, Info, ReadHandle, mradm_wav_chunks_chna, mradm_wav_chunks_destroy,
-    mradm_wav_chunks_open, mradm_wav_chunks_read, mradm_wav_reader_destroy, mradm_wav_reader_open,
-};
+use mradm_ffi::scene::SceneHandle;
+use mradm_scene::{Context, RenderScene};
+use mradm_wav::{Chna, ChunkReader, Reader};
 use std::ffi::c_char;
-use std::mem::MaybeUninit;
+use std::fs::File;
+use std::io::BufReader;
 use std::ptr;
 
 /// `adm_render_stage_t` of a progress stage name; `ADM_STAGE_UNKNOWN` (0) otherwise.
@@ -40,19 +33,24 @@ pub unsafe extern "C" fn adm_render_stage_from_string(stage: *const c_char) -> i
     }
 }
 
-/// An imported scene, destroyed with its handle.
+/// An imported scene. The pointer is the boxed `SceneHandle` the render and Monitor requests still
+/// take; it is released with the scene.
 pub(crate) struct Scene(pub(crate) *mut SceneHandle);
 
-impl Drop for Scene {
-    fn drop(&mut self) {
-        unsafe { mradm_scene_destroy(self.0) };
+impl Scene {
+    pub(crate) fn render_scene(&self) -> &RenderScene {
+        // The pointer comes from `Box::into_raw` in `import_with` and lives until drop.
+        unsafe { (*self.0).scene() }
     }
 }
 
-const EMPTY: Text = Text {
-    data: ptr::null(),
-    len: 0,
-};
+impl Drop for Scene {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            drop(unsafe { Box::from_raw(self.0) });
+        }
+    }
+}
 
 /// `RenderScene::import` without a layout or labels; `routed` is whether the caller passed
 /// import options (the template does not).
@@ -68,60 +66,26 @@ pub(crate) fn import_with(
     labels: &[Vec<u8>],
 ) -> Result<Scene, Failure> {
     let utf8 = utf8_path(path).ok_or(Failure::Exception)?;
-    let mut views = Vec::new();
-    views
-        .try_reserve_exact(labels.len())
-        .map_err(|_| Failure::Exception)?;
-    views.extend(labels.iter().map(|l| Text::bytes(l)));
-    let mut message = [0u8; 1024];
-    let mut context = 0u32;
-    let mut raw = ptr::null_mut();
-    let code = unsafe {
-        mradm_scene_import(
-            utf8.as_ptr(),
-            utf8.len(),
-            u32::from(routed),
-            u32::from(layout.is_some()),
-            layout.map_or(EMPTY, Text::bytes),
-            if views.is_empty() {
-                ptr::null()
-            } else {
-                views.as_ptr()
-            },
-            views.len(),
-            &mut raw,
-            &mut context,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    let scene = Scene(raw);
-    if code != 0 {
-        return Err(scene_error(code, &message, context, path)?.into());
-    }
-    Ok(scene)
+    let layout = layout.map(|l| String::from_utf8_lossy(l).into_owned());
+    let labels: Vec<String> = labels
+        .iter()
+        .map(|l| String::from_utf8_lossy(l).into_owned())
+        .collect();
+    let handle = SceneHandle::import(&utf8, routed, layout.as_deref(), &labels)
+        .map_err(|error| scene_failure(&error, path))?;
+    Ok(Scene(Box::into_raw(handle)))
 }
 
-/// `scene_error`: the locator by the import's context (1 the input, 2 a referenced path).
-pub(crate) fn scene_error(
-    code: i32,
-    message: &[u8],
-    context: u32,
-    path: &[u8],
-) -> Result<Error, Failure> {
-    let locator = match context {
-        1 => concat(&[b"input=", path])?,
-        2 => concat(&[b"path=", path])?,
-        _ => Vec::new(),
+/// A scene error with its locator (the input or a referenced path).
+pub(crate) fn scene_failure(error: &mradm_scene::Error, path: &[u8]) -> Failure {
+    let locator = match error.context {
+        Context::Input => concat(&[b"input=", path]),
+        Context::Path => concat(&[b"path=", path]),
+        Context::None | Context::Label => Ok(Vec::new()),
     };
-    Error::clamped(code, until_nul(message), &locator)
-}
-
-fn text(t: Text) -> &'static [u8] {
-    if t.len == 0 {
-        &[]
-    } else {
-        unsafe { std::slice::from_raw_parts(t.data, t.len) }
+    match locator.and_then(|l| Error::clamped(error.code, error.message.as_bytes(), &l)) {
+        Ok(error) => error.into(),
+        Err(failure) => failure,
     }
 }
 
@@ -143,115 +107,57 @@ fn probe(path: &[u8]) -> Result<adm_scene_info_t, Failure> {
         Err(Failure::Error(error)) => return wave_facts(path).ok_or(Failure::Error(error)),
         Err(Failure::Exception) => return Err(Failure::Exception),
     };
-    let mut message = [0u8; 1024];
-    let mut info = unsafe { MaybeUninit::<SceneImportInfo>::zeroed().assume_init() };
-    let mut view = unsafe { MaybeUninit::<View>::zeroed().assume_init() };
-    let code = unsafe {
-        mradm_scene_view(
-            scene.0,
-            &mut info,
-            &mut view,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if code != 0 {
-        return Err(scene_error(code, &message, 1, path)?.into());
-    }
+    let render = scene.render_scene();
     Ok(adm_scene_info_t {
-        sample_rate: info.sample_rate,
-        channels: u32::from(info.channels as u16),
-        frames: info.frames,
-        programme_count: view.programmes_len as u32,
-        object_count: view.objects_len as u32,
+        sample_rate: render.info.sample_rate,
+        channels: u32::from(render.info.channels),
+        frames: render.info.frames,
+        programme_count: render.snapshot.programmes.len() as u32,
+        object_count: render.snapshot.objects.len() as u32,
     })
 }
 
-/// `log_import_warnings`: the scene view the warnings come from, for its error only (the preview and
-/// export log sinks discard the lines).
-pub(crate) fn check_view(scene: &Scene, path: &[u8]) -> Result<(), Failure> {
-    let mut message = [0u8; 1024];
-    let mut info = unsafe { MaybeUninit::<SceneImportInfo>::zeroed().assume_init() };
-    let mut view = unsafe { MaybeUninit::<View>::zeroed().assume_init() };
-    let code = unsafe {
-        mradm_scene_view(
-            scene.0,
-            &mut info,
-            &mut view,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if code != 0 {
-        return Err(scene_error(code, &message, 1, path)?.into());
-    }
+/// The import is complete once `import_with` returns: there is no separate view step that can fail.
+pub(crate) fn check_view(_scene: &Scene, _path: &[u8]) -> Result<(), Failure> {
     Ok(())
 }
 
-/// `log_import_warnings`: the scene's import warnings, or the view's error as `check_view` reports
-/// it.
-pub(crate) fn import_warnings(scene: &Scene, path: &[u8]) -> Result<Vec<Vec<u8>>, Failure> {
-    let mut message = [0u8; 1024];
-    let mut info = unsafe { MaybeUninit::<SceneImportInfo>::zeroed().assume_init() };
-    let mut view = unsafe { MaybeUninit::<View>::zeroed().assume_init() };
-    let code = unsafe {
-        mradm_scene_view(
-            scene.0,
-            &mut info,
-            &mut view,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if code != 0 {
-        return Err(scene_error(code, &message, 1, path)?.into());
-    }
-    let strings = slice(view.strings, view.strings_len);
-    let ids = slice(view.warnings, view.warnings_len);
+/// `log_import_warnings`: the scene's import warnings.
+pub(crate) fn import_warnings(scene: &Scene, _path: &[u8]) -> Result<Vec<Vec<u8>>, Failure> {
+    let snapshot = &scene.render_scene().snapshot;
     let mut warnings = Vec::new();
     warnings
-        .try_reserve_exact(ids.len())
+        .try_reserve_exact(snapshot.warnings.len())
         .map_err(|_| Failure::Exception)?;
-    for &id in ids {
-        let text = strings.get(id as usize).ok_or(Failure::Exception)?;
-        warnings.push(concat(&[slice(text.data, text.len)])?);
+    for &id in &snapshot.warnings {
+        let text = snapshot
+            .strings
+            .get(id as usize)
+            .ok_or(Failure::Exception)?;
+        warnings.push(concat(&[text.as_bytes()])?);
     }
     Ok(warnings)
 }
 
-fn slice<'a, T>(data: *const T, len: usize) -> &'a [T] {
-    if len == 0 {
-        &[]
-    } else {
-        unsafe { std::slice::from_raw_parts(data, len) }
-    }
+/// A UTF-8 path as `mradm-wav` opens it.
+fn wav_path(utf8: &[u8]) -> Option<&str> {
+    std::str::from_utf8(utf8)
+        .ok()
+        .filter(|p| !p.is_empty() && !p.contains('\0'))
 }
 
 fn wave_facts(path: &[u8]) -> Option<adm_scene_info_t> {
     let utf8 = utf8_path(path)?;
-    let mut message = [0u8; 512];
-    let mut handle: *mut ReadHandle = ptr::null_mut();
-    let mut info = Info::default();
-    let code = unsafe {
-        mradm_wav_reader_open(
-            utf8.as_ptr(),
-            utf8.len(),
-            &mut handle,
-            &mut info,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    unsafe { mradm_wav_reader_destroy(handle) };
-    (code == 0 && info.channels != 0 && info.channels <= u32::from(u16::MAX)).then_some(
-        adm_scene_info_t {
-            sample_rate: info.rate,
-            channels: info.channels,
-            frames: info.frames,
-            programme_count: 0,
-            object_count: 0,
-        },
-    )
+    let file = File::open(wav_path(&utf8)?).ok()?;
+    let info = Reader::new(BufReader::new(file)).ok()?.info();
+    let channels = u32::from(info.format.channels);
+    (channels != 0).then_some(adm_scene_info_t {
+        sample_rate: info.format.sample_rate,
+        channels,
+        frames: info.frames,
+        programme_count: 0,
+        object_count: 0,
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -361,9 +267,8 @@ unsafe fn text_query(
     })
 }
 
-/// An owned copy of a Rust entry's text output.
-fn owned(t: Text) -> Result<Vec<u8>, Failure> {
-    let bytes = text(t);
+/// An owned copy of a text output.
+pub(crate) fn owned(bytes: &[u8]) -> Result<Vec<u8>, Failure> {
     let mut copy = Vec::new();
     copy.try_reserve_exact(bytes.len())
         .map_err(|_| Failure::Exception)?;
@@ -385,20 +290,11 @@ pub unsafe extern "C" fn adm_inspect_file_json(
             |path| {
                 let scene = import(path, true)?;
                 let utf8 = utf8_path(path).ok_or(Failure::Exception)?;
-                let mut message = [0u8; 1024];
-                let mut output = EMPTY;
-                let code = mradm_scene_inspect_json(
-                    scene.0,
-                    utf8.as_ptr(),
-                    utf8.len(),
-                    &mut output,
-                    message.as_mut_ptr(),
-                    message.len(),
-                );
-                if code != 0 {
-                    return Err(Error::new(code, until_nul(&message), b"")?.into());
-                }
-                owned(output)
+                let display = String::from_utf8_lossy(&utf8);
+                owned(
+                    mradm_engine::scene_json::inspect_json(scene.render_scene(), &display)
+                        .as_bytes(),
+                )
             },
             "failed to allocate ADM inspect JSON",
             "unexpected exception while inspecting ADM file",
@@ -419,14 +315,7 @@ pub unsafe extern "C" fn adm_policy_template_json(
             out_json,
             |path| {
                 let scene = import(path, false)?;
-                let mut message = [0u8; 1024];
-                let mut output = EMPTY;
-                let code =
-                    mradm_scene_template(scene.0, &mut output, message.as_mut_ptr(), message.len());
-                if code != 0 {
-                    return Err(Error::new(code, until_nul(&message), b"")?.into());
-                }
-                owned(output)
+                owned(mradm_scene::report::template(scene.render_scene()).as_bytes())
             },
             "failed to allocate semantic-policy template JSON",
             "unexpected exception while building semantic-policy template",
@@ -497,14 +386,6 @@ enum Chunks {
     Path,
 }
 
-struct ChunkReader(*mut ChunkReadHandle);
-
-impl Drop for ChunkReader {
-    fn drop(&mut self) {
-        unsafe { mradm_wav_chunks_destroy(self.0) };
-    }
-}
-
 fn alloc_zeroed<T: Clone + Default>(len: usize) -> Result<Vec<T>, Chunks> {
     let mut v = Vec::new();
     v.try_reserve_exact(len).map_err(|_| Chunks::OutOfMemory)?;
@@ -515,106 +396,41 @@ fn alloc_zeroed<T: Clone + Default>(len: usize) -> Result<Vec<T>, Chunks> {
 /// `read_wav_adm_chunks`: the axml payload (empty when absent) and whether a CHNA record has
 /// track index 0.
 fn chunks(path: &[u8]) -> Result<(Vec<u8>, bool), Chunks> {
-    let wav_error = |code: i32, message: &[u8]| {
+    let wav_error = |error: mradm_wav::Error| {
         concat(&[b"path=", path])
-            .and_then(|locator| Error::clamped(code, until_nul(message), &locator))
+            .and_then(|locator| Error::clamped(error.code, error.message.as_bytes(), &locator))
             .map_or(Chunks::OutOfMemory, Chunks::Error)
     };
     let utf8 = utf8_path(path).ok_or(Chunks::Path)?;
-    let mut message = [0u8; 512];
-    let mut raw = ptr::null_mut();
-    let code = unsafe {
-        mradm_wav_chunks_open(
-            utf8.as_ptr(),
-            utf8.len(),
-            &mut raw,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    let reader = ChunkReader(raw);
-    if code != 0 {
-        return Err(wav_error(code, &message));
+    let name = std::str::from_utf8(&utf8)
+        .map_err(|_| wav_error(mradm_wav::Error::invalid("WAVE 路径必须使用 UTF-8")))?;
+    if name.is_empty() {
+        return Err(wav_error(mradm_wav::Error::invalid("WAVE 路径为空")));
     }
-    let id = b"axml";
-    let mut size = 0u64;
-    let mut found = 0u8;
-    let code = unsafe {
-        mradm_wav_chunks_read(
-            reader.0,
-            id.as_ptr(),
-            ptr::null_mut(),
-            0,
-            &mut size,
-            &mut found,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if code != 0 {
-        return Err(wav_error(code, &message));
+    if name.contains('\0') {
+        return Err(wav_error(mradm_wav::Error::invalid("WAVE 路径包含 NUL")));
     }
+    let file = File::open(name).map_err(|e| wav_error(e.into()))?;
+    let mut reader = ChunkReader::new(BufReader::new(file)).map_err(wav_error)?;
+    let id = *b"axml";
     let mut axml = Vec::new();
-    if found != 0 {
-        let Ok(len) = usize::try_from(size) else {
-            return Err(wav_error(2, b"WAVE chunk is too large"));
+    if let Some(chunk) = reader.chunks().iter().find(|c| c.id == id).copied() {
+        let Ok(len) = usize::try_from(chunk.size) else {
+            return Err(wav_error(mradm_wav::Error {
+                code: 2,
+                message: "WAVE chunk is too large".into(),
+            }));
         };
         axml = alloc_zeroed::<u8>(len)?;
         if len != 0 {
-            let code = unsafe {
-                mradm_wav_chunks_read(
-                    reader.0,
-                    id.as_ptr(),
-                    axml.as_mut_ptr(),
-                    axml.len(),
-                    &mut size,
-                    &mut found,
-                    message.as_mut_ptr(),
-                    message.len(),
-                )
-            };
-            if code != 0 {
-                return Err(wav_error(code, &message));
-            }
+            reader.read_chunk(id, &mut axml).map_err(wav_error)?;
         }
     }
-    let mut count = 0usize;
-    let code = unsafe {
-        mradm_wav_chunks_chna(
-            reader.0,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            0,
-            &mut count,
-            &mut found,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if code != 0 {
-        return Err(wav_error(code, &message));
-    }
-    if found == 0 || count == 0 {
+    let Some(data) = reader.metadata(*b"chna", u64::MAX).map_err(wav_error)? else {
         return Ok((axml, false));
-    }
-    let mut indices = alloc_zeroed::<u16>(count)?;
-    let mut uids = alloc_zeroed::<u8>(count.wrapping_mul(12))?;
-    let code = unsafe {
-        mradm_wav_chunks_chna(
-            reader.0,
-            indices.as_mut_ptr(),
-            uids.as_mut_ptr(),
-            count,
-            &mut count,
-            &mut found,
-            message.as_mut_ptr(),
-            message.len(),
-        )
     };
-    if code != 0 {
-        return Err(wav_error(code, &message));
-    }
-    Ok((axml, indices[..count].contains(&0)))
+    let chna = Chna::decode_import(&data).map_err(wav_error)?;
+    Ok((axml, chna.entries.iter().any(|e| e.track_index == 0)))
 }
 
 #[cfg(test)]
@@ -623,9 +439,14 @@ mod tests {
     use crate::context::{adm_context_last_error_message, adm_create_context, adm_destroy_context};
     use crate::test_alloc::{with_allocation_failure, with_allocation_failure_after};
 
+    fn scene(code: i32, message: &str, context: Context) -> mradm_scene::Error {
+        mradm_scene::Error::new(code, message, context)
+    }
+
     #[test]
     fn query_error_allocations_return_internal_and_allow_retry() {
         let context = adm_create_context();
+        let cannot_read = scene(3, "cannot read", Context::Input);
         for successful in 0..3 {
             let mut out = ptr::null_mut();
             let (code, failed) = with_allocation_failure_after(successful, || unsafe {
@@ -633,7 +454,7 @@ mod tests {
                     context,
                     c"input.wav".as_ptr(),
                     &mut out,
-                    |path| Err(scene_error(3, b"cannot read", 1, path)?.into()),
+                    |path| Err(scene_failure(&cannot_read, path)),
                     "allocation failed",
                     "unexpected query failure",
                 )
@@ -646,8 +467,8 @@ mod tests {
                 b"unexpected query failure"
             );
         }
-        let failure = scene_error(3, b"cannot read", 1, b"input.wav").unwrap();
-        assert_eq!(unsafe { report(context, failure.into(), None) }, guard::IO);
+        let failure = scene_failure(&cannot_read, b"input.wav");
+        assert_eq!(unsafe { report(context, failure, None) }, guard::IO);
         assert_eq!(
             unsafe { c_str(adm_context_last_error_message(context)) },
             b"cannot read: input=input.wav"
@@ -683,17 +504,25 @@ mod tests {
 
     #[test]
     fn scene_errors_take_the_locator_of_their_context() {
-        let e = scene_error(3, b"m\0junk", 1, b"a.wav").unwrap();
+        let error = |e: Failure| match e {
+            Failure::Error(e) => e,
+            Failure::Exception => panic!("allocation"),
+        };
+        let e = error(scene_failure(&scene(3, "m", Context::Input), b"a.wav"));
         assert_eq!(
             (e.code, &e.message[..], &e.context[..]),
             (3, &b"m"[..], &b"input=a.wav"[..])
         );
-        let e = scene_error(9, b"m", 2, b"a.wav").unwrap();
+        let e = error(scene_failure(&scene(9, "m", Context::Path), b"a.wav"));
         assert_eq!(
             (e.code, &e.context[..]),
             (guard::INTERNAL, &b"path=a.wav"[..])
         );
-        assert!(scene_error(1, b"", 0, b"a.wav").unwrap().context.is_empty());
+        assert!(
+            error(scene_failure(&scene(1, "", Context::None), b"a.wav"))
+                .context
+                .is_empty()
+        );
     }
 
     #[test]

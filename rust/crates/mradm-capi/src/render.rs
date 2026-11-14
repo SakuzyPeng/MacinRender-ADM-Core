@@ -8,9 +8,7 @@
 //! before every step and by the islands, and the progress and log lines forwarded as before.
 use crate::cancel::Flag;
 use crate::context::adm_context_t;
-use crate::error::{
-    Error, Failure, c_str, caught, clear, concat, report, set, try_box, until_nul, utf8_path,
-};
+use crate::error::{Error, Failure, c_str, caught, clear, concat, report, set, try_box, utf8_path};
 use crate::guard;
 use crate::options::adm_render_options_t;
 use crate::query::{Scene, axml, check_view, import_with};
@@ -30,8 +28,6 @@ use mradm_ffi::engine_service::{
 };
 use mradm_ffi::render::RenderPrepared;
 use mradm_ffi::render::apple_island::AppleIslands;
-use mradm_ffi::scene::mradm_scene_export_axml;
-use mradm_ffi::wav::mradm_wav_replace_axml;
 use std::ffi::{c_char, c_void};
 use std::mem::MaybeUninit;
 use std::ptr;
@@ -1163,44 +1159,23 @@ pub(crate) fn export_logged(
     apply_policy_logged(&scene, &display, options, log)?;
     let xml = axml(input)?;
     let locator = concat(&[b"input=", input, b" output=", output])?;
-    let mut message = [0u8; 1024];
-    let mut text = Text::bytes(&[]);
-    let code = unsafe {
-        mradm_scene_export_axml(
-            scene.0,
-            xml.as_ptr(),
-            xml.len(),
-            &mut text,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if code != 0 {
-        return Err(Error::new(code, until_nul(&message), &locator)?.into());
-    }
-    let rewritten = concat(&[bytes(&text)])?;
+    let rewritten = mradm_scene::writeback::patched_axml(scene.render_scene(), &xml)
+        .map_err(|e| Failure::error(e.code, e.message.as_bytes(), &locator))?;
     let source = utf8_path(input).ok_or(Failure::Exception)?;
     let target = utf8_path(output).ok_or(Failure::Exception)?;
-    let mut message = [0u8; 512];
-    let mut context = [0u8; 1024];
-    let code = unsafe {
-        mradm_wav_replace_axml(
-            source.as_ptr(),
-            source.len(),
-            target.as_ptr(),
-            target.len(),
-            rewritten.as_ptr(),
-            rewritten.len(),
-            message.as_mut_ptr(),
-            message.len(),
-            context.as_mut_ptr(),
-            context.len(),
-        )
+    let path = |utf8: &[u8]| -> Result<String, Failure> {
+        match std::str::from_utf8(utf8) {
+            Ok(p) if !p.is_empty() && !p.contains('\0') => Ok(p.to_owned()),
+            _ => Err(Failure::error(1, "WAVE 路径无效".as_bytes(), &locator)),
+        }
     };
-    if code != 0 {
-        return Err(Error::clamped(code, until_nul(&message), &locator)?.into());
-    }
-    Ok(())
+    mradm_render::postprocess::replace_axml(&path(&source)?, &path(&target)?, rewritten.as_bytes())
+        .map_err(
+            |f| match Error::clamped(f.code, f.message.as_bytes(), &locator) {
+                Ok(error) => error.into(),
+                Err(failure) => failure,
+            },
+        )
 }
 
 #[unsafe(no_mangle)]

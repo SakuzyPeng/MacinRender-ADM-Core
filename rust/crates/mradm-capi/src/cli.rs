@@ -2,17 +2,16 @@
 //! `mradm-cli` with this crate's engine entries (the same render driver, scene import, AXML reader,
 //! export and room package entries the C ABI exports use), the APAC encode worker of the audio
 //! island and a SIGINT handler.
-use crate::error::{Failure, concat, until_nul, with_utf8_paths};
+use crate::error::{Failure, with_utf8_paths};
 use crate::options::{Path, adm_render_options_t, file_name};
-use crate::query::{BAD_ALLOC, axml, import_with};
+use crate::query::{BAD_ALLOC, axml, import_with, owned};
 use crate::render::{Sink, drive, export_logged, islands};
 use crate::room::{Config, inspect};
 use crate::scene::screens;
 use mradm_cli::{Event, Facts, Interrupt, Outcome, Platform, Request, Screens, Service};
 use mradm_ffi::adm::Text;
 use mradm_ffi::engine_service::{EnginePath, EngineProgress, EngineRenderRequest};
-use mradm_ffi::room::{RoomProfileHandle, mradm_room_profile_destroy, mradm_room_profile_load};
-use mradm_ffi::scene::{mradm_scene_inspect_text, mradm_scene_template};
+use mradm_ffi::room::RoomProfileHandle;
 use std::ffi::{CString, c_char, c_int};
 use std::io::{Read, Write};
 use std::ptr;
@@ -44,7 +43,7 @@ pub(crate) struct RoomPackage(*mut RoomProfileHandle);
 
 impl Drop for RoomPackage {
     fn drop(&mut self) {
-        unsafe { mradm_room_profile_destroy(self.0) };
+        unsafe { crate::options::release_profile(self.0) };
     }
 }
 
@@ -270,21 +269,10 @@ impl Service for Engine {
     }
 
     fn load_room(&self, manifest: &[u8]) -> Result<RoomPackage, Vec<u8>> {
-        let mut text = [0u8; 512];
-        let mut raw = ptr::null_mut();
-        let code = unsafe {
-            mradm_room_profile_load(
-                manifest.as_ptr(),
-                manifest.len(),
-                &mut raw,
-                text.as_mut_ptr(),
-                text.len(),
-            )
-        };
-        if code != 0 {
-            return Err(until_nul(&text).to_vec());
+        match RoomProfileHandle::load(manifest) {
+            Ok(profile) => Ok(RoomPackage(Box::into_raw(profile))),
+            Err(error) => Err(mradm_ffi::room::error_code(&error).1.as_bytes().to_vec()),
         }
-        Ok(RoomPackage(raw))
     }
 
     fn render(
@@ -318,15 +306,7 @@ impl Service for Engine {
     fn inspect_text(&self, input: &[u8]) -> Result<Vec<u8>, Vec<u8>> {
         with_utf8_paths(|| {
             let scene = import_with(input, true, None, &[])?;
-            let mut text = [0u8; 1024];
-            let mut output = Text::bytes(&[]);
-            let code = unsafe {
-                mradm_scene_inspect_text(scene.0, &mut output, text.as_mut_ptr(), text.len())
-            };
-            if code != 0 {
-                return Err(Failure::error(code, until_nul(&text), b""));
-            }
-            concat(&[bytes(&output)])
+            owned(mradm_engine::scene_json::inspect_text(scene.render_scene()).as_bytes())
         })
         .map_err(message)
     }
@@ -338,14 +318,7 @@ impl Service for Engine {
     fn write_policy_template(&self, input: &[u8], output: &[u8]) -> Result<(), Vec<u8>> {
         let json = with_utf8_paths(|| {
             let scene = import_with(input, true, None, &[])?;
-            let mut text = [0u8; 1024];
-            let mut json = Text::bytes(&[]);
-            let code =
-                unsafe { mradm_scene_template(scene.0, &mut json, text.as_mut_ptr(), text.len()) };
-            if code != 0 {
-                return Err(Failure::error(code, until_nul(&text), b""));
-            }
-            concat(&[bytes(&json)])
+            owned(mradm_scene::report::template(scene.render_scene()).as_bytes())
         })
         .map_err(message)?;
         // `write_policy_json`.

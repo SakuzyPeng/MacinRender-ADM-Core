@@ -10,8 +10,7 @@ use crate::room::{self, adm_room_config_t};
 use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_ffi::adm::Text;
 use mradm_ffi::engine_service::{EnginePath, EngineRenderRequest};
-use mradm_ffi::room::{RoomProfileHandle, mradm_room_profile_destroy};
-use mradm_ffi::scene::{ScreenConfigView, mradm_scene_screen_parse};
+use mradm_ffi::room::RoomProfileHandle;
 use std::ffi::c_char;
 use std::ptr;
 
@@ -27,9 +26,16 @@ pub(crate) struct Room {
     metres: f64,
 }
 
+/// Releases a room profile handle (from `RoomProfileHandle::load` or `share`).
+pub(crate) unsafe fn release_profile(profile: *mut RoomProfileHandle) {
+    if !profile.is_null() {
+        drop(unsafe { Box::from_raw(profile) });
+    }
+}
+
 impl Drop for Room {
     fn drop(&mut self) {
-        unsafe { mradm_room_profile_destroy(self.profile) };
+        unsafe { release_profile(self.profile) };
     }
 }
 
@@ -161,7 +167,7 @@ impl adm_render_options_t {
                 let hrir = match copy(&r.hrir) {
                     Some(hrir) => hrir,
                     None => {
-                        unsafe { mradm_room_profile_destroy(profile) };
+                        unsafe { release_profile(profile) };
                         return None;
                     }
                 };
@@ -860,7 +866,7 @@ pub unsafe extern "C" fn adm_render_options_set_room(
         let hrir = match concat(&[converted.hrir]) {
             Ok(hrir) => hrir,
             Err(_) => {
-                unsafe { mradm_room_profile_destroy(profile) };
+                unsafe { release_profile(profile) };
                 return guard::INTERNAL;
             }
         };
@@ -913,28 +919,12 @@ pub unsafe extern "C" fn adm_render_options_set_screen_config_json(
         if source.len() > MAX_SCREEN_JSON {
             return guard::INVALID_ARGUMENT;
         }
-        let mut view = ScreenConfigView {
-            has_reference: 0,
-            has_reproduction: 0,
-            reference: RoomScreenGeometry::default(),
-            reproduction: RoomScreenGeometry::default(),
+        let screens = match mradm_scene::screen::parse(source) {
+            Ok(screens) => screens,
+            Err(error) => return crate::error::map(error.code),
         };
-        let mut message = [0u8; 1024];
-        let mut message_len = message.len();
-        let code = unsafe {
-            mradm_scene_screen_parse(
-                source.as_ptr(),
-                source.len(),
-                &mut view,
-                message.as_mut_ptr(),
-                &mut message_len,
-            )
-        };
-        if code != 0 {
-            return crate::error::map(code);
-        }
-        let reference = (view.has_reference != 0).then(|| normalized(view.reference));
-        let reproduction = (view.has_reproduction != 0).then(|| normalized(view.reproduction));
+        let reference = screens.reference.map(normalized);
+        let reproduction = screens.reproduction.map(normalized);
         let code = room::validate_screens(reference, reproduction);
         if code != 0 {
             return crate::error::map(code);

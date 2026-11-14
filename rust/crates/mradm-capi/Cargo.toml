@@ -15,6 +15,12 @@ mradm-cli = { path = "../mradm-cli" }
 mradm-ffi = { path = "../mradm-ffi", default-features = false }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-json = { path = "../mradm-json" }
+mradm-adm = { path = "../mradm-adm" }
+mradm-engine = { path = "../mradm-engine" }
+mradm-osc = { path = "../mradm-osc" }
+mradm-render = { path = "../mradm-render" }
+mradm-scene = { path = "../mradm-scene" }
+mradm-wav = { path = "../mradm-wav" }
 
 [features]
 default = ["sofa"]
