@@ -1,6 +1,7 @@
 # 通用 ADM/BWF 读写库接入
 
-本迁移分支将现有 Rust 文件格式实现归入私有仓库 MacinFormat-ADM-Core。
+本仓库通过公开的 [MacinFormat-ADM-Core](https://github.com/SakuzyPeng/MacinFormat-ADM-Core)
+复用 Rust 文件格式实现。
 读取、投影和语义回写保持既有模型与数值行为，不重新设计 Snapshot/records。
 
 - macin-adm 接管原 mradm-adm 的 Document、Snapshot、Patch、生成器及 common definitions 资源。
@@ -12,7 +13,7 @@
 - 许可检查通过 Cargo metadata 定位锁定的 macin-adm 资源，不假设个人目录或 Cargo 缓存位置。
 
 依赖提交由各 Cargo.toml 与 Cargo.lock 固定。正常构建使用 Git 依赖；本地开发可显式启用被忽略的
-Cargo patch 文件，提交前恢复 Git lock。private 阶段只在迁移分支集成，不合入公开发布线。
+Cargo patch 文件，提交前恢复 Git lock。CI 与下游构建直接获取锁定的公开依赖，无需私有仓库凭据。
 
 验收包括 Rust WAVE/Scene 测试、全 workspace Clippy、资源哈希与许可检查、Release 原生构建、
 11 项文件 I/O/导出/CLI/C ABI 定向 CTest，以及 164 个公开导出和 FFI 结构/签名检查。
