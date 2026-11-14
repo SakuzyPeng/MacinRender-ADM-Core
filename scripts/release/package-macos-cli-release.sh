@@ -98,6 +98,9 @@ while IFS= read -r dep; do
     dep_path="$(awk '{print $1}' <<<"$dep")"
     case "$dep_path" in
         /usr/lib/libSystem.B.dylib|/usr/lib/libc++.1.dylib) ;;
+        # Objective-C 运行时（macOS 系统库）：mradm 经 Rust C ABI 链入设备岛，其中含 Objective-C++ 的
+        # AVSampleBuffer 系统空间 sink（src/adm_apple/avsamplebuffer_device.mm）。
+        /usr/lib/libobjc.A.dylib) ;;
         # 任何 Apple 系统 framework 都不随发行物再分发（macOS 平台提供），一律放行；
         # 与 package-macos-gui-release.sh 的白名单口径一致，避免每次新增系统 framework 依赖就打地鼠。
         # 真正的再分发风险（Homebrew / /usr/local）已由上方独立检查拦截。
