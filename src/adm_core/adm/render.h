@@ -25,11 +25,6 @@ struct RenderSceneHandle;
 
 struct DirectSpeakersMatrix;
 
-struct Diagnostic {
-    LogLevel level{LogLevel::info};
-    std::string message;
-};
-
 // Inline measurement results from the renderer's render loop.
 // Both fields are nullopt when the signal is silence or too short for gating.
 // For HOA outputs, LUFS is measured via an AllRAD 7.1.4 decode (spatial domain).
@@ -37,20 +32,6 @@ struct Diagnostic {
 struct RenderMetrics {
     std::optional<double> measured_lufs;      // BS.1770-4 integrated loudness (LUFS)
     std::optional<double> measured_peak_dbtp; // ITU-R BS.1770-4 True Peak (dBTP)
-};
-
-struct RenderResult {
-    Error error;
-    std::optional<std::filesystem::path> output_path;
-    std::optional<RenderMetrics> metrics;
-    std::vector<Diagnostic> diagnostics;
-    // Effective semantic-policy report JSON (UTF-8), populated when the request set
-    // RenderOptions::capture_semantic_report. nullopt otherwise. The default member
-    // initializer lets the many aggregate error-returns omit this trailing field
-    // without tripping -Wmissing-field-initializers.
-    std::optional<std::string> semantic_report_json = std::nullopt;
-
-    [[nodiscard]] bool success() const noexcept { return error.ok(); }
 };
 
 // Restricts a backend's inline loudness / True-Peak measurement to a frame
@@ -130,11 +111,6 @@ struct RenderPlan {
     std::function<void(std::string)> renderer_semantics_sink{};
     RoomConfig room{};
     ScreenConfig screens{};
-};
-
-// A policy-applied Rust render scene, imported once for many renders.
-struct PreparedScene {
-    std::shared_ptr<const detail::RenderSceneHandle> handle;
 };
 
 } // namespace mradm

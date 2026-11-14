@@ -8,6 +8,7 @@
 #include "adm/errors.h"
 #include "adm/io.h"
 #include "adm/render.h"
+#include "adm/renderer.h"
 #include "adm/scene.h"
 
 namespace mradm {

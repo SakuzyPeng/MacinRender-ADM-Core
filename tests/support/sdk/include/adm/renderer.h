@@ -1,14 +1,18 @@
 #pragma once
 
-// The C++ backend interfaces the test renderers, the file streams and the SDK's RenderService
+// The render results and C++ backend interfaces the test renderers, the file streams and the SDK's RenderService
 // drive. Production calls the Apple backend directly (src/adm_apple/apple_backend.h).
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stop_token>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "adm/capability.h"
 #include "adm/errors.h"
@@ -19,6 +23,30 @@
 #include "adm/room.h"
 
 namespace mradm {
+
+struct Diagnostic {
+    LogLevel level{LogLevel::info};
+    std::string message;
+};
+
+struct RenderResult {
+    Error error;
+    std::optional<std::filesystem::path> output_path;
+    std::optional<RenderMetrics> metrics;
+    std::vector<Diagnostic> diagnostics;
+    // Effective semantic-policy report JSON (UTF-8), populated when the request set
+    // RenderOptions::capture_semantic_report. nullopt otherwise. The default member
+    // initializer lets the many aggregate error-returns omit this trailing field
+    // without tripping -Wmissing-field-initializers.
+    std::optional<std::string> semantic_report_json = std::nullopt;
+
+    [[nodiscard]] bool success() const noexcept { return error.ok(); }
+};
+
+// A policy-applied Rust render scene, imported once for many renders.
+struct PreparedScene {
+    std::shared_ptr<const detail::RenderSceneHandle> handle;
+};
 
 // Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,
 // HRTF tables, decoders). Opaque base; each backend returns its own derived type and
