@@ -40,10 +40,10 @@ class Digest {
         }
     }
     void bytes(const Bytes& data) { bytes(data.data(), data.size()); }
-    void text(std::string_view value) { bytes(reinterpret_cast<const uint8_t*>(value.data()), value.size()); }
-    void number(uint64_t value) {
+    void text(std::string_view input) { bytes(reinterpret_cast<const uint8_t*>(input.data()), input.size()); }
+    void number(uint64_t input) {
         for (int shift = 0; shift < 64; shift += 8) {
-            state_ = (state_ ^ ((value >> static_cast<unsigned>(shift)) & 0xFFU)) * 0x100000001b3ULL;
+            state_ = (state_ ^ ((input >> static_cast<unsigned>(shift)) & 0xFFU)) * 0x100000001b3ULL;
         }
     }
     [[nodiscard]] uint64_t value() const { return state_; }
@@ -58,6 +58,7 @@ struct Goldens {
     Digest read;
     Digest replace;
     Digest scan;
+    int cases{0};
 };
 Goldens& goldens() {
     static Goldens value;
@@ -281,18 +282,13 @@ template <typename T> int code_of(const mradm::Result<T>& result) {
     return result ? 0 : static_cast<int>(result.error().code);
 }
 
-int& case_count() {
-    static int count = 0;
-    return count;
-}
-
 void record(Digest& digest, const std::string& name, const Outcome& outcome) {
     digest.text(name);
     digest.number(static_cast<uint64_t>(static_cast<int64_t>(outcome.first)));
     if (outcome.first == 0) {
         digest.bytes(outcome.second);
     }
-    ++case_count();
+    ++goldens().cases;
 }
 
 // Runs an in-place operation on a copy of `source`.
@@ -421,10 +417,10 @@ void read_golden(const fs::path& root, const Fixture& fixture) {
     if (actual) {
         digest.text(actual->axml);
         std::map<std::string, uint16_t> uid_to_channel;
-        for (const auto& record : actual->chna) {
-            require(record.track_index != 0U, "read " + fixture.name + ": unexpected track index 0");
-            if (auto uid = normalize_uid(record.uid); !uid.empty()) {
-                uid_to_channel[uid] = static_cast<uint16_t>(record.track_index - 1U);
+        for (const auto& entry : actual->chna) {
+            require(entry.track_index != 0U, "read " + fixture.name + ": unexpected track index 0");
+            if (auto uid = normalize_uid(entry.uid); !uid.empty()) {
+                uid_to_channel[uid] = static_cast<uint16_t>(entry.track_index - 1U);
             }
         }
         digest.number(uid_to_channel.size());
@@ -437,7 +433,7 @@ void read_golden(const fs::path& root, const Fixture& fixture) {
             require(axml && *axml == actual->axml, "read " + fixture.name + ": get_axml differs");
         }
     }
-    ++case_count();
+    ++goldens().cases;
 }
 
 void replace_golden(const fs::path& root, const Fixture& fixture) {
@@ -463,7 +459,7 @@ void scan_case(const fs::path& path, const std::string& label) {
         state = *actual ? 2U : 1U;
     }
     digest.number(state);
-    ++case_count();
+    ++goldens().cases;
 }
 
 void scan_golden(const fs::path& root, const std::vector<Fixture>& all) {
@@ -657,12 +653,12 @@ int main() {
             {"replace", {goldens().replace.value(), k_replace_digest}},
             {"scan", {goldens().scan.value(), k_scan_digest}},
         }};
-        bool same = case_count() == k_case_count;
+        bool same = goldens().cases == k_case_count;
         for (const auto& [name, values] : digests) {
             same = same && values.first == values.second;
         }
         if (!same) {
-            std::cerr << "WAVE container golden mismatch: " << case_count() << " cases (expected " << k_case_count
+            std::cerr << "WAVE container golden mismatch: " << goldens().cases << " cases (expected " << k_case_count
                       << ")\n";
             for (const auto& [name, values] : digests) {
                 std::cerr << "  " << name << " 0x" << std::hex << values.first << " (expected 0x" << values.second
@@ -670,7 +666,7 @@ int main() {
             }
             return 1;
         }
-        std::cout << case_count() << " WAVE container cases match the golden digests\n";
+        std::cout << goldens().cases << " WAVE container cases match the golden digests\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

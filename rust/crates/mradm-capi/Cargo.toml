@@ -15,7 +15,7 @@ mradm-cli = { path = "../mradm-cli" }
 mradm-ffi = { path = "../mradm-ffi", default-features = false }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-json = { path = "../mradm-json" }
-mradm-adm = { path = "../mradm-adm" }
+mradm-adm = { package = "macin-adm", git = "https://github.com/SakuzyPeng/MacinFormat-ADM-Core", rev = "158b1760e22ca87dc5a8a6b4a56d511581d4c86f" }
 mradm-engine = { path = "../mradm-engine" }
 mradm-osc = { path = "../mradm-osc" }
 mradm-render = { path = "../mradm-render" }

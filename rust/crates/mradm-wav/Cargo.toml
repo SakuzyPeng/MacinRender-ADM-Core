@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+macin-bwf = { git = "https://github.com/SakuzyPeng/MacinFormat-ADM-Core", rev = "158b1760e22ca87dc5a8a6b4a56d511581d4c86f" }
 
 [dev-dependencies]
 mradm-json = { path = "../mradm-json" }

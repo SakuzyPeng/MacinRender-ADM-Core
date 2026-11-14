@@ -173,7 +173,8 @@ C++ 模块 ──→ ADMDsp ──→ mradm-capi（Rust staticlib，含 mradm-ff
 | `ADMEngine` / `ADMCAPI` | `RenderService` 编排与稳定 C ABI |
 | `rust/crates/mradm-dsp` | FFT、VBAP、HRTF/SOFA、卷积、OM spreader、重采样、计量、HOA、Monitor 等数值 DSP |
 | `rust/crates/mradm-ear` | 移植自 libear 的布局、增益与 FIR 设计 |
-| `rust/crates/mradm-adm` / `mradm-wav` | ADM XML 元数据；WAVE / RF64 / BW64 与 CAF 读写、容器编辑 |
+| `macin-adm` / `macin-bwf`（共享依赖） | ADM XML 元数据与 WAVE / RF64 / BW64 读写、容器编辑；见[共享格式库](docs/architecture/SHARED_ADM_FORMAT.md) |
+| `rust/crates/mradm-wav` | 重导出共享 BWF 实现，并提供 CAF / FLAC 功能 |
 | `rust/crates/mradm-math` | 跨平台逐位一致的可移植 sin/cos |
 | `rust/crates/mradm-osc` | PoseBridge OSC 头追踪数据报解码（回环 UDP 输入） |
 | `rust/crates/mradm-scene` | 渲染场景：输入导入、CHNA 映射、声道床与扬声器布局表；语义策略、报告与模板、导出回写、DirectSpeakers 矩阵与屏幕配置 |

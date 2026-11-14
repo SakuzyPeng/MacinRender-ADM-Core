@@ -15,7 +15,9 @@ fn main() {
 
 /// `adm_api_version_*` return the version macros of `c_api.h`, the one place they are set.
 fn version() {
-    let header = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../include/adm/c_api.h");
+    // Resolve the active Cargo invocation, including when the build-script binary is cached.
+    let manifest = std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let header = Path::new(&manifest).join("../../../include/adm/c_api.h");
     println!("cargo::rerun-if-changed={}", header.display());
     let text = std::fs::read_to_string(&header).expect("include/adm/c_api.h");
     let macro_value = |name: &str| -> i32 {

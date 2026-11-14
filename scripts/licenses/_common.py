@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 SCHEMA = "mradm.third-party-manifest.v1"
@@ -49,3 +51,15 @@ def cyclonedx_license_entry(license_str: str) -> dict:
     if license_str.startswith("LicenseRef-"):
         return {"license": {"name": license_str}}
     return {"license": {"id": license_str}}
+
+
+@lru_cache(maxsize=None)
+def cargo_package_root(name: str) -> Path:
+    """Resolve the locked dependency instead of assuming a sibling checkout or Cargo cache path."""
+    rust = repo_root() / 'rust'
+    result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version', '1'],
+                            cwd=rust, check=True, stdout=subprocess.PIPE, text=True)
+    packages = [p for p in json.loads(result.stdout)['packages'] if p['name'] == name]
+    if len(packages) != 1:
+        raise RuntimeError(f'Expected exactly one locked {name} package')
+    return Path(packages[0]['manifest_path']).parent

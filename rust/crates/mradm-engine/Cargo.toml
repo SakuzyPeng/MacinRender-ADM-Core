@@ -7,7 +7,7 @@ license.workspace = true
 description = "Render orchestration: backend capability catalog, discovery JSON and the offline render service"
 
 [dependencies]
-mradm-adm = { path = "../mradm-adm" }
+mradm-adm = { package = "macin-adm", git = "https://github.com/SakuzyPeng/MacinFormat-ADM-Core", rev = "158b1760e22ca87dc5a8a6b4a56d511581d4c86f" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-json = { path = "../mradm-json" }
 mradm-render = { path = "../mradm-render" }
