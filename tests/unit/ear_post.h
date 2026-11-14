@@ -13,7 +13,6 @@
 namespace mradm::dsp {
 class EarFilters {
   public:
-    static constexpr std::size_t k_taps = 512U;
     [[nodiscard]] static Result<EarFilters>
     create(std::size_t channels, std::span<const float> firs, std::size_t delay) {
         EarFilters result;

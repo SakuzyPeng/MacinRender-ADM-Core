@@ -6,7 +6,6 @@
 #include "adm/errors.h"
 #include "adm/scene.h"
 
-#include "../ffi/scene_test_ffi.h"
 #include "audio_io_internal.h"
 #include "speaker_layouts.h"
 

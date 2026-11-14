@@ -232,4 +232,5 @@ cppcheck \
     --error-exitcode=2 \
     --suppressions-list="$repo_root/CppcheckSuppressions.txt" \
     -I "$repo_root/include" \
+    -I "$repo_root/tests/support/ffi" \
     "${analysis_files[@]}"

@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "../adm_core/config_ffi.h"
+#include "../adm_metadata/adm_ffi.h"
 #include "../adm_metadata/scene_ffi.h"
 #include "routing_ffi.h"
 #ifdef __cplusplus
