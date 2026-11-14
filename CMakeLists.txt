@@ -343,7 +343,13 @@ target_sources(
             include/adm/c_api.h
 )
 
-target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMIslands MacinRender::ADMAudio)
+target_link_libraries(mr_adm_c_api
+    PUBLIC MacinRender::ADMIslands MacinRender::ADMAudio
+    PRIVATE mradm_capi
+)
+if(APPLE)
+    target_link_libraries(mr_adm_c_api PRIVATE MacinRender::ADMRenderApple)
+endif()
 set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -363,8 +369,24 @@ if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
     endforeach()
 endif()
 get_target_property(_mr_c_api_type mr_adm_c_api TYPE)
+if(_mr_c_api_type STREQUAL "SHARED_LIBRARY" OR MR_ADM_BUILD_CAPI_BUNDLE)
+    # Keep every public Rust entry reachable in each shared C ABI target.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(_mr_capi_references "${CMAKE_CURRENT_BINARY_DIR}/generated/mradm_capi_entries.c")
+    add_custom_command(
+        OUTPUT "${_mr_capi_references}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
+            --write-references "${_mr_capi_references}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/adm/c_api.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
+        COMMENT "Generating the C ABI entry table from c_api.h"
+        VERBATIM
+    )
+endif()
 if(_mr_c_api_type STREQUAL "STATIC_LIBRARY")
     target_link_options(mr_adm_c_api INTERFACE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
+else()
+    target_sources(mr_adm_c_api PRIVATE "${_mr_capi_references}")
 endif()
 mr_adm_core_apply_warnings(mr_adm_c_api)
 mr_adm_core_apply_static_analysis(mr_adm_c_api)
@@ -382,21 +404,8 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         VERSION   ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
     )
-    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMIslands MacinRender::ADMAudio)
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMIslands MacinRender::ADMAudio mradm_capi)
     target_link_options(mradm_capi_bundle PRIVATE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
-    # A table naming every function c_api.h declares: the exports implemented in Rust live in
-    # the mradm-capi staticlib, and nothing else in this DSO calls them.
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    set(_mr_capi_references "${CMAKE_CURRENT_BINARY_DIR}/generated/mradm_capi_entries.c")
-    add_custom_command(
-        OUTPUT "${_mr_capi_references}"
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
-            --write-references "${_mr_capi_references}"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/adm/c_api.h"
-            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
-        COMMENT "Generating the C ABI entry table from c_api.h"
-        VERBATIM
-    )
     target_sources(mradm_capi_bundle PRIVATE "${_mr_capi_references}")
     target_include_directories(mradm_capi_bundle PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
     # Keep Rust's allocator/panic machinery and every private DSP symbol inside
@@ -415,6 +424,7 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         )
         target_sources(mradm_capi_bundle PRIVATE "${_mr_capi_def}")
     elseif(APPLE)
+        target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMRenderApple)
         target_link_options(mradm_capi_bundle PRIVATE
             "LINKER:-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/cmake/mradm-capi.exports")
     elseif(UNIX)
