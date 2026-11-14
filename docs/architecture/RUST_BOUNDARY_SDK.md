@@ -1,6 +1,6 @@
 # 删除 C++ 外壳与 SDK（六期 6.5）
 
-> 状态：进行中（A、B、C、D 批完成，2026-11-14）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
+> 状态：已完成（2026-11-14），CI 三平台验收通过；维护者的 macOS arm64 / Windows x64 原生复核待办。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
 
 6.3 / 6.4 之后，公开 C ABI 与 `mradm` CLI 都由 Rust 实现，生产只需要 Rust 按名调用的岛（编码器与容器元数据、APAC worker、
 Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度回调跳板。6.5 把其余 C++（会话外壳、C++ SDK 头、其实现与打包）删出生产：
@@ -129,3 +129,45 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 - Apple 岛与 Apple 测试只能由 macOS CI 编译运行。本机以替身 `AudioToolbox.h` 对 `spatial_mixer_renderer.cpp`、`apple_island.cpp`、
   测试适配器与三个 Apple 测试做了只检查语法的编译；
 - 规模：生产 C/C++ 9,674 → 9,432 行，岛 3,045 → 3,028 行。
+- 分支 CI（macOS / Windows / Linux / ARM64）通过，macOS 首次编译运行 Apple 岛与三个 Apple 测试；Quality 首次因两个移到测试 SDK 的
+  头被 cppcheck 单独检查报 `unusedStructMember` 失败，加与 FFI 头相同的行内抑制（`a5063a9`）后通过。
+
+## E 批：三平台验收
+
+对象为合并 A–D 后的 main `55cd757`（分支同一提交）：
+
+| 工作流 | 结果 |
+| --- | --- |
+| CI（push） | 通过：macOS / Windows / Linux debug 与 Linux ARM64 Release |
+| Consistency（push） | 通过：三平台 A/B 采集，`gates.json` 的全部内核与 294 个 PCM 用例跨平台位相等 |
+| Quality（push，full） | 通过：Rust fmt / clippy、FFI 头校验、`check-all.sh` |
+| Reference tests（手动） | 通过：各 `MR_ADM_BUILD_*_REFERENCE_TESTS` 对照 |
+| Release Build（手动，不发布） | 修正后通过（`8e777d8`，run 43578966428）：macOS / Windows CLI 包、Linux AppImage、两个 GUI 包与各自 smoke |
+
+- **Release 的修正**：五期结项（`2207538`）之后第一次运行 Release Build，macOS CLI 打包的依赖白名单拒绝
+  `/usr/lib/libobjc.A.dylib`。`mradm` 经 Rust C ABI 链入设备岛，其中含 Objective-C++ 的 AVSampleBuffer 系统空间 sink，
+  因此依赖 Objective-C 运行时；它是 macOS 系统库、不随包分发，`package-macos-cli-release.sh` 只放行这一项（GUI 包早已放行
+  `/usr/lib/*`），Homebrew / `/usr/local` 检查不变（`8e777d8`）。Windows CLI、Linux AppImage 与两个 GUI 包（含 P/Invoke smoke）
+  在修正前就已通过。
+- **本机 Linux x64**：关闭测试的 Release（C ABI bundle）构建 `cmake --install` 恰好安装 `include/adm/c_api.h`、`libmradm_capi.so*` 与
+  `bin/mradm`，不获取 fmt / nlohmann_json / tl-expected；`check-capi-exports.py` 确认共享库恰好导出 164 个 `adm_*`；各批的 CLI 记录、
+  C ABI 采集与完整一致性采集对照见上文，全部 0 差异。
+- **待维护者**：macOS arm64 与 Windows x64 的原生复核（规范构建、完整 CTest、Apple 后端与系统空间监听实机、GUI 包实机），照
+  AGENTS.md 的主机验收；IAMF 启用配置。
+
+## 规模
+
+| 时点 | 生产 C/C++ | 岛 | 岛接口 |
+| --- | ---: | ---: | ---: |
+| 6.5 之前（6.4 结束） | 15,314 | 3,045 | 1,026 |
+| A：测试专用外壳与 SDK 移出 | 11,380 | 3,045 | 1,026 |
+| B：无调用者的 FFI 与测试专用声明 | 9,768 | 3,045 | 1,026 |
+| C：`include/adm` 只剩 `c_api.h`、自有 `Result` | 9,674 | 3,045 | 1,026 |
+| D：Apple 岛去 `IRenderer` / `IRenderStream` | 9,432 | 3,028 | 1,057 |
+
+岛接口的增加是 D 批新登记的 `apple_backend.h`（218 行，流表从 `apple_island.cpp` 移入，后者 353 → 166 行）。测试侧随之增加
+（56,241 → 62,400 行），只供测试的 SDK、头与适配器都在 `tests/support`。
+
+移交 6.6（构建以 Cargo 为主、cdylib）：生产 C/C++ 只剩岛、编码器与容器元数据、两个进度回调跳板（`adm_c_api.cpp`，仍待另行决定）与
+`src/adm_core/adm` 中岛共用的头（`render.h` 只剩 Apple 岛用的计划、计量与窗口记录）。`src` 的私有 FFI 头只保留生产 C/C++ 使用的记录与入口，
+其余声明位于 `tests/support`、`tests/unit` 等测试目录。`mradm-ffi` 共保留 391 个函数导出，其中包含测试与工具使用的入口。
