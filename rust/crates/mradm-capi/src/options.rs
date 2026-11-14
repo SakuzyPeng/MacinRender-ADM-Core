@@ -8,10 +8,11 @@ use crate::error::{Failure, c_str, concat, try_box, utf8_path};
 use crate::guard;
 use crate::room::{self, adm_room_config_t};
 use mradm_dsp::room::screen::RoomScreenGeometry;
+use mradm_engine::backend::Screens as EngineScreens;
+use mradm_engine::render::{PathText, Request as EngineRequest, RoomOptions, SofaPath};
 use mradm_ffi::adm::Text;
 use mradm_ffi::engine_service::{EnginePath, EngineRenderRequest};
-use mradm_ffi::room::{RoomProfileHandle, mradm_room_profile_destroy};
-use mradm_ffi::scene::{ScreenConfigView, mradm_scene_screen_parse};
+use mradm_ffi::room::RoomProfileHandle;
 use std::ffi::c_char;
 use std::ptr;
 
@@ -27,9 +28,16 @@ pub(crate) struct Room {
     metres: f64,
 }
 
+/// Releases a room profile handle (from `RoomProfileHandle::load` or `share`).
+pub(crate) unsafe fn release_profile(profile: *mut RoomProfileHandle) {
+    if !profile.is_null() {
+        drop(unsafe { Box::from_raw(profile) });
+    }
+}
+
 impl Drop for Room {
     fn drop(&mut self) {
-        unsafe { mradm_room_profile_destroy(self.profile) };
+        unsafe { release_profile(self.profile) };
     }
 }
 
@@ -161,7 +169,7 @@ impl adm_render_options_t {
                 let hrir = match copy(&r.hrir) {
                     Some(hrir) => hrir,
                     None => {
-                        unsafe { mradm_room_profile_destroy(profile) };
+                        unsafe { release_profile(profile) };
                         return None;
                     }
                 };
@@ -331,6 +339,112 @@ impl adm_render_options_t {
             _labels: labels,
             _layers: layers,
         })
+    }
+}
+
+/// A path as the engine request holds it; `None` when it is not UTF-8 or contains NUL.
+pub(crate) fn path_text(utf8: &[u8]) -> Option<PathText> {
+    let text = std::str::from_utf8(utf8).ok()?;
+    if text.contains('\0') {
+        return None;
+    }
+    Some(PathText {
+        utf8: text.to_owned(),
+        display: text.to_owned(),
+    })
+}
+
+/// Text the engine matches as ASCII; other bytes become replacement characters.
+pub(crate) fn lossy(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+impl adm_render_options_t {
+    /// The engine request of a render of `input` (and `output`) with these options; `None` when a
+    /// path is not UTF-8 or contains NUL.
+    pub(crate) fn engine_request(
+        &self,
+        input: &[u8],
+        output: Option<&[u8]>,
+    ) -> Result<Option<EngineRequest>, Failure> {
+        let opt_path = |p: &Option<Path>| -> Option<Option<PathText>> {
+            match p {
+                None => Some(None),
+                Some(p) => path_text(&p.utf8).map(Some),
+            }
+        };
+        let request = (|| {
+            Some(EngineRequest {
+                input: path_text(input)?,
+                output: match output {
+                    None => None,
+                    Some(o) => Some(path_text(o)?),
+                },
+                renderer: self.renderer,
+                output_layout: lossy(&self.output_layout),
+                input_layout: self.input_layout.as_deref().map(lossy),
+                input_channel_labels: self.input_channel_labels.iter().map(|l| lossy(l)).collect(),
+                measure_loudness: self.measure_loudness,
+                loudness_target_lufs: self.loudness_target_lufs,
+                peak_limit: self.peak_limit,
+                peak_limit_dbtp: self.peak_limit_dbtp,
+                peak_normalize_to_limit: self.peak_normalize_to_limit,
+                final_gain_db: self.final_gain_db,
+                output_bit_depth: self.output_bit_depth,
+                opus_bitrate_per_ch_kbps: self.opus_bitrate_per_ch_kbps,
+                apac_bitrate_kbps: self.apac_bitrate_kbps,
+                apac_drc_music: self.apac_drc_music,
+                apac_caf: self.apac_caf,
+                sofa: match &self.sofa {
+                    None => None,
+                    Some(p) => Some(SofaPath {
+                        path: path_text(&p.utf8)?,
+                        file_name: self.sofa_file_name.clone(),
+                    }),
+                },
+                semantic_policy_path: opt_path(&self.semantic_policy_path)?,
+                semantic_policy_json: self.semantic_policy_json.clone(),
+                matrix_path: opt_path(&self.direct_speakers_matrix_path)?,
+                matrix_json: self.direct_speakers_matrix_json.clone(),
+                semantic_report_path: opt_path(&self.semantic_report_path)?,
+                capture_semantic_report: self.capture_semantic_report,
+                default_interp_ms: self.default_interp_ms,
+                object_smoothing_frames: self.object_smoothing_frames,
+                apple_geometry: self.speaker_geometry == 1,
+                routing: self.direct_speakers_routing_mode,
+                speaker_spread: self.speaker_spread_mode,
+                triple_balance_mode: self.triple_balance_mode,
+                binaural_spread: self.binaural_spread_mode,
+                split_power: self.lfe_routing_mode == 1,
+                apple_spatial_preset: 0,
+                apple_speaker_rendering_flags: self.apple_speaker_rendering_flags,
+                listener_orientation: [0.0; 3],
+                render_start_sec: self.render_start_sec,
+                render_end_sec: self.render_end_sec,
+                room: self.room.as_ref().map_or_else(
+                    || RoomOptions {
+                        quality: self.room_quality,
+                        ..RoomOptions::default()
+                    },
+                    |r| RoomOptions {
+                        package: unsafe { r.profile.as_ref() }.map(RoomProfileHandle::package),
+                        hrir: r.hrir.clone(),
+                        metres: r.metres,
+                        quality: self.room_quality,
+                    },
+                ),
+                screens: EngineScreens {
+                    has_reference: self.screen_reference.is_some(),
+                    reference: self.screen_reference.unwrap_or_default(),
+                    has_reproduction: self.screen_reproduction.is_some(),
+                    reproduction: self.screen_reproduction.unwrap_or_default(),
+                },
+                internal_allow_speaker_stereo: false,
+                iamf_mp4: self.iamf_mp4,
+                iamf_layers: self.iamf_layers.iter().map(|l| lossy(l)).collect(),
+            })
+        })();
+        Ok(request)
     }
 }
 
@@ -860,7 +974,7 @@ pub unsafe extern "C" fn adm_render_options_set_room(
         let hrir = match concat(&[converted.hrir]) {
             Ok(hrir) => hrir,
             Err(_) => {
-                unsafe { mradm_room_profile_destroy(profile) };
+                unsafe { release_profile(profile) };
                 return guard::INTERNAL;
             }
         };
@@ -913,28 +1027,12 @@ pub unsafe extern "C" fn adm_render_options_set_screen_config_json(
         if source.len() > MAX_SCREEN_JSON {
             return guard::INVALID_ARGUMENT;
         }
-        let mut view = ScreenConfigView {
-            has_reference: 0,
-            has_reproduction: 0,
-            reference: RoomScreenGeometry::default(),
-            reproduction: RoomScreenGeometry::default(),
+        let screens = match mradm_scene::screen::parse(source) {
+            Ok(screens) => screens,
+            Err(error) => return crate::error::map(error.code),
         };
-        let mut message = [0u8; 1024];
-        let mut message_len = message.len();
-        let code = unsafe {
-            mradm_scene_screen_parse(
-                source.as_ptr(),
-                source.len(),
-                &mut view,
-                message.as_mut_ptr(),
-                &mut message_len,
-            )
-        };
-        if code != 0 {
-            return crate::error::map(code);
-        }
-        let reference = (view.has_reference != 0).then(|| normalized(view.reference));
-        let reproduction = (view.has_reproduction != 0).then(|| normalized(view.reproduction));
+        let reference = screens.reference.map(normalized);
+        let reproduction = screens.reproduction.map(normalized);
         let code = room::validate_screens(reference, reproduction);
         if code != 0 {
             return crate::error::map(code);

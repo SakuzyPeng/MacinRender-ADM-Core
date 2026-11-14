@@ -25,6 +25,35 @@ fn boundary(message: *mut u8, capacity: usize, call: impl FnOnce() -> Result<()>
     crate::boundary(message, capacity, call)
 }
 
+/// One room call outside the C boundary: the room floating-point environment (and on Windows the
+/// worker start hook) around `call`. Panics are the caller's to catch.
+pub fn in_environment<T>(call: impl FnOnce() -> Result<T>) -> Result<T> {
+    #[cfg(windows)]
+    mradm_dsp::room::set_worker_start_hook(crate::room_environment::start_worker);
+    let _environment = crate::room_environment::Environment::enter();
+    call()
+}
+
+/// The status code and message the room boundary reports for `error`.
+pub fn error_code(error: &Error) -> (i32, &'static str) {
+    match *error {
+        Error::InvalidArgument(s) => (1, s),
+        Error::Unsupported(s) => (2, s),
+        Error::Io(s) => (3, s),
+        Error::RenderFailed(s) => (4, s),
+    }
+}
+
+/// Every screen mapping is valid (`mradm_room_validate_screens`).
+pub fn validate_screens(screens: &[RoomScreens]) -> Result<()> {
+    in_environment(|| {
+        for value in screens {
+            Mapping::new(*value)?;
+        }
+        Ok(())
+    })
+}
+
 /// The room boundary of one call the Rust room runtime makes (formerly one C++ FFI call): the
 /// room floating-point environment, and panics as `(6, "Rust DSP panic")`.
 pub(crate) fn scope(call: &mut dyn FnMut() -> Result<()>) -> std::result::Result<(), Fault> {
@@ -61,6 +90,25 @@ pub struct RoomProfileHandle {
     json: CString,
 }
 impl RoomProfileHandle {
+    /// Loads the room package at `path` (`mradm_room_profile_load`).
+    pub fn load(path: &[u8]) -> Result<Box<Self>> {
+        in_environment(|| {
+            let package = Arc::new(loading::load_package(path)?);
+            let json = CString::new(package.manifest.clone()).map_err(|_| invalid())?;
+            Ok(Box::new(Self { package, json }))
+        })
+    }
+
+    /// The package manifest JSON.
+    pub fn manifest(&self) -> &std::ffi::CStr {
+        &self.json
+    }
+
+    /// The loaded package, shared with the handle.
+    pub fn package(&self) -> Arc<Package> {
+        Arc::clone(&self.package)
+    }
+
     /// A second handle on the same loaded package (destroyed with `mradm_room_profile_destroy`);
     /// `None` when out of memory.
     pub fn share(&self) -> Option<*mut RoomProfileHandle> {
@@ -87,6 +135,40 @@ pub struct RoomPreparedHandle {
     prepared: Arc<PreparedSet>,
     json: CString,
     cuda: bool,
+}
+impl RoomPreparedHandle {
+    /// Prepares the room for `profile` (`mradm_room_prepare_quality`): the HRIR manifest and SOFA
+    /// paths (empty for none), an earlier preparation to reuse, the quality and the distance scale.
+    pub fn prepare(
+        profile: &RoomProfileHandle,
+        hrir: &[u8],
+        sofa: &[u8],
+        reuse: Option<&RoomPreparedHandle>,
+        quality: u32,
+        metres: f64,
+    ) -> Result<Box<Self>> {
+        in_environment(|| {
+            let (prepared, cuda, metadata) = prepare_set(
+                &profile.package,
+                hrir,
+                sofa,
+                reuse.map(|r| (&*r.prepared, r.cuda)),
+                quality,
+                metres,
+            )?;
+            let json = description(&prepared, metres, metadata)?;
+            Ok(Box::new(Self {
+                prepared,
+                json,
+                cuda,
+            }))
+        })
+    }
+
+    /// The prepared room's description JSON.
+    pub fn description(&self) -> &std::ffi::CStr {
+        &self.json
+    }
 }
 
 #[derive(Clone, Copy, Default)]

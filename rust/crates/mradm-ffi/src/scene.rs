@@ -176,9 +176,44 @@ fn user_mute(user: UserLevel) -> u32 {
 }
 
 impl SceneHandle {
-    pub(crate) fn scene(&self) -> &RenderScene {
+    pub fn scene(&self) -> &RenderScene {
         &self.scene
     }
+    /// A render request's semantic policy applied to the scene (`mradm_engine_apply_policy`): the
+    /// in-memory JSON preferred over the file, with the warnings as log lines.
+    pub fn apply_policy(
+        &mut self,
+        json: Option<&[u8]>,
+        path: Option<&mradm_engine::render::PathText>,
+        display: &str,
+    ) -> mradm_engine::request::Outcome<()> {
+        let outcome = mradm_engine::render::apply_policy(&mut self.scene, json, path, display);
+        self.refresh();
+        outcome
+    }
+
+    /// The import `mradm_scene_import` makes: `routed` false imports ADM BW64 only; true routes to
+    /// ADM or a channel bed by the layout and labels. `path` is UTF-8.
+    pub fn import(
+        path: &[u8],
+        routed: bool,
+        layout: Option<&str>,
+        labels: &[String],
+    ) -> mradm_scene::Result<Box<Self>> {
+        let scene = if routed {
+            mradm_scene::import(
+                path,
+                ImportOptions {
+                    input_layout: layout,
+                    input_channel_labels: labels,
+                },
+            )?
+        } else {
+            mradm_scene::import_adm(path)?
+        };
+        Ok(Box::new(Self::new(scene)))
+    }
+
     pub(crate) fn new(scene: RenderScene) -> Self {
         let mut handle = Self {
             texts: scene
@@ -368,8 +403,8 @@ pub unsafe extern "C" fn mradm_scene_import(
             *output = ptr::null_mut();
         }
         let path = unsafe { bytes(path, path_len)? };
-        let scene = if routed == 0 {
-            mradm_scene::import_adm(path)?
+        let handle = if routed == 0 {
+            SceneHandle::import(path, false, None, &[])?
         } else {
             let layout = if has_layout != 0 {
                 Some(unsafe { lossy(layout)? })
@@ -377,16 +412,10 @@ pub unsafe extern "C" fn mradm_scene_import(
                 None
             };
             let labels = unsafe { labels(input_labels, input_labels_len)? };
-            mradm_scene::import(
-                path,
-                ImportOptions {
-                    input_layout: layout.as_deref(),
-                    input_channel_labels: &labels,
-                },
-            )?
+            SceneHandle::import(path, true, layout.as_deref(), &labels)?
         };
         unsafe {
-            *output = Box::into_raw(Box::new(SceneHandle::new(scene)));
+            *output = Box::into_raw(handle);
         }
         Ok(())
     })

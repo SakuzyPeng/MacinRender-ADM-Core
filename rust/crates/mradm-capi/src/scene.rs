@@ -41,8 +41,7 @@ use mradm_ffi::render::room_ffi::{
 use mradm_ffi::render::{
     EngineSceneRendererRequest, RenderLiveEntry, RenderLiveState, RenderLiveUpdate,
 };
-use mradm_ffi::room::{RoomSourceInfo, mradm_room_validate_screens};
-use mradm_ffi::scene::{ScreenConfigView, mradm_scene_screen_parse};
+use mradm_ffi::room::RoomSourceInfo;
 #[cfg(test)]
 use std::ffi::CStr;
 use std::ffi::{c_char, c_void};
@@ -789,39 +788,15 @@ pub(crate) unsafe fn screens(
     if source.len() > 1024 * 1024 {
         return Err(invalid(1, "屏幕配置超过 1 MiB"));
     }
-    let mut view = ScreenConfigView {
-        has_reference: 0,
-        has_reproduction: 0,
-        reference: RoomScreenGeometry::default(),
-        reproduction: RoomScreenGeometry::default(),
-    };
-    // Numeric overflow diagnostics contain the complete input token plus fixed text.
-    let mut message = Vec::new();
-    let len = source.len().checked_add(1024).ok_or(Failure::Exception)?;
-    message
-        .try_reserve_exact(len)
-        .map_err(|_| Failure::Exception)?;
-    message.resize(len, 0);
-    let mut message_len = message.len();
-    let code = unsafe {
-        mradm_scene_screen_parse(
-            source.as_ptr(),
-            source.len(),
-            &mut view,
-            message.as_mut_ptr(),
-            &mut message_len,
-        )
-    };
-    if code != 0 {
-        return Err(Error::new(code, &message[..message_len.min(len)], b"")?.into());
-    }
+    let parsed = mradm_scene::screen::parse(source)
+        .map_err(|error| Failure::error(error.code, error.message.as_bytes(), b""))?;
     let normal = |s: RoomScreenGeometry| RoomScreenGeometry {
         cartesian: u32::from(s.cartesian != 0),
         reserved: 0,
         ..s
     };
-    let reference = (view.has_reference != 0).then(|| normal(view.reference));
-    let reproduction = (view.has_reproduction != 0).then(|| normal(view.reproduction));
+    let reference = parsed.reference.map(normal);
+    let reproduction = parsed.reproduction.map(normal);
     // `validate_screen_config`.
     let default = reference.unwrap_or_default();
     let validated = RoomScreens {
@@ -830,11 +805,9 @@ pub(crate) unsafe fn screens(
         reference: default,
         reproduction: reproduction.unwrap_or(default),
     };
-    let mut message = [0u8; 512];
-    let code =
-        unsafe { mradm_room_validate_screens(&validated, 1, message.as_mut_ptr(), message.len()) };
-    if code != 0 {
-        return Err(Error::new(code, until_nul(&message), b"screen")?.into());
+    if let Err(error) = mradm_ffi::room::validate_screens(&[validated]) {
+        let (code, message) = mradm_ffi::room::error_code(&error);
+        return Err(Error::new(code, message.as_bytes(), b"screen")?.into());
     }
     Ok((reference, reproduction))
 }

@@ -207,6 +207,129 @@ struct Retained {
     report: String,
 }
 
+impl EngineRender {
+    /// A render of `request`; `preimported` is a preview session's policy-applied scene and
+    /// `cached` its earlier preparation (a Rust backend's or the Apple island's).
+    fn create(
+        request: Request,
+        platform: mradm_engine::catalog::Platform,
+        preimported: Option<&SceneHandle>,
+        cached: Option<&RenderPrepared>,
+    ) -> Box<Self> {
+        let apple = cached.and_then(|c| c.apple.clone());
+        let reuse = Reuse {
+            scene: preimported.map(|scene| scene.scene().clone()),
+            prepared: cached.and_then(|c| c.prepared.clone()),
+            apple_prepared: apple.is_some(),
+        };
+        Box::new(Self {
+            render: Render::new(request, platform, reuse),
+            island: None,
+            islands: None,
+            apple_prepared: RefCell::new(apple),
+            apple_made: Cell::new(false),
+            texts: Vec::new(),
+            matrix: None,
+            message: String::new(),
+            logs: Vec::new(),
+            log_views: Vec::new(),
+            result: None,
+        })
+    }
+
+    /// One step, running the islands the registered runner accepts.
+    fn step(&mut self, cancelled: bool) -> Event {
+        let runner = self.islands.as_ref().map(|islands| Runner {
+            islands,
+            apple: Apple::new(islands.apple),
+            prepared: &self.apple_prepared,
+            made: &self.apple_made,
+        });
+        let islands = runner.as_ref().map(|r| r as &dyn render::Islands);
+        self.render.next_with(cancelled, &FfiHost, islands)
+    }
+
+    /// The preparation the render made (a Rust backend's and the Apple island's), if any.
+    fn take(&mut self) -> Option<Box<RenderPrepared>> {
+        let prepared = self.render.take_prepared();
+        let apple = self
+            .apple_made
+            .get()
+            .then(|| self.apple_prepared.borrow().clone())
+            .flatten();
+        if prepared.is_none() && apple.is_none() {
+            return None;
+        }
+        Some(Box::new(RenderPrepared {
+            logs: Vec::new(),
+            log_views: Vec::new(),
+            error: None,
+            report: None,
+            prepared,
+            apple,
+        }))
+    }
+}
+
+/// The offline render with its islands, for Rust callers (`mradm-capi`): the same steps the
+/// `mradm_engine_render_*` entries expose to C, on Rust types.
+pub struct RenderDriver(Box<EngineRender>);
+
+impl RenderDriver {
+    /// `islands` runs the audio islands and the Apple backend inside the steps.
+    ///
+    /// # Safety
+    ///
+    /// The callbacks must honor the island pointer, ownership and reply contracts. They must
+    /// complete before their island call returns and must not retain its event, reply or context
+    /// pointers. Data reached through `islands.driver.user` must remain valid until this driver is
+    /// dropped and support every thread on which the islands invoke the callbacks.
+    ///
+    /// A non-null `islands.apple` must point to an immutable, thread-safe table that remains valid
+    /// until this driver and every preparation returned by [`Self::take_prepared`] (including
+    /// shared copies) have been dropped.
+    ///
+    /// ```compile_fail,E0133
+    /// use mradm_engine::{catalog::Platform, render::Request};
+    /// use mradm_ffi::engine_service::{IslandRunner, RenderDriver};
+    ///
+    /// fn create(request: Request, platform: Platform, islands: IslandRunner) {
+    ///     RenderDriver::new(request, platform, None, None, islands);
+    /// }
+    /// ```
+    pub unsafe fn new(
+        request: Request,
+        platform: mradm_engine::catalog::Platform,
+        preimported: Option<&SceneHandle>,
+        cached: Option<&RenderPrepared>,
+        islands: IslandRunner,
+    ) -> Self {
+        let mut render = EngineRender::create(request, platform, preimported, cached);
+        render.islands = Some(islands);
+        Self(render)
+    }
+
+    /// The next event; an island no runner accepted is returned to be answered with
+    /// [`Self::resume`].
+    pub fn next(&mut self, cancelled: bool) -> Event {
+        self.0.step(cancelled)
+    }
+
+    pub fn resume(&mut self, reply: Reply) {
+        self.0.render.resume(reply);
+    }
+
+    /// The result after [`Event::Done`].
+    pub fn outcome(&self) -> Option<&Outcome> {
+        self.0.render.outcome()
+    }
+
+    /// The preparation the render made, for a preview session's cache.
+    pub fn take_prepared(&mut self) -> Option<Box<RenderPrepared>> {
+        self.0.take()
+    }
+}
+
 unsafe fn bytes<'a>(t: &Text) -> Option<&'a [u8]> {
     if t.len == 0 {
         return Some(&[]);
@@ -353,26 +476,12 @@ pub unsafe extern "C" fn mradm_engine_render_begin(
         }) else {
             return 1;
         };
-        let cached = unsafe { cached.as_ref() };
-        let apple = cached.and_then(|c| c.apple.clone());
-        let reuse = Reuse {
-            scene: unsafe { preimported.as_ref() }.map(|scene| scene.scene().clone()),
-            prepared: cached.and_then(|c| c.prepared.clone()),
-            apple_prepared: apple.is_some(),
-        };
-        *out = Box::into_raw(Box::new(EngineRender {
-            render: Render::new(request, platform, reuse),
-            island: None,
-            islands: None,
-            apple_prepared: RefCell::new(apple),
-            apple_made: Cell::new(false),
-            texts: Vec::new(),
-            matrix: None,
-            message: String::new(),
-            logs: Vec::new(),
-            log_views: Vec::new(),
-            result: None,
-        }));
+        *out = Box::into_raw(EngineRender::create(
+            request,
+            platform,
+            unsafe { preimported.as_ref() },
+            unsafe { cached.as_ref() },
+        ));
         0
     }))
     .unwrap_or(6)
@@ -583,14 +692,7 @@ pub unsafe extern "C" fn mradm_engine_render_next(
     };
     *e = empty_event();
     catch_unwind(AssertUnwindSafe(|| {
-        let runner = h.islands.as_ref().map(|islands| Runner {
-            islands,
-            apple: Apple::new(islands.apple),
-            prepared: &h.apple_prepared,
-            made: &h.apple_made,
-        });
-        let islands = runner.as_ref().map(|r| r as &dyn render::Islands);
-        match h.render.next_with(cancelled != 0, &FfiHost, islands) {
+        match h.step(cancelled != 0) {
             Event::Continue => {}
             Event::Progress(p) => {
                 e.kind = 1;
@@ -923,23 +1025,7 @@ pub unsafe extern "C" fn mradm_engine_render_take_prepared(
     let Some(h) = (unsafe { handle.as_mut() }) else {
         return ptr::null_mut();
     };
-    let prepared = h.render.take_prepared();
-    let apple = h
-        .apple_made
-        .get()
-        .then(|| h.apple_prepared.borrow().clone())
-        .flatten();
-    if prepared.is_none() && apple.is_none() {
-        return ptr::null_mut();
-    }
-    Box::into_raw(Box::new(RenderPrepared {
-        logs: Vec::new(),
-        log_views: Vec::new(),
-        error: None,
-        report: None,
-        prepared,
-        apple,
-    }))
+    h.take().map_or(ptr::null_mut(), Box::into_raw)
 }
 
 #[unsafe(no_mangle)]

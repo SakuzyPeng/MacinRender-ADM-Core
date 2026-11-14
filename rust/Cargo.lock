@@ -307,10 +307,16 @@ dependencies = [
 name = "mradm-capi"
 version = "0.1.0"
 dependencies = [
+ "mradm-adm",
  "mradm-cli",
  "mradm-dsp",
+ "mradm-engine",
  "mradm-ffi",
  "mradm-json",
+ "mradm-osc",
+ "mradm-render",
+ "mradm-scene",
+ "mradm-wav",
 ]
 
 [[package]]

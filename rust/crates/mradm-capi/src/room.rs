@@ -1,16 +1,13 @@
 //! Room packages: `adm_room_load` / `adm_room_destroy` / `adm_room_manifest_json` and
-//! `adm_room_inspect(_with_quality)`, through the room entries the C++ `RoomProfile` used.
+//! `adm_room_inspect(_with_quality)`, on the room package and preparation of `mradm-ffi` (which
+//! hold the room floating-point environment), called directly (R2).
 use crate::context::adm_context_t;
-use crate::error::{Error, Failure, c_str, caught, clear, report, try_box, until_nul};
+use crate::error::{Error, Failure, c_str, caught, clear, report, try_box};
 use crate::guard;
 use crate::string;
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
-use mradm_ffi::room::{
-    RoomPreparedInfo, RoomProfileHandle, mradm_room_prepare_quality, mradm_room_prepared_destroy,
-    mradm_room_prepared_info, mradm_room_prepared_json, mradm_room_profile_destroy,
-    mradm_room_profile_json, mradm_room_profile_load, mradm_room_validate_screens,
-};
-use std::ffi::{CStr, c_char};
+use mradm_ffi::room::{RoomPreparedHandle, RoomProfileHandle, error_code};
+use std::ffi::c_char;
 use std::ptr;
 
 /// A loaded room package.
@@ -21,8 +18,16 @@ pub struct adm_room_t {
 
 impl Drop for adm_room_t {
     fn drop(&mut self) {
-        unsafe { mradm_room_profile_destroy(self.profile) };
+        if !self.profile.is_null() {
+            drop(unsafe { Box::from_raw(self.profile) });
+        }
     }
+}
+
+/// The room error as the C++ room checks reported it.
+pub(crate) fn room_failure(error: &mradm_dsp::Error) -> Failure {
+    let (code, message) = error_code(error);
+    Failure::error(code, message.as_bytes(), ROOM)
 }
 
 /// `adm_room_config_t` (`c_api.h`).
@@ -57,24 +62,10 @@ pub unsafe extern "C" fn adm_room_load(
     }
     caught(context, None, || unsafe {
         clear(context);
-        let path = c_str(manifest);
-        let mut message = [0u8; 512];
-        let mut raw = ptr::null_mut();
-        let code = mradm_room_profile_load(
-            path.as_ptr(),
-            path.len(),
-            &mut raw,
-            message.as_mut_ptr(),
-            message.len(),
-        );
-        if code != 0 {
-            return report(
-                context,
-                Failure::error(code, until_nul(&message), ROOM),
-                None,
-            );
+        match RoomProfileHandle::load(c_str(manifest)) {
+            Ok(profile) => publish_room(Box::into_raw(profile), out),
+            Err(error) => report(context, room_failure(&error), None),
         }
-        publish_room(raw, out)
     })
 }
 
@@ -99,7 +90,7 @@ pub unsafe extern "C" fn adm_room_destroy(room: *mut adm_room_t) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn adm_room_manifest_json(room: *const adm_room_t) -> *const c_char {
     match unsafe { room.as_ref() } {
-        Some(room) => unsafe { mradm_room_profile_json(room.profile) }.cast(),
+        Some(room) => unsafe { (*room.profile).manifest() }.as_ptr(),
         None => ptr::null(),
     }
 }
@@ -161,45 +152,27 @@ pub(crate) fn validate_screens(
         reference,
         reproduction: reproduction.unwrap_or(reference),
     };
-    let mut message = [0u8; 512];
-    unsafe { mradm_room_validate_screens(&screens, 1, message.as_mut_ptr(), message.len()) }
+    match mradm_ffi::room::validate_screens(&[screens]) {
+        Ok(()) => 0,
+        Err(error) => error_code(&error).0,
+    }
 }
 
 /// `inspect_room`: the prepared room's JSON (no SOFA, no reuse).
 pub(crate) unsafe fn inspect(config: &Config<'_>, quality: i32) -> Result<Vec<u8>, Failure> {
-    let mut message = [0u8; 512];
-    let mut raw = ptr::null_mut();
-    let code = unsafe {
-        mradm_room_prepare_quality(
-            config.profile,
-            config.hrir.as_ptr(),
-            config.hrir.len(),
-            b"".as_ptr(),
-            0,
-            ptr::null(),
-            quality as u32,
-            config.metres,
-            &mut raw,
-            message.as_mut_ptr(),
-            message.len(),
-        )
+    let Some(profile) = (unsafe { config.profile.as_ref() }) else {
+        return Err(Error::new(1, "无效的房间配置".as_bytes(), ROOM)?.into());
     };
-    if code != 0 {
-        return Err(Error::new(code, until_nul(&message), ROOM)?.into());
-    }
-    struct Prepared(*mut mradm_ffi::room::RoomPreparedHandle);
-    impl Drop for Prepared {
-        fn drop(&mut self) {
-            unsafe { mradm_room_prepared_destroy(self.0) };
-        }
-    }
-    let prepared = Prepared(raw);
-    let mut info = RoomPreparedInfo::default();
-    let code = unsafe { mradm_room_prepared_info(prepared.0, &mut info) };
-    if code != 0 {
-        return Err(Error::new(code, "房间 DSP 操作失败".as_bytes(), ROOM)?.into());
-    }
-    let json = unsafe { CStr::from_ptr(mradm_room_prepared_json(prepared.0).cast()) }.to_bytes();
+    let prepared = RoomPreparedHandle::prepare(
+        profile,
+        config.hrir,
+        b"",
+        None,
+        quality as u32,
+        config.metres,
+    )
+    .map_err(|error| room_failure(&error))?;
+    let json = prepared.description().to_bytes();
     let mut copy = Vec::new();
     copy.try_reserve_exact(json.len())
         .map_err(|_| Failure::Exception)?;
@@ -275,20 +248,8 @@ mod tests {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../tests/fixtures/room/synthetic/room.json");
         let path = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
-        let mut profile = ptr::null_mut();
-        let mut message = [0; 512];
-        assert_eq!(
-            unsafe {
-                mradm_room_profile_load(
-                    path.as_ptr().cast(),
-                    path.as_bytes().len(),
-                    &mut profile,
-                    message.as_mut_ptr(),
-                    message.len(),
-                )
-            },
-            guard::OK
-        );
+        let profile =
+            Box::into_raw(RoomProfileHandle::load(path.as_bytes()).expect("room package"));
         assert!(!profile.is_null());
         let mut out = ptr::null_mut();
         let (code, failed) = with_allocation_failure(|| unsafe { publish_room(profile, &mut out) });
