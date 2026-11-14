@@ -4,6 +4,7 @@
 > 日期：2026-05-17  
 > 适用范围：`adm_core`、`adm_io`、`adm_render*`、`adm_process`、`adm_c_api`、`adm_cli` 中所有可恢复错误路径。OOM（Out Of Memory，内存不足）和编程错误（assertion 失败）走 C++ 异常 / `std::terminate`，不受本 ADR 约束。
 > 2026-10-16：[ADR 0021](0021-rust-primary-project.md) 保留错误码数值一一对应；`tl::expected` 与 `noexcept` 模板随 C++ 代码退出，改为“不跨 C 展开”。
+> 2026-11-14（六期 6.5 C，用户决定）：岛的 C++ 代码仍用 `mradm::Result<T>`，但它改为项目自有的最小类型（`src/adm_core/adm/errors.h`：值或 `Error`、`Result<void>`、`mradm::unexpected`），tl-expected 移出构建；`errors.h` 不再是公开头，公开面只剩 `include/adm/c_api.h`。
 
 ## 背景
 

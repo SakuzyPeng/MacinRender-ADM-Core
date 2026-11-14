@@ -1,6 +1,6 @@
 # 删除 C++ 外壳与 SDK（六期 6.5）
 
-> 状态：进行中（A、B 批完成，2026-11-13）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
+> 状态：进行中（A、B、C 批完成，2026-11-14）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
 
 6.3 / 6.4 之后，公开 C ABI 与 `mradm` CLI 都由 Rust 实现，生产只需要 Rust 按名调用的岛（编码器与容器元数据、APAC worker、
 Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度回调跳板。6.5 把其余 C++（会话外壳、C++ SDK 头、其实现与打包）删出生产：
@@ -69,3 +69,31 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 - 共享库比参照小 44 KB（死代码删除），导出 164 个 `adm_*`、未定义符号与参照相同；ctest 85/85、FFI 头校验、Rust fmt / clippy、
   改动 C/C++ 的 clang-format / clang-tidy / cppcheck；
 - 规模：生产 C/C++ 11,380 → 9,768 行（`src` 的私有 FFI 头 2,676 → 1,063 行），`tests/support` 增加测试头，`mradm-ffi` 25,971 → 25,260 行。
+
+## C 批：`include/adm` 只剩 `c_api.h`，岛的依赖
+
+用户决定（2026-11-14）：`Result` 改为项目自有的最小类型；生产仍用的 C++ 头放到岛的私有目录。
+
+- **头的去处**：`include/adm` 除 `c_api.h` 外的 12 个头（`audio_io`、`capability`、`direct_speakers_matrix`、`errors`、
+  `live_override`、`logging`、`options`、`progress`、`render`、`render_apple`、`room`、`screen`）移到 `src/adm_core/adm`，
+  include 写法仍为 `"adm/xxx.h"`，只对岛与测试目标可见、不安装；`render.h` 中只有测试使用的 `RenderService` /
+  `PreviewSession` 与发现记录（`SceneProbe`、`OutputLayoutRow`、`OutputFormat*`）移到 `tests/support/sdk/include/adm/render_service.h`。
+- **`Result`**：`mradm::Result<T>` 由 `tl::expected<T, Error>` 改为 `errors.h` 中的自有类型（值或 `Error`、`Result<void>`、
+  `mradm::unexpected`、`value_or`、`emplace`、与值比较；无值时 `value()` 抛 `BadResultAccess`，同 `tl::bad_expected_access`）；
+  `tl::unexpected` / `tl::make_unexpected` 全部改写为 `mradm::unexpected`，包括 10 个冻结参考（只改写法，`retention.json`
+  同步更新哈希，算法不变；ebur128 参考的两处 `.map` 改为直接判断）。tl-expected 移出构建与许可证清单。
+- **fmt**：生产只剩 Apple 岛、`flac_io.cpp`、`metadata_io.cpp` 共 18 处，改为字符串拼接；`{:.1f}` / `{:.2f}` 改用与 locale 无关的
+  `std::to_chars` fixed，`{:08X}` 改为逐位十六进制。本机对 220 万个随机值与半数边界值核对与 fmt 11.2.0 逐字节相同（写入输出文件的
+  `loudness=` / `peak=` 注释不变）。
+- **测试专用依赖**：fmt 与 nlohmann_json 只在 `MR_ADM_CORE_BUILD_TESTS` 时获取（冻结参考、测试 SDK 与工具），清单中
+  `distribution` 为 `test-only`、`cmake_option` 为 `MR_ADM_CORE_BUILD_TESTS`；生产不再链接 nlohmann_json（四期 4.4 起已不使用）。
+- **安装面**：libFLAC 与 libopus 以 `EXCLUDE_FROM_ALL` 获取（CMake 3.28+），`cmake --install` 只装 `c_api.h`、共享库与 `mradm`。
+- 质量脚本的 cppcheck 增加 `src/adm_core` 与 `tests/support/sdk/include`，使移动后的头能被解析。
+
+验证（本机 Linux x64 Release，一致性 config A，参照同 A 批为 main `8e665a5`）：
+- CLI 记录 113 条 0 差异；C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- 关闭测试的构建不获取 fmt / nlohmann_json / tl-expected，`cmake --install` 恰好安装 `include/adm/c_api.h`、`libmradm_capi.so*` 与 `bin/mradm`；
+- ctest 85/85、FFI 头校验、参考登记、许可证校验与 SBOM、改动 C/C++ 的 clang-format（CI 的新版本规则，本机以 clang-format 23 核对）/ clang-tidy / cppcheck（cppcheck 与 main 同文件对照无新增）；
+  Apple 岛的改动只能由 macOS CI 编译；
+- 规模：生产 C/C++ 9,768 → 9,674 行（`Result` 自有实现 +98 行，`render.h` 测试专用部分移出 −208 行）。
