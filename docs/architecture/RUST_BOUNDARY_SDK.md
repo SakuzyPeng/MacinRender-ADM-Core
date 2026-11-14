@@ -142,7 +142,7 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 | Consistency（push） | 通过：三平台 A/B 采集，`gates.json` 的全部内核与 294 个 PCM 用例跨平台位相等 |
 | Quality（push，full） | 通过：Rust fmt / clippy、FFI 头校验、`check-all.sh` |
 | Reference tests（手动） | 通过：各 `MR_ADM_BUILD_*_REFERENCE_TESTS` 对照 |
-| Release Build（手动，不发布） | Windows CLI、Linux AppImage 与两个 GUI 包通过；macOS CLI 打包首次失败（见下），修正后重跑中 |
+| Release Build（手动，不发布） | 修正后通过（`8e777d8`，run 43578966428）：macOS / Windows CLI 包、Linux AppImage、两个 GUI 包与各自 smoke |
 
 - **Release 的修正**：五期结项（`2207538`）之后第一次运行 Release Build，macOS CLI 打包的依赖白名单拒绝
   `/usr/lib/libobjc.A.dylib`。`mradm` 经 Rust C ABI 链入设备岛，其中含 Objective-C++ 的 AVSampleBuffer 系统空间 sink，
