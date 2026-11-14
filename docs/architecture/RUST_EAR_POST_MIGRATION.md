@@ -107,3 +107,5 @@ python3 scripts/consistency/compare-pcm-mix.py \
 - 单元 `ear_post`（`tests/reference/ear_post_legacy.h`）：随默认测试构建编译，由 `mr_adm_ear_post_tests` 比较。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `ear_post` 在 `c263686` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/ear_post.rs`、EAR 去相关 FIR 内核与 EAR PCM 门禁；`mr_adm_ear_post_tests` 保留独立 double 时域 FIR 校验。

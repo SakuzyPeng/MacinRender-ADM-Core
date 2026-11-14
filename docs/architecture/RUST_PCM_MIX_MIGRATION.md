@@ -107,3 +107,5 @@ CLI 输入由已有 `mr_adm_make_fixture` 生成；比较器会删除临时输�
 - 单元 `pcm_mix`（`tests/reference/pcm_mix_legacy.h`）：随默认测试构建编译，由 `mr_adm_pcm_mix_tests` 比较。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `pcm_mix` 在 `c263686` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/pcm_mix.rs` 与全部扬声器 PCM 门禁；`mr_adm_pcm_mix_tests` 保留被裁剪块的时间线回归。

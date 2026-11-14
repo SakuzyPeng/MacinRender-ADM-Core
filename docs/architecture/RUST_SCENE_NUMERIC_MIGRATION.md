@@ -132,3 +132,5 @@ Rust fmt/Clippy 与改动 C++ 质量检查通过。上方机器可读记录保�
   `hoa` 与 `live_vbap` 的冻结参考引用本单元的 `spatial.h`，本单元必须在二者之后退役。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `scene_numeric`（含 Live 双耳）在 `c263686` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/scene_math.rs`、`tests/scene_transition.rs`、`tests/live_binaural.rs`，Scene 空间数学内核与 Scene PCM 门禁。

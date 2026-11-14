@@ -1,5 +1,7 @@
 # 数值差异定位实验
 
+> 2026-11-14：本文用到的 SAF 探针（`mr_adm_numeric_probe`、`mr_adm_vbap_probe`、`mr_adm_fft_lifecycle_probe`）、`MR_ADM_DIAGNOSTIC_PORTABLE_RNG` 与定位脚本（`run-localization.py`、`localize.py`、`localize-vbap.py`）已随 R1 删除，只能从 git 历史恢复；本文为历史记录。
+
 目标是定位当前 Release 渲染的首个分歧阶段，为 Rust 数学切片划定边界。这里的控制项是实验工具，不构成新的生产确定性承诺。
 
 ## 2026-09-08 定位结论

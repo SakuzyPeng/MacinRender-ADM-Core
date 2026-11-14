@@ -805,6 +805,12 @@ nlohmann_json 移出生产）、D（Apple 岛内部去 `IRenderer` / `IRenderStr
 macOS CLI 打包对 Objective-C 运行时的白名单）三平台通过；6.5 生产 C/C++ 合计 15,314 → 9,432 行，macOS / Windows 原生复核待维护者
 （见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
 
+**R1 状态**：已完成（2026-11-14，本机 Linux x64）。先把 wav_container、osc_protocol、hptf_parse 的语料与当前输出固化为 golden
+（`48fbd0b`，语料与结果和冻结实现逐字节相同），再分三批删除：第三方参考、`MR_ADM_BUILD_*_REFERENCE_TESTS`、SAF 探针、登记表与
+校验脚本（`da4c781`）；已有 Rust 回归的 8 个冻结单元，ARM64 Release job 改跑 `cargo test --release`（`c263686`）；最后三个单元与
+`tests/reference/`（`0bf8627`）。测试 C/C++ 由 62,403 行降到 57,767 行、冻结参考 12,027 行归零，生产 C/C++ 不变（9,432 行）。
+逐单元依据见[参考实现的保留与退役](RUST_REFERENCE_RETENTION.md#当前状态)。下一步 R2。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

@@ -54,6 +54,33 @@
 
 ## 当前状态
 
+**2026-11-14：全部 18 个单元已退役（R1），`tests/reference/`、`retention.json`、`check-reference-retention.py`、
+`MR_ADM_BUILD_*_REFERENCE_TESTS` 与 `reference-tests.yml` 均已删除。** 本文件此后只作历史记录；下面的旧状态保留原文。
+
+| 单元 | 类别 | 删除提交 | 覆盖依据 |
+|---|---|---|---|
+| `saf`（含 `spreader_mr`、SAF 探针） | third-party | `da4c781` | FFT、OM / spreader、HRTF、SOFA、HpTF 设计内核门禁与双耳 PCM 门禁 |
+| `libadm` | third-party | `da4c781` | ADM 导入换算门禁、`params-*` 用例、mradm-adm 测试 |
+| `libbw64` | third-party | `da4c781` | mradm-wav 测试、整数 WAVE 量化门禁、`final-*` 用例 |
+| `resampler` | third-party | `da4c781` | 重采样门禁、96 / 192 kHz 用例、`tests/resampler.rs` |
+| `ebur128` | third-party | `da4c781` | True Peak、响度与计量验收门禁、`tests/meter_acceptance.rs` |
+| `dr_wav` | third-party | `da4c781` | mradm-wav 测试、整数 WAVE 量化门禁 |
+| `libear` | third-party | `da4c781` | EAR 布局 / 增益 / 去相关 FIR 门禁、EAR 用例、mradm-ear 测试 |
+| `ear_post` | frozen | `c263686` | `tests/ear_post.rs`、EAR 门禁；C++ 保留时域 FIR 校验 |
+| `output_dsp` | frozen | `c263686` | `tests/output_dsp.rs`、HpTF / 峰值保护门禁 |
+| `pcm_mix` | frozen | `c263686` | `tests/pcm_mix.rs`、扬声器 PCM 门禁；C++ 保留裁剪块时间线回归 |
+| `scene_numeric` | frozen | `c263686` | `tests/scene_math.rs`、`scene_transition.rs`、`live_binaural.rs`、Scene 门禁 |
+| `hoa` | frozen | `c263686` | `tests/hoa.rs`、HOA 编解码门禁与用例 |
+| `live_vbap` | frozen | `c263686` | `tests/live_vbap.rs`、Scene VBAP 用例 |
+| `monitor` | frozen | `c263686` | `tests/monitor.rs`、文件流式 / 监听运算门禁 |
+| `triple_balance` | frozen | `c263686` | `tests/triple_balance.rs`、`triple_balance_d.rs`、Triple Balance 门禁 |
+| `wav_container` | frozen | `0bf8627` | `mr_adm_wav_container_tests` golden 摘要（`48fbd0b`） |
+| `osc_protocol` | frozen | `0bf8627` | mradm-osc `tests/decode_golden.rs`（`48fbd0b`） |
+| `hptf_parse` | frozen | `0bf8627` | mradm-dsp `tests/hptf_parse_golden.rs`（`48fbd0b`） |
+
+`48fbd0b` 的三份 golden 在记录时与冻结实现对照：语料从 C++ 差分测试与 Rust 测试各导出一份逐字节相同，且原差分测试在同一树上通过。
+Linux ARM64 Release job 改为 `cargo test --release`，取代原来的 Scene 冻结对照。
+
 2026-10-16：登记表现有 18 个单元、49 个文件（下文 2026-10-07 之后新增 `osc_protocol` 与 `hptf_parse`），全部保留，
 三个退役条件均未解除。[ADR 0021](../adr/0021-rust-primary-project.md) 起，冻结参考引用的生产头（如 `render_common.h`、
 `speaker_layouts.h`、`speaker_pcm.h`、Triple Balance 的 `panner.h` / `size_*`、`adm/scene.h`）所属的 C++ 在迁出前，

@@ -112,7 +112,7 @@ A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹�
 两者只做 `boundary.py` 列出的六条归一化（包括 MP4 头中的创建／修改时间）；CLI v2 记录全部工作目录文件变化，
 help / parse-error 只豁免文字差异。见 `docs/architecture/RUST_BOUNDARY_BASELINE.md`。
 原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
-历史 SAF 清单和定位脚本保留原始边界。
+历史 SAF 清单保留原始边界；SAF 定位脚本与探针已随 R1 删除（git 历史可查）。
 
 ### 第三阶段：发布构建
 

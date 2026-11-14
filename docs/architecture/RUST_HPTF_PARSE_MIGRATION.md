@@ -82,3 +82,5 @@ python3 scripts/quality/check-ffi-headers.py
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见
 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `hptf_parse` 在 `0bf8627` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/hptf_parse_golden.rs`（语料与解析结果摘要，另含原差分排除的下溢与十六进制数字；`48fbd0b` 记录时与冻结解析器逐字节相同）。

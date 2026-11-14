@@ -128,3 +128,5 @@ ADM/WAV。覆盖 13 个既有后端控制用例和 15 个新增尺寸/窗口用�
   五期 5.6 C 删除生产 `RenderPlan::scene` 后，`render_state.{h,cpp}` 的 `SizeMixer::create` / `open_stream` 改收测试侧 `ScenePlan`（`tests/support/adm_scene/adm_scene.h`，`RenderPlan` 加 C++ `AdmScene`），算法未改，`retention.json` 的两处哈希已更新。
 
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `triple_balance` 在 `c263686` 删除，上文为历史记录。覆盖依据：mradm-dsp `tests/triple_balance.rs`、`tests/triple_balance_d.rs`，Triple Balance 声像内核与 PCM 门禁。

@@ -64,3 +64,5 @@ C++ 质量门仍显示既有长函数等告警；没有将其描述为零告警�
 2026-11-11（PCM consistency 5.6 C）：`AdmScene` 迁入 `tests/support/adm_scene` 后，
 参考导入器通过显式包含 `adm/scene.h` 和链接 `mr_adm_scene_test_support` 获取场景类型。
 参考文件新增该头文件引用，并同步登记哈希。
+
+**已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `libadm` 在 `da4c781` 删除，上文为历史记录。覆盖依据：ADM 导入换算内核门禁、`params-*` 离线用例与 mradm-adm `tests/compatibility.rs`、`tests/metadata.rs`。
