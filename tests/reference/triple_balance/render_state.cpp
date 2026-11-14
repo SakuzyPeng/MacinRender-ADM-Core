@@ -19,13 +19,13 @@ Result<SizeMixer> SizeMixer::create(const Prepared& prepared, const ScenePlan& p
     for (const auto& track : prepared.size_tracks) {
         auto processor = SizeObjectProcessor::create(track.events, plan.output_layout, plan.scene.info.sample_rate);
         if (!processor) {
-            return tl::unexpected{processor.error()};
+            return mradm::unexpected{processor.error()};
         }
         result.processors_.push_back(std::move(*processor));
         if (live_points) {
             auto gains = point_gains(track.initial_position, 1, plan.output_layout);
             if (!gains) {
-                return tl::unexpected{gains.error()};
+                return mradm::unexpected{gains.error()};
             }
             PointMotionState point;
             point.position = point.target = track.events.front().position;
@@ -142,7 +142,7 @@ Result<void> SizeMixer::prepare_points(uint64_t start_frame, std::size_t frames)
                 position.z = state.position.z;
                 auto gains = point_gains(position, 1, layout_);
                 if (!gains) {
-                    return tl::unexpected{gains.error()};
+                    return mradm::unexpected{gains.error()};
                 }
                 if (!std::equal(gains->begin(), gains->end(), state.gains.begin())) {
                     std::copy(gains->begin(), gains->end(), state.gains.begin());

@@ -34,7 +34,7 @@ Result<Room222Gains> room_222_gains(const SceneBlockPosition& p, float size) {
     Room222Gains result{};
     auto status = dsp::tb_status(mradm_dsp_tb_gains, 2U, &query, std::size_t{1}, result.data(), result.size());
     if (!status) {
-        return tl::unexpected{status.error()};
+        return mradm::unexpected{status.error()};
     }
     return result;
 }

@@ -9,16 +9,18 @@ functionStatic:*/tests/support/sdk/engine/render_service.cpp
 *:*/_deps/*
 # Public API structs are consumed across translation units; cppcheck sees the
 # header alone and reports false positives for metadata fields.
-unusedStructMember:*/include/adm/audio_io.h
-unusedStructMember:*/include/adm/io.h
-unusedStructMember:*/include/adm/options.h
-unusedStructMember:*/include/adm/capability.h
-unusedStructMember:*/include/adm/direct_speakers_matrix.h
-unusedStructMember:*/include/adm/render.h
-unusedStructMember:*/include/adm/monitor.h
-unusedStructMember:*/include/adm/hptf.h
-unusedStructMember:*/include/adm/head_tracking.h
-unusedStructMember:*/include/adm/live_override.h
+unusedStructMember:*/src/adm_core/adm/audio_io.h
+unusedStructMember:*/src/adm_core/adm/errors.h
+unusedStructMember:*/tests/support/sdk/include/adm/render_service.h
+unusedStructMember:*/tests/support/sdk/include/adm/io.h
+unusedStructMember:*/src/adm_core/adm/options.h
+unusedStructMember:*/src/adm_core/adm/capability.h
+unusedStructMember:*/src/adm_core/adm/direct_speakers_matrix.h
+unusedStructMember:*/src/adm_core/adm/render.h
+unusedStructMember:*/tests/support/sdk/include/adm/monitor.h
+unusedStructMember:*/tests/support/sdk/include/adm/hptf.h
+unusedStructMember:*/tests/support/sdk/include/adm/head_tracking.h
+unusedStructMember:*/src/adm_core/adm/live_override.h
 unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h

@@ -11,6 +11,7 @@
 
 #include "adm/monitor.h"
 #include "adm/render.h"
+#include "adm/render_service.h"
 
 #ifdef __APPLE__
 #include "adm_apple/apple_island.h"
@@ -161,7 +162,7 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     BufferedLogSink import_logs;
     auto scene = service.prepare_preview_scene(input_path, options, import_logs);
     if (!scene) {
-        return tl::unexpected{scene.error()};
+        return mradm::unexpected{scene.error()};
     }
     impl.input_path = input_path;
     impl.scene_handle = std::move(scene->handle);
@@ -192,7 +193,7 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
                                                          errors.c(),
                                                          errors.cl());
     if (auto created = errors.result(code); !created) {
-        return tl::unexpected{created.error()};
+        return mradm::unexpected{created.error()};
     }
     return session;
 }
@@ -243,12 +244,12 @@ void MonitorSession::set_listener_orientation(const ListenerOrientation& orienta
 
 Result<void> MonitorSession::set_hptf(const std::string& path, HptfPreampMode mode, std::uint64_t revision) {
     auto settings = render_common::prepare_hptf(path, mode, revision);
-    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+    return settings ? set_hptf_prepared(*settings) : mradm::unexpected{settings.error()};
 }
 Result<void>
 MonitorSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
     auto settings = render_common::prepare_hptf(profile, mode, revision);
-    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+    return settings ? set_hptf_prepared(*settings) : mradm::unexpected{settings.error()};
 }
 Result<void> MonitorSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
     Texts errors;

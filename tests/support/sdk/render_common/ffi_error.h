@@ -19,7 +19,7 @@ class FfiError {
     uint8_t* context() noexcept { return context_.data(); }
     std::size_t* message_len() noexcept { return &(message_len_ = message_.size()); }
     std::size_t* context_len() noexcept { return &(context_len_ = context_.size()); }
-    [[nodiscard]] tl::unexpected<Error> error(int32_t code) const {
+    [[nodiscard]] mradm::unexpected<Error> error(int32_t code) const {
         return make_error(static_cast<ErrorCode>(code),
                           std::string{reinterpret_cast<const char*>(message_.data()), message_len_},
                           std::string{reinterpret_cast<const char*>(context_.data()), context_len_});

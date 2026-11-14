@@ -233,4 +233,6 @@ cppcheck \
     --suppressions-list="$repo_root/CppcheckSuppressions.txt" \
     -I "$repo_root/include" \
     -I "$repo_root/tests/support/ffi" \
+    -I "$repo_root/src/adm_core" \
+    -I "$repo_root/tests/support/sdk/include" \
     "${analysis_files[@]}"

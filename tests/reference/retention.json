@@ -93,7 +93,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/scene_numeric/live_binaural.h": "c4e66dd1baff11c86ec8eb74b72ca9447d6ada16ed1d68b23a79e06455f5661b",
+        "tests/reference/scene_numeric/live_binaural.h": "7bc9b5e3750ec3502fe2b31c12762178e11c213ad83d7ff710795da050c20c58",
         "tests/reference/scene_numeric/provenance.json": "1c37b8a1635bb0b33d365952cae45c25367126e0da946575affa047bda3d0004",
         "tests/reference/scene_numeric/spatial.h": "b18141b43d485ecff21aac801fcb2e2004cce7e88c00194934b37073b1a11ff6",
         "tests/reference/scene_numeric/transitions.h": "3aebd55309166be17b27f7a32c2e6c6ba1bdd935d48cd5f82c94e75eb2c39b8b"
@@ -145,7 +145,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/live_vbap/legacy.h": "edcfd5ce424943ef71dce824184b8568b16447c75838d71c0ce55b2833aadb15",
+        "tests/reference/live_vbap/legacy.h": "250cc56d205637c52fca381670629a71214b89ccc73add99bccab999eddfd367",
         "tests/reference/live_vbap/provenance.json": "0358076f6ac6779812764ad78d4dc9e01ec5b72236c59543ce99844fc37d4f0f",
         "tests/reference/live_vbap/ramps.h": "00d34b1992715fbaf2c225ed27e72cae64e4aeef3ce741fbaa12a5e33496bac9"
       }
@@ -194,15 +194,15 @@
       "files": {
         "tests/reference/triple_balance/layout_222.cpp": "8c2661a6e3af912db58b5eef2aea1f6346791eb28ec37bd440435533769e01a3",
         "tests/reference/triple_balance/layout_222.h": "6d7c92bbe036a8cadadec5fcde12fc263461a8bfc560d678ce283c850a24020a",
-        "tests/reference/triple_balance/motion.h": "ef63fdd02c922ee3b60dc54e4e5c4e235118c66f7e91f67b6a86e8043da818a4",
-        "tests/reference/triple_balance/panner.cpp": "2f002a7f41a0d9eb897f852f686361db6f292db671ee9a30be702797e7720bbe",
+        "tests/reference/triple_balance/motion.h": "187ed108f791d8a518289007e92d766fd12b33d5b160f1b7e96ded5f5b4b0717",
+        "tests/reference/triple_balance/panner.cpp": "fe974d34fe305f159d9ca7bfa5345e61f5ffc4ba9b50c23e8f6f33033253977c",
         "tests/reference/triple_balance/panner.h": "243c7634163cc52a6daac0add14a39b1faf41c38596901e2b4ad563d60b97641",
         "tests/reference/triple_balance/provenance.json": "8bd4bd7ebf0b32e051d345b5710d006969dca62368ab07fe0d7c57fd4fc78468",
-        "tests/reference/triple_balance/render_state.cpp": "efe9259879261245a98f5aafab94d347482a5f9c021d96281ecc4c9e4347d771",
+        "tests/reference/triple_balance/render_state.cpp": "fdfe844f1091f3095ab1b9e793f486c7d76f0e9e078addb4219abd8db7e0405f",
         "tests/reference/triple_balance/render_state.h": "bfab1fe55507c4f97c36822d8cb991e9c5bb8bb483aa8a8ec88894aff4524a90",
         "tests/reference/triple_balance/size_panner.cpp": "35f12b5dd60d9310c42f3bc75c78e8f19f0214bd38c82adea0d457d34d3bf3d7",
         "tests/reference/triple_balance/size_panner.h": "895f0e192920837ad2961750b83f3022a6e198f8dd1580b504822cad87b6a9e8",
-        "tests/reference/triple_balance/size_processor.cpp": "fe1f569c005149b2b1147a8638949ae18fa751bf3b28511070d4d8a0a7ae9779",
+        "tests/reference/triple_balance/size_processor.cpp": "e8cf062d3a430c47dcdd456f69d2be03dacb3a253f00dc7906177aa5d791699d",
         "tests/reference/triple_balance/size_processor.h": "69bf5d404309b6eeb5f095550ee05bd625a9695550afd12e695b1fce4726aa29"
       }
     },
@@ -225,7 +225,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/wav_container/legacy.cpp": "1e377d3df62c388fb88eadba176aacc119b94837d3f04a915529b7e12f0450ae",
+        "tests/reference/wav_container/legacy.cpp": "66e7b19d779b6a075f0dc54bbaa328b54e4de2b86f0db0bb73c71ac204bae266",
         "tests/reference/wav_container/legacy.h": "d732f23a351dbb1fb223f30fc0c8d9f4772d42d3d55f68564371155acba94712"
       }
     },
@@ -278,7 +278,7 @@
         "tests/reference/libadm/provenance.json": "8bcf4d0884c42312476803daa7b9f81543346a972dcdb73cf6e6fe08ea472616",
         "tests/reference/libadm/reference_test.cpp": "d0574f7d2b23943fe9438280395e1f4bb2ca09c22ca820c467ed5506a0677b2e",
         "tests/reference/libadm/run.py": "7ed1f5059f298301bf69e6d8f67af38241ed8cc3544046e3037689837bca8763",
-        "tests/reference/libadm/scene_importer.cpp": "96a76a33f07bdfa459026eff9537c6234c637d074a605251dc61760f5489dade"
+        "tests/reference/libadm/scene_importer.cpp": "c8d37a0100271354543afe8a7fc91d2d5e26ea479503535ebc04d1a9787b521a"
       }
     },
     {
@@ -346,7 +346,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/ebur128_reference_test.cpp": "54b085370114e8ef91877f89094d73c6502632f0d51b5e51a5f6f9d4efd4fac4"
+        "tests/reference/ebur128_reference_test.cpp": "665e2388f2d5e9cffc64d6e37dfc03d6ccebf377b04a1bedb8ce8bbba4617afb"
       }
     },
     {
@@ -436,7 +436,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/hptf_parse/legacy.h": "f21ccef99b7f97fc88e043576ce4074a8be6f4bc3bcfe275360499de2d89d986",
+        "tests/reference/hptf_parse/legacy.h": "45fe4446f354a7845d9a4c4f8935029a1ceeef0a81497f7ca974aa349ca48c01",
         "tests/reference/hptf_parse/provenance.json": "237087bfd3ca25ebab1429b218dd3b7faf9b984ef61cffb11fdb0baa05c64be7"
       }
     }

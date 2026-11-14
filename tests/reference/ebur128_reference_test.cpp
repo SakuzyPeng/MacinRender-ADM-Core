@@ -125,11 +125,11 @@ bool apply_measured_gain(std::vector<float>& block, uint32_t channels, bool loud
     if (!measured) {
         return false;
     }
-    const auto gain =
-        loudness
-            ? mradm::dsp::loudness_gain(*measured, target).map([](auto g) { return std::pair{g.apply, g.gain}; })
-            : mradm::dsp::peak_limit_gain(*measured, target).map([](auto g) { return std::pair{g.apply, g.gain}; });
-    return gain && gain->first && mradm::dsp::apply_gain(block, gain->second);
+    const auto apply = [&block](const auto& gain) {
+        return gain && gain->apply && mradm::dsp::apply_gain(block, gain->gain);
+    };
+    return loudness ? apply(mradm::dsp::loudness_gain(*measured, target))
+                    : apply(mradm::dsp::peak_limit_gain(*measured, target));
 }
 
 // The offline post-processing gains checked against libebur128.

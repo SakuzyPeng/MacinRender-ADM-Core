@@ -780,7 +780,9 @@ nlohmann_json 移出生产）、D（Apple 岛内部去 `IRenderer` / `IRenderStr
 `include/adm` 中只供它们使用的 5 个头移到 `tests/support/sdk`（测试目标名不变），`renderer_factory` 删除，生产的岛集中到 `mr_adm_islands`，
 只安装 `c_api.h`、共享库与 `mradm`，`MacinRenderADMCoreConfig` 与其测试删除；生产 C/C++ 15,314 → 11,380 行。B 已完成：21 个没有调用者的
 `mradm-ffi` 导出与其声明删除（412 → 391），`src` 的 8 个私有 FFI 头只留生产用到的记录与入口，只有测试与工具调用的声明移到
-`tests/support/ffi/*_test_ffi.h`；生产 C/C++ 11,380 → 9,768 行（见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
+`tests/support/ffi/*_test_ffi.h`；生产 C/C++ 11,380 → 9,768 行。C 已完成：`include/adm` 只剩 `c_api.h`（岛共用的 C++ 头移到
+`src/adm_core/adm`），`mradm::Result` 改为项目自有类型，tl-expected 移出构建，fmt / nlohmann_json 只供测试，`cmake --install` 只装
+`c_api.h`、共享库与 `mradm`；生产 C/C++ 9,768 → 9,674 行（见 [6.5 记录](RUST_BOUNDARY_SDK.md)）。
 
 ## 每个迁移切片的验证
 

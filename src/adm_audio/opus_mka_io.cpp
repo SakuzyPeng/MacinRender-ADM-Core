@@ -483,24 +483,24 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
     if (auto ret = opus_ctl_error(opus_multistream_encoder_ctl(impl->encoder, OPUS_SET_VBR(1)), "OPUS_SET_VBR"); !ret) {
-        return tl::unexpected{ret.error()};
+        return mradm::unexpected{ret.error()};
     }
     if (auto ret = opus_ctl_error(opus_multistream_encoder_ctl(impl->encoder, OPUS_SET_VBR_CONSTRAINT(0)),
                                   "OPUS_SET_VBR_CONSTRAINT");
         !ret) {
-        return tl::unexpected{ret.error()};
+        return mradm::unexpected{ret.error()};
     }
     if (auto ret =
             opus_ctl_error(opus_multistream_encoder_ctl(impl->encoder, OPUS_SET_BITRATE(bitrate)), "OPUS_SET_BITRATE");
         !ret) {
-        return tl::unexpected{ret.error()};
+        return mradm::unexpected{ret.error()};
     }
 
     int32_t preskip{};
     if (auto ret = opus_ctl_error(opus_multistream_encoder_ctl(impl->encoder, OPUS_GET_LOOKAHEAD(&preskip)),
                                   "OPUS_GET_LOOKAHEAD");
         !ret) {
-        return tl::unexpected{ret.error()};
+        return mradm::unexpected{ret.error()};
     }
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -627,7 +627,7 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
     if (!impl->open_cluster(0U)) {
         auto err = impl->close();
         if (!err) {
-            return tl::unexpected{err.error()};
+            return mradm::unexpected{err.error()};
         }
         return make_error(ErrorCode::io_error, "failed to write initial MKA cluster", "path=" + path);
     }
@@ -684,7 +684,7 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
     }
     auto reader_res = FloatWavReader::open(src_path);
     if (!reader_res) {
-        return tl::unexpected{reader_res.error()};
+        return mradm::unexpected{reader_res.error()};
     }
     auto& reader = *reader_res;
 
@@ -697,7 +697,7 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
     auto writer_res =
         FloatOpusMkaWriter::open(mka_path, reader.channels(), reader.sample_rate(), bitrate_per_ch_kbps, layout_id);
     if (!writer_res) {
-        return tl::unexpected{writer_res.error()};
+        return mradm::unexpected{writer_res.error()};
     }
     auto& writer = *writer_res;
 

@@ -182,7 +182,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             set_level(element, level_for(state), 0U);
             auto gains = gains_for(element, state, frame);
             if (!gains) {
-                return tl::unexpected{gains.error()};
+                return mradm::unexpected{gains.error()};
             }
             element.current_gains = *gains;
             element.target_gains = std::move(*gains);
@@ -198,7 +198,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 set_level(element, level_for(defaults), 0U);
                 auto gains = gains_for(element, defaults, frame);
                 if (!gains) {
-                    return tl::unexpected{gains.error()};
+                    return mradm::unexpected{gains.error()};
                 }
                 element.current_gains = *gains;
                 element.target_gains = std::move(*gains);
@@ -240,7 +240,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 if ((changed & ~(state_active | state_linear_gain | state_head_locked)) != 0U) {
                     auto gains = gains_for(element, target, frame);
                     if (!gains) {
-                        return tl::unexpected{gains.error()};
+                        return mradm::unexpected{gains.error()};
                     }
                     set_target(element, std::move(*gains), ramp);
                 }
@@ -356,7 +356,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             }
             auto source_gains = point_gains(position.azimuth, position.elevation, source.gain, spread);
             if (!source_gains) {
-                return tl::unexpected{source_gains.error()};
+                return mradm::unexpected{source_gains.error()};
             }
             for (std::size_t channel = 0; channel < result.size(); ++channel) {
                 result[channel] += (*source_gains)[channel];

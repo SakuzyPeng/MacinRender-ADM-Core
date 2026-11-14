@@ -32,7 +32,7 @@ using render_common::BlockGains;
     // compatibility mode; the other backends retain their own ADM gain semantics.
     auto initial = triple_balance_legacy::point_gains(first.position, 1.0F, layout_id);
     if (!initial) {
-        return tl::unexpected{initial.error()};
+        return mradm::unexpected{initial.error()};
     }
     std::vector<BlockGains> result;
     result.push_back({std::move(*initial), 0, std::numeric_limits<uint64_t>::max(), true, true, std::nullopt});
@@ -63,7 +63,7 @@ using render_common::BlockGains;
         position.z = state[2];
         auto gains = triple_balance_legacy::point_gains(position, 1.0F, layout_id);
         if (!gains) {
-            return tl::unexpected{gains.error()};
+            return mradm::unexpected{gains.error()};
         }
         if (*gains != result.back().gains) {
             result.push_back({std::move(*gains),

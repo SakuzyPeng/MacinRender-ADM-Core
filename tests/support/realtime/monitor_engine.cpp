@@ -63,7 +63,7 @@ MonitorEngine::create(IRenderStreamFactory& factory,
                       std::shared_ptr<IRoomControl> (*room_control)(MradmRenderRoomControl*)) {
     auto stream = factory.open(scene, opts, logs);
     if (!stream) {
-        return tl::unexpected{stream.error()};
+        return mradm::unexpected{stream.error()};
     }
     if (*stream == nullptr) {
         return make_error(ErrorCode::internal_error, "render stream factory returned a null stream");
@@ -110,7 +110,7 @@ MonitorEngine::create(IRenderStreamFactory& factory,
     if (!started) {
         mradm_engine_live_monitor_begin_shutdown(raw);
         engine->rust_.reset();
-        return tl::unexpected{started.error()};
+        return mradm::unexpected{started.error()};
     }
     return engine;
 }

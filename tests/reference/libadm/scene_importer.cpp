@@ -955,7 +955,7 @@ Result<AdmScene> import_scene(const std::string& path) {
     try {
         auto reader_res = audio::FloatWavReader::open(path);
         if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
+            return mradm::unexpected{reader_res.error()};
         }
         const auto& reader = *reader_res;
         if (reader.channels() > std::numeric_limits<uint16_t>::max()) {
@@ -963,7 +963,7 @@ Result<AdmScene> import_scene(const std::string& path) {
         }
         auto metadata_res = read_wave_adm_metadata(path);
         if (!metadata_res) {
-            return tl::unexpected{metadata_res.error()};
+            return mradm::unexpected{metadata_res.error()};
         }
         auto& metadata = *metadata_res;
 
@@ -1005,7 +1005,7 @@ Result<std::string> get_axml(const std::string& path) {
     try {
         auto metadata = read_wave_adm_metadata(path);
         if (!metadata) {
-            return tl::unexpected{metadata.error()};
+            return mradm::unexpected{metadata.error()};
         }
         if (metadata->axml.empty()) {
             return make_error(ErrorCode::io_error, "axml chunk 缺失或为空", "input=" + path);
@@ -1421,7 +1421,7 @@ Result<void> write_scene(const std::string& src_path,
     try {
         auto xml_res = get_axml(src_path);
         if (!xml_res) {
-            return tl::unexpected{xml_res.error()};
+            return mradm::unexpected{xml_res.error()};
         }
         std::string xml_str = std::move(*xml_res);
 

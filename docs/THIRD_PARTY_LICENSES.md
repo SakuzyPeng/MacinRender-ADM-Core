@@ -31,9 +31,8 @@
 
 | 依赖 | 用途 | 许可证 (SPDX) | 默认发行可用性 | 备注 |
 |---|---|---|---|---|
-| `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（语义策略、SBOM 内部） | MIT | 可用 |  |
-| `fmt` @ 11.2.0 | 格式化与日志辅助 | MIT | 可用 | 若动态链接系统库，仍需记录版本与许可证 |
-| `tl-expected` @ v1.1.0 | Result<T> 基础类型 | CC0-1.0 | 可用 | header-only；FetchContent 目标目录名为 expected-src |
+| `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（测试专用：测试 SDK、工具与冻结参考，6.5 C 起不进生产） | MIT | 测试专用（不进生产） |  |
+| `fmt` @ 11.2.0 | 格式化（测试专用：冻结参考与测试 SDK，6.5 C 起不进生产） | MIT | 测试专用（不进生产） | 若动态链接系统库，仍需记录版本与许可证 |
 | `libebur128` @ v1.2.6 | 历史响度/True Peak 参考（测试专用） | MIT | opt-in（默认关闭） | 仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。 |
 | `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | FLAC 解码（dr_flac）；dr_wav 仅用于显式启用的 WAVE 参考测试 | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |

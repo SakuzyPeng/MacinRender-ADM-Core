@@ -37,7 +37,7 @@ bed_gains(const SceneDirectSpeakersBlock& block, std::string_view layout, LfeRou
                                  gains.data(),
                                  gains.size());
     if (!routed) {
-        return tl::unexpected{routed.error()};
+        return mradm::unexpected{routed.error()};
     }
     return gains;
 }

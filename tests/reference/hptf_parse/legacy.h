@@ -235,7 +235,7 @@ inline Result<HptfProfile> parse_parametric_eq(std::string_view text) {
     }
 
     if (auto valid = validate_hptf_profile(profile); !valid) {
-        return tl::unexpected{valid.error()};
+        return mradm::unexpected{valid.error()};
     }
     return profile;
 }

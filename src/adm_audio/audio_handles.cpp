@@ -24,7 +24,7 @@ Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::st
     try {
         auto reader = WavFileReader::open(path);
         if (!reader) {
-            return tl::unexpected{reader.error()};
+            return mradm::unexpected{reader.error()};
         }
         auto out = std::unique_ptr<RenderInputReader>{new RenderInputReader{}};
         out->impl_ = std::make_unique<Impl>();
@@ -100,20 +100,20 @@ WriterHandle::open(const std::string& path, uint32_t channels, uint32_t sample_r
     if (ext == ".caf") {
         auto res = FloatCafWriter::open(path, channels, sample_rate, layout_id);
         if (!res) {
-            return tl::unexpected{res.error()};
+            return mradm::unexpected{res.error()};
         }
         return WriterHandle{std::move(*res)};
     }
     if (ext == ".flac") {
         auto res = FloatFlacWriter::open(path, channels, sample_rate);
         if (!res) {
-            return tl::unexpected{res.error()};
+            return mradm::unexpected{res.error()};
         }
         return WriterHandle{std::move(*res)};
     }
     auto res = FloatWavWriter::open(path, channels, sample_rate);
     if (!res) {
-        return tl::unexpected{res.error()};
+        return mradm::unexpected{res.error()};
     }
     return WriterHandle{std::move(*res)};
 }

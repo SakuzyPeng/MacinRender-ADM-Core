@@ -52,7 +52,7 @@ Result<void> run_output_pass(const std::string& path,
     MradmOutputPost* raw = nullptr;
     if (const auto code = begin(&raw, &report, message.data(), message.size(), context.data(), context.size());
         code != 0) {
-        return tl::unexpected{post_error(code, message, context)};
+        return mradm::unexpected{post_error(code, message, context)};
     }
     const std::unique_ptr<MradmOutputPost, decltype(&mradm_output_post_destroy)> pass{raw, mradm_output_post_destroy};
     emit();
@@ -68,7 +68,7 @@ Result<void> run_output_pass(const std::string& path,
         if (const auto code = mradm_output_post_step(
                 pass.get(), &report, message.data(), message.size(), context.data(), context.size());
             code != 0) {
-            return tl::unexpected{post_error(code, message, context)};
+            return mradm::unexpected{post_error(code, message, context)};
         }
         emit();
     }
@@ -78,7 +78,7 @@ Result<void> run_output_pass(const std::string& path,
     if (const auto code = mradm_output_post_finish(
             pass.get(), &report, message.data(), message.size(), context.data(), context.size());
         code != 0) {
-        return tl::unexpected{post_error(code, message, context)};
+        return mradm::unexpected{post_error(code, message, context)};
     }
     emit();
     return {};
@@ -110,7 +110,7 @@ class WavFileReader {
                                                 message.data(),
                                                 message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path)};
+            return mradm::unexpected{wav_error(code, message, path)};
         }
         reader->handle_.reset(handle);
         return reader;
@@ -128,7 +128,7 @@ class WavFileReader {
                                                 message.data(),
                                                 message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         return count;
     }
@@ -136,7 +136,7 @@ class WavFileReader {
         std::array<uint8_t, 512> message{};
         const auto code = mradm_wav_reader_seek(handle_.get(), frame, message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         return {};
     }
@@ -163,7 +163,7 @@ class WavChunkReader {
                                                 message.data(),
                                                 message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path)};
+            return mradm::unexpected{wav_error(code, message, path)};
         }
         reader->handle_.reset(handle);
         return reader;
@@ -180,7 +180,7 @@ class WavChunkReader {
         auto code =
             mradm_wav_chunks_read(handle_.get(), raw_id, nullptr, 0, &size, &found, message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         if (found == 0U) {
             return std::optional<std::string>{};
@@ -200,7 +200,7 @@ class WavChunkReader {
                                          message.data(),
                                          message.size());
             if (code != 0) {
-                return tl::unexpected{wav_error(code, message, path_)};
+                return mradm::unexpected{wav_error(code, message, path_)};
             }
         }
         return std::optional<std::string>{std::move(payload)};
@@ -213,7 +213,7 @@ class WavChunkReader {
         auto code =
             mradm_wav_chunks_chna(handle_.get(), nullptr, nullptr, 0, &count, &found, message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         std::vector<WavChnaUid> records;
         if (found == 0U || count == 0U) {
@@ -224,7 +224,7 @@ class WavChunkReader {
         code = mradm_wav_chunks_chna(
             handle_.get(), indices.data(), uids.data(), count, &count, &found, message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         records.reserve(count);
         for (std::size_t index = 0; index < count; ++index) {
@@ -262,7 +262,7 @@ class WavFileWriter {
                                                   message.data(),
                                                   message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path)};
+            return mradm::unexpected{wav_error(code, message, path)};
         }
         writer->handle_.reset(handle);
         return writer;
@@ -275,7 +275,7 @@ class WavFileWriter {
         const auto code = mradm_wav_writer_write(
             handle_.get(), samples, static_cast<std::size_t>(frames) * channels_, message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         return {};
     }
@@ -283,7 +283,7 @@ class WavFileWriter {
         std::array<uint8_t, 512> message{};
         const auto code = mradm_wav_writer_finish(handle_.get(), message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         return {};
     }
@@ -316,7 +316,7 @@ class PcmOutputWriter {
                                                      message.data(),
                                                      message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path)};
+            return mradm::unexpected{wav_error(code, message, path)};
         }
         writer->handle_.reset(handle);
         return writer;
@@ -331,7 +331,7 @@ class PcmOutputWriter {
         std::array<uint8_t, 512> message{};
         const auto code = mradm_output_writer_finish(handle_.get(), message.data(), message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path_)};
+            return mradm::unexpected{wav_error(code, message, path_)};
         }
         return {};
     }
@@ -358,7 +358,7 @@ class CafFileReader {
                                                 message.data(),
                                                 message.size());
         if (code != 0) {
-            return tl::unexpected{wav_error(code, message, path)};
+            return mradm::unexpected{wav_error(code, message, path)};
         }
         reader->handle_.reset(handle);
         return reader;

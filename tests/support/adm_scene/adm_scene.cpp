@@ -40,7 +40,7 @@ Result<AdmScene> adm_scene(const detail::RenderSceneHandle& handle, const std::s
     if (!scene) {
         auto error = scene.error();
         error.context = "input=" + path;
-        return tl::unexpected{std::move(error)};
+        return mradm::unexpected{std::move(error)};
     }
     auto& scene_info = scene->info;
     scene_info.sample_rate = info.sample_rate;
@@ -72,7 +72,7 @@ namespace {
 Result<AdmScene> imported(const std::string& path, const SceneImportOptions* options) {
     auto scene = RenderScene::import(path, options);
     if (!scene) {
-        return tl::unexpected{scene.error()};
+        return mradm::unexpected{scene.error()};
     }
     return mradm::adm_scene(*scene->handle(), path);
 }

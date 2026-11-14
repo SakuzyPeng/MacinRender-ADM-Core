@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "adm/render.h"
+#include "adm/render_service.h"
 
 #include "engine_test_ffi.h"
 

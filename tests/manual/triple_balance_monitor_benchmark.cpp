@@ -139,7 +139,7 @@ mradm::audio::WavLayoutFinalization fixture_metadata() {
     {
         auto writer = mradm::audio::FloatWavWriter::open(input, k_input_channels, k_sample_rate);
         if (!writer) {
-            return tl::unexpected{writer.error()};
+            return mradm::unexpected{writer.error()};
         }
         std::vector<float> pcm(std::size_t{1024} * k_input_channels);
         for (uint64_t start = 0; start < k_frames; start += 1024) {
@@ -155,15 +155,15 @@ mradm::audio::WavLayoutFinalization fixture_metadata() {
             }
         }
         if (auto finished = writer->finish(); !finished) {
-            return tl::unexpected{finished.error()};
+            return mradm::unexpected{finished.error()};
         }
     }
     if (auto finalized = mradm::audio::finalize_wav_layout(input, fixture_metadata()); !finalized) {
-        return tl::unexpected{finalized.error()};
+        return mradm::unexpected{finalized.error()};
     }
     auto scene = mradm::io::RenderScene::import(input, nullptr);
     if (!scene) {
-        return tl::unexpected{scene.error()};
+        return mradm::unexpected{scene.error()};
     }
     mradm::ScenePlan plan;
     plan.input_path = input;

@@ -307,7 +307,7 @@ Result<void> write_hoa3_ambi_chunk(std::FILE* f, const std::string& path) {
 
     const auto existing_ambi_res = find_riff_chunk(f, path, "ambi");
     if (!existing_ambi_res) {
-        return tl::unexpected{existing_ambi_res.error()};
+        return mradm::unexpected{existing_ambi_res.error()};
     }
     const auto& existing_ambi = *existing_ambi_res;
     if (existing_ambi.has_value()) {
@@ -336,7 +336,7 @@ Result<RiffInfo> inspect_wav_metadata_target(std::FILE* f, const std::string& pa
     RiffInfo riff_info;
     auto ambi_lookup = find_riff_chunk(f, path, "ambi", &riff_info);
     if (!ambi_lookup) {
-        return tl::unexpected{ambi_lookup.error()};
+        return mradm::unexpected{ambi_lookup.error()};
     }
 
     constexpr uint32_t k_bext_total = 8 + 602; // FourCC(4) + size(4) + payload
@@ -449,7 +449,7 @@ build_chna_payload(uint32_t channels, const std::vector<WavChnaEntry>& entries, 
     {
         auto reader_res = FloatWavReader::open(path);
         if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
+            return mradm::unexpected{reader_res.error()};
         }
         const auto& reader = *reader_res;
         source.channels = reader.channels();
@@ -481,7 +481,7 @@ build_chna_payload(uint32_t channels, const std::vector<WavChnaEntry>& entries, 
     }
     auto data_res = find_riff_chunk(file.get(), path, "data", &source.riff);
     if (!data_res) {
-        return tl::unexpected{data_res.error()};
+        return mradm::unexpected{data_res.error()};
     }
     auto data_chunk = *data_res;
     if (!data_chunk.has_value()) {
@@ -635,7 +635,7 @@ Result<void> finalize_wav_layout(const std::string& path,
     }
     auto source_res = inspect_wav_for_layout_rewrite(path);
     if (!source_res) {
-        return tl::unexpected{source_res.error()};
+        return mradm::unexpected{source_res.error()};
     }
     const WavSourceFormat source = *source_res;
 
@@ -649,7 +649,7 @@ Result<void> finalize_wav_layout(const std::string& path,
     }
     auto permutation_res = validate_wav_permutation(source.channels, layout.output_channel_sources, path);
     if (!permutation_res) {
-        return tl::unexpected{permutation_res.error()};
+        return mradm::unexpected{permutation_res.error()};
     }
     const auto& permutation = *permutation_res;
 
@@ -661,7 +661,7 @@ Result<void> finalize_wav_layout(const std::string& path,
     }
     auto chna_res = build_chna_payload(source.channels, layout.chna, path);
     if (!chna_res) {
-        return tl::unexpected{chna_res.error()};
+        return mradm::unexpected{chna_res.error()};
     }
     const auto& chna_payload = *chna_res;
 
@@ -810,7 +810,7 @@ Result<void> finalize_wav_layout(const std::string& path,
 
     auto replace_res = replace_wav_with_rewrite(path, *rewritten_path, rewritten_guard);
     if (!replace_res) {
-        return tl::unexpected{replace_res.error()};
+        return mradm::unexpected{replace_res.error()};
     }
     emit_wav_progress(progress, operation, 1.0, source.frames, source.frames, "WAV channel layout finalized");
     return {};
@@ -827,7 +827,7 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     auto riff_info_res = inspect_wav_metadata_target(f, path, meta.output_layout);
     if (!riff_info_res) {
         std::fclose(f);
-        return tl::unexpected{riff_info_res.error()};
+        return mradm::unexpected{riff_info_res.error()};
     }
     const RiffInfo riff_info = *riff_info_res;
 
@@ -911,14 +911,14 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
         auto ambi_res = write_hoa3_ambi_chunk(f, path);
         if (!ambi_res) {
             std::fclose(f);
-            return tl::unexpected{ambi_res.error()};
+            return mradm::unexpected{ambi_res.error()};
         }
     }
 
     auto size_res = update_riff_sizes(f, path, riff_info);
     if (!size_res) {
         std::fclose(f);
-        return tl::unexpected{size_res.error()};
+        return mradm::unexpected{size_res.error()};
     }
 
     std::fclose(f);
@@ -1399,7 +1399,7 @@ Result<void> write_wav_metadata(const std::string& path, const audio::MetadataFi
 Result<AdmChunks> read_wave_adm_metadata(const std::string& path) {
     auto metadata = scene_importer::read_wave_adm_metadata(path);
     if (!metadata) {
-        return tl::unexpected{metadata.error()};
+        return mradm::unexpected{metadata.error()};
     }
     return AdmChunks{std::move(metadata->axml), std::move(metadata->uid_to_channel)};
 }

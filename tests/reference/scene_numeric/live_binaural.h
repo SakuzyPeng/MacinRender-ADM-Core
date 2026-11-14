@@ -243,13 +243,13 @@ channel_locked_direction(float azimuth, float elevation, const ObjectState& obje
     const auto output_length = static_cast<std::size_t>(output_frames);
     auto resampler = dsp::Resampler::create(1U, static_cast<std::uint32_t>(dataset.sample_rate), sample_rate);
     if (!resampler) {
-        return tl::unexpected{resampler.error()};
+        return mradm::unexpected{resampler.error()};
     }
     std::vector<float> output(filters * output_length);
     for (std::size_t filter = 0U; filter < filters; ++filter) {
         auto reset = resampler->reset();
         if (!reset) {
-            return tl::unexpected{reset.error()};
+            return mradm::unexpected{reset.error()};
         }
         const auto source = std::span{dataset.hrirs}.subspan(filter * input_length, input_length);
         const auto destination = std::span{output}.subspan(filter * output_length, output_length);
@@ -258,7 +258,7 @@ channel_locked_direction(float azimuth, float elevation, const ObjectState& obje
         while (consumed < input_length) {
             auto progress = resampler->process(source.subspan(consumed), destination.subspan(written));
             if (!progress) {
-                return tl::unexpected{progress.error()};
+                return mradm::unexpected{progress.error()};
             }
             consumed += progress->input_frames;
             written += progress->output_frames;
@@ -269,7 +269,7 @@ channel_locked_direction(float azimuth, float elevation, const ObjectState& obje
         while (written < output_length) {
             auto generated = resampler->finish(destination.subspan(written));
             if (!generated) {
-                return tl::unexpected{generated.error()};
+                return mradm::unexpected{generated.error()};
             }
             if (*generated == 0U) {
                 return make_error(ErrorCode::render_failed, "HRTF resampler returned a short filter");
@@ -377,15 +377,15 @@ class HrtfStateCache {
                                       ? Result<HrtfDataset>{binaural_internal::built_in_kemar_dataset()}
                                       : binaural_internal::load_sofa_dataset(config.sofa_path, 0U);
     if (!dataset) {
-        return tl::unexpected{dataset.error()};
+        return mradm::unexpected{dataset.error()};
     }
     auto resampled = resample_dataset(std::move(*dataset), config.sample_rate);
     if (!resampled) {
-        return tl::unexpected{resampled.error()};
+        return mradm::unexpected{resampled.error()};
     }
     auto prepared = binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block, true);
     if (!prepared) {
-        return tl::unexpected{prepared.error()};
+        return mradm::unexpected{prepared.error()};
     }
     auto state_owner = std::move(*prepared);
     // Live convolution and extent rendering use only the frequency-domain HRTFs
@@ -449,7 +449,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
 
         auto initialized = initialize_frame(frame);
         if (!initialized) {
-            return tl::unexpected{initialized.error()};
+            return mradm::unexpected{initialized.error()};
         }
 
         std::unordered_map<std::uint64_t, const PcmPlane*> planes;
@@ -464,7 +464,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             while (update_index < frame.updates.size() && frame.updates[update_index].offset_samples == cursor) {
                 const auto applied = apply_update(frame.updates[update_index], frame);
                 if (!applied) {
-                    return tl::unexpected{applied.error()};
+                    return mradm::unexpected{applied.error()};
                 }
                 ++update_index;
             }
@@ -488,7 +488,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                 const PcmPlane* pcm = plane != planes.end() ? plane->second : nullptr;
                 auto rendered = render_element(frame, element, pcm, cursor, frames, output);
                 if (!rendered) {
-                    return tl::unexpected{rendered.error()};
+                    return mradm::unexpected{rendered.error()};
                 }
             }
             advance_states(frames);
@@ -520,7 +520,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             element.target = state;
             auto direction_initialized = initialize_direction(element, state, frame);
             if (!direction_initialized) {
-                return tl::unexpected{direction_initialized.error()};
+                return mradm::unexpected{direction_initialized.error()};
             }
             element.ramp_remaining.fill(0U);
             element.initialized = true;
@@ -529,7 +529,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             if (!element.initialized) {
                 auto direction_initialized = initialize_direction(element, element.current, frame);
                 if (!direction_initialized) {
-                    return tl::unexpected{direction_initialized.error()};
+                    return mradm::unexpected{direction_initialized.error()};
                 }
                 element.initialized = true;
             }
@@ -545,7 +545,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         }
         auto direction = direction_for(element, state, frame);
         if (!direction) {
-            return tl::unexpected{direction.error()};
+            return mradm::unexpected{direction.error()};
         }
         element.current_direction = *direction;
         element.target_direction = *direction;
@@ -565,7 +565,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         if (element.descriptor.role == ElementRole::direct_speaker) {
             auto direction = direction_for(element, target, frame);
             if (!direction) {
-                return tl::unexpected{direction.error()};
+                return mradm::unexpected{direction.error()};
             }
             target_direction = *direction;
         }
@@ -686,7 +686,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         } else {
             auto resolved = direction_for(element, object_state, frame);
             if (!resolved) {
-                return tl::unexpected{resolved.error()};
+                return mradm::unexpected{resolved.error()};
             }
             direction = *resolved;
         }
@@ -825,13 +825,13 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         if (convolution_info.initialized == 0U) {
             auto initial = hrtf_for(element, start, frame, scratch_.hrtf_target, element.current_direction);
             if (!initial) {
-                return tl::unexpected{initial.error()};
+                return mradm::unexpected{initial.error()};
             }
             convolver_.initialize(element.convolution, scratch_.hrtf_target);
         }
         auto target = hrtf_for(element, end, frame, scratch_.hrtf_target, segment_end_direction(element, frames));
         if (!target) {
-            return tl::unexpected{target.error()};
+            return mradm::unexpected{target.error()};
         }
         bool spatial_ramp = false;
         for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
@@ -882,7 +882,7 @@ Result<std::unique_ptr<ILiveSceneRenderer>> create_live_binaural_renderer(const 
                                                                           DiagnosticSink diagnostics) {
     auto state = prepare_hrtf_state(config);
     if (!state) {
-        return tl::unexpected{state.error()};
+        return mradm::unexpected{state.error()};
     }
     auto renderer = std::make_unique<LiveBinauralRenderer>(config, std::move(*state), std::move(diagnostics));
     if (renderer->sample_rate() == 0U) {

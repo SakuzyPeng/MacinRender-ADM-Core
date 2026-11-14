@@ -28,7 +28,6 @@
 #include <FLAC/callback.h>
 #include <FLAC/metadata.h>
 #include <FLAC/stream_encoder.h>
-#include <fmt/format.h>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
@@ -261,7 +260,7 @@ struct FloatFlacWriter::Impl {
 Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
     if (channels < 1U || channels > 8U) {
         return make_error(
-            ErrorCode::unsupported, fmt::format("FLAC supports 1-8 channels, got {}", channels), "path=" + path);
+            ErrorCode::unsupported, "FLAC supports 1-8 channels, got " + std::to_string(channels), "path=" + path);
     }
 
     FLAC__StreamEncoder* enc = FLAC__stream_encoder_new();
@@ -286,7 +285,7 @@ Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t 
         FLAC__stream_encoder_delete(enc);
         std::fclose(file);
         return make_error(ErrorCode::io_error,
-                          fmt::format("FLAC encoder init failed: {}", FLAC__StreamEncoderInitStatusString[status]),
+                          std::string("FLAC encoder init failed: ") + FLAC__StreamEncoderInitStatusString[status],
                           "path=" + path);
     }
 
@@ -335,7 +334,7 @@ Result<FloatFlacReader> FloatFlacReader::open(const std::string& path) {
                                               message.data(),
                                               message.size());
         code != 0) {
-        return tl::unexpected{wav_error(code, message, path)};
+        return mradm::unexpected{wav_error(code, message, path)};
     }
     FloatFlacReader r;
     r.impl_ = std::make_unique<Impl>();
@@ -404,7 +403,7 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
         const auto status = FLAC__metadata_chain_status(chain);
         FLAC__metadata_chain_delete(chain);
         return make_error(ErrorCode::io_error,
-                          fmt::format("FLAC metadata chain read failed: {}", FLAC__Metadata_ChainStatusString[status]),
+                          std::string("FLAC metadata chain read failed: ") + FLAC__Metadata_ChainStatusString[status],
                           "path=" + path);
     }
 
@@ -443,7 +442,11 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
     }};
     for (const auto& [id, mask] : k_masks) {
         if (meta.output_layout == id) {
-            tags_ok &= append_tag(fmt::format("WAVEFORMATEXTENSIBLE_CHANNEL_MASK=0x{:08X}", mask));
+            std::string tag = "WAVEFORMATEXTENSIBLE_CHANNEL_MASK=0x"; // fmt's {:08X}
+            for (int shift = 28; shift >= 0; shift -= 4) {
+                tag += std::string_view{"0123456789ABCDEF"}.at((mask >> shift) & 0xFU);
+            }
+            tags_ok &= append_tag(tag);
             break;
         }
     }
@@ -510,7 +513,7 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
     if (ok == 0) {
         std::filesystem::remove(temp_path);
         return make_error(ErrorCode::io_error,
-                          fmt::format("FLAC metadata chain write failed: {}", FLAC__Metadata_ChainStatusString[status]),
+                          std::string("FLAC metadata chain write failed: ") + FLAC__Metadata_ChainStatusString[status],
                           "path=" + path);
     }
 
@@ -536,13 +539,13 @@ Result<void> convert_to_flac(const std::string& src_path,
     }
     auto reader_res = FloatWavReader::open(src_path);
     if (!reader_res) {
-        return tl::unexpected{reader_res.error()};
+        return mradm::unexpected{reader_res.error()};
     }
     auto& reader = *reader_res;
 
     auto writer_res = FloatFlacWriter::open(flac_path, reader.channels(), reader.sample_rate());
     if (!writer_res) {
-        return tl::unexpected{writer_res.error()};
+        return mradm::unexpected{writer_res.error()};
     }
     auto& writer = *writer_res;
 

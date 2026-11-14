@@ -14,6 +14,7 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
+#include "adm/render_service.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
 

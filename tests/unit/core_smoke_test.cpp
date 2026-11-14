@@ -16,6 +16,7 @@
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
+#include "adm/render_service.h"
 #include "adm/version.h"
 
 #include "audio_reader.h"

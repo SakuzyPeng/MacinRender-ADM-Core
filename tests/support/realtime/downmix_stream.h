@@ -42,7 +42,7 @@ class DownmixStream final : public IRenderStream {
         }
         auto produced = inner_->process(std::span<float>(scratch_.data(), src_floats), frames);
         if (!produced) {
-            return tl::unexpected{produced.error()};
+            return mradm::unexpected{produced.error()};
         }
         const std::size_t got = *produced;
         if (got > frames) {
@@ -50,7 +50,7 @@ class DownmixStream final : public IRenderStream {
         }
         auto mixed = matrix_.process(std::span{scratch_}.first(got * src_channels_), out, got);
         if (!mixed) {
-            return tl::unexpected{mixed.error()};
+            return mradm::unexpected{mixed.error()};
         }
         return got;
     }

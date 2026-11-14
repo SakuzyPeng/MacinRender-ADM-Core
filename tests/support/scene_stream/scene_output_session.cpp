@@ -22,10 +22,10 @@ MradmAdmText text(const std::string& s) noexcept {
     return {reinterpret_cast<const uint8_t*>(s.data()), s.size()};
 }
 // Code 100: the device threw; rethrow it as the former shell did.
-tl::unexpected<Error> device_error(const FfiError& error, int32_t code) {
+mradm::unexpected<Error> device_error(const FfiError& error, int32_t code) {
     auto e = error.error(code);
     if (code == 100) {
-        throw std::runtime_error(e.value().message);
+        throw std::runtime_error(e.error().message);
     }
     return e;
 }
@@ -153,12 +153,12 @@ Result<void> SceneOutputSession::set_hptf(const std::optional<render_common::Hpt
 Result<void>
 SceneOutputSession::set_hptf_profile(const std::string& path, HptfPreampMode mode, std::uint64_t revision) {
     auto settings = render_common::prepare_hptf(path, mode, revision);
-    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+    return settings ? set_hptf_prepared(*settings) : mradm::unexpected{settings.error()};
 }
 Result<void>
 SceneOutputSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
     auto settings = render_common::prepare_hptf(profile, mode, revision);
-    return settings ? set_hptf_prepared(*settings) : tl::unexpected{settings.error()};
+    return settings ? set_hptf_prepared(*settings) : mradm::unexpected{settings.error()};
 }
 Result<void> SceneOutputSession::set_hptf_prepared(const render_common::HptfSettings& settings) {
     // Rust designs for the fixed stream rate and serialises publication independently of the output control lock.

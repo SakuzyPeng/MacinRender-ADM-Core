@@ -57,7 +57,7 @@ Result<ScreenConfig> parse_screen_config_json(std::string_view source) {
     const ScreenConfig config{view.has_reference != 0U ? std::optional{convert(view.reference)} : std::nullopt,
                               view.has_reproduction != 0U ? std::optional{convert(view.reproduction)} : std::nullopt};
     if (auto valid = validate_screen_config(config); !valid) {
-        return tl::unexpected{valid.error()};
+        return mradm::unexpected{valid.error()};
     }
     return config;
 }

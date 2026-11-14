@@ -23,7 +23,7 @@ class VbapRenderer final : public IRenderer {
     [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override {
         auto prepared = render_common::prepare_backend(EngineBackend::saf, plan, logs);
         if (!prepared) {
-            return tl::unexpected{prepared.error()};
+            return mradm::unexpected{prepared.error()};
         }
         return std::static_pointer_cast<IPreparedRender>(*prepared);
     }

@@ -24,6 +24,7 @@ DIST_LABEL = {
     "available": "可用",
     "macos-only": "macOS only",
     "opt-in": "opt-in（默认关闭）",
+    "test-only": "测试专用（不进生产）",
     "system": "平台 SDK（不再分发）",
     "gpl-gated-off": "默认禁用",
 }
