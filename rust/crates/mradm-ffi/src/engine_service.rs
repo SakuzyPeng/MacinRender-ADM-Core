@@ -277,7 +277,27 @@ pub struct RenderDriver(Box<EngineRender>);
 
 impl RenderDriver {
     /// `islands` runs the audio islands and the Apple backend inside the steps.
-    pub fn new(
+    ///
+    /// # Safety
+    ///
+    /// The callbacks must honor the island pointer, ownership and reply contracts. They must
+    /// complete before their island call returns and must not retain its event, reply or context
+    /// pointers. Data reached through `islands.driver.user` must remain valid until this driver is
+    /// dropped and support every thread on which the islands invoke the callbacks.
+    ///
+    /// A non-null `islands.apple` must point to an immutable, thread-safe table that remains valid
+    /// until this driver and every preparation returned by [`Self::take_prepared`] (including
+    /// shared copies) have been dropped.
+    ///
+    /// ```compile_fail,E0133
+    /// use mradm_engine::{catalog::Platform, render::Request};
+    /// use mradm_ffi::engine_service::{IslandRunner, RenderDriver};
+    ///
+    /// fn create(request: Request, platform: Platform, islands: IslandRunner) {
+    ///     RenderDriver::new(request, platform, None, None, islands);
+    /// }
+    /// ```
+    pub unsafe fn new(
         request: Request,
         platform: mradm_engine::catalog::Platform,
         preimported: Option<&SceneHandle>,

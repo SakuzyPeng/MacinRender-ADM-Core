@@ -424,13 +424,17 @@ pub(crate) fn drive(
         apple: islands::apple(),
     };
     let cached = cache.as_ref().and_then(|c| c.as_ref()).map(|p| &*p.0);
-    let mut render = RenderDriver::new(
-        request,
-        platform,
-        preimported.map(|s| unsafe { &*s.0 }),
-        cached,
-        runner,
-    );
+    // SAFETY: The driver and its sink outlive render; all island callbacks complete inside next.
+    // The Apple table is immutable process data, including for cached preparations.
+    let mut render = unsafe {
+        RenderDriver::new(
+            request,
+            platform,
+            preimported.map(|s| &*s.0),
+            cached,
+            runner,
+        )
+    };
     loop {
         let event = render.next(driver.cancelled());
         if driver.failed.load(Ordering::Acquire) {
