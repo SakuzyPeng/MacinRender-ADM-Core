@@ -2,6 +2,10 @@
 
 > 2026-10-06：落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md)"按单元记录退出条件与移除参考实现的时机"。登记表为 [`tests/reference/retention.json`](../../tests/reference/retention.json)，由 `scripts/quality/check-reference-retention.py` 校验。
 
+> 2026-11-14：用户决定不为对照长期保留旧实现（[PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)）。下文三条退役条件由一条取代：
+> **行为已被门禁矩阵或独立的 Rust 回归覆盖**；门禁覆盖不到的不可信输入与错误路径先固化为 Rust golden 再删。R1 删除全部 18 个单元、
+> 登记表与校验脚本，本文件此后只作历史记录。
+
 ## 两类参考
 
 每个迁移批次都会保留旧实现，用来比较 Rust 版本。参考分两类：
@@ -29,7 +33,7 @@
 
 ## 退役条件
 
-一个单元同时满足以下三条才可以删除。条件 ID 与 `retention.json` 的 `conditions` 字段对应。
+（2026-11-14 起由上文的一条取代，下面是原规则。）一个单元同时满足以下三条才可以删除。条件 ID 与 `retention.json` 的 `conditions` 字段对应。
 
 1. **`released`**：该批次的 Rust 实现已随至少一个正式 `v*` tag 发布。截至 2026-10-06，最新 tag 为 `v1.9.1`，所有批次都还没有发布。
 2. **`independent-regression`**：比较测试守护的行为已固化为不依赖旧实现的回归，并在必需 CI 运行。形式可以是 golden 输出或哈希、误差阈值，或运行时生成的 fixture。只证明"与旧实现一致"的测试不算。
