@@ -62,7 +62,7 @@ template <typename T> class [[nodiscard]] Result {
         requires std::is_default_constructible_v<T>
         : state_(std::in_place_index<0>) {}
     template <typename U = T>
-        requires(std::is_constructible_v<T, U &&> && !std::is_same_v<std::remove_cvref_t<U>, Result>)
+        requires(std::is_constructible_v<T, U&&> && !std::is_same_v<std::remove_cvref_t<U>, Result>)
     // cppcheck-suppress noExplicitConstructor ; implicit, as in tl::expected
     explicit(!std::is_convertible_v<U&&, T>) Result(U&& value)
         : state_(std::in_place_index<0>, std::forward<U>(value)) {}
