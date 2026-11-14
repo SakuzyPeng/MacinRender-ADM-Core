@@ -139,6 +139,33 @@ pub struct EngineSceneStream {
     pub(crate) stream: Arc<Stream>,
 }
 
+impl EngineSceneStream {
+    /// The handle of a created stream (`mradm_engine_scene_create`).
+    pub fn new(stream: Stream) -> Box<Self> {
+        Box::new(Self {
+            stream: Arc::new(stream),
+        })
+    }
+
+    /// The stream, for Rust callers.
+    pub fn stream(&self) -> &Arc<Stream> {
+        &self.stream
+    }
+}
+
+/// The checked Scene stream configuration and renderer, for Rust callers: a stream on the FFI
+/// host (room floating-point environment, Windows worker scheduling).
+pub fn create_stream(
+    config: &Config,
+    renderer: &mradm_engine::scene::renderer::Config<'_>,
+) -> Result<Box<EngineSceneStream>, Error> {
+    Ok(EngineSceneStream::new(Stream::create(
+        config,
+        renderer,
+        Arc::new(FfiHost),
+    )?))
+}
+
 unsafe fn stream<'a>(handle: *const EngineSceneStream) -> Result<&'a Stream, Error> {
     unsafe { handle.as_ref() }
         .map(|h| &*h.stream)
@@ -243,10 +270,7 @@ pub unsafe extern "C" fn mradm_engine_scene_create(
                 update: c.update_bytes,
             },
         };
-        let stream = Stream::create(&config, &renderer, Arc::new(FfiHost))?;
-        *out = Box::into_raw(Box::new(EngineSceneStream {
-            stream: Arc::new(stream),
-        }));
+        *out = Box::into_raw(create_stream(&config, &renderer)?);
         Ok(())
     })
 }

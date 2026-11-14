@@ -24,6 +24,116 @@ pub struct EngineSceneOutput {
 }
 
 impl EngineSceneOutput {
+    /// Opens the device of `kind` (`SceneOutputKind`: 0 system spatial over `layout` in `geometry`,
+    /// 1 the stereo hardware device `device_id`, 2 the null backend) and the session over it
+    /// (`mradm_engine_scene_output_open`).
+    ///
+    /// # Safety
+    ///
+    /// `devices` is null or points at the device island table, valid for the process.
+    pub unsafe fn open(
+        stream: &EngineSceneStream,
+        kind: u32,
+        layout: &[u8],
+        geometry: u32,
+        device_id: &[u8],
+        devices: *const DeviceIslands,
+    ) -> Result<Box<Self>, Error> {
+        let devices = Devices::new(devices).ok_or_else(|| bad("无效设备表"))?;
+        let layout = String::from_utf8_lossy(layout).into_owned();
+        let (_, channels) = stream.stream.output_format();
+        let device = if kind == KIND_SYSTEM_SPATIAL {
+            let geometry = if geometry == 1 {
+                Geometry::Apple
+            } else {
+                Geometry::Standard
+            };
+            if layouts::find(&layout, geometry)
+                .is_none_or(|l| l.speakers.len() != channels as usize)
+            {
+                return Err(invalid(
+                    "Scene output layout does not match the rendered channels",
+                ));
+            }
+            let geometry = u32::from(geometry == Geometry::Apple);
+            devices.open(SYSTEM_SPATIAL, &layout, geometry, b"")?
+        } else {
+            if kind == KIND_STEREO && channels != 2 {
+                return Err(invalid("Stereo output requires two rendered channels"));
+            }
+            let device_kind = if kind == KIND_NULL {
+                NULL_BACKEND
+            } else {
+                HARDWARE
+            };
+            devices.open(device_kind, "", 0, device_id)?
+        };
+        start(stream, device, kind != KIND_SYSTEM_SPATIAL)
+    }
+
+    pub fn pause(&self) {
+        let _control = self.lock();
+        self.park();
+    }
+
+    pub fn play(&self) {
+        let _control = self.lock();
+        self.session.play();
+        self.device.resume();
+    }
+
+    /// A stale epoch is rejected before the device queue is disturbed; otherwise park, flush the
+    /// device and reset to `target`.
+    pub fn begin_epoch(&self, epoch: u64, target: i64) -> Result<(), Error> {
+        let _control = self.lock();
+        self.session.check_epoch(epoch)?;
+        self.park();
+        self.device.flush();
+        self.session.reset_epoch(epoch, target)
+    }
+
+    pub fn set_volume(&self, gain: f32) -> Result<(), Error> {
+        let _control = self.lock();
+        self.session.set_volume(gain)?;
+        self.device.set_volume(gain);
+        Ok(())
+    }
+
+    /// Designs prepared settings for the stream's rate and publishes them.
+    pub fn set_hptf_settings(&self, settings: &Settings) -> Result<(), Error> {
+        let s = &self.session;
+        s.check_hptf_settings()?;
+        let snapshot = settings
+            .design(s.sample_rate())
+            .map_err(|(code, message)| Error {
+                code,
+                message: message.into_bytes(),
+                context: Vec::new(),
+            })?;
+        s.publish_hptf(snapshot)
+    }
+
+    pub fn hptf_snapshot(&self) -> Snapshot {
+        self.session.hptf_snapshot().into()
+    }
+
+    pub fn status(&self) -> EngineSceneOutputStatus {
+        let _control = self.lock();
+        let v = self.session.status(self.device.progress());
+        EngineSceneOutputStatus {
+            state: v.state as u32,
+            epoch: v.epoch,
+            consumed_frames: v.consumed_frames,
+            presented_frames: v.presented_frames,
+            queued_frames: v.queued_frames,
+            underruns: v.underruns,
+            media_clock: u32::from(v.media_clock),
+            recovering: u32::from(v.recovering),
+            failed: u32::from(v.failed),
+            ended: u32::from(v.ended),
+        }
+    }
+
     fn lock(&self) -> MutexGuard<'_, ()> {
         self.control.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -119,7 +229,7 @@ fn start(
     stream: &EngineSceneStream,
     device: Device,
     protect_stereo: bool,
-) -> Result<*mut EngineSceneOutput, Error> {
+) -> Result<Box<EngineSceneOutput>, Error> {
     let session = Session::new(stream.stream.clone(), protect_stereo, device.has_volume())?;
     let (channels, rate) = (session.channels(), session.sample_rate());
     let output = Box::new(EngineSceneOutput {
@@ -133,7 +243,7 @@ fn start(
     // A failed start drops the output: park, then stop, as the C++ destructor did.
     output.device.start(channels, rate, user, pull)?;
     output.device.pause();
-    Ok(Box::into_raw(output))
+    Ok(output)
 }
 
 fn invalid(message: &str) -> Error {
@@ -164,37 +274,11 @@ pub unsafe extern "C" fn mradm_engine_scene_output_open(
         let out = unsafe { out.as_mut() }.ok_or_else(|| bad("无效输出指针"))?;
         *out = ptr::null_mut();
         let stream = unsafe { stream.as_ref() }.ok_or_else(|| bad("无效 Scene 流句柄"))?;
-        let devices = Devices::new(devices).ok_or_else(|| bad("无效设备表"))?;
-        let layout = String::from_utf8_lossy(unsafe { super::bytes(&layout)? }).into_owned();
+        let layout = unsafe { super::bytes(&layout)? };
         let device_id = unsafe { super::bytes(&device_id)? };
-        let (_, channels) = stream.stream.output_format();
-        let device = if kind == KIND_SYSTEM_SPATIAL {
-            let geometry = if geometry == 1 {
-                Geometry::Apple
-            } else {
-                Geometry::Standard
-            };
-            if layouts::find(&layout, geometry)
-                .is_none_or(|l| l.speakers.len() != channels as usize)
-            {
-                return Err(invalid(
-                    "Scene output layout does not match the rendered channels",
-                ));
-            }
-            let geometry = u32::from(geometry == Geometry::Apple);
-            devices.open(SYSTEM_SPATIAL, &layout, geometry, b"")?
-        } else {
-            if kind == KIND_STEREO && channels != 2 {
-                return Err(invalid("Stereo output requires two rendered channels"));
-            }
-            let device_kind = if kind == KIND_NULL {
-                NULL_BACKEND
-            } else {
-                HARDWARE
-            };
-            devices.open(device_kind, "", 0, device_id)?
-        };
-        *out = start(stream, device, kind != KIND_SYSTEM_SPATIAL)?;
+        let output =
+            unsafe { EngineSceneOutput::open(stream, kind, layout, geometry, device_id, devices)? };
+        *out = Box::into_raw(output);
         Ok(())
     })
 }
@@ -217,7 +301,7 @@ pub unsafe extern "C" fn mradm_engine_scene_output_create(
         *out = ptr::null_mut();
         let stream = unsafe { stream.as_ref() }.ok_or_else(|| bad("无效 Scene 流句柄"))?;
         let device = device.ok_or_else(|| bad("无效设备"))?;
-        *out = start(stream, device, protect_stereo != 0)?;
+        *out = Box::into_raw(start(stream, device, protect_stereo != 0)?);
         Ok(())
     })
 }

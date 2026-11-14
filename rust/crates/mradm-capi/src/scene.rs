@@ -4,44 +4,30 @@
 //! `SceneOutputSession` shells called, with the same message buffers, so messages, locators and
 //! truncation are unchanged.
 use crate::context::adm_context_t;
-use crate::error::{self, Error, Failure, c_str, concat, until_nul, utf8_path};
+use crate::error::{self, Error, Failure, c_str, concat, utf8_path};
 use crate::guard::{self, INTERNAL, INVALID_ARGUMENT, OK, UNSUPPORTED};
 use crate::options::file_name;
 use crate::query::BAD_ALLOC;
 use crate::room::{self, adm_room_config_t};
 use crate::string;
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
-use mradm_ffi::adm::Text;
-use mradm_ffi::hptf::settings::{
-    Settings, mradm_dsp_hptf_settings_create, mradm_dsp_hptf_settings_destroy,
+use mradm_engine::backend::{RoomRequest as EngineRoomRequest, Screens, Sofa};
+use mradm_engine::request::Selection;
+use mradm_engine::scene::renderer::Config as RendererConfig;
+use mradm_engine::scene::stream::{
+    self as engine_stream, Config as StreamConfig, Descriptor, Entity, FrameInput,
+    Identity as EngineIdentity, PlaneInput, PlaneInputs, Sizes,
 };
+use mradm_ffi::engine_render::{binaural_spread_of, speaker_spread_of};
+use mradm_ffi::hptf::settings::Settings;
 use mradm_ffi::hptf::{Coefficients, Snapshot};
 use mradm_ffi::render::device_island::DeviceIslands;
-use mradm_ffi::render::engine_scene::{
-    EngineSceneConfig, EngineSceneDiagnostic, EngineSceneElement, EngineSceneEntity,
-    EngineSceneFrame, EngineSceneIdentity, EngineScenePlane, EngineScenePull, EngineSceneStatus,
-    EngineSceneStream, mradm_engine_scene_attached, mradm_engine_scene_begin_epoch,
-    mradm_engine_scene_configure, mradm_engine_scene_create, mradm_engine_scene_destroy,
-    mradm_engine_scene_diagnostic, mradm_engine_scene_diagnostic_count, mradm_engine_scene_format,
-    mradm_engine_scene_orientation, mradm_engine_scene_policy, mradm_engine_scene_pull,
-    mradm_engine_scene_room_control, mradm_engine_scene_signal_end, mradm_engine_scene_status,
-    mradm_engine_scene_submit, mradm_engine_scene_switch_backend,
-};
-use mradm_ffi::render::engine_scene_output::{
-    EngineSceneOutput, EngineSceneOutputStatus, mradm_engine_scene_output_begin_epoch,
-    mradm_engine_scene_output_destroy, mradm_engine_scene_output_hptf_snapshot,
-    mradm_engine_scene_output_open, mradm_engine_scene_output_pause,
-    mradm_engine_scene_output_play, mradm_engine_scene_output_set_hptf_settings,
-    mradm_engine_scene_output_set_volume, mradm_engine_scene_output_status,
-};
-use mradm_ffi::render::room_ffi::{
-    RenderRoomConfig, RenderRoomControl, RenderRoomStatus, mradm_room_control_destroy,
-    mradm_room_control_request, mradm_room_control_source, mradm_room_control_status,
-};
-use mradm_ffi::render::{
-    EngineSceneRendererRequest, RenderLiveEntry, RenderLiveState, RenderLiveUpdate,
-};
-use mradm_ffi::room::RoomSourceInfo;
+use mradm_ffi::render::engine_scene::{EngineSceneStream, create_stream};
+use mradm_ffi::render::engine_scene_output::EngineSceneOutput;
+use mradm_ffi::render::room_ffi::{RenderRoomControl, switch_config};
+use mradm_render::live;
+use mradm_render::room_runtime::{self, SourcePosition, Status as RoomStatus};
+use mradm_render::routing::Error as EngineError;
 #[cfg(test)]
 use std::ffi::CStr;
 use std::ffi::{c_char, c_void};
@@ -517,66 +503,9 @@ pub(crate) unsafe fn text<'a>(value: *const c_char) -> &'a [u8] {
     }
 }
 
-pub(crate) fn ffi_text(bytes: &[u8]) -> Text {
-    Text {
-        data: bytes.as_ptr(),
-        len: bytes.len(),
-    }
-}
-
 /// `make_error(code, message)`.
 pub(crate) fn invalid(code: i32, message: &str) -> Failure {
     Failure::error(code, message.as_bytes(), b"")
-}
-
-/// The message and context buffers of a private FFI call (`FfiError`): 512 bytes plus `extra`
-/// (`context_extra` for the context).
-pub(crate) struct Buffers {
-    message: Vec<u8>,
-    context: Vec<u8>,
-    message_len: usize,
-    context_len: usize,
-}
-
-impl Buffers {
-    pub(crate) fn new(extra: usize, context_extra: usize) -> Result<Self, Failure> {
-        let zeroed = |len: usize| -> Result<Vec<u8>, Failure> {
-            let len = len.checked_add(512).ok_or(Failure::Exception)?;
-            let mut bytes = Vec::new();
-            bytes
-                .try_reserve_exact(len)
-                .map_err(|_| Failure::Exception)?;
-            bytes.resize(len, 0);
-            Ok(bytes)
-        };
-        let message = zeroed(extra)?;
-        let context = zeroed(context_extra)?;
-        Ok(Self {
-            message_len: message.len(),
-            context_len: context.len(),
-            message,
-            context,
-        })
-    }
-
-    /// Runs `call` with the buffers; a non-zero code is the error it wrote.
-    pub(crate) fn run(
-        mut self,
-        call: impl FnOnce(*mut u8, *mut usize, *mut u8, *mut usize) -> i32,
-    ) -> Result<(), Failure> {
-        let code = call(
-            self.message.as_mut_ptr(),
-            &mut self.message_len,
-            self.context.as_mut_ptr(),
-            &mut self.context_len,
-        );
-        if code == 0 {
-            return Ok(());
-        }
-        let message = &self.message[..self.message_len.min(self.message.len())];
-        let context = &self.context[..self.context_len.min(self.context.len())];
-        Err(Error::new(code, message, context)?.into())
-    }
 }
 
 /// `load_sized_array`: `count` records `stride` bytes apart, `stride` the first record's
@@ -750,34 +679,54 @@ impl Renderer {
         Some(())
     }
 
-    /// `SceneRendererRequest` (it borrows `self`) and its error buffers.
-    fn request(&self, sink: bool) -> Result<(EngineSceneRendererRequest, Buffers), Failure> {
+    /// The engine's renderer configuration (it borrows `self`).
+    fn config(&self, sink: bool) -> Result<RendererConfig<'_>, Failure> {
+        let (Some(selection), Some(speaker_spread), Some(binaural_spread)) = (
+            Selection::from_u32(self.selection as u32),
+            speaker_spread_of(self.speaker_spread),
+            binaural_spread_of(self.binaural_spread),
+        ) else {
+            return Err(invalid(1, "无效 Scene 流式渲染参数"));
+        };
         let reference = self.reference.unwrap_or_default();
-        let hrir = self.room.as_ref().map_or(&[][..], |r| &r.hrir[..]);
-        let paths = self.sofa.len() + hrir.len();
-        let request = EngineSceneRendererRequest {
-            selection: self.selection as u32,
-            layout_id: ffi_text(&self.layout),
-            apple_geometry: u32::from(self.apple_geometry),
-            speaker_spread: self.speaker_spread,
-            binaural_spread: self.binaural_spread,
-            split_power: u32::from(self.split_power),
+        let room = self.room.as_ref();
+        Ok(RendererConfig {
+            selection,
+            layout_id: &self.layout,
+            apple_geometry: self.apple_geometry,
+            speaker_spread,
+            binaural_spread,
+            split_power: self.split_power,
             smoothing_frames: self.smoothing,
             sample_rate: self.sample_rate,
-            has_sofa: u32::from(!self.sofa.is_empty()),
-            sofa_path: ffi_text(&self.sofa),
-            sofa_file_name: ffi_text(file_name(&self.sofa)),
-            has_reference: u32::from(self.reference.is_some()),
-            reference,
-            has_reproduction: u32::from(self.reproduction.is_some()),
-            reproduction: self.reproduction.unwrap_or(reference),
-            room_profile: self.room.as_ref().map_or(ptr::null(), |r| r.profile),
-            room_hrir: ffi_text(hrir),
-            room_metres: self.room.as_ref().map_or(0.0, |r| r.metres),
-            room_quality: self.room.as_ref().map_or(0, |r| r.quality),
-            sink: u32::from(sink),
-        };
-        Ok((request, Buffers::new(self.layout.len() + paths, paths)?))
+            sofa: (!self.sofa.is_empty()).then(|| Sofa {
+                path: &self.sofa,
+                file_name: file_name(&self.sofa),
+            }),
+            screens: Screens {
+                has_reference: self.reference.is_some(),
+                reference,
+                has_reproduction: self.reproduction.is_some(),
+                reproduction: self.reproduction.unwrap_or(reference),
+            },
+            room: EngineRoomRequest {
+                package: room
+                    .and_then(|r| unsafe { r.profile.as_ref() })
+                    .map(mradm_ffi::room::RoomProfileHandle::package),
+                hrir: room.map_or(&[][..], |r| &r.hrir[..]),
+                metres: room.map_or(0.0, |r| r.metres),
+                quality: room.map_or(0, |r| r.quality),
+            },
+            sink,
+        })
+    }
+}
+
+/// An engine error as the C ABI stores it.
+pub(crate) fn engine_failure(error: EngineError) -> Failure {
+    match Error::new(error.code, &error.message, &error.context) {
+        Ok(error) => error.into(),
+        Err(failure) => failure,
     }
 }
 
@@ -823,7 +772,7 @@ struct StreamMessages {
 
 #[allow(non_camel_case_types)] // The `c_api.h` name.
 pub struct adm_scene_stream_t {
-    handle: *mut EngineSceneStream,
+    handle: Box<EngineSceneStream>,
     output_rate: u32,
     channels: u32,
     input_rate: u32,
@@ -834,13 +783,16 @@ pub struct adm_scene_stream_t {
 unsafe impl Send for adm_scene_stream_t {}
 unsafe impl Sync for adm_scene_stream_t {}
 
-impl Drop for adm_scene_stream_t {
-    fn drop(&mut self) {
-        unsafe { mradm_engine_scene_destroy(self.handle) };
-    }
-}
-
 impl adm_scene_stream_t {
+    fn stream(&self) -> &engine_stream::Stream {
+        self.handle.stream()
+    }
+
+    /// The handle the not-yet-direct room and output entries take.
+    fn raw(&self) -> *const EngineSceneStream {
+        &*self.handle
+    }
+
     fn clear(&self) {
         let mut m = lock(&self.messages);
         m.last_error.clear();
@@ -888,7 +840,7 @@ impl adm_scene_stream_t {
     }
 
     fn attached(&self) -> bool {
-        unsafe { mradm_engine_scene_attached(self.handle) != 0 }
+        self.stream().output_attached()
     }
 }
 
@@ -1023,28 +975,25 @@ unsafe fn create(
         });
     }
     let (frame, plane, entry, update) = SIZES;
-    let record = EngineSceneConfig {
+    let config = StreamConfig {
         output_sample_rate: input.output_sample_rate,
         input_queue_samples: input.input_queue_samples,
         input_queue_bytes: input.input_queue_bytes,
         output_ring_frames: input.output_ring_frames,
         startup_watermark_frames: input.startup_watermark_frames,
-        manual_clock: 0,
-        clock_ns: 0,
-        frame_bytes: frame,
-        plane_bytes: plane,
-        entry_bytes: entry,
-        update_bytes: update,
+        manual_clock: None,
+        sizes: Sizes {
+            frame,
+            plane,
+            entry,
+            update,
+        },
     };
-    let (request, buffers) = renderer.request(true)?;
-    let mut raw = ptr::null_mut();
-    buffers.run(|m, ml, c, cl| unsafe {
-        mradm_engine_scene_create(&record, &request, &mut raw, m, ml, c, cl)
-    })?;
-    let (mut output_rate, mut channels, mut input_rate) = (0, 0, 0);
-    unsafe { mradm_engine_scene_format(raw, &mut output_rate, &mut channels, &mut input_rate) };
+    let handle = create_stream(&config, &renderer.config(true)?).map_err(engine_failure)?;
+    let (output_rate, channels) = handle.stream().output_format();
+    let input_rate = handle.stream().input_sample_rate();
     let handle = error::try_box(adm_scene_stream_t {
-        handle: raw,
+        handle,
         output_rate,
         channels,
         input_rate,
@@ -1118,62 +1067,36 @@ pub unsafe extern "C" fn adm_scene_stream_begin_epoch(
     s.call(
         "unexpected exception while beginning live Scene epoch",
         || {
-            Buffers::new(0, 0)?.run(|m, ml, c, cl| unsafe {
-                mradm_engine_scene_begin_epoch(s.handle, epoch_id, target_sample, m, ml, c, cl)
-            })?;
+            s.stream()
+                .begin_epoch(epoch_id, target_sample)
+                .map_err(engine_failure)?;
             Ok(OK)
         },
     )
 }
 
-fn no_identity() -> EngineSceneIdentity {
-    EngineSceneIdentity {
-        present: 0,
-        object_id: ffi_text(b""),
-        object_name: ffi_text(b""),
-        track_uid: ffi_text(b""),
-        has_importance: 0,
-        importance: 0,
-        has_dialogue_id: 0,
-        dialogue_id: 0,
-        contents: ptr::null(),
-        contents_len: 0,
-        programmes: ptr::null(),
-        programmes_len: 0,
-    }
-}
-
-/// The entity records of a membership array; `None` for an invalid one.
+/// The entities of a membership array; `None` for an invalid one.
 unsafe fn entities(
     source: *const adm_scene_semantic_entity_t,
     count: u32,
-) -> Result<Option<Vec<EngineSceneEntity>>, Failure> {
+) -> Result<Option<Vec<Entity>>, Failure> {
     let Some(items) = (unsafe { sized(source, count)? }) else {
         return Ok(None);
     };
-    let mut records = Vec::new();
-    records
-        .try_reserve_exact(items.len())
-        .map_err(|_| Failure::Exception)?;
+    let mut records = reserve(items.len())?;
     for e in &items {
-        records.push(EngineSceneEntity {
-            id: ffi_text(unsafe { text(e.id) }),
-            name: ffi_text(unsafe { text(e.name) }),
+        records.push(Entity {
+            id: concat(&[unsafe { text(e.id) }])?,
+            name: concat(&[unsafe { text(e.name) }])?,
         });
     }
     Ok(Some(records))
 }
 
-/// An identity record and the content and programme lists it points at.
-type Identity = (
-    EngineSceneIdentity,
-    Vec<EngineSceneEntity>,
-    Vec<EngineSceneEntity>,
-);
-
-/// `to_scene_semantic_identity` and the record `configure_generation` built from it; `None` for
-/// an invalid identity.
-unsafe fn identity(source: &adm_scene_semantic_identity_t) -> Result<Option<Identity>, Failure> {
+/// `to_scene_semantic_identity`; `None` for an invalid identity.
+unsafe fn identity(
+    source: &adm_scene_semantic_identity_t,
+) -> Result<Option<EngineIdentity>, Failure> {
     if (source.struct_size as usize) < size_of::<adm_scene_semantic_identity_t>()
         || (source.has_importance != 0 && !(0..=10).contains(&source.importance))
         || (source.has_dialogue_id != 0 && !(0..=2).contains(&source.dialogue_id))
@@ -1186,36 +1109,15 @@ unsafe fn identity(source: &adm_scene_semantic_identity_t) -> Result<Option<Iden
     ) else {
         return Ok(None);
     };
-    let list = |items: &Vec<EngineSceneEntity>| {
-        if items.is_empty() {
-            ptr::null()
-        } else {
-            items.as_ptr()
-        }
-    };
-    let record = EngineSceneIdentity {
-        present: 1,
-        object_id: ffi_text(unsafe { text(source.object_id) }),
-        object_name: ffi_text(unsafe { text(source.object_name) }),
-        track_uid: ffi_text(unsafe { text(source.track_uid) }),
-        has_importance: u32::from(source.has_importance != 0),
-        importance: if source.has_importance != 0 {
-            source.importance
-        } else {
-            0
-        },
-        has_dialogue_id: u32::from(source.has_dialogue_id != 0),
-        dialogue_id: if source.has_dialogue_id != 0 {
-            source.dialogue_id
-        } else {
-            0
-        },
-        contents: list(&contents),
-        contents_len: contents.len(),
-        programmes: list(&programmes),
-        programmes_len: programmes.len(),
-    };
-    Ok(Some((record, contents, programmes)))
+    Ok(Some(EngineIdentity {
+        object_id: concat(&[unsafe { text(source.object_id) }])?,
+        object_name: concat(&[unsafe { text(source.object_name) }])?,
+        track_uid: concat(&[unsafe { text(source.track_uid) }])?,
+        importance: (source.has_importance != 0).then_some(source.importance),
+        dialogue_id: (source.has_dialogue_id != 0).then_some(source.dialogue_id),
+        contents,
+        programmes,
+    }))
 }
 
 #[unsafe(no_mangle)]
@@ -1238,19 +1140,15 @@ pub unsafe extern "C" fn adm_scene_stream_configure_generation(
                     "invalid live Scene element descriptor array/stride",
                 ));
             };
-            // The entity lists the records point at.
-            let mut lists: Vec<(Vec<EngineSceneEntity>, Vec<EngineSceneEntity>)> =
-                reserve(borrowed.len())?;
-            let mut records: Vec<EngineSceneElement> = reserve(borrowed.len())?;
+            let mut descriptors: Vec<Descriptor> = reserve(borrowed.len())?;
             for d in &borrowed {
                 if !(0..=2).contains(&d.role) {
                     return Err(invalid(1, "invalid live Scene element role"));
                 }
-                let (identity, contents, programmes) = match unsafe { d.semantic_identity.as_ref() }
-                {
-                    None => (no_identity(), Vec::new(), Vec::new()),
+                let identity = match unsafe { d.semantic_identity.as_ref() } {
+                    None => None,
                     Some(source) => match unsafe { identity(source)? } {
-                        Some(found) => found,
+                        Some(found) => Some(found),
                         None => {
                             return Err(invalid(
                                 1,
@@ -1259,41 +1157,29 @@ pub unsafe extern "C" fn adm_scene_stream_configure_generation(
                         }
                     },
                 };
-                lists.push((contents, programmes));
-                records.push(EngineSceneElement {
+                descriptors.push(Descriptor {
                     element_id: d.element_id,
                     role: d.role as u32,
-                    speaker_label: ffi_text(unsafe { text(d.speaker_label) }),
-                    has_position: u32::from(d.has_position != 0),
+                    speaker_label: concat(&[unsafe { text(d.speaker_label) }])?,
+                    has_position: d.has_position != 0,
                     position: [d.position_x, d.position_y, d.position_z],
                     flags: d.flags,
                     identity,
                 });
             }
-            Buffers::new(1024, 0)?.run(|m, ml, c, cl| unsafe {
-                mradm_engine_scene_configure(
-                    s.handle,
-                    epoch_id,
-                    generation_id,
-                    records.as_ptr(),
-                    records.len(),
-                    m,
-                    ml,
-                    c,
-                    cl,
-                )
-            })?;
+            s.stream()
+                .configure_generation(epoch_id, generation_id, &descriptors)
+                .map_err(engine_failure)?;
             Ok(OK)
         },
     )
 }
 
-/// `to_scene_state` as the C++ shell's `state_record`.
-fn state(s: &adm_scene_object_state_t) -> RenderLiveState {
-    let has_max = s.has_channel_lock_max_distance != 0;
-    RenderLiveState {
+/// `to_scene_state`.
+pub(crate) fn state(s: &adm_scene_object_state_t) -> live::State {
+    live::State {
         valid_fields: s.valid_fields,
-        active: u32::from(s.active != 0),
+        active: s.active != 0,
         linear_gain: s.linear_gain,
         position: [s.position_x, s.position_y, s.position_z],
         width: s.extent_width,
@@ -1301,17 +1187,39 @@ fn state(s: &adm_scene_object_state_t) -> RenderLiveState {
         depth: s.extent_depth,
         diffuse: s.diffuse,
         divergence: s.divergence,
-        channel_lock: u32::from(s.channel_lock != 0),
-        screen_reference: u32::from(s.screen_reference != 0),
-        head_locked: u32::from(s.head_locked != 0),
+        channel_lock: s.channel_lock != 0,
+        screen_reference: s.screen_reference != 0,
+        head_locked: s.head_locked != 0,
         divergence_azimuth_range: s.divergence_azimuth_range,
         divergence_position_range: s.divergence_position_range,
-        has_max_distance: u32::from(has_max),
-        max_distance: if has_max {
-            s.channel_lock_max_distance
-        } else {
-            0.0
-        },
+        channel_lock_max_distance: (s.has_channel_lock_max_distance != 0)
+            .then_some(s.channel_lock_max_distance),
+    }
+}
+
+/// The producer's planes, read in place.
+struct Planes<'a>(&'a [adm_scene_pcm_plane_t]);
+
+impl PlaneInputs for Planes<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+    fn plane(&self, plane: usize) -> PlaneInput {
+        let p = &self.0[plane];
+        PlaneInput {
+            element_id: p.element_id,
+            sample_count: p.sample_count,
+            stride: p.stride,
+            has_signal: p.has_signal != 0,
+            has_samples: !p.samples.is_null(),
+        }
+    }
+    fn sample(&self, plane: usize, index: usize) -> f32 {
+        let p = &self.0[plane];
+        // The engine reads a sample only after the plane passed its checks: signalled, non-null,
+        // a non-zero stride whose span fits the address space, and `index` below the frame
+        // duration. The caller's view holds those samples (the C ABI contract).
+        unsafe { p.samples.add(index * p.stride as usize).read() }
     }
 }
 
@@ -1353,21 +1261,13 @@ pub unsafe extern "C" fn adm_scene_stream_submit_frame(
             ) else {
                 return Err(invalid(1, "invalid live Scene frame array pointer/stride"));
             };
-            let mut planes = reserve(pcm.len())?;
-            planes.extend(pcm.iter().map(|p| EngineScenePlane {
-                element_id: p.element_id,
-                samples: p.samples,
-                sample_count: p.sample_count,
-                stride: p.stride,
-                has_signal: u32::from(p.has_signal != 0),
-            }));
             let state_size = size_of::<adm_scene_object_state_t>();
             let mut initial = reserve(initial_states.len())?;
             for e in &initial_states {
                 if (e.state.struct_size as usize) < state_size {
                     return Err(invalid(1, "invalid live Scene initial-state struct_size"));
                 }
-                initial.push(RenderLiveEntry {
+                initial.push(live::Entry {
                     element_id: e.element_id,
                     state: state(&e.state),
                 });
@@ -1377,42 +1277,31 @@ pub unsafe extern "C" fn adm_scene_stream_submit_frame(
                 if (u.state.struct_size as usize) < state_size {
                     return Err(invalid(1, "invalid live Scene metadata target struct_size"));
                 }
-                targets.push(RenderLiveUpdate {
+                targets.push(live::Update {
                     element_id: u.element_id,
                     offset: u.offset_samples,
                     ramp: u.ramp_duration_samples,
-                    jump: u32::from(u.jump_position != 0),
+                    jump: u.jump_position != 0,
                     changed: u.changed_fields,
                     cleared: 0,
                     state: state(&u.state),
                 });
             }
-            let record = EngineSceneFrame {
+            let planes = Planes(&pcm);
+            let view = FrameInput {
                 epoch: input.epoch_id,
                 generation: input.generation_id,
                 start: input.media_sample_start,
                 duration: input.duration_samples,
                 flags: input.flags,
-                planes: planes.as_ptr(),
-                planes_len: planes.len(),
-                initial: initial.as_ptr(),
-                initial_len: initial.len(),
-                updates: targets.as_ptr(),
-                updates_len: targets.len(),
+                planes: &planes,
+                initial: &initial,
+                updates: &targets,
             };
-            let mut submitted = 0u32;
-            Buffers::new(0, 0)?.run(|m, ml, c, cl| unsafe {
-                mradm_engine_scene_submit(
-                    s.handle,
-                    &record,
-                    i64::from(timeout_ms),
-                    &mut submitted,
-                    m,
-                    ml,
-                    c,
-                    cl,
-                )
-            })?;
+            let submitted = s
+                .stream()
+                .submit_frame(&view, i64::from(timeout_ms))
+                .map_err(engine_failure)?;
             unsafe { *out_submit_status = submitted as i32 };
             Ok(OK)
         },
@@ -1429,9 +1318,9 @@ pub unsafe extern "C" fn adm_scene_stream_signal_end(
         return INVALID_ARGUMENT;
     };
     s.call("unexpected exception while ending live Scene epoch", || {
-        Buffers::new(0, 0)?.run(|m, ml, c, cl| unsafe {
-            mradm_engine_scene_signal_end(s.handle, epoch_id, end_sample, m, ml, c, cl)
-        })?;
+        s.stream()
+            .signal_end(epoch_id, end_sample)
+            .map_err(engine_failure)?;
         Ok(OK)
     })
 }
@@ -1453,21 +1342,15 @@ pub unsafe extern "C" fn adm_scene_stream_pull(
         return INVALID_ARGUMENT;
     }
     guard::code(|| {
-        let mut pulled = EngineScenePull {
-            flags: 0,
-            epoch: 0,
-            first_media_frame: 0,
-            media_frames: 0,
-            requested_frames: 0,
+        let needed = frames as usize * s.channels as usize;
+        let output = if needed == 0 {
+            &mut [][..]
+        } else {
+            // Checked above: a non-null buffer the caller sized for `frames` frames.
+            unsafe { std::slice::from_raw_parts_mut(interleaved_output, needed) }
         };
+        let pulled = s.stream().pull(output, frames);
         unsafe {
-            mradm_engine_scene_pull(
-                s.handle,
-                interleaved_output,
-                frames as usize * s.channels as usize,
-                frames,
-                &mut pulled,
-            );
             write_sized(
                 result,
                 adm_scene_pull_result_t {
@@ -1496,9 +1379,8 @@ pub unsafe extern "C" fn adm_scene_stream_get_status(
         return INVALID_ARGUMENT;
     }
     guard::code(|| {
-        let mut v: EngineSceneStatus = unsafe { std::mem::zeroed() };
+        let v = s.stream().status();
         unsafe {
-            mradm_engine_scene_status(s.handle, &mut v);
             write_sized(
                 out,
                 adm_scene_stream_status_t {
@@ -1514,8 +1396,8 @@ pub unsafe extern "C" fn adm_scene_stream_get_status(
                     semantic_degradations: v.semantic_degradations,
                     semantic_policy_revision: v.semantic_policy_revision,
                     ring_fill: v.ring_fill,
-                    ended: i32::from(v.ended != 0),
-                    failed: i32::from(v.failed != 0),
+                    ended: i32::from(v.ended),
+                    failed: i32::from(v.failed),
                 },
             );
         }
@@ -1530,10 +1412,9 @@ unsafe fn switch_backend(
 ) -> Result<(), Failure> {
     let mut renderer = unsafe { renderer_config(config, s.input_rate)? };
     renderer.convert_sofa().ok_or(Failure::Exception)?;
-    let (request, buffers) = renderer.request(true)?;
-    buffers.run(|m, ml, c, cl| unsafe {
-        mradm_engine_scene_switch_backend(s.handle, &request, m, ml, c, cl)
-    })
+    s.stream()
+        .switch_backend(&renderer.config(true)?)
+        .map_err(engine_failure)
 }
 
 #[unsafe(no_mangle)]
@@ -1569,7 +1450,8 @@ pub unsafe extern "C" fn adm_scene_stream_set_listener_orientation(
     s.call(
         "unexpected exception while setting live Scene listener orientation",
         || {
-            unsafe { mradm_engine_scene_orientation(s.handle, yaw_deg, pitch_deg, roll_deg) };
+            s.stream()
+                .set_listener_orientation([yaw_deg, pitch_deg, roll_deg]);
             Ok(OK)
         },
     )
@@ -1610,15 +1492,9 @@ pub unsafe extern "C" fn adm_scene_stream_set_semantic_policy_json(
     s.call(
         "unexpected exception while setting live Scene semantic policy",
         || {
-            let document = unsafe { text(json) };
-            let data = if json.is_null() {
-                ptr::null()
-            } else {
-                document.as_ptr()
-            };
-            Buffers::new(1024, 0)?.run(|m, ml, c, cl| unsafe {
-                mradm_engine_scene_policy(s.handle, data, document.len(), revision, m, ml, c, cl)
-            })?;
+            s.stream()
+                .set_semantic_policy_json(unsafe { text(json) }, revision)
+                .map_err(engine_failure)?;
             Ok(OK)
         },
     )
@@ -1632,7 +1508,7 @@ pub unsafe extern "C" fn adm_scene_stream_log_count(stream: *mut adm_scene_strea
     guard::guard(0, || {
         let mut m = lock(&s.messages);
         m.diagnostic.clear();
-        let count = unsafe { mradm_engine_scene_diagnostic_count(s.handle) };
+        let count = s.stream().diagnostic_count();
         u32::try_from(count).unwrap_or(u32::MAX)
     })
 }
@@ -1657,39 +1533,10 @@ pub unsafe extern "C" fn adm_scene_stream_log_entry(
     guard::guard(0, || {
         let mut m = lock(&s.messages);
         m.diagnostic.clear();
-        let mut record: EngineSceneDiagnostic = unsafe { std::mem::zeroed() };
-        let mut message = Vec::new();
-        let read = |record: &mut EngineSceneDiagnostic, message: &mut Vec<u8>| unsafe {
-            mradm_engine_scene_diagnostic(
-                s.handle,
-                index as usize,
-                record,
-                message.as_mut_ptr(),
-                message.len(),
-            ) == 0
+        let Some(record) = s.stream().diagnostic(index as usize) else {
+            return 0;
         };
-        if message.try_reserve_exact(256).is_err() {
-            return 0;
-        }
-        message.resize(256, 0);
-        if !read(&mut record, &mut message) {
-            return 0;
-        }
-        while record.message_len > message.len() {
-            // A reset or a later error can replace an entry between reads.
-            if message
-                .try_reserve_exact(record.message_len - message.len())
-                .is_err()
-            {
-                return 0;
-            }
-            message.resize(record.message_len, 0);
-            if !read(&mut record, &mut message) {
-                return 0;
-            }
-        }
-        message.truncate(record.message_len);
-        if !m.diagnostic.set(&message) {
+        if !m.diagnostic.set(&record.message) {
             return 0;
         }
         unsafe {
@@ -1715,29 +1562,22 @@ pub unsafe extern "C" fn adm_scene_stream_log_entry(
 // ── Scene stream rooms ───────────────────────────────────────────────────────────
 
 /// A room control handle of a Scene stream's or a monitor's current backend.
-pub(crate) struct Control(*mut RenderRoomControl);
+pub(crate) struct Control(room_runtime::Control);
 
 impl Control {
-    /// `None` for a null handle (a backend without a room renderer).
+    /// The control behind a private handle; `None` for null (a backend without a room renderer).
     pub(crate) fn new(raw: *mut RenderRoomControl) -> Option<Self> {
-        (!raw.is_null()).then_some(Self(raw))
-    }
-}
-
-impl Drop for Control {
-    fn drop(&mut self) {
-        unsafe { mradm_room_control_destroy(self.0) };
+        // SAFETY: `raw` comes straight from a `*_room_control` entry and is used only here.
+        unsafe { RenderRoomControl::take(raw) }.map(Self)
     }
 }
 
 fn control(s: &adm_scene_stream_t) -> Option<Control> {
-    Control::new(unsafe { mradm_engine_scene_room_control(s.handle) })
+    s.stream().room_control().map(Control)
 }
 
-fn room_status(control: &Control) -> RenderRoomStatus {
-    let mut record: RenderRoomStatus = unsafe { std::mem::zeroed() };
-    unsafe { mradm_room_control_status(control.0, &mut record) };
-    record
+fn room_status(control: &Control) -> RoomStatus {
+    control.0.status()
 }
 
 #[unsafe(no_mangle)]
@@ -1784,34 +1624,19 @@ pub(crate) unsafe fn switch_room(
             Err(Failure::Exception) => return INTERNAL,
         };
         let quality = room_status(&control).quality;
-        let record = RenderRoomConfig {
-            profile: config.profile,
-            hrir: ffi_text(config.hrir),
-            metres: config.metres,
-            quality,
+        // SAFETY: `room::config` checked the room handle the caller passed.
+        let profile = unsafe { config.profile.as_ref() };
+        let revision = match switch_config(profile, config.hrir, config.metres, quality)
+            .and_then(|config| control.0.request(&config))
+        {
+            Ok(revision) => revision,
+            Err(e) => {
+                return match Error::new(e.code, &e.message, b"") {
+                    Ok(e) => fail(e),
+                    Err(_) => INTERNAL,
+                };
+            }
         };
-        let mut message = [0u8; 512];
-        let mut context = [0u8; 512];
-        let (mut message_len, mut context_len) = (message.len(), context.len());
-        let mut revision = 0;
-        let code = unsafe {
-            mradm_room_control_request(
-                control.0,
-                &record,
-                &mut revision,
-                message.as_mut_ptr(),
-                &mut message_len,
-                context.as_mut_ptr(),
-                &mut context_len,
-            )
-        };
-        if code != 0 {
-            let message = &message[..message_len.min(message.len())];
-            return match Error::new(code, message, b"") {
-                Ok(e) => fail(e),
-                Err(_) => INTERNAL,
-            };
-        }
         unsafe { *out_request = revision };
         OK
     }
@@ -1832,7 +1657,7 @@ impl Write for JsonText {
 
 /// `room_status_json`'s document; `None` where nlohmann threw (an unknown state, invalid UTF-8,
 /// or an allocation failure). Keep keys in the former map's byte order.
-fn status_json(status: &RenderRoomStatus) -> Option<String> {
+fn status_json(status: &RoomStatus) -> Option<String> {
     const STATES: [&str; 5] = [
         "applied",
         "preparing",
@@ -1841,17 +1666,12 @@ fn status_json(status: &RenderRoomStatus) -> Option<String> {
         "failed",
     ];
     let state = *STATES.get(status.state as usize)?;
-    let quality = match status.quality {
+    let quality = match status.quality as u32 {
         0 => "exact",
         1 => "realtime",
         _ => "unknown",
     };
-    let message = if status.message.len == 0 {
-        &[][..]
-    } else {
-        unsafe { std::slice::from_raw_parts(status.message.data, status.message.len) }
-    };
-    let message = std::str::from_utf8(message).ok()?;
+    let message = status.message.as_str();
     let mut json = JsonText::default();
     write!(
         json,
@@ -1879,7 +1699,7 @@ fn status_json(status: &RenderRoomStatus) -> Option<String> {
     Some(json.0)
 }
 
-fn source_json(id: u64, source: &RoomSourceInfo) -> Option<String> {
+fn source_json(id: u64, source: &SourcePosition) -> Option<String> {
     let triple = |json: &mut JsonText, values: [f64; 3]| -> fmt::Result {
         json.write_char('[')?;
         for (index, value) in values.into_iter().enumerate() {
@@ -1894,7 +1714,7 @@ fn source_json(id: u64, source: &RoomSourceInfo) -> Option<String> {
     write!(
         json,
         "{{\"constrained\":{},\"direction\":",
-        source.constrained != 0
+        source.constrained
     )
     .ok()?;
     triple(&mut json, source.direction).ok()?;
@@ -1905,7 +1725,7 @@ fn source_json(id: u64, source: &RoomSourceInfo) -> Option<String> {
     write!(
         json,
         ",\"present\":{},\"schema\":\"mradm.room-source\",\"version\":1}}",
-        source.present != 0,
+        source.present,
     )
     .ok()?;
     Some(json.0)
@@ -1975,8 +1795,7 @@ pub(crate) unsafe fn room_source_json(
     let Some(control) = control else {
         return UNSUPPORTED;
     };
-    let mut source: RoomSourceInfo = unsafe { std::mem::zeroed() };
-    unsafe { mradm_room_control_source(control.0, element_id, &mut source) };
+    let source = control.0.source_position(element_id);
     unsafe { room_json(out_json, || source_json(element_id, &source)) }
 }
 
@@ -1984,7 +1803,7 @@ pub(crate) unsafe fn room_source_json(
 
 #[allow(non_camel_case_types)] // The `c_api.h` name.
 pub struct adm_scene_output_t {
-    handle: *mut EngineSceneOutput,
+    handle: Box<EngineSceneOutput>,
     /// Serialises the calls and holds the last error message.
     message: Mutex<Message>,
 }
@@ -1993,24 +1812,18 @@ pub struct adm_scene_output_t {
 unsafe impl Send for adm_scene_output_t {}
 unsafe impl Sync for adm_scene_output_t {}
 
-impl Drop for adm_scene_output_t {
-    fn drop(&mut self) {
-        unsafe { mradm_engine_scene_output_destroy(self.handle) };
-    }
-}
-
 /// `scene_output_call`: under the output's lock, `action`'s error message (without its locator)
 /// or nothing becomes the last error message.
 fn output_call(
     output: *const adm_scene_output_t,
-    action: impl FnOnce(*mut EngineSceneOutput) -> Result<(), Failure>,
+    action: impl FnOnce(&EngineSceneOutput) -> Result<(), Failure>,
 ) -> i32 {
     let Some(o) = (unsafe { output.as_ref() }) else {
         return INVALID_ARGUMENT;
     };
     guard::code(|| {
         let mut message = lock(&o.message);
-        match action(o.handle) {
+        match action(&o.handle) {
             Ok(()) => {
                 message.clear();
                 OK
@@ -2053,33 +1866,25 @@ pub unsafe extern "C" fn adm_create_scene_output(
     let result = guard::guard(Err(Failure::Exception), || {
         let layout = unsafe { text(c.output_layout) };
         let device_id = unsafe { text(c.device_id) };
-        let mut raw = ptr::null_mut();
-        let thrown = std::cell::Cell::new(false);
-        let opened = Buffers::new(4096, 0)?.run(|m, ml, cx, cl| {
-            let code = unsafe {
-                mradm_engine_scene_output_open(
-                    s.handle,
-                    c.kind as u32,
-                    ffi_text(layout),
-                    c.speaker_geometry as u32,
-                    ffi_text(device_id),
-                    mradm_device_islands(),
-                    &mut raw,
-                    m,
-                    ml,
-                    cx,
-                    cl,
-                )
-            };
-            thrown.set(code == DEVICE_THREW);
-            code
-        });
-        if thrown.get() {
-            return Err(Failure::Exception);
-        }
-        opened?;
+        // SAFETY: The device island table is immutable process data.
+        let opened = unsafe {
+            EngineSceneOutput::open(
+                &*s.raw(),
+                c.kind as u32,
+                layout,
+                c.speaker_geometry as u32,
+                device_id,
+                mradm_device_islands(),
+            )
+        };
+        let handle = match opened {
+            Ok(handle) => handle,
+            // The device threw: the C++ shell rethrew it.
+            Err(e) if e.code == DEVICE_THREW => return Err(Failure::Exception),
+            Err(e) => return Err(engine_failure(e)),
+        };
         let output = error::try_box(adm_scene_output_t {
-            handle: raw,
+            handle,
             message: Mutex::new(Message::default()),
         });
         if output.is_null() {
@@ -2115,7 +1920,7 @@ pub unsafe extern "C" fn adm_scene_output_last_error_message(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn adm_scene_output_play(output: *mut adm_scene_output_t) -> i32 {
     output_call(output, |h| {
-        unsafe { mradm_engine_scene_output_play(h) };
+        h.play();
         Ok(())
     })
 }
@@ -2123,7 +1928,7 @@ pub unsafe extern "C" fn adm_scene_output_play(output: *mut adm_scene_output_t) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn adm_scene_output_pause(output: *mut adm_scene_output_t) -> i32 {
     output_call(output, |h| {
-        unsafe { mradm_engine_scene_output_pause(h) };
+        h.pause();
         Ok(())
     })
 }
@@ -2135,9 +1940,7 @@ pub unsafe extern "C" fn adm_scene_output_begin_epoch(
     target_sample: i64,
 ) -> i32 {
     output_call(output, |h| {
-        Buffers::new(0, 0)?.run(|m, ml, c, cl| unsafe {
-            mradm_engine_scene_output_begin_epoch(h, epoch, target_sample, m, ml, c, cl)
-        })
+        h.begin_epoch(epoch, target_sample).map_err(engine_failure)
     })
 }
 
@@ -2146,38 +1949,25 @@ pub unsafe extern "C" fn adm_scene_output_set_volume(
     output: *mut adm_scene_output_t,
     gain: f32,
 ) -> i32 {
-    output_call(output, |h| {
-        Buffers::new(0, 0)?.run(|m, ml, c, cl| unsafe {
-            mradm_engine_scene_output_set_volume(h, gain, m, ml, c, cl)
-        })
-    })
+    output_call(output, |h| h.set_volume(gain).map_err(engine_failure))
 }
 
 /// `apply_hptf_request`: the caller's request of `kind` (0 file, 1 parameters, 2 stereo files,
 /// 3 stereo parameters) as Rust settings, designed and published for the output.
 pub(crate) unsafe fn apply_hptf(
-    output: *mut EngineSceneOutput,
+    output: &EngineSceneOutput,
     config: *const c_void,
     kind: u32,
 ) -> Result<(), Failure> {
-    let mut message = [0u8; 512];
-    let mut raw: *mut Settings = ptr::null_mut();
-    let status = unsafe {
-        mradm_dsp_hptf_settings_create(config, kind, &mut raw, message.as_mut_ptr(), message.len())
-    };
-    if status != 0 {
-        return Err(Error::new(status, until_nul(&message), b"")?.into());
-    }
-    struct Owned(*mut Settings);
-    impl Drop for Owned {
-        fn drop(&mut self) {
-            unsafe { mradm_dsp_hptf_settings_destroy(self.0) };
-        }
-    }
-    let settings = Owned(raw);
-    Buffers::new(0, 0)?.run(|m, ml, c, cl| unsafe {
-        mradm_engine_scene_output_set_hptf_settings(output, settings.0, m, ml, c, cl)
-    })
+    let settings = unsafe { hptf_settings(config, kind)? };
+    output.set_hptf_settings(&settings).map_err(engine_failure)
+}
+
+/// The caller's HpTF request of `kind` as Rust settings.
+pub(crate) unsafe fn hptf_settings(config: *const c_void, kind: u32) -> Result<Settings, Failure> {
+    // SAFETY: `config` is the caller's request of `kind` (the C ABI contract of the setters).
+    unsafe { Settings::read(config, kind) }
+        .map_err(|(code, message)| Failure::error(code, message.as_bytes(), b""))
 }
 
 fn scene_hptf(output: *const adm_scene_output_t, config: *const c_void, kind: u32) -> i32 {
@@ -2197,7 +1987,7 @@ unsafe fn scene_hptf_ex(
     let Some(o) = (unsafe { output.as_ref() }) else {
         return INVALID_ARGUMENT;
     };
-    guard::code(|| match unsafe { apply_hptf(o.handle, config, kind) } {
+    guard::code(|| match unsafe { apply_hptf(&o.handle, config, kind) } {
         Ok(()) => OK,
         Err(Failure::Error(e)) => match unsafe { owned(&e.message, out_error) } {
             Ok(()) => error::map(e.code),
@@ -2251,10 +2041,8 @@ pub(crate) fn hptf_infos(snapshot: &Snapshot) -> (adm_hptf_info_t, adm_hptf_info
     )
 }
 
-fn snapshot(output: *mut EngineSceneOutput) -> Snapshot {
-    let mut record: Snapshot = unsafe { std::mem::zeroed() };
-    unsafe { mradm_engine_scene_output_hptf_snapshot(output, &mut record) };
-    record
+fn snapshot(output: &EngineSceneOutput) -> Snapshot {
+    output.hptf_snapshot()
 }
 
 #[unsafe(no_mangle)]
@@ -2359,8 +2147,7 @@ pub unsafe extern "C" fn adm_scene_output_get_status(
         return INVALID_ARGUMENT;
     }
     output_call(output, |h| {
-        let mut v: EngineSceneOutputStatus = unsafe { std::mem::zeroed() };
-        unsafe { mradm_engine_scene_output_status(h, &mut v) };
+        let v = h.status();
         unsafe {
             write_sized(
                 out,
@@ -2474,14 +2261,13 @@ mod tests {
         .unwrap();
         binaural.convert_sofa().unwrap();
         assert_eq!(binaural.layout, b"binaural");
-        let (request, _) = binaural.request(true).ok().unwrap();
-        assert_eq!(request.has_sofa, 1);
-        assert_eq!(request.sample_rate, 44100);
-        assert!(request.room_profile.is_null());
-        let name = unsafe {
-            std::slice::from_raw_parts(request.sofa_file_name.data, request.sofa_file_name.len)
-        };
-        assert_eq!(name, b"hrtf.sofa");
+        let config = binaural.config(true).ok().unwrap();
+        assert_eq!(config.sample_rate, 44100);
+        assert!(config.room.package.is_none());
+        assert_eq!(
+            config.sofa.map(|sofa| sofa.file_name),
+            Some(&b"hrtf.sofa"[..])
+        );
     }
 
     #[repr(C)]
@@ -2559,15 +2345,30 @@ mod tests {
         assert!(!unsafe { output_valid(tiny.as_ptr()) });
     }
 
+    fn room_status_fixture(message: &str) -> RoomStatus {
+        RoomStatus {
+            state: 0,
+            requested_revision: 0,
+            applied_revision: 0,
+            transition_sample: 0,
+            material_frames: 0,
+            tail_frames: 0,
+            buffer_frames: 0,
+            material_filter_guard_frames: 0,
+            constrained_sources: 0,
+            message: message.to_owned(),
+            quality: mradm_dsp::room::quality::Quality::Exact,
+            reflection_update_frames: 0,
+        }
+    }
+
     #[test]
     fn room_documents_match_the_former_json() {
-        let mut status: RenderRoomStatus = unsafe { std::mem::zeroed() };
+        let mut status = room_status_fixture("准备中");
         status.state = 1;
-        status.quality = 1;
+        status.quality = mradm_dsp::room::quality::Quality::Realtime;
         status.requested_revision = 3;
         status.buffer_frames = 256;
-        let text = "准备中";
-        status.message = ffi_text(text.as_bytes());
         assert_eq!(
             status_json(&status).unwrap(),
             "{\"applied_revision\":0,\"buffer_frames\":256,\"constrained_sources\":0,\
@@ -2578,17 +2379,13 @@ mod tests {
         );
         status.state = 5;
         assert!(status_json(&status).is_none());
-        status.state = 0;
-        let invalid = [0xFFu8];
-        status.message = ffi_text(&invalid);
-        assert!(status_json(&status).is_none());
-        let source = RoomSourceInfo {
-            id: 9,
+        let source = SourcePosition {
+            element_id: 9,
             position: [1.0, 0.5, 0.0],
             direction: [0.0, 1.0, 0.0],
             distance: 1.25,
-            constrained: 0,
-            present: 1,
+            constrained: false,
+            present: true,
         };
         assert_eq!(
             source_json(4, &source).unwrap(),
@@ -2633,30 +2430,28 @@ mod tests {
         }
 
         let message = "\"\\\0\u{1}\u{8}\t\n\u{c}\r准备中/\u{2028}".repeat(256);
-        let mut status: RenderRoomStatus = unsafe { std::mem::zeroed() };
-        status.message = ffi_text(message.as_bytes());
+        let mut status = room_status_fixture(&message);
         status.requested_revision = u64::MAX;
         check(|| status_json(&status));
 
         // Scientific notation must not allocate a temporary exponent string. Both finite
         // extremes and non-finite values follow the original nlohmann formatting rules.
-        let source = RoomSourceInfo {
-            id: 1,
+        let source = SourcePosition {
+            element_id: 1,
             position: [-0.0, f64::from_bits(1), f64::MAX],
             direction: [f64::NAN, f64::INFINITY, f64::NEG_INFINITY],
             distance: 1e-9,
-            constrained: 1,
-            present: 1,
+            constrained: true,
+            present: true,
         };
         check(|| source_json(u64::MAX, &source));
     }
 
     #[test]
     fn room_json_rejects_invalid_status_without_publishing() {
-        let mut status: RenderRoomStatus = unsafe { std::mem::zeroed() };
-        for (state, message) in [(5, &b""[..]), (0, &b"\xff"[..])] {
+        let mut status = room_status_fixture("");
+        for state in [5, 6] {
             status.state = state;
-            status.message = ffi_text(message);
             let mut out = ptr::dangling_mut();
             assert_eq!(
                 unsafe { room_json(&mut out, || status_json(&status)) },
@@ -2723,8 +2518,5 @@ mod tests {
         assert!(failed && !stored);
         assert!(m.set(b"error"));
         assert_eq!(unsafe { CStr::from_ptr(m.as_ptr()) }.to_bytes(), b"error");
-        let (buffers, failed) =
-            crate::test_alloc::with_allocation_failure(|| Buffers::new(0, 0).is_err());
-        assert!(failed && buffers);
     }
 }

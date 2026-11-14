@@ -237,7 +237,14 @@ pub struct Settings {
     independent: bool,
 }
 impl Settings {
-    unsafe fn read(source: *const c_void, kind: u32) -> Result<Self> {
+    /// The caller's HpTF request of `kind` (0 file, 1 parameters, 2 stereo files, 3 stereo
+    /// parameters) as settings; errors are (status code, message).
+    ///
+    /// # Safety
+    ///
+    /// `source` is null or points at the `c_api.h` structure of `kind`, whose `struct_size` covers
+    /// the fields read and whose strings and arrays are valid for the call.
+    pub unsafe fn read(source: *const c_void, kind: u32) -> Result<Self> {
         let (profiles, mode_value, revision) = match kind {
             0 => {
                 let mut c: Config =
