@@ -20,6 +20,7 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
+#include "adm/render_service.h"
 #include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 

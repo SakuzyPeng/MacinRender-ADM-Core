@@ -19,7 +19,7 @@ class RoomRenderer final : public IRenderer {
         const void* profile = plan.room.profile ? room_internal::Access::get(*plan.room.profile) : nullptr;
         auto prepared = render_common::prepare_backend(render_common::EngineBackend::room, plan, logs, profile);
         if (!prepared) {
-            return tl::unexpected{prepared.error()};
+            return mradm::unexpected{prepared.error()};
         }
         return std::static_pointer_cast<IPreparedRender>(*prepared);
     }

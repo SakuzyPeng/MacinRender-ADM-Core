@@ -16,7 +16,7 @@
 #include "wav_backend.h"
 
 namespace mradm::render_common {
-tl::unexpected<Error> DriverError::error(int32_t code, const std::string& input_path) const {
+mradm::unexpected<Error> DriverError::error(int32_t code, const std::string& input_path) const {
     std::string context;
     if (location_ == 1U) {
         context = "path=" + input_path;

@@ -37,7 +37,7 @@ Result<std::shared_ptr<const HrtfState>> adopt(const std::filesystem::path* sofa
     state->handle.reset(raw, mradm_render_binaural_hrtf_destroy);
     auto filters = dsp::HrtfFilters::adopt(view.filters);
     if (!filters) {
-        return tl::unexpected{filters.error()};
+        return mradm::unexpected{filters.error()};
     }
     state->filters = std::move(*filters);
     state->dataset_name.assign(reinterpret_cast<const char*>(view.name.data), view.name.len);

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "adm/render.h"
+#include "adm/render_service.h"
 
 #ifdef MR_ADM_DIAGNOSTIC_PORTABLE_RNG
 extern "C" void mr_adm_diagnostic_seed(unsigned int seed);

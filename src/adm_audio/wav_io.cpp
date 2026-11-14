@@ -27,7 +27,7 @@ struct FloatWavWriter::Impl {
 Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
     auto writer = PcmOutputWriter::create(path, channels, sample_rate, std::nullopt);
     if (!writer) {
-        return tl::unexpected{writer.error()};
+        return mradm::unexpected{writer.error()};
     }
     FloatWavWriter w;
     w.impl_ = std::make_unique<Impl>(Impl{std::move(*writer)});
@@ -55,7 +55,7 @@ Result<FloatCafWriter>
 FloatCafWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate, const std::string& layout_id) {
     auto writer = PcmOutputWriter::create(path, channels, sample_rate, layout_id);
     if (!writer) {
-        return tl::unexpected{writer.error()};
+        return mradm::unexpected{writer.error()};
     }
     FloatCafWriter w;
     w.impl_ = std::make_unique<Impl>(Impl{std::move(*writer)});
@@ -83,7 +83,7 @@ struct FloatCafReader::Impl {
 Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
     auto reader = CafFileReader::open(path);
     if (!reader) {
-        return tl::unexpected{reader.error()};
+        return mradm::unexpected{reader.error()};
     }
     FloatCafReader r;
     r.impl_ = std::make_unique<Impl>(Impl{std::move(*reader)});
@@ -124,7 +124,7 @@ Result<void> write_caf_metadata(const std::string& path, const MetadataFields& m
                                             message.data(),
                                             message.size());
     if (code != 0) {
-        return tl::unexpected{wav_error(code, message, path)};
+        return mradm::unexpected{wav_error(code, message, path)};
     }
     return {};
 }
@@ -138,7 +138,7 @@ struct FloatWavReader::Impl {
 Result<FloatWavReader> FloatWavReader::open(const std::string& path) {
     auto reader = WavFileReader::open(path);
     if (!reader) {
-        return tl::unexpected{reader.error()};
+        return mradm::unexpected{reader.error()};
     }
     FloatWavReader r;
     r.impl_ = std::make_unique<Impl>();
@@ -281,7 +281,7 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     const auto code =
         mradm_wav_append_bext(wav_bytes(utf8_path), utf8_path.size(), &fields, message.data(), message.size());
     if (code != 0) {
-        return tl::unexpected{wav_error(code, message, path)};
+        return mradm::unexpected{wav_error(code, message, path)};
     }
     return {};
 }
@@ -289,17 +289,17 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
 Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
     auto reader = WavChunkReader::open(path);
     if (!reader) {
-        return tl::unexpected{reader.error()};
+        return mradm::unexpected{reader.error()};
     }
     WavAdmChunks chunks;
     auto axml = (*reader)->chunk("axml");
     if (!axml) {
-        return tl::unexpected{axml.error()};
+        return mradm::unexpected{axml.error()};
     }
     chunks.axml = std::move(*axml).value_or(std::string{});
     auto chna = (*reader)->chna();
     if (!chna) {
-        return tl::unexpected{chna.error()};
+        return mradm::unexpected{chna.error()};
     }
     chunks.chna = std::move(*chna);
     return chunks;
@@ -321,7 +321,7 @@ Result<void> replace_wav_axml(const std::string& source, const std::string& targ
                                              context.data(),
                                              context.size());
     if (code != 0) {
-        return tl::unexpected{post_error(code, message, context)};
+        return mradm::unexpected{post_error(code, message, context)};
     }
     return {};
 }
@@ -336,7 +336,7 @@ Result<bool> wav_has_chunk(const std::string& path, std::string_view id) {
     const auto code = mradm_wav_has_chunk(
         wav_bytes(utf8_path), utf8_path.size(), wav_bytes(id), &present, message.data(), message.size());
     if (code != 0) {
-        return tl::unexpected{wav_error(code, message, path)};
+        return mradm::unexpected{wav_error(code, message, path)};
     }
     return present != 0U;
 }

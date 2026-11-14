@@ -46,7 +46,7 @@ class HoaPlan {
                                  &raw,
                                  trace);
         if (!status) {
-            return tl::unexpected{status.error()};
+            return mradm::unexpected{status.error()};
         }
         result.handle_.reset(raw);
         return result;
@@ -70,7 +70,7 @@ class HoaEncoder {
         auto status =
             hoa_status(mradm_dsp_hoa_encoder_create, plan.get(), max_frames, interpolation, smoothing ? 1U : 0U, &raw);
         if (!status) {
-            return tl::unexpected{status.error()};
+            return mradm::unexpected{status.error()};
         }
         result.handle_.reset(raw);
         return result;
@@ -97,7 +97,7 @@ class HoaMeterPreprocessor {
         void* raw = nullptr;
         auto status = hoa_status(mradm_dsp_hoa_meter_create, plan.get(), max_frames, interpolation, &raw);
         if (!status) {
-            return tl::unexpected{status.error()};
+            return mradm::unexpected{status.error()};
         }
         result.handle_.reset(raw);
         return result;

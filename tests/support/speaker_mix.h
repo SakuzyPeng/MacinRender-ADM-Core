@@ -90,7 +90,7 @@ prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, s
     }
     auto prepared = dsp::PcmMixPlan::create(inputs, outputs, rows, blocks, gains);
     if (!prepared) {
-        return tl::unexpected{prepared.error()};
+        return mradm::unexpected{prepared.error()};
     }
     result.plan = std::move(*prepared);
     return result;

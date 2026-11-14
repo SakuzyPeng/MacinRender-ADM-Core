@@ -143,26 +143,29 @@ endif()
 add_library(mr_adm_core INTERFACE)
 add_library(MacinRender::ADMCore ALIAS mr_adm_core)
 
+# The C++ types the islands share (errors, options, progress and logging, capability and render
+# records, the audio island API): private to the build since 6.5 C, not installed; only c_api.h
+# stays in include/adm.
 target_sources(
     mr_adm_core
     INTERFACE
         FILE_SET HEADERS
-        BASE_DIRS include
+        BASE_DIRS src/adm_core
         FILES
-            include/adm/capability.h
-            include/adm/direct_speakers_matrix.h
-            include/adm/errors.h
-            include/adm/live_override.h
-            include/adm/logging.h
-            include/adm/options.h
-            include/adm/progress.h
-            include/adm/render.h
-            include/adm/room.h
-            include/adm/screen.h
+            src/adm_core/adm/capability.h
+            src/adm_core/adm/direct_speakers_matrix.h
+            src/adm_core/adm/errors.h
+            src/adm_core/adm/live_override.h
+            src/adm_core/adm/logging.h
+            src/adm_core/adm/options.h
+            src/adm_core/adm/progress.h
+            src/adm_core/adm/render.h
+            src/adm_core/adm/room.h
+            src/adm_core/adm/screen.h
 )
 
-target_include_directories(mr_adm_core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(mr_adm_core INTERFACE tl::expected fmt::fmt)
+target_include_directories(mr_adm_core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core")
 
 # ── adm_render_common ─────────────────────────────────────────────────────────
 # Backend-agnostic object preprocessing and block timeline helpers used by
@@ -224,9 +227,9 @@ target_sources(
         src/adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS
-        BASE_DIRS include
+        BASE_DIRS src/adm_core
         FILES
-            include/adm/audio_io.h
+            src/adm_core/adm/audio_io.h
 )
 
 target_link_libraries(mr_adm_audio
@@ -267,9 +270,9 @@ if(APPLE)
             src/adm_apple/avsamplebuffer_device.mm
         PUBLIC
             FILE_SET HEADERS
-            BASE_DIRS include
+            BASE_DIRS src/adm_core
             FILES
-                include/adm/render_apple.h
+                src/adm_core/adm/render_apple.h
     )
     # ARC for the Objective-C++ AVSampleBufferAudioRenderer sink (manages the ObjC lifetimes).
     set_source_files_properties(src/adm_apple/avsamplebuffer_device.mm
@@ -567,7 +570,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/unit/wav_container_test.cpp
         tests/reference/wav_container/legacy.cpp)
     target_include_directories(mr_adm_wav_container_tests PRIVATE src/adm_audio)
-    target_link_libraries(mr_adm_wav_container_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMIo)
+    target_link_libraries(mr_adm_wav_container_tests PRIVATE fmt::fmt MacinRender::ADMAudio MacinRender::ADMIo)
     mr_adm_core_apply_warnings(mr_adm_wav_container_tests)
     add_test(NAME mr_adm_wav_container_tests COMMAND mr_adm_wav_container_tests)
 
@@ -817,7 +820,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_test_support)
 
     add_executable(mr_adm_live_binaural_parity_tests tests/unit/live_binaural_parity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_parity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
+    target_link_libraries(mr_adm_live_binaural_parity_tests PRIVATE fmt::fmt mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
         MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
     # The frozen reference includes the former creation header (tests/support/frozen_includes) and the
     # resampler wrapper (tests/support/dsp).
@@ -1475,7 +1478,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
     add_executable(mr_adm_hoa_parity_tests tests/unit/hoa_parity_test.cpp)
-    target_link_libraries(mr_adm_hoa_parity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderCommon
+    target_link_libraries(mr_adm_hoa_parity_tests PRIVATE fmt::fmt mr_adm_engine_renderer_test_support MacinRender::ADMRenderCommon
         MacinRender::ADMDsp nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_hoa_parity_tests PRIVATE src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_hoa_parity_tests)

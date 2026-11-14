@@ -25,7 +25,7 @@ Result<std::shared_ptr<const RoomProfile>> RoomProfile::load(const std::filesyst
     auto result = checked(mradm_room_profile_load(path.data(), path.size(), &raw, message.data(), message.size()),
                           message.data());
     if (!result) {
-        return tl::unexpected{result.error()};
+        return mradm::unexpected{result.error()};
     }
     std::unique_ptr<void, decltype(&mradm_room_profile_destroy)> owned{raw, mradm_room_profile_destroy};
     return std::shared_ptr<const RoomProfile>{new RoomProfile(owned.release())};
@@ -40,7 +40,7 @@ std::string RoomProfile::manifest_json() const {
 Result<std::string> inspect_room(const RoomConfig& config) {
     auto result = room_internal::prepare(config);
     if (!result) {
-        return tl::unexpected{result.error()};
+        return mradm::unexpected{result.error()};
     }
     return (*result)->json;
 }
@@ -76,14 +76,14 @@ prepare(const RoomConfig& config, const std::filesystem::path& sofa, const Prepa
                                                      message.size()),
                           message.data());
     if (!status) {
-        return tl::unexpected{status.error()};
+        return mradm::unexpected{status.error()};
     }
     PreparedHandle owned{raw, mradm_room_prepared_destroy};
     auto result = std::make_shared<Prepared>();
     result->handle = std::move(owned);
     auto info = checked(mradm_room_prepared_info(raw, &result->info));
     if (!info) {
-        return tl::unexpected{info.error()};
+        return mradm::unexpected{info.error()};
     }
     result->json = mradm_room_prepared_json(raw);
     return std::shared_ptr<const Prepared>{std::move(result)};

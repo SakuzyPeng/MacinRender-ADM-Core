@@ -27,6 +27,7 @@
 #include "adm/live_override.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
+#include "adm/render_service.h"
 
 #include "adm_scene.h"
 #include "render_common.h"

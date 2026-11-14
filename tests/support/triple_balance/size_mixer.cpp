@@ -5,7 +5,7 @@ Result<SizeMixer> SizeMixer::create(const void* numeric, std::size_t inputs, uin
     void* raw = nullptr;
     auto status = dsp::tb_status(mradm_dsp_tb_create, numeric, std::size_t{1024}, interpolation, live ? 1U : 0U, &raw);
     if (!status) {
-        return tl::unexpected{status.error()};
+        return mradm::unexpected{status.error()};
     }
     result.handle_.reset(raw);
     result.inputs_ = inputs;

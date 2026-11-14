@@ -111,6 +111,5 @@
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |
 | Spatial_Audio_Framework | v1.3.4 | ISC | `LICENSE.md` |
 | spreader_mr | fork-of-SAF-examples@v1.3.4 | ISC | `NOTICE.txt` |
-| tl-expected | v1.1.0 | CC0-1.0 | `COPYING` |
 | xsimd | bundled-in-libear@2db69f8f | BSD-3-Clause | `LICENSE` |
 | zlib | bundled-in-SAF@v1.3.4 | Zlib | `zlib.h` |

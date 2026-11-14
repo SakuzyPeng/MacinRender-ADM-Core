@@ -18,6 +18,7 @@
 #include "adm/io.h"
 #include "adm/logging.h"
 #include "adm/render.h"
+#include "adm/render_service.h"
 #include "adm/scene.h"
 
 #include "adm_scene.h"

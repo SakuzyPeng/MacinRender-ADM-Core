@@ -33,7 +33,7 @@ class DriverError {
         message_len_ = message_.size();
         return &message_len_;
     }
-    [[nodiscard]] tl::unexpected<Error> error(int32_t code, const std::string& input_path) const;
+    [[nodiscard]] mradm::unexpected<Error> error(int32_t code, const std::string& input_path) const;
 
   private:
     std::array<uint8_t, 512> message_{};

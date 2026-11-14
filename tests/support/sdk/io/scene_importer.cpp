@@ -78,7 +78,7 @@ RenderScene::import(const std::string& path, const SceneImportOptions* options, 
                                          message.size());
     RenderScene scene{std::make_shared<detail::RenderSceneHandle>(raw), path};
     if (code != 0) {
-        return tl::unexpected{scene_error(code, message, context, path)};
+        return mradm::unexpected{scene_error(code, message, context, path)};
     }
     if (checkpoint != nullptr) {
         scene.checkpoint(checkpoint);
@@ -95,7 +95,7 @@ Result<SceneSummary> RenderScene::summary() const {
     MradmSceneImportInfo info{};
     MradmAdmView view{};
     if (const auto code = mradm_scene_view(handle_->raw, &info, &view, message.data(), message.size()); code != 0) {
-        return tl::unexpected{scene_error(code, message, 1U, path_)};
+        return mradm::unexpected{scene_error(code, message, 1U, path_)};
     }
     SceneSummary summary;
     summary.sample_rate = info.sample_rate;
@@ -230,7 +230,7 @@ Result<std::vector<InputChannelDefinition>> resolve_input_channel_labels(const s
     const auto code = mradm_scene_resolve_labels(
         raw.data(), raw.size(), indices.data(), indices.size(), message.data(), message.size());
     if (code != 0) {
-        return tl::unexpected{scene_error(code, message, 0U, {})};
+        return mradm::unexpected{scene_error(code, message, 0U, {})};
     }
     const auto& catalog = input_channel_catalog();
     std::vector<InputChannelDefinition> out;
@@ -247,7 +247,7 @@ Result<std::string> get_axml(const std::string& path) {
         if (!chunks) {
             auto error = chunks.error();
             error.context = "input=" + path;
-            return tl::unexpected{std::move(error)};
+            return mradm::unexpected{std::move(error)};
         }
         if (std::ranges::any_of(chunks->chna, [](const auto& record) { return record.track_index == 0U; })) {
             return make_error(ErrorCode::io_error, "CHNA trackIndex 必须从 1 开始", "input=" + path);
@@ -266,7 +266,7 @@ Result<std::string> get_axml(const std::string& path) {
 Result<void> RenderScene::write(const std::string& dst) const {
     auto xml = get_axml(path_);
     if (!xml) {
-        return tl::unexpected{xml.error()};
+        return mradm::unexpected{xml.error()};
     }
     const auto locator = "input=" + path_ + " output=" + dst;
     std::array<uint8_t, 1024> message{};
@@ -284,7 +284,7 @@ Result<void> RenderScene::write(const std::string& dst) const {
     if (!written) {
         auto error = written.error();
         error.context = locator;
-        return tl::unexpected{std::move(error)};
+        return mradm::unexpected{std::move(error)};
     }
     return {};
 }

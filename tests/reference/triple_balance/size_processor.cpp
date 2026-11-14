@@ -119,12 +119,12 @@ SizeObjectProcessor::create(std::span<const SizeEvent> events, std::string layou
             position.z = event.position.z;
             const auto valid = room_222_gains(position, event.size);
             if (!valid) {
-                return tl::unexpected{valid.error()};
+                return mradm::unexpected{valid.error()};
             }
         } else {
             const auto valid = quantize_size_parameters(event.position, event.size);
             if (!valid) {
-                return tl::unexpected{valid.error()};
+                return mradm::unexpected{valid.error()};
             }
         }
         initial = false;
@@ -233,11 +233,11 @@ Result<void> SizeObjectProcessor::process_control(std::vector<float>& output, st
     }
     auto quantized = quantize_size_parameters(position_, size_);
     if (!quantized) {
-        return tl::unexpected{quantized.error()};
+        return mradm::unexpected{quantized.error()};
     }
     auto spatial = raw_size_gains(*quantized);
     if (!spatial) {
-        return tl::unexpected{spatial.error()};
+        return mradm::unexpected{spatial.error()};
     }
     const auto mix = mix_size_gains(*spatial, size_);
     SceneBlockPosition point_position;
@@ -250,7 +250,7 @@ Result<void> SizeObjectProcessor::process_control(std::vector<float>& output, st
     point_position.z = mix.direct == 0 ? 0 : position_.z;
     auto point = point_gains(point_position, 1, layout_);
     if (!point) {
-        return tl::unexpected{point.error()};
+        return mradm::unexpected{point.error()};
     }
     if (first_) {
         previous_mix_ = mix;
@@ -334,13 +334,13 @@ Result<void> SizeObjectProcessor::process_extended_control(std::vector<float>& o
         position.z = position_.z;
         auto spatial = room_222_gains(position, size_);
         if (!spatial) {
-            return tl::unexpected{spatial.error()};
+            return mradm::unexpected{spatial.error()};
         }
         cached_extended_mix_ = room_222_mix(*spatial, size_);
         position.z = cached_extended_mix_.direct == 0 ? 0 : position.z;
         auto point = room_222_gains(position);
         if (!point) {
-            return tl::unexpected{point.error()};
+            return mradm::unexpected{point.error()};
         }
         cached_extended_point_ = *point;
         cached_position_ = position_;

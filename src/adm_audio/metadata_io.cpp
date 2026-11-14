@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -10,14 +11,22 @@
 #include <string_view>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
 #include "audio_io_internal.h"
 
 namespace mradm::audio {
+namespace {
+// fmt's `{:.Nf}`: fixed with N decimals, correctly rounded and locale-independent.
+std::string fixed(double value, int precision) {
+    std::array<char, 64> text{};
+    auto* const end =
+        std::to_chars(text.data(), text.data() + text.size(), value, std::chars_format::fixed, precision).ptr;
+    return {text.data(), end};
+}
+} // namespace
+
 
 std::string compact_metadata_comment(const MetadataFields& meta) {
     std::string comments;
@@ -34,10 +43,10 @@ std::string compact_metadata_comment(const MetadataFields& meta) {
         append("layout=" + meta.output_layout);
     }
     if (meta.lufs) {
-        append(fmt::format("loudness={:.1f}LUFS", *meta.lufs));
+        append("loudness=" + fixed(*meta.lufs, 1) + "LUFS");
     }
     if (meta.peak_dbtp) {
-        append(fmt::format("peak={:.2f}dBTP", *meta.peak_dbtp));
+        append("peak=" + fixed(*meta.peak_dbtp, 2) + "dBTP");
     }
     return comments;
 }

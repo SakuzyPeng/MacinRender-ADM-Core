@@ -1,3 +1,5 @@
+#include "adm/render_service.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -132,7 +134,7 @@ void island_log(void* user, uint32_t level, MradmAdmText module, MradmAdmText me
 [[nodiscard]] Result<void> log_import_warnings(const io::RenderScene& scene, LogSink& logs) {
     auto summary = scene.summary();
     if (!summary) {
-        return tl::unexpected{summary.error()};
+        return mradm::unexpected{summary.error()};
     }
     for (const auto& warning : summary->warnings) {
         logs.log(LogLevel::warning, "importer", warning);
@@ -158,7 +160,7 @@ apply_policy(io::RenderScene& scene, const std::string& input, const RenderOptio
     });
     outcome.emit(logs, "semantic-policy");
     if (!outcome.ok()) {
-        return tl::unexpected{outcome.error()};
+        return mradm::unexpected{outcome.error()};
     }
     return {};
 }
@@ -247,7 +249,7 @@ Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
         // return raw WAVE audio facts even when its channel mask is unknown.
         auto wave = audio::FloatWavReader::open(input_path);
         if (!wave || wave->channels() == 0U || wave->channels() > std::numeric_limits<uint16_t>::max()) {
-            return tl::unexpected(scene_result.error());
+            return mradm::unexpected(scene_result.error());
         }
         SceneProbe raw;
         raw.sample_rate = wave->sample_rate();
@@ -257,7 +259,7 @@ Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
     }
     auto summary = scene_result->summary();
     if (!summary) {
-        return tl::unexpected(summary.error());
+        return mradm::unexpected(summary.error());
     }
     SceneProbe probe;
     probe.sample_rate = summary->sample_rate;
@@ -272,7 +274,7 @@ Result<std::string> RenderService::inspect_json(const std::string& input_path) c
     const io::SceneImportOptions no_options{};
     auto scene = io::RenderScene::import(input_path, &no_options);
     if (!scene) {
-        return tl::unexpected(scene.error());
+        return mradm::unexpected(scene.error());
     }
     return scene->inspect_json();
 }
@@ -281,11 +283,11 @@ Result<std::string> RenderService::inspect_text(const std::string& input_path) c
     const io::SceneImportOptions no_options{};
     auto scene = io::RenderScene::import(input_path, &no_options);
     if (!scene) {
-        return tl::unexpected(scene.error());
+        return mradm::unexpected(scene.error());
     }
     auto text = scene->inspect_text();
     if (!text) {
-        return tl::unexpected(text.error());
+        return mradm::unexpected(text.error());
     }
     return "File: " + input_path + "\n" + *text;
 }
@@ -349,7 +351,7 @@ Result<std::string> RenderService::axml(const std::string& input_path) const {
 Result<std::string> RenderService::policy_template_json(const std::string& input_path) const {
     auto scene = io::RenderScene::import(input_path, nullptr);
     if (!scene) {
-        return tl::unexpected(scene.error());
+        return mradm::unexpected(scene.error());
     }
     return scene->policy_template();
 }
@@ -360,11 +362,11 @@ Result<void> RenderService::write_policy_template(const std::filesystem::path& i
     const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
     auto scene = io::RenderScene::import(input_path.string(), &import_options);
     if (!scene) {
-        return tl::unexpected(scene.error());
+        return mradm::unexpected(scene.error());
     }
     auto json = scene->policy_template();
     if (!json) {
-        return tl::unexpected(json.error());
+        return mradm::unexpected(json.error());
     }
     return io::write_policy_json(output_path, *json, "policy template");
 }
@@ -375,10 +377,10 @@ Result<void> RenderService::export_file(const std::string& input_path,
                                         LogSink& logs) const {
     auto scene = io::RenderScene::import(input_path, nullptr);
     if (!scene) {
-        return tl::unexpected(scene.error());
+        return mradm::unexpected(scene.error());
     }
     if (auto logged = log_import_warnings(*scene, logs); !logged) {
-        return tl::unexpected(logged.error());
+        return mradm::unexpected(logged.error());
     }
     if (auto applied = apply_policy(*scene, input_path, options, logs); !applied) {
         return applied;
@@ -392,13 +394,13 @@ Result<PreparedScene> RenderService::prepare_preview_scene(const std::filesystem
     const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
     auto scene = io::RenderScene::import(input_path.string(), &import_options);
     if (!scene) {
-        return tl::unexpected(scene.error());
+        return mradm::unexpected(scene.error());
     }
     if (auto logged = log_import_warnings(*scene, logs); !logged) {
-        return tl::unexpected(logged.error());
+        return mradm::unexpected(logged.error());
     }
     if (auto applied = apply_policy(*scene, input_path.string(), options, logs); !applied) {
-        return tl::unexpected(applied.error());
+        return mradm::unexpected(applied.error());
     }
     return PreparedScene{scene->handle()};
 }
@@ -412,7 +414,7 @@ Result<PreviewSession> PreviewSession::create(std::filesystem::path input_path, 
     RenderService service;
     auto imported = service.prepare_preview_scene(input_path, options, logs);
     if (!imported) {
-        return tl::unexpected(imported.error());
+        return mradm::unexpected(imported.error());
     }
     return PreviewSession{std::move(input_path), std::move(options), std::move(*imported)};
 }

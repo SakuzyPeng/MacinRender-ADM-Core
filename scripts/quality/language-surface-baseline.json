@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 50,
-      "lines": 9768
+      "lines": 9674
     },
     "islands": {
       "files": 6,
@@ -18,8 +18,8 @@
       "lines": 1026
     },
     "tests": {
-      "files": 239,
-      "lines": 61671
+      "files": 240,
+      "lines": 61919
     },
     "reference": {
       "files": 38,
@@ -35,7 +35,7 @@
     }
   },
   "modules": {
-    "include/adm": 3606,
+    "include/adm": 2009,
     "rust/crates/mradm-adm": 2676,
     "rust/crates/mradm-capi": 9487,
     "rust/crates/mradm-cli": 2820,
@@ -59,7 +59,7 @@
     "src/adm_apple": 2336,
     "src/adm_apple/apple_island.cpp": 353,
     "src/adm_apple/apple_island.h": 14,
-    "src/adm_audio": 4169,
+    "src/adm_audio": 4181,
     "src/adm_audio/apac_worker_island.cpp": 23,
     "src/adm_audio/apac_worker_island.h": 15,
     "src/adm_audio/island.cpp": 117,
@@ -67,7 +67,7 @@
     "src/adm_audio/island_ffi.h": 17,
     "src/adm_c_api": 27,
     "src/adm_cli": 19,
-    "src/adm_core": 64,
+    "src/adm_core": 1555,
     "src/adm_dsp": 312,
     "src/adm_engine/platform_island.cpp": 176,
     "src/adm_engine/platform_island.h": 15,
@@ -100,9 +100,9 @@
     "tests/reference/spreader_mr_internal.h": 153,
     "tests/reference/triple_balance": 1620,
     "tests/reference/wav_container": 1456,
-    "tests/support": 14345,
-    "tests/tools": 3183,
-    "tests/unit": 41718
+    "tests/support": 14574,
+    "tests/tools": 3184,
+    "tests/unit": 41736
   },
   "island_interfaces": {
     "src/adm_apple/apple_island.cpp": 353,

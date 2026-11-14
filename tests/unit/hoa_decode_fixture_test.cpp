@@ -16,6 +16,7 @@
 #include "adm/audio_io.h"
 #include "adm/options.h"
 #include "adm/render.h"
+#include "adm/render_service.h"
 
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"

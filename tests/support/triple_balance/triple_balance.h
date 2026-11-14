@@ -69,7 +69,7 @@ class TbPlan {
                                 bed.size(),
                                 &raw);
         if (!status) {
-            return tl::unexpected{status.error()};
+            return mradm::unexpected{status.error()};
         }
         result.handle_.reset(raw);
         return result;
@@ -78,7 +78,7 @@ class TbPlan {
         void* raw = nullptr;
         auto status = tb_status(mradm_dsp_tb_plan_mix, get(), &raw);
         if (!status) {
-            return tl::unexpected{status.error()};
+            return mradm::unexpected{status.error()};
         }
         return PcmMixPlan::adopt(raw);
     }

@@ -8,15 +8,16 @@
       "cmake_key": "nlohmann_json",
       "purl": "pkg:github/nlohmann/json@v3.12.0",
       "license": "MIT",
-      "purpose": "JSON 解析/序列化（语义策略、SBOM 内部）",
-      "distribution": "available",
+      "purpose": "JSON 解析/序列化（测试专用：测试 SDK、工具与冻结参考，6.5 C 起不进生产）",
+      "distribution": "test-only",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "nlohmann_json-src",
         "parent": null,
         "license_files": [
           "LICENSE.MIT"
-        ]
+        ],
+        "cmake_option": "MR_ADM_CORE_BUILD_TESTS"
       },
       "notes": ""
     },
@@ -26,35 +27,18 @@
       "cmake_key": "fmt",
       "purl": "pkg:github/fmtlib/fmt@11.2.0",
       "license": "MIT",
-      "purpose": "格式化与日志辅助",
-      "distribution": "available",
+      "purpose": "格式化（测试专用：冻结参考与测试 SDK，6.5 C 起不进生产）",
+      "distribution": "test-only",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "fmt-src",
         "parent": null,
         "license_files": [
           "LICENSE"
-        ]
+        ],
+        "cmake_option": "MR_ADM_CORE_BUILD_TESTS"
       },
       "notes": "若动态链接系统库，仍需记录版本与许可证"
-    },
-    {
-      "name": "tl-expected",
-      "version": "v1.1.0",
-      "cmake_key": "tl-expected",
-      "purl": "pkg:github/TartanLlama/expected@v1.1.0",
-      "license": "CC0-1.0",
-      "purpose": "Result<T> 基础类型",
-      "distribution": "available",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "expected-src",
-        "parent": null,
-        "license_files": [
-          "COPYING"
-        ]
-      },
-      "notes": "header-only；FetchContent 目标目录名为 expected-src"
     },
     {
       "name": "libebur128",

@@ -24,6 +24,7 @@
 #include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_binaural.h"
+#include "adm/render_service.h"
 
 #include "../support/adm_fixture.h"
 #include "../support/scene_policy.h"
@@ -75,7 +76,7 @@ const mradm::AdmScene& adm(const ImportedScene& scene) {
 mradm::Result<ImportedScene> import_scene_with_handle(const std::string& path) {
     auto imported = mradm::io::RenderScene::import(path, nullptr);
     if (!imported) {
-        return tl::make_unexpected(imported.error());
+        return mradm::unexpected(imported.error());
     }
     return ImportedScene{mradm::io::adm_scene(*imported), imported->handle()};
 }
@@ -1638,9 +1639,9 @@ bool verify_binaural_stream_topology_reprepare() {
         return o;
     };
 
-    const auto baseline = run({});                                             // width = 1.0 (wide cloud)
-    const auto pointed = run({extent_override(0.0F)});                         // extent_scale 0 → collapses to a point
-    const auto width_pointed = run({extent_width_override(0.0F)});             // width_scale 0 also collapses width
+    const auto baseline = run({});                                 // width = 1.0 (wide cloud)
+    const auto pointed = run({extent_override(0.0F)});             // extent_scale 0 → collapses to a point
+    const auto width_pointed = run({extent_width_override(0.0F)}); // width_scale 0 also collapses width
     const auto reverted = run({extent_override(0.0F), extent_override(1.0F)}); // back to unscaled
     if (!baseline || !pointed || !width_pointed || !reverted) {
         return false;

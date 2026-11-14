@@ -22,6 +22,7 @@
 #include "adm/direct_speakers_matrix.h"
 #include "adm/render.h"
 #include "adm/render_apple.h"
+#include "adm/render_service.h"
 
 #include "../support/direct_speakers_fixture.h"
 #include "adm_scene.h"

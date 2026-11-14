@@ -100,7 +100,7 @@ probe_rust_link_paths(Windows windows)
             (fixture / 'src/ear.cpp').write_text('int ear_fixture() { return 0; }\n')
             # Stub unrelated packages so the real MRDependencies libear branch can run offline.
             targets = ('fmt::fmt nlohmann_json::nlohmann_json '
-                       'tl::expected ebur128 dr_wav::dr_wav FLAC::FLAC libbw64 adm saf '
+                       'ebur128 dr_wav::dr_wav FLAC::FLAC libbw64 adm saf '
                        'Opus::opus miniaudio')
             if flac:
                 targets = targets.replace(' FLAC::FLAC', '')
@@ -174,7 +174,7 @@ probe_rust_link_paths(Windows windows)
         ear = next(d for d in manifest['dependencies'] if d['name'] == 'libear')
         self.assertEqual(Path(ear['source_dir']).resolve(), (source / 'ear fixture').resolve())
         self.assertEqual(ear['provider'], 'source')
-        self.assertEqual(next(d for d in manifest['dependencies'] if d['name'] == 'fmt')['provider'], 'external')
+        self.assertEqual(next(d for d in manifest['dependencies'] if d['name'] == 'miniaudio')['provider'], 'external')
 
     def test_default_preset_clears_experimental_overrides(self):
         source = self.project(ear=True)

@@ -21,7 +21,7 @@
       "type": "library",
       "name": "nlohmann_json",
       "version": "v3.12.0",
-      "description": "JSON 解析/序列化（语义策略、SBOM 内部）",
+      "description": "JSON 解析/序列化（测试专用：测试 SDK、工具与冻结参考，6.5 C 起不进生产）",
       "licenses": [
         {
           "license": {
@@ -33,7 +33,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "test-only"
         },
         {
           "name": "mradm:source-type",
@@ -45,7 +45,7 @@
       "type": "library",
       "name": "fmt",
       "version": "11.2.0",
-      "description": "格式化与日志辅助",
+      "description": "格式化（测试专用：冻结参考与测试 SDK，6.5 C 起不进生产）",
       "licenses": [
         {
           "license": {
@@ -57,31 +57,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "tl-expected",
-      "version": "v1.1.0",
-      "description": "Result<T> 基础类型",
-      "licenses": [
-        {
-          "license": {
-            "id": "CC0-1.0"
-          }
-        }
-      ],
-      "purl": "pkg:github/TartanLlama/expected@v1.1.0",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
+          "value": "test-only"
         },
         {
           "name": "mradm:source-type",

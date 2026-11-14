@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -17,7 +18,6 @@
 #include <vector>
 
 #include <AudioToolbox/AudioToolbox.h>
-#include <fmt/format.h>
 
 #include "adm/audio_io.h"
 #include "adm/render_apple.h"
@@ -38,7 +38,13 @@ namespace {
 constexpr UInt32 k_render_block = 512;
 
 [[nodiscard]] std::string os_status_message(OSStatus status) {
-    return fmt::format("OSStatus {}", static_cast<int>(status));
+    return "OSStatus " + std::to_string(static_cast<int>(status));
+}
+
+// fmt's `{:.1f}`: fixed, one decimal, locale-independent.
+[[nodiscard]] std::string fixed1(double value) {
+    std::array<char, 64> text{};
+    return {text.data(), std::to_chars(text.data(), text.data() + 64, value, std::chars_format::fixed, 1).ptr};
 }
 
 [[nodiscard]] Error apple_status_error(std::string message, OSStatus status) {
@@ -119,13 +125,13 @@ class AudioUnitGuard {
 
     AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
     if (comp == nullptr) {
-        return tl::unexpected{
+        return mradm::unexpected{
             Error{ErrorCode::unsupported, "AUSpatialMixer component is not available", "subtype=3dem"}};
     }
     AudioUnit unit = nullptr;
     const OSStatus status = AudioComponentInstanceNew(comp, &unit);
     if (status != noErr || unit == nullptr) {
-        return tl::unexpected{apple_status_error("failed to create AUSpatialMixer instance", status)};
+        return mradm::unexpected{apple_status_error("failed to create AUSpatialMixer instance", status)};
     }
     return AudioUnitGuard{unit};
 }
@@ -152,7 +158,7 @@ class AudioUnitGuard {
                                                std::string_view label) {
     const OSStatus status = AudioUnitSetProperty(unit, property, scope, element, &value, sizeof(value));
     if (status != noErr) {
-        return tl::unexpected{apple_status_error(fmt::format("failed to set AUSpatialMixer {}", label), status)};
+        return mradm::unexpected{apple_status_error("failed to set AUSpatialMixer " + std::string(label), status)};
     }
     return {};
 }
@@ -168,8 +174,8 @@ class AudioUnitGuard {
     const OSStatus status = AudioUnitSetProperty(
         unit, kAudioUnitProperty_PresentPreset, kAudioUnitScope_Global, 0, &preset, sizeof(preset));
     if (status != noErr) {
-        return tl::unexpected{apple_status_error(
-            fmt::format("failed to set AUSpatialMixer factory preset {}", preset_number.value()), status)};
+        return mradm::unexpected{apple_status_error(
+            "failed to set AUSpatialMixer factory preset " + std::to_string(preset_number.value()), status)};
     }
     return {};
 }
@@ -184,7 +190,7 @@ class AudioUnitGuard {
     const OSStatus status =
         AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, scope, element, &fmt, sizeof(fmt));
     if (status != noErr) {
-        return tl::unexpected{apple_status_error(fmt::format("failed to set AUSpatialMixer {}", label), status)};
+        return mradm::unexpected{apple_status_error("failed to set AUSpatialMixer " + std::string(label), status)};
     }
     return {};
 }
@@ -200,7 +206,7 @@ class AudioUnitGuard {
     const OSStatus status = AudioUnitSetProperty(
         unit, kAudioUnitProperty_AudioChannelLayout, kAudioUnitScope_Input, element, &layout, size);
     if (status != noErr) {
-        return tl::unexpected{apple_status_error("failed to set LFE input channel layout", status)};
+        return mradm::unexpected{apple_status_error("failed to set LFE input channel layout", status)};
     }
     return {};
 }
@@ -243,7 +249,7 @@ struct OutputProfile {
     const OSStatus status = AudioUnitSetProperty(
         unit, kAudioUnitProperty_AudioChannelLayout, kAudioUnitScope_Output, 0, &layout, sizeof(layout));
     if (status != noErr) {
-        return tl::unexpected{apple_status_error("failed to set output channel layout", status)};
+        return mradm::unexpected{apple_status_error("failed to set output channel layout", status)};
     }
     return {};
 }
@@ -483,7 +489,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
         }
     }
     if (auto finished = writer.finish(); !finished) {
-        return tl::unexpected{finished.error()};
+        return mradm::unexpected{finished.error()};
     }
     RenderMetrics metrics;
     if (state == nullptr) {
@@ -526,11 +532,11 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                               "layout=" + output_layout);
         }
         if (auto r = set_present_preset(unit, preset); !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
         logs.log(LogLevel::info,
                  "apple",
-                 fmt::format("applied AUSpatialMixer factory preset: {}", apple_spatial_preset_display_name(preset)));
+                 "applied AUSpatialMixer factory preset: " + std::string(apple_spatial_preset_display_name(preset)));
     }
 
     if (profile.binaural) {
@@ -541,7 +547,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                                          kSpatialMixerOutputType_Headphones,
                                          "output type");
             !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
     }
     if (auto r = set_uint32_property(unit,
@@ -551,7 +557,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                                      static_cast<UInt32>(buses.size()),
                                      "input element count");
         !r) {
-        return tl::unexpected{r.error()};
+        return mradm::unexpected{r.error()};
     }
     if (auto r = set_uint32_property(unit,
                                      kAudioUnitProperty_MaximumFramesPerSlice,
@@ -560,23 +566,23 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                                      k_render_block,
                                      "maximum frames per slice");
         !r) {
-        return tl::unexpected{r.error()};
+        return mradm::unexpected{r.error()};
     }
     if (auto r = set_stream_format(unit, kAudioUnitScope_Output, 0, num_out_ch, sample_rate, "output stream format");
         !r) {
-        return tl::unexpected{r.error()};
+        return mradm::unexpected{r.error()};
     }
     // Speaker output: a standard CoreAudio layout tag gives VBAP the speaker geometry and
     // fixes the output channel order to match the container writers (caf_io.cpp mapping).
     if (!profile.binaural) {
         if (auto r = set_output_layout_tag(unit, profile.layout_tag); !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
         logs.log(LogLevel::info,
                  "apple",
-                 fmt::format("speaker rendering flags: {}",
-                             speaker_rendering_flags ? "Apple native (InterAuralDelay + DistanceAttenuation)"
-                                                     : "ADM-compatible (disabled)"));
+                 std::string("speaker rendering flags: ") +
+                     (speaker_rendering_flags ? "Apple native (InterAuralDelay + DistanceAttenuation)"
+                                              : "ADM-compatible (disabled)"));
     }
 
     contexts.assign(buses.size(), InputBusContext{});
@@ -585,7 +591,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
         const auto element = static_cast<AudioUnitElement>(i);
         if (auto r = set_stream_format(unit, kAudioUnitScope_Input, element, 1, sample_rate, "input stream format");
             !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
         if (auto r = set_uint32_property(unit,
                                          kAudioUnitProperty_SpatializationAlgorithm,
@@ -594,7 +600,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                                          spatialization_algorithm,
                                          "spatialization algorithm");
             !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
         if (auto r = set_uint32_property(unit,
                                          kAudioUnitProperty_SpatialMixerSourceMode,
@@ -603,11 +609,11 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                                          bus.source_mode,
                                          "source mode");
             !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
         if (bus.is_lfe) {
             if (auto r = set_lfe_input_layout(unit, element); !r) {
-                return tl::unexpected{r.error()};
+                return mradm::unexpected{r.error()};
             }
         }
         // Apply this after source mode and the optional LFE layout so neither can
@@ -624,7 +630,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
                                              rendering_flags,
                                              "speaker rendering flags");
                 !r) {
-                return tl::unexpected{r.error()};
+                return mradm::unexpected{r.error()};
             }
         }
         contexts[i] = InputBusContext{staging_data, nullptr, bus.source_channel, num_in_ch};
@@ -634,13 +640,13 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
         const OSStatus status = AudioUnitSetProperty(
             unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, element, &callback, sizeof(callback));
         if (status != noErr) {
-            return tl::unexpected{apple_status_error("failed to set input render callback", status)};
+            return mradm::unexpected{apple_status_error("failed to set input render callback", status)};
         }
     }
 
     const OSStatus init_status = AudioUnitInitialize(unit);
     if (init_status != noErr) {
-        return tl::unexpected{apple_status_error("failed to initialize AUSpatialMixer", init_status)};
+        return mradm::unexpected{apple_status_error("failed to initialize AUSpatialMixer", init_status)};
     }
 
     // Listener head orientation (binaural only). A factory preset resets unit/bus
@@ -650,14 +656,13 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
     if (profile.binaural && !listener_orientation.is_identity()) {
         const OSStatus head_status = apply_head_orientation(unit, listener_orientation);
         if (head_status != noErr) {
-            return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
+            return mradm::unexpected{apple_status_error("failed to set listener orientation", head_status)};
         }
         logs.log(LogLevel::info,
                  "apple",
-                 fmt::format("listener orientation: yaw={:.1f} pitch={:.1f} roll={:.1f} deg",
-                             static_cast<double>(listener_orientation.yaw_deg),
-                             static_cast<double>(listener_orientation.pitch_deg),
-                             static_cast<double>(listener_orientation.roll_deg)));
+                 "listener orientation: yaw=" + fixed1(static_cast<double>(listener_orientation.yaw_deg)) +
+                     " pitch=" + fixed1(static_cast<double>(listener_orientation.pitch_deg)) +
+                     " roll=" + fixed1(static_cast<double>(listener_orientation.roll_deg)) + " deg");
     }
     return {};
 }
@@ -686,7 +691,7 @@ class AppleStream final : public IRenderStream {
         if (has_spatial_buses) {
             auto unit_res = create_spatial_mixer_unit();
             if (!unit_res) {
-                return tl::unexpected{unit_res.error()};
+                return mradm::unexpected{unit_res.error()};
             }
             guard = std::move(*unit_res);
         }
@@ -723,7 +728,7 @@ class AppleStream final : public IRenderStream {
                                                       stream->contexts_,
                                                       logs);
                 !r) {
-                return tl::unexpected{r.error()};
+                return mradm::unexpected{r.error()};
             }
         }
         stream->live_orientation_ = plan.listener_orientation;
@@ -733,7 +738,7 @@ class AppleStream final : public IRenderStream {
 
         auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
-            return tl::unexpected{reader.error()};
+            return mradm::unexpected{reader.error()};
         }
         stream->reader_ = std::move(*reader);
         return stream;
@@ -747,7 +752,7 @@ class AppleStream final : public IRenderStream {
                     break;
                 }
                 if (auto r = render_slice(); !r) {
-                    return tl::unexpected{r.error()};
+                    return mradm::unexpected{r.error()};
                 }
                 if (fifo_read_ >= fifo_.size()) {
                     break; // slice produced nothing (EOF)
@@ -777,11 +782,11 @@ class AppleStream final : public IRenderStream {
         if (unit_.get() != nullptr) {
             const OSStatus status = AudioUnitReset(unit_.get(), kAudioUnitScope_Global, 0);
             if (status != noErr) {
-                return tl::unexpected{apple_status_error("failed to reset AUSpatialMixer on seek", status)};
+                return mradm::unexpected{apple_status_error("failed to reset AUSpatialMixer on seek", status)};
             }
         }
         if (auto result = reader_->seek_frame(frame); !result) {
-            return tl::unexpected{result.error()};
+            return mradm::unexpected{result.error()};
         }
         std::ranges::fill(ev_cursor_, std::size_t{0});
         std::ranges::fill(direct_ev_cursor_, std::size_t{0});
@@ -804,7 +809,7 @@ class AppleStream final : public IRenderStream {
             return {};
         }
         if (auto result = reader_->seek_frame(frame); !result) {
-            return tl::unexpected{result.error()};
+            return mradm::unexpected{result.error()};
         }
         producer_pos_ = frame;
         ended_ = false;
@@ -881,7 +886,7 @@ class AppleStream final : public IRenderStream {
         } else {
             const auto read_result = reader_->read(out.data(), static_cast<UInt32>(n));
             if (!read_result) {
-                return tl::unexpected{read_result.error()};
+                return mradm::unexpected{read_result.error()};
             }
             if (*read_result != static_cast<UInt32>(n)) {
                 return make_error(ErrorCode::io_error, "short render input read");
@@ -1113,14 +1118,14 @@ class AppleStream final : public IRenderStream {
         if (orientation_dirty_ && unit_.get() != nullptr) {
             const OSStatus head_status = apply_head_orientation(unit_.get(), live_orientation_);
             if (head_status != noErr) {
-                return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
+                return mradm::unexpected{apple_status_error("failed to set listener orientation", head_status)};
             }
         }
         orientation_dirty_ = false;
 
         const auto read_result = reader_->read(staging_.data(), frames_now);
         if (!read_result) {
-            return tl::unexpected{read_result.error()};
+            return mradm::unexpected{read_result.error()};
         }
         if (*read_result != frames_now) {
             return make_error(ErrorCode::io_error, "short render input read");
@@ -1129,7 +1134,7 @@ class AppleStream final : public IRenderStream {
         // fifo_ was sized + zeroed at the top of this slice; the shared core interleaves into it.
         if (const OSStatus s = render_au_block(producer_pos_, live_orientation_, fifo_.data(), frames_now);
             s != noErr) {
-            return tl::unexpected{apple_status_error("AudioUnitRender failed", s)};
+            return mradm::unexpected{apple_status_error("AudioUnitRender failed", s)};
         }
         producer_pos_ += frames_now;
         return {};
@@ -1191,7 +1196,7 @@ class AppleRenderer final : public IRenderer {
         const auto profile = resolve_output_profile(plan.output_layout);
         if (!profile) {
             return make_error(ErrorCode::unsupported,
-                              fmt::format("apple backend does not support output layout '{}'", plan.output_layout),
+                              "apple backend does not support output layout '" + plan.output_layout + "'",
                               "layout=" + plan.output_layout);
         }
 
@@ -1272,7 +1277,7 @@ class AppleRenderer final : public IRenderer {
         }
         auto stream = AppleStream::create(*prepared, plan, logs);
         if (!stream) {
-            return tl::unexpected{stream.error()};
+            return mradm::unexpected{stream.error()};
         }
         return std::unique_ptr<IRenderStream>{std::move(*stream)};
     }
@@ -1321,21 +1326,20 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     if (plan.output_layout != writer_layout) {
         logs.log(LogLevel::info,
                  "apple",
-                 fmt::format("output layout '{}' rendered as binaural HRTF; tagging container as '{}'",
-                             plan.output_layout,
-                             writer_layout));
+                 "output layout '" + plan.output_layout + "' rendered as binaural HRTF; tagging container as '" +
+                     writer_layout + "'");
     }
     auto writer_res =
         audio::WriterHandle::open(plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), writer_layout);
     if (!writer_res) {
-        return tl::unexpected{writer_res.error()};
+        return mradm::unexpected{writer_res.error()};
     }
     auto& writer = *writer_res;
 
     auto lufs_st =
         dsp::Meter::create(num_out_ch, static_cast<uint32_t>(sample_rate), dsp::MeterMode::integrated_true_peak);
     if (!lufs_st) {
-        return tl::unexpected{lufs_st.error()};
+        return mradm::unexpected{lufs_st.error()};
     }
 
     constexpr std::size_t k_num_buffers = 2;
@@ -1397,7 +1401,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     if (!buses.empty()) {
         auto unit_res = create_spatial_mixer_unit();
         if (!unit_res) {
-            return tl::unexpected{unit_res.error()};
+            return mradm::unexpected{unit_res.error()};
         }
         unit_guard = std::move(*unit_res);
         unit = unit_guard.get();
@@ -1417,31 +1421,27 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                                                   contexts,
                                                   logs);
             !r) {
-            return tl::unexpected{r.error()};
+            return mradm::unexpected{r.error()};
         }
     }
 
     logs.log(LogLevel::info,
              "apple",
-             fmt::format("rendering {} spatial buses + {} direct side buses + {} LFE side buses → {} ({}ch, {}), "
-                         "{} frames",
-                         buses.size(),
-                         direct_buses.size(),
-                         lfe_buses.size(),
-                         plan.output_layout,
-                         num_out_ch,
-                         profile.binaural ? "HRTF binaural" : "VBAP speakers",
-                         frames_to_write));
+             "rendering " + std::to_string(buses.size()) + " spatial buses + " + std::to_string(direct_buses.size()) +
+                 " direct side buses + " + std::to_string(lfe_buses.size()) + " LFE side buses → " +
+                 plan.output_layout + " (" + std::to_string(num_out_ch) + "ch, " +
+                 (profile.binaural ? "HRTF binaural" : "VBAP speakers") + "), " + std::to_string(frames_to_write) +
+                 " frames");
     progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
     auto reader_res = audio::RenderInputReader::open(plan.input_path);
     if (!reader_res) {
-        return tl::unexpected{reader_res.error()};
+        return mradm::unexpected{reader_res.error()};
     }
     auto reader = std::move(*reader_res);
     if (start_pos > 0) {
         if (auto result = reader->seek_frame(start_pos); !result) {
-            return tl::unexpected{result.error()};
+            return mradm::unexpected{result.error()};
         }
     }
 
@@ -1476,7 +1476,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 
         const auto read_result = reader->read(staging.data(), frames_now);
         if (!read_result) {
-            return tl::unexpected{read_result.error()};
+            return mradm::unexpected{read_result.error()};
         }
         if (*read_result != frames_now) {
             return make_error(ErrorCode::io_error, "short render input read");
@@ -1498,7 +1498,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                 const auto element = static_cast<AudioUnitElement>(i);
                 const OSStatus param_status = set_bus_parameters(unit, element, azimuth, elevation, distance, gain_db);
                 if (param_status != noErr) {
-                    return tl::unexpected{
+                    return mradm::unexpected{
                         apple_status_error("failed to set SpatialMixer input parameter", param_status)};
                 }
             }
@@ -1515,7 +1515,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
             AudioUnitRenderActionFlags flags = 0;
             const OSStatus render_status = AudioUnitRender(unit, &flags, &time_stamp, 0, frames_now, abl);
             if (render_status != noErr) {
-                return tl::unexpected{apple_status_error("AudioUnitRender failed", render_status)};
+                return mradm::unexpected{apple_status_error("AudioUnitRender failed", render_status)};
             }
 
             for (uint16_t ch = 0; ch < num_out_ch; ++ch) {
@@ -1580,7 +1580,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     }
 
     progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-    logs.log(LogLevel::info, "apple", fmt::format("wrote {} frames to {}", frames_to_write, plan.output_path));
+    logs.log(LogLevel::info, "apple", "wrote " + std::to_string(frames_to_write) + " frames to " + plan.output_path);
     return finish_output(meter_pending, writer, &*lufs_st);
 }
 

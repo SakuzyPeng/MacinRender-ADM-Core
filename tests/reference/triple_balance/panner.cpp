@@ -114,7 +114,7 @@ Result<std::vector<float>> point_gains(const SceneBlockPosition& position, float
         auto values = room_222_gains(position);
         if (!values || !std::isfinite(gain)) {
             return values ? make_error(ErrorCode::unsupported, "room-222 requires finite gain")
-                          : tl::unexpected{values.error()};
+                          : mradm::unexpected{values.error()};
         }
         std::vector<float> result(values->begin(), values->end());
         std::ranges::transform(result, result.begin(), [gain](float value) { return value * gain; });

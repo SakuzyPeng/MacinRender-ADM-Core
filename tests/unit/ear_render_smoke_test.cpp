@@ -5,6 +5,7 @@
 
 #include "adm/render.h"
 #include "adm/render_ear.h"
+#include "adm/render_service.h"
 
 #include "test_portable.h"
 

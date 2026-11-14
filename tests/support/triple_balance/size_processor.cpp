@@ -20,7 +20,7 @@ Result<SizeObjectProcessor>
 SizeObjectProcessor::create(std::span<const SizeEvent> events, const std::string& layout, uint32_t rate) {
     auto code = dsp::tb_layout(layout);
     if (!code) {
-        return tl::unexpected{code.error()};
+        return mradm::unexpected{code.error()};
     }
     std::vector<MradmTbEvent> transfer;
     transfer.reserve(events.size());
@@ -30,7 +30,7 @@ SizeObjectProcessor::create(std::span<const SizeEvent> events, const std::string
     void* raw = nullptr;
     auto status = dsp::tb_status(mradm_dsp_tb_object_create, transfer.data(), transfer.size(), *code, rate, &raw);
     if (!status) {
-        return tl::unexpected{status.error()};
+        return mradm::unexpected{status.error()};
     }
     SizeObjectProcessor result;
     result.handle_.reset(raw);

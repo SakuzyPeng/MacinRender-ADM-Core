@@ -56,21 +56,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG 11.2.0
             GIT_SHALLOW TRUE
         )
-    elseif(package_name STREQUAL "tl-expected")
-        set(EXPECTED_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-        set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
-        FetchContent_Declare(
-            expected
-            GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-            GIT_TAG v1.1.0
-            GIT_SHALLOW TRUE
-        )
-        FetchContent_MakeAvailable(expected)
-        # FetchContent creates target 'expected'; installed config exports 'tl::expected'
-        if(NOT TARGET tl::expected)
-            add_library(tl::expected ALIAS expected)
-        endif()
-        return()
     elseif(package_name STREQUAL "libebur128")
         set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
         set(_mr_adm_core_restore_shared_ebur TRUE)
@@ -264,6 +249,9 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_REPOSITORY https://github.com/xiph/flac.git
             GIT_TAG 1.5.0
             GIT_SHALLOW TRUE
+            # Linked statically into mradm and the shared library only: no install rules of its own
+            # (CMake 3.28+; older versions still install the FLAC headers and archive).
+            EXCLUDE_FROM_ALL
         )
         FetchContent_MakeAvailable(FLAC)
         if(MSVC AND TARGET FLAC)
@@ -479,7 +467,9 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         set(OPUS_DISABLE_INTRINSICS ON CACHE BOOL "" FORCE)
         FetchContent_Declare(Opus
             GIT_REPOSITORY https://github.com/xiph/opus.git
-            GIT_TAG v1.5.2 GIT_SHALLOW TRUE)
+            GIT_TAG v1.5.2 GIT_SHALLOW TRUE
+            # As FLAC: linked statically, nothing of its own installed (CMake 3.28+).
+            EXCLUDE_FROM_ALL)
         FetchContent_MakeAvailable(Opus)
         if(_mr_adm_core_had_shared_opus)
             set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_opus}" CACHE BOOL "" FORCE)
@@ -538,9 +528,11 @@ function(mr_adm_core_find_or_fetch package_name target_name)
     endif()
 endfunction()
 
-mr_adm_core_find_or_fetch(fmt fmt::fmt)
-mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
-mr_adm_core_find_or_fetch(tl-expected tl::expected)
+# fmt and nlohmann_json are test-only since 6.5 C (frozen references, test SDK and tools).
+if(MR_ADM_CORE_BUILD_TESTS)
+    mr_adm_core_find_or_fetch(fmt fmt::fmt)
+    mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
+endif()
 if(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS)
     mr_adm_core_find_or_fetch(libebur128 ebur128)
 endif()

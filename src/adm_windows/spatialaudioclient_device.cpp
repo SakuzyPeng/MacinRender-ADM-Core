@@ -52,8 +52,8 @@ using Microsoft::WRL::ComPtr;
 constexpr float k_lfe_active_epsilon = 1.0e-12F;
 
 // Build an error (carrying the failing HRESULT in hex) ready to return into a Result<>. Mirrors
-// make_error's tl::unexpected<Error> return so callers can `return hr_error(...)` directly.
-[[nodiscard]] tl::unexpected<Error>
+// make_error's mradm::unexpected<Error> return so callers can `return hr_error(...)` directly.
+[[nodiscard]] mradm::unexpected<Error>
 hr_error(ErrorCode code, std::string message, const std::string& where, HRESULT hr) {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "0x%08lX", static_cast<unsigned long>(hr));
