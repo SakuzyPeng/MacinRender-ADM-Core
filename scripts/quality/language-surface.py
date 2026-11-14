@@ -30,6 +30,7 @@ RATCHETED = ("production", "islands", "cuda")
 # The islands' narrow C interfaces called from Rust, file by file (user decision 2026-11-12): never a
 # directory, so no general allowance; a new file is registered by `--update` in the commit that adds it.
 ISLAND_INTERFACES = (
+    "src/adm_apple/apple_backend.h",
     "src/adm_apple/apple_island.cpp",
     "src/adm_apple/apple_island.h",
     "src/adm_audio/apac_worker_island.cpp",

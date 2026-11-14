@@ -18,6 +18,7 @@
 #ifdef __APPLE__
 #include "adm/render_apple.h"
 
+#include "../support/apple_renderer/apple_renderer.h"
 #include "../support/direct_speakers_fixture.h"
 #include "adm_scene.h"
 #endif

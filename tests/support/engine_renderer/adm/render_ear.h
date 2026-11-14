@@ -4,6 +4,7 @@
 
 #include "adm/capability.h"
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 namespace mradm {
 

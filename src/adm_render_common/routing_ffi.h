@@ -9,8 +9,6 @@
 extern "C" {
 #endif
 
-typedef struct MradmRenderPrepared MradmRenderPrepared;
-
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmRenderMatrixTarget {
     MradmAdmText label;
@@ -76,9 +74,6 @@ uint32_t mradm_render_live_override(const MradmRenderOverride* values,
                                     float* gain,
                                     uint32_t* head_locked);
 float mradm_render_lfe_gain(const MradmRenderLfeRouting* routing, uint32_t input_target, uint32_t output_target);
-
-// A backend preparation (mradm_engine_prepare, engine_ffi.h).
-void mradm_render_prepared_destroy(MradmRenderPrepared* handle);
 
 #ifdef __cplusplus
 }

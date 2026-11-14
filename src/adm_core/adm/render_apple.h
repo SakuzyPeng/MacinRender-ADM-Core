@@ -1,9 +1,6 @@
 #pragma once
 
-#include <memory>
-
 #include "adm/capability.h"
-#include "adm/render.h"
 
 namespace mradm {
 
@@ -17,8 +14,5 @@ CapabilityReport apple_capabilities();
 // monitoring to an EAR/VBAP bed on affected systems. Returns true if the probe can't run (no false
 // alarms). Defined only in the macOS-gated apple target.
 [[nodiscard]] bool apple_system_spatial_lfe_routing_ok();
-
-// Creates a macOS-only IRenderer backed by Apple AUSpatialMixer.
-std::unique_ptr<IRenderer> create_apple_renderer();
 
 } // namespace mradm

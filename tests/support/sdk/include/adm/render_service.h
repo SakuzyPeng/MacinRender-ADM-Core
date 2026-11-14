@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 namespace mradm {
 

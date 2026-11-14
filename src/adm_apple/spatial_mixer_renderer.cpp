@@ -22,6 +22,7 @@
 #include "adm/audio_io.h"
 #include "adm/render_apple.h"
 
+#include "apple_backend.h"
 #include "apple_layouts.h"
 #include "apple_plan_ffi.h"
 #include "engine_records.h"
@@ -290,10 +291,12 @@ struct BusPlan {
     std::vector<BusEvent> events;  // sorted by start_sample
 };
 
+} // namespace
+
 // Immutable render recipe: the resolved output target plus one BusPlan per SpatialMixer
 // input element. The AU itself (mutable DSP state) is created in render_window, not here,
 // so this stays shareable across PreviewSession windows.
-struct ApplePrepared final : IPreparedRender {
+struct apple::Prepared {
     OutputProfile profile;
     uint16_t input_channels{0}; // the scene's input format
     uint32_t sample_rate{0};
@@ -303,6 +306,10 @@ struct ApplePrepared final : IPreparedRender {
     std::vector<BusPlan> lfe_buses;    // 22.2 side-bus inputs
     render_common::LfeRoutingPlan lfe_routing;
 };
+
+namespace {
+
+using ApplePrepared = apple::Prepared;
 
 // The buses of the Rust recipe (mradm-render `apple`), whose events are
 // already in AudioUnit convention.
@@ -673,7 +680,7 @@ finish_output(std::span<std::future<void>> meter_pending, audio::WriterHandle& w
 // time match render_window exactly, so a gap-free run from frame 0 is bit-identical to the
 // offline path (the smoke test asserts this). seek() resets the AU + readers (a small
 // discontinuity, acceptable for monitoring).
-class AppleStream final : public IRenderStream {
+class AppleStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<AppleStream>>
     create(const ApplePrepared& prepared, const RenderPlan& plan, LogSink& logs) {
@@ -744,7 +751,7 @@ class AppleStream final : public IRenderStream {
         return stream;
     }
 
-    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) {
         std::size_t produced = 0;
         while (produced < frames) {
             if (fifo_read_ >= fifo_.size()) {
@@ -767,7 +774,7 @@ class AppleStream final : public IRenderStream {
         return produced;
     }
 
-    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+    [[nodiscard]] Result<void> seek(uint64_t frame) {
         // Silent stream has no AU / reader: just reposition the silence cursor.
         if (silent_) {
             fifo_.clear();
@@ -802,7 +809,7 @@ class AppleStream final : public IRenderStream {
     // Stage A (worker): reposition ONLY the source read for an output-stage loop wrap. Leaves the AU
     // state, the per-bus event cursors, and consumer_pos_ alone — the consumer is still rendering
     // earlier frames and wraps its own state later, at the actual playout boundary (loop_render_reset).
-    [[nodiscard]] Result<void> reposition_source(uint64_t frame) override {
+    [[nodiscard]] Result<void> reposition_source(uint64_t frame) {
         if (silent_) {
             producer_pos_ = frame;
             ended_ = false;
@@ -821,7 +828,7 @@ class AppleStream final : public IRenderStream {
     // (no AudioUnitReset / alloc / lock). The AU's HRTF tail is intentionally NOT cleared (a sub-
     // perceptual decorrelation tail may bleed across the loop seam; clearing it would need an AU op
     // that is not callback-safe).
-    void loop_render_reset(uint64_t frame) override {
+    void loop_render_reset(uint64_t frame) {
         std::ranges::fill(ev_cursor_, std::size_t{0});
         std::ranges::fill(direct_ev_cursor_, std::size_t{0});
         std::ranges::fill(lfe_ev_cursor_, std::size_t{0});
@@ -831,7 +838,7 @@ class AppleStream final : public IRenderStream {
     // Publish per-bus live gain targets + head-lock flags. render_au_block turns each gain target
     // into a sample-domain input envelope; buffered output keeps its prepared value and the new
     // ramp begins at the first subsequently rendered frame.
-    void set_overrides(const LiveOverrides& overrides) override {
+    void set_overrides(const LiveOverrides& overrides) {
         // Resolve per-bus gain + head-lock on the WORKER and store each into its own atomic. The audio
         // callback (render_au_block) loads each atomic — race-free, no shared_ptr / refcount / lock on
         // the realtime path. The worker is the sole writer; the callback the sole reader.
@@ -861,22 +868,22 @@ class AppleStream final : public IRenderStream {
     // Worker-thread only (same thread as process()): stash the latest listener head orientation.
     // render_slice() applies it to the AU's global HeadYaw/Pitch/Roll params on the next slice.
     // No-op effect on non-binaural / silent units (those params are ignored by the AU).
-    void set_listener_orientation(const ListenerOrientation& orientation) override {
+    void set_listener_orientation(const ListenerOrientation& orientation) {
         live_orientation_ = orientation;
         orientation_dirty_ = true;
     }
 
-    // ── Output-stage orientation (two-stage rendering); see IRenderStream ────────────────────
+    // ── Output-stage orientation (two-stage rendering); see stream_table (apple_backend.h) ─
     // Binaural opts in: render_output() runs the AU on the audio callback with the live head pose,
     // so head tracking is heard at playout (no ring-drain delay). Speaker output keeps the single-
     // stage worker path (no head tracking there). A silent stream still reports binaural so the
     // engine drives the two-stage path uniformly; produce/render then just emit silence.
-    [[nodiscard]] bool renders_orientation_at_output() const override { return profile_.binaural; }
-    [[nodiscard]] uint32_t intermediate_channels() const override { return num_in_ch_; }
+    [[nodiscard]] bool renders_orientation_at_output() const { return profile_.binaural; }
+    [[nodiscard]] uint32_t intermediate_channels() const { return num_in_ch_; }
 
     // Stage A (worker): read the next `frames` of interleaved source PCM into `out` — orientation-
     // independent. Advances the producer (file-read) cursor; returns frames produced (0 at EOF).
-    [[nodiscard]] Result<std::size_t> produce_intermediate(std::span<float> out, std::size_t frames) override {
+    [[nodiscard]] Result<std::size_t> produce_intermediate(std::span<float> out, std::size_t frames) {
         if (producer_pos_ >= total_frames_) {
             return std::size_t{0};
         }
@@ -903,7 +910,7 @@ class AppleStream final : public IRenderStream {
     [[nodiscard]] std::size_t render_output(std::span<const float> intermediate,
                                             std::span<float> out,
                                             std::size_t frames,
-                                            const ListenerOrientation& o) override {
+                                            const ListenerOrientation& o) {
         if (silent_) {
             std::fill_n(out.data(), frames * num_out_ch_, 0.0F);
             consumer_pos_ += frames;
@@ -934,11 +941,10 @@ class AppleStream final : public IRenderStream {
 
     // True once render_output hit an AudioUnit error on the callback (the affected block was silenced
     // rather than emitting garbage). The engine polls this to surface / stop the monitor.
-    [[nodiscard]] bool render_failed() const override { return render_failed_.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool render_failed() const { return render_failed_.load(std::memory_order_relaxed); }
 
-    [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
-    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
-    [[nodiscard]] std::string_view output_layout() const override { return profile_.writer_layout; }
+    [[nodiscard]] uint32_t out_channels() const { return num_out_ch_; }
+    [[nodiscard]] uint32_t sample_rate() const { return sample_rate_; }
 
   private:
     AppleStream(AudioUnitGuard unit,
@@ -1187,123 +1193,94 @@ class AppleStream final : public IRenderStream {
     AudioUnitGuard unit_;
 };
 
-class AppleRenderer final : public IRenderer {
-  public:
-    [[nodiscard]] CapabilityReport capabilities() const override { return apple_capabilities(); }
+} // namespace
 
-    // NOLINTNEXTLINE(readability-function-size): preparation validates and freezes one complete AU recipe.
-    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override {
-        const auto profile = resolve_output_profile(plan.output_layout);
-        if (!profile) {
-            return make_error(ErrorCode::unsupported,
-                              "apple backend does not support output layout '" + plan.output_layout + "'",
-                              "layout=" + plan.output_layout);
-        }
-
-        // The DirectSpeakers routing checks, the 22.2 LFE routing, the spread controls, channelLock
-        // on the Apple speaker geometry and the buses are prepared in Rust (mradm-render `apple`),
-        // which logs the "apple" lines in order.
-        std::optional<render_common::MatrixRecords> matrix;
-        if (plan.direct_speakers_matrix != nullptr) {
-            matrix.emplace(*plan.direct_speakers_matrix);
-        }
-        const auto log = [](void* context, uint32_t level, MradmAdmText text) noexcept {
-            try {
-                static_cast<LogSink*>(context)->log(
-                    static_cast<LogLevel>(level),
-                    "apple",
-                    std::string_view{reinterpret_cast<const char*>(text.data), text.len});
-            } catch (...) {
-                std::terminate();
-            }
-        };
-        const MradmRenderAppleRequest request{plan.scene_handle ? plan.scene_handle->raw : nullptr,
-                                              render_common::text(plan.output_layout),
-                                              profile->binaural ? 1U : 0U,
-                                              static_cast<uint32_t>(plan.direct_speakers_routing_mode),
-                                              matrix ? 1U : 0U,
-                                              matrix ? matrix->routes.data() : nullptr,
-                                              matrix ? matrix->routes.size() : 0U,
-                                              plan.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U,
-                                              plan.speaker_spread_mode == SpeakerSpreadMode::none ? 1U : 0U,
-                                              plan.binaural_spread_mode == BinauralSpreadMode::automatic ||
-                                                      plan.binaural_spread_mode == BinauralSpreadMode::cloud
-                                                  ? 1U
-                                                  : 0U,
-                                              render_common::text(plan.input_path),
-                                              &logs,
-                                              log};
-        const std::size_t extra = (matrix ? matrix->label_bytes : 0U) + plan.input_path.size() + 512U;
-        std::vector<uint8_t> message(extra);
-        std::vector<uint8_t> context(extra);
-        std::size_t message_len = message.size();
-        std::size_t context_len = context.size();
-        MradmRenderApplePlan* raw = nullptr;
-        MradmRenderApplePlanView view{};
-        const auto code = mradm_render_apple_prepare(
-            &request, &raw, &view, message.data(), &message_len, context.data(), &context_len);
-        const std::unique_ptr<MradmRenderApplePlan, decltype(&mradm_render_apple_plan_destroy)> recipe{
-            raw, &mradm_render_apple_plan_destroy};
-        if (code != 0) {
-            return make_error(static_cast<ErrorCode>(code),
-                              std::string{reinterpret_cast<const char*>(message.data()), message_len},
-                              std::string{reinterpret_cast<const char*>(context.data()), context_len});
-        }
-
-        auto prepared = std::make_shared<ApplePrepared>();
-        prepared->profile = *profile;
-        prepared->input_channels = static_cast<uint16_t>(view.input_channels);
-        prepared->sample_rate = view.sample_rate;
-        prepared->frames = view.frames;
-        prepared->buses = bus_plans(view.spatial, view.spatial_len);
-        prepared->direct_buses = bus_plans(view.direct, view.direct_len);
-        prepared->lfe_buses = bus_plans(view.lfe, view.lfe_len);
-        prepared->lfe_routing.applies_to_22_2 = view.applies_to_22_2 != 0U;
-        prepared->lfe_routing.mode = view.split_power != 0U ? LfeRoutingMode::split_power : LfeRoutingMode::direct;
-        prepared->lfe_routing.has_lfe1 = view.has_lfe1 != 0U;
-        prepared->lfe_routing.has_lfe2 = view.has_lfe2 != 0U;
-        return std::static_pointer_cast<IPreparedRender>(prepared);
+// NOLINTNEXTLINE(readability-function-size): preparation validates and freezes one complete AU recipe.
+Result<std::shared_ptr<const apple::Prepared>> apple::prepare(const RenderPlan& plan, LogSink& logs) {
+    const auto profile = resolve_output_profile(plan.output_layout);
+    if (!profile) {
+        return make_error(ErrorCode::unsupported,
+                          "apple backend does not support output layout '" + plan.output_layout + "'",
+                          "layout=" + plan.output_layout);
     }
 
-    [[nodiscard]] Result<RenderMetrics>
-    render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
-
-    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
-    open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
-        const auto* prepared = dynamic_cast<const ApplePrepared*>(&prep);
-        if (prepared == nullptr) {
-            return make_error(
-                ErrorCode::internal_error, "apple: open_stream received an incompatible prepared state", {});
-        }
-        auto stream = AppleStream::create(*prepared, plan, logs);
-        if (!stream) {
-            return mradm::unexpected{stream.error()};
-        }
-        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+    // The DirectSpeakers routing checks, the 22.2 LFE routing, the spread controls, channelLock
+    // on the Apple speaker geometry and the buses are prepared in Rust (mradm-render `apple`),
+    // which logs the "apple" lines in order.
+    std::optional<render_common::MatrixRecords> matrix;
+    if (plan.direct_speakers_matrix != nullptr) {
+        matrix.emplace(*plan.direct_speakers_matrix);
     }
-};
+    const auto log = [](void* context, uint32_t level, MradmAdmText text) noexcept {
+        try {
+            static_cast<LogSink*>(context)->log(static_cast<LogLevel>(level),
+                                                "apple",
+                                                std::string_view{reinterpret_cast<const char*>(text.data), text.len});
+        } catch (...) {
+            std::terminate();
+        }
+    };
+    const MradmRenderAppleRequest request{plan.scene_handle ? plan.scene_handle->raw : nullptr,
+                                          render_common::text(plan.output_layout),
+                                          profile->binaural ? 1U : 0U,
+                                          static_cast<uint32_t>(plan.direct_speakers_routing_mode),
+                                          matrix ? 1U : 0U,
+                                          matrix ? matrix->routes.data() : nullptr,
+                                          matrix ? matrix->routes.size() : 0U,
+                                          plan.lfe_routing_mode == LfeRoutingMode::split_power ? 1U : 0U,
+                                          plan.speaker_spread_mode == SpeakerSpreadMode::none ? 1U : 0U,
+                                          plan.binaural_spread_mode == BinauralSpreadMode::automatic ||
+                                                  plan.binaural_spread_mode == BinauralSpreadMode::cloud
+                                              ? 1U
+                                              : 0U,
+                                          render_common::text(plan.input_path),
+                                          &logs,
+                                          log};
+    const std::size_t extra = (matrix ? matrix->label_bytes : 0U) + plan.input_path.size() + 512U;
+    std::vector<uint8_t> message(extra);
+    std::vector<uint8_t> context(extra);
+    std::size_t message_len = message.size();
+    std::size_t context_len = context.size();
+    MradmRenderApplePlan* raw = nullptr;
+    MradmRenderApplePlanView view{};
+    const auto code =
+        mradm_render_apple_prepare(&request, &raw, &view, message.data(), &message_len, context.data(), &context_len);
+    const std::unique_ptr<MradmRenderApplePlan, decltype(&mradm_render_apple_plan_destroy)> recipe{
+        raw, &mradm_render_apple_plan_destroy};
+    if (code != 0) {
+        return make_error(static_cast<ErrorCode>(code),
+                          std::string{reinterpret_cast<const char*>(message.data()), message_len},
+                          std::string{reinterpret_cast<const char*>(context.data()), context_len});
+    }
 
+    auto prepared = std::make_shared<Prepared>();
+    prepared->profile = *profile;
+    prepared->input_channels = static_cast<uint16_t>(view.input_channels);
+    prepared->sample_rate = view.sample_rate;
+    prepared->frames = view.frames;
+    prepared->buses = bus_plans(view.spatial, view.spatial_len);
+    prepared->direct_buses = bus_plans(view.direct, view.direct_len);
+    prepared->lfe_buses = bus_plans(view.lfe, view.lfe_len);
+    prepared->lfe_routing.applies_to_22_2 = view.applies_to_22_2 != 0U;
+    prepared->lfe_routing.mode = view.split_power != 0U ? LfeRoutingMode::split_power : LfeRoutingMode::direct;
+    prepared->lfe_routing.has_lfe1 = view.has_lfe1 != 0U;
+    prepared->lfe_routing.has_lfe2 = view.has_lfe2 != 0U;
+    return std::shared_ptr<const Prepared>{std::move(prepared)};
+}
+
+Result<RenderMetrics>
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
-                                                   const RenderPlan& plan,
-                                                   ProgressSink& progress,
-                                                   LogSink& logs) {
-    const auto* prepared = dynamic_cast<const ApplePrepared*>(&prep);
-    if (prepared == nullptr) {
-        return make_error(
-            ErrorCode::internal_error, "apple: render_window received an incompatible prepared state", {});
-    }
-
-    const auto num_in_ch = prepared->input_channels;
-    const auto num_frames = prepared->frames;
-    const auto sample_rate = prepared->sample_rate;
-    const auto& profile = prepared->profile;
+apple::render_window(const Prepared& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+    const auto num_in_ch = prepared.input_channels;
+    const auto num_frames = prepared.frames;
+    const auto sample_rate = prepared.sample_rate;
+    const auto& profile = prepared.profile;
     const uint16_t num_out_ch = profile.channels;
     const UInt32 spatialization_algorithm =
         profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
-    const auto& buses = prepared->buses;
-    const auto& direct_buses = prepared->direct_buses;
-    const auto& lfe_buses = prepared->lfe_buses;
+    const auto& buses = prepared.buses;
+    const auto& direct_buses = prepared.direct_buses;
+    const auto& lfe_buses = prepared.lfe_buses;
 
     // On-demand output window (RenderPlan::render_window). AUSpatialMixer is a
     // black-box stateful AudioUnit, especially in HRTF mode, so windowed rendering
@@ -1536,7 +1513,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                               direct_ev_cursor);
 
         mix_lfe_side_buses(lfe_buses,
-                           prepared->lfe_routing,
+                           prepared.lfe_routing,
                            staging.data(),
                            num_in_ch,
                            out_interleaved.data(),
@@ -1583,6 +1560,16 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     logs.log(LogLevel::info, "apple", "wrote " + std::to_string(frames_to_write) + " frames to " + plan.output_path);
     return finish_output(meter_pending, writer, &*lufs_st);
 }
+
+Result<MradmEngineIslandStream> apple::open_stream(const Prepared& prepared, const RenderPlan& plan, LogSink& logs) {
+    auto stream = AppleStream::create(prepared, plan, logs);
+    if (!stream) {
+        return mradm::unexpected{stream.error()};
+    }
+    return stream_table(std::move(*stream));
+}
+
+namespace {
 
 // Render callback for the LFE-routing self-test: an 80 Hz sine on the (single) mono LFE bus.
 OSStatus probe_lfe_input_callback(void* ref,
@@ -1756,10 +1743,6 @@ CapabilityReport apple_capabilities() {
                                        false});
     }
     return r;
-}
-
-std::unique_ptr<IRenderer> create_apple_renderer() {
-    return std::make_unique<AppleRenderer>();
 }
 
 } // namespace mradm

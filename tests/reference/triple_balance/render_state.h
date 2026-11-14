@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 #include "adm_scene.h"
 #include "size_processor.h"

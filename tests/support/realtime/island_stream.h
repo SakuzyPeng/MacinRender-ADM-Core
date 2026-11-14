@@ -5,6 +5,7 @@
 
 #include "adm/errors.h"
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 #include "engine_test_ffi.h"
 

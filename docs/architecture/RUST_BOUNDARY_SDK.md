@@ -1,6 +1,6 @@
 # 删除 C++ 外壳与 SDK（六期 6.5）
 
-> 状态：进行中（A、B、C 批完成，2026-11-14）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
+> 状态：进行中（A、B、C、D 批完成，2026-11-14）。路线见 [PCM 一致性审计六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)。
 
 6.3 / 6.4 之后，公开 C ABI 与 `mradm` CLI 都由 Rust 实现，生产只需要 Rust 按名调用的岛（编码器与容器元数据、APAC worker、
 Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度回调跳板。6.5 把其余 C++（会话外壳、C++ SDK 头、其实现与打包）删出生产：
@@ -97,3 +97,35 @@ Apple 后端、输出设备与系统空间 sink、平台事实）和两个进度
 - ctest 85/85、FFI 头校验、参考登记、许可证校验与 SBOM、改动 C/C++ 的 clang-format（CI 的新版本规则，本机以 clang-format 23 核对）/ clang-tidy / cppcheck（cppcheck 与 main 同文件对照无新增）；
   Apple 岛的改动只能由 macOS CI 编译；
 - 规模：生产 C/C++ 9,768 → 9,674 行（`Result` 自有实现 +98 行，`render.h` 测试专用部分移出 −208 行）。
+
+## D 批：Apple 岛不再经 `IRenderer` / `IRenderStream`
+
+用户决定（2026-11-12）把 Apple 岛内部停用 C++ 后端接口推到 6.5。D 批起生产不再有 C++ 后端接口：
+
+- **Apple 后端的入口**：`AppleRenderer`（`IRenderer`）改为三个函数 `apple::prepare` / `apple::render_window` / `apple::open_stream`，
+  声明在新的 `src/adm_apple/apple_backend.h`。准备状态 `apple::Prepared` 只在 `spatial_mixer_renderer.cpp` 中定义，不再需要
+  `dynamic_cast` 检查；`AppleStream` 去掉 `IRenderStream` 基类与 `override`，渲染、seek、回环、覆盖、朝向与两段式输出的实现不变。
+- **流表**：`apple::open_stream` 直接返回 Rust Monitor 调用的 `MradmEngineIslandStream`。建表代码（错误缓冲、异常兜底、覆盖记录的
+  换算、可取消 seek）从 `apple_island.cpp` 移到 `apple_backend.h`，以流类型为模板参数，在流的定义处实例化；表的行为与原来相同：
+  不需要预滚（原 `seek_requires_preroll` 默认值）、覆盖检查总是通过（原 `validate_overrides` 默认值）、可取消 seek 在已请求取消时报
+  `cancelled`、否则 seek 一次（原 `seek_with_cancel` 默认实现），异常照旧报状态 100。`apple_backend.h` 是 Rust 调用的流表所在，
+  按岛接口登记到 `ISLAND_INTERFACES`（218 行；`apple_island.cpp` 353 → 166 行）。
+- **接口移到测试**：`IRenderer`、`IRenderStream`、`IPreparedRender`、`EmptyPreparedRender` 从 `src/adm_core/adm/render.h` 移到测试 SDK
+  的 `tests/support/sdk/include/adm/renderer.h`；只剩测试的 `EnginePrepared` 移到 `tests/support/sdk/render_common/engine_prepared.h`，
+  它用的 `MradmRenderPrepared` / `mradm_render_prepared_destroy` 声明移到 `tests/support/ffi/engine_test_ffi.h`；只有测试使用的
+  `Diagnostic`、`RenderResult`、`PreparedScene` 移到同一个 `renderer.h`。`render.h` 只剩 Apple 岛用的 `RenderPlan`、`RenderMetrics` 与
+  窗口记录；`render_apple.h` 只剩能力表与 LFE 自检。
+- **测试**：Apple 的冒烟、LFE 路由与 DirectSpeakers 矩阵测试仍以 `IRenderer` 驱动 Apple 后端，经新的
+  `tests/support/apple_renderer`（`mr_adm_apple_renderer_test_support`，只在 macOS）：`prepare` / `render_window` 直接转调，
+  流把岛表包装为 `IRenderStream`，因此测试经过的流路径就是生产给 Rust 的表。冻结参考 `triple_balance/render_state.h` 只加一行
+  include，`retention.json` 同步哈希。
+
+验证（本机 Linux x64，一致性 config A，参照同 A 批为 main `8e665a5`；对照的源码为 `ff8f814`，之后只把测试专用的结果记录移出
+`render.h`，以 ctest 复核）：
+- CLI 记录 113 条 0 差异；C ABI 采集 3,283 行、36 个文件 0 差异，consumer 测试在两个库上都通过；
+- 完整一致性采集：PCM 输出 294、fixture 220、比较 989、重放 176、产物 256、日志 666 全部相同；
+- ctest 83/83（本机 debug 树未开 C ABI bundle，少两个只在 bundle / Release 下登记的测试）、FFI 头校验、参考登记、改动 C/C++ 的
+  clang-format（以 clang-format 23 核对）与 cppcheck（与 main 同文件对照无新增）；
+- Apple 岛与 Apple 测试只能由 macOS CI 编译运行。本机以替身 `AudioToolbox.h` 对 `spatial_mixer_renderer.cpp`、`apple_island.cpp`、
+  测试适配器与三个 Apple 测试做了只检查语法的编译；
+- 规模：生产 C/C++ 9,674 → 9,432 行，岛 3,045 → 3,028 行。

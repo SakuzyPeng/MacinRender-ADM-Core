@@ -24,7 +24,7 @@ pub struct EngineIslandError {
     context_len: *mut usize,
 }
 
-/// A C++ `IRenderStream` (`IslandStream`). `validate` and `cancel_request` may run on any thread,
+/// A C++ stream (the Apple backend). `validate` and `cancel_request` may run on any thread,
 /// `render_output` / `loop_render_reset` on the device callback; everything else on the worker.
 /// `cancel_begin` starts a fresh stop source for the next `seek_cancellable`.
 #[repr(C)]

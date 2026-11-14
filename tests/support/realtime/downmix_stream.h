@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "adm/render.h"
+#include "adm/renderer.h"
 
 #include "pcm_mix.h"
 

@@ -6,6 +6,7 @@
 #include "adm/logging.h"
 #include "adm/options.h"
 #include "adm/render.h"
+#include "adm/renderer.h"
 #include "adm/scene.h"
 
 // Opens a file streaming IRenderStream for a scene + options. Injected into the MonitorEngine so the

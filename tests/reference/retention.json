@@ -199,7 +199,7 @@
         "tests/reference/triple_balance/panner.h": "243c7634163cc52a6daac0add14a39b1faf41c38596901e2b4ad563d60b97641",
         "tests/reference/triple_balance/provenance.json": "8bd4bd7ebf0b32e051d345b5710d006969dca62368ab07fe0d7c57fd4fc78468",
         "tests/reference/triple_balance/render_state.cpp": "fdfe844f1091f3095ab1b9e793f486c7d76f0e9e078addb4219abd8db7e0405f",
-        "tests/reference/triple_balance/render_state.h": "bfab1fe55507c4f97c36822d8cb991e9c5bb8bb483aa8a8ec88894aff4524a90",
+        "tests/reference/triple_balance/render_state.h": "3b4ea317c4ec8d2c1884a28d92a2c18db63df23966ecb7edcd0504bcc0fd7be8",
         "tests/reference/triple_balance/size_panner.cpp": "35f12b5dd60d9310c42f3bc75c78e8f19f0214bd38c82adea0d457d34d3bf3d7",
         "tests/reference/triple_balance/size_panner.h": "895f0e192920837ad2961750b83f3022a6e198f8dd1580b504822cad87b6a9e8",
         "tests/reference/triple_balance/size_processor.cpp": "e8cf062d3a430c47dcdd456f69d2be03dacb3a253f00dc7906177aa5d791699d",
