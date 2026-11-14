@@ -426,11 +426,11 @@ impl adm_hptf_stereo_info_t {
 
 impl adm_hptf_band_t {
     /// A parsed band with the caller's `stride` as its `struct_size`; the type as `HptfBandType`.
-    pub(crate) fn of(stride: u32, band: &mradm_ffi::hptf::Band) -> Self {
+    pub(crate) fn of(stride: u32, band: &mradm_dsp::hptf::Band) -> Self {
         Self {
             struct_size: stride,
             r#type: i32::from(band.kind as u8),
-            enabled: i32::from(band.enabled != 0),
+            enabled: i32::from(band.enabled),
             reserved_v1_38: 0,
             fc_hz: band.frequency,
             gain_db: band.gain_db,

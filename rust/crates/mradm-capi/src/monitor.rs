@@ -14,11 +14,12 @@ use crate::scene::{
     hptf_infos, hptf_settings, lock, mradm_device_islands, owned, room_source_json,
     room_status_json, switch_room, text, write_sized,
 };
+use mradm_dsp::hptf::{ParseErrorKind, Profile, try_parse_parametric_eq};
 use mradm_engine::monitor::session::{Session, THROWN};
 use mradm_engine::monitor::{LEVEL_CHANNELS, Levels, ObjectOverride, Overrides};
 use mradm_ffi::adm::Text;
-use mradm_ffi::hptf::settings::mradm_dsp_hptf_validate;
-use mradm_ffi::hptf::{Band, ParseResult, Snapshot, mradm_dsp_hptf_parse};
+use mradm_ffi::hptf::Snapshot;
+use mradm_ffi::hptf::settings::profile_error;
 use mradm_ffi::render::device_island::DeviceEnumeration;
 use mradm_ffi::render::engine_monitor_session::{
     EngineMonitorSession, EngineMonitorSessionHost, choice, hptf_design,
@@ -997,12 +998,6 @@ pub unsafe extern "C" fn adm_monitor_room_source_json(
 
 // ── AutoEq ParametricEQ text ─────────────────────────────────────────────────────
 
-/// A parsed profile: the preamp and the bands.
-struct Profile {
-    preamp_db: f64,
-    bands: Vec<Band>,
-}
-
 /// The validation error's locator, formatted on the stack before the fallible copy.
 fn band_locator(index: usize) -> Result<Vec<u8>, Failure> {
     if index == 0 {
@@ -1018,80 +1013,21 @@ fn band_locator(index: usize) -> Result<Vec<u8>, Failure> {
 
 /// `parse_parametric_eq`: the grammar in Rust, the messages and line locators as the C++ wrote them.
 fn parse(text: &[u8]) -> Result<Profile, Failure> {
-    let mut bands: Vec<Band> = Vec::new();
-    let grow = |bands: &mut Vec<Band>, len: usize| -> Result<(), Failure> {
-        bands
-            .try_reserve_exact(len.saturating_sub(bands.len()))
-            .map_err(|_| Failure::Exception)?;
-        while bands.len() < len {
-            bands.push(unsafe { std::mem::zeroed() });
+    let parsed = try_parse_parametric_eq(text).map_err(|_| Failure::Exception)?;
+    let invalid = |message: &str, locator: &[u8]| Failure::error(1, message.as_bytes(), locator);
+    let profile = parsed.map_err(|e| {
+        let line = &text[e.line];
+        match e.kind {
+            ParseErrorKind::Preamp => invalid("HpTF:Preamp 行数值无法解析", line),
+            ParseErrorKind::Frequency => invalid("HpTF:滤波器行缺少可解析的 Fc", line),
+            ParseErrorKind::GainOrQ => invalid("HpTF:Gain 或 Q 数值无法解析", line),
+            ParseErrorKind::Empty => invalid("HpTF:没有可用的 ParametricEQ 参数", b""),
         }
-        Ok(())
-    };
-    grow(&mut bands, 16)?;
-    let mut result: ParseResult = unsafe { std::mem::zeroed() };
-    loop {
-        let mut message = [0u8; 256];
-        if unsafe {
-            mradm_dsp_hptf_parse(
-                text.as_ptr(),
-                text.len(),
-                bands.as_mut_ptr(),
-                bands.len(),
-                &mut result,
-                message.as_mut_ptr(),
-                message.len(),
-            )
-        } != 0
-        {
-            return Err(Failure::error(
-                6,
-                "HpTF:ParametricEQ 解析失败".as_bytes(),
-                error::until_nul(&message),
-            ));
-        }
-        if result.error != 0 || result.band_count <= bands.len() {
-            break;
-        }
-        grow(&mut bands, result.band_count)?;
+    })?;
+    if let Some((index, message)) = profile_error(&profile) {
+        return Err(Failure::error(1, message.as_bytes(), &band_locator(index)?));
     }
-    let line = || {
-        if result.line_offset > text.len() || result.line_len > text.len() - result.line_offset {
-            &[][..]
-        } else {
-            &text[result.line_offset..result.line_offset + result.line_len]
-        }
-    };
-    let invalid =
-        |message: &str, locator: &[u8]| Err(Failure::error(1, message.as_bytes(), locator));
-    match result.error {
-        0 => {}
-        1 => return invalid("HpTF:Preamp 行数值无法解析", line()),
-        2 => return invalid("HpTF:滤波器行缺少可解析的 Fc", line()),
-        3 => return invalid("HpTF:Gain 或 Q 数值无法解析", line()),
-        _ => return invalid("HpTF:没有可用的 ParametricEQ 参数", b""),
-    }
-    bands.truncate(result.band_count);
-    let mut message = [0u8; 256];
-    let mut invalid_band = 0usize;
-    let status = unsafe {
-        mradm_dsp_hptf_validate(
-            bands.as_ptr(),
-            bands.len(),
-            result.preamp_db,
-            &mut invalid_band,
-            message.as_mut_ptr(),
-            message.len(),
-        )
-    };
-    if status != 0 {
-        let locator = band_locator(invalid_band)?;
-        return Err(Failure::error(status, error::until_nul(&message), &locator));
-    }
-    Ok(Profile {
-        preamp_db: result.preamp_db,
-        bands,
-    })
+    Ok(profile)
 }
 
 /// `hptf_output_stride`: the caller's band array stride (the first band's `struct_size`, which
