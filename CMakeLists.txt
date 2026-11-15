@@ -485,14 +485,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/sdk/room
         tests/support/sdk/realtime
     )
-    set(MR_ADM_GENERATED_VERSION_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/version.cpp")
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/tests/support/sdk/core/version.cpp.in"
-        "${MR_ADM_GENERATED_VERSION_CPP}" @ONLY)
-
     add_library(mr_adm_sdk_core STATIC
         tests/support/sdk/core/direct_speakers_matrix.cpp
-        tests/support/sdk/core/screen.cpp
-        "${MR_ADM_GENERATED_VERSION_CPP}")
+        tests/support/sdk/core/screen.cpp)
     target_include_directories(mr_adm_sdk_core PRIVATE src/adm_core)
     target_link_libraries(mr_adm_sdk_core PUBLIC MacinRender::ADMCore MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_sdk_core)
@@ -571,18 +566,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_audio_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_audio_test_support)
 
-    # core_smoke_test exercises RenderService (empty-input validation); link engine.
+    # The audio island's WAVE / CAF metadata and writer wrappers (R3 C4 removed its SDK checks).
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMEngine mr_adm_audio_test_support)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE mr_adm_audio_test_support)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
-
-    add_executable(mr_adm_render_service_tests tests/unit/render_service_test.cpp)
-    target_link_libraries(mr_adm_render_service_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_render_service_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_render_service_tests)
-    add_test(NAME mr_adm_render_service_tests COMMAND mr_adm_render_service_tests)
 
     add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp tests/support/wav_output.cpp)
     target_include_directories(mr_adm_wav_profile_tests PRIVATE tests/support src/adm_audio)
@@ -1071,8 +1060,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
 
-    # Smoke test: non-existent file → io_error via full engine stack.
-
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
     target_link_libraries(mr_adm_lfe_routing_tests
         PRIVATE mr_adm_scene_test_support
@@ -1087,25 +1074,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
     mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
     add_test(NAME mr_adm_lfe_routing_tests COMMAND mr_adm_lfe_routing_tests)
-
-    # Fixture test: build a real BW64/ADM Objects file, render it, verify output.
-
-    # Fixture test: True Peak limiting — renders a near-full-scale Objects file and
-    # verifies the limiter brings output below the target dBTP.
-    add_executable(mr_adm_peak_fixture_tests tests/unit/peak_limiter_fixture_test.cpp)
-    target_link_libraries(mr_adm_peak_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-    )
-    mr_adm_core_apply_warnings(mr_adm_peak_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_peak_fixture_tests)
-    add_test(NAME mr_adm_peak_fixture_tests COMMAND mr_adm_peak_fixture_tests)
-
-    # Fixture test: HOA ADM (typeDefinition=HOA) → loudspeaker decode via EAR.
-
-    # Fixture test: Rust KEMAR HRTF binaural renderer timing and fixed stereo output layout.
-    # The interpolation invariant probe is test support over the legacy HRTF state.
 
     set(_mr_rust_test_features --no-default-features)
     if(MR_ADM_ENABLE_SOFA)
@@ -1145,17 +1113,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
 
-    # Fixture test: integrated loudness normalization — RenderService renders a loud sine → -23 LUFS.
-    add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)
-    target_link_libraries(mr_adm_loudness_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-    )
-    mr_adm_core_apply_warnings(mr_adm_loudness_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_loudness_fixture_tests)
-    add_test(NAME mr_adm_loudness_fixture_tests COMMAND mr_adm_loudness_fixture_tests)
 
     # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
     # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
@@ -1182,28 +1139,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_trim_file_smoke_tests)
     add_test(NAME mr_adm_trim_file_smoke_tests COMMAND mr_adm_trim_file_smoke_tests)
 
-    # End-to-end output trim: --start/--end map to rendered frame ranges.
-    add_executable(mr_adm_render_trim_fixture_tests tests/unit/render_trim_fixture_test.cpp)
-    target_link_libraries(mr_adm_render_trim_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-    )
-    mr_adm_core_apply_warnings(mr_adm_render_trim_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_render_trim_fixture_tests)
-    add_test(NAME mr_adm_render_trim_fixture_tests COMMAND mr_adm_render_trim_fixture_tests)
 
-    # Final PCM after loudness / peak gain staging, re-measured.
-    add_executable(mr_adm_normalization_acceptance_tests tests/unit/normalization_acceptance_test.cpp)
-    target_link_libraries(mr_adm_normalization_acceptance_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-    )
-    mr_adm_core_apply_warnings(mr_adm_normalization_acceptance_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_normalization_acceptance_tests)
-    add_test(NAME mr_adm_normalization_acceptance_tests COMMAND mr_adm_normalization_acceptance_tests)
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)

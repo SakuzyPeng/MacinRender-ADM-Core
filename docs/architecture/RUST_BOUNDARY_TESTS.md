@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B 已完成（2026-11-15，本机 Linux x64）；C–G 待做。macOS arm64 / Windows x64 原生复核待维护者。
+> 状态：进行中。A、B、C 已完成（2026-11-15，本机 Linux x64）；D–G 待做。macOS arm64 / Windows x64 原生复核待维护者。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -174,3 +174,99 @@ B 批处理经私有 FFI 直接测 Rust 内核的 C++ 测试。逐文件读出�
 
 **规模**：测试 C/C++ 由 56,619 行降到 51,580 行（`tests/unit` 38,025 → 34,330，`tests/support` 14,734 → 13,390）；
 `mradm-ffi` 由 25,838 行降到 23,751 行。生产 C/C++ 不变（9,432 行）。
+
+## C SDK 渲染测试
+
+C 处理经 C++ SDK（`RenderService` / `PreviewSession`、`tests/support/engine_renderer` 的 `IRenderer` 适配、`io::import_scene` 与
+`adm_scene`）做整段渲染的 18 个测试。它们只写 WAV / CAF，不经编码器岛，因此全部改在 `cargo test` 中用纯 Rust 运行。分四个子批提交：
+C1 扬声器后端、C2 双耳 / Triple Balance 流 / room、C3 导入导出与声道床、C4 渲染服务与后处理。
+
+**整段渲染的测试工具** `mradm-engine` `tests/common/render.rs`：
+- 用 `mradm-testkit` 写 ADM WAVE（单对象、多 track、嵌套对象、DS 与 HOA 块）；
+- 经 `mradm_engine::render::Render` 与 `TestHost` 渲染，请求默认值照 C++ `RenderOptions`，输出 float32 以便读出精确值；
+- 任何岛请求都让测试失败，保证不经编码器或 Apple 岛；
+- 用 `mradm-wav` 读回输出，并收集服务的日志行（检查警告）。
+
+导入与导出的测试读后端收到的场景：inspect JSON（`scene_json::inspect_json`，即 C++ 测试读的 `AdmScene` 视图）加快照中的作者来源。
+只在某个后端内部的断言放到 `mradm-render` 的测试。
+
+| C++ 测试 | 去向 |
+|---|---|
+| vbap_smoke_test | 移植为 `mradm-engine` `vbap_render.rs`（19 项，经渲染服务整段渲染）：对象位置、块切换与插值钳位、嵌套对象起点、对象增益 / 静音 / 时长 / 偏移、DS 标签 / 别名 / 位置 / 回退路由（stereo、5.1、wav71、2+5+0、4+5+4、9.1.6、22.2）、显式 DS 路由在其他后端被拒、无坐标后置标签、channelLock / maxDistance / divergence、MDAP、默认插值、Apple 几何、2D 布局警告、Triple Balance 块增益与语义报告；实时增益覆盖的线性比例 → `mradm-render` `vbap.rs` `a_live_gain_override_scales_the_stream`；文件流式等于离线窗口与分块无关已由 `vbap.rs` `seeks_follow_the_offline_window` 等覆盖；能力表由 `catalog.rs` golden 覆盖 |
+| ear_render_fixture_test | 移植为 `mradm-engine` `ear_render.rs`（9 项）：前方对象、DS 床与混合场景、9.1.6 对象与顶层标签、RC_LFE 别名、Cartesian 对象与扬声器位置、位置偏移、diffuse 与 255 帧补偿延迟、短输入、P2 语义的警告、channelLock / divergence、同一窗口内两个跳变块；整体与按标签的实时增益 → `mradm-render` `ear.rs` `live_gains_scale_the_whole_object_or_one_label`；文件流式与窗口等于整段离线已由 `ear.rs` 覆盖；C++ 岛辅助 `resolve_live_channel_gain` 与 `LiveGainRamp`（生产 `render_common`，Apple 岛使用）的断言移到 C++ 岛测试 `speaker_layouts_test` |
+| ear_render_smoke_test | 已覆盖：能力表由 `catalog.rs` golden 覆盖（含 wav71、无 0+7+0）；缺失输入的 io_error 与非空消息 → `ear_render.rs` `a_missing_input_is_an_io_error_with_a_message` |
+| hoa_encode_fixture_test | 移植为 `mradm-engine` `hoa_render.rs`（6 项）：前 / 左 / 偏移声源的一阶分量、对象静音与增益、跳变与插值块切换、diffuse / extent / divergence 降低指向性、DS 位置与 RC_LFE、只有 LFE 时的 True Peak 与无响度；流的缓冲规则（过小缓冲不消耗也不改写、零帧）、整体增益、静音与标签优先级 → `mradm-render` `hoa.rs` `stream_buffers_and_live_gains`；窗口与文件流式等于整段离线、seek 不留 diffuse 历史已由 `hoa.rs` 覆盖，prepared / 输入不匹配由 `stream.rs` 覆盖，能力表由 `catalog.rs` 覆盖 |
+| hoa_decode_fixture_test | 移植为 `mradm-engine` `hoa_decode_render.rs`（4 项）：HOA1 的 W 到 5.1 与 9.1.6、对象静音与增益、增益为 0 的后一块在补偿延迟后静音、无 track 的 UID 不产生 W |
+| binaural_render_fixture_test | 移植为 `mradm-engine` `binaural_render.rs`（9 项，经渲染服务整段渲染）：偏离中心声源的两耳差、块起点之前不泄漏、LFE 绕过 HRTF、CAF 双耳布局标签与多声道布局被拒、缺失 SOFA、channelLock / divergence / extent / diffuse、点块之后的 divergence 块保持对称、SAF spreader 保持输入长度、离线朝向与 ADM 头锁定（含 spreader 与先自由后锁定的块）；文件流式的缺口 → `mradm-render` `binaural_stream.rs`（20 ms 线性增益、拓扑交叉淡化从旧状态开始且还原后逐位相同、实时 extent 缩放等于按 ADM 范围钳位后的块、头锁定与只改增益 / 显式解锁 / cloud 与 diffuse 分支、姿态扫动有界）；拉取大小、seek、放弃的 seek、拓扑合并与按标签增益已由 `binaural_stream.rs` 覆盖；原先经 `binaural_test_probe`（4.7 A 之前的 C++ HRTF 状态副本）检查的网格点恒等、离网格幅度不出凸包、侧向头影改为对内置 KEMAR 的独立断言 → `mradm-dsp` `hrtf_kemar.rs` `kemar_lookups_reproduce_bound_and_shadow_the_measurements`；外部 SOFA（`MR_ADM_TEST_SOFA_PATH`）一项不移植，SOFA 读取由 `binaural_hrtf_sofa.rs` 覆盖 |
+| triple_balance_stream_test | 标准模式的流（拉取模式与 seek 等于离线、取消的 seek、空处理与过短缓冲、静态编辑等于策略离线渲染、拒绝时保留已接受目标、实时静音与 size 自动化与拉取大小无关）已由 `mradm-render` `triple_balance_stream.rs` 覆盖；D 模式移植为 `mradm-engine` `triple_balance_render.rs`（2 项，同一 13 声道场景经渲染服务）：起始静音、有效报告、22.2 LFE 等功率分配、裁剪窗口、重复渲染、spread none 忽略 size、布局与采样率边界；D 模式拒绝实时由 `monitor-v1` golden 覆盖 |
+| room_render_test | **缩为 C ABI 测试，去掉 SDK**：Scene 流、房间检查与两种档位、距离集合与 SOFA 检查、损坏的包、选项设置器、显式 HRIR 与 SOFA 冲突，只经 `c_api.h`（E 批再移植）；文件渲染（离线追加尾部且等于碎片化文件流、seek、窗口、实时静音、屏幕映射，两种档位、距离集合、靠墙房间与 SOFA）→ `mradm-engine` `room_render.rs`；切换规则（失败候选保留当前房间、最新请求胜出、重复请求不重启过渡、失败的最新请求不复活被取代的房间）、声源增长与 reset → `mradm-render` `room_runtime.rs` 三项；屏幕 JSON 解析由 `mradm-scene` `config.rs` 覆盖，切换不能改档位由 `room_runtime.rs` 覆盖 |
+| adm_io_fixture_test | 移植为 `mradm-engine` `adm_import.rs`（14 项，读后端收到的场景：inspect JSON 即 C++ 读的 `AdmScene` 视图，作者来源读快照）：最小图与 CHNA 映射、对象与块的来源（dB、相对 rtime）、块位置 / 增益 / 默认值、分数帧边界连续、channelLock / divergence 及默认值、DS 块、三种类型的头锁定优先级、HOA pack 属性、混合对象、按 track 限定的 pack 声道与大小写不同的 CHNA UID、Binaural 警告、LFE 低通、programme / content 响度、语言、标签、对白、参考屏幕、programme 时间、importance 与 dialogue ID |
+| adm_io_smoke_test | 缺失输入、mask 自动识别、显式布局与 AXML 优先级、格式错误已由 `mradm-scene` `import.rs` 覆盖；移植 7.1.4 两种顺序、别名几何与 LFE、带仰角的上层标签、空标签被拒、自定义 float 床（一个对象每声道一 track、LFE 只有低通标记）、预设声道数不符、格式错误的 AXML 不退回 mask → `import.rs` `catalog_aliases_custom_beds_and_malformed_axml` |
+| scene_export_fixture_test | 移植为 `mradm-engine` `scene_export.rs`（3 项，照 C ABI 的导出：`patched_axml` 后 `replace_axml`，再重新导入）：无策略时块字段不变、增益缩放只改对象增益、插值上限只改插值、位置覆盖延后、头锁定覆盖写到每种类型的每个块而对象保持、data chunk 逐字节相同、BW64 源仍为 BW64；各策略写出的 AXML 由 `mradm-scene` `export-v1` golden 锁定 |
+| channel_bed_render_test | 移植为 `mradm-engine` `channel_bed_render.rs`（5 项，经渲染服务）：扬声器输出的 WAVE mask、自定义标签床到双耳（ADM Binaural 语义、无扬声器 mask、重新导入）、7.1.4 WAVE 顺序改写保持各声道信号、8 声道以上整数输出为 BW64 且带 DirectSpeakers ADM、HOA3 的 ACN / SN3D pack |
+| render_trim_fixture_test | 移植为 `mradm-engine` `render_service.rs`：结束 / 起止 / 无裁剪的帧数、巨大有限结束钳到整段、起点超出时长与 inf / -inf / NaN / 负值 / 结束不在起点之后 / 不足一帧的窗口被拒且不留输出、计量跟随窗口（EAR 与 HOA3 静音半段无 True Peak）、窗口逐位等于整段切片（EAR、VBAP、HOA3，双耳 1e-6）、稀疏 BW64 输入在 2^31 帧之后的 6 对象窗口（只在 Unix 运行；C++ 在 Windows 也只在设置 `MR_ADM_RUN_LARGE_FILE_TESTS` 时运行）；Apple 后端的稀疏窗口归 F（岛测试） |
+| core_smoke_test | **岛测试，保留**：去掉 SDK 的版本与 `RenderService` 检查（版本由 C ABI 测试与 `mradm --version` 的 CLI 记录覆盖，渲染服务由 `render_service.rs` 覆盖），只留 `src/adm_audio` 的 WAVE / CAF 元数据与写出包装；SDK `version.h` / `version.cpp.in` 随之删除 |
+| render_service_test | 准备缓存复用（不重复准备、仍导入并应用策略、仍写语义报告、输出相同）已由 `render.rs` `cached_preparation_does_not_skip_import_policy_or_report` 覆盖（Apple 的缓存归 F）；策略 JSON 错误为参数错误、缺失策略文件为 IO 错误 → `render_service.rs` `policy_errors_are_parameter_and_io_errors`；非 UTF-8 输出 / 策略路径被拒而非改写为替换字符、含 NUL 被拒、字面替换字符可用 → `mradm-capi` `options.rs` `request_paths_reject_invalid_utf8_instead_of_replacing_it`（路径在 C ABI 边界转换，引擎只收 UTF-8） |
+| normalization_acceptance_test | 移植为 `render_service.rs` `final_pcm_meets_the_normalisation_targets`：同一 6 s 节目（1 kHz 与跨采样峰值突发），响度 -23、加 -2.5 dB 终增益、峰值补偿到 -6 dBTP（float 与 24-bit）、热输入的默认 -1 dBTP 上限、静音保持数字静音且不报读数；以 `mradm-dsp` `Meter` 重新测量写出的文件，误差 1e-5，报告值等于测量值（`Meter` 对独立 BS.1770-4 参考的准确性由 `meter_acceptance.rs` 覆盖） |
+| loudness_fixture_test | 移植为 `render_service.rs` `loudness_normalisation_reaches_its_target`：5 s 正弦归一化到 -23 LUFS（1.5 LU 内）、静音不报错且保持静音、缺失输入为 IO 错误 |
+| peak_limiter_fixture_test | 移植为 `render_service.rs` `the_limiter_and_peak_make_up`：0.95 正弦限制到 -1 dBTP 附近、0.10 不变、0.01 补偿到 -6 dBTP 附近、峰值补偿无限制器时为参数错误 |
+
+新增的 Rust 测试（约 4,900 行）：
+- `mradm-engine`：`vbap_render.rs`（19 项）、`ear_render.rs`（9）、`hoa_render.rs`（6）、`hoa_decode_render.rs`（4）、
+  `binaural_render.rs`（9）、`triple_balance_render.rs`（2）、`room_render.rs`（2）、`adm_import.rs`（14）、`scene_export.rs`（3）、
+  `channel_bed_render.rs`（5）、`render_service.rs`（8），以及共用的 `tests/common/render.rs`；dev-dependency 加 `mradm-testkit`。
+- `mradm-render`：`vbap.rs`、`ear.rs`、`hoa.rs` 各一项，`binaural_stream.rs` 四项，`room_runtime.rs` 三项；
+  `tests/common` 的输入改为从文件读声道数。
+- `mradm-dsp`：`hrtf_kemar.rs` 的 `kemar_lookups_reproduce_bound_and_shadow_the_measurements`。
+- `mradm-scene`：`import.rs` 的 `catalog_aliases_custom_beds_and_malformed_axml`。
+- `mradm-capi`：`options.rs` 的 `request_paths_reject_invalid_utf8_instead_of_replacing_it`。
+
+**保留的 C++**（按决定 1，测的是生产岛代码，或只经 C ABI）：
+- `core_smoke_test`：去掉 SDK 检查，只测 `src/adm_audio` 的包装；
+- `speaker_layouts_test`：加入 `render_common` 的实时增益辅助（Apple 岛使用）；
+- `room_render_test`：缩为只经 `c_api.h` 的测试，不再链接 SDK，E 批再移植。
+
+**随批删除的测试支持**：
+- `tests/support/binaural/` 全部（`binaural_test_probe.*`、`binaural_internal.h`、`hrtf_state.*`、`legacy_state.cpp`、`binaural_dsp.h`）
+  及库 `mr_adm_binaural_test_support`，`engine_renderer` 库去掉 `hrtf_state.cpp`；
+- `speaker_mix.h`、`scene_policy.h`、`sdk/dsp/hrtf.h`；
+- SDK 的 `version.h` / `version.cpp.in`。
+
+`engine_renderer` 与 `adm_scene` 库仍被 D（Monitor 支持）、F（Apple 与 LFE 路由测试）、G（手动基准）使用，留到那时。
+
+**`mradm-ffi` 入口**：327 → 291。C2 删除失去全部 C/C++ 调用者的 `convolution`、`render_binaural`、`hrtf` 模块，以及 `spatial` 中的
+HRTF 数据集与 HOA 矩阵入口。`render_binaural` 的分配计数测试改挂在 `render.rs` 下。`dsp_test_ffi.h` 与 `render_test_ffi.h`
+中的声明、结构体同步删除。B 记录中留到 G 的无调用者入口剩 4 个（`mradm_dsp_hoa_matrix` 已在 C2 删除）。
+
+**文档与 CI**：
+- `release.yml` 的 Windows 优化构建测试集去掉已删除的 C++ fixture（含 `mr_adm_loudness_fixture_tests`），新增一步
+  `cargo test --release -p mradm-engine -p mradm-render`，在优化构建下运行上述整段渲染测试；
+- `CI.md` 同步。
+
+稀疏大 BW64 一项只在 Unix 运行。C++ 版在 Windows 上也默认跳过，只在设置 `MR_ADM_RUN_LARGE_FILE_TESTS` 时运行。
+
+生产代码不变，没有行为变化。
+
+### C 的验证
+
+每个子批都运行新增与改动的 Rust 测试、`cargo fmt --check` 与 workspace clippy `-D warnings`，以及 debug 构建与 ctest。
+C4 之后的结果如下。
+
+- **Rust**：新增与改动的测试全部通过（`mradm-engine` `render_service.rs` 8 项，包括 2^31 帧之后的稀疏 BW64 窗口）。
+  `mr_adm_rust_unit_tests`（`cargo test --workspace`）通过。
+- **C++ 侧**：debug 构建通过，ctest 37 项全部通过（C 之前为 53 项）。
+  - FFI 头校验通过：291 个函数、138 个结构体；
+  - `quality_scripts_test.py`、许可证检查与 C/C++ 棘轮通过；
+  - `core_smoke_test.cpp` 通过 clang-format 与 clang-tidy。
+- **对照参照构建 `b89687c`**（方法同 A，候选为 C4 之后的 `consistency-a`）：
+  - C ABI 采集：3,283 行、36 个文件，0 差异；
+  - CLI 记录：113 条命令，0 差异；
+  - C 消费者测试 2 项通过；
+  - 共享库恰好导出 164 个 `adm_*`；
+  - 完整 PCM 采集与参照完全相同：294 个输出、220 个 fixture、989 项比较、176 个重放、256 个产物、666 份日志。
+
+**规模**：测试 C/C++ 由 51,580 行降到 36,402 行：
+- `tests/unit` 34,330 → 20,339；
+- `tests/support` 13,390 → 12,203。
+
+`mradm-ffi` 由 23,751 行降到 22,366 行。生产 C/C++ 不变（9,432 行）。

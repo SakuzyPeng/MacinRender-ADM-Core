@@ -938,6 +938,18 @@ pub unsafe extern "C" fn adm_render_options_set_screen_config_json(
 mod tests {
     use super::*;
 
+    /// Request paths are never converted lossily (formerly part of the C++ `render_service_test`,
+    /// R3 C4): invalid UTF-8 cannot become, and so redirect a write to, a replacement-character
+    /// file name, while a literal replacement character is an ordinary path.
+    #[test]
+    fn request_paths_reject_invalid_utf8_instead_of_replacing_it() {
+        assert!(path_text(b"output-\xff.wav").is_none());
+        assert!(path_text(b"policy-\xff.json").is_none());
+        assert!(path_text(b"out\0put.wav").is_none());
+        let literal = path_text("output-\u{fffd}.wav".as_bytes()).unwrap();
+        assert_eq!(literal.utf8, "output-\u{fffd}.wav");
+    }
+
     fn split(csv: &str, keep: bool) -> Vec<String> {
         split_csv(csv.as_bytes(), keep)
             .unwrap()

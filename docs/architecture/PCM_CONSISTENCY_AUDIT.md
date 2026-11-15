@@ -832,7 +832,12 @@ A 已完成：新 crate `mradm-testkit`（ADM / WAVE fixture 编写器与 12 种
 
 B 已完成：21 个经私有 FFI 测内核的 C++ 测试删除，缺口移植为 `mradm-dsp` / `mradm-render` / `mradm-engine` / `mradm-scene` 的
 Rust 测试（旧实现副本改为独立期望）；`meter_test` 与 `speaker_layouts_test` 作为岛测试保留。`mradm-ffi` 入口 391 → 327。
-测试 C/C++ 56,619 → 51,580 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
+测试 C/C++ 56,619 → 51,580 行。
+
+C 已完成：经 C++ SDK 做整段渲染的 18 个测试移植为 `mradm-engine` 的整段渲染测试（经渲染服务、不经岛）与 `mradm-render` /
+`mradm-dsp` / `mradm-scene` / `mradm-capi` 的缺口测试；`core_smoke_test`、`speaker_layouts_test` 作为岛测试保留，
+`room_render_test` 缩为只经 C ABI。双耳测试支持（含 4.7 A 之前的 HRTF 状态副本）删除，`mradm-ffi` 入口 327 → 291。
+测试 C/C++ 51,580 → 36,402 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
 
 ## 每个迁移切片的验证
 
