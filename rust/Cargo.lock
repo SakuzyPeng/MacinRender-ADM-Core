@@ -373,6 +373,7 @@ dependencies = [
  "mradm-json",
  "mradm-render",
  "mradm-scene",
+ "mradm-testkit",
  "mradm-wav",
 ]
 

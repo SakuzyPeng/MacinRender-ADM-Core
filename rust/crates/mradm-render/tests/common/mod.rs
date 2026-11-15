@@ -28,6 +28,11 @@ impl Temp {
     pub fn path(&self) -> &str {
         self.0.to_str().unwrap()
     }
+    /// The channel count of the file.
+    pub fn channels(&self) -> usize {
+        let reader = mradm_wav::Reader::new(std::io::BufReader::new(File::open(&self.0).unwrap()));
+        usize::from(reader.unwrap().info().format.channels)
+    }
 }
 
 impl Drop for Temp {
@@ -38,9 +43,14 @@ impl Drop for Temp {
 
 /// A mono float input of `frames` frames.
 pub fn input(samples: &[f32]) -> Temp {
+    input_channels(samples, 1)
+}
+
+/// A float input of `channels` interleaved channels.
+pub fn input_channels(samples: &[f32], channels: u16) -> Temp {
     let temp = Temp::new("input");
     let format = Format {
-        channels: 1,
+        channels,
         sample_rate: RATE,
         sample_format: SampleFormat::Float32,
         channel_mask: None,
@@ -78,6 +88,11 @@ pub struct ObjectSpec {
 
 /// One object per spec, track `i` on input channel `i` of a mono file.
 pub fn scene(objects: Vec<ObjectSpec>, frames: u64) -> RenderScene {
+    scene_channels(objects, frames, 1)
+}
+
+/// [`scene`] over an input of `channels` channels.
+pub fn scene_channels(objects: Vec<ObjectSpec>, frames: u64, channels: u16) -> RenderScene {
     let mut s = Snapshot::default();
     let string = |s: &mut Snapshot, v: &str| {
         s.strings.push(v.to_owned());
@@ -131,7 +146,7 @@ pub fn scene(objects: Vec<ObjectSpec>, frames: u64) -> RenderScene {
     RenderScene::new(
         Info {
             sample_rate: RATE,
-            channels: 1,
+            channels,
             frames,
             source_kind: SourceKind::Adm,
             input_layout: String::new(),
@@ -178,7 +193,7 @@ pub fn render_offline(
         Driver::open_reader(input.path())?,
         offline::Settings {
             kernel,
-            inputs: 1,
+            inputs: input.channels(),
             outputs,
             frames,
             sample_rate: RATE,
@@ -217,7 +232,7 @@ pub fn render_stream(
         kernel,
         Arc::from(bindings.to_vec()),
         stream::Settings {
-            inputs: 1,
+            inputs: input.channels(),
             outputs,
             frames,
             sample_rate: RATE,
@@ -301,7 +316,7 @@ pub fn single(id: &'static str, gain: f32, track: TrackSpec) -> Vec<ObjectSpec> 
     }]
 }
 
-fn open_stream(
+pub fn open_stream(
     kernel: &Kernel,
     bindings: &[Binding],
     input: &Temp,
@@ -314,7 +329,7 @@ fn open_stream(
         kernel,
         Arc::from(bindings.to_vec()),
         stream::Settings {
-            inputs: 1,
+            inputs: input.channels(),
             outputs,
             frames,
             sample_rate: RATE,

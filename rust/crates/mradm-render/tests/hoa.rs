@@ -438,3 +438,66 @@ fn seeks_follow_the_offline_window() {
         &gain_override(b"AO_1"),
     );
 }
+
+/// The HOA file stream's buffer rules and live gains (formerly part of the C++
+/// `hoa_encode_fixture_test`): an undersized buffer is rejected without consuming audio or
+/// touching it, zero frames consume nothing, a whole-object gain scales the stream, a mute is exact
+/// silence, and a matching label wins over the whole object in either order while another
+/// channel's mute leaves this one alone.
+#[test]
+fn stream_buffers_and_live_gains() {
+    const FRAMES: u64 = 4096;
+    let file = input(&noise(FRAMES as usize));
+    let p = prepare(&scene(single("AO_1", 0.75, diffuse_track(FRAMES)), FRAMES));
+    let mut stream = open_stream(&kernel(&p), &p.bindings, &file, CHANNELS, FRAMES, 0);
+    let mut fresh = open_stream(&kernel(&p), &p.bindings, &file, CHANNELS, FRAMES, 0);
+    let mut sentinel = [0.125f32; 17];
+    assert!(stream.process(&mut sentinel, 2).is_err());
+    assert_eq!(sentinel, [0.125; 17]);
+    assert_eq!(stream.process(&mut [], 0).unwrap(), 0);
+    let (mut a, mut b) = (vec![0f32; 733 * CHANNELS], vec![0f32; 733 * CHANNELS]);
+    assert_eq!(
+        stream.process(&mut a, 733).unwrap(),
+        fresh.process(&mut b, 733).unwrap()
+    );
+    assert_eq!(bits(&a), bits(&b), "the rejected call consumed nothing");
+
+    let total = |pcm: &[f32]| pcm.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>();
+    let entry = |label: &'static str, gain_db, mute| Override {
+        object_id: b"AO_1",
+        speaker_label: label.as_bytes(),
+        mute,
+        gain_db,
+        head_locked: None,
+    };
+    let base = streamed(&p, &file, FRAMES, 0, &[1024], &[]);
+    let quieter = streamed(&p, &file, FRAMES, 0, &[1024], &[entry("", -20., false)]);
+    let ratio = (total(&quieter) / total(&base)).sqrt();
+    assert!((0.05..0.2).contains(&ratio), "{ratio}");
+    assert!(
+        streamed(&p, &file, FRAMES, 0, &[1024], &[entry("", -20., true)])
+            .iter()
+            .all(|v| *v == 0.)
+    );
+
+    let bed = TrackSpec {
+        direct: vec![(vec!["M+000"], {
+            let mut b = direct_block(0, FRAMES);
+            b.has_position = 1;
+            b
+        })],
+        ..TrackSpec::default()
+    };
+    let p = prepare(&scene(single("AO_1", 1., bed), FRAMES));
+    let base = bits(&streamed(&p, &file, FRAMES, 0, &[1024], &[]));
+    for entries in [
+        vec![entry("", -20., false), entry("M+000", 0., false)],
+        vec![entry("M+000", 0., false), entry("", -20., false)],
+        vec![entry("M-030", 0., true)],
+    ] {
+        assert_eq!(
+            bits(&streamed(&p, &file, FRAMES, 0, &[1024], &entries)),
+            base
+        );
+    }
+}

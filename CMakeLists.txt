@@ -1034,20 +1034,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
     add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)
 
-    add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
-    target_link_libraries(mr_adm_vbap_smoke_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
-    target_include_directories(mr_adm_vbap_smoke_tests PRIVATE src/adm_io)
-    mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
-    add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
-
     add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_scene_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
@@ -1134,11 +1120,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     # Smoke test: non-existent file → io_error via full engine stack.
-    add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)
-    target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine mr_adm_engine_renderer_test_support)
-    mr_adm_core_apply_warnings(mr_adm_ear_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_ear_smoke_tests)
-    add_test(NAME mr_adm_ear_smoke_tests COMMAND mr_adm_ear_smoke_tests)
 
     add_executable(mr_adm_channel_bed_render_tests tests/unit/channel_bed_render_test.cpp)
     target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMAudio MacinRender::ADMIo)
@@ -1162,19 +1143,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_lfe_routing_tests COMMAND mr_adm_lfe_routing_tests)
 
     # Fixture test: build a real BW64/ADM Objects file, render it, verify output.
-    add_executable(mr_adm_ear_fixture_tests tests/unit/ear_render_fixture_test.cpp)
-    target_link_libraries(mr_adm_ear_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
-    target_include_directories(mr_adm_ear_fixture_tests PRIVATE src/adm_io)
-    mr_adm_core_apply_warnings(mr_adm_ear_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
-    add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)
 
     # Fixture test: True Peak limiting — renders a near-full-scale Objects file and
     # verifies the limiter brings output below the target dBTP.
@@ -1188,30 +1156,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_peak_fixture_tests)
     add_test(NAME mr_adm_peak_fixture_tests COMMAND mr_adm_peak_fixture_tests)
 
-    add_executable(mr_adm_hoa_encode_fixture_tests tests/unit/hoa_encode_fixture_test.cpp)
-    target_link_libraries(mr_adm_hoa_encode_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
-    target_include_directories(mr_adm_hoa_encode_fixture_tests PRIVATE src/adm_io)
-    mr_adm_core_apply_warnings(mr_adm_hoa_encode_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
-    add_test(NAME mr_adm_hoa_encode_fixture_tests COMMAND mr_adm_hoa_encode_fixture_tests)
-
     # Fixture test: HOA ADM (typeDefinition=HOA) → loudspeaker decode via EAR.
-    add_executable(mr_adm_hoa_decode_fixture_tests tests/unit/hoa_decode_fixture_test.cpp)
-    target_link_libraries(mr_adm_hoa_decode_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-    )
-    mr_adm_core_apply_warnings(mr_adm_hoa_decode_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hoa_decode_fixture_tests)
-    add_test(NAME mr_adm_hoa_decode_fixture_tests COMMAND mr_adm_hoa_decode_fixture_tests)
 
     # Fixture test: Rust KEMAR HRTF binaural renderer timing and fixed stereo output layout.
     # The interpolation invariant probe is test support over the legacy HRTF state.
