@@ -27,7 +27,7 @@ fn one_frame_calls_retain_the_unconsumed_tail() {
 #[test]
 fn irregular_chunks_match_an_independent_double_time_domain_fir() {
     let frames = 1700;
-    for channels in [1, 2, 6] {
+    for channels in [1, 2, 6, 12, 24] {
         let firs: Vec<_> = (0..channels * TAPS)
             .map(|i| ((i * 13 % 31) as f32 - 15.) / 1024.)
             .collect();

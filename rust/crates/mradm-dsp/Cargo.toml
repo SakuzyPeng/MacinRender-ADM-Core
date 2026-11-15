@@ -23,6 +23,10 @@ sofar = { version = "=0.3.0", default-features = false }
 [dev-dependencies]
 # Native resource counters in offline performance probes; already in Cargo.lock.
 libc = "=0.2.190"
+# JSON fixtures of the Triple Balance regressions (project crate, no external dependency).
+mradm-json = { path = "../mradm-json" }
+# `%.10g` output of the Triple Balance size probe example.
+mradm-testkit = { path = "../mradm-testkit" }
 
 [features]
 diagnostics = []

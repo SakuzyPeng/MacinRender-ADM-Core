@@ -141,8 +141,8 @@ Rust 数值 session 仅持有各元素的控制／滤波状态，不保留历史
 worker slice 调用一次数值 Mixer，处理和 reset 不分配。generation 建立和帧控制暂存属于
 允许分配的控制编排；编排迁入 Rust 后仍按此范围区分。共享 Scene FFI 直接借用本次调用的
 PCM 记录，不再逐块分配临时视图数组，也不把样本引用保留到后续调用。
-`mr_adm_live_triple_balance_tests`、Scene C API/设备测试及 Rust `live_triple_balance`
-测试覆盖固定路由、拒绝原子性、独立 ramp、静音恢复、任意分块和现有静态尺寸内核对照。
+Scene C API/设备测试及 `mradm-dsp` / `mradm-render` 的 Rust `live_triple_balance` 测试
+（原 C++ `mr_adm_live_triple_balance_tests` 于 R3 B 删除）覆盖固定路由、拒绝原子性、独立 ramp、静音恢复、任意分块和现有静态尺寸内核对照。
 跨平台矩阵新增 `scene-triple-balance-*` 用例，涵盖三布局、尺寸过零、重采样、generation、
 epoch 与 VBAP 热切换；一致性结论以实际执行平台的结果为准。
 
@@ -180,7 +180,7 @@ macOS arm64 的 72 项 Rust 测试、两个 C++ 定向回归、clippy、FFI 头�
 
 生产目标不依赖 SAF 或 libear；详细所有权、错误边界和验收见
 [Rust Triple Balance 迁移](RUST_TRIPLE_BALANCE_MIGRATION.md)。
-历史测量 FIR 对照工具保留在 `tests/support/triple_balance_size_filter.*`，不用于生产渲染。
+历史测量 FIR 对照工具 `tests/support/triple_balance_size_filter.*` 已于 R3 B 删除（只有它自己的测试使用，从未用于生产渲染）。
 
 ## 名称与公开资料
 

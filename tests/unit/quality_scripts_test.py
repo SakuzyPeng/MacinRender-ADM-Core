@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -132,8 +133,11 @@ class FfiArrayTests(unittest.TestCase):
             "FilteredFrame* out, size_t len, uint8_t* message, size_t capacity);",
             "generated.h", generated,
         )
-        checker = ffi.Checker(hand, generated)
-        checker.run()
+        # No production entry needs an array alias now (R3 B); the mechanism is checked on its own.
+        known = {("mradm_dsp_tb_filter_process", 3, "FilteredFrame*", "f32*"): ("f32", 4)}
+        with mock.patch.dict(ffi.KNOWN_PARAMETER_DIFFERENCES, known):
+            checker = ffi.Checker(hand, generated)
+            checker.run()
         return checker.errors
 
     def test_four_float_frames_match(self):

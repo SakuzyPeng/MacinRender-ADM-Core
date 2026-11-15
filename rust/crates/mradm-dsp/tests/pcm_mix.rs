@@ -243,3 +243,57 @@ fn shared_table_lifetime_independent_cursors_and_fixed_matrix() {
         assert_eq!(a.to_bits(), b.to_bits());
     }
 }
+
+/// A block clipped to nothing by the object end stays silent but remains the interpolation
+/// predecessor of the next block (formerly the C++ `pcm_mix_test`, R3 B; the backends' clipping
+/// itself is in `mradm-render` `vbap.rs` / `ear.rs`).
+#[test]
+fn clipped_blocks_stay_silent_and_keep_the_interpolation_history() {
+    let row = Row {
+        input_channel: 0,
+        block_offset: 0,
+        block_count: 4,
+        output_gain: 1.,
+    };
+    let blocks = vec![
+        block(0, 2, 0, JUMP | SMOOTH),
+        block(4, 4, 0, JUMP | SMOOTH),
+        block(6, 10, 4, SMOOTH | HAS_INTERPOLATION),
+        block(12, 12, 0, JUMP | SMOOTH),
+    ];
+    let p = Arc::new(
+        Plan::new(
+            1,
+            1,
+            vec![row],
+            blocks,
+            Coefficients::Speaker(vec![1., 0.5, 2., 3.]),
+        )
+        .unwrap(),
+    );
+    let expected = [
+        1., 1., 0., 0., 0., 0., 0.5, 0.875, 1.25, 1.625, 0., 0., 0., 0., 0., 0.,
+    ];
+    for chunk in [1, 3, 16] {
+        let mut mixer = Mixer::new(Arc::clone(&p), chunk, 0, false).unwrap();
+        let input = vec![1f32; chunk];
+        let mut output = [0f32; 16];
+        let mut start = 0;
+        while start < output.len() {
+            let frames = chunk.min(output.len() - start);
+            mixer
+                .speaker(
+                    &input[..frames],
+                    &mut output[start..start + frames],
+                    &[],
+                    start as u64,
+                    frames,
+                    None,
+                    None,
+                )
+                .unwrap();
+            start += frames;
+        }
+        assert_eq!(output, expected, "chunk {chunk}");
+    }
+}

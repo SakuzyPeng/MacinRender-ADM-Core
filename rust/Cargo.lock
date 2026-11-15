@@ -342,6 +342,8 @@ dependencies = [
  "ebur128",
  "libc",
  "libm",
+ "mradm-json",
+ "mradm-testkit",
  "nalgebra",
  "pulp",
  "rayon",

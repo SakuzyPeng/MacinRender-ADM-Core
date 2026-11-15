@@ -32,10 +32,6 @@ unusedStructMember:*/src/adm_metadata/scene_ffi.h
 unusedStructMember:*/tests/support/sdk/engine/catalog.h
 # Room geometry and per-object DSP state are consumed by their implementation
 # units; standalone header checks cannot see those uses.
-unusedStructMember:*/tests/support/triple_balance/layout_222.h
-unusedStructMember:*/tests/support/triple_balance_size_filter.h
-unusedStructMember:*/tests/support/triple_balance/size_panner.h
-unusedStructMember:*/tests/support/triple_balance/size_processor.h
 # HpTF coefficient/status aggregates and test cascade state cross translation units.
 unusedStructMember:*/tests/support/sdk/render_common/hptf_eq.h
 unusedStructMember:*/tests/support/dsp/hptf_cascade.h
@@ -58,7 +54,6 @@ unusedStructMember:*/tests/support/binaural/hrtf_state.h
 unusedStructMember:*/tests/support/speaker_mix.h
 
 # Private Rust transport PODs and renderer control mappings are read across the FFI / translation units.
-unusedStructMember:*/tests/support/triple_balance/triple_balance_ffi.h
 unusedStructMember:*/src/adm_render_triple_balance/render_state.h
 
 # HOA transport POD fields are consumed by Rust across the private FFI.

@@ -324,14 +324,16 @@ clients use the ABI minor version to detect the new memory interface.
 
 ## Tests
 
-`mr_adm_hptf_tests` covers parsing (including `OFF` lines, missing `Preamp`,
-absent `Gain` on `LP`/`HP` lines, unknown types, CRLF and a C-locale decimal
-point), frequency response, the preamp switch, bypass bit-identity and the
-hot-swap. Response correctness is asserted in the strong form: the running
-filter's impulse response, evaluated by a single-point DFT, must match the
-closed-form `cascade_magnitude_db` — which is the same formula that drives
-`auto_trim` — and the absolute scale is anchored on externally verified MDR-MV1
-values.
+The design, parsing and processing tests are Rust tests in `mradm-dsp` (the C++ `mr_adm_hptf_tests`,
+`mr_adm_hptf_regression_tests` and `mr_adm_hptf_dsp_tests` were ported in R3 B). `hptf_parse_golden.rs` and the
+`parametric_eq` unit tests cover parsing (including `OFF` lines, missing `Preamp`, absent `Gain` on `LP`/`HP`
+lines, unknown types, CRLF and a C-locale decimal point); `hptf.rs` covers the design anchors, parameter
+contracts, bypass bit-identity and the exact hot-swap fade. `hptf_regression.rs` asserts response correctness
+in the strong form — the running filter's impulse response, evaluated by a single-point DFT, must match the
+closed-form cascade magnitude that drives `auto_trim`, with the absolute scale anchored on externally verified
+MDR-MV1 values — and adds preamp-only processing, the reset priority over a pending target, warn-only and
+auto-trim on narrow, overlapping, off-grid and quantized low-frequency peaks, a 20 Hz Q8 long run, partition
+independence for every section type at six rates, and concurrent publication and applied-state queries.
 
 `mr_adm_realtime_tests` adds the MonitorEngine regression locks: the cascade
 reaches the device feed, an unused HpTF stage is bit-identical to none, LUFS is
@@ -341,13 +343,6 @@ silence, and the compensation survives a backend switch.
 `mr_adm_stereo_peak_guard_tests` pins the Scene insertion point: with a +12 dB
 shelf on hot material every captured sample still satisfies the guard's ceiling,
 which fails immediately if the stage is ever moved downstream of the limiter.
-
-`mr_adm_hptf_regression_tests` covers preamp-only processing, seek during an active
-fade and with a newer pending target, malformed/overflowing inputs, off-grid narrow
-peaks, independent impulse-response validation, and concurrent mailbox publication
-and applied-state queries. The concurrency cases also run under ThreadSanitizer;
-Apple's runtime needs `ignore_interceptors_accesses=0` to inspect the POD memcpy
-operations used by the mailboxes.
 
 `mr_adm_hptf_parameters_tests` exercises the public text parser's sizing and buffer
 contracts, forward-compatible input/output strides, caller-memory ownership,

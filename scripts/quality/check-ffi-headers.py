@@ -44,10 +44,6 @@ FFI_HEADERS = [
     "tests/unit/live_vbap_ffi.h",
     "tests/support/dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
-    "tests/support/dsp/scene_transition_ffi.h",
-    "tests/support/post_gain/post_gain_ffi.h",
-    "tests/support/sdk/dsp/semantic_policy_ffi.h",
-    "tests/support/triple_balance/triple_balance_ffi.h",
     "src/adm_render_common/layout_ffi.h",
     "src/adm_metadata/adm_ffi.h",
     "src/adm_metadata/scene_ffi.h",
@@ -70,10 +66,7 @@ FFI_HEADERS = [
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.
 # These pointer spellings are compatible only while the underlying array keeps this exact shape.
-KNOWN_PARAMETER_DIFFERENCES = {
-    # Rust takes `*mut [f32; 4]` (one filtered frame); C++ passes the first element of float[4].
-    ("mradm_dsp_tb_filter_process", 3, "FilteredFrame*", "f32*"): ("f32", 4),
-}
+KNOWN_PARAMETER_DIFFERENCES: dict[tuple[str, int, str, str], tuple[str, int]] = {}
 
 SCALARS = {
     "void": "void",

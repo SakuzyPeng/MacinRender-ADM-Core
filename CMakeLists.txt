@@ -791,21 +791,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_stream_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_test_support)
 
-    add_executable(mr_adm_pcm_mix_tests tests/unit/pcm_mix_test.cpp)
-    target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    target_include_directories(mr_adm_pcm_mix_tests PRIVATE tests/support)
-    mr_adm_core_apply_warnings(mr_adm_pcm_mix_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_pcm_mix_tests)
-    add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)
-    set_tests_properties(mr_adm_pcm_mix_tests PROPERTIES TIMEOUT 60)
-
-    add_executable(mr_adm_ear_post_tests tests/unit/ear_post_test.cpp)
-    target_link_libraries(mr_adm_ear_post_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_ear_post_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_ear_post_tests)
-    add_test(NAME mr_adm_ear_post_tests COMMAND mr_adm_ear_post_tests)
-    set_tests_properties(mr_adm_ear_post_tests PROPERTIES TIMEOUT 60)
-
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.
     add_executable(mr_adm_scene_stream_stress EXCLUDE_FROM_ALL tests/manual/scene_stream_stress.cpp)
@@ -884,15 +869,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests
             mr_adm_scene_stream_c_api_consumer_tests)
     endif()
-
-    add_executable(mr_adm_room_profile_allocation_tests tests/unit/room_profile_allocation_test.cpp)
-    target_link_libraries(mr_adm_room_profile_allocation_tests PRIVATE MacinRender::ADMRenderRoom)
-    target_include_directories(mr_adm_room_profile_allocation_tests PRIVATE src/adm_render_room src/adm_render_common)
-    mr_adm_core_apply_warnings(mr_adm_room_profile_allocation_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_profile_allocation_tests)
-    add_test(NAME mr_adm_room_profile_allocation_tests COMMAND mr_adm_room_profile_allocation_tests
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic/room.json")
-
 
     add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp
         tests/support/live_scene/live_scene_trace.cpp)
@@ -1014,12 +990,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/quality_scripts_test.py")
     endif()
 
-    add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
-    target_link_libraries(mr_adm_semantic_policy_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMCore MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_semantic_policy_tests)
-    add_test(NAME mr_adm_semantic_policy_tests COMMAND mr_adm_semantic_policy_tests)
-
     add_executable(mr_adm_io_fixture_tests tests/unit/adm_io_fixture_test.cpp)
     target_link_libraries(mr_adm_io_fixture_tests
         PRIVATE mr_adm_scene_test_support
@@ -1122,26 +1092,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
-    # Test-only C++ adapters over the Triple Balance numeric FFI (out of production).
-    add_library(mr_adm_triple_balance_test_support STATIC
-        tests/support/triple_balance/bed.cpp
-        tests/support/triple_balance/panner.cpp tests/support/triple_balance/layout_222.cpp
-        tests/support/triple_balance/size_panner.cpp tests/support/triple_balance/size_processor.cpp
-        tests/support/triple_balance/size_mixer.cpp)
-    target_include_directories(mr_adm_triple_balance_test_support PUBLIC tests/support/triple_balance tests/support)
-    target_link_libraries(mr_adm_triple_balance_test_support PUBLIC mr_adm_scene_test_support MacinRender::ADMCore MacinRender::ADMDsp
-        MacinRender::ADMRenderCommon)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_test_support)
-
-    add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
-    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon mr_adm_triple_balance_test_support mr_adm_live_scene_test_support)
-    target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_room)
-    mr_adm_core_apply_warnings(mr_adm_live_triple_balance_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_live_triple_balance_tests)
-    add_test(NAME mr_adm_live_triple_balance_tests COMMAND mr_adm_live_triple_balance_tests)
-
     add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
     target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
         mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
@@ -1150,71 +1100,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)
     add_test(NAME mr_adm_triple_balance_stream_tests COMMAND mr_adm_triple_balance_stream_tests)
-
-    add_executable(mr_adm_triple_balance_point_tests tests/unit/triple_balance_point_test.cpp)
-    add_executable(mr_adm_triple_balance_222_tests tests/unit/triple_balance_222_test.cpp)
-    target_include_directories(mr_adm_triple_balance_222_tests PRIVATE)
-    target_link_libraries(mr_adm_triple_balance_222_tests PRIVATE mr_adm_engine_renderer_test_support
-        mr_adm_triple_balance_test_support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_222_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_222_tests)
-    add_test(NAME mr_adm_triple_balance_222_tests COMMAND mr_adm_triple_balance_222_tests)
-    add_executable(mr_adm_triple_balance_semantics_tests tests/unit/triple_balance_semantics_test.cpp)
-    target_include_directories(mr_adm_triple_balance_semantics_tests PRIVATE)
-    target_link_libraries(mr_adm_triple_balance_semantics_tests PRIVATE mr_adm_triple_balance_test_support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_semantics_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_semantics_tests)
-    add_test(NAME mr_adm_triple_balance_semantics_tests COMMAND mr_adm_triple_balance_semantics_tests
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_semantics")
-    target_include_directories(mr_adm_triple_balance_point_tests PRIVATE)
-    target_link_libraries(mr_adm_triple_balance_point_tests PRIVATE mr_adm_engine_renderer_test_support
-        mr_adm_triple_balance_test_support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_point_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_point_tests)
-    add_test(NAME mr_adm_triple_balance_point_tests COMMAND mr_adm_triple_balance_point_tests)
-
-    add_executable(mr_adm_triple_balance_size_filter_tests tests/unit/triple_balance_size_filter_test.cpp
-        tests/support/triple_balance_size_filter.cpp)
-    target_include_directories(mr_adm_triple_balance_size_filter_tests PRIVATE tests/support)
-    target_link_libraries(mr_adm_triple_balance_size_filter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_size_filter_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_size_filter_tests)
-    add_test(NAME mr_adm_triple_balance_size_filter_tests COMMAND mr_adm_triple_balance_size_filter_tests)
-
-    add_executable(mr_adm_triple_balance_size_probe tests/unit/triple_balance_size_probe.cpp)
-    target_include_directories(mr_adm_triple_balance_size_probe PRIVATE)
-    target_link_libraries(mr_adm_triple_balance_size_probe PRIVATE mr_adm_triple_balance_test_support
-        nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_size_probe)
-
-    add_executable(mr_adm_triple_balance_size_processor_tests tests/unit/triple_balance_size_processor_test.cpp)
-    target_include_directories(mr_adm_triple_balance_size_processor_tests PRIVATE)
-    target_link_libraries(mr_adm_triple_balance_size_processor_tests PRIVATE mr_adm_triple_balance_test_support
-        nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_size_processor_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_size_processor_tests)
-    add_test(NAME mr_adm_triple_balance_size_processor_tests COMMAND mr_adm_triple_balance_size_processor_tests
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_size")
-
-
-    add_executable(mr_adm_hptf_tests tests/unit/hptf_eq_test.cpp)
-    target_link_libraries(mr_adm_hptf_tests PRIVATE mr_adm_sdk_render_common mr_adm_output_dsp_test_support)
-    mr_adm_core_apply_warnings(mr_adm_hptf_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hptf_tests)
-    add_test(NAME mr_adm_hptf_tests COMMAND mr_adm_hptf_tests)
-
-    add_executable(mr_adm_hptf_regression_tests tests/unit/hptf_eq_regression_test.cpp)
-    target_link_libraries(mr_adm_hptf_regression_tests
-        PRIVATE mr_adm_sdk_render_common Threads::Threads mr_adm_output_dsp_test_support)
-    mr_adm_core_apply_warnings(mr_adm_hptf_regression_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hptf_regression_tests)
-    add_test(NAME mr_adm_hptf_regression_tests COMMAND mr_adm_hptf_regression_tests)
-
-    add_executable(mr_adm_hptf_dsp_tests tests/unit/hptf_dsp_test.cpp)
-    target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE mr_adm_sdk_render_common mr_adm_output_dsp_test_support)
-    mr_adm_core_apply_warnings(mr_adm_hptf_dsp_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hptf_dsp_tests)
-    add_test(NAME mr_adm_hptf_dsp_tests COMMAND mr_adm_hptf_dsp_tests)
 
     add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
     target_link_libraries(mr_adm_hptf_parameters_tests
@@ -1232,22 +1117,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
-    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
     mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
     add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
-
-    add_executable(mr_adm_config_json_compat_tests tests/unit/config_json_compat_test.cpp)
-    target_link_libraries(mr_adm_config_json_compat_tests PRIVATE mr_adm_sdk_core)
-    mr_adm_core_apply_warnings(mr_adm_config_json_compat_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_config_json_compat_tests)
-    add_test(NAME mr_adm_config_json_compat_tests COMMAND mr_adm_config_json_compat_tests)
-
-    add_executable(mr_adm_direct_speakers_matrix_tests tests/unit/direct_speakers_matrix_test.cpp)
-    target_link_libraries(mr_adm_direct_speakers_matrix_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMRenderCommon)
-    mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_tests)
-    add_test(NAME mr_adm_direct_speakers_matrix_tests COMMAND mr_adm_direct_speakers_matrix_tests)
 
     # The Apple island's DirectSpeakers matrix rendering; the Rust backends' cases are Rust tests.
     if(APPLE)
@@ -1359,14 +1232,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
 
-    add_executable(mr_adm_sofa_fixture_tests tests/unit/sofa_fixture_test.cpp)
-    target_link_libraries(mr_adm_sofa_fixture_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    target_include_directories(mr_adm_sofa_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support/binaural")
-    target_compile_definitions(mr_adm_sofa_fixture_tests PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
-    mr_adm_core_apply_warnings(mr_adm_sofa_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_sofa_fixture_tests)
-    add_test(NAME mr_adm_sofa_fixture_tests COMMAND mr_adm_sofa_fixture_tests "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sofa")
-
     set(_mr_rust_test_features --no-default-features)
     if(MR_ADM_ENABLE_SOFA)
         list(APPEND _mr_rust_test_features --features sofa)
@@ -1398,39 +1263,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_rust_unit_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
     add_test(NAME mr_adm_room_trace_tests COMMAND ${_mr_room_trace_test_command})
     set_tests_properties(mr_adm_room_trace_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
-
-    add_executable(mr_adm_hrtf_grid_tests tests/unit/hrtf_grid_test.cpp)
-    target_link_libraries(mr_adm_hrtf_grid_tests PRIVATE mr_adm_binaural_test_support)
-
-    mr_adm_core_apply_warnings(mr_adm_hrtf_grid_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hrtf_grid_tests)
-    add_test(NAME mr_adm_hrtf_grid_tests COMMAND mr_adm_hrtf_grid_tests)
-
-    add_executable(mr_adm_hrtf_interpolation_tests tests/unit/hrtf_interpolation_test.cpp)
-    target_link_libraries(mr_adm_hrtf_interpolation_tests PRIVATE mr_adm_binaural_test_support)
-    mr_adm_core_apply_warnings(mr_adm_hrtf_interpolation_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hrtf_interpolation_tests)
-    add_test(NAME mr_adm_hrtf_interpolation_tests COMMAND mr_adm_hrtf_interpolation_tests)
-    set_tests_properties(mr_adm_hrtf_interpolation_tests PROPERTIES TIMEOUT 120)
-
-    add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMDsp mr_adm_binaural_test_support mr_adm_live_scene_test_support)
-    target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/support/binaural"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_room"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
-
-    mr_adm_core_apply_warnings(mr_adm_live_binaural_continuity_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_live_binaural_continuity_tests)
-    add_test(NAME mr_adm_live_binaural_continuity_tests COMMAND mr_adm_live_binaural_continuity_tests)
-
-    add_executable(mr_adm_resampler_tests tests/unit/resampler_test.cpp)
-    target_link_libraries(mr_adm_resampler_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
-    target_include_directories(mr_adm_resampler_tests PRIVATE tests/support/dsp)
-    mr_adm_core_apply_warnings(mr_adm_resampler_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_resampler_tests)
-    add_test(NAME mr_adm_resampler_tests COMMAND mr_adm_resampler_tests)
 
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
     target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)

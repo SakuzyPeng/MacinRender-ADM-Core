@@ -828,7 +828,11 @@ D Monitor、HpTF 文本与 OSC（`fd76097`、`e2a7658`）；E `mradm-ffi` 只经
 
 A 已完成：新 crate `mradm-testkit`（ADM / WAVE fixture 编写器与 12 种矩阵 fixture）。`mr_adm_make_fixture`、`mr_adm_pcm_bits`、
 `mr_adm_fft_benchmark`、`mr_adm_repeat_render` 改为 Rust example（目标名不变），向量长度测试并入 `mradm-dsp`；与 C++ 版逐字节相同。
-测试 C/C++ 57,767 → 56,619 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
+测试 C/C++ 57,767 → 56,619 行。
+
+B 已完成：21 个经私有 FFI 测内核的 C++ 测试删除，缺口移植为 `mradm-dsp` / `mradm-render` / `mradm-engine` / `mradm-scene` 的
+Rust 测试（旧实现副本改为独立期望）；`meter_test` 与 `speaker_layouts_test` 作为岛测试保留。`mradm-ffi` 入口 391 → 327。
+测试 C/C++ 56,619 → 51,580 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
 
 ## 每个迁移切片的验证
 
