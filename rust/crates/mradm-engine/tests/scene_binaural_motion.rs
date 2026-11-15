@@ -3,13 +3,15 @@
 //! gain motion keeps a 100 Hz tone free of broadband discontinuities, and convolution at an
 //! off-grid direction is independent of the frame partition. The convolution, OLA, diffuse delay
 //! and lookup contracts are `mradm-dsp` `binaural_convolution.rs` and `hrtf_filters.rs`.
+//! `MR_ADM_TEST_SOFA` repeats the motion checks with an external SOFA dataset.
 mod common;
 use common::backend::TestHost;
 use mradm_dsp::room::screen::RoomScreenGeometry;
-use mradm_engine::backend::{BinauralSpreadMode, RoomRequest, Screens, SpeakerSpread};
+use mradm_engine::backend::{BinauralSpreadMode, RoomRequest, Screens, Sofa, SpeakerSpread};
 use mradm_engine::request::Selection;
 use mradm_engine::scene::renderer::{Config, create};
 use mradm_render::live::{Element, Entry, Frame, Plane, Role, State, Update, field};
+use std::path::Path;
 
 const OMEGA: f64 = 2. * std::f64::consts::PI * 100. / 48000.;
 const TOTAL: u32 = 192_000;
@@ -25,7 +27,7 @@ enum Motion {
     Gain,
 }
 
-fn config() -> Config<'static> {
+fn config(sofa: Option<&str>) -> Config<'_> {
     Config {
         selection: Selection::SafBinaural,
         layout_id: b"binaural",
@@ -35,7 +37,14 @@ fn config() -> Config<'static> {
         split_power: false,
         smoothing_frames: 0,
         sample_rate: 48000,
-        sofa: None,
+        sofa: sofa.map(|path| Sofa {
+            path: path.as_bytes(),
+            file_name: Path::new(path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(path)
+                .as_bytes(),
+        }),
         screens: Screens {
             has_reference: false,
             reference: RoomScreenGeometry::default(),
@@ -52,12 +61,28 @@ fn config() -> Config<'static> {
     }
 }
 
+fn datasets() -> Vec<Option<String>> {
+    let mut datasets = vec![None];
+    if let Some(path) = std::env::var_os("MR_ADM_TEST_SOFA").filter(|path| !path.is_empty()) {
+        datasets.push(Some(
+            path.into_string().expect("MR_ADM_TEST_SOFA must be UTF-8"),
+        ));
+    }
+    datasets
+}
+
 fn progress(sample: u32) -> f32 {
     ((sample as f32 - START as f32) / (END - START) as f32).clamp(0., 1.)
 }
 
-fn render(motion: Motion, block: u32, locked: bool, fixed_yaw: f32) -> Vec<f32> {
-    let mut renderer = create(&config(), &TestHost)
+fn render(
+    sofa: Option<&str>,
+    motion: Motion,
+    block: u32,
+    locked: bool,
+    fixed_yaw: f32,
+) -> Vec<f32> {
+    let mut renderer = create(&config(sofa), &TestHost)
         .unwrap_or_else(|e| panic!("{}", String::from_utf8_lossy(&e.message)))
         .renderer;
     let element = Element {
@@ -153,38 +178,63 @@ fn peak_tone_residual(audio: &[f32]) -> f64 {
 
 #[test]
 fn head_locked_audio_ignores_head_movement() {
-    assert_eq!(
-        render(Motion::Fixed, 256, false, 0.),
-        render(Motion::Head, 256, true, 0.)
-    );
+    for dataset in datasets() {
+        let sofa = dataset.as_deref();
+        assert_eq!(
+            render(sofa, Motion::Fixed, 256, false, 0.),
+            render(sofa, Motion::Head, 256, true, 0.),
+            "{sofa:?}"
+        );
+    }
 }
 
 #[test]
 fn motion_is_audible_and_free_of_discontinuities() {
-    let fixed = render(Motion::Fixed, 256, false, 0.);
-    for motion in [Motion::Head, Motion::Object, Motion::Gain] {
-        let audio = render(motion, 256, false, 0.);
-        let change = audio[96_000..]
-            .iter()
-            .zip(&fixed[96_000..])
-            .fold(0f32, |m, (a, b)| m.max((a - b).abs()));
-        let peak = audio[96_000..].iter().fold(0f32, |m, a| m.max(a.abs()));
-        assert!(
-            change > 1e-3 && peak > 1e-3,
-            "motion must change, not freeze or mute"
-        );
-        let residual = peak_tone_residual(&audio);
-        assert!(residual < 5e-5, "residual {residual}");
+    for dataset in datasets() {
+        let sofa = dataset.as_deref();
+        let fixed = render(sofa, Motion::Fixed, 256, false, 0.);
+        for motion in [Motion::Head, Motion::Object, Motion::Gain] {
+            let audio = render(sofa, motion, 256, false, 0.);
+            let change = audio[96_000..]
+                .iter()
+                .zip(&fixed[96_000..])
+                .fold(0f32, |m, (a, b)| m.max((a - b).abs()));
+            let peak = audio[96_000..].iter().fold(0f32, |m, a| m.max(a.abs()));
+            assert!(
+                change > 1e-3 && peak > 1e-3,
+                "{sofa:?}: motion must change, not freeze or mute"
+            );
+            let residual = peak_tone_residual(&audio);
+            assert!(residual < 5e-5, "{sofa:?}: residual {residual}");
+        }
     }
 }
 
 #[test]
 fn off_grid_convolution_is_independent_of_the_partition() {
-    let regular = render(Motion::Fixed, 512, false, 37.);
-    let irregular = render(Motion::Fixed, 137, false, 37.);
-    let error = regular
-        .iter()
-        .zip(&irregular)
-        .fold(0f32, |m, (a, b)| m.max((a - b).abs()));
-    assert!(error < 2e-7, "{error}");
+    for dataset in datasets() {
+        let sofa = dataset.as_deref();
+        let regular = render(sofa, Motion::Fixed, 512, false, 37.);
+        let irregular = render(sofa, Motion::Fixed, 137, false, 37.);
+        let error = regular
+            .iter()
+            .zip(&irregular)
+            .fold(0f32, |m, (a, b)| m.max((a - b).abs()));
+        assert!(error < 2e-7, "{sofa:?}: {error}");
+    }
+}
+
+#[test]
+fn an_invalid_external_sofa_fails_the_motion_checks() {
+    let directory = common::backend::Dir::new("binaural-motion-missing-sofa");
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "head_locked_audio_ignores_head_movement"])
+        .env("MR_ADM_TEST_SOFA", directory.file("missing.sofa"))
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "the motion checks ignored MR_ADM_TEST_SOFA: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }

@@ -6,13 +6,13 @@
 //!   `size`; `layout` 7.1.4 / 9.1.6 / 22.2; 48 kHz) in `block_frames` blocks (default 1024) and
 //!   writes the interleaved output to `output_f32`.
 //! - without arguments: reads quantized `x y z size` integers from stdin and prints the raw size
-//!   gains of each line (`%.10g`, space-separated).
+//!   gains of each complete group (`%.10g`, space-separated), before waiting for more input.
 use mradm_dsp::triple_balance::{
     Event, Layout, Position, panner,
     processor::{Processor, Track},
 };
 use mradm_json::{Value, at};
-use std::io::{Read, Write};
+use std::io::{BufRead, Write};
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -91,22 +91,30 @@ fn render(path: &str) -> Result<(), String> {
     output.flush().map_err(|e| e.to_string())
 }
 
-/// Raw size gains of each complete `x y z size` line; a token that is not an integer fails, an
+/// Raw size gains of each complete `x y z size` group; a token that is not an integer fails, an
 /// incomplete last group ends the input.
-fn gains() -> Result<(), String> {
-    let mut text = String::new();
-    std::io::stdin()
-        .read_to_string(&mut text)
-        .map_err(|e| e.to_string())?;
-    let mut out = std::io::stdout().lock();
-    let tokens: Vec<&str> = text.split_ascii_whitespace().collect();
-    for group in tokens.chunks(4) {
-        let mut q = [0i32; 4];
-        for (v, t) in q.iter_mut().zip(group) {
-            *v = t.parse().map_err(|_| format!("invalid integer: {t}"))?;
+fn gains(input: impl BufRead, mut out: impl Write) -> Result<(), String> {
+    let mut token = Vec::new();
+    let mut q = [0i32; 4];
+    let mut count = 0;
+    // The final delimiter also processes a token immediately followed by EOF.
+    for byte in input.bytes().chain(std::iter::once(Ok(b' '))) {
+        let byte = byte.map_err(|e| e.to_string())?;
+        if !byte.is_ascii_whitespace() {
+            token.push(byte);
+            continue;
         }
-        if group.len() < 4 {
-            break;
+        if token.is_empty() {
+            continue;
+        }
+        let text = std::str::from_utf8(&token).map_err(|e| e.to_string())?;
+        q[count] = text
+            .parse()
+            .map_err(|_| format!("invalid integer: {text}"))?;
+        token.clear();
+        count += 1;
+        if count < 4 {
+            continue;
         }
         let gains = panner::raw(q).map_err(|e| e.to_string())?;
         for g in gains {
@@ -114,6 +122,8 @@ fn gains() -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
         writeln!(out).map_err(|e| e.to_string())?;
+        out.flush().map_err(|e| e.to_string())?;
+        count = 0;
     }
     Ok(())
 }
@@ -123,7 +133,7 @@ fn main() -> ExitCode {
     let result = if args.len() == 2 {
         render(&args[1])
     } else {
-        gains()
+        gains(std::io::stdin().lock(), std::io::stdout().lock())
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -131,5 +141,52 @@ fn main() -> ExitCode {
             eprintln!("{message}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{BufReader, BufWriter, Cursor};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    const REPLY: &str = "1 0 0 0 0 0 0 0 0 0 0 \n";
+
+    #[test]
+    fn complete_groups_reply_before_stdin_eof() {
+        let (input, mut requests) = std::io::pipe().unwrap();
+        let (replies, output) = std::io::pipe().unwrap();
+        let worker =
+            std::thread::spawn(move || gains(BufReader::new(input), BufWriter::new(output)));
+        let (send, receive) = mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            for line in BufReader::new(replies).lines() {
+                send.send(line.unwrap()).unwrap();
+            }
+        });
+        let responses = [b"0 0 0 0 ".as_slice(), b"0\n0\t0\r\n0\n"].map(|request| {
+            requests.write_all(request).unwrap();
+            receive.recv_timeout(Duration::from_secs(5))
+        });
+        // Close the pipe before checking timeouts so a broken reader can still finish.
+        drop(requests);
+        worker.join().unwrap().unwrap();
+        reader.join().unwrap();
+        for response in responses {
+            assert_eq!(response.unwrap(), REPLY.trim_end_matches('\n'));
+        }
+    }
+
+    #[test]
+    fn whitespace_final_tokens_and_incomplete_groups_keep_their_contract() {
+        for input in ["0 0 0 0", "\t0\n0 0\r\n0\t", "0 0 0 0 1 2 3"] {
+            let mut output = Vec::new();
+            gains(Cursor::new(input), &mut output).unwrap();
+            assert_eq!(output, REPLY.as_bytes());
+        }
+        let mut output = Vec::new();
+        assert!(gains(Cursor::new("0 0 0 0 invalid"), &mut output).is_err());
+        assert_eq!(output, REPLY.as_bytes());
     }
 }

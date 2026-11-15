@@ -28,6 +28,10 @@ mradm-json = { path = "../mradm-json" }
 # `%.10g` output of the Triple Balance size probe example.
 mradm-testkit = { path = "../mradm-testkit" }
 
+[[example]]
+name = "triple_balance_size_probe"
+test = true
+
 [features]
 diagnostics = []
 # Room stage counters only; disabled in production and final benchmarks.

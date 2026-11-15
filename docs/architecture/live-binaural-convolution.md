@@ -53,6 +53,8 @@ movement, that head / object / gain motion of a pure tone adds no broadband disc
 off-grid direction is independent of the frame partition. The Scene C API and binaural fixture tests cover
 reference-frame changes, independent metadata ramp deadlines, spatial geometry, and the batch renderer's
 HRTF invariants.
+Set `MR_ADM_TEST_SOFA` to repeat all three motion checks with an external SOFA dataset alongside KEMAR.
+An invalid dataset fails the checks.
 
 Use Release builds for audio comparisons and timing. The pure-tone second-order
 residual in the continuity test detects discontinuities; it is not a loudness or

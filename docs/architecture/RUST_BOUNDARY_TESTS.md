@@ -108,8 +108,8 @@ B 批处理经私有 FFI 直接测 Rust 内核的 C++ 测试。逐文件读出�
 | triple_balance_semantics_test | 移植「首个事件晚到」与 Renderer 捕获 PCM 的对照（7.1.4 / 9.1.6，`tests/fixtures/room_compat_semantics`）及分块无关 → `triple_balance_regression.rs` |
 | triple_balance_size_processor_test | 移植捕获的空间增益（`reference.json`）、去相关滤波器捕获、零 size 快速复位捕获、分块 / reset / 实例独立、采样率与倒序元数据拒绝、稠密初始元数据 → `triple_balance_regression.rs`；未验证布局的拒绝在 Rust 中由 `Layout` 类型保证 |
 | triple_balance_size_filter_test | 删除，不移植：测的是只存在于测试支持里的 C++ `SizeFilterBank`（头文件注明「从未链接进生产渲染器」） |
-| triple_balance_size_probe | 改为 `mradm-dsp` example `triple_balance_size_probe`（同样的请求 JSON 与 stdin 两种模式） |
-| live_binaural_continuity_test | 全 FIR 与分块、重定向沿用输入历史、OLA 与 diffuse delay 已由 `mradm-dsp` `binaural_convolution.rs` 覆盖，连续查表由 `hrtf_filters.rs` 与 `hrtf_kemar.rs` 覆盖；移植真实 HRTF 下的头锁定不随头动、头 / 对象 / 增益运动无宽带跳变、离网格方向与分块无关 → `mradm-engine` `scene_binaural_motion.rs` |
+| triple_balance_size_probe | 改为 `mradm-dsp` example `triple_balance_size_probe`（同样的请求 JSON 与 stdin 两种模式）；stdin 每读完一组参数就输出并 flush，不等待 EOF，保留跨行参数与未完成末组的处理 |
+| live_binaural_continuity_test | 全 FIR 与分块、重定向沿用输入历史、OLA 与 diffuse delay 已由 `mradm-dsp` `binaural_convolution.rs` 覆盖，连续查表由 `hrtf_filters.rs` 与 `hrtf_kemar.rs` 覆盖；移植真实 HRTF 下的头锁定不随头动、头 / 对象 / 增益运动无宽带跳变、离网格方向与分块无关 → `mradm-engine` `scene_binaural_motion.rs`，并保留 `MR_ADM_TEST_SOFA` 对外部数据集重复三组检查的入口 |
 | live_triple_balance_test | 已覆盖：`mradm-render` `live_triple_balance.rs`（创建、代次与床检查、乱序床的固定路由与 LFE 分配、不支持的状态与 `element=` 上下文、拒绝的原子性、描述符位置与初始状态、spread=none 只报一次、分块无关）与 `mradm-dsp` `live_triple_balance.rs` `level_changes_do_not_restart_spatial_ramps_or_filter_history` |
 | room_profile_allocation_test | 删除，不移植：测的是 SDK 包装 `room_internal::Access::adopt` 在 C++ `operator new` 失败时释放已接管的 Rust 房间句柄；生产中房间句柄只由 Rust 持有（`mradm-capi` `options::Room` 经 `Drop` 释放），不再有跨语言接管 |
 | semantic_policy_test | 已覆盖：断言对照的是 C++ 算术副本；Rust 侧有 `mradm-dsp` `semantic_policy` 单元测试、`mradm-scene` 策略 golden 与门禁矩阵的策略用例；dB 换算表补入 −20.5 dB 一项 |
@@ -121,9 +121,9 @@ B 批处理经私有 FFI 直接测 Rust 内核的 C++ 测试。逐文件读出�
 - `mradm-dsp`：`hptf_regression.rs`（10 项）、`hrtf_kemar.rs`（4 项）、`triple_balance_regression.rs`（6 项），以及 `pcm_mix.rs`
   的被裁剪块一项；`ear_post.rs` 的声道数扩到 12、24；`semantic_policy` 的 dB 表补一项。
 - `mradm-render`：`binaural_hrtf_sofa.rs`（SOFA 开、关两种构建都通过）。
-- `mradm-engine`：`scene_binaural_motion.rs`（3 项）。
+- `mradm-engine`：`scene_binaural_motion.rs`（4 项，含外部 SOFA 入口拒绝无效数据集的回归）。
 - `mradm-scene`：`config.rs` 的 `terminal_nul_embedded_nul_and_long_overflow`。
-- example：`mradm-dsp` `triple_balance_size_probe`。
+- example：`mradm-dsp` `triple_balance_size_probe`，2 项测试随 `cargo test --workspace` 运行，检查管道未关闭时的逐组响应、空白分隔与 EOF 行为。
 
 `mradm-dsp` 新增两个只供测试的 dev-dependency：`mradm-json`（读 `reference.json`）与 `mradm-testkit`，都是项目内 crate。
 
