@@ -27,6 +27,7 @@ pub struct Single {
     pub doc: Document,
     pub object: Id,
     pub channel: Id,
+    pub pack: Id,
     pub uid: Id,
 }
 
@@ -63,6 +64,7 @@ impl Single {
             doc,
             object,
             channel,
+            pack,
             uid,
         }
     }

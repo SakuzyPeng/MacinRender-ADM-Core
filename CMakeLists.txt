@@ -591,12 +591,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
     add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
 
-    add_executable(mr_adm_io_smoke_tests tests/unit/adm_io_smoke_test.cpp)
-    target_link_libraries(mr_adm_io_smoke_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMIo MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_io_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_io_smoke_tests)
-    add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
-
     # Contract test for the stable C ABI. Links only the C ABI target (consumer
     # view); the independent fixture author only uses the standard library.
     add_executable(mr_adm_c_api_tests tests/unit/c_api_fixture_test.cpp)
@@ -976,25 +970,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/quality_scripts_test.py")
     endif()
 
-    add_executable(mr_adm_io_fixture_tests tests/unit/adm_io_fixture_test.cpp)
-    target_link_libraries(mr_adm_io_fixture_tests
-        PRIVATE mr_adm_scene_test_support
-            MacinRender::ADMIo
-    )
-    mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_io_fixture_tests)
-    add_test(NAME mr_adm_io_fixture_tests COMMAND mr_adm_io_fixture_tests)
-
-    add_executable(mr_adm_scene_export_tests tests/unit/scene_export_fixture_test.cpp)
-    target_link_libraries(mr_adm_scene_export_tests
-        PRIVATE mr_adm_scene_test_support
-            MacinRender::ADMEngine
-            MacinRender::ADMIo
-    )
-    mr_adm_core_apply_warnings(mr_adm_scene_export_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
-    add_test(NAME mr_adm_scene_export_tests COMMAND mr_adm_scene_export_tests)
-
     # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
     # The C++ MonitorEngine shell over the Rust monitor (not in production):
@@ -1097,12 +1072,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     # Smoke test: non-existent file → io_error via full engine stack.
-
-    add_executable(mr_adm_channel_bed_render_tests tests/unit/channel_bed_render_test.cpp)
-    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMAudio MacinRender::ADMIo)
-    mr_adm_core_apply_warnings(mr_adm_channel_bed_render_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_channel_bed_render_tests)
-    add_test(NAME mr_adm_channel_bed_render_tests COMMAND mr_adm_channel_bed_render_tests)
 
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
     target_link_libraries(mr_adm_lfe_routing_tests
