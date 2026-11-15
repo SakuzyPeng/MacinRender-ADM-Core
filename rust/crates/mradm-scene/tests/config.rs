@@ -160,3 +160,47 @@ fn parsers_reproduce_the_cpp_goldens() {
     }
     assert_eq!((parsed, failed), (227, 731));
 }
+
+/// Inputs the golden file cannot hold (formerly the C++ `config_json_compat_test`, R3 B): a
+/// document followed by a terminal NUL, an embedded NUL kept in error messages, and numbers far
+/// longer than any golden line, whose overflow message keeps every digit.
+#[test]
+fn terminal_nul_embedded_nul_and_long_overflow() {
+    let matrix = br#"{"schema":"mradm.direct-speakers-matrix.v1","output_layout":"5.1","routes":[{"source_label":"C","targets":[{"label":"L","weight":1},{"label":"R","weight":3}]}]}"#;
+    let screen_json = br#"{"schema":"mradm.screen-config","version":1,"reference":{"coordinates":"polar","centre":[0,0,1],"width":58,"aspect_ratio":1.78}}"#;
+    for suffix in [&b"\0"[..], b" \0trailing"] {
+        let parsed = direct_matrix::parse(&[&matrix[..], suffix].concat()).unwrap();
+        assert_eq!(parsed.routes.len(), 1);
+        assert_eq!(parsed.routes[0].targets.len(), 2);
+        assert_eq!(parsed.routes[0].targets[0].gain, 0.5);
+        let screens = screen::parse(&[&screen_json[..], suffix].concat()).unwrap();
+        assert_eq!(screens.reference.unwrap().width, 58.);
+    }
+
+    let unknown = direct_matrix::parse(br#"{"x\u0000y":1}"#).err().unwrap();
+    assert_eq!(unknown.code, 1);
+    assert_eq!(
+        unknown.message,
+        "invalid DirectSpeakers matrix: unknown top-level field 'x\0y'"
+    );
+    let schema = direct_matrix::parse(br#"{"schema":"x\u0000y"}"#)
+        .err()
+        .unwrap();
+    assert_eq!(
+        schema.message,
+        "invalid DirectSpeakers matrix: unsupported schema 'x\0y'"
+    );
+
+    for length in [1024, 10_000] {
+        let number = "9".repeat(length);
+        let text = format!(r#"{{"schema":"mradm.screen-config","version":1,"extra":{number}}}"#);
+        let error = screen::parse(text.as_bytes()).err().unwrap();
+        assert_eq!((error.code, error.context), (1, Context::None));
+        assert_eq!(
+            error.message,
+            format!(
+                "无效的屏幕配置: [json.exception.out_of_range.406] number overflow parsing '{number}'"
+            )
+        );
+    }
+}

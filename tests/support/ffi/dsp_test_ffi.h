@@ -15,23 +15,6 @@
 extern "C" {
 #endif
 
-// Channel-major 512-tap EAR FIRs; production compensation is 255 samples.
-int mradm_dsp_ear_filters_create(
-    size_t channels, const float* firs, size_t length, size_t delay, void** out, char* message, size_t capacity);
-void mradm_dsp_ear_filters_destroy(void* bank);
-int mradm_dsp_ear_post_create(const void* bank, size_t max_frames, void** out, char* message, size_t capacity);
-void mradm_dsp_ear_post_destroy(void* processor);
-int mradm_dsp_ear_post_reset(void* processor, char* message, size_t capacity);
-// Lengths count floats. Direct is replaced in place; diffuse must be disjoint. Empty buffers may be null.
-int mradm_dsp_ear_post_process(void* processor,
-                               float* direct,
-                               size_t direct_len,
-                               const float* diffuse,
-                               size_t diffuse_len,
-                               size_t frames,
-                               char* message,
-                               size_t capacity);
-
 // Prepared PCM timelines; fields contain only project-owned scalar data.
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmDspMixRow {
@@ -232,29 +215,6 @@ int32_t mradm_dsp_hptf_settings_design(
 int32_t mradm_dsp_hptf_validate(
     const MradmDspHptfBand* bands, size_t count, double preamp, size_t* invalid_band, char* message, size_t capacity);
 
-// Fixed-rate, interleaved resampling. Lengths count floats; progress counts
-// whole frames. end=1 requires empty input and drains to the rational duration.
-// A completed stream requires reset before accepting more input.
-// cppcheck-suppress-begin unusedStructMember
-typedef struct MradmDspResampleProgress {
-    size_t input_frames;
-    size_t output_frames;
-} MradmDspResampleProgress;
-// cppcheck-suppress-end unusedStructMember
-int32_t mradm_dsp_resampler_create(
-    size_t channels, uint32_t input_rate, uint32_t output_rate, void** output, char* message, size_t capacity);
-void mradm_dsp_resampler_destroy(void* handle);
-int32_t mradm_dsp_resampler_reset(void* handle, char* message, size_t capacity);
-int32_t mradm_dsp_resampler_process(void* handle,
-                                    const float* input,
-                                    size_t input_length,
-                                    float* output,
-                                    size_t output_length,
-                                    uint32_t end,
-                                    MradmDspResampleProgress* progress,
-                                    char* message,
-                                    size_t capacity);
-
 // Binaural spectra contain [L.re, L.im, R.re, R.im] per bin. Live outputs
 // are overwritten; OLA outputs are accumulated. All lengths count floats.
 int32_t mradm_dsp_live_convolver_create(
@@ -454,29 +414,6 @@ int32_t mradm_dsp_dataset_copy(const void* handle,
                                char* message,
                                size_t capacity);
 int32_t mradm_dsp_hoa_matrix(float* output, size_t length, char* message, size_t capacity);
-
-int32_t mradm_dsp_spreader_create(const float* ir,
-                                  size_t ir_length,
-                                  const float* directions,
-                                  size_t dir_length,
-                                  size_t taps,
-                                  uint32_t sample_rate,
-                                  const uint64_t* seeds,
-                                  size_t sources,
-                                  void** output,
-                                  char* message,
-                                  size_t capacity);
-void mradm_dsp_spreader_destroy(void* handle);
-int32_t mradm_dsp_spreader_set_source(
-    void* handle, size_t index, float azimuth, float elevation, float spread, char* message, size_t capacity);
-int32_t mradm_dsp_spreader_process(void* handle,
-                                   const float* const* inputs,
-                                   size_t sources,
-                                   float* left,
-                                   float* right,
-                                   size_t frames,
-                                   char* message,
-                                   size_t capacity);
 
 #ifdef __cplusplus
 }

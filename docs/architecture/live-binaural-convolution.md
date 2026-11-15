@@ -44,13 +44,17 @@ poses apply before the first sample. Head-locked sources bypass head rotation.
 
 ## Regression coverage
 
-`mr_adm_live_binaural_continuity_tests` checks full FIR support against direct
-convolution, arbitrary partitions and silent tails, interrupted filter fades,
-sub-degree lookup and azimuth wrapping, stationary off-grid output, and pure-tone
-head/object/gain motion. `MR_ADM_TEST_SOFA` optionally repeats the renderer tests
-with a real SOFA dataset. The existing Scene C API and binaural fixture tests
-cover reference-frame changes, independent metadata ramp deadlines, spatial
-geometry, and the batch renderer's HRTF invariants.
+The convolution contracts are Rust tests (the C++ `mr_adm_live_binaural_continuity_tests` was ported in
+R3 B): `mradm-dsp` `binaural_convolution.rs` checks full FIR support against direct convolution, arbitrary
+partitions and silent tails, interrupted filter fades and the diffuse delay; `hrtf_filters.rs` and
+`hrtf_kemar.rs` check sub-degree lookup and azimuth wrapping against an independent lookup oracle; and
+`mradm-engine` `scene_binaural_motion.rs` checks, on the built-in HRTF set, that head-locked audio ignores head
+movement, that head / object / gain motion of a pure tone adds no broadband discontinuity, and that an
+off-grid direction is independent of the frame partition. The Scene C API and binaural fixture tests cover
+reference-frame changes, independent metadata ramp deadlines, spatial geometry, and the batch renderer's
+HRTF invariants.
+Set `MR_ADM_TEST_SOFA` to repeat all three motion checks with an external SOFA dataset alongside KEMAR.
+An invalid dataset fails the checks.
 
 Use Release builds for audio comparisons and timing. The pure-tone second-order
 residual in the continuity test detects discontinuities; it is not a loudness or
@@ -69,6 +73,5 @@ perceptual noise measurement.
 `BinauralState` 共享不可变表；原有完整 HRTF 缓存仍为四组、64 MiB，不共享卷积或对象历史。
 超过完整缓存预算的大型 SOFA 仍可命中网格缓存，重新生成其频域及幅度数据。
 
-`mr_adm_hrtf_grid_tests` 在相同随机序列下对照原 SAF 三角化和密集 VBAP，实现全部 65,341 格的
-索引与权重比较，并验证并发命中、坐标顺序、LRU 预算和共享对象寿命。设置
-`MR_ADM_TEST_SOFA_PATH` 可对本地 SOFA 运行同样的完整对照。性能以 Release 构建测量。
+网格的维度、权重归一、索引范围与确定性由 `mradm-dsp` `hrtf_kemar.rs` 检查（原 `mr_adm_hrtf_grid_tests`，R3 B），
+几何缓存的命中、预算与共享寿命由 `mradm-render` `binaural_hrtf` 的单元测试检查。性能以 Release 构建测量。

@@ -14,7 +14,6 @@ pub mod api;
 mod checked;
 mod convolution;
 mod ear;
-mod ear_post;
 mod engine;
 mod engine_render;
 mod engine_service;
@@ -28,24 +27,18 @@ mod monitor;
 mod osc;
 mod output_dsp;
 mod pcm_mix;
-mod post_gain;
 mod render;
 mod render_apple;
-mod resampler;
 mod room;
 mod room_cuda_selection;
 mod room_environment;
 mod scene;
 mod scene_math;
-mod scene_transition;
 #[cfg(windows)]
 mod scene_worker;
-mod semantic_policy;
 mod spatial;
-mod spreader;
 #[cfg(test)]
 mod test_alloc;
-mod triple_balance;
 mod wav;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to
