@@ -813,17 +813,50 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_stream_stress)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_stress)
 
-    # Cross-platform numerical baseline tool (docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §6.1).
-    # Extracts the final float32 PCM as a canonical little-endian bit image and bit-compares two
-    # such images. Built by default so the CLI/protocol regression test can run through CTest.
-    add_executable(mr_adm_pcm_bits tests/tools/pcm_bits.cpp)
+    # The consistency tools (R3 A, formerly C++ under tests/tools): the fixture generator, the PCM
+    # bit-image tool and the FFT benchmark are `mradm-testkit` examples, the same-process repeat
+    # render an `mradm-ffi` example (it renders on the production engine host). Each builds in
+    # Release and is copied under its former name, so the scripts and workflows call it unchanged.
+    # mr_adm_pcm_bits builds by default so the CLI/protocol regression tests can run through CTest.
+    foreach(_mr_tool IN ITEMS make_fixture:mradm-testkit pcm_bits:mradm-testkit
+            fft_benchmark:mradm-testkit repeat_render:mradm-ffi)
+        string(REPLACE ":" ";" _mr_tool "${_mr_tool}")
+        list(GET _mr_tool 0 _mr_tool_example)
+        list(GET _mr_tool 1 _mr_tool_package)
+        set(_mr_tool_all)
+        if(_mr_tool_example STREQUAL "pcm_bits")
+            set(_mr_tool_all ALL)
+        endif()
+        set(_mr_tool_features)
+        if(_mr_tool_package STREQUAL "mradm-ffi")
+            set(_mr_tool_features --no-default-features ${_mr_consistency_feature_args})
+        endif()
+        add_custom_target(mr_adm_${_mr_tool_example} ${_mr_tool_all}
+            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+                "${MR_ADM_RUST_NATIVE_ENV}"
+                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+                --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p ${_mr_tool_package}
+                --example ${_mr_tool_example} ${_mr_tool_features}
+                --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/${_mr_tool_example}${CMAKE_EXECUTABLE_SUFFIX}"
+                "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_${_mr_tool_example}${CMAKE_EXECUTABLE_SUFFIX}"
+            DEPENDS FLAC::FLAC
+            USES_TERMINAL
+            VERBATIM)
+    endforeach()
+    set(_mr_pcm_bits "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_pcm_bits${CMAKE_EXECUTABLE_SUFFIX}")
+
+    # The FLAC reader island's probe for flac_reader_test.py (the production reader: strict Rust
+    # validation, then dr_flac PCM), writing the same canonical image as mr_adm_pcm_bits.
+    add_executable(mr_adm_flac_reader_probe tests/unit/flac_reader_probe.cpp)
     if(MSVC)
         # Keep narrow argv and file APIs lossless on non-UTF-8 Windows hosts.
-        target_sources(mr_adm_pcm_bits PRIVATE tests/tools/pcm_bits.manifest)
+        target_sources(mr_adm_flac_reader_probe PRIVATE tests/unit/flac_reader_probe.manifest)
     endif()
-    target_link_libraries(mr_adm_pcm_bits PRIVATE mr_adm_audio_test_support)
-    mr_adm_core_apply_warnings(mr_adm_pcm_bits)
-    mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
+    target_link_libraries(mr_adm_flac_reader_probe PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_flac_reader_probe)
+    mr_adm_core_apply_static_analysis(mr_adm_flac_reader_probe)
 
     # C ABI consumers for the same-build comparison of two C ABI implementations (phase 6): they link the
     # shared libmradm_capi and load whichever copy sits next to them (an $ORIGIN / @loader_path rpath; on
@@ -852,11 +885,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             mr_adm_scene_stream_c_api_consumer_tests)
     endif()
 
-    add_executable(mr_adm_make_fixture EXCLUDE_FROM_ALL tests/tools/make_fixture.cpp)
-    target_link_libraries(mr_adm_make_fixture PRIVATE MacinRender::ADMCore)
-    mr_adm_core_apply_warnings(mr_adm_make_fixture)
-    mr_adm_core_apply_static_analysis(mr_adm_make_fixture)
-
     add_executable(mr_adm_room_profile_allocation_tests tests/unit/room_profile_allocation_test.cpp)
     target_link_libraries(mr_adm_room_profile_allocation_tests PRIVATE MacinRender::ADMRenderRoom)
     target_include_directories(mr_adm_room_profile_allocation_tests PRIVATE src/adm_render_room src/adm_render_common)
@@ -865,16 +893,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_room_profile_allocation_tests COMMAND mr_adm_room_profile_allocation_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic/room.json")
 
-    # Explicitly built in Release by the baseline workflow; measures state across two renders.
-    add_executable(mr_adm_repeat_render EXCLUDE_FROM_ALL tests/tools/repeat_render.cpp)
-    target_link_libraries(mr_adm_repeat_render PRIVATE MacinRender::ADMEngine)
-    mr_adm_core_apply_warnings(mr_adm_repeat_render)
-    mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
-
-    add_executable(mr_adm_fft_benchmark EXCLUDE_FROM_ALL tests/tools/fft_benchmark.cpp)
-    target_link_libraries(mr_adm_fft_benchmark PRIVATE MacinRender::ADMDsp nlohmann_json::nlohmann_json)
-    target_compile_definitions(mr_adm_fft_benchmark PRIVATE MR_ADM_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>)
-    mr_adm_core_apply_warnings(mr_adm_fft_benchmark)
 
     add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp
         tests/support/live_scene/live_scene_trace.cpp)
@@ -888,7 +906,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(Python3_Interpreter_FOUND)
         add_test(NAME mr_adm_flac_reader_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
-                --pcm-tool $<TARGET_FILE:mr_adm_pcm_bits>)
+                --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
         target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
             MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json
@@ -985,7 +1003,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         endif()
         add_test(NAME mr_adm_consistency_tool_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_tools_test.py"
-                --pcm-bits $<TARGET_FILE:mr_adm_pcm_bits> --bash "${_mr_consistency_bash}")
+                --pcm-bits "${_mr_pcm_bits}" --bash "${_mr_consistency_bash}")
         add_test(NAME mr_adm_consistency_build_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_build_test.py"
                 --cmake "${CMAKE_COMMAND}" --c-compiler "${CMAKE_C_COMPILER}"
@@ -1178,11 +1196,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_triple_balance_size_processor_tests COMMAND mr_adm_triple_balance_size_processor_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_size")
 
-    add_executable(mr_adm_render_common_numeric_tests tests/unit/render_common_numeric_test.cpp)
-    target_link_libraries(mr_adm_render_common_numeric_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_render_common_numeric_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_render_common_numeric_tests)
-    add_test(NAME mr_adm_render_common_numeric_tests COMMAND mr_adm_render_common_numeric_tests)
 
     add_executable(mr_adm_hptf_tests tests/unit/hptf_eq_test.cpp)
     target_link_libraries(mr_adm_hptf_tests PRIVATE mr_adm_sdk_render_common mr_adm_output_dsp_test_support)

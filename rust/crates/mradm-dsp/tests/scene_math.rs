@@ -124,3 +124,53 @@ fn rotations_posebridge_poles_and_invalid_pose() {
             .all(|x| x.is_finite())
     );
 }
+
+/// The loudspeaker backends' direction length must be bit-reproducible (formerly
+/// `tests/unit/render_common_numeric_test.cpp`; see `CONSISTENCY_LOCALIZATION.md`). The first
+/// three-platform baseline split `hoa-hoa3-point` here: `std::hypot` has no precision guarantee,
+/// Darwin returned exactly 1.0 for a unit vector while glibc / UCRT returned 1 - 1 ulp. The
+/// expected bits follow from IEEE-754 (exact squares in binary64, correctly rounded sum, sqrt and
+/// narrowing), not from one machine's output. The inputs are given as bits and pass through
+/// `black_box`, so the release build evaluates the path instead of folding it.
+#[test]
+fn vector_lengths_are_correctly_rounded() {
+    use std::hint::black_box;
+    let f = |bits: u32| black_box(f32::from_bits(bits));
+    let cases: [(u32, u32, u32, u32, &str); 8] = [
+        (
+            0x3F5DB3D7,
+            0x3F000000,
+            0,
+            0x3F800000,
+            "az=30 el=0, where hypot split",
+        ),
+        (0xBEAF1D44, 0x3F708FB2, 0, 0x3F800000, "az=110 el=0"),
+        (0, 0x3F800000, 0, 0x3F800000, "unit +Y"),
+        (0x40400000, 0x40800000, 0, 0x40A00000, "3, 4, 0: exactly 5"),
+        (
+            0x40000000,
+            0x40400000,
+            0x40C00000,
+            0x40E00000,
+            "2, 3, 6: exactly 7",
+        ),
+        (0, 0, 0, 0, "zero vector"),
+        (
+            0x7E967699,
+            0x7E967699,
+            0,
+            0x7ED4C986,
+            "near f32::MAX: the f64 sum does not overflow",
+        ),
+        (1, 2, 0, 2, "subnormal: the f64 sum does not underflow"),
+    ];
+    for (x, y, z, expected, what) in cases {
+        assert_eq!(length([f(x), f(y), f(z)]).to_bits(), expected, "{what}");
+    }
+    // A direction whose length is exactly 1.0 must normalise to itself.
+    let (x, y) = (f(0x3F5DB3D7), f(0x3F000000));
+    let len = length([x, y, 0.]);
+    assert_eq!(len.to_bits(), 0x3F800000);
+    assert_eq!((x / len).to_bits(), 0x3F5DB3D7);
+    assert_eq!((y / len).to_bits(), 0x3F000000);
+}

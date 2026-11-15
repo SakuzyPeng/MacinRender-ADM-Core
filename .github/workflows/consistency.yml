@@ -120,7 +120,7 @@ jobs:
       - name: Build
         run: >
           cmake --build build/consistency-${{ matrix.config }}
-          --target mr_adm_consistency_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
+          --target mr_adm_consistency_tools mr_adm_fft_benchmark mradm_capi_bundle
 
       - name: C ABI exports
         run: python3 scripts/quality/check-capi-exports.py "build/consistency-${{ matrix.config }}/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
@@ -141,8 +141,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      # The Rust test of the loudspeaker backends' vector length (formerly the C++
+      # mr_adm_render_common_numeric_tests), in a Release build on every runner.
       - name: Test vector length rounding
-        run: build/consistency-${{ matrix.config }}/mr_adm_render_common_numeric_tests
+        working-directory: rust
+        run: cargo test --release --locked --target-dir ../build/rust -p mradm-dsp --no-default-features --test scene_math
 
       - name: Test consistency utilities
         shell: bash
@@ -323,7 +326,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/win-canon --target mr_adm_consistency_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark mradm_capi_bundle
+          cmake --build build/win-canon --target mr_adm_consistency_tools mr_adm_fft_benchmark mradm_capi_bundle
 
       - name: C ABI exports
         shell: pwsh
@@ -349,7 +352,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          build\win-canon\mr_adm_render_common_numeric_tests.exe
+          cd rust && cargo test --release --locked --target-dir ../build/rust -p mradm-dsp --no-default-features --test scene_math
 
       - name: Test consistency utilities
         shell: bash

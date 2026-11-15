@@ -18,12 +18,12 @@
       "lines": 1057
     },
     "tests": {
-      "files": 222,
-      "lines": 57767
+      "files": 218,
+      "lines": 56619
     },
     "rust": {
-      "files": 362,
-      "lines": 141318
+      "files": 358,
+      "lines": 138876
     },
     "rust-vendor": {
       "files": 175,
@@ -32,20 +32,20 @@
   },
   "modules": {
     "include/adm": 2009,
-    "rust/crates/mradm-adm": 2676,
-    "rust/crates/mradm-capi": 9487,
-    "rust/crates/mradm-cli": 2820,
-    "rust/crates/mradm-dsp": 40915,
+    "rust/crates/mradm-capi": 8643,
+    "rust/crates/mradm-cli": 2822,
+    "rust/crates/mradm-dsp": 40985,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 20787,
-    "rust/crates/mradm-ffi": 25260,
+    "rust/crates/mradm-ffi": 25838,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 2385,
     "rust/crates/mradm-render": 22082,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5679,
-    "rust/crates/mradm-wav": 3395,
+    "rust/crates/mradm-testkit": 1890,
+    "rust/crates/mradm-wav": 1933,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,
     "rust/vendor/realfft": 1225,
@@ -77,8 +77,8 @@
     "src/adm_windows": 709,
     "tests/manual": 2425,
     "tests/support": 14734,
-    "tests/tools": 2553,
-    "tests/unit": 38055
+    "tests/tools": 1435,
+    "tests/unit": 38025
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,
