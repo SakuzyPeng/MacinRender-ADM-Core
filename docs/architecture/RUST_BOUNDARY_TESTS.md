@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B 已完成（2026-11-15，本机 Linux x64）；C–G 待做。macOS arm64 / Windows x64 原生复核待维护者。
+> 状态：进行中。A、B 已完成（2026-11-15），B 已通过 macOS arm64 / Windows x64 原生复核；C–G 待做。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -174,3 +174,16 @@ B 批处理经私有 FFI 直接测 Rust 内核的 C++ 测试。逐文件读出�
 
 **规模**：测试 C/C++ 由 56,619 行降到 51,580 行（`tests/unit` 38,025 → 34,330，`tests/support` 14,734 → 13,390）；
 `mradm-ffi` 由 25,838 行降到 23,751 行。生产 C/C++ 不变（9,432 行）。
+
+### B 的 macOS / Windows 原生复核（2026-11-15）
+
+验证源码为 `4be5d6da`，包含 B 的迁移与审查修复。两项新增回归均在修复前失败，修复后通过。
+
+- macOS arm64 的 `cmake --preset debug`、`cmake --build --preset debug` 与完整并行 CTest 通过，60/60 项成功，
+  包含 workspace Rust 测试与 size 探针的管道交互测试；探针可执行文件也验证了输入尚未关闭时连续返回两组结果。
+- Windows x64 复用规范 MSVC/Ninja Release 构建与 Cargo 缓存，SOFA/IAMF 关闭，完整并行 CTest 通过，58/58 项成功。
+  随后在同一 Cargo 缓存启用 `mradm-render/sofa`，`scene_binaural_motion` 与 `binaural_hrtf_sofa` 定向测试通过。
+- 两平台均通过 `MR_ADM_TEST_SOFA` 对 `simple.sofa` 与 `general-compressed.sofa` 重复头锁定、运动连续性和分块检查。
+  无效外部路径会使运动检查失败，Unicode SOFA 路径测试通过。
+- macOS 的 rustfmt、Clippy `-D warnings`、34 项质量脚本测试、FFI 头校验、许可证与 C/C++ 棘轮检查通过。
+  macOS 与 Windows 的 C ABI 共享库均恰好导出 164 个 `adm_*` 函数。
