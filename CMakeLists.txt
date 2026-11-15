@@ -675,8 +675,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer):
     # the one preparation entry, the offline driver and the file stream of
     # every Rust backend behind create_*_renderer. Production renders through mradm-engine directly;
-    # the C++ tests and the frozen references drive the backends through these. HrtfState
-    # (tests/support/binaural) is the binaural HRTF view the SOFA tests read.
+    # the remaining C++ tests and manual benchmarks drive the backends through these.
     add_library(mr_adm_engine_renderer_test_support STATIC
         tests/support/engine_renderer/binaural_renderer.cpp
         tests/support/engine_renderer/ear_renderer.cpp
@@ -684,12 +683,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/engine_renderer/room_renderer.cpp
         tests/support/engine_renderer/speaker_pcm.cpp
         tests/support/engine_renderer/triple_balance_renderer.cpp
-        tests/support/engine_renderer/vbap_renderer.cpp
-        tests/support/binaural/hrtf_state.cpp)
+        tests/support/engine_renderer/vbap_renderer.cpp)
     target_include_directories(mr_adm_engine_renderer_test_support PUBLIC
         tests/support/engine_renderer src/adm_render_common)
     target_include_directories(mr_adm_engine_renderer_test_support PRIVATE
-        tests/support/binaural src/adm_render_room src/adm_audio src/adm_metadata)
+        src/adm_render_room src/adm_audio src/adm_metadata)
     target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC mr_adm_scene_test_support mr_adm_sdk_render_common MacinRender::ADMRenderCommon
         MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp)
     target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE
@@ -751,16 +749,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_callback_alloc_tests)
     add_test(NAME mr_adm_scene_callback_alloc_tests COMMAND mr_adm_scene_callback_alloc_tests)
     set_tests_properties(mr_adm_scene_callback_alloc_tests PROPERTIES TIMEOUT 60)
-
-    # Test-only copy of the C++ HRTF state from before the Rust binaural backend, for the frozen live binaural
-    # reference and the HRTF interpolation tests; production prepares it in Rust.
-    add_library(mr_adm_binaural_test_support STATIC tests/support/binaural/legacy_state.cpp)
-    target_include_directories(mr_adm_binaural_test_support PUBLIC tests/support/binaural)
-    target_link_libraries(mr_adm_binaural_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp
-        PRIVATE fmt::fmt)
-    target_compile_definitions(mr_adm_binaural_test_support PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
-    mr_adm_core_apply_warnings(mr_adm_binaural_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_binaural_test_support)
 
     # One Scene stream renderer behind the C++ interface, outside the Rust stream engine:
     # the live renderer tests, the frozen references and the manual benchmarks.
@@ -884,10 +872,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
                 --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
-        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
-            MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json
-            mr_adm_live_scene_test_support mr_adm_engine_renderer_test_support)
-        target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room tests/support)
+        # The room Scene stream through the C ABI only (R3 C2); the file and switch checks are Rust.
+        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMCAPI nlohmann_json::nlohmann_json)
         mr_adm_core_apply_warnings(mr_adm_room_tests)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
@@ -1078,15 +1064,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
-    add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
-    target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
-        mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
-        MacinRender::ADMIo)
-    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE tests/support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)
-    add_test(NAME mr_adm_triple_balance_stream_tests COMMAND mr_adm_triple_balance_stream_tests)
-
     add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
     target_link_libraries(mr_adm_hptf_parameters_tests
         PRIVATE MacinRender::ADMCAPI MacinRender::ADMEngine MacinRender::ADMRealtime
@@ -1160,22 +1137,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Fixture test: Rust KEMAR HRTF binaural renderer timing and fixed stereo output layout.
     # The interpolation invariant probe is test support over the legacy HRTF state.
-    add_executable(mr_adm_binaural_fixture_tests
-        tests/unit/binaural_render_fixture_test.cpp
-        tests/support/binaural/binaural_test_probe.cpp)
-    target_link_libraries(mr_adm_binaural_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-            mr_adm_binaural_test_support)
-    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_io")
-    mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
-    add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
 
     set(_mr_rust_test_features --no-default-features)
     if(MR_ADM_ENABLE_SOFA)

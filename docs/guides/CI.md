@@ -300,7 +300,7 @@ Windows GUI 普通包和 CUDA 试用包都启用 `MR_ADM_ENABLE_SOFA=ON`，保�
 
 `release-windows` 在打包前用 ctest 运行一组优化构建下的测试，覆盖主要编码器：
 `mr_adm_flac_io_smoke_tests`、`mr_adm_opus_mka_smoke_tests`、`mr_adm_cli_smoke_tests`、
-`mr_adm_binaural_fixture_tests`、`mr_adm_loudness_fixture_tests`。渲染后端在 Rust 中，
+`mr_adm_loudness_fixture_tests`。渲染后端在 Rust 中，
 它们的整段渲染测试（R3 C 由 C++ 移植，`mradm-engine` 的 `*_render` 与 `mradm-render` 的后端测试）
 以 `cargo test --release -p mradm-engine -p mradm-render` 在同一 job 中运行。
 完整测试集仍由必需 CI 的 `windows-debug` 覆盖；SOFA 的 Unicode 路径与两种准备流程（原 `mr_adm_sofa_fixture_tests`，R3 B）

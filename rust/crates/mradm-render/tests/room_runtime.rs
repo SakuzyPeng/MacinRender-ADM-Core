@@ -103,17 +103,21 @@ fn open_gate() -> Arc<Gate> {
 }
 
 fn scene() -> mradm_scene::RenderScene {
+    scene_of(FRAMES)
+}
+
+fn scene_of(frames: u64) -> mradm_scene::RenderScene {
     common::scene(
         vec![ObjectSpec {
             id: "AO_1001",
             gain: 1.,
             end: u64::MAX,
             tracks: vec![TrackSpec {
-                blocks: vec![object_block(0, 9000, 30.), object_block(9000, FRAMES, -60.)],
+                blocks: vec![object_block(0, 9000, 30.), object_block(9000, frames, -60.)],
                 direct: Vec::new(),
             }],
         }],
-        FRAMES,
+        frames,
     )
 }
 
@@ -560,4 +564,254 @@ fn without_a_sink_an_unknown_label_keeps_its_position_silently() {
         outputs[0], outputs[1],
         "the element's own position, not the front"
     );
+}
+
+/// The switch rules of the C++ `room_render_test` (R3 C2): a failed candidate keeps the current
+/// room, the latest request wins, asking again for the incoming or the current room does not
+/// restart its transition, and a failed newest request does not revive a superseded pending room.
+#[test]
+fn failed_candidates_and_repeated_requests_keep_the_transition() {
+    const LONG: u64 = 480_000;
+    let package = package();
+    let fixture = Fixture {
+        resources: resources(&package),
+        package,
+        table: table(&scene_of(LONG)),
+        input: common::input(&common::sine(LONG as usize, 0.5)),
+    };
+    let dir = std::env::temp_dir().join(format!("mradm-room-variants-{}", std::process::id()));
+    let second = variant(
+        &dir,
+        "second.json",
+        &[
+            (
+                r#""dimensions": [7, 6, 3.2]"#,
+                r#""dimensions": [8, 7, 3.6]"#,
+            ),
+            (r#""id": "synthetic""#, r#""id": "second""#),
+        ],
+    );
+    let incompatible = variant(
+        &dir,
+        "incompatible.json",
+        &[
+            (
+                r#""alignment_guard_samples": 40"#,
+                r#""alignment_guard_samples": 41"#,
+            ),
+            (r#""id": "synthetic""#, r#""id": "incompatible-guard""#),
+        ],
+    );
+    let (current, other, bad) = (
+        config(&fixture.package),
+        config(&second),
+        config(&incompatible),
+    );
+    // The preparation rejects the incompatible alignment guard.
+    let mut stream = fixture.stream(open_gate().prepare());
+    let control = stream.control();
+    let mut out = vec![0f32; 512];
+    let mut wait = |done: &dyn Fn(&mradm_render::room_runtime::Status) -> bool| {
+        for _ in 0..4000 {
+            assert_eq!(
+                stream.process(&mut out, 256).unwrap(),
+                256,
+                "the material lasts: {:?}",
+                control.status()
+            );
+            if done(&control.status()) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        panic!("status {:?}", control.status());
+    };
+
+    let failed = control.request(&bad).unwrap();
+    wait(&|s| s.state == state::FAILED && s.requested_revision == failed);
+    assert_eq!(
+        control.status().applied_revision,
+        0,
+        "a failed candidate keeps the current room"
+    );
+    control.request(&other).unwrap();
+    let latest = control.request(&current).unwrap();
+    wait(&|s| s.state == state::APPLIED && s.applied_revision == latest);
+
+    let change = control.request(&other).unwrap();
+    wait(&|s| s.state == state::TRANSITIONING && s.requested_revision == change);
+    let sample = control.status().transition_sample;
+    control.request(&current).unwrap();
+    let last = control.request(&other).unwrap();
+    wait(&|s| s.state == state::APPLIED && s.applied_revision == last);
+    assert_eq!(
+        control.status().transition_sample,
+        sample,
+        "the incoming room does not restart"
+    );
+    let same = control.request(&other).unwrap();
+    wait(&|s| s.state == state::APPLIED && s.applied_revision == same);
+    assert_eq!(
+        control.status().transition_sample,
+        sample,
+        "the current room does not restart"
+    );
+
+    let retained = control.request(&current).unwrap();
+    wait(&|s| s.state == state::TRANSITIONING && s.requested_revision == retained);
+    control.request(&other).unwrap();
+    let newest = control.request(&bad).unwrap();
+    wait(&|s| s.state == state::FAILED && s.requested_revision == newest);
+    wait(&|s| s.applied_revision == retained);
+    for _ in 0..100 {
+        wait(&|_| true);
+    }
+    assert_eq!(
+        control.status().applied_revision,
+        retained,
+        "the superseded room stays dropped"
+    );
+    let restored = control.request(&other).unwrap();
+    wait(&|s| s.state == state::APPLIED && s.applied_revision == restored);
+    drop(stream);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A copy of the synthetic room in `dir` with `edits` applied to its manifest text (the C++
+/// fixture's `second.json`: other dimensions; `incompatible.json`: another alignment guard).
+fn variant(dir: &std::path::Path, name: &str, edits: &[(&str, &str)]) -> Arc<Package> {
+    let source = std::path::PathBuf::from(manifest());
+    let source = source.parent().unwrap();
+    std::fs::create_dir_all(dir).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), dir.join(entry.file_name())).unwrap();
+    }
+    let mut text = std::fs::read_to_string(source.join("room.json")).unwrap();
+    for (from, to) in edits {
+        assert!(text.contains(from), "{from}");
+        text = text.replace(from, to);
+    }
+    let path = dir.join(name);
+    std::fs::write(&path, text).unwrap();
+    Arc::new(loading::load_package(path.to_str().unwrap().as_bytes()).unwrap())
+}
+
+/// Source growth during a switch (formerly part of the C++ `room_render_test`): a candidate
+/// prepared for fewer sources is resized when a later generation adds one, before the zero-source
+/// session's first frame and while a room is being prepared, without failing the switch.
+#[test]
+fn source_growth_resizes_the_candidate_without_failing_the_switch() {
+    let fixture = Fixture::new();
+    let dir = std::env::temp_dir().join(format!("mradm-room-growth-{}", std::process::id()));
+    let second = variant(
+        &dir,
+        "second.json",
+        &[
+            (
+                r#""dimensions": [7, 6, 3.2]"#,
+                r#""dimensions": [8, 7, 3.6]"#,
+            ),
+            (r#""id": "synthetic""#, r#""id": "second""#),
+        ],
+    );
+    let mut r = live(&fixture, false);
+    let control = r.control();
+    let mut elements = Vec::new();
+    for generation in 1..=2u64 {
+        let target = if generation == 1 {
+            config(&second)
+        } else {
+            config(&fixture.package)
+        };
+        let request = control.request(&target).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        let mut e = element(generation, Role::Object, "");
+        e.has_position = true;
+        elements.push(e);
+        r.configure(generation, &elements).unwrap();
+        let ids: Vec<u64> = (1..=generation).collect();
+        for _ in 0..2000 {
+            if control.status().applied_revision == request {
+                break;
+            }
+            render(&mut r, generation, &ids, &[], &[]).unwrap();
+            assert_ne!(
+                control.status().state,
+                state::FAILED,
+                "{:?}",
+                control.status()
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(control.status().applied_revision, request);
+    }
+    drop(r);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An epoch reset keeps the applied room and clears the history (formerly part of the C++
+/// `room_render_test`): after switching to another room, a reset renderer equals a fresh one
+/// opened on that room.
+#[test]
+fn a_reset_keeps_the_applied_room_and_clears_history() {
+    let fixture = Fixture::new();
+    let dir = std::env::temp_dir().join(format!("mradm-room-reset-{}", std::process::id()));
+    let second = variant(
+        &dir,
+        "second.json",
+        &[
+            (
+                r#""dimensions": [7, 6, 3.2]"#,
+                r#""dimensions": [8, 7, 3.6]"#,
+            ),
+            (r#""id": "synthetic""#, r#""id": "second""#),
+        ],
+    );
+    let mut placed = element(7, Role::Object, "");
+    placed.has_position = true;
+    let initial = [Entry {
+        element_id: 7,
+        state: State {
+            valid_fields: field::KNOWN,
+            ..State::default()
+        },
+    }];
+    let mut r = live(&fixture, false);
+    r.configure(1, &[placed]).unwrap();
+    render(&mut r, 1, &[7], &initial, &[]).unwrap();
+    let control = r.control();
+    let request = control.request(&config(&second)).unwrap();
+    for _ in 0..2000 {
+        let s = control.status();
+        if s.state == state::APPLIED && s.applied_revision == request {
+            break;
+        }
+        render(&mut r, 1, &[7], &[], &[]).unwrap();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert_eq!(control.status().applied_revision, request);
+    r.reset();
+    r.configure(2, &[placed]).unwrap();
+    let mut fresh = Live::new(
+        resources(&second),
+        config(&second),
+        true,
+        RoomScreens::default(),
+        false,
+        scope,
+        open_gate().prepare(),
+    )
+    .unwrap();
+    fresh.configure(2, &[placed]).unwrap();
+    for i in 0..20 {
+        let states: &[Entry] = if i == 0 { &initial } else { &[] };
+        assert_eq!(
+            render(&mut r, 2, &[7], states, &[]).unwrap(),
+            render(&mut fresh, 2, &[7], states, &[]).unwrap(),
+            "frame {i}"
+        );
+    }
+    drop((r, fresh));
+    let _ = std::fs::remove_dir_all(&dir);
 }

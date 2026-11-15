@@ -215,3 +215,121 @@ fn malformed_banks_are_rejected() {
     assert!(Filters::new(grid.clone(), short, kemar.ir_len, 512, false).is_err());
     assert!(Filters::new(grid, &kemar.impulses, kemar.ir_len, usize::MAX, false).is_err());
 }
+
+/// The magnitude of every (bin, ear) of a quantized or continuous lookup.
+fn magnitudes(bank: &Filters, az: f32, el: f32, lookup: Lookup) -> Vec<f32> {
+    let mut out = vec![0f32; bank.output_len()];
+    bank.query(az, el, lookup, &mut out, None).unwrap();
+    out.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|p| C(p[0], p[1]).abs())
+        .collect()
+}
+
+/// Bins inside 200 Hz – 18 kHz at 48 kHz.
+fn audible(bins: usize) -> impl Iterator<Item = usize> {
+    let hz = 24000. / (bins - 1) as f32;
+    (0..bins).filter(move |&b| (200.0..18000.).contains(&(b as f32 * hz)))
+}
+
+/// Properties of the built-in set that the probe of the C++ `binaural_render_fixture_test` checked
+/// (R3 C2): a lookup at a measured direction reproduces the measurement, an off-grid lookup stays
+/// inside the hull of its three measured neighbours (no fabricated comb), and a lateral source is
+/// head-shadowed at the far ear.
+#[test]
+fn kemar_lookups_reproduce_bound_and_shadow_the_measurements() {
+    let kemar = Dataset::kemar();
+    let grid = Arc::new(Grid::new(&kemar.directions).unwrap());
+    let bank = Filters::new(grid, &kemar.impulses, kemar.ir_len, 512, false).unwrap();
+    let oracle = Oracle::new(&bank);
+    let cell = |az: f32, el: f32| {
+        let mut a = (az + 180.) % 360.;
+        if a < 0. {
+            a += 360.;
+        }
+        let (x, y) = (
+            (a.round() as usize).min(360),
+            (el + 90.).clamp(0., 180.).round() as usize,
+        );
+        y * 361 + x
+    };
+
+    let mut identities = 0;
+    for az in [0f32, 30., 90., 180., -90.] {
+        let c = cell(az, 0.);
+        let w = &oracle.weights[c * 3..c * 3 + 3];
+        let Some(k) = w.iter().position(|&v| v == 1.) else {
+            continue;
+        };
+        let direction = oracle.indices[c * 3 + k] as usize;
+        let got = magnitudes(&bank, az, 0., Lookup::Quantized);
+        for bin in audible(oracle.bins) {
+            for ear in 0..2 {
+                let raw = oracle.spectra[(bin * 2 + ear) * oracle.directions + direction].abs();
+                let db = 20. * ((got[bin * 2 + ear] + 1e-9) / (raw + 1e-9)).log10();
+                assert!(db.abs() < 0.01, "az={az} bin={bin} ear={ear}: {db} dB");
+            }
+        }
+        identities += 1;
+    }
+    assert!(
+        identities > 0,
+        "at least one azimuth is a measured direction"
+    );
+
+    let mut bounded = 0;
+    for (az, el) in [
+        (37f32, 10f32),
+        (70., 25.),
+        (-55., 15.),
+        (120., 0.),
+        (25., 50.),
+    ] {
+        let c = cell(az, el);
+        if oracle.weights[c * 3..c * 3 + 3].contains(&1.) {
+            continue;
+        }
+        let got = magnitudes(&bank, az, el, Lookup::Quantized);
+        for bin in audible(oracle.bins) {
+            for ear in 0..2 {
+                let around: Vec<f32> = (0..3)
+                    .map(|k| {
+                        let d = oracle.indices[c * 3 + k] as usize;
+                        oracle.spectra[(bin * 2 + ear) * oracle.directions + d].abs()
+                    })
+                    .collect();
+                let (lo, hi) = around
+                    .iter()
+                    .fold((f32::MAX, 0f32), |(l, h), &v| (l.min(v), h.max(v)));
+                let slack = 1e-4 * hi + 1e-4;
+                let v = got[bin * 2 + ear];
+                assert!(
+                    v >= lo - slack && v <= hi + slack,
+                    "az={az} el={el} bin={bin}: {v} not in [{lo}, {hi}]"
+                );
+            }
+        }
+        bounded += 1;
+    }
+    assert!(
+        bounded > 0,
+        "at least one direction is off the measurements"
+    );
+
+    let band_db = |m: &[f32], ear: usize| {
+        let hz = 24000. / (oracle.bins - 1) as f64;
+        let bins: Vec<usize> = (0..oracle.bins)
+            .filter(|&b| (4000.0..10000.).contains(&(b as f64 * hz)))
+            .collect();
+        bins.iter()
+            .map(|&b| 20. * (f64::from(m[b * 2 + ear]) + 1e-9).log10())
+            .sum::<f64>()
+            / bins.len() as f64
+    };
+    for (az, near, far) in [(100f32, 0, 1), (120., 0, 1), (-100., 1, 0)] {
+        let m = magnitudes(&bank, az, 0., Lookup::Continuous);
+        let ild = band_db(&m, near) - band_db(&m, far);
+        assert!(ild > 12., "az={az}: 4-10 kHz ILD {ild} dB");
+    }
+}
