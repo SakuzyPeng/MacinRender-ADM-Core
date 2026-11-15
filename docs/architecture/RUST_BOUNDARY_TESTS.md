@@ -178,7 +178,7 @@ B 批处理经私有 FFI 直接测 Rust 内核的 C++ 测试。逐文件读出�
 ## C SDK 渲染测试
 
 C 处理经 C++ SDK（`RenderService` / `PreviewSession`、`tests/support/engine_renderer` 的 `IRenderer` 适配、`io::import_scene` 与
-`adm_scene`）做整段渲染的 18 个测试。它们只写 WAV / CAF，不经编码器岛，因此全部改在 `cargo test` 中用纯 Rust 运行。分四个子批提交：
+`adm_scene`）做整段渲染的 18 个测试。Rust 后端的检查改在 `cargo test` 中运行，Apple 岛的大文件裁剪检查经公开 C ABI 运行。分四个子批提交：
 C1 扬声器后端、C2 双耳 / Triple Balance 流 / room、C3 导入导出与声道床、C4 渲染服务与后处理。
 
 **整段渲染的测试工具** `mradm-engine` `tests/common/render.rs`：
@@ -189,6 +189,9 @@ C1 扬声器后端、C2 双耳 / Triple Balance 流 / room、C3 导入导出与�
 
 导入与导出的测试读后端收到的场景：inspect JSON（`scene_json::inspect_json`，即 C++ 测试读的 `AdmScene` 视图）加快照中的作者来源。
 只在某个后端内部的断言放到 `mradm-render` 的测试。
+
+`room_runtime.rs` 的切换检查在 Scene 流式渲染中用零帧处理将候选送进等待队列，再提交失败的新请求，
+随后推进活动过渡并确认旧候选保持失效。`render_service.rs` 中的 `Type` 导入与稀疏文件检查同样限定为 Unix。
 
 | C++ 测试 | 去向 |
 |---|---|
@@ -204,7 +207,7 @@ C1 扬声器后端、C2 双耳 / Triple Balance 流 / room、C3 导入导出与�
 | adm_io_smoke_test | 缺失输入、mask 自动识别、显式布局与 AXML 优先级、格式错误已由 `mradm-scene` `import.rs` 覆盖；移植 7.1.4 两种顺序、别名几何与 LFE、带仰角的上层标签、空标签被拒、自定义 float 床（一个对象每声道一 track、LFE 只有低通标记）、预设声道数不符、格式错误的 AXML 不退回 mask → `import.rs` `catalog_aliases_custom_beds_and_malformed_axml` |
 | scene_export_fixture_test | 移植为 `mradm-engine` `scene_export.rs`（3 项，照 C ABI 的导出：`patched_axml` 后 `replace_axml`，再重新导入）：无策略时块字段不变、增益缩放只改对象增益、插值上限只改插值、位置覆盖延后、头锁定覆盖写到每种类型的每个块而对象保持、data chunk 逐字节相同、BW64 源仍为 BW64；各策略写出的 AXML 由 `mradm-scene` `export-v1` golden 锁定 |
 | channel_bed_render_test | 移植为 `mradm-engine` `channel_bed_render.rs`（5 项，经渲染服务）：扬声器输出的 WAVE mask、自定义标签床到双耳（ADM Binaural 语义、无扬声器 mask、重新导入）、7.1.4 WAVE 顺序改写保持各声道信号、8 声道以上整数输出为 BW64 且带 DirectSpeakers ADM、HOA3 的 ACN / SN3D pack |
-| render_trim_fixture_test | 移植为 `mradm-engine` `render_service.rs`：结束 / 起止 / 无裁剪的帧数、巨大有限结束钳到整段、起点超出时长与 inf / -inf / NaN / 负值 / 结束不在起点之后 / 不足一帧的窗口被拒且不留输出、计量跟随窗口（EAR 与 HOA3 静音半段无 True Peak）、窗口逐位等于整段切片（EAR、VBAP、HOA3，双耳 1e-6）、稀疏 BW64 输入在 2^31 帧之后的 6 对象窗口（只在 Unix 运行；C++ 在 Windows 也只在设置 `MR_ADM_RUN_LARGE_FILE_TESTS` 时运行）；Apple 后端的稀疏窗口归 F（岛测试） |
+| render_trim_fixture_test | 移植为 `mradm-engine` `render_service.rs`：结束 / 起止 / 无裁剪的帧数、巨大有限结束钳到整段、起点超出时长与 inf / -inf / NaN / 负值 / 结束不在起点之后 / 不足一帧的窗口被拒且不留输出、计量跟随窗口（EAR 与 HOA3 静音半段无 True Peak）、窗口逐位等于整段切片（EAR、VBAP、HOA3，双耳 1e-6）、稀疏 BW64 输入在 2^31 帧之后的 6 对象窗口（只在 Unix 运行；C++ 在 Windows 也只在设置 `MR_ADM_RUN_LARGE_FILE_TESTS` 时运行）；Apple 后端的两种布局窗口由 `apple_render_trim_test.py` 经公开 C ABI 共享库检查，注册为 macOS 的 `mr_adm_apple_render_trim_tests` |
 | core_smoke_test | **岛测试，保留**：去掉 SDK 的版本与 `RenderService` 检查（版本由 C ABI 测试与 `mradm --version` 的 CLI 记录覆盖，渲染服务由 `render_service.rs` 覆盖），只留 `src/adm_audio` 的 WAVE / CAF 元数据与写出包装；SDK `version.h` / `version.cpp.in` 随之删除 |
 | render_service_test | 准备缓存复用（不重复准备、仍导入并应用策略、仍写语义报告、输出相同）已由 `render.rs` `cached_preparation_does_not_skip_import_policy_or_report` 覆盖（Apple 的缓存归 F）；策略 JSON 错误为参数错误、缺失策略文件为 IO 错误 → `render_service.rs` `policy_errors_are_parameter_and_io_errors`；非 UTF-8 输出 / 策略路径被拒而非改写为替换字符、含 NUL 被拒、字面替换字符可用 → `mradm-capi` `options.rs` `request_paths_reject_invalid_utf8_instead_of_replacing_it`（路径在 C ABI 边界转换，引擎只收 UTF-8） |
 | normalization_acceptance_test | 移植为 `render_service.rs` `final_pcm_meets_the_normalisation_targets`：同一 6 s 节目（1 kHz 与跨采样峰值突发），响度 -23、加 -2.5 dB 终增益、峰值补偿到 -6 dBTP（float 与 24-bit）、热输入的默认 -1 dBTP 上限、静音保持数字静音且不报读数；以 `mradm-dsp` `Meter` 重新测量写出的文件，误差 1e-5，报告值等于测量值（`Meter` 对独立 BS.1770-4 参考的准确性由 `meter_acceptance.rs` 覆盖） |

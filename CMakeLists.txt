@@ -1041,6 +1041,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/hptf_stereo_test.py"
                     "$<TARGET_FILE:mradm_capi_bundle>")
         set_tests_properties(mr_adm_hptf_stereo_c_api_tests PROPERTIES TIMEOUT 60)
+        if(APPLE)
+            add_test(NAME mr_adm_apple_render_trim_tests
+                COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/apple_render_trim_test.py"
+                        "$<TARGET_FILE:mradm_capi_bundle>")
+            set_tests_properties(mr_adm_apple_render_trim_tests PROPERTIES TIMEOUT 60)
+        endif()
     endif()
 
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)

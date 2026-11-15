@@ -11,7 +11,9 @@ use common::render::*;
 use mradm_dsp::meter::{Meter, MeterMode};
 use mradm_engine::render::Request;
 use mradm_engine::request::{BitDepth, Selection};
-use mradm_testkit::adm::{Type, gain_linear};
+#[cfg(unix)]
+use mradm_testkit::adm::Type;
+use mradm_testkit::adm::gain_linear;
 use mradm_testkit::wave::{AudioId, Wave};
 use std::path::{Path, PathBuf};
 

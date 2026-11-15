@@ -103,21 +103,17 @@ fn open_gate() -> Arc<Gate> {
 }
 
 fn scene() -> mradm_scene::RenderScene {
-    scene_of(FRAMES)
-}
-
-fn scene_of(frames: u64) -> mradm_scene::RenderScene {
     common::scene(
         vec![ObjectSpec {
             id: "AO_1001",
             gain: 1.,
             end: u64::MAX,
             tracks: vec![TrackSpec {
-                blocks: vec![object_block(0, 9000, 30.), object_block(9000, frames, -60.)],
+                blocks: vec![object_block(0, 9000, 30.), object_block(9000, FRAMES, -60.)],
                 direct: Vec::new(),
             }],
         }],
-        frames,
+        FRAMES,
     )
 }
 
@@ -571,14 +567,7 @@ fn without_a_sink_an_unknown_label_keeps_its_position_silently() {
 /// restart its transition, and a failed newest request does not revive a superseded pending room.
 #[test]
 fn failed_candidates_and_repeated_requests_keep_the_transition() {
-    const LONG: u64 = 480_000;
-    let package = package();
-    let fixture = Fixture {
-        resources: resources(&package),
-        package,
-        table: table(&scene_of(LONG)),
-        input: common::input(&common::sine(LONG as usize, 0.5)),
-    };
+    let fixture = Fixture::new();
     let dir = std::env::temp_dir().join(format!("mradm-room-variants-{}", std::process::id()));
     let second = variant(
         &dir,
@@ -608,17 +597,42 @@ fn failed_candidates_and_repeated_requests_keep_the_transition() {
         config(&incompatible),
     );
     // The preparation rejects the incompatible alignment guard.
-    let mut stream = fixture.stream(open_gate().prepare());
-    let control = stream.control();
-    let mut out = vec![0f32; 512];
-    let mut wait = |done: &dyn Fn(&mradm_render::room_runtime::Status) -> bool| {
-        for _ in 0..4000 {
-            assert_eq!(
-                stream.process(&mut out, 256).unwrap(),
-                256,
-                "the material lasts: {:?}",
-                control.status()
-            );
+    let mut renderer = live(&fixture, false);
+    let mut placed = element(7, Role::Object, "");
+    placed.has_position = true;
+    renderer.configure(1, &[placed]).unwrap();
+    let initial = [Entry {
+        element_id: 7,
+        state: State {
+            valid_fields: field::KNOWN,
+            ..State::default()
+        },
+    }];
+    render(&mut renderer, 1, &[7], &initial, &[]).unwrap();
+    let control = renderer.control();
+    let samples = [0.5f32; 256];
+    let planes = [Plane {
+        element_id: 7,
+        has_signal: true,
+        samples: &samples,
+    }];
+    let mut out = [0f32; 512];
+    let mut wait = |done: &dyn Fn(&mradm_render::room_runtime::Status) -> bool, advance: bool| {
+        for _ in 0..2000 {
+            renderer
+                .render(
+                    &Frame {
+                        generation: 1,
+                        duration: if advance { 256 } else { 0 },
+                        planes: &planes,
+                        initial: &[],
+                        updates: &[],
+                        trace: b"",
+                    },
+                    &mut out,
+                )
+                .unwrap();
+            assert!(out.iter().all(|sample| sample.is_finite()));
             if done(&control.status()) {
                 return;
             }
@@ -628,7 +642,10 @@ fn failed_candidates_and_repeated_requests_keep_the_transition() {
     };
 
     let failed = control.request(&bad).unwrap();
-    wait(&|s| s.state == state::FAILED && s.requested_revision == failed);
+    wait(
+        &|s| s.state == state::FAILED && s.requested_revision == failed,
+        true,
+    );
     assert_eq!(
         control.status().applied_revision,
         0,
@@ -636,21 +653,33 @@ fn failed_candidates_and_repeated_requests_keep_the_transition() {
     );
     control.request(&other).unwrap();
     let latest = control.request(&current).unwrap();
-    wait(&|s| s.state == state::APPLIED && s.applied_revision == latest);
+    wait(
+        &|s| s.state == state::APPLIED && s.applied_revision == latest,
+        true,
+    );
 
     let change = control.request(&other).unwrap();
-    wait(&|s| s.state == state::TRANSITIONING && s.requested_revision == change);
+    wait(
+        &|s| s.state == state::TRANSITIONING && s.requested_revision == change,
+        true,
+    );
     let sample = control.status().transition_sample;
     control.request(&current).unwrap();
     let last = control.request(&other).unwrap();
-    wait(&|s| s.state == state::APPLIED && s.applied_revision == last);
+    wait(
+        &|s| s.state == state::APPLIED && s.applied_revision == last,
+        true,
+    );
     assert_eq!(
         control.status().transition_sample,
         sample,
         "the incoming room does not restart"
     );
     let same = control.request(&other).unwrap();
-    wait(&|s| s.state == state::APPLIED && s.applied_revision == same);
+    wait(
+        &|s| s.state == state::APPLIED && s.applied_revision == same,
+        true,
+    );
     assert_eq!(
         control.status().transition_sample,
         sample,
@@ -658,13 +687,24 @@ fn failed_candidates_and_repeated_requests_keep_the_transition() {
     );
 
     let retained = control.request(&current).unwrap();
-    wait(&|s| s.state == state::TRANSITIONING && s.requested_revision == retained);
-    control.request(&other).unwrap();
+    wait(
+        &|s| s.state == state::TRANSITIONING && s.requested_revision == retained,
+        true,
+    );
+    let pending = control.request(&other).unwrap();
+    // Pump the candidate into the session's pending slot without finishing the active transition.
+    wait(
+        &|s| s.state == state::TRANSITIONING && s.requested_revision == pending,
+        false,
+    );
     let newest = control.request(&bad).unwrap();
-    wait(&|s| s.state == state::FAILED && s.requested_revision == newest);
-    wait(&|s| s.applied_revision == retained);
+    wait(
+        &|s| s.state == state::FAILED && s.requested_revision == newest,
+        false,
+    );
+    wait(&|s| s.applied_revision == retained, true);
     for _ in 0..100 {
-        wait(&|_| true);
+        wait(&|_| true, true);
     }
     assert_eq!(
         control.status().applied_revision,
@@ -672,8 +712,11 @@ fn failed_candidates_and_repeated_requests_keep_the_transition() {
         "the superseded room stays dropped"
     );
     let restored = control.request(&other).unwrap();
-    wait(&|s| s.state == state::APPLIED && s.applied_revision == restored);
-    drop(stream);
+    wait(
+        &|s| s.state == state::APPLIED && s.applied_revision == restored,
+        true,
+    );
+    drop(renderer);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
