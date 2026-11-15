@@ -11,7 +11,7 @@ use mradm_engine::backend::{
 };
 use mradm_engine::request::{self, Level, Selection};
 use mradm_engine::stream::{self, Body, Settings, Validator};
-use mradm_ffi::FfiHost;
+use mradm_ffi::api::render::FfiHost;
 use mradm_render::binaural::Spread;
 use mradm_render::routing::{LiveOverride, Override};
 use mradm_scene::RenderScene;

@@ -1,5 +1,5 @@
 //! `adm_render_options_t` and its setters, with the C++ `RenderOptions` defaults and checks, and the
-//! engine request record (`EngineRenderRequest`) a render or preview builds from them.
+//! engine request (`mradm_engine::render::Request`) a render, preview or monitor builds from them.
 //!
 //! Paths are kept as the UTF-8 the C++ `std::filesystem::path` produced when a setter stored them
 //! (on Windows from the code page, `error::utf8_path`), with the SOFA file name the record needs.
@@ -10,7 +10,7 @@ use crate::room::{self, adm_room_config_t};
 use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_engine::backend::Screens as EngineScreens;
 use mradm_engine::render::{PathText, Request as EngineRequest, RoomOptions, SofaPath};
-use mradm_ffi::room::RoomProfileHandle;
+use mradm_ffi::api::room::RoomProfileHandle;
 use std::ffi::c_char;
 use std::ptr;
 

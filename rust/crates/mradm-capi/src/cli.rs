@@ -1,6 +1,6 @@
 //! The `mradm` command line: `mradm_cli_main`, which the `mradm` executable's `main` calls, runs
-//! `mradm-cli` with this crate's engine entries (the same render driver, scene import, AXML reader,
-//! export and room package entries the C ABI exports use), the APAC encode worker of the audio
+//! `mradm-cli` with this crate's engine calls (the same render driver, scene import, AXML reader,
+//! export and room package calls the C ABI exports use), the APAC encode worker of the audio
 //! island and a SIGINT handler.
 use crate::error::{Failure, with_utf8_paths};
 use crate::options::{Path, adm_render_options_t, file_name, lossy, path_text};
@@ -11,9 +11,9 @@ use crate::scene::screens;
 use mradm_cli::{Event, Facts, Interrupt, Outcome, Platform, Request, Screens, Service};
 use mradm_engine::backend::Screens as EngineScreens;
 use mradm_engine::render::{PathText, Request as EngineRequest, RoomOptions, SofaPath};
-use mradm_ffi::adm::Text;
-use mradm_ffi::engine_service::EngineProgress;
-use mradm_ffi::room::RoomProfileHandle;
+use mradm_ffi::api::islands::Text;
+use mradm_ffi::api::render::EngineProgress;
+use mradm_ffi::api::room::RoomProfileHandle;
 use std::ffi::{CString, c_char, c_int};
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -225,12 +225,12 @@ impl Service for Engine {
 
     fn platform(&self, facts: Facts) -> Platform {
         let facts = match facts {
-            Facts::Render => mradm_ffi::engine::Facts::Render,
-            Facts::Document(kind) => mradm_ffi::engine::Facts::Document(kind),
+            Facts::Render => mradm_ffi::api::islands::Facts::Render,
+            Facts::Document(kind) => mradm_ffi::api::islands::Facts::Document(kind),
         };
         let islands = unsafe { islands::mradm_platform_islands().as_ref() };
         islands
-            .and_then(|p| unsafe { mradm_ffi::engine::platform(p, facts) })
+            .and_then(|p| unsafe { mradm_ffi::api::islands::platform(p, facts) })
             .unwrap_or_default()
     }
 
@@ -264,7 +264,10 @@ impl Service for Engine {
     fn load_room(&self, manifest: &[u8]) -> Result<RoomPackage, Vec<u8>> {
         match RoomProfileHandle::load(manifest) {
             Ok(profile) => Ok(RoomPackage(Box::into_raw(profile))),
-            Err(error) => Err(mradm_ffi::room::error_code(&error).1.as_bytes().to_vec()),
+            Err(error) => Err(mradm_ffi::api::room::error_code(&error)
+                .1
+                .as_bytes()
+                .to_vec()),
         }
     }
 

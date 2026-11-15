@@ -1,8 +1,8 @@
 //! Scene streams and Scene outputs: `adm_scene_stream_*`, `adm_scene_output_*` and the Scene
 //! stream's room exports. Each export validates the caller's records as the C++ did, converts
-//! them, and calls the same `mradm-ffi` entries the C++ `SceneStreamEngine` and
-//! `SceneOutputSession` shells called, with the same message buffers, so messages, locators and
-//! truncation are unchanged.
+//! them to the engine's types and calls `mradm_engine::scene` directly (R2): streams on the engine
+//! host, outputs on the device islands (`mradm_ffi::api::scene_stream`). Messages keep their full
+//! text.
 use crate::context::adm_context_t;
 use crate::error::{self, Error, Failure, c_str, concat, utf8_path};
 use crate::guard::{self, INTERNAL, INVALID_ARGUMENT, OK, UNSUPPORTED};
@@ -10,6 +10,7 @@ use crate::options::file_name;
 use crate::query::BAD_ALLOC;
 use crate::room::{self, adm_room_config_t};
 use crate::string;
+use mradm_dsp::hptf::{Coefficients, StereoSnapshot};
 use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
 use mradm_engine::backend::{RoomRequest as EngineRoomRequest, Screens, Sofa};
 use mradm_engine::request::Selection;
@@ -18,13 +19,12 @@ use mradm_engine::scene::stream::{
     self as engine_stream, Config as StreamConfig, Descriptor, Entity, FrameInput,
     Identity as EngineIdentity, PlaneInput, PlaneInputs, Sizes,
 };
-use mradm_ffi::engine_render::{binaural_spread_of, speaker_spread_of};
-use mradm_ffi::hptf::settings::Settings;
-use mradm_ffi::hptf::{Coefficients, Snapshot};
-use mradm_ffi::render::device_island::DeviceIslands;
-use mradm_ffi::render::engine_scene::{EngineSceneStream, create_stream};
-use mradm_ffi::render::engine_scene_output::EngineSceneOutput;
-use mradm_ffi::render::room_ffi::switch_config;
+use mradm_ffi::api::hptf::Settings;
+use mradm_ffi::api::islands::DeviceIslands;
+use mradm_ffi::api::render::{binaural_spread_of, speaker_spread_of};
+use mradm_ffi::api::room::switch_config;
+use mradm_ffi::api::scene_stream::EngineSceneOutput;
+use mradm_ffi::api::scene_stream::{EngineSceneStream, create_stream};
 use mradm_render::live;
 use mradm_render::room_runtime::{self, SourcePosition, Status as RoomStatus};
 use mradm_render::routing::Error as EngineError;
@@ -585,7 +585,7 @@ struct Renderer {
 }
 
 struct RoomRequest {
-    profile: *const mradm_ffi::room::RoomProfileHandle,
+    profile: *const mradm_ffi::api::room::RoomProfileHandle,
     hrir: Vec<u8>,
     metres: f64,
     quality: u32,
@@ -713,7 +713,7 @@ impl Renderer {
             room: EngineRoomRequest {
                 package: room
                     .and_then(|r| unsafe { r.profile.as_ref() })
-                    .map(mradm_ffi::room::RoomProfileHandle::package),
+                    .map(mradm_ffi::api::room::RoomProfileHandle::package),
                 hrir: room.map_or(&[][..], |r| &r.hrir[..]),
                 metres: room.map_or(0.0, |r| r.metres),
                 quality: room.map_or(0, |r| r.quality),
@@ -755,8 +755,8 @@ pub(crate) unsafe fn screens(
         reference: default,
         reproduction: reproduction.unwrap_or(default),
     };
-    if let Err(error) = mradm_ffi::room::validate_screens(&[validated]) {
-        let (code, message) = mradm_ffi::room::error_code(&error);
+    if let Err(error) = mradm_ffi::api::room::validate_screens(&[validated]) {
+        let (code, message) = mradm_ffi::api::room::error_code(&error);
         return Err(Error::new(code, message.as_bytes(), b"screen")?.into());
     }
     Ok((reference, reproduction))
@@ -1996,26 +1996,14 @@ pub(crate) fn bypass(c: &Coefficients) -> bool {
     c.band_count == 0 && c.preamp_gain == 1.0
 }
 
-/// `HptfCoefficients::operator==` (IEEE comparison of every float).
-pub(crate) fn same(a: &Coefficients, b: &Coefficients) -> bool {
-    a.sample_rate == b.sample_rate
-        && a.band_count == b.band_count
-        && a.preamp_gain == b.preamp_gain
-        && a.sections.iter().zip(&b.sections).all(|(x, y)| {
-            x.b0 == y.b0 && x.b1 == y.b1 && x.b2 == y.b2 && x.a1 == y.a1 && x.a2 == y.a2
-        })
-        && a.max_response_db == b.max_response_db
-        && a.auto_trim_db == b.auto_trim_db
-        && a.preamp_db == b.preamp_db
-}
-
 /// `hptf_snapshot_info` and `to_hptf_info`: the left and right infos and whether they are the
 /// same curve.
-pub(crate) fn hptf_infos(snapshot: &Snapshot) -> (adm_hptf_info_t, adm_hptf_info_t, bool) {
+pub(crate) fn hptf_infos(snapshot: &StereoSnapshot) -> (adm_hptf_info_t, adm_hptf_info_t, bool) {
     let info = |c: &Coefficients| adm_hptf_info_t {
         struct_size: size_of::<adm_hptf_info_t>() as u32,
         enabled: i32::from(!bypass(c)),
-        band_count: c.band_count,
+        // At most `MAX_BANDS`.
+        band_count: c.band_count as u32,
         sample_rate: c.sample_rate,
         preamp_db: c.preamp_db,
         auto_trim_db: c.auto_trim_db,
@@ -2023,19 +2011,14 @@ pub(crate) fn hptf_infos(snapshot: &Snapshot) -> (adm_hptf_info_t, adm_hptf_info
         reserved_v1_37: 0,
         applied_revision: snapshot.revision,
     };
-    let right = if snapshot.independent != 0 {
-        &snapshot.right
-    } else {
-        &snapshot.coefficients
-    };
-    (
-        info(&snapshot.coefficients),
-        info(right),
-        same(right, &snapshot.coefficients),
-    )
+    let [left, right] = &snapshot.coefficients;
+    // A shared curve reports the left coefficients for both ears.
+    let right = if snapshot.independent { right } else { left };
+    // `HptfCoefficients::operator==`: an IEEE comparison of every field.
+    (info(left), info(right), right == left)
 }
 
-fn snapshot(output: &EngineSceneOutput) -> Snapshot {
+fn snapshot(output: &EngineSceneOutput) -> StereoSnapshot {
     output.hptf_snapshot()
 }
 
@@ -2457,15 +2440,20 @@ mod tests {
 
     #[test]
     fn hptf_infos_compare_both_curves() {
-        let mut s: Snapshot = unsafe { std::mem::zeroed() };
-        s.coefficients.preamp_gain = 1.0;
-        s.right.preamp_gain = 1.0;
-        s.revision = 4;
+        let mut s = StereoSnapshot {
+            coefficients: [Coefficients::default(); 2],
+            revision: 4,
+            independent: false,
+        };
+        // A shared curve ignores the right coefficients.
+        s.coefficients[1].band_count = 1;
         let (left, right, symmetric) = hptf_infos(&s);
         assert!(symmetric);
-        assert_eq!((left.enabled, right.applied_revision), (0, 4));
-        s.independent = 1;
-        s.right.band_count = 1;
+        assert_eq!(
+            (left.enabled, right.enabled, right.applied_revision),
+            (0, 0, 4)
+        );
+        s.independent = true;
         let (_, right, symmetric) = hptf_infos(&s);
         assert!(!symmetric);
         assert_eq!((right.enabled, right.band_count), (1, 1));

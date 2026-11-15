@@ -15,7 +15,7 @@ use mradm_engine::scene::stream::{
     Config, Descriptor, Entity, FrameInput, Identity, PlaneView, Stream, Submit, frame_flag,
     pull_flag,
 };
-use mradm_ffi::FfiHost;
+use mradm_ffi::api::render::FfiHost;
 use mradm_json::{Map, Value};
 use mradm_render::live::{self, field};
 use mradm_render::routing::Error;

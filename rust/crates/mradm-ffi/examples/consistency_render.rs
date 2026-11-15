@@ -8,7 +8,7 @@ use mradm_dsp::room::screen::{RoomScreenGeometry, RoomScreens};
 use mradm_engine::backend::{BinauralSpreadMode, Host, Screens, SpeakerSpread};
 use mradm_engine::render::{Event, PathText, Render, Request, Reuse, RoomOptions, SofaPath};
 use mradm_engine::request::{BitDepth, DsRouting, Selection};
-use mradm_ffi::FfiHost;
+use mradm_ffi::api::render::FfiHost;
 use mradm_wav::{Reader, SampleFormat, caf};
 use serde_json::Value;
 use std::fs::{self, File};

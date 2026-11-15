@@ -103,6 +103,7 @@
 - [C ABI 迁入 Rust（六期 6.3）](architecture/RUST_BOUNDARY_CAPI.md)
 - [CLI 改为 Rust（六期 6.4）](architecture/RUST_BOUNDARY_CLI.md)
 - [删除 C++ 外壳与 SDK（六期 6.5）](architecture/RUST_BOUNDARY_SDK.md)
+- [Rust 直接调用 Rust（R2）](architecture/RUST_BOUNDARY_DIRECT.md)
 - [room 默认 ramp 按采样率换算（五期 5.7）](architecture/RUST_ROOM_DEFAULT_RAMP.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)

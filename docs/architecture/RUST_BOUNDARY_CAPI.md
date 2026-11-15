@@ -3,6 +3,9 @@
 > 对应 [PCM 一致性审计](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)六期 6.3，家族清单与对照工具见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)，
 > 岛的窄 C 接口见 [6.2 记录](RUST_BOUNDARY_ISLANDS.md)。6.3 分 A（骨架）与 B–F（按家族迁移：版本、上下文与内存 7；
 > render / inspect / room / 能力表 80；preview 4；Scene 38；Monitor / OSC 35）。
+>
+> R2（2026-11-14）之后，`mradm-capi` 不再调用下文所说的 `mradm-ffi` 入口，改为直接调用 Rust crate 与 `mradm_ffi::api`；
+> 下文记录的是 6.3 时的结构，现状见 [R2 记录](RUST_BOUNDARY_DIRECT.md)。
 
 ## 方向与用户决定
 

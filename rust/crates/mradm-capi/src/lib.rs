@@ -3,8 +3,10 @@
 //! `src/adm_c_api/adm_c_api.cpp` is the progress-callback trampolines, which keep a C++ caller's
 //! exception on the C++ side.
 //!
+//! The exports call the Rust crates directly (R2); what needs a C table, a callback that keeps an
+//! address or a platform service comes from `mradm_ffi::api`, never from its `mradm_*` entries.
 //! This is also the staticlib CMake links: it carries mradm-ffi, whose private `mradm_*` entries
-//! the C++ shells and islands still call.
+//! the C++ islands and tests still call.
 #![allow(clippy::missing_safety_doc)]
 
 mod cancel;

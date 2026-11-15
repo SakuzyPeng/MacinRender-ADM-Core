@@ -7,7 +7,7 @@ use crate::context::adm_context_t;
 use crate::error::{Error, Failure, c_str, caught, clear, concat, report, set, try_box, utf8_path};
 use crate::guard;
 use crate::string;
-use mradm_ffi::scene::SceneHandle;
+use mradm_ffi::api::scene::SceneHandle;
 use mradm_scene::{Context, RenderScene};
 use mradm_wav::{Chna, ChunkReader, Reader};
 use std::ffi::c_char;

@@ -809,7 +809,15 @@ macOS CLI 打包对 Objective-C 运行时的白名单）三平台通过；6.5 �
 （`48fbd0b`，语料与结果和冻结实现逐字节相同），再分三批删除：第三方参考、`MR_ADM_BUILD_*_REFERENCE_TESTS`、SAF 探针、登记表与
 校验脚本（`da4c781`）；已有 Rust 回归的 8 个冻结单元，ARM64 Release job 改跑 `cargo test --release`（`c263686`）；最后三个单元与
 `tests/reference/`（`0bf8627`）。测试 C/C++ 由 62,403 行降到 57,767 行、冻结参考 12,027 行归零，生产 C/C++ 不变（9,432 行）。
-逐单元依据见[参考实现的保留与退役](RUST_REFERENCE_RETENTION.md#当前状态)。下一步 R2。
+逐单元依据见[参考实现的保留与退役](RUST_REFERENCE_RETENTION.md#当前状态)。
+
+**R2 状态**：已完成（2026-11-14，本机 Linux x64，macOS / Windows 原生复核待维护者）。`mradm-capi` / `mradm-cli` 直接调用 Rust crate，
+引用的 `mradm-ffi` 私有入口由 97 个降到 0 个，`mradm-capi` 中含 `unsafe` 的行由 984 降到 868。分五批完成：A 查询、房间、选项与 export
+（`eb4e6cf`）；B 离线渲染与预览（`756c508`、`7c2ac9f`）；C Scene 流与输出（`8c82b00`，`4c4a97c` 固定被设备回调保存地址的输出）；
+D Monitor、HpTF 文本与 OSC（`fd76097`、`e2a7658`）；E `mradm-ffi` 只经 `mradm_ffi::api` 提供 Rust 接口，其余模块私有（`4e499b2`）。
+每批与 `b89687c` 对照：C ABI 采集、CLI 记录与 PCM 采集均为 0 差异，consumer 与 ctest 通过；错误消息不再截到固定缓冲区。
+按用户的排序决定，只供 C++ 测试的 `extern "C"` 入口留到 R3 删除，上文 R2 一项的「测试专用导出删除」随之移到 R3。
+见 [R2 记录](RUST_BOUNDARY_DIRECT.md)。下一步 R3。
 
 ## 每个迁移切片的验证
 

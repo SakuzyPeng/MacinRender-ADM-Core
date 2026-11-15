@@ -56,7 +56,7 @@ impl EngineMonitorSession {
     /// must remain valid until the session is dropped.
     ///
     /// ```compile_fail,E0133
-    /// use mradm_ffi::render::engine_monitor_session::{
+    /// use mradm_ffi::api::monitor::{
     ///     EngineMonitorSession, EngineMonitorSessionHost,
     /// };
     ///
