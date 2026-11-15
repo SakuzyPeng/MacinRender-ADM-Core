@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B、C 已完成（2026-11-15），B 已通过 macOS arm64 / Windows x64 原生复核，C 原生复核中；D–G 待做。
+> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D–G 待做。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -286,3 +286,20 @@ C4 之后的结果如下。
 - `tests/support` 13,390 → 12,203。
 
 `mradm-ffi` 由 23,751 行降到 22,366 行。生产 C/C++ 不变（9,432 行）。
+
+### C 的 macOS / Windows 原生复核（2026-11-15）
+
+验证源码为合并提交 `a739e54f`，包含 C1–C4、审查修复 `84be879d` 和主线已有的 B 批修复。
+
+- macOS arm64 的 `cmake --preset debug`、`cmake --build --preset debug --parallel 8` 与完整并行 CTest 通过，45/45 项成功。
+  新增的 `mr_adm_apple_render_trim_tests` 经公开 C ABI 共享库，将 6 对象稀疏 BW64 输入裁剪到超过 2^31 帧的位置，
+  `4+7+0` 和 `9+10+3` 分别输出 12、24 声道，各 1024 帧。
+- Windows x64 复用规范 MSVC/Ninja Release 构建与 Cargo 缓存，SOFA/IAMF 关闭，完整并行 CTest 通过，42/42 项成功。
+  两平台的 `mr_adm_rust_quality` 均通过，包含 workspace 的 rustfmt 与全部 targets 的 Clippy `-D warnings`。
+  Windows 对 `Type` 的未使用导入告警通过 Unix 条件编译消除。
+- 房间切换检查恢复 Scene 流式渲染的零帧处理步骤，确认旧候选已进入等待队列后，再提交失败的新请求。
+  临时移除 `Runtime::pump` 的 `note_room_request` 通知时，修复后的检查会因旧候选被应用而失败。
+  还原通知后检查通过。
+- macOS 的变更 C/C++ 检查通过，包含 clang-format、clang-tidy 和 cppcheck。
+  clang-tidy 仍报告 `room_render_test.cpp` 中 5 项既有告警，涉及非法枚举测试、公开成员和指针声明。
+  FFI 头校验、许可证与 C/C++ 棘轮检查通过，两平台共享库均恰好导出 164 个 `adm_*` 函数。
