@@ -12,7 +12,6 @@ use std::{
 mod adm;
 pub mod api;
 mod checked;
-mod convolution;
 mod ear;
 mod engine;
 mod engine_render;
@@ -20,7 +19,6 @@ mod engine_service;
 mod flac;
 mod hoa;
 mod hptf;
-mod hrtf;
 mod live_vbap;
 mod meter;
 mod monitor;

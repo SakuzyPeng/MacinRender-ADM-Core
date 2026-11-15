@@ -266,9 +266,7 @@ jobs:
         run: |
           call "%VCVARS64%"
           cmake --build build/windows --target mradm_exe mradm_capi_bundle ^
-            mr_adm_flac_io_smoke_tests mr_adm_opus_mka_smoke_tests mr_adm_cli_smoke_tests ^
-            mr_adm_ear_fixture_tests mr_adm_vbap_smoke_tests mr_adm_hoa_encode_fixture_tests ^
-            mr_adm_binaural_fixture_tests mr_adm_loudness_fixture_tests
+            mr_adm_flac_io_smoke_tests mr_adm_opus_mka_smoke_tests mr_adm_cli_smoke_tests
 
       - name: C ABI exports
         shell: pwsh
@@ -285,7 +283,17 @@ jobs:
         run: |
           call "%VCVARS64%"
           ctest --test-dir build/windows --output-on-failure -j %NUMBER_OF_PROCESSORS% ^
-            -R "^(mr_adm_flac_io_smoke_tests|mr_adm_opus_mka_smoke_tests|mr_adm_cli_smoke_tests|mr_adm_ear_fixture_tests|mr_adm_vbap_smoke_tests|mr_adm_hoa_encode_fixture_tests|mr_adm_binaural_fixture_tests|mr_adm_loudness_fixture_tests)$"
+            -R "^(mr_adm_flac_io_smoke_tests|mr_adm_opus_mka_smoke_tests|mr_adm_cli_smoke_tests)$"
+
+      # The renderers are Rust: their whole-render tests (R3 C) run in the optimized profile.
+      - name: Rust render tests
+        shell: cmd
+        working-directory: rust
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/build/rust-release-tests
+        run: |
+          call "%VCVARS64%"
+          cargo test --release --locked -p mradm-engine -p mradm-render
 
       - name: Package
         shell: pwsh

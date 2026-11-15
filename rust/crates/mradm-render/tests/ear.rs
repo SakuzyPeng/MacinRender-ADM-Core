@@ -785,3 +785,66 @@ fn seeks_follow_the_offline_window() {
         );
     }
 }
+
+/// Live gains on the EAR stream (formerly part of the C++ `ear_render_fixture_test`): a whole-
+/// object gain scales every output, a per-label gain only the channel its label drives.
+#[test]
+fn live_gains_scale_the_whole_object_or_one_label() {
+    const FRAMES: u64 = 4096;
+    let tone = sine(FRAMES as usize, 0.25);
+    let stereo: Vec<f32> = tone.iter().flat_map(|&v| [v, 0.5 * v]).collect();
+    let file = input_channels(&stereo, 2);
+    let speaker = |label: &'static str, azimuth| {
+        let mut b = direct_block(0, FRAMES);
+        b.has_position = 1;
+        b.azimuth = azimuth;
+        TrackSpec {
+            direct: vec![(vec![label], b)],
+            ..TrackSpec::default()
+        }
+    };
+    let bed = vec![ObjectSpec {
+        id: "AO_1",
+        gain: 1.,
+        end: u64::MAX,
+        tracks: vec![speaker("M+030", 30.), speaker("M-030", -30.)],
+    }];
+    let p = Case::new("0+5+0").prepare(&scene_channels(bed, FRAMES, 2));
+    let gain = |label: &'static str, gain_db| Override {
+        object_id: b"AO_1",
+        speaker_label: label.as_bytes(),
+        mute: false,
+        gain_db,
+        head_locked: None,
+    };
+    let chunks = [1024];
+    let base = streamed(&p, "0+5+0", &file, FRAMES, 0, &chunks, &[]);
+    let whole = streamed(&p, "0+5+0", &file, FRAMES, 0, &chunks, &[gain("", -20.)]);
+    let left = streamed(
+        &p,
+        "0+5+0",
+        &file,
+        FRAMES,
+        0,
+        &chunks,
+        &[gain("M+030", -40.)],
+    );
+    // After the 20 ms de-zipper and the compensation delay the gains have settled.
+    let settled = 2048..FRAMES as usize;
+    let outputs = p.outputs;
+    let energy = |pcm: &[f32], channel: usize| -> f64 {
+        settled
+            .clone()
+            .map(|f| f64::from(pcm[f * outputs + channel]).powi(2))
+            .sum()
+    };
+    assert!(energy(&base, 0) > 1e-3 && energy(&base, 1) > 1e-3);
+    for f in settled.clone() {
+        for c in 0..outputs {
+            let i = f * outputs + c;
+            assert!((whole[i] - 0.1 * base[i]).abs() <= 1e-6, "{f} {c}");
+        }
+    }
+    assert!(energy(&left, 0) < energy(&base, 0) * 1e-3);
+    assert!((energy(&left, 1) - energy(&base, 1)).abs() <= energy(&base, 1) * 1e-6);
+}

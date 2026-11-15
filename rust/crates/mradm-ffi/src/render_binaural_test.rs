@@ -5,6 +5,7 @@ use crate::render::test_common::{ObjectSpec, TrackSpec, object_block, scene};
 use crate::test_alloc::COUNT;
 use mradm_dsp::dataset::Dataset;
 use mradm_render::binaural::Spread;
+use mradm_render::binaural_hrtf;
 use mradm_render::binaural_render as binaural;
 use mradm_render::binaural_render::Bank;
 

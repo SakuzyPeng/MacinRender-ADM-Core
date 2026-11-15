@@ -1184,8 +1184,10 @@ pub unsafe extern "C" fn mradm_render_live_render(
 #[path = "render_room.rs"]
 pub mod room_ffi;
 
-#[path = "render_binaural.rs"]
-mod binaural_ffi;
+// The binaural file graph's allocation test (the allocation counter lives in this crate).
+#[cfg(test)]
+#[path = "render_binaural_test.rs"]
+mod binaural_allocations;
 
 #[path = "render_stream.rs"]
 mod stream_ffi;

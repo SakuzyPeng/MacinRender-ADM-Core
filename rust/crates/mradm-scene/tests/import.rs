@@ -204,3 +204,95 @@ fn ambiguous_catalog_labels_need_an_elevation_token() {
     assert!(catalog.iter().any(|c| c.token == "U+110@45"));
     assert!(mradm_scene::input::resolve_input_channel_labels(&["U+110".to_owned()]).is_err());
 }
+
+/// The catalog and custom beds (formerly the C++ `adm_io_smoke_test`, R3 C3): the 7.1.4 preset
+/// follows WAVE mask order in both lists, aliases carry their geometry and LFE role, an elevation
+/// token selects the upper layer, a custom float bed becomes one object with a track per channel
+/// (the LFE with only its low-pass marker), a preset must match the channel count, and present but
+/// malformed AXML never falls back to the channel mask.
+#[test]
+fn catalog_aliases_custom_beds_and_malformed_axml() {
+    let layout = mradm_scene::input::input_layouts()
+        .iter()
+        .find(|l| l.id == "7.1.4")
+        .unwrap();
+    assert_eq!(
+        (
+            layout.channels[4].token.as_str(),
+            layout.channels[6].token.as_str()
+        ),
+        ("M+135", "M+090")
+    );
+    assert_eq!(
+        (
+            layout.wave_mask_channels[4].token.as_str(),
+            layout.wave_mask_channels[6].token.as_str()
+        ),
+        ("M+135", "M+090")
+    );
+
+    let catalog = mradm_scene::input::channel_catalog();
+    let resolve = |labels: &[&str]| {
+        let labels: Vec<String> = labels.iter().map(|l| (*l).to_owned()).collect();
+        mradm_scene::input::resolve_input_channel_labels(&labels)
+    };
+    let aliases = resolve(&["L", "R", "C", "LFE"]).unwrap();
+    let (l, r, lfe) = (
+        &catalog[aliases[0]],
+        &catalog[aliases[1]],
+        &catalog[aliases[3]],
+    );
+    assert_eq!((l.speaker_label, l.azimuth), ("M+030", 30.));
+    assert_eq!((r.speaker_label, r.azimuth), ("M-030", -30.));
+    assert!(lfe.is_lfe);
+    let upper = resolve(&["U+110@30", "U-110@45"]).unwrap();
+    assert_eq!(
+        (catalog[upper[0]].elevation, catalog[upper[1]].elevation),
+        (30., 45.)
+    );
+    assert!(
+        resolve(&["L", "", "R"]).is_err(),
+        "an empty custom label is rejected"
+    );
+
+    let bed = wav(4, None, None, None);
+    let labels: Vec<String> = ["L", "R", "C", "LFE"]
+        .iter()
+        .map(|l| (*l).to_owned())
+        .collect();
+    let custom = ImportOptions {
+        input_layout: None,
+        input_channel_labels: &labels,
+    };
+    let scene = import(bed.path(), custom).unwrap();
+    assert_eq!(scene.info.source_kind, SourceKind::ChannelBed);
+    assert_eq!(
+        (scene.info.input_layout.as_str(), scene.info.channels),
+        ("custom", 4)
+    );
+    assert_eq!(
+        (scene.snapshot.objects.len(), scene.snapshot.tracks.len()),
+        (1, 4)
+    );
+    let blocks = &scene.snapshot.direct_blocks;
+    assert_eq!(
+        (
+            blocks[0].has_position,
+            blocks[0].azimuth,
+            blocks[0].elevation
+        ),
+        (1, 30., 0.)
+    );
+    assert_eq!((blocks[3].has_position, blocks[3].low_pass_present), (0, 1));
+    let preset = ImportOptions {
+        input_layout: Some("5.1"),
+        input_channel_labels: &[],
+    };
+    assert!(
+        import(bed.path(), preset).is_err(),
+        "a preset must match the channel count"
+    );
+
+    let malformed = wav(6, Some(0x3F), Some("<"), None);
+    assert!(import(malformed.path(), ImportOptions::default()).is_err());
+}

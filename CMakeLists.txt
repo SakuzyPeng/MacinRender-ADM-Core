@@ -485,14 +485,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/sdk/room
         tests/support/sdk/realtime
     )
-    set(MR_ADM_GENERATED_VERSION_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/version.cpp")
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/tests/support/sdk/core/version.cpp.in"
-        "${MR_ADM_GENERATED_VERSION_CPP}" @ONLY)
-
     add_library(mr_adm_sdk_core STATIC
         tests/support/sdk/core/direct_speakers_matrix.cpp
-        tests/support/sdk/core/screen.cpp
-        "${MR_ADM_GENERATED_VERSION_CPP}")
+        tests/support/sdk/core/screen.cpp)
     target_include_directories(mr_adm_sdk_core PRIVATE src/adm_core)
     target_link_libraries(mr_adm_sdk_core PUBLIC MacinRender::ADMCore MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_sdk_core)
@@ -571,18 +566,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_audio_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_audio_test_support)
 
-    # core_smoke_test exercises RenderService (empty-input validation); link engine.
+    # The audio island's WAVE / CAF metadata and writer wrappers (R3 C4 removed its SDK checks).
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMEngine mr_adm_audio_test_support)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE mr_adm_audio_test_support)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
-
-    add_executable(mr_adm_render_service_tests tests/unit/render_service_test.cpp)
-    target_link_libraries(mr_adm_render_service_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_render_service_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_render_service_tests)
-    add_test(NAME mr_adm_render_service_tests COMMAND mr_adm_render_service_tests)
 
     add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp tests/support/wav_output.cpp)
     target_include_directories(mr_adm_wav_profile_tests PRIVATE tests/support src/adm_audio)
@@ -590,12 +579,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_wav_profile_tests)
     mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
     add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
-
-    add_executable(mr_adm_io_smoke_tests tests/unit/adm_io_smoke_test.cpp)
-    target_link_libraries(mr_adm_io_smoke_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMIo MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_io_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_io_smoke_tests)
-    add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
 
     # Contract test for the stable C ABI. Links only the C ABI target (consumer
     # view); the independent fixture author only uses the standard library.
@@ -675,8 +658,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer):
     # the one preparation entry, the offline driver and the file stream of
     # every Rust backend behind create_*_renderer. Production renders through mradm-engine directly;
-    # the C++ tests and the frozen references drive the backends through these. HrtfState
-    # (tests/support/binaural) is the binaural HRTF view the SOFA tests read.
+    # the remaining C++ tests and manual benchmarks drive the backends through these.
     add_library(mr_adm_engine_renderer_test_support STATIC
         tests/support/engine_renderer/binaural_renderer.cpp
         tests/support/engine_renderer/ear_renderer.cpp
@@ -684,12 +666,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
         tests/support/engine_renderer/room_renderer.cpp
         tests/support/engine_renderer/speaker_pcm.cpp
         tests/support/engine_renderer/triple_balance_renderer.cpp
-        tests/support/engine_renderer/vbap_renderer.cpp
-        tests/support/binaural/hrtf_state.cpp)
+        tests/support/engine_renderer/vbap_renderer.cpp)
     target_include_directories(mr_adm_engine_renderer_test_support PUBLIC
         tests/support/engine_renderer src/adm_render_common)
     target_include_directories(mr_adm_engine_renderer_test_support PRIVATE
-        tests/support/binaural src/adm_render_room src/adm_audio src/adm_metadata)
+        src/adm_render_room src/adm_audio src/adm_metadata)
     target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC mr_adm_scene_test_support mr_adm_sdk_render_common MacinRender::ADMRenderCommon
         MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp)
     target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE
@@ -751,16 +732,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_callback_alloc_tests)
     add_test(NAME mr_adm_scene_callback_alloc_tests COMMAND mr_adm_scene_callback_alloc_tests)
     set_tests_properties(mr_adm_scene_callback_alloc_tests PROPERTIES TIMEOUT 60)
-
-    # Test-only copy of the C++ HRTF state from before the Rust binaural backend, for the frozen live binaural
-    # reference and the HRTF interpolation tests; production prepares it in Rust.
-    add_library(mr_adm_binaural_test_support STATIC tests/support/binaural/legacy_state.cpp)
-    target_include_directories(mr_adm_binaural_test_support PUBLIC tests/support/binaural)
-    target_link_libraries(mr_adm_binaural_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMDsp
-        PRIVATE fmt::fmt)
-    target_compile_definitions(mr_adm_binaural_test_support PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
-    mr_adm_core_apply_warnings(mr_adm_binaural_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_binaural_test_support)
 
     # One Scene stream renderer behind the C++ interface, outside the Rust stream engine:
     # the live renderer tests, the frozen references and the manual benchmarks.
@@ -884,10 +855,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
                 --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
         add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
-        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
-            MacinRender::ADMCAPI MacinRender::ADMRenderCommon MacinRender::ADMIo nlohmann_json::nlohmann_json
-            mr_adm_live_scene_test_support mr_adm_engine_renderer_test_support)
-        target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room tests/support)
+        # The room Scene stream through the C ABI only (R3 C2); the file and switch checks are Rust.
+        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMCAPI nlohmann_json::nlohmann_json)
         mr_adm_core_apply_warnings(mr_adm_room_tests)
         add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
@@ -990,25 +959,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/quality_scripts_test.py")
     endif()
 
-    add_executable(mr_adm_io_fixture_tests tests/unit/adm_io_fixture_test.cpp)
-    target_link_libraries(mr_adm_io_fixture_tests
-        PRIVATE mr_adm_scene_test_support
-            MacinRender::ADMIo
-    )
-    mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_io_fixture_tests)
-    add_test(NAME mr_adm_io_fixture_tests COMMAND mr_adm_io_fixture_tests)
-
-    add_executable(mr_adm_scene_export_tests tests/unit/scene_export_fixture_test.cpp)
-    target_link_libraries(mr_adm_scene_export_tests
-        PRIVATE mr_adm_scene_test_support
-            MacinRender::ADMEngine
-            MacinRender::ADMIo
-    )
-    mr_adm_core_apply_warnings(mr_adm_scene_export_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
-    add_test(NAME mr_adm_scene_export_tests COMMAND mr_adm_scene_export_tests)
-
     # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
     # The C++ MonitorEngine shell over the Rust monitor (not in production):
@@ -1033,20 +983,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_realtime_tests)
     mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
     add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)
-
-    add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
-    target_link_libraries(mr_adm_vbap_smoke_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
-    target_include_directories(mr_adm_vbap_smoke_tests PRIVATE src/adm_io)
-    mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
-    add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
 
     add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_scene_benchmark.cpp)
@@ -1092,15 +1028,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
-    add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
-    target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
-        mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp
-        MacinRender::ADMIo)
-    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE tests/support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)
-    add_test(NAME mr_adm_triple_balance_stream_tests COMMAND mr_adm_triple_balance_stream_tests)
-
     add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
     target_link_libraries(mr_adm_hptf_parameters_tests
         PRIVATE MacinRender::ADMCAPI MacinRender::ADMEngine MacinRender::ADMRealtime
@@ -1114,6 +1041,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/hptf_stereo_test.py"
                     "$<TARGET_FILE:mradm_capi_bundle>")
         set_tests_properties(mr_adm_hptf_stereo_c_api_tests PROPERTIES TIMEOUT 60)
+        if(APPLE)
+            add_test(NAME mr_adm_apple_render_trim_tests
+                COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/apple_render_trim_test.py"
+                        "$<TARGET_FILE:mradm_capi_bundle>")
+            set_tests_properties(mr_adm_apple_render_trim_tests PROPERTIES TIMEOUT 60)
+        endif()
     endif()
 
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
@@ -1133,19 +1066,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
 
-    # Smoke test: non-existent file → io_error via full engine stack.
-    add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)
-    target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine mr_adm_engine_renderer_test_support)
-    mr_adm_core_apply_warnings(mr_adm_ear_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_ear_smoke_tests)
-    add_test(NAME mr_adm_ear_smoke_tests COMMAND mr_adm_ear_smoke_tests)
-
-    add_executable(mr_adm_channel_bed_render_tests tests/unit/channel_bed_render_test.cpp)
-    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMAudio MacinRender::ADMIo)
-    mr_adm_core_apply_warnings(mr_adm_channel_bed_render_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_channel_bed_render_tests)
-    add_test(NAME mr_adm_channel_bed_render_tests COMMAND mr_adm_channel_bed_render_tests)
-
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
     target_link_libraries(mr_adm_lfe_routing_tests
         PRIVATE mr_adm_scene_test_support
@@ -1160,77 +1080,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
     mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
     add_test(NAME mr_adm_lfe_routing_tests COMMAND mr_adm_lfe_routing_tests)
-
-    # Fixture test: build a real BW64/ADM Objects file, render it, verify output.
-    add_executable(mr_adm_ear_fixture_tests tests/unit/ear_render_fixture_test.cpp)
-    target_link_libraries(mr_adm_ear_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
-    target_include_directories(mr_adm_ear_fixture_tests PRIVATE src/adm_io)
-    mr_adm_core_apply_warnings(mr_adm_ear_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
-    add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)
-
-    # Fixture test: True Peak limiting — renders a near-full-scale Objects file and
-    # verifies the limiter brings output below the target dBTP.
-    add_executable(mr_adm_peak_fixture_tests tests/unit/peak_limiter_fixture_test.cpp)
-    target_link_libraries(mr_adm_peak_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-    )
-    mr_adm_core_apply_warnings(mr_adm_peak_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_peak_fixture_tests)
-    add_test(NAME mr_adm_peak_fixture_tests COMMAND mr_adm_peak_fixture_tests)
-
-    add_executable(mr_adm_hoa_encode_fixture_tests tests/unit/hoa_encode_fixture_test.cpp)
-    target_link_libraries(mr_adm_hoa_encode_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
-    target_include_directories(mr_adm_hoa_encode_fixture_tests PRIVATE src/adm_io)
-    mr_adm_core_apply_warnings(mr_adm_hoa_encode_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
-    add_test(NAME mr_adm_hoa_encode_fixture_tests COMMAND mr_adm_hoa_encode_fixture_tests)
-
-    # Fixture test: HOA ADM (typeDefinition=HOA) → loudspeaker decode via EAR.
-    add_executable(mr_adm_hoa_decode_fixture_tests tests/unit/hoa_decode_fixture_test.cpp)
-    target_link_libraries(mr_adm_hoa_decode_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-    )
-    mr_adm_core_apply_warnings(mr_adm_hoa_decode_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hoa_decode_fixture_tests)
-    add_test(NAME mr_adm_hoa_decode_fixture_tests COMMAND mr_adm_hoa_decode_fixture_tests)
-
-    # Fixture test: Rust KEMAR HRTF binaural renderer timing and fixed stereo output layout.
-    # The interpolation invariant probe is test support over the legacy HRTF state.
-    add_executable(mr_adm_binaural_fixture_tests
-        tests/unit/binaural_render_fixture_test.cpp
-        tests/support/binaural/binaural_test_probe.cpp)
-    target_link_libraries(mr_adm_binaural_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            mr_adm_engine_renderer_test_support
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-            mr_adm_binaural_test_support)
-    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_io")
-    mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
-    add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
 
     set(_mr_rust_test_features --no-default-features)
     if(MR_ADM_ENABLE_SOFA)
@@ -1270,17 +1119,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
 
-    # Fixture test: integrated loudness normalization — RenderService renders a loud sine → -23 LUFS.
-    add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)
-    target_link_libraries(mr_adm_loudness_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-    )
-    mr_adm_core_apply_warnings(mr_adm_loudness_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_loudness_fixture_tests)
-    add_test(NAME mr_adm_loudness_fixture_tests COMMAND mr_adm_loudness_fixture_tests)
 
     # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
     # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
@@ -1307,28 +1145,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_trim_file_smoke_tests)
     add_test(NAME mr_adm_trim_file_smoke_tests COMMAND mr_adm_trim_file_smoke_tests)
 
-    # End-to-end output trim: --start/--end map to rendered frame ranges.
-    add_executable(mr_adm_render_trim_fixture_tests tests/unit/render_trim_fixture_test.cpp)
-    target_link_libraries(mr_adm_render_trim_fixture_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-    )
-    mr_adm_core_apply_warnings(mr_adm_render_trim_fixture_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_render_trim_fixture_tests)
-    add_test(NAME mr_adm_render_trim_fixture_tests COMMAND mr_adm_render_trim_fixture_tests)
 
-    # Final PCM after loudness / peak gain staging, re-measured.
-    add_executable(mr_adm_normalization_acceptance_tests tests/unit/normalization_acceptance_test.cpp)
-    target_link_libraries(mr_adm_normalization_acceptance_tests
-        PRIVATE
-            MacinRender::ADMEngine
-            MacinRender::ADMAudio
-            MacinRender::ADMDsp
-    )
-    mr_adm_core_apply_warnings(mr_adm_normalization_acceptance_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_normalization_acceptance_tests)
-    add_test(NAME mr_adm_normalization_acceptance_tests COMMAND mr_adm_normalization_acceptance_tests)
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)

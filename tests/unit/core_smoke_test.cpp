@@ -15,9 +15,6 @@
 #endif
 
 #include "adm/audio_io.h"
-#include "adm/render.h"
-#include "adm/render_service.h"
-#include "adm/version.h"
 
 #include "audio_reader.h"
 
@@ -707,22 +704,6 @@ int main() {
         std::cerr << (ok ? "PASS: " : "FAIL: ") << name << "\n";
         return ok;
     };
-
-    if (mradm::version().empty()) {
-        std::cerr << "version should not be empty\n";
-        return EXIT_FAILURE;
-    }
-
-    mradm::RenderService service;
-    mradm::RenderRequest request;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-
-    mradm::RenderResult result = service.render(request, progress, logs);
-    if (result.error.code != mradm::ErrorCode::invalid_argument) {
-        std::cerr << "empty input should return invalid_argument\n";
-        return EXIT_FAILURE;
-    }
 
     if (!run_check("verify_caf_writer", verify_caf_writer)) {
         return EXIT_FAILURE;

@@ -507,3 +507,32 @@ fn seeks_follow_the_offline_window() {
         &gain_override(b"AO_1"),
     );
 }
+
+/// A live per-object gain scales the stream by its linear factor (formerly part of the C++
+/// `vbap_smoke_test`): after the gain ramp, -20 dB leaves a tenth of every output sample.
+#[test]
+fn a_live_gain_override_scales_the_stream() {
+    const FRAMES: u64 = 4096;
+    let file = input(&sine(FRAMES as usize, 0.5));
+    let layout = "0+5+0";
+    let outputs = speakers(layout).len();
+    let track = TrackSpec {
+        blocks: vec![object_block(0, FRAMES, 20.)],
+        ..TrackSpec::default()
+    };
+    let p = Case::new(layout).prepare(&scene(single("AO_1", 1.0, track), FRAMES));
+    let mut quieter = gain_override(b"AO_1");
+    quieter[0].gain_db = -20.;
+    let base = streamed(&p, &file, outputs, FRAMES, 0, &[1024], &[]);
+    let over = streamed(&p, &file, outputs, FRAMES, 0, &[1024], &quieter);
+    let settled = 2048 * outputs..base.len();
+    assert!(base[settled.clone()].iter().any(|v| v.abs() > 1e-3));
+    for i in settled {
+        assert!(
+            (over[i] - 0.1 * base[i]).abs() <= 1e-6,
+            "sample {i}: {} {}",
+            over[i],
+            base[i]
+        );
+    }
+}

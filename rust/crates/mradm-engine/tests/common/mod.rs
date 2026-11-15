@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 pub mod backend;
 pub mod monitor;
+pub mod render;
 use mradm_json::Value;
 use mradm_wav::{Chna, ChnaEntry, Format, SampleFormat, Writer, WriterOptions};
 use std::fs::File;
