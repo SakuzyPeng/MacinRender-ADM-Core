@@ -819,6 +819,17 @@ D Monitor、HpTF 文本与 OSC（`fd76097`、`e2a7658`）；E `mradm-ffi` 只经
 按用户的排序决定，只供 C++ 测试的 `extern "C"` 入口留到 R3 删除，上文 R2 一项的「测试专用导出删除」随之移到 R3。
 见 [R2 记录](RUST_BOUNDARY_DIRECT.md)。下一步 R3。
 
+**R3 状态**：进行中。用户决定（2026-11-15）：
+- 依赖 C++ 岛的测试暂留 C++，但去掉 SDK，6.6 之后再移植；
+- 一致性门禁用的 C++ 工具移植为 Rust 并逐字节对照；
+- 依赖 SDK 的手动探针移植为 Rust example；
+- C ABI 对照工具（`mr_adm_capi_capture`、`capi-capture.py`、`cli-transcript.py`）保留到 6.6 验收后，6.7 删除，
+  上文 R3 一项的「新旧对照工具删除」随之改到 6.7。
+
+A 已完成：新 crate `mradm-testkit`（ADM / WAVE fixture 编写器与 12 种矩阵 fixture）。`mr_adm_make_fixture`、`mr_adm_pcm_bits`、
+`mr_adm_fft_benchmark`、`mr_adm_repeat_render` 改为 Rust example（目标名不变），向量长度测试并入 `mradm-dsp`；与 C++ 版逐字节相同。
+测试 C/C++ 57,767 → 56,619 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

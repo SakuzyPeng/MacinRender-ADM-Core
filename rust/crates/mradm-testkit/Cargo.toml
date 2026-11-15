@@ -1,0 +1,15 @@
+[package]
+name = "mradm-testkit"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Test-only ADM BWF fixtures and the consistency tools (fixture generator, PCM bit images, FFT benchmark)"
+
+[dependencies]
+
+[dev-dependencies]
+mradm-dsp = { path = "../mradm-dsp", default-features = false }
+mradm-json = { path = "../mradm-json" }
+mradm-wav = { path = "../mradm-wav" }
