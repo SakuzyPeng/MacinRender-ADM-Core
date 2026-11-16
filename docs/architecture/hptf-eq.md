@@ -335,10 +335,11 @@ MDR-MV1 values — and adds preamp-only processing, the reset priority over a pe
 auto-trim on narrow, overlapping, off-grid and quantized low-frequency peaks, a 20 Hz Q8 long run, partition
 independence for every section type at six rates, and concurrent publication and applied-state queries.
 
-`mr_adm_realtime_tests` adds the MonitorEngine regression locks: the cascade
-reaches the device feed, an unused HpTF stage is bit-identical to none, LUFS is
-unaffected while peak moves, seeking does not click, paused output is exact
-silence, and the compensation survives a backend switch.
+`mradm-engine`'s `monitor_engine.rs` adds the MonitorEngine regression locks
+(formerly `mr_adm_realtime_tests`, R3 D1): the cascade reaches the device feed
+with its analytic gain, no HpTF is bit-identical to none, LUFS is unaffected
+while peak moves, seeking does not click, paused output is exact silence, and
+the compensation survives a backend switch.
 
 `mr_adm_stereo_peak_guard_tests` pins the Scene insertion point: with a +12 dB
 shelf on hot material every captured sample still satisfies the guard's ceiling,

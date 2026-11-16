@@ -959,10 +959,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/quality_scripts_test.py")
     endif()
 
-    # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
-    # exercised with a deterministic PatternStream (no real backend). Cross-platform.
-    # The C++ MonitorEngine shell over the Rust monitor (not in production):
-    # the realtime tests and the monitor benchmark drive the engine through it.
+    # The C++ MonitorEngine shell over the Rust monitor (not in production): only the manual
+    # monitor benchmark drives the engine through it (the engine's tests are Rust, R3 D1).
     add_library(mr_adm_monitor_engine_test_support STATIC
         tests/support/realtime/monitor_engine.cpp tests/support/realtime/island_stream.cpp)
     target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
@@ -971,18 +969,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         MacinRender::ADMRealtime mr_adm_sdk_render_common MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_engine_renderer_test_support)
     mr_adm_core_apply_warnings(mr_adm_monitor_engine_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_monitor_engine_test_support)
-
-    add_executable(mr_adm_realtime_tests tests/unit/realtime_stream_fixture_test.cpp)
-    # ADMRenderCommon is PRIVATE on mr_adm_realtime, so its PUBLIC include dir does not
-    # propagate; the HpTF tests below use that module's API directly, hence the explicit link.
-    target_link_libraries(
-        mr_adm_realtime_tests
-        PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon Threads::Threads
-        mr_adm_output_dsp_test_support mr_adm_monitor_engine_test_support
-    )
-    mr_adm_core_apply_warnings(mr_adm_realtime_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
-    add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)
 
     add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_scene_benchmark.cpp)
@@ -1119,7 +1105,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
 
-
     # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
     # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
     add_executable(mr_adm_audio_island_tests tests/unit/audio_island_test.cpp)
@@ -1144,8 +1129,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_trim_file_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_trim_file_smoke_tests)
     add_test(NAME mr_adm_trim_file_smoke_tests COMMAND mr_adm_trim_file_smoke_tests)
-
-
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)
