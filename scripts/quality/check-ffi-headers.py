@@ -37,11 +37,8 @@ CAPI_FFI_HEADERS = ["src/adm_cli/cli_ffi.h"]
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [
-    "tests/unit/ear_ffi.h",
     "src/adm_dsp/dsp_ffi.h",
-    "tests/unit/hoa_ffi.h",
     "src/adm_dsp/room_ffi.h",
-    "tests/unit/live_vbap_ffi.h",
     "tests/support/dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
     "src/adm_render_common/layout_ffi.h",

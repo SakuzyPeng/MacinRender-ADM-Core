@@ -282,52 +282,6 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotation_apply(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_pose(
-    src: *const f32,
-    n: usize,
-    dst: *mut f32,
-    m: usize,
-    quaternion: u32,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, dst, m)?;
-        if m != 7 {
-            return Err(invalid());
-        }
-        let q = flag(quaternion)?;
-        let result = math::pose(input(src, n)?, q)?;
-        output(dst, m)?.copy_from_slice(&result);
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_rotate_pose(
-    src: *const f32,
-    n: usize,
-    dst: *mut f32,
-    m: usize,
-    apple: u32,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, dst, m)?;
-        if n != 5 || m != 2 {
-            return Err(invalid());
-        }
-        let contract = apple & 256 != 0;
-        let apple = flag(apple & !256)?;
-        let s = input(src, n)?;
-        if s.iter().any(|x| !x.is_finite()) {
-            return Err(invalid());
-        }
-        let rotation = Rotation::new_compat([s[2], s[3], s[4]], contract)?;
-        let result = rotation.apply(s[0], s[1], apple);
-        output(dst, m)?.copy_from_slice(&result);
-        Ok(())
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,16 +315,6 @@ mod tests {
                 0
             );
             assert_eq!(count, 16);
-            assert_eq!(
-                mradm_dsp_scene_pose(pose.as_ptr(), 3, result.as_mut_ptr(), 7, 0),
-                0
-            );
-            let before = result;
-            assert_eq!(
-                mradm_dsp_scene_pose(pose.as_ptr(), 3, result.as_mut_ptr(), 6, 0),
-                1
-            );
-            assert_eq!(result, before);
             assert_eq!(
                 mradm_dsp_scene_rotation_apply(
                     handle,
