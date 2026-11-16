@@ -20,9 +20,6 @@
 #include <nlohmann/json.hpp>
 
 #include "adm/c_api.h"
-
-#include "head_rotation.h"
-#include "osc_head_tracking_protocol.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -37,8 +34,21 @@
 #endif
 
 namespace {
-using Timing = mradm::HeadTrackingTiming;
-using Kind = mradm::realtime::HeadTrackingMessageKind;
+// The PoseBridge pose timing fields as the sender writes them.
+struct Timing {
+    std::uint32_t protocol_version{0};
+    std::uint32_t sample_time_kind{0};
+    std::uint64_t instance_id{0};
+    std::uint64_t tx_sequence{0};
+    std::uint64_t reference_epoch{0};
+    std::uint64_t metadata_revision{0};
+    std::uint64_t source_age_at_send_ns{0};
+    std::uint64_t source_session_id{0};
+    std::uint64_t source_sequence{0};
+    std::uint64_t source_received_ns{0};
+    std::uint64_t sample_time_ms{0};
+    std::uint64_t sample_clock_epoch{0};
+};
 void require(bool value, std::string_view message) {
     if (!value) {
         throw std::runtime_error(std::string{message});
@@ -145,194 +155,6 @@ std::vector<std::byte> telemetry_text(std::string_view json, bool info) {
 }
 std::vector<std::byte> telemetry(const nlohmann::json& j, bool info) {
     return telemetry_text(j.dump(), info);
-}
-mradm::realtime::HeadTrackingMessage decoded(const std::vector<std::byte>& bytes) {
-    const auto result = mradm::realtime::decode_head_tracking_osc(bytes);
-    if (!result) {
-        throw std::runtime_error("valid message rejected");
-    }
-    return *result;
-}
-// One sequence of shared protocol vectors covers the wire contract.
-// NOLINTNEXTLINE(readability-function-size)
-void parser_contract() {
-    struct Vector {
-        std::array<float, 3> angles;
-        std::array<float, 4> q;
-    };
-    const std::array vectors{Vector{{0, 0, 0}, {0, 0, 0, 1}},
-                             Vector{{90, 0, 0}, {0, 0.707106781F, 0, 0.707106781F}},
-                             Vector{{0, 30, 0}, {0.258819045F, 0, 0, 0.965925826F}},
-                             Vector{{0, 0, 30}, {0, 0, 0.258819045F, 0.965925826F}},
-                             Vector{{30, 20, 10}, {0.189307857F, 0.239298338F, 0.038134576F, 0.951548525F}},
-                             Vector{{179, 0, 0}, {0, 0.999961923F, 0, 0.008726535F}},
-                             Vector{{-179, 0, 0}, {0, -0.999961923F, 0, 0.008726535F}}};
-    for (const auto& v : vectors) {
-        const auto pose = decoded(packet("/posebridge/euler", v.angles)).orientation;
-        for (std::size_t i = 0; i < 4U; ++i) {
-            require(approximately_equal(pose.quaternion_xyzw.at(i), v.q.at(i), 1e-6), "quaternion vector");
-        }
-        for (float scale : {1.0F, -1.0F, 3.0F}) {
-            auto q = v.q;
-            std::ranges::transform(q, q.begin(), [scale](float component) { return component * scale; });
-            const auto result = decoded(packet("/posebridge/quaternion", q)).orientation;
-            for (std::size_t i = 0; i < 3U; ++i) {
-                require(approximately_equal(result.euler_deg.at(i), v.angles.at(i)),
-                        "quaternion sign and normalization");
-            }
-        }
-    }
-    mradm::ListenerOrientation listener;
-    listener.yaw_deg = 90;
-    const auto [az, el] = mradm::render_common::HeadRotation{listener}.rotate_az_el(0, 0);
-    require(approximately_equal(az, -90) && approximately_equal(el, 0), "world-fixed source");
-    auto timing = fixture();
-    timing.instance_id = (1ULL << 55U) + 1U;
-    timing.source_sequence = (1ULL << 54U) + 3U;
-    timing.source_received_ns = (1ULL << 53U) + 5U;
-    timing.sample_time_kind = 1;
-    timing.sample_time_ms = 473398726930ULL;
-    timing.sample_clock_epoch = 1;
-    const auto good = euler(timing);
-    const auto got = decoded(good).timing;
-    require(got.instance_id == timing.instance_id && got.source_sequence == timing.source_sequence &&
-                got.source_received_ns == timing.source_received_ns && got.sample_time_ms == timing.sample_time_ms,
-            "int64 precision");
-    for (std::size_t size = 0; size < good.size(); ++size) {
-        require(!mradm::realtime::decode_head_tracking_osc(std::span{good.data(), size}), "truncated pose");
-    }
-    auto bad = good;
-    bad.push_back(std::byte{0});
-    require(!mradm::realtime::decode_head_tracking_osc(bad), "trailing byte");
-    bad = good;
-    bad[std::strlen("/posebridge/euler")] = std::byte{1};
-    require(!mradm::realtime::decode_head_tracking_osc(bad), "padding");
-    for (float value : {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
-        require(!mradm::realtime::decode_head_tracking_osc(euler(timing, value)), "nonfinite");
-    }
-    require(!mradm::realtime::decode_head_tracking_osc(
-                packet("/posebridge/quaternion", std::array{0.0F, 0.0F, 0.0F, 0.0F})),
-            "zero quaternion");
-    require(!mradm::realtime::decode_head_tracking_osc(euler(timing, 0, "")), "empty identity");
-    require(!mradm::realtime::decode_head_tracking_osc(euler(timing, 0, std::string(257, 'x'))), "long identity");
-    require(!mradm::realtime::valid_source_id(std::string{"\xc0\xaf", 2}), "invalid UTF-8");
-    require(mradm::realtime::valid_source_id("耳机"), "UTF-8 source label");
-    require(!mradm::realtime::valid_source_id("　"), "Unicode-only whitespace source rejected");
-    for (const auto field : {&Timing::instance_id,
-                             &Timing::source_session_id,
-                             &Timing::source_sequence,
-                             &Timing::tx_sequence,
-                             &Timing::reference_epoch,
-                             &Timing::metadata_revision}) {
-        auto invalid = timing;
-        invalid.*field = 0;
-        require(!mradm::realtime::decode_head_tracking_osc(euler(invalid)), "zero key rejected");
-        invalid.*field = std::numeric_limits<std::uint64_t>::max();
-        require(!mradm::realtime::decode_head_tracking_osc(euler(invalid)), "negative int64 rejected");
-    }
-    auto invalid = timing;
-    invalid.sample_time_kind = 0;
-    require(!mradm::realtime::decode_head_tracking_osc(euler(invalid)), "absent clock with nonzero metadata");
-    invalid = timing;
-    invalid.source_age_at_send_ns = 500000000U;
-    require(!mradm::realtime::decode_head_tracking_osc(euler(invalid)), "already expired at send");
-    invalid = timing;
-    invalid.protocol_version = 2;
-    require(decoded(euler(invalid)).kind == Kind::incompatible, "version mismatch reported");
-    require(decoded(packet("/posebridge/v2/euler", std::array{0.0F, 0.0F, 0.0F})).kind == Kind::incompatible,
-            "old address rejected explicitly");
-    for (bool info : {false, true}) {
-        auto j = metadata(timing, 1, info);
-        const auto bytes = telemetry(j, info);
-        require(decoded(bytes).kind == (info ? Kind::info : Kind::status), "telemetry message");
-        j["instance_id"] = timing.instance_id;
-        require(!mradm::realtime::decode_head_tracking_osc(telemetry(j, info)), "JSON identity must be decimal string");
-        j = metadata(timing, 1, info);
-        j[info ? "descriptor" : "status"]["session_id"] = "999";
-        require(!mradm::realtime::decode_head_tracking_osc(telemetry(j, info)), "nested identity mismatch");
-        j = metadata(timing, 1, info);
-        j["extra"] = std::string(8192, 'x');
-        require(!mradm::realtime::decode_head_tracking_osc(telemetry(j, info)), "oversized JSON");
-    }
-}
-void require_same_rotation(const std::array<float, 4>& a, const std::array<float, 4>& b) {
-    double same = 0.0;
-    double opposite = 0.0;
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        const double difference = static_cast<double>(a.at(i)) - b.at(i);
-        const double sum = static_cast<double>(a.at(i)) + b.at(i);
-        same += difference * difference;
-        opposite += sum * sum;
-    }
-    require(std::min(same, opposite) < 1e-11, "Euler output must preserve the input rotation, including at poles");
-}
-void orientation_poles() {
-    const std::array<float, 4> quarter_turn{0.5F, 0.5F, -0.5F, 0.5F};
-    const auto pole = decoded(packet("/posebridge/quaternion", quarter_turn)).orientation;
-    require_same_rotation(quarter_turn,
-                          decoded(packet("/posebridge/euler", pole.euler_deg)).orientation.quaternion_xyzw);
-    for (float pitch : {-90.001F, -90.0F, -89.99999F, -89.9999F, 89.9999F, 89.99999F, 90.0F, 90.001F}) {
-        for (float yaw : {-150.0F, 0.0F, 30.0F, 70.0F, 179.0F}) {
-            for (float roll : {-75.0F, 0.0F, 10.0F, 60.0F}) {
-                const auto source = decoded(packet("/posebridge/euler", std::array{yaw, pitch, roll})).orientation;
-                const auto round_trip = decoded(packet("/posebridge/euler", source.euler_deg)).orientation;
-                require_same_rotation(source.quaternion_xyzw, round_trip.quaternion_xyzw);
-                for (float scale : {1.0F, -1.0F, 3.0F}) {
-                    auto q = source.quaternion_xyzw;
-                    std::ranges::transform(q, q.begin(), [scale](float value) { return value * scale; });
-                    const auto result = decoded(packet("/posebridge/quaternion", q)).orientation;
-                    const auto restored = decoded(packet("/posebridge/euler", result.euler_deg)).orientation;
-                    require_same_rotation(source.quaternion_xyzw, restored.quaternion_xyzw);
-                }
-            }
-        }
-    }
-}
-void ordering_contract() {
-    mradm::realtime::OscSourceOrder order;
-    auto t = fixture();
-    t.sample_time_kind = 1;
-    t.sample_time_ms = 100;
-    t.sample_clock_epoch = 1;
-    require(order.accept(t) && !order.accept(t), "duplicate pose");
-    advance(t);
-    t.tx_sequence += 2;
-    require(order.accept(t) && order.last_gap() == 2U, "tx gaps independent of sample gaps");
-    auto bad = t;
-    advance(bad);
-    bad.source_received_ns = 0;
-    require(!order.accept(bad), "host time reversal");
-    bad = t;
-    advance(bad);
-    bad.sample_time_ms = t.sample_time_ms;
-    require(!order.accept(bad), "repeated device timestamp");
-    ++bad.sample_clock_epoch;
-    bad.sample_time_ms = 0;
-    require(order.accept(bad), "explicit clock reset");
-    t = bad;
-    auto absent = t;
-    advance(absent);
-    absent.sample_time_kind = 0;
-    absent.sample_time_ms = 0;
-    absent.sample_clock_epoch = 0;
-    require(order.accept(absent), "absent timestamp");
-    advance(bad);
-    ++bad.tx_sequence;
-    ++bad.source_sequence;
-    bad.sample_clock_epoch = 1;
-    require(!order.accept(bad), "absence does not erase clock history");
-    t = absent;
-    advance(t);
-    ++t.source_session_id;
-    t.source_sequence = 1;
-    t.source_received_ns = 0;
-    require(!order.accept(t), "new device session requires metadata/reference advance");
-    ++t.metadata_revision;
-    ++t.reference_epoch;
-    require(order.accept(t), "reconnect");
-    auto next = fixture();
-    ++next.instance_id;
-    require(order.accept(next) && !order.accept(t), "old instance retired");
 }
 using Receiver = std::unique_ptr<adm_osc_head_tracking_t, decltype(&adm_destroy_osc_head_tracking)>;
 Receiver create(std::uint32_t port, const char* source = nullptr) {
@@ -677,9 +499,6 @@ void invalid_arguments() {
 } // namespace
 int main() {
     try {
-        parser_contract();
-        orientation_poles();
-        ordering_contract();
         invalid_arguments();
         telemetry_number_boundaries();
         telemetry_instance_ordering();

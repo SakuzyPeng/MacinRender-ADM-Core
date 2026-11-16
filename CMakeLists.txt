@@ -602,18 +602,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
 
-    # The PoseBridge decoder and source ordering as C++ values (tests/support/osc): the protocol
-    # tests check them directly; production decodes in the Rust receiver.
-    add_library(mr_adm_osc_protocol_test_support STATIC tests/support/osc/osc_head_tracking_protocol.cpp)
-    target_include_directories(mr_adm_osc_protocol_test_support PUBLIC tests/support/osc)
-    target_link_libraries(mr_adm_osc_protocol_test_support PUBLIC MacinRender::ADMRealtime MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_osc_protocol_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_osc_protocol_test_support)
-
     add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
-    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI MacinRender::ADMRealtime
-        mr_adm_osc_protocol_test_support)
-    target_include_directories(mr_adm_osc_head_tracking_tests PRIVATE src/adm_render_common tests/support)
+    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI)
     target_include_directories(mr_adm_osc_head_tracking_tests SYSTEM PRIVATE
         "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
     )
