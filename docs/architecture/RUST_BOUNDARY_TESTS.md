@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D–G 待做。
+> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），原生复核待维护者；E–G 待做。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -303,3 +303,85 @@ C4 之后的结果如下。
 - macOS 的变更 C/C++ 检查通过，包含 clang-format、clang-tidy 和 cppcheck。
   clang-tidy 仍报告 `room_render_test.cpp` 中 5 项既有告警，涉及非法枚举测试、公开成员和指针声明。
   FFI 头校验、许可证与 C/C++ 棘轮检查通过，两平台共享库均恰好导出 164 个 `adm_*` 函数。
+
+## D 实时测试
+
+D 处理经 C++ 外壳测实时链路的 6 个测试：
+- `tests/support/realtime/monitor_engine` 之上的 Monitor；
+- `tests/support/scene_stream` 之上的 Scene 输出；
+- `tests/support/osc` 之上的 OSC 协议。
+
+检查改为直接驱动 Rust 的 `mradm_engine::monitor::Monitor`、`mradm_engine::scene::output::Session` 与 `mradm-osc`。
+测试设备只拉取环中已有的帧，与 C++ 的 `ManualSink` 相同。分四个子批提交：D1 Monitor、D2 Scene 输出、D3 OSC、D4 收尾。
+
+| C++ 测试 | 去向 |
+|---|---|
+| realtime_stream_fixture_test | 移植为 `mradm-engine` `monitor_engine.rs` 的 18 项（经测试设备只拉取环中已有的帧，同 C++ `ManualSink`）：整次回调的电平含 EOS 填充、零帧拉取清空电平而不消耗媒体（实时与非实时）、暂停为精确静音（有无 HpTF）、seek 从最后输出帧桥接且步进 < 0.05、480 帧后落在目标时间线、暂停 seek 后静音拉取不推进播放头、恢复时淡入从静音开始、暂停中快速 seek 再 play 等待目标并只 flush / resume 一次、干净 EOS 之后的静音不计欠载、增益编辑整体校验（800 dB、±inf、NaN、后一项非法时整份拒绝、静音时允许溢出、下溢为合法增益）并到达输出、切换后保持编辑、2048 帧交叉淡化的逐帧权重、被第二次切换或 seek 打断的交叉淡化、交叉淡化中提前结束的短流、停止时不再开始 loop 预滚、长预滚不阻塞控制且被 seek 与停止取消、预热成功后交叉淡化接入、输出级 loop 分别回绕源与播放、LUFS 播放前静音 / 读出正弦 / 暂停 seek 清空并重新积分、HpTF 输出符合解析幅度且切换后仍生效、无 HpTF 时逐位相同、LUFS 取 EQ 前而峰值取 EQ 后、HpTF 跨 seek 无爆音；输出环的单生产者单消费者无丢失无重复 → `mradm-engine` `ring.rs` 单元测试；播放、loop、畸形流、失败日志、实时编辑 revision、带预热的切换与失败预热已由原有 10 项覆盖；ring buffer、PatternStream、capture sink、stream factory 与 downmix 测的是测试支持本身，随 `ring_buffer.h` / `downmix_stream.h` 删除；miniaudio null 设备由 `scene_output_c_api_test` 经 C ABI（`ADM_SCENE_OUTPUT_NULL`）覆盖 |
+| stereo_peak_guard_test | 峰值保护内核的透明、音量、静音、分块无关、EOS 与 reset、非有限输入已由 `mradm-dsp` `output_dsp.rs` 覆盖；移植增益平滑（相邻帧步进 < 0.001）、在 5 ms lookahead 内提前压低、之前的材料不变 → `output_dsp.rs` `peak_guard_gain_is_smooth_and_anticipates_the_overload`；Scene 输出移植为 `mradm-engine` `scene_output.rs` 6 项：保护后的媒体长度与呈现时钟、暂停保留 lookahead 不消耗媒体、新 epoch 不带旧 lookahead（加一个在仍有响亮 lookahead 时中断的 epoch，原测试的两个 epoch 都排空到结尾，测不到这一点）、无保护输出对超满幅 PCM 精确缩放音量、epoch 重置按快照应用 HpTF 元数据与挂起的 bypass、设备输出与拉取分块无关且被替换的排队目标从不生效、欠载不改变媒体，以及并发创建与销毁空闲流；HpTF 在上限之内与非立体声不支持 HpTF 已由原有测试覆盖；外部真实 PCM（`MR_ADM_TEST_STEREO_PCM`）一项不移植 |
+| scene_callback_alloc_test | 移植为 `mradm-engine` `scene_pull_allocations.rs` `session_pulls_through_hptf_volume_and_underruns_do_not_allocate`：双耳与 44.1 → 48 kHz 重采样立体声（HpTF 淡化中再排一个目标、音量）及无保护 4+7+0（音量），每次拉取包括欠载与恢复后都不分配；C++ 分配计数器自检只针对 C++ `operator new`，随测试删除 |
+| hptf_parameters_test | **缩为只经 C ABI**（E 批再移植）：解析缓冲区、未来布局与校验、快照所有权与快速更新、文件接口的错误所有权；解析结果改与按原文写出的期望比较，不再经 C++ 解析器；准备好的 HpTF 不等输出控制锁 → `mradm-ffi` `engine_scene_output.rs` 单元测试（设备的 progress 阻塞时发布仍完成，epoch 重置采用共享或独立目标）；文本文件与内存参数等价 → `mradm-ffi` `hptf/settings.rs` 单元测试（两者设计出相同目标） |
+| live_scene_trace_test | 测的是只供手动基准的 C++ trace 写出器（`live_scene_trace.cpp`，G 批随基准删除）；Rust 检查点的状态行布局（12 个 f32、15 个 i32、保留负零、64 位元素 ID 先低后高）→ `mradm-engine` `scene/stream/trace.rs` 单元测试（编码从写出中分出，行为不变）；检查点键由 `scene_tail_trace.rs` 与完整采集的检查点对照覆盖 |
+| osc_head_tracking_test | **缩为只经 C ABI**（E 批再移植）：遥测数值边界与实例排序、状态引用变化、回环 UDP 接收器契约、自动绑定与无效参数，测试内自带姿态时间字段，不再经 SDK 的 `HeadTrackingTiming`；解析与排序原先经测试支持的 C++ shim（`osc_head_tracking_protocol`）调用 `mradm-osc`，截断、尾字节、padding、非有限、零四元数、身份长度与 UTF-8、版本与旧地址、遥测身份必须是十进制字符串已由 `mradm-osc` `src/tests.rs` 与 `decode_golden.rs` 覆盖；移植四元数向量表及其缩放与取反、2^53 以上的 int64 精度、六个键的零与负值、遥测嵌套会话不符与超大 JSON、极点附近 Euler 输出保持旋转、来源排序的完整序列（重复、传输间隔、主机时间倒退、设备时间重复、显式时钟重置、缺席时间戳不抹去时钟历史、新设备会话需要元数据与参考推进、重连、旧实例退役）→ `src/tests.rs` 5 项；听者朝向使世界固定声源反向旋转已由 `mradm-dsp` `scene_math.rs` 覆盖 |
+| （B / C 遗留）`tests/unit/{ear,hoa,live_vbap}.h` 与 `_ffi.h`、`sdk/dsp/pcm_mix.h` | 没有任何 include（前三者自 B 起，`pcm_mix.h` 随 D1 删除 `downmix_stream.h`），对应的 `mradm-ffi` 模块 `ear`（7）、`hoa`（12）、`live_vbap`（5）、`pcm_mix`（12）只剩这些头调用，连同原定留到 G 的 `scene_pose` / `scene_rotate_pose`（2）一并删除；内核由 `mradm-ear`、`mradm-dsp` 的 `hoa.rs`、`live_vbap.rs`、`pcm_mix.rs`、`scene_math.rs` 与 `realtime_allocations.rs` 覆盖，只测边界（空指针、别名、首次调用分配）的单元测试随边界删除 |
+
+**新增的 Rust 测试**：
+- `mradm-engine`：`monitor_engine.rs` 18 项，`ring.rs` 1 项，`scene_output.rs` 6 项，`scene_pull_allocations.rs` 1 项，
+  `scene/stream/trace.rs` 1 项。
+- `mradm-dsp`：`output_dsp.rs` 1 项。
+- `mradm-osc`：`src/tests.rs` 5 项。
+- `mradm-ffi`：`engine_scene_output.rs` 与 `hptf/settings.rs` 各 1 项，另有两个只在 `cfg(test)` 中的构造（`DeviceTable::progress_only`、
+  `Settings::for_test`）。
+
+`scene/stream/trace.rs` 把状态行的编码从写出中分出，便于不开诊断构建也能测，写出的字节不变。除此之外生产代码不变。
+
+**故障注入**（每项改动后恢复）。D 按 C 批之后的做法，为最容易「测不到」的移植项各做一次。
+- 能检出的故障：
+  - D1：交叉淡化改为 2047 帧、loop 预滚前不检查停止、seek 不清 LUFS、seek 不重置响度积分、回调中不做 HpTF、播放端不重置 loop、
+    不延后设备 flush；
+  - D2：新 epoch 不重置保护或 HpTF、拉取中分配、HpTF 发布取控制锁、HpTF 移到保护之后；
+  - D3：metadata revision 允许为零、主机时间允许倒退、新设备会话不需推进、缺席时间戳抹去时钟历史。
+- 有两项最初测不到，都是照搬 C++ 断言造成的：
+  - 「seek 不重置响度积分」：C++ 测试 seek 后重放同一音调，积分值本来就一样。现在 seek 后降低 20 dB 重放。
+  - 「新 epoch 不重置保护」：C++ 的两个 epoch 都排空到结尾，没有 lookahead 可泄漏。现在加一个在仍有响亮 lookahead 时中断的 epoch。
+
+**保留的 C++**（只经 C ABI，归 E）：`hptf_parameters_test`、`osc_head_tracking_test`。
+
+**随批删除的测试支持**：
+- `dsp/ring_buffer.h`、`realtime/downmix_stream.h`、`sdk/dsp/pcm_mix.h`；
+- `dsp/stereo_peak_guard.*`、`dsp/hptf_cascade.*` 及库 `mr_adm_output_dsp_test_support`；
+- `tests/support/osc/` 及库 `mr_adm_osc_protocol_test_support`、`head_rotation.h`；
+- 无人 include 的 `tests/unit/{ear,hoa,live_vbap}.h` 与 `_ffi.h`。
+
+`monitor_engine`、`island_stream`、`render_stream_factory`、`room_worker_wait`、`scene_stream`、`live_scene`（含 trace 写出器）与
+`sdk/realtime/osc_*` 仍被 G 的手动基准与探针使用，留到那时。
+
+**`mradm-ffi` 入口**：291 → 234，共删除 57 个：
+- D2：峰值保护 6、HpTF cascade 6、HpTF 设计与幅度 2、`gain_scale` 1；
+- D3：OSC 解析、来源 ID 校验与来源排序 4；
+- D4：模块 `ear` 7、`hoa` 12、`live_vbap` 5、`pcm_mix` 12，以及 `scene_pose` / `scene_rotate_pose` 2。
+
+`check-ffi-headers.py` 去掉三个删除的头。B 记录中留到 G 的无调用者入口已全部删除。
+
+**文档**：`hptf-eq.md` 改为指向 Rust 测试。
+
+### D 的验证
+
+- **Rust**：新增与改动的测试全部通过，`monitor_engine.rs` 连跑 8 次稳定；workspace fmt 与 clippy `-D warnings` 通过。
+- **C++ 侧**：debug 构建通过，ctest 33 项全部通过（D 之前为 37 项）。
+  - FFI 头校验通过：234 个函数、122 个结构体；
+  - `quality_scripts_test.py`、许可证检查与 C/C++ 棘轮通过；
+  - 两个缩减后的 C++ 测试通过 clang-format 与 clang-tidy。
+  - D1 的一次 ctest 中 `mr_adm_boundary_tool_tests` 失败：两次 CLI 记录之间工作树有改动，导致 source 不同。
+    单独重跑通过，此后没有再出现。
+- **对照参照构建 `b89687c`**（方法同 A，候选为 D4 之后的 `consistency-a`）：
+  - C ABI 采集：3,283 行、36 个文件，0 差异；
+  - CLI 记录：113 条命令，0 差异；
+  - C 消费者测试 2 项通过；
+  - 共享库恰好导出 164 个 `adm_*`；
+  - 完整 PCM 采集与参照完全相同：294 个输出、220 个 fixture、989 项比较、176 个重放、256 个产物、666 份日志。
+
+**规模**：测试 C/C++ 由 36,402 行降到 31,322 行：
+- `tests/unit` 20,339 → 16,252；
+- `tests/support` 12,203 → 11,210。
+
+`mradm-ffi` 由 22,366 行降到 19,893 行。生产 C/C++ 不变（9,432 行）。

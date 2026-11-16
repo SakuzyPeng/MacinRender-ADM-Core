@@ -18,12 +18,12 @@
       "lines": 1057
     },
     "tests": {
-      "files": 146,
-      "lines": 36402
+      "files": 126,
+      "lines": 31322
     },
     "rust": {
-      "files": 366,
-      "lines": 142032
+      "files": 362,
+      "lines": 141361
     },
     "rust-vendor": {
       "files": 175,
@@ -34,13 +34,13 @@
     "include/adm": 2009,
     "rust/crates/mradm-capi": 8655,
     "rust/crates/mradm-cli": 2822,
-    "rust/crates/mradm-dsp": 42420,
+    "rust/crates/mradm-dsp": 42448,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 25058,
-    "rust/crates/mradm-ffi": 22366,
+    "rust/crates/mradm-engine": 26600,
+    "rust/crates/mradm-ffi": 19893,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
-    "rust/crates/mradm-osc": 2385,
+    "rust/crates/mradm-osc": 2617,
     "rust/crates/mradm-render": 22856,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5815,
@@ -76,9 +76,9 @@
     "src/adm_render_room/cuda": 512,
     "src/adm_windows": 709,
     "tests/manual": 2425,
-    "tests/support": 12203,
+    "tests/support": 11210,
     "tests/tools": 1435,
-    "tests/unit": 20339
+    "tests/unit": 16252
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,

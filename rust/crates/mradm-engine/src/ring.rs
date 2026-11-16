@@ -97,4 +97,41 @@ mod tests {
         ring.clear();
         assert_eq!(ring.available_read(), 0);
     }
+
+    /// One producer and one consumer thread: every value arrives once, in order (formerly the
+    /// C++ SPSC test of the test-only ring, R3 D1).
+    #[test]
+    fn a_producer_and_a_consumer_thread_lose_and_duplicate_nothing() {
+        const TOTAL: usize = 200_000;
+        let ring = std::sync::Arc::new(Ring::new(256));
+        let producer = {
+            let ring = ring.clone();
+            std::thread::spawn(move || {
+                let mut next = 0usize;
+                while next < TOTAL {
+                    let block: Vec<f32> =
+                        (next..(next + 37).min(TOTAL)).map(|v| v as f32).collect();
+                    let pushed = ring.push(&block);
+                    next += pushed;
+                    if pushed == 0 {
+                        std::thread::yield_now();
+                    }
+                }
+            })
+        };
+        let mut expected = 0usize;
+        let mut out = [0f32; 53];
+        while expected < TOTAL {
+            let got = ring.pop(&mut out);
+            for &v in &out[..got] {
+                assert_eq!(v, expected as f32, "value {expected}");
+                expected += 1;
+            }
+            if got == 0 {
+                std::thread::yield_now();
+            }
+        }
+        producer.join().unwrap();
+        assert_eq!(ring.available_read(), 0);
+    }
 }

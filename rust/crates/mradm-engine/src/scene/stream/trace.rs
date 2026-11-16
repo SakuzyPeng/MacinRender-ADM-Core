@@ -50,6 +50,15 @@ pub(super) fn states(stage: &str, initial: &[live::Entry], updates: &[MetaUpdate
     if !ENABLED {
         return;
     }
+    let (values, fields) = encode(initial, updates);
+    if !values.is_empty() {
+        let _ = diagnostics::process(&format!("{stage}.f32"), Words::F32(&values));
+        let _ = diagnostics::process(&format!("{stage}-fields.i32"), Words::I32(&fields));
+    }
+}
+
+/// The two word streams of [`states`].
+fn encode(initial: &[live::Entry], updates: &[MetaUpdate]) -> (Vec<f32>, Vec<i32>) {
     let mut values = Vec::new();
     let mut fields = Vec::new();
     for entry in initial {
@@ -81,13 +90,32 @@ pub(super) fn states(stage: &str, initial: &[live::Entry], updates: &[MetaUpdate
         ]);
         append_state(&mut values, &mut fields, &u.state);
     }
-    if !values.is_empty() {
-        let _ = diagnostics::process(&format!("{stage}.f32"), Words::F32(&values));
-        let _ = diagnostics::process(&format!("{stage}-fields.i32"), Words::I32(&fields));
-    }
+    (values, fields)
 }
 
 /// The prefix of every checkpoint of one rendered slice.
 pub(super) fn slice_key(epoch: u64, generation: u64, start: i64) -> String {
     format!("scene/e{epoch}-g{generation}-s{start}")
+}
+
+#[cfg(test)]
+mod tests {
+    use mradm_render::live;
+
+    /// One row: twelve f32 and fifteen i32 words, the sign of zero kept and the 64-bit element id
+    /// split low then high (formerly the C++ `live_scene_trace_test`, R3 D2).
+    #[test]
+    fn state_rows_keep_signed_zero_and_the_whole_element_id() {
+        let entry = live::Entry {
+            element_id: 0x1234_5678_0000_0001,
+            state: live::State {
+                position: [-0., 0., 0.],
+                ..live::State::default()
+            },
+        };
+        let (values, fields) = super::encode(&[entry], &[]);
+        assert_eq!((values.len(), fields.len()), (12, 15));
+        assert_eq!(values[1].to_bits(), 0x8000_0000);
+        assert_eq!((fields[0], fields[1], fields[2]), (0, 1, 0x1234_5678));
+    }
 }

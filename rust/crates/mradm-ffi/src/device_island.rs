@@ -281,3 +281,26 @@ impl DeviceIslands {
         }
     }
 }
+
+#[cfg(test)]
+impl DeviceTable {
+    /// A device without a context whose only call is `progress`.
+    pub(crate) fn progress_only(
+        progress: unsafe extern "C" fn(*mut c_void, *mut EngineSceneDeviceProgress),
+    ) -> Self {
+        Self {
+            ctx: std::ptr::null_mut(),
+            start: None,
+            stop: None,
+            flush: None,
+            pause: None,
+            resume: None,
+            mark_end: None,
+            realtime: None,
+            has_volume: None,
+            set_volume: None,
+            progress: Some(progress),
+            destroy: None,
+        }
+    }
+}

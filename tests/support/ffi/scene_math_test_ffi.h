@@ -54,8 +54,6 @@ int mradm_dsp_scene_channel_lock(const float* src,
                                  float* dst,
                                  size_t m,
                                  uint32_t* locked);
-int mradm_dsp_scene_rotate_pose(const float* src, size_t n, float* dst, size_t m, uint32_t apple);
-int mradm_dsp_scene_pose(const float* src, size_t n, float* dst, size_t m, uint32_t quaternion);
 
 #ifdef __cplusplus
 }

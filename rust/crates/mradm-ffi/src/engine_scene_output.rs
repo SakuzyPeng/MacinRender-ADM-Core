@@ -466,3 +466,133 @@ pub unsafe extern "C" fn mradm_engine_scene_output_status(
         ended: u32::from(v.ended),
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mradm_dsp::hptf as dsp;
+    use mradm_dsp::room::screen::RoomScreenGeometry;
+    use mradm_engine::backend::{BinauralSpreadMode, RoomRequest, Screens, SpeakerSpread};
+    use mradm_engine::request::Selection;
+    use mradm_engine::scene::{renderer, stream::Config};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
+
+    static ENTERED: AtomicBool = AtomicBool::new(false);
+    static RELEASE: AtomicBool = AtomicBool::new(false);
+
+    /// A device whose progress query blocks until released, holding the output's control lock.
+    unsafe extern "C" fn blocking(_: *mut c_void, _: *mut EngineSceneDeviceProgress) {
+        ENTERED.store(true, Ordering::SeqCst);
+        while !RELEASE.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn within(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
+        let end = Instant::now() + limit;
+        while !done() {
+            if Instant::now() > end {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        true
+    }
+
+    /// An HpTF publication designs and publishes while a status query holds the control lock
+    /// (formerly the C++ `hptf_parameters_test` over the SDK `SceneOutputSession`, R3 D2); the
+    /// epoch reset then adopts the complete shared or independent target.
+    #[test]
+    fn hptf_publication_does_not_wait_for_a_status_query() {
+        let renderer = renderer::Config {
+            selection: Selection::SafBinaural,
+            layout_id: b"binaural",
+            apple_geometry: false,
+            speaker_spread: SpeakerSpread::Automatic,
+            binaural_spread: BinauralSpreadMode::Automatic,
+            split_power: false,
+            smoothing_frames: 0,
+            sample_rate: 48000,
+            sofa: None,
+            screens: Screens {
+                has_reference: false,
+                reference: RoomScreenGeometry::default(),
+                has_reproduction: false,
+                reproduction: RoomScreenGeometry::default(),
+            },
+            room: RoomRequest {
+                package: None,
+                hrir: b"",
+                metres: 0.,
+                quality: 0,
+            },
+            sink: true,
+        };
+        let band = dsp::Band {
+            kind: dsp::BandKind::Peaking,
+            enabled: true,
+            frequency: 1000.,
+            gain_db: 3.,
+            q: 1.,
+        };
+        let profile = |preamp_db| dsp::Profile {
+            preamp_db,
+            bands: vec![band],
+        };
+        for independent in [false, true] {
+            ENTERED.store(false, Ordering::SeqCst);
+            RELEASE.store(false, Ordering::SeqCst);
+            let config = Config {
+                output_sample_rate: 48000,
+                output_ring_frames: 1 << 16,
+                ..Config::default()
+            };
+            let stream = super::super::engine_scene::create_stream(&config, &renderer).unwrap();
+            let table = DeviceTable::progress_only(blocking);
+            let output = start(&stream, unsafe { Device::adopt(&table) }, true).unwrap();
+            let settings = if independent {
+                Settings::for_test(
+                    [
+                        profile(-3.),
+                        dsp::Profile {
+                            preamp_db: -9.,
+                            bands: Vec::new(),
+                        },
+                    ],
+                    82,
+                    true,
+                )
+            } else {
+                Settings::for_test([profile(-6.), profile(-6.)], 81, false)
+            };
+            let output = &*output;
+            std::thread::scope(|scope| {
+                let status = scope.spawn(|| output.status());
+                let in_progress = within(Duration::from_secs(5), || ENTERED.load(Ordering::SeqCst));
+                let setter = scope.spawn(|| output.set_hptf_settings(&settings));
+                let published = within(Duration::from_secs(5), || setter.is_finished());
+                RELEASE.store(true, Ordering::SeqCst);
+                status.join().unwrap();
+                setter.join().unwrap().unwrap();
+                assert!(in_progress, "the status query holds the control lock");
+                assert!(
+                    published,
+                    "the publication does not wait for output control"
+                );
+            });
+            output.begin_epoch(1, 0).unwrap();
+            let snapshot = output.hptf_snapshot();
+            let [left, right] = &snapshot.coefficients;
+            let expected = if independent {
+                (82, -3., -9.)
+            } else {
+                (81, -6., -6.)
+            };
+            assert_eq!(
+                (snapshot.revision, left.preamp_db, right.preamp_db),
+                expected
+            );
+        }
+    }
+}

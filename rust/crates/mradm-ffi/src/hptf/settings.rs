@@ -238,6 +238,18 @@ pub struct Settings {
     revision: u64,
     independent: bool,
 }
+#[cfg(test)]
+impl Settings {
+    /// Warn-only settings of two profiles; `independent` designs each ear on its own.
+    pub(crate) fn for_test(profiles: [dsp::Profile; 2], revision: u64, independent: bool) -> Self {
+        Self {
+            profiles,
+            mode: dsp::PreampMode::WarnOnly,
+            revision,
+            independent,
+        }
+    }
+}
 impl Settings {
     /// The caller's HpTF request of `kind` (0 file, 1 parameters, 2 stereo files, 3 stereo
     /// parameters) as settings; errors are (status code, message).
@@ -476,6 +488,54 @@ mod tests {
         );
         assert!(unsafe { Settings::read((&raw const request).cast(), 3) }.is_err());
         assert!(band.q.is_nan());
+    }
+    /// The AutoEq text file and the same parameters given in memory design the same target
+    /// (formerly a PCM comparison of the C++ `hptf_parameters_test` over the SDK, R3 D2).
+    #[test]
+    fn a_text_file_and_the_same_parameters_design_identically() {
+        let text = "Preamp: -6 dB\n\
+                    Filter 1: ON LSC Fc 105 Hz Gain 3 dB Q 0.7\n\
+                    Filter 2: ON PK Fc 1000 Hz Gain -2 dB Q 1.5\n\
+                    Filter 3: OFF HSC Fc 10000 Hz Gain 1 dB Q 0.7\n";
+        let path = std::env::temp_dir().join(format!("mradm-hptf-same-{}.txt", std::process::id()));
+        std::fs::write(&path, text).unwrap();
+        let name = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        let file = Config {
+            struct_size: size_of::<Config>() as u32,
+            path: name.as_ptr().cast(),
+            revision: 5,
+            ..Config::default()
+        };
+        let from_file = unsafe { Settings::read((&raw const file).cast(), 0) };
+        std::fs::remove_file(&path).unwrap();
+        let band = |kind, enabled, frequency, gain_db, q| ApiBand {
+            struct_size: size_of::<ApiBand>() as u32,
+            kind,
+            enabled,
+            frequency,
+            gain_db,
+            q,
+            ..ApiBand::default()
+        };
+        let bands = [
+            band(1, 1, 105., 3., 0.7),
+            band(0, 1, 1000., -2., 1.5),
+            band(2, 0, 10000., 1., 0.7),
+        ];
+        let memory = Parameters {
+            struct_size: size_of::<Parameters>() as u32,
+            count: 3,
+            bands: bands.as_ptr(),
+            preamp: -6.,
+            revision: 5,
+            ..Parameters::default()
+        };
+        let from_memory = unsafe { Settings::read((&raw const memory).cast(), 1) }.unwrap();
+        let designed = from_memory.design(48000).unwrap();
+        assert_eq!(from_file.unwrap().design(48000).unwrap(), designed);
+        let c = &designed.coefficients[0];
+        assert_eq!((designed.revision, c.preamp_db), (5, -6.));
+        assert!(c.band_count >= 2, "the enabled bands are designed");
     }
     #[test]
     fn truncated_legacy_file_defaults_mode_and_revision_but_not_partial_fields() {

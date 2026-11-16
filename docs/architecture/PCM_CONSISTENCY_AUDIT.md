@@ -837,7 +837,11 @@ Rust 测试（旧实现副本改为独立期望）；`meter_test` 与 `speaker_l
 C 已完成：经 C++ SDK 做整段渲染的 18 个测试移植为 `mradm-engine` 的整段渲染测试（经渲染服务、不经岛）与 `mradm-render` /
 `mradm-dsp` / `mradm-scene` / `mradm-capi` 的缺口测试；`core_smoke_test`、`speaker_layouts_test` 作为岛测试保留，
 `room_render_test` 缩为只经 C ABI。双耳测试支持（含 4.7 A 之前的 HRTF 状态副本）删除，`mradm-ffi` 入口 327 → 291。
-测试 C/C++ 51,580 → 36,402 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
+测试 C/C++ 51,580 → 36,402 行。
+
+D 已完成：经 C++ 外壳测 Monitor、Scene 输出与 OSC 协议的 6 个测试移植为直接驱动 `mradm-engine` / `mradm-osc` 的 Rust 测试，
+`hptf_parameters_test` 与 `osc_head_tracking_test` 缩为只经 C ABI；每个子批对易漏的移植项做故障注入。B / C 留下的无用头一并删除，
+`mradm-ffi` 入口 291 → 234。测试 C/C++ 36,402 → 31,322 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
 
 ## 每个迁移切片的验证
 

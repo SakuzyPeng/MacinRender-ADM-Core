@@ -382,3 +382,235 @@ fn mutated_datagrams_never_panic() {
         let _ = decode(&packet);
     }
 }
+
+// ── R3 D3: the protocol checks of the C++ `osc_head_tracking_test` ────────────────────────────
+
+fn decoded(bytes: &[u8]) -> Message {
+    decode(bytes).expect("valid message rejected")
+}
+
+/// Euler (yaw, pitch, roll) vectors and their quaternions; scaled and negated quaternions decode
+/// back to the same angles.
+#[test]
+fn quaternion_vectors_and_their_scaled_forms_round_trip() {
+    const HALF: f64 = std::f64::consts::FRAC_1_SQRT_2;
+    let vectors: [([f32; 3], [f64; 4]); 7] = [
+        ([0., 0., 0.], [0., 0., 0., 1.]),
+        ([90., 0., 0.], [0., HALF, 0., HALF]),
+        ([0., 30., 0.], [0.258819045, 0., 0., 0.965925826]),
+        ([0., 0., 30.], [0., 0., 0.258819045, 0.965925826]),
+        (
+            [30., 20., 10.],
+            [0.189307857, 0.239298338, 0.038134576, 0.951548525],
+        ),
+        ([179., 0., 0.], [0., 0.999961923, 0., 0.008726535]),
+        ([-179., 0., 0.], [0., -0.999961923, 0., 0.008726535]),
+    ];
+    for (angles, q) in vectors {
+        let q = q.map(|c| c as f32);
+        let pose = decoded(&pose_packet(
+            "/posebridge/euler",
+            &angles,
+            &timing(),
+            b"head",
+        ));
+        for (i, (&got, &want)) in pose.quaternion_xyzw.iter().zip(&q).enumerate() {
+            assert!((got - want).abs() < 1e-6, "{angles:?}[{i}]");
+        }
+        for scale in [1f32, -1., 3.] {
+            let scaled = q.map(|c| c * scale);
+            let pose = decoded(&pose_packet(
+                "/posebridge/quaternion",
+                &scaled,
+                &timing(),
+                b"head",
+            ));
+            for i in 0..3 {
+                assert!(
+                    (pose.euler_deg[i] - angles[i]).abs() < 5e-4,
+                    "{angles:?} x {scale}"
+                );
+            }
+        }
+    }
+}
+
+/// The C++ fixture timing with fields above 2^53 and a device clock.
+fn wide_timing() -> Timing {
+    Timing {
+        instance_id: (1 << 55) + 1,
+        source_sequence: (1 << 54) + 3,
+        source_received_ns: (1 << 53) + 5,
+        sample_time_kind: 1,
+        sample_time_ms: 473_398_726_930,
+        sample_clock_epoch: 1,
+        ..timing()
+    }
+}
+
+#[test]
+fn int64_fields_keep_their_precision_and_every_key_is_checked() {
+    let t = wide_timing();
+    assert_eq!(decoded(&euler(&t)).timing, t);
+    type Field = fn(&mut Timing) -> &mut u64;
+    let keys: [(&str, Field); 6] = [
+        ("instance", |t| &mut t.instance_id),
+        ("session", |t| &mut t.source_session_id),
+        ("source sequence", |t| &mut t.source_sequence),
+        ("tx sequence", |t| &mut t.tx_sequence),
+        ("reference epoch", |t| &mut t.reference_epoch),
+        ("metadata revision", |t| &mut t.metadata_revision),
+    ];
+    for (name, field) in keys {
+        for value in [0, u64::MAX] {
+            let mut invalid = t;
+            *field(&mut invalid) = value;
+            assert!(decode(&euler(&invalid)).is_none(), "{name} = {value}");
+        }
+    }
+    let mut absent = t;
+    absent.sample_time_kind = 0;
+    assert!(
+        decode(&euler(&absent)).is_none(),
+        "an absent clock with clock fields"
+    );
+}
+
+#[test]
+fn telemetry_rejects_nested_identity_mismatches_and_oversized_json() {
+    let status = status_json("active").replace(
+        r#""status":{"session_id":"456""#,
+        r#""status":{"session_id":"999""#,
+    );
+    assert!(
+        decode(&telemetry(status.as_bytes(), false)).is_none(),
+        "status session"
+    );
+    let info = info_json().replace(
+        r#""descriptor":{"source_id":"head","instance_id":"123","session_id":"456""#,
+        r#""descriptor":{"source_id":"head","instance_id":"123","session_id":"999""#,
+    );
+    assert!(
+        decode(&telemetry(info.as_bytes(), true)).is_none(),
+        "descriptor session"
+    );
+    let extra = format!(r#"{{"extra":"{}","#, "x".repeat(8192));
+    for (json, info) in [(info_json(), true), (status_json("active"), false)] {
+        let oversized = json.replacen('{', &extra, 1);
+        assert!(
+            decode(&telemetry(oversized.as_bytes(), info)).is_none(),
+            "info={info}"
+        );
+    }
+}
+
+/// `a` and `b` are the same rotation (a quaternion and its negation are).
+fn same_rotation(a: [f32; 4], b: [f32; 4]) {
+    let (mut same, mut opposite) = (0f64, 0f64);
+    for (&x, &y) in a.iter().zip(&b) {
+        same += (f64::from(x) - f64::from(y)).powi(2);
+        opposite += (f64::from(x) + f64::from(y)).powi(2);
+    }
+    assert!(same.min(opposite) < 1e-11, "{a:?} vs {b:?}");
+}
+
+/// The decoded Euler angles describe the same rotation as the input, also at and near the poles.
+#[test]
+fn euler_outputs_preserve_the_rotation_at_the_poles() {
+    let packet = |address: &str, values: &[f32]| pose_packet(address, values, &timing(), b"head");
+    let quarter = [0.5, 0.5, -0.5, 0.5];
+    let pole = decoded(&packet("/posebridge/quaternion", &quarter));
+    same_rotation(
+        quarter,
+        decoded(&packet("/posebridge/euler", &pole.euler_deg)).quaternion_xyzw,
+    );
+    for pitch in [
+        -90.001f32, -90., -89.99999, -89.9999, 89.9999, 89.99999, 90., 90.001,
+    ] {
+        for yaw in [-150f32, 0., 30., 70., 179.] {
+            for roll in [-75f32, 0., 10., 60.] {
+                let source = decoded(&packet("/posebridge/euler", &[yaw, pitch, roll]));
+                let back = decoded(&packet("/posebridge/euler", &source.euler_deg));
+                same_rotation(source.quaternion_xyzw, back.quaternion_xyzw);
+                for scale in [1f32, -1., 3.] {
+                    let q = source.quaternion_xyzw.map(|v| v * scale);
+                    let result = decoded(&packet("/posebridge/quaternion", &q));
+                    let restored = decoded(&packet("/posebridge/euler", &result.euler_deg));
+                    same_rotation(source.quaternion_xyzw, restored.quaternion_xyzw);
+                }
+            }
+        }
+    }
+}
+
+fn advance(t: &mut Timing) {
+    t.source_sequence += 1;
+    t.tx_sequence += 1;
+    t.source_received_ns += 10_000_000;
+    if t.sample_time_kind != 0 {
+        t.sample_time_ms += 10;
+    }
+}
+
+/// The ordering rules of one source: duplicates, transport gaps, host time and device clock
+/// reversals, clock resets, absent timestamps, reconnects and retired instances.
+#[test]
+fn source_order_contract() {
+    let mut order = SourceOrder::default();
+    let mut t = Timing {
+        sample_time_kind: 1,
+        sample_time_ms: 100,
+        sample_clock_epoch: 1,
+        ..timing()
+    };
+    assert!(order.accept(&t) && !order.accept(&t), "duplicate pose");
+    advance(&mut t);
+    t.tx_sequence += 2;
+    assert!(
+        order.accept(&t) && order.last_gap == 2,
+        "tx gaps are independent of sample gaps"
+    );
+    let mut bad = t;
+    advance(&mut bad);
+    bad.source_received_ns = 0;
+    assert!(!order.accept(&bad), "host time reversal");
+    let mut bad = t;
+    advance(&mut bad);
+    bad.sample_time_ms = t.sample_time_ms;
+    assert!(!order.accept(&bad), "repeated device timestamp");
+    bad.sample_clock_epoch += 1;
+    bad.sample_time_ms = 0;
+    assert!(order.accept(&bad), "explicit clock reset");
+    let mut absent = bad;
+    advance(&mut absent);
+    absent.sample_time_kind = 0;
+    absent.sample_time_ms = 0;
+    absent.sample_clock_epoch = 0;
+    assert!(order.accept(&absent), "absent timestamp");
+    advance(&mut bad);
+    bad.tx_sequence += 1;
+    bad.source_sequence += 1;
+    bad.sample_clock_epoch = 1;
+    assert!(
+        !order.accept(&bad),
+        "absence does not erase the clock history"
+    );
+    let mut t = absent;
+    advance(&mut t);
+    t.source_session_id += 1;
+    t.source_sequence = 1;
+    t.source_received_ns = 0;
+    assert!(
+        !order.accept(&t),
+        "a new device session needs a metadata and reference advance"
+    );
+    t.metadata_revision += 1;
+    t.reference_epoch += 1;
+    assert!(order.accept(&t), "reconnect");
+    let mut next = timing();
+    next.instance_id += 1;
+    assert!(
+        order.accept(&next) && !order.accept(&t),
+        "the old instance is retired"
+    );
+}

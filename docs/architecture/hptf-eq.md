@@ -335,20 +335,25 @@ MDR-MV1 values — and adds preamp-only processing, the reset priority over a pe
 auto-trim on narrow, overlapping, off-grid and quantized low-frequency peaks, a 20 Hz Q8 long run, partition
 independence for every section type at six rates, and concurrent publication and applied-state queries.
 
-`mr_adm_realtime_tests` adds the MonitorEngine regression locks: the cascade
-reaches the device feed, an unused HpTF stage is bit-identical to none, LUFS is
-unaffected while peak moves, seeking does not click, paused output is exact
-silence, and the compensation survives a backend switch.
+`mradm-engine`'s `monitor_engine.rs` adds the MonitorEngine regression locks
+(formerly `mr_adm_realtime_tests`, R3 D1): the cascade reaches the device feed
+with its analytic gain, no HpTF is bit-identical to none, LUFS is unaffected
+while peak moves, seeking does not click, paused output is exact silence, and
+the compensation survives a backend switch.
 
-`mr_adm_stereo_peak_guard_tests` pins the Scene insertion point: with a +12 dB
-shelf on hot material every captured sample still satisfies the guard's ceiling,
-which fails immediately if the stage is ever moved downstream of the limiter.
+`mradm-engine`'s `scene_output.rs` pins the Scene insertion point (formerly
+`mr_adm_stereo_peak_guard_tests`, R3 D2): with a boost on hot material every
+pulled sample still satisfies the guard's ceiling, and the device output stays
+bit-identical across pull partitions while HpTF targets change, which fails as
+soon as the stage moves downstream of the limiter.
 
 `mr_adm_hptf_parameters_tests` exercises the public text parser's sizing and buffer
 contracts, forward-compatible input/output strides, caller-memory ownership,
 invalid and disabled parameters, 32 enabled sections, preamp-only/bypass updates,
-and rapid memory-only updates through the headless Scene C ABI. A capture device
-verifies sample-identical PCM for file import, text import and direct C++ parameters.
+and rapid memory-only updates through the headless Scene C ABI. `mradm-ffi`'s
+settings tests check that a ParametricEQ file and the same parameters given in
+memory design the same target, and that a publication never waits for the
+output's control lock.
 The Monitor C ABI fixture additionally verifies that memory parameters survive
 backend/device switching after the caller's buffers have gone away.
 
