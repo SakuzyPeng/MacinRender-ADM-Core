@@ -106,29 +106,8 @@ int mradm_dsp_matrix_process(const void* matrix,
                              size_t frames,
                              char* message,
                              size_t capacity);
-// Multiplies PCM in place by a constant finite volume.
-int mradm_dsp_gain_scale(float* data, size_t length, float gain, char* message, size_t capacity);
-// cppcheck-suppress-begin unusedStructMember
-typedef struct MradmDspPeakStatus {
-    size_t lookahead, buffered, writable, readable;
-} MradmDspPeakStatus;
-// cppcheck-suppress-end unusedStructMember
-int mradm_dsp_peak_guard_create(uint32_t rate, void** output, char* message, size_t capacity);
-void mradm_dsp_peak_guard_destroy(void* handle);
-int mradm_dsp_peak_guard_reset(void* handle, char* message, size_t capacity);
-int mradm_dsp_peak_guard_status(
-    const void* handle, uint32_t ended, MradmDspPeakStatus* status, char* message, size_t capacity);
-int mradm_dsp_peak_guard_push(void* handle, const float* data, size_t length, char* message, size_t capacity);
-int mradm_dsp_peak_guard_pop(void* handle,
-                             float* data,
-                             size_t length,
-                             float volume,
-                             uint32_t ended,
-                             size_t* frames,
-                             char* message,
-                             size_t capacity);
 
-// HpTF control-thread design and prepared realtime kernels. Coefficients are
+// HpTF coefficients, text import and the realtime processor. Coefficients are
 // copied explicitly; these private PODs do not alter the public C ABI.
 // All audio lengths count interleaved floats. Empty audio may be null.
 // cppcheck-suppress-begin unusedStructMember
@@ -167,14 +146,6 @@ typedef struct MradmDspHptfParseResult {
     size_t line_len;
 } MradmDspHptfParseResult;
 // cppcheck-suppress-end unusedStructMember
-int32_t mradm_dsp_hptf_design(const MradmDspHptfBand* bands,
-                              size_t length,
-                              double preamp_db,
-                              uint32_t rate,
-                              uint32_t mode,
-                              MradmDspHptfCoefficients* output,
-                              char* message,
-                              size_t capacity);
 // Writes at most capacity bands; band_count is always the full count (retry when larger).
 int32_t mradm_dsp_hptf_parse(const uint8_t* text,
                              size_t length,
@@ -183,15 +154,6 @@ int32_t mradm_dsp_hptf_parse(const uint8_t* text,
                              MradmDspHptfParseResult* result,
                              char* message,
                              size_t message_capacity);
-int32_t mradm_dsp_hptf_magnitude(
-    const MradmDspHptfCoefficients* coefficients, double hz, double* output, char* message, size_t capacity);
-int32_t mradm_dsp_hptf_cascade_create(size_t channels, void** output, char* message, size_t capacity);
-int32_t mradm_dsp_hptf_cascade_clone(const void* handle, void** output, char* message, size_t capacity);
-void mradm_dsp_hptf_cascade_destroy(void* handle);
-int32_t
-mradm_dsp_hptf_cascade_set(void* handle, const MradmDspHptfCoefficients* coefficients, char* message, size_t capacity);
-int32_t mradm_dsp_hptf_cascade_reset(void* handle, char* message, size_t capacity);
-int32_t mradm_dsp_hptf_cascade_process(void* handle, float* samples, size_t length, char* message, size_t capacity);
 // The shared HpTF processor (MonitorEngine's insert; the Scene output owns its own): control
 // threads publish designed targets, the audio callback processes and reports what it applied.
 // A target the processor would reject fails on publication. Reset only while the callback is

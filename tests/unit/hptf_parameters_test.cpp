@@ -1,12 +1,9 @@
-#include <algorithm>
 #include <array>
 #include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <future>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -17,10 +14,6 @@
 #include <vector>
 
 #include "adm/c_api.h"
-#include "adm/hptf.h"
-
-#include "hptf_eq.h"
-#include "scene_output_session.h"
 
 namespace {
 constexpr const char* k_text = "Preamp: -6 dB\n"
@@ -31,19 +24,6 @@ constexpr const char* k_text = "Preamp: -6 dB\n"
 void require(bool condition, const char* message) {
     if (!condition) {
         throw std::runtime_error(message);
-    }
-}
-
-template <typename T> T unwrap(mradm::Result<T> result) {
-    if (!result) {
-        throw std::runtime_error(result.error().message);
-    }
-    return std::move(*result);
-}
-
-void require_ok(const mradm::Result<void>& result) {
-    if (!result) {
-        throw std::runtime_error(result.error().message);
     }
 }
 
@@ -158,14 +138,18 @@ void test_parser_buffers() {
             "insufficient capacity reports needed size without partial output");
     require(adm_hptf_parse_parametric_eq(context.get(), k_text, &preamp, bands.data(), 3, &count) == ADM_ERROR_OK,
             "parse into caller-owned buffers");
-    const auto parsed = unwrap(mradm::parse_hptf_parametric_eq(k_text));
+    // The bands of k_text, as written.
+    const std::array<adm_hptf_band_t, 3> expected{{
+        {sizeof(adm_hptf_band_t), ADM_HPTF_BAND_LOW_SHELF, 1, 0, 105.0, 3.0, 0.7},
+        {sizeof(adm_hptf_band_t), ADM_HPTF_BAND_PEAKING, 1, 0, 1000.0, -2.0, 1.5},
+        {sizeof(adm_hptf_band_t), ADM_HPTF_BAND_HIGH_SHELF, 0, 0, 10000.0, 1.0, 0.7},
+    }};
     for (std::size_t i = 0; i < bands.size(); ++i) {
         const auto& actual = bands.at(i);
-        const auto& expected = parsed.bands[i];
-        require(actual.struct_size == sizeof(actual) && actual.type == static_cast<int32_t>(expected.type) &&
-                    actual.enabled == static_cast<int32_t>(expected.enabled) && actual.fc_hz == expected.fc_hz &&
-                    actual.gain_db == expected.gain_db && actual.q == expected.q,
-                "C and C++ parsing expose the same editable parameters");
+        const auto& want = expected.at(i);
+        require(actual.struct_size == sizeof(actual) && actual.type == want.type && actual.enabled == want.enabled &&
+                    actual.fc_hz == want.fc_hz && actual.gain_db == want.gain_db && actual.q == want.q,
+                "the parser exposes the editable parameters as written");
     }
     bands[1].struct_size = 4;
     count = 77;
@@ -302,139 +286,6 @@ void test_owned_snapshots_and_rapid_updates() {
             "latest complete snapshot wins while the null output keeps playing");
 }
 
-class CaptureDevice final : public mradm::realtime::IAudioOutputDevice {
-  public:
-    mradm::Result<void> start(uint32_t /*channels*/, uint32_t rate, PullFn callback) override {
-        rate_ = rate;
-        pull_ = std::move(callback);
-        return {};
-    }
-    void stop() override { pull_ = {}; }
-    [[nodiscard]] uint32_t actual_sample_rate() const override { return rate_; }
-    std::size_t pull(std::span<float> output) { return pull_(output, output.size() / 2U); }
-
-  private:
-    uint32_t rate_{0};
-    PullFn pull_;
-};
-
-class BlockingProgressDevice final : public mradm::realtime::IAudioOutputDevice {
-  public:
-    BlockingProgressDevice(std::promise<void>& entered, std::shared_future<void> release)
-        : entered_(entered), release_(std::move(release)) {}
-
-    mradm::Result<void> start(uint32_t /*channels*/, uint32_t rate, PullFn /*callback*/) override {
-        rate_ = rate;
-        return {};
-    }
-    void stop() override {}
-    [[nodiscard]] uint32_t actual_sample_rate() const override { return rate_; }
-    [[nodiscard]] mradm::realtime::AudioDeviceProgress progress() const override {
-        entered_.set_value();
-        release_.wait();
-        return {};
-    }
-
-  private:
-    std::promise<void>& entered_;
-    std::shared_future<void> release_;
-    uint32_t rate_{0};
-};
-
-void test_prepared_hptf_does_not_wait_for_output_control() {
-    using namespace mradm::realtime;
-    for (const bool stereo : {false, true}) {
-        SceneStreamConfig config;
-        config.renderer.renderer = mradm::RendererSelection::saf_binaural;
-        config.renderer.output_layout = "binaural";
-        auto stream = std::shared_ptr<SceneStreamEngine>(unwrap(SceneStreamEngine::create(config)));
-        std::promise<void> entered;
-        auto entered_future = entered.get_future();
-        std::promise<void> release;
-        auto device = std::make_unique<BlockingProgressDevice>(entered, release.get_future().share());
-        auto output = unwrap(SceneOutputSession::create_with_device(stream, std::move(device), true));
-
-        const auto filter = band();
-        const auto shared = parameters(std::span{&filter, 1U}, 81);
-        const adm_hptf_stereo_parameters_t independent{
-            sizeof(adm_hptf_stereo_parameters_t), ADM_HPTF_PREAMP_WARN_ONLY, 1, 0, &filter, nullptr, -3.0, -9.0, 82};
-        const auto settings = stereo ? unwrap(mradm::render_common::prepare_hptf(&independent, 3))
-                                     : unwrap(mradm::render_common::prepare_hptf(&shared, 1));
-
-        // Hold control_ in the device's status query. The setter must finish its Rust design
-        // and mailbox publication while this control operation is still waiting.
-        auto status = std::async(std::launch::async, [&] { return output->status(); });
-        const bool in_progress = entered_future.wait_for(std::chrono::seconds{5}) == std::future_status::ready;
-        auto setter = std::async(std::launch::async, [&] { return output->set_hptf_prepared(settings); });
-        const bool published = setter.wait_for(std::chrono::seconds{5}) == std::future_status::ready;
-        release.set_value();
-        static_cast<void>(status.get());
-        require_ok(setter.get());
-        require(in_progress, "status query holds the output control lock");
-        require(published, "HpTF preparation and publication remain independent of output control");
-
-        require_ok(output->begin_epoch(1, 0));
-        const auto info = output->hptf_stereo_info();
-        require(info.left.applied_revision == (stereo ? 82U : 81U) &&
-                    info.right.applied_revision == info.left.applied_revision &&
-                    info.left.preamp_db == (stereo ? -3.0F : -6.0F) && info.right.preamp_db == (stereo ? -9.0F : -6.0F),
-                "epoch reset adopts the complete shared or independent target");
-    }
-}
-
-std::vector<float> render_profile(const mradm::HptfProfile& profile, const std::string& path = {}) {
-    using namespace mradm::realtime;
-    SceneStreamConfig config;
-    config.renderer.renderer = mradm::RendererSelection::saf_binaural;
-    config.renderer.output_layout = "binaural";
-    config.startup_watermark_frames = 1;
-    auto stream = std::shared_ptr<SceneStreamEngine>(unwrap(SceneStreamEngine::create(config)));
-    auto device = std::make_unique<CaptureDevice>();
-    auto* capture = device.get();
-    auto output = unwrap(SceneOutputSession::create_with_device(stream, std::move(device), true));
-    if (path.empty()) {
-        auto editable = profile;
-        require_ok(output->set_hptf_parameters(editable, mradm::HptfPreampMode::warn_only, 1));
-        editable.bands.clear();
-        // cppcheck-suppress unreadVariable; deliberately poison caller memory after the setter returns.
-        editable.preamp_db = 100;
-    } else {
-        require_ok(output->set_hptf_profile(path, mradm::HptfPreampMode::warn_only, 1));
-    }
-    require_ok(output->begin_epoch(1, 0));
-    mradm::live_scene::ElementDescriptor element;
-    element.element_id = 1;
-    element.role = mradm::live_scene::ElementRole::lfe;
-    require_ok(stream->configure_generation(1, 1, std::span{&element, 1U}));
-    std::vector<float> samples(4096);
-    for (std::size_t i = 0; i < samples.size(); ++i) {
-        samples[i] = static_cast<float>(0.1 * std::sin(static_cast<double>(i) * 0.13));
-    }
-    ScenePcmPlaneView plane{1, samples.data(), static_cast<uint32_t>(samples.size()), 1, true};
-    SceneFrameView frame;
-    frame.epoch_id = 1;
-    frame.generation_id = 1;
-    frame.duration_samples = static_cast<uint32_t>(samples.size());
-    frame.flags = mradm::live_scene::frame_state_complete;
-    frame.pcm = std::span{&plane, 1U};
-    unwrap(stream->submit_frame(frame, std::chrono::milliseconds{100}));
-    require_ok(stream->signal_end(1, static_cast<std::int64_t>(samples.size())));
-    output->play();
-    std::array<float, 512> buffer{};
-    std::vector<float> result;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-    while (!output->status().ended && std::chrono::steady_clock::now() < deadline) {
-        const auto count = capture->pull(buffer);
-        const auto produced = std::span{buffer}.first(count * 2U);
-        result.insert(result.end(), produced.begin(), produced.end());
-        if (count == 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{1});
-        }
-    }
-    require(output->status().ended && result.size() == samples.size() * 2U, "captured exact output media length");
-    return result;
-}
-
 void test_concurrent_file_api_owns_errors() {
     ApiScene scene;
     const auto serial = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -476,29 +327,6 @@ void test_concurrent_file_api_owns_errors() {
     require(scene.info().applied_revision == 72 && scene.info().enabled == 0, "bypass is acknowledged");
 }
 
-void test_file_text_and_memory_equivalence() {
-    const auto parsed = unwrap(mradm::parse_hptf_parametric_eq(k_text));
-    mradm::HptfProfile editable;
-    editable.preamp_db = -6;
-    editable.bands = {{mradm::HptfBandType::low_shelf, true, 105, 3, 0.7},
-                      {mradm::HptfBandType::peaking, true, 1000, -2, 1.5},
-                      {mradm::HptfBandType::high_shelf, false, 10000, 1, 0.7}};
-    const auto expected = render_profile(editable);
-    require(std::ranges::any_of(expected, [](float value) { return std::abs(value) > 1e-6F; }),
-            "equivalence fixture contains audible nonzero PCM");
-    require(render_profile(parsed) == expected,
-            "text import and directly constructed parameters produce identical PCM");
-    const auto serial = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto path = std::filesystem::temp_directory_path() / ("mradm-hptf-memory-" + std::to_string(serial) + ".txt");
-    {
-        std::ofstream file(path);
-        file << k_text;
-        require(static_cast<bool>(file), "write legacy import fixture");
-    }
-    const auto from_file = render_profile({}, path.string());
-    std::filesystem::remove(path);
-    require(from_file == expected, "legacy file adapter produces identical PCM");
-}
 } // namespace
 
 int main() {
@@ -506,8 +334,6 @@ int main() {
         test_parser_buffers();
         test_future_layouts_and_validation();
         test_owned_snapshots_and_rapid_updates();
-        test_prepared_hptf_does_not_wait_for_output_control();
-        test_file_text_and_memory_equivalence();
         test_concurrent_file_api_owns_errors();
         std::cout << "HpTF memory parameter tests passed\n";
         return 0;

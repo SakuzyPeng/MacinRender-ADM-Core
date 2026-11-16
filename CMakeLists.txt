@@ -693,48 +693,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_core_apply_static_analysis(mr_adm_apple_renderer_test_support)
     endif()
 
-    # Test-only output DSP helpers (tests/support/dsp): the stand-alone stereo peak guard and the
-    # HpTF design / cascade wrappers. Production uses the Rust Scene output and HptfProcessor.
-    add_library(mr_adm_output_dsp_test_support STATIC
-        tests/support/dsp/stereo_peak_guard.cpp tests/support/dsp/hptf_cascade.cpp)
-    target_include_directories(mr_adm_output_dsp_test_support PUBLIC tests/support/dsp src/adm_render_common)
-    target_link_libraries(mr_adm_output_dsp_test_support PUBLIC MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_output_dsp_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_output_dsp_test_support)
-
     add_executable(mr_adm_scene_output_c_api_tests tests/unit/scene_output_c_api_test.cpp)
     target_link_libraries(mr_adm_scene_output_c_api_tests PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_scene_output_c_api_tests)
     add_test(NAME mr_adm_scene_output_c_api_tests COMMAND mr_adm_scene_output_c_api_tests)
 
-    add_executable(mr_adm_stereo_peak_guard_tests tests/unit/stereo_peak_guard_test.cpp)
-    target_link_libraries(
-        mr_adm_stereo_peak_guard_tests
-        PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
-        mr_adm_output_dsp_test_support mr_adm_scene_stream_test_support
-    )
-    mr_adm_core_apply_warnings(mr_adm_stereo_peak_guard_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_stereo_peak_guard_tests)
-    add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
-    set_tests_properties(mr_adm_stereo_peak_guard_tests PROPERTIES TIMEOUT 30)
-
-    # Replaces the global operator new; keep it out of other test binaries.
-    add_executable(mr_adm_scene_callback_alloc_tests tests/unit/scene_callback_alloc_test.cpp)
-    target_link_libraries(
-        mr_adm_scene_callback_alloc_tests
-        PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon
-        mr_adm_output_dsp_test_support mr_adm_scene_stream_test_support
-    )
-    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        target_compile_definitions(mr_adm_scene_callback_alloc_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_scene_callback_alloc_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_callback_alloc_tests)
-    add_test(NAME mr_adm_scene_callback_alloc_tests COMMAND mr_adm_scene_callback_alloc_tests)
-    set_tests_properties(mr_adm_scene_callback_alloc_tests PROPERTIES TIMEOUT 60)
-
-    # One Scene stream renderer behind the C++ interface, outside the Rust stream engine:
-    # the live renderer tests, the frozen references and the manual benchmarks.
+    # One Scene stream renderer behind the C++ interface, outside the Rust stream engine: only the
+    # manual benchmarks use it (the live renderer and trace tests are Rust, R3 B and D2).
     add_library(mr_adm_live_scene_test_support STATIC
         tests/support/live_scene/live_renderer.cpp
         tests/support/live_scene/live_renderer_adapter.cpp
@@ -750,8 +715,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_live_scene_test_support)
 
     # The C++ Scene stream and Scene output shells over the Rust engine (mradm-engine `scene`), not
-    # in production since the C ABI calls the engine from Rust: the device, HpTF and allocation tests
-    # and the manual benchmarks drive the engine through them.
+    # in production since the C ABI calls the engine from Rust: only the manual benchmarks drive the
+    # engine through them (the device, HpTF and allocation tests are Rust, R3 D2).
     add_library(mr_adm_scene_stream_test_support STATIC
         tests/support/scene_stream/scene_stream_engine.cpp
         tests/support/scene_stream/scene_output_session.cpp)
@@ -841,14 +806,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             mr_adm_scene_stream_c_api_consumer_tests)
     endif()
 
-    add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp
-        tests/support/live_scene/live_scene_trace.cpp)
-    target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
-    target_include_directories(mr_adm_live_scene_trace_tests PRIVATE tests/support/live_scene src/adm_render_common)
-    target_compile_definitions(mr_adm_live_scene_trace_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    mr_adm_core_apply_warnings(mr_adm_live_scene_trace_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_live_scene_trace_tests)
-    add_test(NAME mr_adm_live_scene_trace_tests COMMAND mr_adm_live_scene_trace_tests)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME mr_adm_flac_reader_tests
@@ -1015,9 +972,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
     add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
-    target_link_libraries(mr_adm_hptf_parameters_tests
-        PRIVATE MacinRender::ADMCAPI MacinRender::ADMEngine MacinRender::ADMRealtime
-                MacinRender::ADMRenderCommon Threads::Threads mr_adm_scene_stream_test_support)
+    target_link_libraries(mr_adm_hptf_parameters_tests PRIVATE MacinRender::ADMCAPI Threads::Threads)
     mr_adm_core_apply_warnings(mr_adm_hptf_parameters_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_parameters_tests)
     add_test(NAME mr_adm_hptf_parameters_tests COMMAND mr_adm_hptf_parameters_tests)

@@ -167,3 +167,31 @@ fn peak_guard_short_eos_reset_nonfinite_and_rejected_calls() {
     assert_eq!(guard.pop(&mut output, 1., true).unwrap(), 2);
     assert_eq!(output[..4], [0., 0., 0.125, -0.25]);
 }
+
+/// A single overload in a quiet stereo feed (formerly the C++ `stereo_peak_guard_test`, R3 D2):
+/// the gain falls smoothly ahead of it within the 5 ms lookahead, rises smoothly after it, keeps
+/// the interaural ratio and leaves the material before the lookahead untouched.
+#[test]
+fn peak_guard_gain_is_smooth_and_anticipates_the_overload() {
+    let input: Vec<f32> = (0..3000)
+        .flat_map(|frame| {
+            let left = if frame == 720 { 4. } else { 0.1 };
+            [left, left * 0.25]
+        })
+        .collect();
+    let reference = protect(&input, 48000, 4096, 0.8);
+    for chunk in [1, 37, 480] {
+        assert_eq!(protect(&input, 48000, chunk, 0.8), reference);
+    }
+    for (frame, pair) in reference.as_chunks::<2>().0.iter().enumerate() {
+        assert!(pair[0].abs() <= CEILING + 1e-6);
+        assert_eq!(pair[1], pair[0] * 0.25);
+        if frame > 0 && frame != 720 && frame != 721 {
+            let step = (pair[0] - reference[(frame - 1) * 2]).abs();
+            assert!(step < 0.001, "gain step {step} at frame {frame}");
+        }
+    }
+    // Frame 600 is inside the 240-frame lookahead before the overload; frame 470 is before it.
+    assert!(reference[1200] < 0.08, "{}", reference[1200]);
+    assert_eq!(reference[940], input[940] * 0.8);
+}
