@@ -68,10 +68,11 @@ fn prepare(scene: &RenderScene, spread: Spread) -> Prepared {
 }
 
 fn open(prepared: &Prepared, spread: Spread, source: &Temp, budget: usize) -> Stream {
-    let (mix, session) = Source::of(&prepared.plan).unwrap();
+    let (mix, session, block_gains) = Source::of(&prepared.plan).unwrap();
     let source_plan = Source {
         mix,
         session,
+        block_gains,
         bindings: prepared.bindings.clone().into(),
         size_tracks: prepared.size_tracks.clone().into(),
         spread_none: spread == Spread::None,
@@ -331,6 +332,73 @@ fn static_edits_equal_the_policy_applied_offline_render() {
         None,
         "cleared"
     );
+}
+
+#[test]
+fn native_levels_follow_file_stream_seeks_live_gain_and_size_transitions() {
+    let source = input(&common::sine(FRAMES as usize, 0.5));
+    let scene = || {
+        let mut scene = sized_object(0.);
+        scene.snapshot.objects[0].source_gain = mradm_adm::records::Gain {
+            present: 1,
+            decibels: 0,
+            value: 0.5,
+            linear: 0.5,
+        };
+        scene.snapshot.objects[0].gain = 0.5;
+        for (b, (at, gain)) in
+            scene
+                .snapshot
+                .object_blocks
+                .iter_mut()
+                .zip([(0, 0.25), (30_113, 0.), (70_117, 1.)])
+        {
+            b.start = at;
+            b.source.rtime_samples = at;
+            b.gain = gain;
+            b.jump = 1;
+        }
+        scene
+    };
+    for scale in [0., 0.5, 1.] {
+        let prepared = prepare(&scene(), Spread::Automatic);
+        let mut stream = open(
+            &prepared,
+            Spread::Automatic,
+            &source,
+            DEFAULT_CHECKPOINT_BUDGET,
+        );
+        let mut edit = object(scale);
+        edit.base.gain_db = -6.;
+        stream.set_overrides(&[edit]).unwrap();
+        let mut effective = scene();
+        let json = r#"{"schema":"mradm.semantic-policy.v1","global":{"gain":{"gain_db":-6},"extent":{"scale":SCALE}}}"#.replace("SCALE", &scale.to_string());
+        policy::apply(&mut effective, &policy::parse(json.as_bytes()).unwrap());
+        let reference = offline(&effective, &source);
+        let actual = pull(&mut stream, FRAMES as usize, &CHUNKS);
+        assert!(actual.iter().any(|&v| v != 0.));
+        assert!(
+            actual[30_113 * OUTPUTS..70_117 * OUTPUTS]
+                .iter()
+                .all(|&v| v == 0.)
+        );
+        // Native/user constant multiplication may be grouped differently by the live de-zipper.
+        let compare = |a: &[f32], b: &[f32]| {
+            assert_eq!(a.len(), b.len());
+            assert!(
+                a.iter().zip(b).all(|(a, b)| (*a - *b).abs() < 1e-7),
+                "scale={scale}"
+            );
+        };
+        compare(&actual, &reference);
+        for at in [70_113, 30_109, 96_257, 17] {
+            seek(&mut stream, at);
+            compare(
+                &pull(&mut stream, 2000, &[17, 1024, 3]),
+                slice(&reference, at, 2000),
+            );
+        }
+    }
 }
 
 #[test]

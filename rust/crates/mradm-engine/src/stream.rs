@@ -110,7 +110,7 @@ pub fn open(p: &Prepared, s: &Settings, host: &dyn Host) -> Result<(Validator, B
                 Some(Kernel::TripleBalance(plan)) => plan,
                 _ => return Err(bad()),
             };
-            let Some((mix, session)) = triple_balance_stream::Source::of(plan) else {
+            let Some((mix, session, block_gains)) = triple_balance_stream::Source::of(plan) else {
                 return Err(invalid(
                     2,
                     "Triple Balance D mode currently supports offline rendering only",
@@ -123,6 +123,7 @@ pub fn open(p: &Prepared, s: &Settings, host: &dyn Host) -> Result<(Validator, B
             let source = triple_balance_stream::Source {
                 mix,
                 session,
+                block_gains,
                 bindings: Arc::clone(&p.bindings),
                 size_tracks: Arc::clone(&data.sizes),
                 spread_none: data.spread_none,

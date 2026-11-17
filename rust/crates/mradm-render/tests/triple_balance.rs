@@ -213,6 +213,93 @@ fn level(l: Level) -> &'static str {
     }
 }
 
+/// The frozen C++ bdc0a30 oracle predates native levels. Check the new level decisions before
+/// projecting just those fields back to that oracle; all spatial/timing/rejection fields stay exact.
+fn legacy_level_report(mut report: Value) -> Value {
+    let user_level = |row: &mradm_json::Map| {
+        if row["user_mute"].as_bool() == Some(true) {
+            0.
+        } else {
+            row["user_gain_multiplier"].as_f64().unwrap() as f32
+        }
+    };
+    let Value::Object(doc) = &mut report else {
+        panic!("report object")
+    };
+    for kind in ["objects", "beds"] {
+        let Some(Value::Array(objects)) = doc.get_mut(kind) else {
+            continue;
+        };
+        for object in objects {
+            let Value::Object(row) = object else {
+                panic!("object report")
+            };
+            let gain = get(&row["native_gain"], "source").as_f64().unwrap() as f32;
+            let mute = row["user_mute"]
+                .as_bool()
+                .unwrap_or(get(&row["native_mute"], "source").as_bool().unwrap());
+            let multiplier = row["user_gain_multiplier"].as_f64().unwrap() as f32;
+            assert_eq!(
+                row["output_gain"].as_f64(),
+                Some(f64::from(if mute { 0. } else { gain * multiplier }))
+            );
+            for (key, neutral) in [
+                ("native_gain", Value::from(1i32)),
+                ("native_mute", Value::from(false)),
+            ] {
+                let Value::Object(decision) = row.get_mut(key).unwrap() else {
+                    panic!("decision")
+                };
+                assert_eq!(decision["action"].as_str(), Some("used"));
+                decision.insert("action".into(), "ignored".into());
+                decision.insert("renderer".into(), neutral);
+            }
+            let level = user_level(row);
+            row.insert("output_gain".into(), level.into());
+            let Value::Array(tracks) = row.get_mut("tracks").unwrap() else {
+                panic!("tracks")
+            };
+            for track in tracks {
+                let Value::Object(track) = track else {
+                    panic!("track report")
+                };
+                if kind == "beds" {
+                    track.insert("output_gain".into(), (level * user_level(track)).into());
+                }
+                let Value::Array(events) = track.get_mut("events").unwrap() else {
+                    panic!("events")
+                };
+                for event in events {
+                    let Value::Object(event) = event else {
+                        panic!("event report")
+                    };
+                    let Value::Object(gain) = event.get_mut("gain").unwrap() else {
+                        panic!("gain")
+                    };
+                    assert_eq!(gain["action"].as_str(), Some("used"));
+                    assert_eq!(gain["source"], gain["renderer"]);
+                    gain.insert("action".into(), "ignored".into());
+                    gain.insert("renderer".into(), 1i32.into());
+                    for key in [
+                        "gain_event_sample",
+                        "gain_jump",
+                        "gain_interpolation_frames",
+                    ] {
+                        event.remove(key);
+                    }
+                    if kind == "beds" {
+                        event.insert(
+                            "time".into(),
+                            "ignored; fixed route active throughout file".into(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    report
+}
+
 #[test]
 fn preparation_reproduces_the_cpp_goldens() {
     let temp = std::env::temp_dir().join(format!("mradm-render-tb-{}", std::process::id()));
@@ -270,7 +357,7 @@ fn preparation_reproduces_the_cpp_goldens() {
                 String::from_utf8(text).unwrap().into(),
             ]))
         });
-        let report = mradm_json::parse(outcome.report.as_bytes()).unwrap();
+        let report = legacy_level_report(mradm_json::parse(outcome.report.as_bytes()).unwrap());
         if let Some(sample) = samples.get(&(index as u64)) {
             assert_eq!(
                 mradm_json::dump(&report, Some(1)),
@@ -438,7 +525,7 @@ fn the_bed_routes_as_the_captured_native_renderer() {
             "the report keeps the authored relative time"
         );
     }
-    // The object and RC_Lts at half user level: both apply once after the ignored native gain.
+    // User unmute does not override the authored zero gain.
     let mut scene = captured_bed(&RC);
     let half = UserLevel {
         gain_multiplier: 0.5,
@@ -453,7 +540,7 @@ fn the_bed_routes_as_the_captured_native_renderer() {
     assert!(ok);
     assert_eq!(
         at(&doc, &["beds", "0", "tracks", "8", "output_gain"]).as_f64(),
-        Some(0.25)
+        Some(0.)
     );
     let rejected = |r: &Request| {
         let outcome = triple_balance::prepare(r, &mut |_, _| {});
@@ -533,10 +620,21 @@ fn point_motion_keeps_the_reference_state_below_a_quantization_boundary() {
     let reference = fixture("room_compat_semantics/point-motion-half-code.json");
     let rtime = get(&reference, "rtime_target").as_f64().unwrap() as u64;
     let frames = 145_000u64;
-    let scene = native_object(
+    let mut scene = native_object(
         &[(0, [0.23, 0.51, 0.37]), (rtime, [-0.2, 0.8, 0.5])],
         frames,
     );
+    // Keep the captured spatial oracle at unity; native levels have separate PCM regressions.
+    scene.snapshot.objects[0].source_gain = Gain {
+        present: 1,
+        value: 1.,
+        linear: 1.,
+        decibels: 0,
+    };
+    scene.snapshot.objects[0].mute = 0;
+    for b in &mut scene.snapshot.object_blocks {
+        b.gain = 1.;
+    }
     let prepared = triple_balance::prepare(&request(&scene, "9.1.6"), &mut |_, _| {})
         .result
         .unwrap();
@@ -645,7 +743,7 @@ fn size_windows_native_fields_and_user_levels() {
             .unwrap();
             assert_eq!(again, whole, "reused prepared metadata");
         }
-        // Native zero gain, mute and a short lifetime, as the copy ignores them.
+        // Native zero gain and mute silence the complete dry/size output.
         let mut native = sized_object(frames);
         let s = &mut native.snapshot;
         s.objects[0].source_gain = zero_gain();
@@ -656,7 +754,10 @@ fn size_windows_native_fields_and_user_levels() {
             b.start += 1000;
             b.end = 1500;
         }
-        assert_eq!(render(&native, None), whole, "ignored native fields");
+        assert!(
+            render(&native, None).iter().all(|&v| v == 0.),
+            "native silence"
+        );
         let mut half = sized_object(frames);
         half.overlay.objects[0].user.gain_multiplier = 0.5;
         let scaled: Vec<f32> = whole.iter().map(|v| v * 0.5).collect();
@@ -692,6 +793,254 @@ fn size_windows_native_fields_and_user_levels() {
             fails(&scene, &|r| r.spread = Spread::Mdap),
             "room size and MDAP are exclusive"
         );
+    }
+}
+
+fn set_native_gain(scene: &mut RenderScene, gain: f32) {
+    let object = &mut scene.snapshot.objects[0];
+    object.gain = gain;
+    object.source_gain = Gain {
+        present: 1,
+        decibels: 0,
+        value: f64::from(gain),
+        linear: gain,
+    };
+}
+
+const LEVEL_MODES: [(Mode, &str, usize); 5] = [
+    (Mode::Standard, "4+7+0", 12),
+    (Mode::Standard, "9.1.6", 16),
+    (Mode::Standard, "9+10+3", 24),
+    (Mode::D, "9.1.6", 16),
+    (Mode::D, "9+10+3", 24),
+];
+
+#[test]
+fn bed_native_object_and_channel_levels_apply_after_fixed_routes() {
+    let frames = 8197;
+    let samples: Vec<f32> = (0..frames as usize * 10)
+        .map(|i| if i % 10 == 8 { 0.125 } else { 0. })
+        .collect();
+    let source = common::input_channels(&samples, 10);
+    for (mode, layout, outputs) in LEVEL_MODES {
+        let tracks = RC
+            .iter()
+            .map(|&label| TrackSpec {
+                blocks: Vec::new(),
+                direct: [0, 1113, 2301, 4097]
+                    .iter()
+                    .map(|&at| {
+                        let mut b = direct_block(at, u64::MAX);
+                        b.source.rtime_samples = at;
+                        (vec![label], b)
+                    })
+                    .collect(),
+            })
+            .collect();
+        let mut scene = common::scene_channels(
+            vec![ObjectSpec {
+                id: "bed",
+                gain: 1.,
+                end: u64::MAX,
+                tracks,
+            }],
+            frames,
+            10,
+        );
+        let render = |scene: &RenderScene| {
+            let mut r = request(scene, layout);
+            r.mode = mode;
+            let p = triple_balance::prepare(&r, &mut |_, _| {}).result.unwrap();
+            render_offline(
+                Kernel::TripleBalance(p.plan),
+                &source,
+                outputs,
+                frames,
+                0,
+                None,
+            )
+            .unwrap()
+        };
+        let unity = render(&scene);
+        assert!(unity.iter().any(|&v| v != 0.));
+        set_native_gain(&mut scene, 0.5);
+        scene.overlay.objects[0].user.gain_multiplier = 0.5;
+        let span = scene.snapshot.tracks[8].ds_blocks;
+        for (index, gain) in (span.offset..span.offset + span.len).zip([1., 0.25, 0., 1.]) {
+            let b = &mut scene.snapshot.direct_blocks[index];
+            b.gain = gain;
+            b.source.gain = Gain {
+                present: 1,
+                decibels: 0,
+                value: f64::from(gain),
+                linear: gain,
+            };
+            scene.overlay.direct_blocks[index].user.gain_multiplier = 0.5;
+        }
+        let actual = render(&scene);
+        for (i, (a, b)) in actual.iter().zip(&unity).enumerate() {
+            let f = i / outputs;
+            let level = match f {
+                0..1113 => 0.125,
+                1113..2301 => 0.03125,
+                2301..4097 => 0.,
+                _ => 0.125,
+            };
+            assert!(
+                (*a - *b * level).abs() < 1e-7,
+                "bed frame={f} {mode:?} {layout}"
+            );
+        }
+    }
+}
+
+#[test]
+fn native_object_block_and_user_gains_apply_once_in_both_modes() {
+    let frames = 10_037;
+    let source = input(&common::sine(frames as usize, 0.5));
+    for (mode, layout, outputs) in LEVEL_MODES {
+        for size in [0., 0.25] {
+            let render = |scene: &RenderScene| {
+                let mut r = request(scene, layout);
+                r.mode = mode;
+                let prepared = triple_balance::prepare(&r, &mut |_, _| {}).result.unwrap();
+                render_offline(
+                    Kernel::TripleBalance(prepared.plan),
+                    &source,
+                    outputs,
+                    frames,
+                    0,
+                    None,
+                )
+                .unwrap()
+            };
+            let mut scene = sized_object(frames);
+            for b in &mut scene.snapshot.object_blocks {
+                (b.width, b.height, b.depth) = (size, size, size);
+            }
+            let unity = render(&scene);
+            assert!(unity.iter().any(|&v| v != 0.));
+            set_native_gain(&mut scene, 0.5);
+            for b in &mut scene.snapshot.object_blocks {
+                b.gain = 0.25;
+            }
+            // Exercise policy bookkeeping too: record.gain already includes the user multiplier.
+            scene.apply_policy(
+                policy::parse(
+                    br#"{"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}}"#,
+                )
+                .unwrap(),
+            );
+            let scaled = render(&scene);
+            assert!(
+                scaled.iter().zip(&unity).all(|(a, b)| *a == *b * 0.0625),
+                "{mode:?} {layout} size={size}"
+            );
+            scene.snapshot.objects[0].mute = 1;
+            assert!(
+                render(&scene).iter().all(|&v| v == 0.),
+                "authored mute includes size output"
+            );
+            scene.overlay.objects[0].user.mute = Some(false);
+            assert!(
+                render(&scene).iter().zip(&scaled).all(|(a, b)| a == b),
+                "explicit user unmute"
+            );
+            scene.overlay.objects[0].user.mute = Some(true);
+            assert!(render(&scene).iter().all(|&v| v == 0.), "user mute");
+        }
+    }
+}
+
+#[test]
+fn native_block_gain_timing_interpolation_and_windows_preserve_filter_history() {
+    let frames = 10_037;
+    let source = input(&common::sine(frames as usize, 0.5));
+    for (mode, layout, outputs) in LEVEL_MODES {
+        for size in [0., 0.25] {
+            let mut scene = sized_object(frames);
+            let mut block = scene.snapshot.object_blocks[0];
+            (block.width, block.height, block.depth) = (size, size, size);
+            let timeline = [
+                (0, 1.),
+                (2301, 0.25),
+                (2301, 0.5),
+                (2503, 0.),
+                (4097, 1.),
+                (6001, 0.5),
+            ];
+            scene.snapshot.object_blocks = timeline
+                .iter()
+                .map(|&(at, gain)| {
+                    let mut b = block;
+                    b.start = at;
+                    b.source.rtime_samples = at;
+                    b.gain = gain;
+                    b.jump = u32::from(at != 4097 && at != 6001);
+                    b.interpolation_present = u32::from(at == 4097);
+                    b.interpolation = 257;
+                    b
+                })
+                .collect();
+            scene.snapshot.tracks[0].blocks.len = timeline.len();
+            let render = |scene: &RenderScene, window| {
+                let mut r = request(scene, layout);
+                r.mode = mode;
+                let p = triple_balance::prepare(&r, &mut |_, _| {}).result.unwrap();
+                render_offline(
+                    Kernel::TripleBalance(p.plan),
+                    &source,
+                    outputs,
+                    frames,
+                    0,
+                    window,
+                )
+                .unwrap()
+            };
+            let actual = render(&scene, None);
+            let crop = render(
+                &scene,
+                Some(Window {
+                    start: 4001,
+                    count: 5000,
+                }),
+            );
+            assert!(
+                crop.iter()
+                    .zip(&actual[4001 * outputs..9001 * outputs])
+                    .all(|(a, b)| a == b),
+                "window {mode:?} {layout}"
+            );
+            for b in &mut scene.snapshot.object_blocks {
+                b.gain = 1.;
+            }
+            let unity = render(&scene, None);
+            for (f, (a, b)) in actual
+                .chunks_exact(outputs)
+                .zip(unity.chunks_exact(outputs))
+                .enumerate()
+            {
+                let level = match f {
+                    0..2301 => 1.,
+                    2301..2503 => 0.5,
+                    2503..4097 => 0.,
+                    4097..4354 => ((f - 4097) as f64 / 257.) as f32,
+                    4354..6001 => 1.,
+                    6001..6241 => (1. - (f - 6001) as f64 / 240. * 0.5) as f32,
+                    _ => 0.5,
+                };
+                assert!(
+                    a.iter().zip(b).all(|(a, b)| (*a - *b * level).abs() < 2e-7),
+                    "frame {f} {mode:?} {layout} size={size}"
+                );
+            }
+            assert!(
+                actual[4354 * outputs..6001 * outputs]
+                    .iter()
+                    .any(|&v| v != 0.),
+                "gain recovery retains filter history"
+            );
+        }
     }
 }
 

@@ -52,10 +52,11 @@ impl TestStream {
         )
         .result
         .unwrap();
-        let (mix, session) = triple_balance_stream::Source::of(&p.plan).unwrap();
+        let (mix, session, block_gains) = triple_balance_stream::Source::of(&p.plan).unwrap();
         let source = triple_balance_stream::Source {
             mix,
             session,
+            block_gains,
             bindings: p.bindings.into(),
             size_tracks: p.size_tracks.into(),
             spread_none: false,

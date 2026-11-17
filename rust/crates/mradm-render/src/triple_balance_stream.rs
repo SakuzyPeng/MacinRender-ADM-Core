@@ -7,7 +7,7 @@
 use crate::offline::{Driver, Error, Location, Result, TbPlan};
 pub use crate::routing::LiveOverride;
 use crate::routing::{self, Override};
-use crate::triple_balance::SizeTrack;
+use crate::triple_balance::{BlockGains, SizeTrack};
 use crate::vbap::Binding;
 use mradm_dsp::gain::GainBank;
 use mradm_dsp::pcm_mix::{self, Mixer};
@@ -32,6 +32,7 @@ const CHECKPOINT_OVERHEAD: usize = size_of::<u64>() + 4 * size_of::<usize>();
 pub struct Source {
     pub mix: Arc<pcm_mix::Plan>,
     pub session: Arc<session::Plan>,
+    pub block_gains: Arc<BlockGains>,
     pub bindings: Arc<[Binding]>,
     pub size_tracks: Arc<[SizeTrack]>,
     pub spread_none: bool,
@@ -42,9 +43,18 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn of(plan: &TbPlan) -> Option<(Arc<pcm_mix::Plan>, Arc<session::Plan>)> {
+    pub fn of(plan: &TbPlan) -> Option<(Arc<pcm_mix::Plan>, Arc<session::Plan>, Arc<BlockGains>)> {
         match plan {
-            TbPlan::Standard { mix, session, .. } => Some((Arc::clone(mix), Arc::clone(session))),
+            TbPlan::Standard {
+                mix,
+                session,
+                block_gains,
+                ..
+            } => Some((
+                Arc::clone(mix),
+                Arc::clone(session),
+                Arc::clone(block_gains),
+            )),
             TbPlan::D { .. } => None,
         }
     }
@@ -136,6 +146,7 @@ pub struct Stream {
     position: u64,
     anchor: u64,
     canonical: bool,
+    interpolation: u64,
     budget: usize,
     size_by_channel: Vec<usize>,
     /// Most recently used first.
@@ -207,6 +218,7 @@ impl Stream {
             position: 0,
             anchor: 0,
             canonical: true,
+            interpolation: default_interp,
             budget: checkpoint_budget.min(DEFAULT_CHECKPOINT_BUDGET),
             size_by_channel,
             checkpoints: VecDeque::new(),
@@ -431,6 +443,12 @@ impl Stream {
         self.ramps
             .fill(&mut self.envelopes[..frames * inputs])
             .map_err(failed)?;
+        self.source.block_gains.apply(
+            &mut self.envelopes[..frames * inputs],
+            inputs,
+            self.position,
+            self.interpolation,
+        );
         self.fifo.clear();
         self.fifo.resize(frames * outputs, 0.);
         self.fifo_len = self.fifo.len();

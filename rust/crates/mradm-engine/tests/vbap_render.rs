@@ -470,7 +470,7 @@ fn elevated_sources_on_a_2d_layout_warn() {
 }
 
 #[test]
-fn triple_balance_ignores_the_block_gain_vbap_applies_it() {
+fn triple_balance_and_vbap_apply_the_block_gain() {
     let total = |renderer: Selection, gain: f32| {
         let dir = scratch("vbap-tb-gain");
         let input = single_input(
@@ -489,8 +489,38 @@ fn triple_balance_ignores_the_block_gain_vbap_applies_it() {
     );
     let (vbap_one, vbap_half) = (total(Selection::Saf, 1.), total(Selection::Saf, 0.5));
     assert!(tb_one > 0. && vbap_one > 0.);
-    assert!((tb_half / tb_one - 1.).abs() < 1e-5);
+    assert!((tb_half / tb_one - 0.5).abs() < 1e-5);
     assert!((vbap_half / vbap_one - 0.5).abs() < 1e-5);
+}
+
+#[test]
+fn triple_balance_imports_object_db_gain_and_native_mute() {
+    let total = |object_level: Param, block_level: Param, policy: Option<&[u8]>| {
+        let dir = scratch("tb-native-level");
+        let mut single = front(true, vec![block_level]);
+        single.doc.set(single.object, object_level);
+        let input = single_input(&dir, single, 48000, 1000);
+        let mut r = request(
+            &input,
+            &dir.file("out.wav"),
+            Selection::TripleBalance,
+            "4+7+0",
+        );
+        r.peak_limit = false;
+        r.semantic_policy_json = policy.map(<[u8]>::to_vec);
+        render(r).1.energy()
+    };
+    let unity = total(gain_linear(1.), gain_linear(1.), None);
+    let half = total(gain_db(-6.020599913279624), gain_linear(1.), None);
+    let eighth = total(
+        gain_linear(0.5),
+        gain_db(-6.020599913279624),
+        Some(br#"{"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}}"#),
+    );
+    assert!(unity > 0.);
+    assert!((half / unity - 0.5).abs() < 1e-5);
+    assert!((eighth / unity - 0.125).abs() < 1e-5);
+    assert_eq!(total(mute(true), gain_linear(1.), None), 0.);
 }
 
 #[test]

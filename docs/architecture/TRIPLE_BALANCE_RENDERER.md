@@ -74,6 +74,28 @@ C ABI v1.45 新增 `adm_render_options_set_triple_balance_mode`，既有结构�
 [对象语义](DAR_OBJECT_SEMANTICS.md)、[bed 语义](DAR_BED_SEMANTICS.md)、
 [22.2 扩展](ROOM_222_EXTENSION.md)。更名不扩大这些证据的适用范围。
 
+## ADM 增益与静音
+
+离线渲染和文件流式渲染应用 ADM 原生 `audioObject` 增益与静音，以及 Objects / DirectSpeakers
+的 `audioBlockFormat` 增益；线性值和 dB 值均使用导入后的线性系数。缺省增益为 1。
+对象输出级叠加原生对象增益、用户策略增益、块增益及实时编辑增益，各项只应用一次。
+用户策略显式指定 `mute=false` 时可解除原生静音；原生零增益仍保持为零。
+
+块增益按文件 `rtime` 的采样点更新，不取整到位置／尺寸的 512 帧控制网格。同采样点的最后一条
+块元数据生效。Objects 的增益使用既有 `jumpPosition`、显式插值长度或默认插值长度，并在下一块
+或已声明的块时长处截短插值；DirectSpeakers 块增益在起点直接切换。首条增益事件前为单位增益，
+事件结束后保持最后目标；对象起止时间和块时长仍不用于门控 PCM 或重置滤波历史。
+
+所有电平作用于固定 bed 路由或对象干声／尺寸混合之后，静音期间继续推进尺寸滤波。
+standard 模式、D 模式及实验性 22.2 都使用这项电平语义；各模式原有采样率和输入限制保持适用。
+文件流式渲染的实时电平斜坡、尺寸切换与检查点跳转复用同一块增益时间线；仅生成当前处理块的
+包络，不展开整轨逐采样增益缓存。语义报告将原生增益／静音标为 `used`，以 `gain_event_sample`
+区分电平更新时间和空间控制时间。
+
+这是对 C++ `bdc0a30` 冻结参考中忽略原生电平行为的有意调整。历史空间、路由、拒绝条件和时间
+报告继续对照原始夹具，电平字段另做明确断言；PCM 回归覆盖原生／用户增益叠加、dB 导入、静音、
+插值、同采样点更新、尺寸滤波恢复、窗口裁剪和文件流式跳转。
+
 ## 实时监听与编辑
 
 `open_stream()` / 既有 `adm_monitor_*` 支持播放、暂停、循环、后端切换与精确跳转。
@@ -109,7 +131,7 @@ Release 的 `mr_adm_triple_balance_monitor_benchmark [9.1.6|9+10+3]` 使用 13 �
 `22.2`（`9+10+3`），PCM 顺序与对应 renderer 的内部布局一致。既有 `adm_scene_output_*`
 可绑定 null 或平台支持的系统空间音频设备；设备支持范围仍由平台决定。
 
-Scene 接收 canonical 有效状态，不经过文件输入的原生 ADM gain/mute/time 忽略规则。
+Scene 接收 canonical 有效状态，不经过文件输入的 ADM 兼容准备和 `rtime` 时间轴转换。
 `linear_gain` 和 `active` 在对象干声／尺寸混合后生效，静音继续推进滤波历史。
 位置、等尺寸和音量各自维护 ramp；事件在 `offset_samples` 开始，显式 ramp 优先于
 `object_smoothing_frames`，jump 按 Scene 契约立即更新。更新一个字段不延长其它字段的

@@ -6,6 +6,9 @@
 
 ## 范围
 
+以下迁移记录描述当时的冻结行为。文件输入的原生对象／块增益与静音现已接入输出电平，
+当前规则见 [ADM 增益与静音](TRIPLE_BALANCE_RENDERER.md#adm-增益与静音)。
+
 Triple Balance 后端的场景改写、床、离线与文件流式渲染、Scene 流式渲染器，以及 room 后端的资源准备、事件表、准备线程状态机、文件流式与 Scene 流式渲染器迁入 `rust/crates/mradm-render`（`#![forbid(unsafe_code)]`），room 的资源与 HRIR 加载迁入 `mradm-dsp`。与 4.5 相同，Rust 后端只读策略后的 Rust 渲染场景（`RenderPlan::scene_handle`），不读 C++ `AdmScene`。
 
 | 批次 | 内容 | 原 C++ | Rust |

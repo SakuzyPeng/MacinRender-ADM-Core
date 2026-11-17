@@ -91,10 +91,12 @@ pub enum TbPlan {
         mix: Arc<pcm_mix::Plan>,
         session: Arc<session::Plan>,
         sized: bool,
+        block_gains: Arc<crate::triple_balance::BlockGains>,
     },
     D {
         mix: Arc<pcm_mix::Plan>,
         plan: Arc<d_mode::Plan>,
+        block_gains: Arc<crate::triple_balance::BlockGains>,
     },
 }
 
@@ -110,13 +112,14 @@ impl TbStage {
         &mut self,
         input: &[f32],
         output: &mut [f32],
+        levels: &[f32],
         start: u64,
         frames: usize,
         last: bool,
     ) -> mradm_dsp::Result<()> {
         match self {
-            Self::Size(s) => s.process(input, output, &[], start, frames, last),
-            Self::D(s, _) => s.process(input, output, start, frames),
+            Self::Size(s) => s.process(input, output, levels, start, frames, last),
+            Self::D(s, _) => s.process_with_levels(input, output, levels, start, frames),
         }
     }
 
@@ -150,6 +153,9 @@ pub(crate) enum Engine {
     TripleBalance {
         mixer: Mixer,
         stage: Option<TbStage>,
+        block_gains: Arc<crate::triple_balance::BlockGains>,
+        levels: Vec<f32>,
+        interpolation: u64,
     },
 }
 
@@ -188,11 +194,12 @@ impl Engine {
                 }
             }
             Kernel::TripleBalance(plan) => {
-                let (mix, stage) = match plan.as_ref() {
+                let (mix, stage, block_gains) = match plan.as_ref() {
                     TbPlan::Standard {
                         mix,
                         session,
                         sized,
+                        block_gains,
                     } => (
                         mix,
                         sized
@@ -206,13 +213,19 @@ impl Engine {
                             })
                             .transpose()?
                             .map(TbStage::Size),
+                        block_gains,
                     ),
-                    TbPlan::D { mix, plan } => (
+                    TbPlan::D {
+                        mix,
+                        plan,
+                        block_gains,
+                    } => (
                         mix,
                         Some(TbStage::D(
                             d_mode::Session::new(Arc::clone(plan)),
                             Arc::clone(plan),
                         )),
+                        block_gains,
                     ),
                 };
                 Self::TripleBalance {
@@ -223,6 +236,13 @@ impl Engine {
                         smoothing,
                     )?,
                     stage,
+                    block_gains: Arc::clone(block_gains),
+                    levels: if block_gains.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![1.; block_size as usize * mix.inputs()]
+                    },
+                    interpolation,
                 }
             }
         })
@@ -237,8 +257,22 @@ impl Engine {
         frames: usize,
     ) -> mradm_dsp::Result<()> {
         match self {
-            Self::Mix(m) | Self::TripleBalance { mixer: m, .. } => {
-                m.speaker(input, output, &[], start, frames, None, None)
+            Self::Mix(m) => m.speaker(input, output, &[], start, frames, None, None),
+            Self::TripleBalance {
+                mixer,
+                block_gains,
+                levels,
+                interpolation,
+                ..
+            } => {
+                let levels = if levels.is_empty() {
+                    &mut [][..]
+                } else {
+                    &mut levels[..frames * mixer.inputs()]
+                };
+                levels.fill(1.);
+                block_gains.apply(levels, mixer.inputs(), start, *interpolation);
+                mixer.speaker(input, output, levels, start, frames, None, None)
             }
             Self::Hoa(e) => e.process(input, output, start, frames),
             Self::Ear {
@@ -271,7 +305,7 @@ impl Engine {
                 post.reset();
                 mixer.reset();
             }
-            Self::TripleBalance { mixer, stage } => {
+            Self::TripleBalance { mixer, stage, .. } => {
                 mixer.reset();
                 if let Some(stage) = stage {
                     stage.reset();
@@ -291,11 +325,25 @@ impl Engine {
         last: bool,
     ) -> Result<()> {
         if let Self::TripleBalance {
-            stage: Some(stage), ..
+            stage: Some(stage),
+            levels,
+            mixer,
+            ..
         } = self
         {
             stage
-                .process(input, output, start, frames, last)
+                .process(
+                    input,
+                    output,
+                    if levels.is_empty() {
+                        &[]
+                    } else {
+                        &levels[..frames * mixer.inputs()]
+                    },
+                    start,
+                    frames,
+                    last,
+                )
                 .map_err(|e| Error::dsp(&e, Location::TripleBalanceDsp))?;
         }
         Ok(())

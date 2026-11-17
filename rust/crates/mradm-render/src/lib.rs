@@ -26,5 +26,6 @@ pub mod routing;
 pub mod scene;
 pub mod stream;
 pub mod triple_balance;
+mod triple_balance_gain;
 pub mod triple_balance_stream;
 pub mod vbap;

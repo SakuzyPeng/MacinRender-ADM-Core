@@ -506,6 +506,18 @@ impl Session {
         start: u64,
         frames: usize,
     ) -> Result<()> {
+        self.process_with_levels(source, output, &[], start, frames)
+    }
+
+    /// Per-input output levels, applied after spatial interpolation without changing its state.
+    pub fn process_with_levels(
+        &mut self,
+        source: &[f32],
+        output: &mut [f32],
+        levels: &[f32],
+        start: u64,
+        frames: usize,
+    ) -> Result<()> {
         let channels = self.plan.layout.channels();
         if start != self.frame
             || start > self.plan.total
@@ -513,6 +525,8 @@ impl Session {
             || source.len() != count(frames, self.plan.inputs)?
             || output.len() < count(frames, channels)?
             || source.iter().any(|v| !v.is_finite())
+            || (!levels.is_empty()
+                && (levels.len() != source.len() || levels.iter().any(|v| !v.is_finite())))
         {
             return Err(invalid());
         }
@@ -531,7 +545,11 @@ impl Session {
                     let sample = source[(offset + f) * self.plan.inputs + lane.input] * lane.gain;
                     for c in 0..channels {
                         let gain = state.previous[c] + t * (state.gains[c] - state.previous[c]);
-                        output[(offset + f) * channels + c] += sample * gain;
+                        let mut value = sample * gain;
+                        if !levels.is_empty() {
+                            value *= levels[(offset + f) * self.plan.inputs + lane.input];
+                        }
+                        output[(offset + f) * channels + c] += value;
                     }
                 }
             }

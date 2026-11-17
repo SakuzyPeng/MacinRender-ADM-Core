@@ -129,6 +129,19 @@ fn rejected_process_preserves_state_and_output() {
     assert!(state.process(&bad, &mut output, 0, 2048).is_err());
     assert!(output.iter().all(|v| *v == 0.));
     assert!(state.process(&input, &mut output, 1, 2048).is_err());
+    let mut levels = vec![1.; input.len()];
+    assert!(
+        state
+            .process_with_levels(&input, &mut output, &levels[..1], 0, 2048)
+            .is_err()
+    );
+    levels[17] = f32::NAN;
+    assert!(
+        state
+            .process_with_levels(&input, &mut output, &levels, 0, 2048)
+            .is_err()
+    );
+    assert!(output.iter().all(|v| *v == 0.));
     state.process(&input, &mut output, 0, 2048).unwrap();
     let mut control = vec![0.; output.len()];
     Session::new(plan)

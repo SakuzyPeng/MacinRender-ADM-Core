@@ -1,12 +1,14 @@
 //! The Triple Balance room backend (`triple-balance`): the private
-//! compatibility copy of the scene (file-absolute rtime timeline, native gain / mute / end
-//! ignored, an initial default block), its `triple-balance-objects-v1` report, the input checks
+//! compatibility copy of the scene (file-absolute rtime timeline, duration gates ignored,
+//! an initial default spatial block), its `triple-balance-objects-v1` report, the input checks
 //! and the numeric plan (bed routes, point and size tracks, D mode). Moved from the C++
 //! `triple_balance_renderer`, `semantics` and `bed` with the same check order, messages and
 //! report; the room numerics stay in `mradm_dsp::triple_balance`.
 use crate::offline::{TbPlan, dsp_code};
 use crate::routing::{self, Error, Level};
 use crate::scene::{Log, in_effect, span};
+pub use crate::triple_balance_gain::BlockGains;
+use crate::triple_balance_gain::Event as GainEvent;
 use crate::vbap::Binding;
 use mradm_adm::records::{DirectBlock, Object, ObjectBlock, Track};
 use mradm_dsp::pcm_mix::{self, Coefficients};
@@ -161,19 +163,21 @@ fn text(bytes: &[u8]) -> String {
 }
 
 /// One track of the compatibility copy: Objects blocks on the rtime timeline, or the bed's
-/// DirectSpeakers blocks (only the first is kept after the report).
+/// DirectSpeakers blocks, plus their independent native level timeline.
 struct CopyTrack<'a> {
     uid: &'a str,
     channel: Option<u16>,
     blocks: Vec<ObjectBlock>,
     /// (overlay index, block) of each DirectSpeakers block.
     direct: Vec<(usize, &'a DirectBlock)>,
+    gains: Vec<GainEvent>,
 }
 
 struct CopyObject<'a> {
     id: &'a str,
     record: &'a Object,
     user: UserLevel,
+    gain: f32,
     tracks: Vec<CopyTrack<'a>>,
 }
 
@@ -212,7 +216,11 @@ impl<'a> View<'a> {
 
     fn native_gain(&self, block: &DirectBlock) -> f32 {
         if self.provenance {
-            block.source.gain.linear
+            if block.source.gain.present != 0 {
+                block.source.gain.linear
+            } else {
+                1.
+            }
         } else {
             block.gain
         }
@@ -522,6 +530,7 @@ impl<'a> Semantics<'a> {
                 id,
                 record,
                 user: state.user,
+                gain: 1.,
                 tracks: Vec::new(),
             };
             for track in span(&s.tracks, record.tracks) {
@@ -580,7 +589,11 @@ impl<'a> Semantics<'a> {
             }
             let provenance = self.view.provenance;
             let native_gain = if provenance {
-                record.source_gain.linear
+                if record.source_gain.present != 0 {
+                    record.source_gain.linear
+                } else {
+                    1.
+                }
             } else {
                 record.gain
             };
@@ -618,10 +631,26 @@ impl<'a> Semantics<'a> {
                     "",
                 ));
             }
+            let effective_mute = user.mute.unwrap_or(native_mute);
+            object.gain = if effective_mute {
+                0.
+            } else if provenance {
+                native_gain * user.gain_multiplier
+            } else {
+                record.gain
+            };
+            if !object.gain.is_finite() {
+                return Err(self.reject(
+                    id,
+                    "gain",
+                    "triple-balance requires finite nonnegative gain",
+                    "",
+                ));
+            }
             let mut row: Map = [
                 ("id", id.into()),
-                ("native_gain", decision("ignored", native_gain, 1i32)),
-                ("native_mute", decision("ignored", native_mute, false)),
+                ("native_gain", decision("used", native_gain, native_gain)),
+                ("native_mute", decision("used", native_mute, effective_mute)),
                 ("object_start", decision("ignored", native_start, 0i32)),
                 (
                     "object_end",
@@ -629,7 +658,7 @@ impl<'a> Semantics<'a> {
                 ),
                 ("user_gain_multiplier", user.gain_multiplier.into()),
                 ("user_mute", user.mute.into()),
-                ("output_gain", level_gain(&user).into()),
+                ("output_gain", object.gain.into()),
                 (
                     "output_gain_stage",
                     if has_bed {
@@ -651,7 +680,7 @@ impl<'a> Semantics<'a> {
             let mut tracks = Vec::with_capacity(object.tracks.len());
             for track in &mut object.tracks {
                 let row = if track.blocks.is_empty() {
-                    self.bed_track(id, &user, track)?
+                    self.bed_track(id, object.gain, track)?
                 } else {
                     self.object_track(id, track, spread_none)?
                 };
@@ -667,7 +696,7 @@ impl<'a> Semantics<'a> {
     fn bed_track(
         &mut self,
         id: &str,
-        user: &UserLevel,
+        object_gain: f32,
         track: &mut CopyTrack<'a>,
     ) -> Result<Value, Error> {
         let view = &self.view;
@@ -686,8 +715,23 @@ impl<'a> Semantics<'a> {
                         },
                     ),
                     ("source_end_sample", optional_end(block.end)),
-                    ("gain", decision("ignored", view.native_gain(block), 1i32)),
-                    ("time", "ignored; fixed route active throughout file".into()),
+                    (
+                        "gain",
+                        decision("used", view.native_gain(block), view.native_gain(block)),
+                    ),
+                    (
+                        "gain_event_sample",
+                        if view.provenance {
+                            block.source.rtime_samples
+                        } else {
+                            block.start
+                        }
+                        .into(),
+                    ),
+                    (
+                        "time",
+                        "fixed route throughout file; gain follows rtime".into(),
+                    ),
                 ])
             })
             .collect();
@@ -703,7 +747,6 @@ impl<'a> Semantics<'a> {
             .into_iter()
             .map(Value::from)
             .collect();
-        track.direct.truncate(1);
         Ok(obj([
             ("track_uid", track.uid.into()),
             ("pcm_channel", track.channel.map(u32::from).into()),
@@ -715,10 +758,7 @@ impl<'a> Semantics<'a> {
             ("gains_internal_layout_order", floats(&gains)),
             ("user_gain_multiplier", level.gain_multiplier.into()),
             ("user_mute", level.mute.into()),
-            (
-                "output_gain",
-                (level_gain(user) * level_gain(&level)).into(),
-            ),
+            ("output_gain", (object_gain * level_gain(&level)).into()),
             ("events", Value::Array(events)),
         ]))
     }
@@ -776,6 +816,7 @@ impl<'a> Semantics<'a> {
                 ("renderer_event_sample", (relative / 512 * 512).into()),
                 ("control_start_sample", (relative / 512 * 512).into()),
                 ("control_target", true.into()),
+                ("gain_event_sample", relative.into()),
                 ("target_cartesian", (p.cartesian != 0).into()),
                 ("target_xyz", floats(&[p.x, p.y, p.z])),
                 (
@@ -786,7 +827,7 @@ impl<'a> Semantics<'a> {
                         decision("used", floats(&extent), floats(&extent))
                     },
                 ),
-                ("gain", decision("ignored", block.gain, 1i32)),
+                ("gain", decision("used", block.gain, block.gain)),
                 ("end", decision("ignored", optional_end(block.end), frames)),
             ]
             .into_iter()
@@ -810,7 +851,6 @@ impl<'a> Semantics<'a> {
             events.push(Value::Object(event));
             block.start = relative;
             block.end = u64::MAX;
-            block.gain = 1.;
             previous = relative;
         }
         let initial = track.blocks[0].start;
@@ -876,15 +916,54 @@ impl<'a> Semantics<'a> {
 
 fn copy_track<'a>(view: &View<'a>, track: &'a Track) -> CopyTrack<'a> {
     let s = &view.scene.snapshot;
+    let blocks = span(&s.object_blocks, track.blocks);
+    let direct = span(&s.direct_blocks, track.ds_blocks);
+    let gains = if blocks.is_empty() {
+        direct
+            .iter()
+            .map(|b| {
+                let start = if view.provenance {
+                    b.source.rtime_samples
+                } else {
+                    b.start
+                };
+                GainEvent {
+                    start,
+                    end: u64::MAX,
+                    gain: view.native_gain(b),
+                    jump: true,
+                    interpolation: None,
+                }
+            })
+            .collect()
+    } else {
+        blocks
+            .iter()
+            .map(|b| GainEvent {
+                start: b.source.rtime_samples,
+                end: if b.source.duration_present != 0 {
+                    b.source
+                        .rtime_samples
+                        .saturating_add(b.source.duration_samples)
+                } else {
+                    u64::MAX
+                },
+                gain: b.gain,
+                jump: b.jump != 0,
+                interpolation: (b.interpolation_present != 0).then_some(b.interpolation),
+            })
+            .collect()
+    };
     CopyTrack {
         uid: view.string(track.uid),
         channel: u16::try_from(track.channel).ok(),
-        blocks: span(&s.object_blocks, track.blocks).to_vec(),
-        direct: span(&s.direct_blocks, track.ds_blocks)
+        blocks: blocks.to_vec(),
+        direct: direct
             .iter()
             .enumerate()
             .map(|(i, b)| (track.ds_blocks.offset + i, b))
             .collect(),
+        gains,
     }
 }
 
@@ -1009,6 +1088,7 @@ fn build(
     let mut events = Vec::new();
     let mut bed_coefficients = Vec::new();
     let mut size_tracks = Vec::new();
+    let mut block_gains = BlockGains::default();
     for object in objects {
         for track in &object.tracks {
             let channel = track.channel.unwrap_or(info.channels);
@@ -1022,7 +1102,8 @@ fn build(
                     [b"input=".as_slice(), r.input_path].concat(),
                 ));
             }
-            let mut gain = level_gain(&object.user);
+            block_gains.push(usize::from(channel), track.gains.clone());
+            let mut gain = object.gain;
             let mut binding = Binding {
                 input_channel: channel,
                 object_id: object.id.as_bytes().to_vec(),
@@ -1033,7 +1114,9 @@ fn build(
                 binding.label_key = routing::canonical_label(
                     view.labels(first).first().map_or(&[][..], |l| l.as_bytes()),
                 );
-                gain *= level_gain(&view.direct_user(first_index).user);
+                if view.provenance {
+                    gain *= level_gain(&view.direct_user(first_index).user);
+                }
                 let row = TbRowInput {
                     input: usize::from(channel),
                     event_offset: 0,
@@ -1098,6 +1181,7 @@ fn build(
         }
     }
     let (bindings, rows): (Vec<_>, Vec<_>) = channels.into_values().unzip();
+    let block_gains = Arc::new(block_gains);
     let plan = match r.mode {
         Mode::D => {
             let plan = d_mode::Plan::new(
@@ -1125,6 +1209,7 @@ fn build(
             TbPlan::D {
                 mix: Arc::new(silent),
                 plan: Arc::new(plan),
+                block_gains,
             }
         }
         Mode::Standard => {
@@ -1148,6 +1233,7 @@ fn build(
                 mix: Arc::clone(&plan.mix),
                 sized: !size_tracks.is_empty(),
                 session: Arc::new(plan),
+                block_gains,
             }
         }
     };
