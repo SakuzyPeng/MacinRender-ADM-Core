@@ -1,29 +1,31 @@
+// 22.2 LFE routing in the islands (R3 F2 / F3): the Windows system-spatial sink's LFE pair
+// recombination, and on macOS the Apple backend through the C ABI (direct, split-power and the dual-LFE
+// refusal) and its island table (the LFE side bus in offline and stream renders, a live override on
+// it, and a channel whose blocks change from LFE to full range). The shared rules and the EAR / VBAP
+// renders are Rust tests (mradm-render tests/routing.rs, mradm-engine tests/lfe_render.rs).
 #include <algorithm>
-#include <array>
-#include <atomic>
 #include <cmath>
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
-#include <numbers>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include "render_common.h"
 #ifdef __APPLE__
-#include "adm/audio_io.h"
-#include "adm/io.h"
-#include "adm/render.h"
-#include "adm/render_apple.h"
-#include "adm/render_service.h"
+#include <atomic>
+#include <cstdint>
+#include <filesystem>
+#include <numbers>
+#include <optional>
+#include <system_error>
+#include <utility>
 
-#include "../support/apple_renderer/apple_renderer.h"
+#include "adm/audio_io.h"
+#include "adm/c_api.h"
+
+#include "../support/apple_island_driver.h"
 #include "../support/direct_speakers_fixture.h"
-#include "adm_scene.h"
-#include "render_common_scene.h"
-#include "test_portable.h"
 #endif
 
 namespace {
@@ -59,11 +61,13 @@ struct SignalSpec {
 
 constexpr uint32_t k_sample_rate = 48000U;
 constexpr uint64_t k_frames = 4800U;
+// The object a channel-bed import synthesizes (mradm-scene).
+constexpr const char* k_bed_object = "AO_CHANNEL_BED";
 
 [[nodiscard]] std::filesystem::path unique_path(std::string_view stem) {
     static std::atomic<unsigned int> sequence{0};
-    return std::filesystem::path{mr_test::temp_prefix() + std::string{stem} + "_" +
-                                 std::to_string(sequence.fetch_add(1)) + ".wav"};
+    return std::filesystem::temp_directory_path() /
+           (std::string{stem} + "_" + std::to_string(sequence.fetch_add(1)) + ".wav");
 }
 
 std::vector<float> make_input_samples(const std::vector<SignalSpec>& signals) {
@@ -86,98 +90,198 @@ bool write_input(const std::filesystem::path& path, const std::vector<SignalSpec
         return false;
     }
     const auto samples = make_input_samples(signals);
-    return writer->write(samples.data(), k_frames) == k_frames;
+    return writer->write(samples.data(), k_frames) == k_frames && writer->finish().has_value();
+}
+
+std::vector<double> channel_rms(const apple_test::Audio& audio) {
+    std::vector<double> rms(audio.channels, 0.0);
+    for (uint64_t frame = 0; frame < audio.frames; ++frame) {
+        for (uint32_t channel = 0; channel < audio.channels; ++channel) {
+            const double sample = audio.samples[(frame * audio.channels) + channel];
+            rms[channel] += sample * sample;
+        }
+    }
+    std::ranges::transform(
+        rms, rms.begin(), [&](double sum) { return std::sqrt(sum / static_cast<double>(audio.frames)); });
+    return rms;
+}
+
+struct RenderCapture {
+    adm_error_code_t code{ADM_ERROR_OK};
+    std::string message;
+    std::vector<double> rms;
+    bool output_exists{false};
+};
+
+// A C ABI Apple render of a labelled channel bed to 22.2.
+RenderCapture render_case(const std::vector<std::string>& labels, const std::vector<SignalSpec>& signals, bool split) {
+    const auto input = unique_path("lfe_routing_input");
+    const auto output = unique_path("lfe_routing_output");
+    const FileGuard input_guard(input);
+    const FileGuard output_guard(output);
+    RenderCapture capture;
+    if (!write_input(input, signals)) {
+        capture.code = ADM_ERROR_IO;
+        return capture;
+    }
+    std::string csv;
+    for (const auto& label : labels) {
+        csv += (csv.empty() ? "" : ",") + label;
+    }
+    adm_context_t* context = adm_create_context();
+    adm_render_options_t* options = adm_create_render_options();
+    adm_render_options_set_renderer(options, ADM_RENDERER_APPLE);
+    adm_render_options_set_output_layout(options, "22.2");
+    adm_render_options_set_input_channel_labels(options, csv.c_str());
+    adm_render_options_set_lfe_routing_mode(options, split ? ADM_LFE_ROUTING_SPLIT_POWER : ADM_LFE_ROUTING_DIRECT);
+    adm_render_options_set_peak_limit(options, 0);
+    capture.code = adm_render_file_ex(
+        context, input.string().c_str(), output.string().c_str(), options, nullptr, nullptr, nullptr);
+    capture.message = adm_context_last_error_message(context);
+    adm_destroy_render_options(options);
+    adm_destroy_context(context);
+    capture.output_exists = std::filesystem::exists(output);
+    if (capture.code == ADM_ERROR_OK) {
+        if (auto audio = apple_test::read_wav(output)) {
+            capture.rms = channel_rms(*audio);
+        }
+    }
+    return capture;
+}
+
+bool near_ratio(double value, double reference, double ratio, double tolerance = 0.025) {
+    return reference > 1.0e-8 && std::abs((value / reference) - ratio) <= tolerance;
+}
+
+// The Apple backend's 22.2 LFE routing (restored in F3 after the shared EAR / VBAP helper moved to
+// Rust): direct LFE1 / LFE2 on ch3 / ch9 only, split-power at sqrt(0.5) on both, a native dual LFE
+// without crosstalk, the dual split refused before any output, and full-range routing unchanged.
+bool verify_apple_backend() {
+    constexpr SignalSpec k_lfe1{0.20F, 80.0F};
+    constexpr SignalSpec k_lfe2{0.10F, 160.0F};
+    constexpr double k_silence = 1.0e-7;
+    const auto direct_lfe1 = render_case({"LFE1"}, {k_lfe1}, false);
+    const auto direct_lfe2 = render_case({"LFE2"}, {k_lfe2}, false);
+    const auto split_lfe1 = render_case({"LFE1"}, {k_lfe1}, true);
+    const auto split_lfe2 = render_case({"LFE2"}, {k_lfe2}, true);
+    const auto direct_dual = render_case({"LFE1", "LFE2"}, {k_lfe1, k_lfe2}, false);
+    const auto split_dual = render_case({"LFE1", "LFE2"}, {k_lfe1, k_lfe2}, true);
+    const auto full_range_direct = render_case({"M+000"}, {{0.12F, 1000.0F}}, false);
+    const auto full_range_split = render_case({"M+000"}, {{0.12F, 1000.0F}}, true);
+
+    const auto rendered = [](const RenderCapture& c) { return c.code == ADM_ERROR_OK && c.rms.size() == 24U; };
+    bool ok = check(rendered(direct_lfe1) && rendered(direct_lfe2) && rendered(split_lfe1) && rendered(split_lfe2) &&
+                        rendered(direct_dual) && rendered(full_range_direct) && rendered(full_range_split),
+                    "Apple: the 22.2 LFE cases render 24 channels");
+    if (!ok) {
+        return false;
+    }
+    const auto only_lfe_slots_active = [&](const RenderCapture& c) {
+        for (std::size_t channel = 0; channel < c.rms.size(); ++channel) {
+            if (channel != 3U && channel != 9U && c.rms[channel] >= k_silence) {
+                return false;
+            }
+        }
+        return true;
+    };
+    ok = check(direct_lfe1.rms[3] > 1.0e-4 && direct_lfe1.rms[9] < k_silence, "Apple: direct LFE1 is on ch3 only");
+    ok =
+        check(direct_lfe2.rms[3] < k_silence && direct_lfe2.rms[9] > 1.0e-4, "Apple: direct LFE2 is on ch9 only") && ok;
+    ok = check(only_lfe_slots_active(direct_lfe1) && only_lfe_slots_active(direct_lfe2) &&
+                   only_lfe_slots_active(split_lfe1) && only_lfe_slots_active(split_lfe2) &&
+                   only_lfe_slots_active(direct_dual),
+               "Apple: LFE never leaks into any of the 22 full-range channels") &&
+         ok;
+    ok = check(near_ratio(split_lfe1.rms[3], direct_lfe1.rms[3], std::sqrt(0.5)) &&
+                   near_ratio(split_lfe1.rms[9], direct_lfe1.rms[3], std::sqrt(0.5)) &&
+                   std::abs(split_lfe1.rms[3] - split_lfe1.rms[9]) < 1.0e-6,
+               "Apple: split LFE1 reaches ch3/ch9 equally at sqrt(0.5)") &&
+         ok;
+    ok = check(near_ratio(split_lfe2.rms[3], direct_lfe2.rms[9], std::sqrt(0.5)) &&
+                   near_ratio(split_lfe2.rms[9], direct_lfe2.rms[9], std::sqrt(0.5)) &&
+                   std::abs(split_lfe2.rms[3] - split_lfe2.rms[9]) < 1.0e-6,
+               "Apple: split LFE2 reaches ch3/ch9 equally at sqrt(0.5)") &&
+         ok;
+    ok = check(near_ratio(direct_dual.rms[3], direct_lfe1.rms[3], 1.0) &&
+                   near_ratio(direct_dual.rms[9], direct_lfe2.rms[9], 1.0),
+               "Apple: native dual LFE stays independent without crosstalk") &&
+         ok;
+    ok = check(split_dual.code == ADM_ERROR_INVALID_ARGUMENT && !split_dual.output_exists &&
+                   split_dual.message.find("both LFE1 and LFE2") != std::string::npos,
+               "Apple: split dual LFE rejects before leaving an output file") &&
+         ok;
+    double full_range_energy = 0.0;
+    double full_range_max_delta = 0.0;
+    for (std::size_t channel = 0; channel < full_range_direct.rms.size(); ++channel) {
+        full_range_energy += full_range_direct.rms[channel] * full_range_direct.rms[channel];
+        full_range_max_delta =
+            std::max(full_range_max_delta, std::abs(full_range_direct.rms[channel] - full_range_split.rms[channel]));
+    }
+    return check(full_range_energy > 1.0e-8 && full_range_max_delta < 1.0e-7,
+                 "Apple: split-power leaves all non-LFE routing unchanged") &&
+           ok;
 }
 
 // NOLINTNEXTLINE(readability-function-size) -- one end-to-end side-bus lifecycle scenario.
 bool verify_apple_side_bus_stream_and_override() {
+    constexpr std::size_t k_channels = 24U;
     const auto input = unique_path("apple_lfe_stream_input");
-    const auto output = unique_path("apple_lfe_stream_reference");
-    FileGuard input_guard(input);
-    FileGuard output_guard(output);
+    const FileGuard input_guard(input);
     if (!check(write_input(input, {{0.2F, 80.0F}}), "Apple LFE stream: write input")) {
         return false;
     }
-
-    mradm::RenderOptions import_options;
-    import_options.input_channel_labels = {"LFE1"};
-    mradm::NullLogSink logs;
-    auto scene = mradm::RenderService{}.prepare_preview_scene(input, import_options, logs);
-    if (!check(scene.has_value(), "Apple LFE stream: import channel-bed scene")) {
+    apple_test::Settings settings;
+    settings.input = input.string();
+    settings.layout = "9+10+3";
+    const apple_test::Prepared prepared(settings, {"LFE1"});
+    if (!check(prepared.ok(), "Apple LFE stream: prepare pure side-bus scene")) {
         return false;
     }
-
-    mradm::ScenePlan plan;
-    plan.input_path = input.string();
-    plan.output_path = output.string();
-    plan.output_layout = "9+10+3";
-    plan.scene = mradm::adm_scene(*scene);
-    plan.scene_handle = scene->handle;
-    plan.lfe_routing_mode = mradm::LfeRoutingMode::direct;
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "Apple LFE stream: prepare pure side-bus scene") ||
-        !check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
+    const auto output = unique_path("apple_lfe_stream_reference");
+    const FileGuard output_guard(output);
+    apple_test::Caller caller;
+    if (!check(apple_test::render(prepared, settings, output, caller).ok(),
                "Apple LFE stream: offline reference render")) {
         return false;
     }
-
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!check(reader.has_value() && reader->channels() == 24U, "Apple LFE stream: reference is 24-channel")) {
+    const auto audio = apple_test::read_wav(output);
+    if (!check(audio.has_value() && audio->channels == k_channels, "Apple LFE stream: reference is 24-channel")) {
         return false;
     }
-    std::vector<float> reference(reader->frame_count() * reader->channels(), 0.0F);
-    reader->read(reference.data(), reader->frame_count());
+    const auto& reference = audio->samples;
 
-    const auto pull_all = [&](mradm::IRenderStream& stream, bool apply_override) {
-        std::vector<float> rendered;
-        std::vector<float> block(std::size_t{1024} * 24U, 0.0F);
-        std::size_t total_frames = 0;
-        bool override_applied = false;
-        for (;;) {
-            std::ranges::fill(block, 0.0F);
-            auto produced = stream.process(std::span<float>(block), 1024U);
-            if (!produced || *produced == 0U) {
-                break;
-            }
-            rendered.insert(
-                rendered.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * 24U));
-            total_frames += *produced;
-            if (apply_override && !override_applied && total_frames >= 1024U) {
-                mradm::LiveObjectOverride object_override;
-                object_override.object_id = plan.scene.objects.front().id;
-                object_override.speaker_label = "LFE1";
-                object_override.gain_db = -20.0F;
-                mradm::LiveOverrides overrides;
-                overrides.revision = 1U;
-                overrides.objects.push_back(std::move(object_override));
-                stream.set_overrides(overrides);
-                override_applied = true;
-            }
+    const auto neutral = apple_test::stream_all(prepared, settings, {1024U});
+    apple_test::Stream edited_stream(prepared, settings);
+    if (!check(neutral.has_value() && edited_stream.ok(), "Apple LFE stream: open realtime streams")) {
+        return false;
+    }
+    // The override lands after the first 1024 frames.
+    std::vector<float> edited;
+    std::vector<float> block(std::size_t{1024} * k_channels, 0.0F);
+    for (bool applied = false;;) {
+        std::ranges::fill(block, 0.0F);
+        const auto produced = edited_stream.process(block, 1024U);
+        if (!produced || *produced == 0U) {
+            break;
         }
-        return rendered;
-    };
-
-    auto neutral_stream = renderer->open_stream(**prepared, plan, logs);
-    auto edited_stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(neutral_stream.has_value() && edited_stream.has_value(), "Apple LFE stream: open realtime streams")) {
-        return false;
+        edited.insert(edited.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * k_channels));
+        if (!applied && edited.size() >= std::size_t{1024} * k_channels) {
+            edited_stream.set_overrides({{k_bed_object, -20.0F, false, std::nullopt, "LFE1"}}, 1U);
+            applied = true;
+        }
     }
-    const auto neutral = pull_all(**neutral_stream, false);
-    const auto edited = pull_all(**edited_stream, true);
-    bool ok = check(neutral.size() == reference.size() && edited.size() == reference.size(),
+    bool ok = check(neutral->size() == reference.size() && edited.size() == reference.size(),
                     "Apple LFE stream: stream/offline frame counts match");
     double max_diff = 0.0;
-    for (std::size_t index = 0; index < std::min(neutral.size(), reference.size()); ++index) {
-        max_diff = std::max(max_diff, std::abs(static_cast<double>(neutral[index] - reference[index])));
+    for (std::size_t index = 0; index < std::min(neutral->size(), reference.size()); ++index) {
+        max_diff = std::max(max_diff, std::abs(static_cast<double>((*neutral)[index] - reference[index])));
     }
-    ok = check(max_diff < 1.0e-7, "Apple LFE stream: pure side bus matches offline render_window") && ok;
+    ok = check(max_diff < 1.0e-7, "Apple LFE stream: pure side bus matches the offline render") && ok;
 
     constexpr std::size_t k_edit_frame = 1024U;
-    if (edited.size() > (k_edit_frame * 24U) + 9U) {
-        ok = check(std::abs(edited[(k_edit_frame * 24U) + 3U] - reference[(k_edit_frame * 24U) + 3U]) < 1.0e-7F,
+    if (edited.size() > (k_edit_frame * k_channels) + 9U) {
+        ok = check(std::abs(edited[(k_edit_frame * k_channels) + 3U] - reference[(k_edit_frame * k_channels) + 3U]) <
+                       1.0e-7F,
                    "Apple LFE stream: override ramp starts continuously at the old gain") &&
              ok;
     }
@@ -186,12 +290,13 @@ bool verify_apple_side_bus_stream_and_override() {
     double reference_energy = 0.0;
     double edited_energy = 0.0;
     double lfe2_energy = 0.0;
-    for (std::size_t frame = k_settled_begin; frame < k_settled_end; ++frame) {
-        const double ref = reference[(frame * 24U) + 3U];
-        const double changed = edited[(frame * 24U) + 3U];
+    for (std::size_t frame = k_settled_begin; frame < k_settled_end && (frame * k_channels) + 9U < edited.size();
+         ++frame) {
+        const double ref = reference[(frame * k_channels) + 3U];
+        const double changed = edited[(frame * k_channels) + 3U];
         reference_energy += ref * ref;
         edited_energy += changed * changed;
-        const double lfe2 = edited[(frame * 24U) + 9U];
+        const double lfe2 = edited[(frame * k_channels) + 9U];
         lfe2_energy += lfe2 * lfe2;
     }
     ok = check(reference_energy > 0.0 && edited_energy > reference_energy * 0.008 &&
@@ -200,14 +305,14 @@ bool verify_apple_side_bus_stream_and_override() {
          ok;
     ok = check(lfe2_energy < 1.0e-12, "Apple LFE stream: direct override does not leak into LFE2") && ok;
 
-    // One source channel may change from LFE to a regular DirectSpeakers target over
-    // time. The Apple prepare recipe must split the intervals, not classify the whole
-    // track as LFE and drop its later full-range block.
+    // One source channel may change from LFE to a regular DirectSpeakers target over time. The
+    // Apple prepare recipe must split the intervals, not classify the whole track as LFE and drop
+    // its later full-range block.
     constexpr uint64_t k_switch_frame = 2048U;
     const auto mixed_input = unique_path("apple_lfe_mixed_blocks_input");
     const auto mixed_output = unique_path("apple_lfe_mixed_blocks");
-    FileGuard mixed_input_guard(mixed_input);
-    FileGuard mixed_output_guard(mixed_output);
+    const FileGuard mixed_input_guard(mixed_input);
+    const FileGuard mixed_output_guard(mixed_output);
     fixture::write_mono_direct_speakers(
         mixed_input,
         k_sample_rate,
@@ -215,43 +320,32 @@ bool verify_apple_side_bus_stream_and_override() {
         1.0F,
         {fixture::direct_speakers_block("LFE1", 0U, k_switch_frame, k_sample_rate),
          fixture::direct_speakers_block("M+000", k_switch_frame, k_frames, k_sample_rate)});
-    auto mixed_scene = mradm::RenderService{}.prepare_preview_scene(mixed_input, {}, logs);
-    if (!check(mixed_scene.has_value(), "Apple mixed blocks: import ADM fixture")) {
-        return false;
-    }
-    mradm::ScenePlan mixed_plan = plan;
-    mixed_plan.input_path = mixed_input.string();
-    mixed_plan.output_path = mixed_output.string();
-    mixed_plan.scene = mradm::adm_scene(*mixed_scene);
-    mixed_plan.scene_handle = mixed_scene->handle;
-
-    auto mixed_prepared = renderer->prepare(mixed_plan, logs);
-    if (!check(mixed_prepared.has_value(), "Apple mixed blocks: prepare") ||
-        !check(renderer->render_window(**mixed_prepared, mixed_plan, progress, logs).has_value(),
+    apple_test::Settings mixed_settings = settings;
+    mixed_settings.input = mixed_input.string();
+    const apple_test::Prepared mixed_prepared(mixed_settings);
+    if (!check(mixed_prepared.ok(), "Apple mixed blocks: prepare") ||
+        !check(apple_test::render(mixed_prepared, mixed_settings, mixed_output, caller).ok(),
                "Apple mixed blocks: offline render")) {
         return false;
     }
-    auto mixed_reader = mradm::audio::FloatWavReader::open(mixed_output.string());
-    if (!check(mixed_reader.has_value() && mixed_reader->channels() == 24U,
-               "Apple mixed blocks: output is 24-channel")) {
+    const auto mixed = apple_test::read_wav(mixed_output);
+    if (!check(mixed.has_value() && mixed->channels == k_channels, "Apple mixed blocks: output is 24-channel")) {
         return false;
     }
-    std::vector<float> mixed_samples(mixed_reader->frame_count() * mixed_reader->channels(), 0.0F);
-    mixed_reader->read(mixed_samples.data(), mixed_reader->frame_count());
     double first_lfe_energy = 0.0;
     double later_lfe_energy = 0.0;
     double later_spatial_energy = 0.0;
-    for (uint64_t frame = 0; frame < mixed_reader->frame_count(); ++frame) {
-        const auto offset = static_cast<std::size_t>(frame) * 24U;
+    for (uint64_t frame = 0; frame < mixed->frames; ++frame) {
+        const auto offset = static_cast<std::size_t>(frame) * k_channels;
         if (frame < k_switch_frame) {
-            const double sample = mixed_samples[offset + 3U];
+            const double sample = mixed->samples[offset + 3U];
             first_lfe_energy += sample * sample;
         } else if (frame >= k_switch_frame + 512U) {
-            const double lfe = mixed_samples[offset + 3U];
+            const double lfe = mixed->samples[offset + 3U];
             later_lfe_energy += lfe * lfe;
-            for (std::size_t channel = 0; channel < 24U; ++channel) {
+            for (std::size_t channel = 0; channel < k_channels; ++channel) {
                 if (channel != 3U && channel != 9U) {
-                    const double sample = mixed_samples[offset + channel];
+                    const double sample = mixed->samples[offset + channel];
                     later_spatial_energy += sample * sample;
                 }
             }
@@ -278,6 +372,7 @@ bool verify_lfe_pair_recombination() {
 int main() {
     bool ok = verify_lfe_pair_recombination();
 #ifdef __APPLE__
+    ok = verify_apple_backend() && ok;
     ok = verify_apple_side_bus_stream_and_override() && ok;
 #endif
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -287,7 +287,8 @@ fn routing_reproduces_the_cpp_goldens() {
     assert_eq!(cases.len(), 4550);
 }
 
-/// The LFE semantics every backend shares (from the C++ `lfe_routing_test`, R3 F2): the LFE1
+/// The LFE semantics every backend shares (from the C++ `lfe_routing_test` and
+/// `apple_renderer_smoke_test`, R3 F2 / F3): the LFE1
 /// aliases, LFE2 / LFER winning over a generic LFE label on the same block, a lowPass-only block,
 /// and the 22.2 routing: one semantic LFE when it repeats, exact unity without crossfeed in
 /// direct mode, a standalone LFE2, both LFEs refused for split-power, the warnings and the
@@ -300,6 +301,7 @@ fn lfe_aliases_and_the_22_2_routing_rules() {
         "LFEL",
         "RC_LFE",
         "RCLFE",
+        "R-LFE",
         "SUB",
         "Subwoofer",
         "low_frequency",

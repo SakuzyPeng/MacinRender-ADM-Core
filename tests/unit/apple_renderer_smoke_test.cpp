@@ -1,3 +1,8 @@
+// The macOS AUSpatialMixer backend (src/adm_apple) without the C++ SDK (R3 F3). Whole renders whose
+// options the C ABI carries run through adm_render_file_ex with the Apple renderer; the factory
+// presets, the offline listener orientation and the monitor streams run on the Apple island table
+// (mradm_apple_islands) over a scene imported through the test FFI, as the engine drives them. The
+// AUSpatialMixer HRTF mode probe calls AudioToolbox directly. macOS only.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -7,6 +12,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -21,22 +27,21 @@
 #include <vector>
 
 #include <AudioToolbox/AudioToolbox.h>
+#include <nlohmann/json.hpp>
 
-#include "adm/audio_io.h"
-#include "adm/io.h"
-#include "adm/render.h"
-#include "adm/render_apple.h"
-#include "adm/render_service.h"
+#include "adm/c_api.h"
 
 #include "../support/adm_fixture.h"
-#include "../support/apple_renderer/apple_renderer.h"
+#include "../support/apple_island_driver.h"
 #include "../support/wav_fixture.h"
-#include "adm_scene.h"
-#include "render_common.h"
-#include "render_common_scene.h"
-#include "scene_import_internal.h"
 
 namespace {
+
+using apple_test::Caller;
+using apple_test::Override;
+using apple_test::Prepared;
+using apple_test::Settings;
+using apple_test::Stream;
 
 class FileGuard {
   public:
@@ -45,7 +50,10 @@ class FileGuard {
     FileGuard& operator=(const FileGuard&) = delete;
     FileGuard(FileGuard&&) = delete;
     FileGuard& operator=(FileGuard&&) = delete;
-    ~FileGuard() { std::filesystem::remove(path_); }
+    ~FileGuard() {
+        std::error_code ignored;
+        std::filesystem::remove(path_, ignored);
+    }
 
   private:
     std::filesystem::path path_;
@@ -58,23 +66,6 @@ bool check(bool condition, const char* msg) {
     return condition;
 }
 
-class CapturingLogSink final : public mradm::LogSink {
-  public:
-    void log(mradm::LogLevel level, std::string_view /*module*/, std::string_view message) override {
-        if (level == mradm::LogLevel::warning) {
-            warnings_.emplace_back(message);
-        }
-    }
-
-    [[nodiscard]] bool has_warning(std::string_view needle) const {
-        return std::ranges::any_of(warnings_,
-                                   [needle](const auto& warning) { return warning.find(needle) != std::string::npos; });
-    }
-
-  private:
-    std::vector<std::string> warnings_;
-};
-
 std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     static std::atomic<int> s_seq{0};
     const auto name = std::string(stem) + "_" + std::to_string(static_cast<int>(::getpid())) + "_" +
@@ -82,6 +73,7 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     return std::filesystem::temp_directory_path() / name;
 }
 
+// BEGIN AUSpatialMixer HRTF probe (direct AudioToolbox, unchanged by R3 F3)
 constexpr UInt32 k_probe_frames = 4096U;
 constexpr UInt32 k_probe_sample_rate = 48000U;
 constexpr UInt32 k_probe_render_block = 512U;
@@ -431,6 +423,11 @@ double rms_difference(const std::vector<float>& lhs, const std::vector<float>& r
     return std::sqrt(total / static_cast<double>(lhs.size()));
 }
 
+// END AUSpatialMixer HRTF probe (first part)
+
+// The fixtures author one object (or one bed object) first, so after reassign_ids it is AO_1001.
+constexpr const char* k_object_id = "AO_1001";
+
 // Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
 // optional ADM width (0..1) for extent spreading, and optional channelLock.
 std::pair<std::shared_ptr<fixture::Document>, std::string>
@@ -499,26 +496,18 @@ make_object_doc(float azimuth,
     return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
+// Two Objects blocks at the front: 0-200 ms headLocked false, 200-400 ms true.
 std::pair<std::shared_ptr<fixture::Document>, std::string> make_head_locked_timeline_doc() {
     auto doc = fixture::Document::create();
     auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"AppleHeadTimelineCF"},
                                                   fixture::TypeDefinition::objects);
-    {
+    for (const bool locked : {false, true}) {
         fixture::AudioBlockFormatObjects block{
             fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
-        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{0}}});
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{locked ? 200 : 0}}});
         block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{200}}});
         block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
-        block.set(fixture::HeadLocked{false});
-        cf->add(block);
-    }
-    {
-        fixture::AudioBlockFormatObjects block{
-            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
-        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{200}}});
-        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{200}}});
-        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
-        block.set(fixture::HeadLocked{true});
+        block.set(fixture::HeadLocked{locked});
         cf->add(block);
     }
     doc->add(cf);
@@ -552,43 +541,20 @@ std::pair<std::shared_ptr<fixture::Document>, std::string> make_head_locked_time
     return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
-std::filesystem::path write_fixture(float azimuth,
-                                    uint32_t frames,
-                                    float gain,
-                                    float width,
-                                    bool channel_lock,
-                                    bool mute = false,
-                                    std::optional<bool> object_head_locked = std::nullopt,
-                                    std::optional<bool> block_head_locked = std::nullopt) {
-    constexpr uint32_t k_ch = 1U;
+// A mono 48 kHz 440 Hz input whose track UIDs all play file channel 1.
+std::filesystem::path write_mono(const std::shared_ptr<fixture::Document>& doc,
+                                 const std::vector<std::string>& uids,
+                                 std::string_view stem,
+                                 uint32_t frames) {
     constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid_str] =
-        make_object_doc(azimuth, gain, width, channel_lock, mute, object_head_locked, block_head_locked);
-    auto path = temp_path("mr_apple_input", ".wav");
-
+    std::vector<fixture::WaveAudioId> ids;
+    ids.reserve(uids.size());
+    std::ranges::transform(
+        uids, std::back_inserter(ids), [](const std::string& uid) { return fixture::WaveAudioId{1U, uid, "", ""}; });
+    const auto path = temp_path(stem, ".wav");
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<fixture::WaveChna>(
-        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
-    auto writer = fixture::write_wave(path.string(), k_ch, k_sr, 24U, chna, axml);
-    std::vector<float> samples(frames);
-    for (uint32_t i = 0; i < frames; ++i) {
-        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
-                                      static_cast<float>(k_sr));
-    }
-    writer->write(samples.data(), frames);
-    return path;
-}
-
-std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
-    constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid] = make_head_locked_timeline_doc();
-    auto path = temp_path("mr_apple_head_timeline", ".wav");
-    std::ostringstream xml_buf;
-    fixture::write_xml(xml_buf, doc);
-    auto chna =
-        std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid, "", "")});
+    auto chna = std::make_shared<fixture::WaveChna>(ids);
     auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
     auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
@@ -598,6 +564,118 @@ std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
     }
     writer->write(samples.data(), frames);
     return path;
+}
+
+std::filesystem::path write_fixture(float azimuth,
+                                    uint32_t frames,
+                                    float gain,
+                                    float width,
+                                    bool channel_lock,
+                                    bool mute = false,
+                                    std::optional<bool> object_head_locked = std::nullopt,
+                                    std::optional<bool> block_head_locked = std::nullopt) {
+    const auto [doc, uid] =
+        make_object_doc(azimuth, gain, width, channel_lock, mute, object_head_locked, block_head_locked);
+    return write_mono(doc, {uid}, "mr_apple_input", frames);
+}
+
+std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
+    const auto [doc, uid] = make_head_locked_timeline_doc();
+    return write_mono(doc, {uid}, "mr_apple_head_timeline", frames);
+}
+
+// One DirectSpeakers block: its label and, when timed, its start and duration.
+struct DsBlockSpec {
+    std::string label;
+    std::optional<std::chrono::nanoseconds> start;
+    std::optional<std::chrono::nanoseconds> duration;
+};
+
+// A DirectSpeakers channel at a fixed nominal position, added to `pf`; returns its track UID.
+std::shared_ptr<fixture::AudioTrackUid> add_ds_channel(const std::shared_ptr<fixture::Document>& doc,
+                                                       const std::shared_ptr<fixture::AudioPackFormat>& pf,
+                                                       const std::string& name,
+                                                       float azimuth,
+                                                       float elevation,
+                                                       const std::vector<DsBlockSpec>& blocks) {
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{name + "CF"},
+                                                  fixture::TypeDefinition::direct_speakers);
+    for (const auto& spec : blocks) {
+        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
+            fixture::Azimuth{azimuth}, fixture::Elevation{elevation}, fixture::Distance{1.0F}}};
+        block.add(fixture::SpeakerLabel{spec.label});
+        block.set(fixture::Gain{1.0F});
+        if (spec.start) {
+            block.set(fixture::Rtime{fixture::Time{*spec.start}});
+        }
+        if (spec.duration) {
+            block.set(fixture::Duration{fixture::Time{*spec.duration}});
+        }
+        cf->add(block);
+    }
+    doc->add(cf);
+    pf->add_reference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{name + "SF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
+    doc->add(sf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{name + "TF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
+    doc->add(tf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
+    doc->add(uid);
+    return uid;
+}
+
+// One DirectSpeakers object of one channel with `blocks`, 8192 frames.
+std::filesystem::path write_ds_blocks_fixture(float azimuth, float elevation, const std::vector<DsBlockSpec>& blocks) {
+    auto doc = fixture::Document::create();
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleDsBlocksPF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    auto uid = add_ds_channel(doc, pf, "AppleDsBlocks", azimuth, elevation, blocks);
+    doc->add(pf);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleDsBlocksObject"});
+    obj->add_reference(uid);
+    doc->add(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleDsBlocksContent"});
+    content->add_reference(obj);
+    doc->add(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleDsBlocksProgramme"});
+    prog->add_reference(content);
+    doc->add(prog);
+    fixture::reassign_ids(doc);
+    return write_mono(doc, {fixture::format_id(uid->get<fixture::AudioTrackUidId>())}, "mr_apple_ds_input", 8192U);
+}
+
+// A single DirectSpeakers bed channel at a fixed speaker position and label.
+std::filesystem::path write_ds_fixture(float azimuth, float elevation, const std::string& label) {
+    return write_ds_blocks_fixture(azimuth, elevation, {{label, std::nullopt, std::nullopt}});
+}
+
+// An Objects object at `azimuth` and a DirectSpeakers object of M+030 and LFE1, all three tracks on
+// the one file channel.
+std::filesystem::path write_mixed_paths_fixture(float azimuth) {
+    const auto [doc, object_uid] = make_object_doc(azimuth, 1.0F, 0.0F, false);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleMixedDsPF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    auto front = add_ds_channel(doc, pf, "AppleMixedFront", 30.0F, 0.0F, {{"M+030", std::nullopt, std::nullopt}});
+    auto lfe = add_ds_channel(doc, pf, "AppleMixedLfe", 0.0F, 0.0F, {{"LFE1", std::nullopt, std::nullopt}});
+    doc->add(pf);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleMixedBed"});
+    obj->add_reference(front);
+    obj->add_reference(lfe);
+    doc->add(obj);
+    doc->get_elements<fixture::AudioContent>().front()->add_reference(obj);
+    fixture::reassign_ids(doc);
+    const auto uid = [](const std::shared_ptr<fixture::AudioTrackUid>& u) {
+        return fixture::format_id(u->get<fixture::AudioTrackUidId>());
+    };
+    const auto object_track = doc->get_elements<fixture::AudioTrackUid>().front();
+    return write_mono(doc, {uid(object_track), uid(front), uid(lfe)}, "mr_apple_mixed_input", 8192U);
 }
 
 double channel_energy(const std::vector<float>& samples, uint32_t channels, uint32_t ch) {
@@ -620,59 +698,38 @@ channel_energy(const std::vector<float>& samples, uint32_t channels, uint32_t ch
     return energy;
 }
 
-std::optional<std::vector<float>>
-render_apple(float azimuth,
-             std::string_view stem,
-             const std::string& layout,
-             uint16_t expected_channels,
-             float gain = 1.0F,
-             float width = 0.0F,
-             bool channel_lock = false,
-             mradm::AppleSpatialPreset apple_spatial_preset = mradm::AppleSpatialPreset::off,
-             const mradm::ListenerOrientation& listener = {},
-             bool apple_speaker_rendering_flags = false,
-             std::optional<bool> object_head_locked = std::nullopt,
-             std::optional<bool> block_head_locked = std::nullopt) {
-    const auto in =
-        write_fixture(azimuth, 8192U, gain, width, channel_lock, false, object_head_locked, block_head_locked);
-    FileGuard in_guard(in);
-    const auto out = temp_path(stem, ".wav");
-    FileGuard out_guard(out);
-
-    mradm::RenderRequest req;
-    req.input_path = in;
-    req.output_path = out;
-    req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = layout;
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-    req.options.apple_spatial_preset = apple_spatial_preset;
-    req.options.apple_speaker_rendering_flags = apple_speaker_rendering_flags;
-    req.options.listener_orientation = listener;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    const auto res = service.render(req, progress, logs);
-    if (!check(res.success(), "apple render succeeds")) {
-        std::cerr << "context: " << res.error.message << " " << res.error.context << "\n";
-        return std::nullopt;
+double total_energy(const std::vector<float>& samples, uint16_t channels) {
+    double total = 0.0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        total += channel_energy(samples, channels, c);
     }
-
-    auto reader = mradm::audio::FloatWavReader::open(out.string());
-    if (!check(reader.has_value(), "apple output WAV opens")) {
-        return std::nullopt;
-    }
-    if (!check(reader->channels() == expected_channels, "apple output channel count")) {
-        return std::nullopt;
-    }
-    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
-    reader->read(samples.data(), reader->frame_count());
-    return samples;
+    return total;
 }
 
-std::optional<std::vector<float>> render_apple_stereo(float azimuth, std::string_view stem, float gain = 1.0F) {
-    return render_apple(azimuth, stem, "binaural", 2U, gain);
+// Number of output channels carrying more than `frac` of the total energy.
+int active_channels(const std::vector<float>& samples, uint16_t channels, double frac) {
+    const double total = total_energy(samples, channels);
+    int active = 0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        if (channel_energy(samples, channels, c) > frac * total) {
+            ++active;
+        }
+    }
+    return active;
+}
+
+// Index of the highest-energy output channel.
+std::size_t loudest_channel(const std::vector<float>& samples, uint16_t channels) {
+    std::size_t best = 0;
+    double best_e = -1.0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        const double e = channel_energy(samples, channels, c);
+        if (e > best_e) {
+            best_e = e;
+            best = c;
+        }
+    }
+    return best;
 }
 
 uint32_t read_be32(const std::vector<unsigned char>& bytes, std::size_t offset) {
@@ -707,18 +764,87 @@ std::optional<uint32_t> caf_channel_layout_tag(const std::filesystem::path& path
     return std::nullopt;
 }
 
-// Index of the highest-energy output channel.
-std::size_t loudest_channel(const std::vector<float>& samples, uint16_t channels) {
-    std::size_t best = 0;
-    double best_e = -1.0;
-    for (uint16_t c = 0; c < channels; ++c) {
-        const double e = channel_energy(samples, channels, c);
-        if (e > best_e) {
-            best_e = e;
-            best = c;
-        }
+// A C ABI render of `input` with the Apple renderer to `layout` (peak limiting off) after
+// `configure`, read back when it has `channels` channels.
+std::optional<std::vector<float>> render_capi(const std::filesystem::path& input,
+                                              std::string_view stem,
+                                              const std::string& layout,
+                                              uint16_t channels,
+                                              const std::function<void(adm_render_options_t*)>& configure = {}) {
+    const auto out = temp_path(stem, ".wav");
+    FileGuard out_guard(out);
+    adm_context_t* context = adm_create_context();
+    adm_render_options_t* options = adm_create_render_options();
+    adm_render_options_set_renderer(options, ADM_RENDERER_APPLE);
+    adm_render_options_set_output_layout(options, layout.c_str());
+    adm_render_options_set_peak_limit(options, 0);
+    if (configure) {
+        configure(options);
     }
-    return best;
+    adm_render_result_t* result = nullptr;
+    const auto code =
+        adm_render_file_ex(context, input.string().c_str(), out.string().c_str(), options, nullptr, nullptr, &result);
+    if (code != ADM_ERROR_OK) {
+        std::cerr << "context: " << adm_context_last_error_message(context) << "\n";
+    }
+    adm_destroy_render_result(result);
+    adm_destroy_render_options(options);
+    adm_destroy_context(context);
+    if (!check(code == ADM_ERROR_OK, "apple render succeeds")) {
+        return std::nullopt;
+    }
+    auto audio = apple_test::read_wav(out);
+    if (!check(audio.has_value() && audio->channels == channels, "apple output has the layout's channels")) {
+        return std::nullopt;
+    }
+    return std::move(audio->samples);
+}
+
+// A C ABI render of a one-object fixture.
+std::optional<std::vector<float>> render_apple(float azimuth,
+                                               std::string_view stem,
+                                               const std::string& layout,
+                                               uint16_t channels,
+                                               float gain = 1.0F,
+                                               float width = 0.0F,
+                                               bool channel_lock = false,
+                                               const std::function<void(adm_render_options_t*)>& configure = {}) {
+    const auto in = write_fixture(azimuth, 8192U, gain, width, channel_lock);
+    FileGuard in_guard(in);
+    return render_capi(in, stem, layout, channels, configure);
+}
+
+std::optional<std::vector<float>> render_apple_stereo(float azimuth, std::string_view stem, float gain = 1.0F) {
+    return render_apple(azimuth, stem, "binaural", 2U, gain);
+}
+
+// An island render (prepare + render) of `settings` to a WAVE file, read back with `channels`.
+std::optional<std::vector<float>> render_island(const Settings& settings, uint16_t channels, std::string_view stem) {
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "apple island prepares")) {
+        std::cerr << "context: " << prepared.reply.message << "\n";
+        return std::nullopt;
+    }
+    const auto out = temp_path(stem, ".wav");
+    FileGuard out_guard(out);
+    Caller caller;
+    const auto reply = apple_test::render(prepared, settings, out, caller);
+    if (!check(reply.ok(), "apple island renders")) {
+        std::cerr << "context: " << reply.message << "\n";
+        return std::nullopt;
+    }
+    auto audio = apple_test::read_wav(out);
+    if (!check(audio.has_value() && audio->channels == channels, "apple island output has the layout's channels")) {
+        return std::nullopt;
+    }
+    return std::move(audio->samples);
+}
+
+Settings settings_for(const std::filesystem::path& input, std::string layout = "binaural") {
+    Settings settings;
+    settings.input = input.string();
+    settings.layout = std::move(layout);
+    return settings;
 }
 
 struct ExpectedLayout {
@@ -741,40 +867,42 @@ constexpr std::array<ExpectedLayout, 8> k_expected_layouts{{
 }};
 // clang-format on
 
+// The Apple backend's capability record as the C ABI publishes it (adm_capabilities_json).
 bool verify_capabilities() {
-    const auto caps = mradm::apple_capabilities();
+    adm_context_t* context = adm_create_context();
+    char* raw = nullptr;
+    const auto code = adm_capabilities_json(context, &raw);
+    const std::string text = raw != nullptr ? raw : "";
+    adm_free_string(raw);
+    adm_destroy_context(context);
+    if (!check(code == ADM_ERROR_OK, "capabilities JSON")) {
+        return false;
+    }
+    const auto json = nlohmann::json::parse(text);
+    const auto& backends = json.at("backends");
+    const auto apple = std::find_if(backends.begin(), backends.end(), [](const nlohmann::json& b) {
+        return b.value("renderer", std::string{}) == "apple";
+    });
+    if (!check(apple != backends.end(), "the macOS build publishes the apple backend")) {
+        return false;
+    }
+    const auto& caps = *apple;
     bool ok = true;
-    ok &= check(caps.backend_name == "apple", "backend name");
-    ok &= check(caps.supports_objects, "objects supported");
-    ok &= check(caps.supports_direct_speakers, "direct speakers supported");
-    ok &= check(!caps.supports_hoa, "hoa unsupported");
-    ok &= check(caps.supports_object_divergence, "object divergence advertised");
-    ok &= check(!caps.supports_diffuse, "diffuse unsupported");
-    ok &= check(caps.supports_render_window, "render window supported");
+    ok &= check(caps.at("backend_name") == "apple", "backend name");
+    ok &= check(caps.at("supports_objects") == true, "objects supported");
+    ok &= check(caps.at("supports_direct_speakers") == true, "direct speakers supported");
+    ok &= check(caps.at("supports_hoa") == false, "hoa unsupported");
+    ok &= check(caps.at("supports_object_divergence") == true, "object divergence advertised");
+    ok &= check(caps.at("supports_diffuse") == false, "diffuse unsupported");
     const auto has_layout = [&](const std::string& id, uint16_t channels, bool binaural) {
-        const auto it = std::ranges::find_if(caps.supported_layouts,
-                                             [&](const mradm::CapabilityReport::Layout& l) { return l.id == id; });
-        return it != caps.supported_layouts.end() && it->channel_count == channels && it->is_binaural == binaural;
+        const auto& layouts = caps.at("layouts");
+        return std::any_of(layouts.begin(), layouts.end(), [&](const nlohmann::json& l) {
+            return l.at("id") == id && l.at("channel_count") == channels && l.at("is_binaural") == binaural;
+        });
     };
     for (const auto& layout : k_expected_layouts) {
         ok &= check(has_layout(layout.id, layout.channels, layout.binaural), layout.display_name);
     }
-    return ok;
-}
-
-bool verify_lfe_label_detection() {
-    mradm::SceneDirectSpeakersBlock lfe;
-    lfe.speaker_labels = {"RC_LFE"};
-    mradm::SceneDirectSpeakersBlock non_lfe;
-    non_lfe.speaker_labels = {"M+030"};
-
-    bool ok = true;
-    ok &= check(mradm::render_common::is_lfe_label("RC_LFE"), "RC_LFE label identifies LFE");
-    ok &= check(mradm::render_common::is_lfe_label("R-LFE"), "R-LFE label identifies LFE");
-    ok &= check(mradm::render_common::is_lfe_label("low_frequency"), "low_frequency label identifies LFE");
-    ok &= check(mradm::render_common::is_lfe_label("Subwoofer"), "Subwoofer label identifies LFE");
-    ok &= check(mradm::render_common::direct_speakers_block_is_lfe(lfe), "RC_LFE label identifies LFE");
-    ok &= check(!mradm::render_common::direct_speakers_block_is_lfe(non_lfe), "front-left label is not LFE");
     return ok;
 }
 
@@ -786,14 +914,11 @@ bool verify_directional_sign() {
     if (!left || !right) {
         return false;
     }
-    const double left_l = channel_energy(*left, 2U, 0U);
-    const double left_r = channel_energy(*left, 2U, 1U);
-    const double right_l = channel_energy(*right, 2U, 0U);
-    const double right_r = channel_energy(*right, 2U, 1U);
-
     bool ok = true;
-    ok &= check(left_l > left_r, "ADM azimuth +90 (left) is louder in left output channel");
-    ok &= check(right_r > right_l, "ADM azimuth -90 (right) is louder in right output channel");
+    ok &= check(channel_energy(*left, 2U, 0U) > channel_energy(*left, 2U, 1U),
+                "ADM azimuth +90 (left) is louder in left output channel");
+    ok &= check(channel_energy(*right, 2U, 1U) > channel_energy(*right, 2U, 0U),
+                "ADM azimuth -90 (right) is louder in right output channel");
     return ok;
 }
 
@@ -804,8 +929,7 @@ bool verify_zero_gain_is_silent() {
     if (!out) {
         return false;
     }
-    const double energy = channel_energy(*out, 2U, 0U) + channel_energy(*out, 2U, 1U);
-    return check(energy < 1.0e-2, "gain=0 object renders as silence (dB floor, not 0 dB unity)");
+    return check(total_energy(*out, 2U) < 1.0e-2, "gain=0 object renders as silence (dB floor, not 0 dB unity)");
 }
 
 // Speaker (VBAP) path: a 7.1.4 render must produce 12 channels and pan an ADM-left
@@ -826,8 +950,9 @@ bool verify_speaker_panning() {
 // The public compatibility switch must reach AUSpatialMixer and configure every
 // speaker bus without producing an unsupported-property error.
 bool verify_speaker_rendering_flags_switch() {
-    const auto apple_native = render_apple(
-        45.0F, "mr_apple_flags_on", "4+7+0", 12U, 1.0F, 0.0F, false, mradm::AppleSpatialPreset::off, {}, true);
+    const auto apple_native = render_apple(45.0F, "mr_apple_flags_on", "4+7+0", 12U, 1.0F, 0.0F, false, [](auto* o) {
+        adm_render_options_set_apple_speaker_rendering_flags(o, 1);
+    });
     return check(apple_native.has_value(), "Apple speaker rendering flags mode renders successfully");
 }
 
@@ -850,107 +975,72 @@ bool verify_binaural_container_tag() {
     FileGuard in_guard(in);
     const auto out = temp_path("mr_apple_tag", ".caf");
     FileGuard out_guard(out);
-
-    mradm::RenderRequest req;
-    req.input_path = in;
-    req.output_path = out;
-    req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = "0+2+0"; // legacy alias -> must normalize to binaural tag
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    const auto res = service.render(req, progress, logs);
-    if (!check(res.success(), "apple 0+2+0 → CAF render succeeds")) {
-        std::cerr << "context: " << res.error.message << " " << res.error.context << "\n";
+    adm_context_t* context = adm_create_context();
+    adm_render_options_t* options = adm_create_render_options();
+    adm_render_options_set_renderer(options, ADM_RENDERER_APPLE);
+    adm_render_options_set_output_layout(options, "0+2+0"); // legacy alias -> must normalize to binaural tag
+    adm_render_options_set_peak_limit(options, 0);
+    const auto code =
+        adm_render_file_ex(context, in.string().c_str(), out.string().c_str(), options, nullptr, nullptr, nullptr);
+    adm_destroy_render_options(options);
+    adm_destroy_context(context);
+    if (!check(code == ADM_ERROR_OK, "apple 0+2+0 → CAF render succeeds")) {
         return false;
     }
     const auto tag = caf_channel_layout_tag(out);
     constexpr uint32_t k_binaural = (106U << 16) | 2U;
     constexpr uint32_t k_stereo = (101U << 16) | 2U;
-    if (!tag.has_value()) {
-        check(false, "CAF has a chan chunk");
+    if (!check(tag.has_value(), "CAF has a chan chunk")) {
         return false;
     }
-    const uint32_t tag_value = tag.value();
-    bool ok = check(tag_value == k_binaural, "CAF tagged Binaural (106), not Stereo");
-    ok &= check(tag_value != k_stereo, "CAF not tagged plain Stereo for a binaural render");
+    bool ok = check(*tag == k_binaural, "CAF tagged Binaural (106), not Stereo");
+    ok &= check(*tag != k_stereo, "CAF not tagged plain Stereo for a binaural render");
     return ok;
 }
 
 bool verify_render_window_frame_count() {
-    constexpr uint32_t k_sample_rate = 48000U;
     const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
     FileGuard in_guard(in);
     const auto out = temp_path("mr_apple_window", ".wav");
     FileGuard out_guard(out);
-
-    mradm::RenderRequest req;
-    req.input_path = in;
-    req.output_path = out;
-    req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = "binaural";
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-    req.options.render_start_sec = 1024.0 / static_cast<double>(k_sample_rate);
-    req.options.render_end_sec = 2048.0 / static_cast<double>(k_sample_rate);
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    const auto res = service.render(req, progress, logs);
-    if (!check(res.success(), "apple render window succeeds")) {
-        std::cerr << "context: " << res.error.message << " " << res.error.context << "\n";
+    adm_context_t* context = adm_create_context();
+    adm_render_options_t* options = adm_create_render_options();
+    adm_render_options_set_renderer(options, ADM_RENDERER_APPLE);
+    adm_render_options_set_output_layout(options, "binaural");
+    adm_render_options_set_peak_limit(options, 0);
+    adm_render_options_set_render_start_sec(options, 1024.0 / 48000.0);
+    adm_render_options_set_render_end_sec(options, 2048.0 / 48000.0);
+    const auto code =
+        adm_render_file_ex(context, in.string().c_str(), out.string().c_str(), options, nullptr, nullptr, nullptr);
+    adm_destroy_render_options(options);
+    adm_destroy_context(context);
+    if (!check(code == ADM_ERROR_OK, "apple render window succeeds")) {
         return false;
     }
-
-    auto reader = mradm::audio::FloatWavReader::open(out.string());
-    if (!check(reader.has_value(), "apple render window output opens")) {
+    const auto audio = apple_test::read_wav(out);
+    if (!check(audio.has_value(), "apple render window output opens")) {
         return false;
     }
-
     bool ok = true;
-    ok &= check(reader->channels() == 2U, "apple render window output is binaural");
-    ok &= check(reader->frame_count() == 1024U, "apple render window writes only requested frames");
+    ok &= check(audio->channels == 2U, "apple render window output is binaural");
+    ok &= check(audio->frames == 1024U, "apple render window writes only requested frames");
     return ok;
 }
 
-// Number of output channels carrying more than `frac` of the total energy.
-int active_channels(const std::vector<float>& samples, uint16_t channels, double frac) {
-    double total = 0.0;
-    for (uint16_t c = 0; c < channels; ++c) {
-        total += channel_energy(samples, channels, c);
-    }
-    int active = 0;
-    for (uint16_t c = 0; c < channels; ++c) {
-        if (channel_energy(samples, channels, c) > frac * total) {
-            ++active;
-        }
-    }
-    return active;
-}
-
-double total_energy(const std::vector<float>& samples, uint16_t channels) {
-    double total = 0.0;
-    for (uint16_t c = 0; c < channels; ++c) {
-        total += channel_energy(samples, channels, c);
-    }
-    return total;
-}
-
+// The AUSpatialMixer factory presets (island settings; the C ABI has no offline preset option).
 bool verify_spatial_presets_render_binaural() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
     bool ok = true;
-    for (const auto preset :
-         {mradm::AppleSpatialPreset::headphone_default, mradm::AppleSpatialPreset::headphone_movie}) {
-        const auto rendered = render_apple(0.0F, "mr_apple_spatial_preset", "binaural", 2U, 1.0F, 0.0F, false, preset);
-        if (!rendered.has_value()) {
-            check(false, "apple binaural factory preset renders");
+    for (const uint32_t preset : {1U, 2U}) { // headphone default, headphone movie
+        auto settings = settings_for(in);
+        settings.spatial_preset = preset;
+        const auto rendered = render_island(settings, 2U, "mr_apple_spatial_preset");
+        if (!check(rendered.has_value(), "apple binaural factory preset renders")) {
             ok = false;
             continue;
         }
-        ok &= check(total_energy(rendered.value(), 2U) > 1.0e-5, "apple binaural factory preset output is not silent");
+        ok &= check(total_energy(*rendered, 2U) > 1.0e-5, "apple binaural factory preset output is not silent");
     }
     return ok;
 }
@@ -968,7 +1058,6 @@ bool verify_extent_spread() {
     const int wide_active = active_channels(*wide, 12U, 0.05);
     const double point_e = total_energy(*point, 12U);
     const double wide_e = total_energy(*wide, 12U);
-
     bool ok = true;
     ok &= check(wide_active > point_active, "width spreads energy across more speakers than a point");
     ok &= check(wide_active >= 3, "wide front object lights up >= 3 speakers");
@@ -976,42 +1065,16 @@ bool verify_extent_spread() {
     return ok;
 }
 
-// Render a wide front object to 7.1.4 with an explicit speaker spread mode.
-std::optional<std::vector<float>> render_714_spread(float width, mradm::SpeakerSpreadMode mode, std::string_view stem) {
-    const auto in = write_fixture(0.0F, 8192U, 1.0F, width, false);
-    FileGuard in_guard(in);
-    const auto out = temp_path(stem, ".wav");
-    FileGuard out_guard(out);
-
-    mradm::RenderRequest req;
-    req.input_path = in;
-    req.output_path = out;
-    req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = "4+7+0";
-    req.options.speaker_spread_mode = mode;
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    if (!check(service.render(req, progress, logs).success(), "apple spread-mode render succeeds")) {
-        return std::nullopt;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(out.string());
-    if (!reader || reader->channels() != 12U) {
-        return std::nullopt;
-    }
-    std::vector<float> samples(12U * reader->frame_count());
-    reader->read(samples.data(), reader->frame_count());
-    return samples;
-}
-
 // --speaker-spread-mode none must disable the extent cloud: a wide object renders as a
 // point (localized), aligning Apple with the VBAP/binaural spread-mode capability gating.
 bool verify_spread_mode_none_disables_extent() {
-    const auto spread = render_714_spread(0.8F, mradm::SpeakerSpreadMode::automatic, "mr_apple_spread_auto");
-    const auto none = render_714_spread(0.8F, mradm::SpeakerSpreadMode::none, "mr_apple_spread_none");
+    const auto spread_mode = [](adm_speaker_spread_mode_t mode) {
+        return [mode](adm_render_options_t* o) { adm_render_options_set_speaker_spread_mode(o, mode); };
+    };
+    const auto spread = render_apple(
+        0.0F, "mr_apple_spread_auto", "4+7+0", 12U, 1.0F, 0.8F, false, spread_mode(ADM_SPEAKER_SPREAD_AUTOMATIC));
+    const auto none = render_apple(
+        0.0F, "mr_apple_spread_none", "4+7+0", 12U, 1.0F, 0.8F, false, spread_mode(ADM_SPEAKER_SPREAD_NONE));
     if (!spread || !none) {
         return false;
     }
@@ -1040,189 +1103,7 @@ bool verify_channel_lock_snaps() {
     return ok;
 }
 
-// Single DirectSpeakers (bed) channel at a fixed speaker position and label.
-std::pair<std::shared_ptr<fixture::Document>, std::string>
-make_ds_doc(float azimuth, float elevation, const std::string& label) {
-    auto doc = fixture::Document::create();
-    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"AppleDsCF"},
-                                                  fixture::TypeDefinition::direct_speakers);
-    {
-        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
-            fixture::Azimuth{azimuth}, fixture::Elevation{elevation}, fixture::Distance{1.0F}}};
-        block.add(fixture::SpeakerLabel{label});
-        block.set(fixture::Gain{1.0F});
-        cf->add(block);
-    }
-    doc->add(cf);
-    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleDsPF"},
-                                               fixture::TypeDefinition::direct_speakers);
-    pf->add_reference(cf);
-    doc->add(pf);
-    auto sf =
-        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"AppleDsSF"}, fixture::FormatDefinition::pcm);
-    sf->set_reference(cf);
-    doc->add(sf);
-    auto tf =
-        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"AppleDsTF"}, fixture::FormatDefinition::pcm);
-    tf->set_reference(sf);
-    sf->add_reference(tf);
-    doc->add(tf);
-    auto uid = fixture::AudioTrackUid::create();
-    uid->set_reference(tf);
-    uid->set_reference(pf);
-    doc->add(uid);
-    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleDsObject"});
-    obj->add_reference(uid);
-    doc->add(obj);
-    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleDsContent"});
-    content->add_reference(obj);
-    doc->add(content);
-    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleDsProgramme"});
-    prog->add_reference(content);
-    doc->add(prog);
-    fixture::reassign_ids(doc);
-    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
-}
-
-std::filesystem::path
-write_ds_fixture(float azimuth, float elevation, const std::string& label, uint32_t frames = 8192U) {
-    constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid_str] = make_ds_doc(azimuth, elevation, label);
-    const auto in = temp_path("mr_apple_ds_input", ".wav");
-    std::ostringstream xml_buf;
-    fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<fixture::WaveChna>(
-        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
-    auto writer = fixture::write_wave(in.string(), 1U, k_sr, 24U, chna, axml);
-    std::vector<float> samples(frames);
-    for (uint32_t i = 0; i < frames; ++i) {
-        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
-                                      static_cast<float>(k_sr));
-    }
-    writer->write(samples.data(), frames);
-    return in;
-}
-
-// BEGIN Apple recipe fixtures (PCM consistency 5.6 B)
-// The Rust render scene the Apple recipe reads, imported as RenderService imports an ADM file.
-std::shared_ptr<const mradm::detail::RenderSceneHandle> rust_scene(const std::filesystem::path& input) {
-    auto scene = mradm::io::RenderScene::import(input.string(), nullptr);
-    return scene ? scene->handle() : nullptr;
-}
-
-// One DirectSpeakers block: its label and, when timed, its start and duration.
-struct DsBlockSpec {
-    std::string label;
-    std::optional<std::chrono::nanoseconds> start;
-    std::optional<std::chrono::nanoseconds> duration;
-};
-
-// A DirectSpeakers channel at a fixed nominal position, added to `pf`; returns its track UID.
-std::shared_ptr<fixture::AudioTrackUid> add_ds_channel(const std::shared_ptr<fixture::Document>& doc,
-                                                       const std::shared_ptr<fixture::AudioPackFormat>& pf,
-                                                       const std::string& name,
-                                                       float azimuth,
-                                                       const std::vector<DsBlockSpec>& blocks) {
-    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{name + "CF"},
-                                                  fixture::TypeDefinition::direct_speakers);
-    for (const auto& spec : blocks) {
-        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
-            fixture::Azimuth{azimuth}, fixture::Elevation{0.0F}, fixture::Distance{1.0F}}};
-        block.add(fixture::SpeakerLabel{spec.label});
-        block.set(fixture::Gain{1.0F});
-        if (spec.start) {
-            block.set(fixture::Rtime{fixture::Time{*spec.start}});
-        }
-        if (spec.duration) {
-            block.set(fixture::Duration{fixture::Time{*spec.duration}});
-        }
-        cf->add(block);
-    }
-    doc->add(cf);
-    pf->add_reference(cf);
-    auto sf =
-        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{name + "SF"}, fixture::FormatDefinition::pcm);
-    sf->set_reference(cf);
-    doc->add(sf);
-    auto tf =
-        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{name + "TF"}, fixture::FormatDefinition::pcm);
-    tf->set_reference(sf);
-    sf->add_reference(tf);
-    doc->add(tf);
-    auto uid = fixture::AudioTrackUid::create();
-    uid->set_reference(tf);
-    uid->set_reference(pf);
-    doc->add(uid);
-    return uid;
-}
-
-// A mono 440 Hz input whose every track UID plays file channel 1.
-std::filesystem::path write_mono_doc(const std::shared_ptr<fixture::Document>& doc,
-                                     const std::vector<std::shared_ptr<fixture::AudioTrackUid>>& uids,
-                                     std::string_view stem,
-                                     uint32_t frames = 8192U) {
-    constexpr uint32_t k_sr = 48000U;
-    fixture::reassign_ids(doc);
-    std::vector<fixture::WaveAudioId> ids;
-    ids.reserve(uids.size());
-    std::ranges::transform(uids, std::back_inserter(ids), [](const std::shared_ptr<fixture::AudioTrackUid>& uid) {
-        return fixture::WaveAudioId{1U, fixture::format_id(uid->get<fixture::AudioTrackUidId>()), "", ""};
-    });
-    const auto in = temp_path(std::string{stem}, ".wav");
-    std::ostringstream xml_buf;
-    fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<fixture::WaveChna>(ids);
-    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
-    auto writer = fixture::write_wave(in.string(), 1U, k_sr, 24U, chna, axml);
-    std::vector<float> samples(frames);
-    for (uint32_t i = 0; i < frames; ++i) {
-        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
-                                      static_cast<float>(k_sr));
-    }
-    writer->write(samples.data(), frames);
-    return in;
-}
-
-// One DirectSpeakers object of one channel with `blocks`.
-std::filesystem::path write_ds_blocks_fixture(float azimuth, const std::vector<DsBlockSpec>& blocks) {
-    auto doc = fixture::Document::create();
-    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleDsBlocksPF"},
-                                               fixture::TypeDefinition::direct_speakers);
-    auto uid = add_ds_channel(doc, pf, "AppleDsBlocks", azimuth, blocks);
-    doc->add(pf);
-    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleDsBlocksObject"});
-    obj->add_reference(uid);
-    doc->add(obj);
-    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleDsBlocksContent"});
-    content->add_reference(obj);
-    doc->add(content);
-    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleDsBlocksProgramme"});
-    prog->add_reference(content);
-    doc->add(prog);
-    return write_mono_doc(doc, {uid}, "mr_apple_ds_blocks_input");
-}
-
-// An Objects object at `azimuth` and a DirectSpeakers object of M+030 and LFE1, all three tracks on
-// the one file channel.
-std::filesystem::path write_mixed_paths_fixture(float azimuth) {
-    const auto doc = make_object_doc(azimuth, 1.0F, 0.0F, false).first;
-    const auto object_track = doc->get_elements<fixture::AudioTrackUid>().front();
-    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleMixedDsPF"},
-                                               fixture::TypeDefinition::direct_speakers);
-    auto front = add_ds_channel(doc, pf, "AppleMixedFront", 30.0F, {{"M+030", std::nullopt, std::nullopt}});
-    auto lfe = add_ds_channel(doc, pf, "AppleMixedLfe", 0.0F, {{"LFE1", std::nullopt, std::nullopt}});
-    doc->add(pf);
-    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleMixedBed"});
-    obj->add_reference(front);
-    obj->add_reference(lfe);
-    doc->add(obj);
-    doc->get_elements<fixture::AudioContent>().front()->add_reference(obj);
-    return write_mono_doc(doc, {object_track, front, lfe}, "mr_apple_mixed_input");
-}
-// END Apple recipe fixtures
-
-// Render a single DirectSpeakers bed channel through the apple backend to `layout`.
+// A single DirectSpeakers bed channel through the C ABI to `layout` with a routing mode.
 std::optional<std::vector<float>>
 render_ds(float azimuth,
           float elevation,
@@ -1230,34 +1111,12 @@ render_ds(float azimuth,
           const std::string& layout,
           uint16_t channels,
           std::string_view stem,
-          mradm::DirectSpeakersRoutingMode routing_mode = mradm::DirectSpeakersRoutingMode::automatic) {
+          adm_direct_speakers_routing_mode_t routing = ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC) {
     const auto in = write_ds_fixture(azimuth, elevation, label);
     FileGuard in_guard(in);
-    const auto out = temp_path(stem, ".wav");
-    FileGuard out_guard(out);
-
-    mradm::RenderRequest req;
-    req.input_path = in;
-    req.output_path = out;
-    req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = layout;
-    req.options.direct_speakers_routing_mode = routing_mode;
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    if (!check(service.render(req, progress, logs).success(), "apple DirectSpeakers render succeeds")) {
-        return std::nullopt;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(out.string());
-    if (!reader || reader->channels() != channels) {
-        return std::nullopt;
-    }
-    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
-    reader->read(samples.data(), reader->frame_count());
-    return samples;
+    return render_capi(in, stem, layout, channels, [routing](adm_render_options_t* o) {
+        adm_render_options_set_direct_speakers_routing_mode(o, routing);
+    });
 }
 
 // Speaker routing: a DirectSpeakers bed channel (AmbienceBed) must land on its output
@@ -1296,12 +1155,12 @@ bool verify_22_2_lfe_routing() {
 }
 
 bool verify_direct_speakers_routing_modes() {
-    const auto automatic = render_ds(
-        45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_auto", mradm::DirectSpeakersRoutingMode::automatic);
+    const auto automatic =
+        render_ds(45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_auto", ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC);
     const auto label =
-        render_ds(45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_label", mradm::DirectSpeakersRoutingMode::label);
-    const auto position = render_ds(
-        45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_position", mradm::DirectSpeakersRoutingMode::position);
+        render_ds(45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_label", ADM_DIRECT_SPEAKERS_ROUTING_LABEL);
+    const auto position =
+        render_ds(45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_position", ADM_DIRECT_SPEAKERS_ROUTING_POSITION);
     if (!automatic || !label || !position) {
         return false;
     }
@@ -1320,13 +1179,8 @@ bool verify_direct_speakers_routing_modes() {
     ok &= check(channel_energy(*position, 24U, 3U) < 1.0e-12 && channel_energy(*position, 24U, 9U) < 1.0e-12,
                 "Apple position-routed non-LFE source never enters either LFE output");
 
-    const auto unknown = render_ds(45.0F,
-                                   15.0F,
-                                   "UNKNOWN",
-                                   "9+10+3",
-                                   24U,
-                                   "mr_apple_ds_unknown_position_fallback",
-                                   mradm::DirectSpeakersRoutingMode::label);
+    const auto unknown = render_ds(
+        45.0F, 15.0F, "UNKNOWN", "9+10+3", 24U, "mr_apple_ds_unknown_fallback", ADM_DIRECT_SPEAKERS_ROUTING_LABEL);
     if (!unknown) {
         return false;
     }
@@ -1336,35 +1190,30 @@ bool verify_direct_speakers_routing_modes() {
                 "Apple unmatched non-LFE label fallback never enters either LFE output");
 
     const auto alias =
-        render_ds(0.0F, 0.0F, "L", "9+10+3", 24U, "mr_apple_ds_alias_l", mradm::DirectSpeakersRoutingMode::label);
+        render_ds(0.0F, 0.0F, "L", "9+10+3", 24U, "mr_apple_ds_alias_l", ADM_DIRECT_SPEAKERS_ROUTING_LABEL);
     if (!alias) {
         return false;
     }
     ok &= check(loudest_channel(*alias, 24U) == 6U, "Apple alias L routes to 22.2 M+030 (ch6)");
 
-    const auto position_lfe = render_ds(
-        0.0F, 0.0F, "LFE", "9+10+3", 24U, "mr_apple_ds_position_lfe", mradm::DirectSpeakersRoutingMode::position);
+    const auto position_lfe =
+        render_ds(0.0F, 0.0F, "LFE", "9+10+3", 24U, "mr_apple_ds_position_lfe", ADM_DIRECT_SPEAKERS_ROUTING_POSITION);
     if (!position_lfe) {
         return false;
     }
     ok &= check(loudest_channel(*position_lfe, 24U) == 3U, "Apple position mode preserves dedicated LFE1 routing");
 
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
+    // Binaural accepts automatic and position routing; an explicit label routing is unsupported.
     const auto routing_input = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
     FileGuard routing_guard{routing_input};
-    mradm::ScenePlan plan;
-    plan.input_path = routing_input.string();
-    plan.scene_handle = rust_scene(routing_input);
-    plan.output_layout = "binaural";
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::automatic;
-    ok &= check(renderer->prepare(plan, logs).has_value(), "Apple binaural automatic DirectSpeakers routing prepares");
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::position;
-    ok &= check(renderer->prepare(plan, logs).has_value(), "Apple binaural explicit position routing prepares");
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
-    const auto rejected = renderer->prepare(plan, logs);
-    ok &= check(!rejected && rejected.error().code == mradm::ErrorCode::unsupported,
-                "Apple binaural explicit label routing is unsupported");
+    auto settings = settings_for(routing_input);
+    const auto prepare_code = [&](uint32_t routing) {
+        settings.routing = routing;
+        return Prepared(settings).reply.code;
+    };
+    ok &= check(prepare_code(0U) == 0, "Apple binaural automatic DirectSpeakers routing prepares");
+    ok &= check(prepare_code(2U) == 0, "Apple binaural explicit position routing prepares");
+    ok &= check(prepare_code(1U) == ADM_ERROR_UNSUPPORTED, "Apple binaural explicit label routing is unsupported");
     return ok;
 }
 
@@ -1373,46 +1222,34 @@ bool verify_direct_speakers_routing_modes() {
 bool verify_direct_speakers_missing_position_fallback() {
     // M+135 is not a 5.1 output: label routing spatializes it from its label direction, not from
     // the block's front-left nominal position.
-    const auto input = write_ds_blocks_fixture(30.0F, {{"M+135", std::nullopt, std::nullopt}});
+    const auto input = write_ds_fixture(30.0F, 0.0F, "M+135");
     FileGuard input_guard{input};
-    auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value(), "Apple rear-label fixture imports")) {
-        return false;
-    }
-    const auto rear_output = temp_path("mr_apple_ds_rear_label_fallback", ".wav");
-    FileGuard rear_output_guard{rear_output};
-    mradm::ScenePlan plan;
-    plan.input_path = input.string();
-    plan.output_path = rear_output.string();
-    plan.output_layout = "0+5+0";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(input);
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullProgressSink progress;
-    CapturingLogSink rear_logs;
-    auto rear_prepared = renderer->prepare(plan, rear_logs);
-    if (!check(rear_prepared.has_value() &&
-                   renderer->render_window(**rear_prepared, plan, progress, rear_logs).has_value(),
+    auto settings = settings_for(input, "0+5+0");
+    settings.routing = 1U; // label
+    Prepared prepared(settings);
+    const auto out = temp_path("mr_apple_ds_rear_label_fallback", ".wav");
+    FileGuard out_guard{out};
+    Caller caller;
+    if (!check(prepared.ok() && apple_test::render(prepared, settings, out, caller).ok(),
                "Apple rear-label fallback render succeeds")) {
         return false;
     }
-    auto rear_reader = mradm::audio::FloatWavReader::open(rear_output.string());
-    if (!check(rear_reader.has_value() && rear_reader->channels() == 6U, "Apple rear-label fallback output opens")) {
+    const auto audio = apple_test::read_wav(out);
+    if (!check(audio.has_value() && audio->channels == 6U, "Apple rear-label fallback output opens")) {
         return false;
     }
-    std::vector<float> rear_samples(static_cast<std::size_t>(rear_reader->frame_count()) * 6U);
-    rear_reader->read(rear_samples.data(), rear_reader->frame_count());
-    const double rear_left = channel_energy(rear_samples, 6U, 4U);
-    const double front = channel_energy(rear_samples, 6U, 0U) + channel_energy(rear_samples, 6U, 1U) +
-                         channel_energy(rear_samples, 6U, 2U);
+    const auto& samples = audio->samples;
+    const double rear_left = channel_energy(samples, 6U, 4U);
+    const double front =
+        channel_energy(samples, 6U, 0U) + channel_energy(samples, 6U, 1U) + channel_energy(samples, 6U, 2U);
+    const auto warned = [&](std::string_view needle) {
+        return prepared.caller.warned(needle) || caller.warned(needle);
+    };
     bool ok = true;
     ok &= check(rear_left > front, "Apple M+135 label direction keeps the bed behind when rendered to 5.1");
-    ok &= check(rear_logs.has_warning("spatializing from label direction"),
-                "Apple absent output slot reports label-direction fallback");
-    ok &= check(!rear_logs.has_warning("no nominal position"),
-                "Apple known rear label does not fall back to front-centre");
+    ok &=
+        check(warned("spatializing from label direction"), "Apple absent output slot reports label-direction fallback");
+    ok &= check(!warned("no nominal position"), "Apple known rear label does not fall back to front-centre");
     return ok;
 }
 
@@ -1421,52 +1258,539 @@ bool verify_mixed_object_direct_and_lfe_paths() {
     // An Objects object and a DirectSpeakers object of M+030 and LFE1, all on file channel 1.
     const auto input = write_mixed_paths_fixture(-90.0F);
     FileGuard input_guard{input};
-    auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value() && scene->objects.size() == 2U, "Apple mixed-path fixture imports")) {
+    const auto samples = render_capi(input, "mr_apple_mixed_paths", "9+10+3", k_channels, [](auto* o) {
+        adm_render_options_set_direct_speakers_routing_mode(o, ADM_DIRECT_SPEAKERS_ROUTING_LABEL);
+    });
+    if (!check(samples.has_value(), "Apple mixed Objects/DirectSpeakers/LFE render succeeds")) {
         return false;
     }
-
-    const auto output = temp_path("mr_apple_mixed_paths", ".wav");
-    FileGuard output_guard{output};
-    mradm::ScenePlan plan;
-    plan.input_path = input.string();
-    plan.output_path = output.string();
-    plan.output_layout = "9+10+3";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(input);
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value() && renderer->render_window(**prepared, plan, progress, logs).has_value(),
-               "Apple mixed Objects/DirectSpeakers/LFE render succeeds")) {
-        return false;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!check(reader.has_value() && reader->channels() == k_channels, "Apple mixed-path output opens")) {
-        return false;
-    }
-    std::vector<float> samples(static_cast<std::size_t>(reader->frame_count()) * k_channels);
-    reader->read(samples.data(), reader->frame_count());
-
     double spatial_energy = 0.0;
     for (uint16_t channel = 0; channel < k_channels; ++channel) {
         if (channel != 3U && channel != 6U && channel != 9U) {
-            spatial_energy += channel_energy(samples, k_channels, channel);
+            spatial_energy += channel_energy(*samples, k_channels, channel);
         }
     }
     bool ok = true;
     ok &= check(spatial_energy > 1.0e-6, "Apple mixed render keeps the Objects spatial path active");
-    ok &= check(channel_energy(samples, k_channels, 6U) > 1.0e-6,
+    ok &= check(channel_energy(*samples, k_channels, 6U) > 1.0e-6,
                 "Apple mixed render keeps the label-direct M+030 path active");
-    ok &= check(channel_energy(samples, k_channels, 3U) > 1.0e-6, "Apple mixed render keeps the LFE1 side path active");
-    ok &= check(channel_energy(samples, k_channels, 9U) == 0.0,
+    ok &=
+        check(channel_energy(*samples, k_channels, 3U) > 1.0e-6, "Apple mixed render keeps the LFE1 side path active");
+    ok &= check(channel_energy(*samples, k_channels, 9U) == 0.0,
                 "Apple mixed render does not leak LFE1 into the LFE2 slot");
     return ok;
 }
 
+// Listener head orientation: a +90° yaw (head turned left) must move a front point source
+// toward the right ear, and the binaural output must differ from the identity (head-forward)
+// render. Locks the Apple backend's HeadYaw sign convention. Offline orientation is an island
+// setting (the C ABI has no offline listener orientation).
+bool verify_listener_orientation() {
+    const auto render_yaw = [](float yaw, std::optional<bool> object_locked, std::optional<bool> block_locked) {
+        const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false, false, object_locked, block_locked);
+        FileGuard in_guard(in);
+        auto settings = settings_for(in);
+        settings.orientation = {yaw, 0.0F, 0.0F};
+        return render_island(settings, 2U, "mr_apple_yaw");
+    };
+    const auto forward = render_yaw(0.0F, std::nullopt, std::nullopt);
+    const auto turned = render_yaw(90.0F, std::nullopt, std::nullopt);
+    const auto adm_locked = render_yaw(90.0F, true, std::nullopt);
+    const auto block_unlocked = render_yaw(90.0F, true, false);
+    if (!forward || !turned || !adm_locked || !block_unlocked) {
+        return check(false, "listener-orientation renders succeed");
+    }
+    const double id_l = channel_energy(*forward, 2U, 0U);
+    const double id_r = channel_energy(*forward, 2U, 1U);
+    const double turn_l = channel_energy(*turned, 2U, 0U);
+    const double turn_r = channel_energy(*turned, 2U, 1U);
+    const double locked_l = channel_energy(*adm_locked, 2U, 0U);
+    const double locked_r = channel_energy(*adm_locked, 2U, 1U);
+    bool ok = true;
+    ok &= check(rms_difference(*forward, *turned) > 1.0e-4, "listener yaw changes the binaural output");
+    ok &= check(std::abs(id_l - id_r) < 0.25 * (id_l + id_r), "identity orientation keeps a front source L/R balanced");
+    ok &= check(turn_r > turn_l, "yaw=+90 (head turned left) moves a front source toward the right ear");
+    ok &= check(std::abs(locked_l - locked_r) < std::abs(turn_l - turn_r) * 0.5,
+                "offline Apple render uses source ADM headLocked");
+    ok &= check(channel_energy(*block_unlocked, 2U, 1U) > channel_energy(*block_unlocked, 2U, 0U),
+                "offline Apple render lets explicit block false override AudioObject true");
+    return ok;
+}
+
+// A whole-timeline monitor stream of `prepared`, pulled in the repeating `chunks` pattern.
+std::optional<std::vector<float>> stream_full(const Prepared& prepared,
+                                              const Settings& settings,
+                                              const std::vector<std::size_t>& chunks,
+                                              const std::vector<Override>& overrides = {}) {
+    auto out = apple_test::stream_all(prepared, settings, chunks, overrides);
+    check(out.has_value(), "apple stream opens and processes");
+    return out;
+}
+
+// The offline island render of `prepared` (the stream's reference), read back with `channels`.
+std::optional<std::vector<float>>
+offline_reference(const Prepared& prepared, const Settings& settings, uint16_t channels, std::string_view stem) {
+    const auto out = temp_path(stem, ".wav");
+    FileGuard out_guard(out);
+    Caller caller;
+    if (!check(apple_test::render(prepared, settings, out, caller).ok(), "apple island offline reference renders")) {
+        return std::nullopt;
+    }
+    auto audio = apple_test::read_wav(out);
+    if (!check(audio.has_value() && audio->channels == channels, "apple island offline reference opens")) {
+        return std::nullopt;
+    }
+    return std::move(audio->samples);
+}
+
+bool verify_apple_direct_stream_and_dynamic_blocks() {
+    constexpr uint16_t k_channels = 12U;
+    constexpr uint64_t k_total_frames = 8192U;
+    // Deliberately not aligned to k_render_block: direct-bus target changes must
+    // occur on the metadata sample, not at the next AUSpatialMixer slice.
+    constexpr uint64_t k_boundary = 4099U;
+    // 85.395833 ms is frame 4099 at 48 kHz; the second block ends at the file's end (frame 8192).
+    const auto input =
+        write_ds_blocks_fixture(30.0F,
+                                0.0F,
+                                {{"M+030", std::chrono::nanoseconds{0}, std::chrono::nanoseconds{85395833}},
+                                 {"M-030", std::chrono::nanoseconds{85395833}, std::chrono::nanoseconds{85270834}}});
+    FileGuard input_guard{input};
+    auto settings = settings_for(input, "4+7+0");
+    settings.routing = 1U; // label
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "direct stream: Apple label prepare")) {
+        return false;
+    }
+    const auto reference = offline_reference(prepared, settings, k_channels, "mr_apple_direct_stream_ref");
+    if (!reference) {
+        return false;
+    }
+    const auto range_energy = [&](uint64_t begin, uint64_t end, uint16_t channel) {
+        return channel_energy(*reference, k_channels, channel, begin, end);
+    };
+    bool ok = true;
+    ok &= check(range_energy(0, k_boundary, 0U) > 1.0e-6 && range_energy(0, k_boundary, 1U) == 0.0,
+                "Apple direct bus sends the first block to M+030 only");
+    ok &= check(range_energy(k_boundary, k_total_frames, 1U) > 1.0e-6 &&
+                    range_energy(k_boundary, k_total_frames, 0U) == 0.0,
+                "Apple direct bus switches target exactly at the second block boundary");
+
+    const auto streamed = stream_full(prepared, settings, {333U, 1000U, 7U, 512U});
+    if (!streamed) {
+        return false;
+    }
+    ok &= check(*streamed == *reference, "Apple direct bus streaming is bit-identical to offline rendering");
+
+    Stream seek_stream(prepared, settings);
+    if (!check(seek_stream.ok() && seek_stream.seek(k_boundary), "Apple direct bus seek succeeds")) {
+        return false;
+    }
+    std::vector<float> seek_block(std::size_t{512U} * k_channels, 0.0F);
+    const auto seek_frames = seek_stream.process(seek_block, 512U);
+    ok &= check(seek_frames == 512U, "Apple direct bus renders after seek");
+    if (seek_frames == 512U) {
+        ok &= check(std::equal(seek_block.begin(),
+                               seek_block.end(),
+                               reference->begin() + static_cast<std::ptrdiff_t>(k_boundary * k_channels)),
+                    "Apple direct bus seek restores event target and source position");
+    }
+
+    Stream loop_stream(prepared, settings);
+    if (!check(loop_stream.ok(), "Apple direct bus loop stream opens")) {
+        return false;
+    }
+    std::vector<float> loop_block(std::size_t{512U} * k_channels, 0.0F);
+    const auto initial = loop_stream.process(loop_block, 512U);
+    const bool repositioned = loop_stream.reposition_source(0);
+    loop_stream.loop_render_reset(0);
+    std::ranges::fill(loop_block, 0.0F);
+    const auto looped = loop_stream.process(loop_block, 512U);
+    ok &= check(initial.has_value() && repositioned && looped == 512U, "Apple direct bus loop reset succeeds");
+    if (looped == 512U) {
+        ok &= check(std::equal(loop_block.begin(), loop_block.end(), reference->begin()),
+                    "Apple direct bus loop reset restores the first event target");
+    }
+
+    const auto gained = stream_full(prepared, settings, {512U}, {{k_object_id, -12.0412F, false, std::nullopt, ""}});
+    const auto muted = stream_full(prepared, settings, {512U}, {{k_object_id, -12.0412F, true, std::nullopt, ""}});
+    if (!gained || !muted) {
+        return false;
+    }
+    const double reference_energy = total_energy(*reference, k_channels);
+    const double gained_energy = total_energy(*gained, k_channels);
+    ok &= check(gained_energy > reference_energy * 0.05 && gained_energy < reference_energy * 0.08,
+                "Apple direct bus live gain override applies the expected scalar");
+    ok &= check(std::ranges::all_of(*muted, [](float sample) { return sample == 0.0F; }),
+                "Apple direct bus live mute produces exact silence");
+    return ok;
+}
+
+// AppleStream (realtime) must reproduce the offline render, and its output must be independent of
+// the caller's pull chunk size (FIFO + canonical k_render_block).
+bool verify_apple_stream_matches_window() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "stream: apple prepare")) {
+        return false;
+    }
+    const auto ref = offline_reference(prepared, settings, 2U, "mr_apple_stream_ref");
+    const auto uniform = stream_full(prepared, settings, {1024});
+    const auto varied = stream_full(prepared, settings, {333, 1000, 512, 7});
+    if (!ref || !uniform || !varied) {
+        return false;
+    }
+    bool ok = true;
+    ok &= check(uniform->size() == ref->size(), "stream output frame count matches the offline render");
+    ok &= check(*uniform == *varied, "stream output is identical regardless of pull chunk size (FIFO correct)");
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform->size(), ref->size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>((*uniform)[i]) - static_cast<double>((*ref)[i])));
+    }
+    ok &= check(max_diff < 1.0e-4, "stream output matches the offline render");
+    return ok;
+}
+
+// Output-stage rendering (方案 B): produce_intermediate (worker, reads source PCM) + render_output
+// (audio callback, applies the orientation + runs the AU) with a STATIC identity orientation must be
+// bit-identical to the single-stage process() path — same AU, same per-block params, just split into
+// two calls so the head pose can enter at playout. This is the core correctness gate for the split.
+bool verify_apple_output_stage_matches_process() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "output-stage: apple prepare")) {
+        return false;
+    }
+    // Reference: single-stage process() in fixed 512-frame chunks.
+    const auto reference = stream_full(prepared, settings, {512});
+    if (!reference) {
+        return false;
+    }
+    Stream stream(prepared, settings);
+    if (!check(stream.ok() && stream.renders_orientation_at_output(),
+               "output-stage: binaural opts into output-stage")) {
+        return false;
+    }
+    const uint32_t in_ch = stream.intermediate_channels();
+    const uint32_t out_ch = stream.out_channels();
+    std::vector<float> out;
+    std::vector<float> interm;
+    std::vector<float> buf;
+    constexpr std::size_t k = 512;
+    while (true) {
+        interm.assign(k * in_ch, 0.0F);
+        const auto got = stream.produce_intermediate(interm, k);
+        if (!check(got.has_value(), "output-stage: produce_intermediate succeeds")) {
+            return false;
+        }
+        if (*got == 0) {
+            break;
+        }
+        buf.assign(*got * out_ch, 0.0F);
+        const std::size_t rendered = stream.render_output(interm.data(), *got * in_ch, buf, *got);
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(rendered * out_ch));
+    }
+    bool ok = check(out.size() == reference->size(), "output-stage: same total samples as process()");
+    if (ok) {
+        ok = check(out == *reference, "output-stage: bit-identical to single-stage process()");
+    }
+    return ok;
+}
+
+// Output-stage loop (方案 B): the Stage A primitive reposition_source() must re-read the source from
+// the wrap point and must NOT disturb the render cursors (the consumer wraps separately). Here we
+// verify the source reposition: produce two distinct blocks, reposition to 0, and confirm the next
+// block re-reads the first block's source exactly.
+bool verify_apple_reposition_source() {
+    const auto in = write_fixture(30.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "reposition-source: apple prepare")) {
+        return false;
+    }
+    Stream stream(prepared, settings);
+    if (!check(stream.ok(), "reposition-source: open stream")) {
+        return false;
+    }
+    const uint32_t in_ch = stream.intermediate_channels();
+    constexpr std::size_t k = 1024;
+    std::vector<float> block_a(k * in_ch, 0.0F);
+    std::vector<float> block_b(k * in_ch, 0.0F);
+    std::vector<float> block_a2(k * in_ch, 0.0F);
+    const auto got_a = stream.produce_intermediate(block_a, k);   // source [0, k)
+    const auto got_b = stream.produce_intermediate(block_b, k);   // source [k, 2k)
+    const bool rep = stream.reposition_source(0);                 // Stage A wrap → 0
+    const auto got_a2 = stream.produce_intermediate(block_a2, k); // source [0, k) again
+    bool ok = check(got_a == k && got_b == k && rep && got_a2 == k, "reposition-source: produce + reposition succeed");
+    ok &= check(block_a2 == block_a, "reposition-source: re-reads the source from the wrap point");
+    ok &= check(block_a != block_b, "reposition-source: distinct source blocks (sanity)");
+    return ok;
+}
+
+// AppleStream must honor a live listener orientation (the realtime head-tracking / free-look
+// path): turning the head left moves a front source toward the right ear, exactly like the
+// offline orientation (verify_listener_orientation).
+bool verify_apple_stream_listener_orientation() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false); // front source
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "stream-orient: apple prepare")) {
+        return false;
+    }
+    const auto forward = stream_full(prepared, settings, {1024});
+    // Turned: a fresh stream with yaw=+90° (head turned left) pushed BEFORE the first process();
+    // the first slice applies the pending orientation to the AU.
+    Stream turned_stream(prepared, settings);
+    if (!forward || !check(turned_stream.ok(), "stream-orient: open turned stream")) {
+        return false;
+    }
+    turned_stream.set_orientation(90.0F);
+    const auto turned = turned_stream.pull_all({1024});
+    if (!check(turned.has_value(), "stream-orient: turned process succeeds")) {
+        return false;
+    }
+    bool ok = true;
+    ok &= check(rms_difference(*forward, *turned) > 1.0e-4, "stream live yaw changes the binaural output");
+    ok &= check(channel_energy(*turned, 2U, 1U) > channel_energy(*turned, 2U, 0U),
+                "stream yaw=+90 (head turned left) moves a front source toward the right ear");
+    return ok;
+}
+
+// If the stream is created with an initial non-identity listener orientation, head-locked live
+// overrides must use that same initial pose for per-bus compensation before the first process().
+bool verify_apple_stream_initial_head_locked_orientation() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false); // front source
+    FileGuard in_guard(in);
+    auto settings = settings_for(in);
+    settings.orientation = {90.0F, 0.0F, 0.0F};
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "stream-headlock: apple prepare")) {
+        return false;
+    }
+    const auto world_locked = stream_full(prepared, settings, {1024});
+    const auto head_locked = stream_full(prepared, settings, {1024}, {{k_object_id, 0.0F, false, true, ""}});
+    if (!world_locked || !head_locked) {
+        return false;
+    }
+    const double world_l = channel_energy(*world_locked, 2U, 0U);
+    const double world_r = channel_energy(*world_locked, 2U, 1U);
+    const double locked_l = channel_energy(*head_locked, 2U, 0U);
+    const double locked_r = channel_energy(*head_locked, 2U, 1U);
+    bool ok = true;
+    ok &= check(world_r > world_l, "stream-headlock: initial yaw moves world-locked front source right");
+    ok &= check(std::abs(locked_r - locked_l) < std::abs(world_r - world_l) * 0.5,
+                "stream-headlock: head-locked override compensates the initial listener yaw");
+    return ok;
+}
+
+// The AudioObject's headLocked reaches its block (the inheritance itself is an import rule, tested in
+// mradm-scene): without a live value the stream follows ADM, a gain-only override does not shadow
+// it, and an explicit live false follows the listener rotation.
+bool verify_apple_stream_adm_head_locked() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false, false, true);
+    FileGuard in_guard(in);
+    auto settings = settings_for(in);
+    settings.orientation = {90.0F, 0.0F, 0.0F};
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "stream-adm-headlock: Apple prepare")) {
+        return false;
+    }
+    const auto inherited = stream_full(prepared, settings, {1024U});
+    const auto gained = stream_full(prepared, settings, {1024U}, {{k_object_id, -3.0F, false, std::nullopt, ""}});
+    const auto unlocked = stream_full(prepared, settings, {1024U}, {{k_object_id, 0.0F, false, false, ""}});
+    if (!inherited || !gained || !unlocked) {
+        return false;
+    }
+    const double unlocked_imbalance = std::abs(channel_energy(*unlocked, 2U, 1U) - channel_energy(*unlocked, 2U, 0U));
+    bool ok = true;
+    ok &= check(channel_energy(*unlocked, 2U, 1U) > channel_energy(*unlocked, 2U, 0U),
+                "stream-adm-headlock: explicit live false follows listener rotation");
+    ok &= check(std::abs(channel_energy(*inherited, 2U, 1U) - channel_energy(*inherited, 2U, 0U)) <
+                    unlocked_imbalance * 0.5,
+                "stream-adm-headlock: no live value inherits ADM");
+    ok &= check(std::abs(channel_energy(*gained, 2U, 1U) - channel_energy(*gained, 2U, 0U)) < unlocked_imbalance * 0.5,
+                "stream-adm-headlock: gain-only override does not shadow ADM");
+    return ok;
+}
+
+bool verify_apple_head_locked_timeline() {
+    constexpr std::size_t k_frames = 19200U;
+    const auto in = write_head_locked_timeline_fixture(k_frames);
+    FileGuard in_guard(in);
+    auto settings = settings_for(in);
+    settings.orientation = {90.0F, 0.0F, 0.0F};
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "apple-headtrack-timeline: Apple prepare")) {
+        return false;
+    }
+    const auto realtime = stream_full(prepared, settings, {333U, 1024U, 511U});
+    const auto offline = offline_reference(prepared, settings, 2U, "mr_apple_head_timeline_output");
+    if (!realtime || !offline || realtime->size() < k_frames * 2U || offline->size() < k_frames * 2U) {
+        return check(false, "apple-headtrack-timeline: realtime and offline renders");
+    }
+    const auto verify_windows =
+        [&](const std::vector<float>& samples, const char* unlocked_msg, const char* locked_msg) {
+            constexpr std::size_t first_begin = 3072U;
+            constexpr std::size_t first_end = 8192U;
+            constexpr std::size_t second_begin = 11264U;
+            constexpr std::size_t second_end = 17408U;
+            const double first_l = channel_energy(samples, 2U, 0U, first_begin, first_end);
+            const double first_r = channel_energy(samples, 2U, 1U, first_begin, first_end);
+            const double second_l = channel_energy(samples, 2U, 0U, second_begin, second_end);
+            const double second_r = channel_energy(samples, 2U, 1U, second_begin, second_end);
+            bool windows_ok = true;
+            windows_ok &= check(first_r > first_l, unlocked_msg);
+            windows_ok &= check(std::abs(second_r - second_l) < std::abs(first_r - first_l) * 0.5, locked_msg);
+            return windows_ok;
+        };
+    bool ok = verify_windows(*realtime,
+                             "apple-headtrack-timeline: realtime false block follows listener rotation",
+                             "apple-headtrack-timeline: realtime true block stays head-relative");
+    ok &= verify_windows(*offline,
+                         "apple-headtrack-timeline: offline false block follows listener rotation",
+                         "apple-headtrack-timeline: offline true block stays head-relative");
+    return ok;
+}
+
+// A scene with no renderable buses (here: a muted object) must open a silent stream — not
+// fail trying to drive a 0-input AUSpatialMixer — and produce full-length silence.
+bool verify_apple_stream_silent() {
+    constexpr uint32_t k_frames = 4096U;
+    const auto in = write_fixture(0.0F, k_frames, 1.0F, 0.0F, false, /*mute=*/true);
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "silent: apple prepare")) {
+        return false;
+    }
+    const auto out = stream_full(prepared, settings, {512, 100});
+    if (!out) {
+        return check(false, "silent: open_stream + process succeeds for empty buses");
+    }
+    bool ok = true;
+    ok &= check(out->size() == static_cast<std::size_t>(k_frames) * 2U, "silent: full-length silence produced");
+    ok &= check(std::ranges::all_of(*out, [](float v) { return v == 0.0F; }), "silent: output is all zero");
+    // seek() on a silent stream must not dereference the (absent) AU / reader.
+    Stream stream(prepared, settings);
+    if (!check(stream.ok(), "silent: open_stream for seek")) {
+        return false;
+    }
+    ok &= check(stream.seek(1000), "silent: seek succeeds without AU/reader");
+    std::vector<float> buf(std::size_t{64} * 2U, 1.0F);
+    const auto produced = stream.process(buf, 64);
+    ok &= check(produced == 64U, "silent: process after seek produces frames");
+    ok &= check(std::ranges::all_of(buf, [](float v) { return v == 0.0F; }), "silent: post-seek output is silence");
+    return ok;
+}
+
+// A live gain override must scale the object's bus gain on the next block, so the stream output is
+// quieter by the override factor — validating BusPlan.object_id → live gain map end to end through
+// the real AUSpatialMixer.
+bool verify_apple_stream_gain_override() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "override: apple prepare")) {
+        return false;
+    }
+    const auto baseline = stream_full(prepared, settings, {1024});
+    // -12.04 dB ≈ 0.25 linear, applied before the first pull.
+    const auto overridden = stream_full(prepared, settings, {1024}, {{k_object_id, -12.041F, false, std::nullopt, ""}});
+    if (!baseline || !overridden) {
+        return false;
+    }
+    bool ok = check(overridden->size() == baseline->size(), "override: same frame count as baseline");
+    const auto buffer_rms = [](const std::vector<float>& v) {
+        const double total = std::accumulate(v.begin(), v.end(), 0.0, [](double acc, float s) {
+            return acc + (static_cast<double>(s) * static_cast<double>(s));
+        });
+        return v.empty() ? 0.0 : std::sqrt(total / static_cast<double>(v.size()));
+    };
+    const double b = buffer_rms(*baseline);
+    const double o = buffer_rms(*overridden);
+    ok &= check(b > 1.0e-3, "override: baseline has signal energy");
+    // 0.25 linear; allow generous tolerance for HRTF spectral coloration around the scalar.
+    ok &= check(o < b * 0.5, "override: -12 dB override clearly attenuates the output");
+    ok &= check(o > b * 0.1, "override: attenuation is the gain scalar, not silence");
+    return ok;
+}
+
+// GUI binaural monitoring drives AppleStream through its output-stage path. A mid-play gain edit
+// must therefore enter the AU as a sample-domain envelope: the first edited frame keeps the intact
+// old convolution state, then the input reaches the target over 20 ms.
+bool verify_apple_output_stage_live_gain_ramp() {
+    constexpr std::size_t k_boundary = 1024U;
+    const auto in = write_fixture(45.0F, 16384U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    const auto settings = settings_for(in);
+    Prepared prepared(settings);
+    if (!check(prepared.ok(), "output-gain-ramp: prepare")) {
+        return false;
+    }
+    const auto baseline = stream_full(prepared, settings, {512});
+    Stream stream(prepared, settings);
+    if (!baseline ||
+        !check(stream.ok() && stream.renders_orientation_at_output(), "output-gain-ramp: open output-stage stream")) {
+        return false;
+    }
+    const uint32_t in_ch = stream.intermediate_channels();
+    const uint32_t out_ch = stream.out_channels();
+    std::vector<float> changed;
+    std::vector<float> intermediate;
+    std::vector<float> rendered;
+    std::size_t total = 0U;
+    while (true) {
+        constexpr std::size_t k_chunk = 512U;
+        intermediate.assign(k_chunk * in_ch, 0.0F);
+        const auto produced = stream.produce_intermediate(intermediate, k_chunk);
+        if (!check(produced.has_value(), "output-gain-ramp: produce intermediate")) {
+            return false;
+        }
+        if (*produced == 0U) {
+            break;
+        }
+        if (total == k_boundary) {
+            stream.set_overrides({{k_object_id, -20.0F, false, std::nullopt, ""}}, 1U);
+        }
+        rendered.assign(*produced * out_ch, 0.0F);
+        const std::size_t got = stream.render_output(intermediate.data(), *produced * in_ch, rendered, *produced);
+        changed.insert(changed.end(), rendered.begin(), rendered.begin() + static_cast<std::ptrdiff_t>(got * out_ch));
+        total += got;
+    }
+    if (!check(changed.size() == baseline->size(), "output-gain-ramp: frame count unchanged")) {
+        return false;
+    }
+    bool ok = true;
+    for (uint32_t channel = 0; channel < out_ch; ++channel) {
+        const std::size_t index = (k_boundary * out_ch) + channel;
+        ok &= check(std::fabs(changed[index] - (*baseline)[index]) < 2.0e-4F,
+                    "output-gain-ramp: first edited frame preserves the old AU state");
+    }
+    const std::size_t settled_begin = k_boundary + 2048U;
+    const std::size_t settled_end = std::min<std::size_t>(settled_begin + 4096U, total);
+    double baseline_energy = 0.0;
+    double changed_energy = 0.0;
+    for (std::size_t frame = settled_begin; frame < settled_end; ++frame) {
+        for (uint32_t channel = 0; channel < out_ch; ++channel) {
+            const std::size_t index = (frame * out_ch) + channel;
+            baseline_energy += static_cast<double>((*baseline)[index]) * (*baseline)[index];
+            changed_energy += static_cast<double>(changed[index]) * changed[index];
+        }
+    }
+    ok &= check(changed_energy < baseline_energy * 0.03 && changed_energy > baseline_energy * 0.003,
+                "output-gain-ramp: settles near the -20 dB target");
+    return ok;
+}
+
+// BEGIN AUSpatialMixer HRTF probe (second part, unchanged by R3 F3)
 bool verify_spatial_mixer_hrtf_modes_probe() {
     if (!hrtf_probe_enabled()) {
         return true;
@@ -1548,900 +1872,13 @@ bool verify_spatial_mixer_hrtf_modes_probe() {
     return ok;
 }
 
-// Listener head orientation: a +90° yaw (head turned left) must move a front point source
-// toward the right ear, and the binaural output must differ from the identity (head-forward)
-// render. Locks the Apple backend's HeadYaw sign convention.
-bool verify_listener_orientation() {
-    const auto forward = render_apple(0.0F, "mr_apple_yaw_identity", "binaural", 2U);
-    mradm::ListenerOrientation yaw_left{};
-    yaw_left.yaw_deg = 90.0F;
-    const auto turned = render_apple(
-        0.0F, "mr_apple_yaw_left", "binaural", 2U, 1.0F, 0.0F, false, mradm::AppleSpatialPreset::off, yaw_left);
-    const auto adm_locked = render_apple(0.0F,
-                                         "mr_apple_yaw_adm_locked",
-                                         "binaural",
-                                         2U,
-                                         1.0F,
-                                         0.0F,
-                                         false,
-                                         mradm::AppleSpatialPreset::off,
-                                         yaw_left,
-                                         false,
-                                         true);
-    const auto block_unlocked = render_apple(0.0F,
-                                             "mr_apple_yaw_block_unlocked",
-                                             "binaural",
-                                             2U,
-                                             1.0F,
-                                             0.0F,
-                                             false,
-                                             mradm::AppleSpatialPreset::off,
-                                             yaw_left,
-                                             false,
-                                             true,
-                                             false);
-    if (!forward || !turned || !adm_locked || !block_unlocked) {
-        return check(false, "listener-orientation renders succeed");
-    }
-    bool ok = true;
-    const double id_l = channel_energy(*forward, 2U, 0U);
-    const double id_r = channel_energy(*forward, 2U, 1U);
-    const double turn_l = channel_energy(*turned, 2U, 0U);
-    const double turn_r = channel_energy(*turned, 2U, 1U);
-    const double locked_l = channel_energy(*adm_locked, 2U, 0U);
-    const double locked_r = channel_energy(*adm_locked, 2U, 1U);
-    const double block_unlocked_l = channel_energy(*block_unlocked, 2U, 0U);
-    const double block_unlocked_r = channel_energy(*block_unlocked, 2U, 1U);
-    ok &= check(rms_difference(*forward, *turned) > 1.0e-4, "listener yaw changes the binaural output");
-    ok &= check(std::abs(id_l - id_r) < 0.25 * (id_l + id_r), "identity orientation keeps a front source L/R balanced");
-    ok &= check(turn_r > turn_l, "yaw=+90 (head turned left) moves a front source toward the right ear");
-    ok &= check(std::abs(locked_l - locked_r) < std::abs(turn_l - turn_r) * 0.5,
-                "offline Apple render uses source ADM headLocked");
-    ok &= check(block_unlocked_r > block_unlocked_l,
-                "offline Apple render lets explicit block false override AudioObject true");
-    return ok;
-}
-
-// Render the whole timeline through AppleStream, pulling in the given (repeating) chunk
-// pattern. Returns interleaved float PCM, or nullopt on error.
-std::optional<std::vector<float>> render_apple_stream_full(mradm::IRenderer& renderer,
-                                                           const mradm::IPreparedRender& prepared,
-                                                           const mradm::ScenePlan& plan,
-                                                           mradm::LogSink& logs,
-                                                           const std::vector<std::size_t>& chunk_pattern,
-                                                           const mradm::LiveOverrides* overrides = nullptr) {
-    auto stream = renderer.open_stream(prepared, plan, logs);
-    if (!check(stream.has_value(), "apple open_stream succeeds")) {
-        return std::nullopt;
-    }
-    if (overrides != nullptr) {
-        (*stream)->set_overrides(*overrides);
-    }
-    const uint32_t ch = (*stream)->out_channels();
-    std::vector<float> out;
-    std::vector<float> buf;
-    std::size_t pi = 0;
-    while (true) {
-        const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
-        ++pi;
-        buf.assign(frames * ch, 0.0F);
-        auto produced = (*stream)->process(std::span<float>(buf), frames);
-        if (!check(produced.has_value(), "apple stream process succeeds")) {
-            return std::nullopt;
-        }
-        const std::size_t got = *produced;
-        if (got == 0) {
-            break;
-        }
-        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(got * ch));
-    }
-    return out;
-}
-
-bool verify_apple_direct_stream_and_dynamic_blocks() {
-    constexpr uint16_t k_channels = 12U;
-    // Deliberately not aligned to k_render_block: direct-bus target changes must
-    // occur on the metadata sample, not at the next AUSpatialMixer slice.
-    constexpr uint64_t k_boundary = 4099U;
-    // 85.395833 ms is frame 4099 at 48 kHz; the second block ends at the file's end (frame 8192).
-    const auto input =
-        write_ds_blocks_fixture(30.0F,
-                                {{"M+030", std::chrono::nanoseconds{0}, std::chrono::nanoseconds{85395833}},
-                                 {"M-030", std::chrono::nanoseconds{85395833}, std::chrono::nanoseconds{85270834}}});
-    FileGuard input_guard{input};
-    auto scene = mradm::io::import_scene(input.string());
-    if (!check(scene.has_value() && !scene->objects.empty() && !scene->objects.front().tracks.empty() &&
-                   scene->objects.front().tracks.front().ds_blocks.size() == 2U &&
-                   scene->objects.front().tracks.front().ds_blocks.back().start_sample == k_boundary,
-               "direct stream: import the two-block DirectSpeakers scene")) {
-        return false;
-    }
-
-    mradm::ScenePlan plan;
-    plan.input_path = input.string();
-    plan.output_layout = "4+7+0";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(input);
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
-    const auto output = temp_path("mr_apple_direct_stream_ref", ".wav");
-    FileGuard output_guard{output};
-    plan.output_path = output.string();
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "direct stream: Apple label prepare")) {
-        return false;
-    }
-    if (!check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
-               "direct stream: offline direct render")) {
-        return false;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!check(reader.has_value() && reader->channels() == k_channels, "direct stream: offline reference opens")) {
-        return false;
-    }
-    std::vector<float> reference(static_cast<std::size_t>(reader->frame_count()) * k_channels);
-    reader->read(reference.data(), reader->frame_count());
-
-    const auto range_energy = [&](uint64_t begin, uint64_t end, uint16_t channel) {
-        double energy = 0.0;
-        for (uint64_t frame = begin; frame < end; ++frame) {
-            const double sample = reference[(static_cast<std::size_t>(frame) * k_channels) + channel];
-            energy += sample * sample;
-        }
-        return energy;
-    };
-    bool ok = true;
-    ok &= check(range_energy(0, k_boundary, 0U) > 1.0e-6 && range_energy(0, k_boundary, 1U) == 0.0,
-                "Apple direct bus sends the first block to M+030 only");
-    ok &= check(range_energy(k_boundary, scene->info.num_frames, 1U) > 1.0e-6 &&
-                    range_energy(k_boundary, scene->info.num_frames, 0U) == 0.0,
-                "Apple direct bus switches target exactly at the second block boundary");
-
-    const auto streamed = render_apple_stream_full(*renderer, **prepared, plan, logs, {333U, 1000U, 7U, 512U});
-    if (!streamed) {
-        return false;
-    }
-    ok &= check(*streamed == reference, "Apple direct bus streaming is bit-identical to offline rendering");
-
-    auto seek_stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(seek_stream.has_value() && (*seek_stream)->seek(k_boundary).has_value(),
-               "Apple direct bus seek succeeds")) {
-        return false;
-    }
-    std::vector<float> seek_block(std::size_t{512U} * k_channels, 0.0F);
-    auto seek_frames = (*seek_stream)->process(std::span<float>(seek_block), 512U);
-    ok &= check(seek_frames.has_value() && *seek_frames == 512U, "Apple direct bus renders after seek");
-    if (seek_frames && *seek_frames == 512U) {
-        ok &= check(std::equal(seek_block.begin(),
-                               seek_block.end(),
-                               reference.begin() + static_cast<std::ptrdiff_t>(k_boundary * k_channels)),
-                    "Apple direct bus seek restores event target and source position");
-    }
-
-    auto loop_stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(loop_stream.has_value(), "Apple direct bus loop stream opens")) {
-        return false;
-    }
-    std::vector<float> loop_block(std::size_t{512U} * k_channels, 0.0F);
-    auto initial = (*loop_stream)->process(std::span<float>(loop_block), 512U);
-    auto reposition = (*loop_stream)->reposition_source(0);
-    (*loop_stream)->loop_render_reset(0);
-    std::ranges::fill(loop_block, 0.0F);
-    auto looped = (*loop_stream)->process(std::span<float>(loop_block), 512U);
-    ok &= check(initial.has_value() && reposition.has_value() && looped.has_value() && *looped == 512U,
-                "Apple direct bus loop reset succeeds");
-    if (looped && *looped == 512U) {
-        ok &= check(std::equal(loop_block.begin(), loop_block.end(), reference.begin()),
-                    "Apple direct bus loop reset restores the first event target");
-    }
-
-    auto render_with_override = [&](bool mute) -> std::optional<std::vector<float>> {
-        auto stream = renderer->open_stream(**prepared, plan, logs);
-        if (!stream) {
-            return std::nullopt;
-        }
-        mradm::LiveObjectOverride edit;
-        edit.object_id = scene->objects.front().id;
-        edit.gain_db = -12.0412F;
-        edit.mute = mute;
-        mradm::LiveOverrides overrides;
-        overrides.revision = 1;
-        overrides.objects.push_back(std::move(edit));
-        (*stream)->set_overrides(overrides);
-
-        std::vector<float> output_samples;
-        std::vector<float> buffer(std::size_t{512U} * k_channels, 0.0F);
-        while (true) {
-            std::ranges::fill(buffer, 0.0F);
-            auto produced = (*stream)->process(std::span<float>(buffer), 512U);
-            if (!produced) {
-                return std::nullopt;
-            }
-            if (*produced == 0U) {
-                break;
-            }
-            const auto used = static_cast<std::vector<float>::difference_type>(*produced * k_channels);
-            output_samples.insert(output_samples.end(), buffer.begin(), buffer.begin() + used);
-        }
-        return output_samples;
-    };
-    const auto gained = render_with_override(false);
-    const auto muted = render_with_override(true);
-    if (!gained || !muted) {
-        return false;
-    }
-    const double reference_energy = total_energy(reference, k_channels);
-    const double gained_energy = total_energy(*gained, k_channels);
-    ok &= check(gained_energy > reference_energy * 0.05 && gained_energy < reference_energy * 0.08,
-                "Apple direct bus live gain override applies the expected scalar");
-    ok &= check(std::ranges::all_of(*muted, [](float sample) { return sample == 0.0F; }),
-                "Apple direct bus live mute produces exact silence");
-    return ok;
-}
-
-// Output-stage rendering (方案 B): produce_intermediate (worker, reads source PCM) + render_output
-// (audio callback, applies the orientation + runs the AU) with a STATIC identity orientation must be
-// bit-identical to the single-stage process() path — same AU, same per-block params, just split into
-// two calls so the head pose can enter at playout. This is the core correctness gate for the split.
-bool verify_apple_output_stage_matches_process() {
-    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
-    FileGuard in_guard(in);
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value(), "output-stage: import scene")) {
-        return false;
-    }
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "output-stage: apple prepare")) {
-        return false;
-    }
-
-    // Reference: single-stage process() in fixed 512-frame chunks.
-    const auto reference = render_apple_stream_full(*renderer, **prepared, plan, logs, {512});
-    if (!reference) {
-        return false;
-    }
-
-    // Output-stage: a fresh stream, driven via produce_intermediate + render_output(identity).
-    auto stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(stream.has_value(), "output-stage: open stream")) {
-        return false;
-    }
-    if (!check((*stream)->renders_orientation_at_output(), "output-stage: binaural opts into output-stage")) {
-        return false;
-    }
-    const uint32_t in_ch = (*stream)->intermediate_channels();
-    const uint32_t out_ch = (*stream)->out_channels();
-    const mradm::ListenerOrientation identity{};
-    std::vector<float> out;
-    std::vector<float> interm;
-    std::vector<float> buf;
-    constexpr std::size_t k = 512;
-    while (true) {
-        interm.assign(k * in_ch, 0.0F);
-        auto got = (*stream)->produce_intermediate(std::span<float>(interm), k);
-        if (!check(got.has_value(), "output-stage: produce_intermediate succeeds")) {
-            return false;
-        }
-        if (*got == 0) {
-            break;
-        }
-        buf.assign(*got * out_ch, 0.0F);
-        const std::size_t rendered = (*stream)->render_output(
-            std::span<const float>(interm.data(), *got * in_ch), std::span<float>(buf), *got, identity);
-        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(rendered * out_ch));
-    }
-
-    bool ok = check(out.size() == reference->size(), "output-stage: same total samples as process()");
-    if (ok) {
-        for (std::size_t i = 0; i < out.size(); ++i) {
-            if (out[i] != (*reference)[i]) {
-                ok = check(false, "output-stage: bit-identical to single-stage process()");
-                break;
-            }
-        }
-    }
-    return ok;
-}
-
-// Output-stage loop (方案 B): the Stage A primitive reposition_source() must re-read the source from
-// the wrap point and must NOT disturb the render cursors (the consumer wraps separately). Here we
-// verify the source reposition: produce two distinct blocks, reposition to 0, and confirm the next
-// block re-reads the first block's source exactly.
-bool verify_apple_reposition_source() {
-    const auto in = write_fixture(30.0F, 8192U, 1.0F, 0.0F, false);
-    FileGuard in_guard(in);
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value(), "reposition-source: import scene")) {
-        return false;
-    }
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "reposition-source: apple prepare")) {
-        return false;
-    }
-    auto stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(stream.has_value(), "reposition-source: open stream")) {
-        return false;
-    }
-    const uint32_t in_ch = (*stream)->intermediate_channels();
-    constexpr std::size_t k = 1024;
-    std::vector<float> block_a(k * in_ch, 0.0F);
-    std::vector<float> block_b(k * in_ch, 0.0F);
-    std::vector<float> block_a2(k * in_ch, 0.0F);
-
-    auto got_a = (*stream)->produce_intermediate(std::span<float>(block_a), k);   // source [0, k)
-    auto got_b = (*stream)->produce_intermediate(std::span<float>(block_b), k);   // source [k, 2k)
-    auto rep = (*stream)->reposition_source(0);                                   // Stage A wrap → 0
-    auto got_a2 = (*stream)->produce_intermediate(std::span<float>(block_a2), k); // source [0, k) again
-    bool ok = check(got_a.has_value() && got_b.has_value() && rep.has_value() && got_a2.has_value() && *got_a == k &&
-                        *got_b == k && *got_a2 == k,
-                    "reposition-source: produce + reposition succeed");
-    ok &= check(block_a2 == block_a, "reposition-source: re-reads the source from the wrap point");
-    ok &= check(block_a != block_b, "reposition-source: distinct source blocks (sanity)");
-    return ok;
-}
-
-// AppleStream (realtime) must reproduce the offline render_window render, and its output
-// must be independent of the caller's pull chunk size (FIFO + canonical k_render_block).
-bool verify_apple_stream_matches_window() {
-    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value(), "stream: import scene")) {
-        return false;
-    }
-
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "stream: apple prepare")) {
-        return false;
-    }
-
-    // Reference: the offline render_window path to a float WAV.
-    const auto out_ref = temp_path("mr_apple_stream_ref", ".wav");
-    FileGuard out_guard(out_ref);
-    mradm::ScenePlan window_plan = plan;
-    window_plan.output_path = out_ref.string();
-    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
-               "stream: reference render_window")) {
-        return false;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(out_ref.string());
-    if (!check(reader.has_value() && reader->channels() == 2U, "stream: reference WAV opens (2ch)")) {
-        return false;
-    }
-    std::vector<float> ref(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
-    reader->read(ref.data(), reader->frame_count());
-
-    // AppleStream, uniform vs. varied chunking (two fresh AUs, identical input/params/time).
-    const auto uniform = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
-    const auto varied = render_apple_stream_full(*renderer, **prepared, plan, logs, {333, 1000, 512, 7});
-    if (!uniform || !varied) {
-        return false;
-    }
-
-    bool ok = true;
-    ok &= check(uniform->size() == ref.size(), "stream output frame count matches render_window");
-    ok &= check(*uniform == *varied, "stream output is identical regardless of pull chunk size (FIFO correct)");
-
-    double max_diff = 0.0;
-    const std::size_t n = std::min(uniform->size(), ref.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        max_diff = std::max(max_diff, std::fabs(static_cast<double>((*uniform)[i]) - static_cast<double>(ref[i])));
-    }
-    ok &= check(max_diff < 1.0e-4, "stream output matches the offline render_window render");
-    return ok;
-}
-
-// AppleStream must honor a live listener orientation pushed through set_listener_orientation()
-// (the realtime head-tracking / free-look path): turning the head left moves a front source
-// toward the right ear, exactly like the offline render_window orientation (verify above).
-bool verify_apple_stream_listener_orientation() {
-    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false); // front source
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value(), "stream-orient: import scene")) {
-        return false;
-    }
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "stream-orient: apple prepare")) {
-        return false;
-    }
-
-    // Reference: stream rendered at identity orientation.
-    const auto forward = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
-
-    // Turned: open a fresh stream, push yaw=+90° (head turned left) live BEFORE the first
-    // process(), then render. The first slice applies the pending orientation to the AU.
-    auto turned_stream = renderer->open_stream(**prepared, plan, logs);
-    if (!forward || !check(turned_stream.has_value(), "stream-orient: open turned stream")) {
-        return false;
-    }
-    mradm::ListenerOrientation yaw_left{};
-    yaw_left.yaw_deg = 90.0F;
-    (*turned_stream)->set_listener_orientation(yaw_left);
-    const uint32_t ch = (*turned_stream)->out_channels();
-    std::vector<float> turned;
-    std::vector<float> buf;
-    while (true) {
-        buf.assign(static_cast<std::size_t>(1024) * ch, 0.0F);
-        auto produced = (*turned_stream)->process(std::span<float>(buf), 1024);
-        if (!check(produced.has_value(), "stream-orient: turned process succeeds")) {
-            return false;
-        }
-        if (*produced == 0) {
-            break;
-        }
-        turned.insert(turned.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
-    }
-
-    bool ok = true;
-    ok &= check(rms_difference(*forward, turned) > 1.0e-4, "stream live yaw changes the binaural output");
-    ok &= check(channel_energy(turned, 2U, 1U) > channel_energy(turned, 2U, 0U),
-                "stream yaw=+90 (head turned left) moves a front source toward the right ear");
-    return ok;
-}
-
-// If the stream is created with an initial non-identity listener orientation, head-locked live
-// overrides must use that same initial pose for per-bus compensation before the first process().
-bool verify_apple_stream_initial_head_locked_orientation() {
-    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false); // front source
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "stream-headlock: import scene with an object")) {
-        return false;
-    }
-    const std::string object_id = scene->objects.front().id;
-
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-    plan.listener_orientation.yaw_deg = 90.0F;
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "stream-headlock: apple prepare")) {
-        return false;
-    }
-
-    const auto world_locked = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
-    if (!world_locked) {
-        return false;
-    }
-
-    auto stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(stream.has_value(), "stream-headlock: open stream")) {
-        return false;
-    }
-    mradm::LiveOverrides ov;
-    ov.revision = 1;
-    mradm::LiveObjectOverride locked_object;
-    locked_object.object_id = object_id;
-    locked_object.head_locked = true;
-    ov.objects.push_back(locked_object);
-    (*stream)->set_overrides(ov);
-
-    const uint32_t ch = (*stream)->out_channels();
-    std::vector<float> head_locked;
-    std::vector<float> buf;
-    while (true) {
-        buf.assign(static_cast<std::size_t>(1024) * ch, 0.0F);
-        auto produced = (*stream)->process(std::span<float>(buf), 1024);
-        if (!check(produced.has_value(), "stream-headlock: process succeeds")) {
-            return false;
-        }
-        if (*produced == 0) {
-            break;
-        }
-        head_locked.insert(head_locked.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
-    }
-
-    const double world_l = channel_energy(*world_locked, 2U, 0U);
-    const double world_r = channel_energy(*world_locked, 2U, 1U);
-    const double locked_l = channel_energy(head_locked, 2U, 0U);
-    const double locked_r = channel_energy(head_locked, 2U, 1U);
-    const double world_imbalance = std::abs(world_r - world_l);
-    const double locked_imbalance = std::abs(locked_r - locked_l);
-
-    bool ok = true;
-    ok &= check(world_r > world_l, "stream-headlock: initial yaw moves world-locked front source right");
-    ok &= check(locked_imbalance < world_imbalance * 0.5,
-                "stream-headlock: head-locked override compensates the initial listener yaw");
-    return ok;
-}
-
-bool verify_apple_stream_adm_head_locked() {
-    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false, false, true);
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
-                   scene->objects.front().tracks.front().blocks.size() == 1U,
-               "stream-adm-headlock: import scene")) {
-        return false;
-    }
-    bool ok = true;
-    ok &= check(scene->objects.front().head_locked && scene->objects.front().tracks.front().blocks.front().head_locked,
-                "stream-adm-headlock: AudioObject value is inherited by its block");
-
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-    plan.listener_orientation.yaw_deg = 90.0F;
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "stream-adm-headlock: Apple prepare")) {
-        return false;
-    }
-
-    mradm::LiveOverrides gain_only;
-    gain_only.revision = 1;
-    mradm::LiveObjectOverride gain_only_object;
-    gain_only_object.object_id = scene->objects.front().id;
-    gain_only_object.gain_db = -3.0F;
-    gain_only.objects.push_back(gain_only_object);
-
-    mradm::LiveOverrides force_unlocked;
-    force_unlocked.revision = 2;
-    mradm::LiveObjectOverride force_unlocked_object;
-    force_unlocked_object.object_id = scene->objects.front().id;
-    force_unlocked_object.head_locked = false;
-    force_unlocked.objects.push_back(force_unlocked_object);
-
-    const auto inherited = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024U});
-    const auto gained = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024U}, &gain_only);
-    const auto unlocked = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024U}, &force_unlocked);
-    if (!inherited || !gained || !unlocked) {
-        return false;
-    }
-
-    const double inherited_l = channel_energy(*inherited, 2U, 0U);
-    const double inherited_r = channel_energy(*inherited, 2U, 1U);
-    const double gained_l = channel_energy(*gained, 2U, 0U);
-    const double gained_r = channel_energy(*gained, 2U, 1U);
-    const double unlocked_l = channel_energy(*unlocked, 2U, 0U);
-    const double unlocked_r = channel_energy(*unlocked, 2U, 1U);
-    const double unlocked_imbalance = std::abs(unlocked_r - unlocked_l);
-    ok &= check(unlocked_r > unlocked_l, "stream-adm-headlock: explicit live false follows listener rotation");
-    ok &= check(std::abs(inherited_r - inherited_l) < unlocked_imbalance * 0.5,
-                "stream-adm-headlock: no live value inherits ADM");
-    ok &= check(std::abs(gained_r - gained_l) < unlocked_imbalance * 0.5,
-                "stream-adm-headlock: gain-only override does not shadow ADM");
-    return ok;
-}
-
-bool verify_apple_head_locked_timeline() {
-    constexpr std::size_t k_frames = 19200U;
-    const auto in = write_head_locked_timeline_fixture(k_frames);
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
-                   scene->objects.front().tracks.front().blocks.size() == 2U,
-               "apple-headtrack-timeline: import two Objects blocks")) {
-        return false;
-    }
-    const auto& blocks = scene->objects.front().tracks.front().blocks;
-    bool ok = true;
-    ok &= check(!blocks[0].head_locked && blocks[1].head_locked,
-                "apple-headtrack-timeline: imported blocks keep explicit false/true");
-
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-    plan.listener_orientation.yaw_deg = 90.0F;
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "apple-headtrack-timeline: Apple prepare")) {
-        return false;
-    }
-
-    const auto realtime = render_apple_stream_full(*renderer, **prepared, plan, logs, {333U, 1024U, 511U});
-    const auto output = temp_path("mr_apple_head_timeline_output", ".wav");
-    FileGuard output_guard(output);
-    mradm::ScenePlan offline_plan = plan;
-    offline_plan.output_path = output.string();
-    if (!check(renderer->render_window(**prepared, offline_plan, progress, logs).has_value(),
-               "apple-headtrack-timeline: offline render")) {
-        return false;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!check(reader.has_value() && reader->channels() == 2U, "apple-headtrack-timeline: offline WAV opens")) {
-        return false;
-    }
-    std::vector<float> offline(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
-    reader->read(offline.data(), reader->frame_count());
-    if (!realtime || realtime->size() < k_frames * 2U || offline.size() < k_frames * 2U) {
-        return false;
-    }
-
-    const auto verify_windows =
-        [&](const std::vector<float>& samples, const char* unlocked_msg, const char* locked_msg) {
-            constexpr std::size_t first_begin = 3072U;
-            constexpr std::size_t first_end = 8192U;
-            constexpr std::size_t second_begin = 11264U;
-            constexpr std::size_t second_end = 17408U;
-            const double first_l = channel_energy(samples, 2U, 0U, first_begin, first_end);
-            const double first_r = channel_energy(samples, 2U, 1U, first_begin, first_end);
-            const double second_l = channel_energy(samples, 2U, 0U, second_begin, second_end);
-            const double second_r = channel_energy(samples, 2U, 1U, second_begin, second_end);
-            bool windows_ok = true;
-            windows_ok &= check(first_r > first_l, unlocked_msg);
-            windows_ok &= check(std::abs(second_r - second_l) < std::abs(first_r - first_l) * 0.5, locked_msg);
-            return windows_ok;
-        };
-    ok &= verify_windows(*realtime,
-                         "apple-headtrack-timeline: realtime false block follows listener rotation",
-                         "apple-headtrack-timeline: realtime true block stays head-relative");
-    ok &= verify_windows(offline,
-                         "apple-headtrack-timeline: offline false block follows listener rotation",
-                         "apple-headtrack-timeline: offline true block stays head-relative");
-    return ok;
-}
-
-// A scene with no renderable buses (here: a muted object) must open a silent stream — not
-// fail trying to drive a 0-input AUSpatialMixer — and produce full-length silence.
-bool verify_apple_stream_silent() {
-    constexpr uint32_t k_frames = 4096U;
-    const auto in = write_fixture(0.0F, k_frames, 1.0F, 0.0F, false, /*mute=*/true);
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value(), "silent: import scene")) {
-        return false;
-    }
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "silent: apple prepare")) {
-        return false;
-    }
-
-    const auto out = render_apple_stream_full(*renderer, **prepared, plan, logs, {512, 100});
-    if (!out) {
-        return check(false, "silent: open_stream + process succeeds for empty buses");
-    }
-    bool ok = true;
-    ok &= check(out->size() == static_cast<std::size_t>(k_frames) * 2U, "silent: full-length silence produced");
-    ok &= check(std::ranges::all_of(*out, [](float v) { return v == 0.0F; }), "silent: output is all zero");
-
-    // seek() on a silent stream must not dereference the (absent) AU / reader.
-    auto stream = renderer->open_stream(**prepared, plan, logs);
-    if (!stream) {
-        return check(false, "silent: open_stream for seek");
-    }
-    ok &= check((*stream)->seek(1000).has_value(), "silent: seek succeeds without AU/reader");
-    std::array<float, std::size_t{64} * 2U> buf{};
-    const auto produced = (*stream)->process(std::span<float>(buf), 64);
-    ok &= check(produced.has_value() && *produced == 64U, "silent: process after seek produces frames");
-    ok &= check(std::ranges::all_of(buf, [](float v) { return v == 0.0F; }), "silent: post-seek output is silence");
-    return ok;
-}
-
-// A live gain override (set_overrides) must scale the object's bus gain on the next block,
-// so the stream output is quieter by the override factor — validating BusPlan.object_id →
-// live gain map end to end through the real AUSpatialMixer.
-bool verify_apple_stream_gain_override() {
-    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "override: import scene with an object")) {
-        return false;
-    }
-    const std::string object_id = scene->objects.front().id;
-
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "override: apple prepare")) {
-        return false;
-    }
-
-    const auto baseline = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
-    if (!baseline) {
-        return false;
-    }
-
-    // Fresh stream; apply -12.04 dB (≈ 0.25 linear) to the object before pulling.
-    auto stream = renderer->open_stream(**prepared, plan, logs);
-    if (!check(stream.has_value(), "override: open_stream")) {
-        return false;
-    }
-    mradm::LiveOverrides ov;
-    ov.revision = 1;
-    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false});
-    (*stream)->set_overrides(ov);
-
-    const uint32_t ch = (*stream)->out_channels();
-    const std::size_t block_floats = std::size_t{1024U} * ch;
-    std::vector<float> overridden;
-    std::vector<float> buf(block_floats, 0.0F);
-    while (true) {
-        buf.assign(block_floats, 0.0F);
-        auto produced = (*stream)->process(std::span<float>(buf), 1024U);
-        if (!check(produced.has_value(), "override: process succeeds")) {
-            return false;
-        }
-        if (*produced == 0) {
-            break;
-        }
-        overridden.insert(overridden.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
-    }
-
-    bool ok = check(overridden.size() == baseline->size(), "override: same frame count as baseline");
-
-    auto buffer_rms = [](const std::vector<float>& v) {
-        const double total = std::accumulate(v.begin(), v.end(), 0.0, [](double acc, float s) {
-            return acc + (static_cast<double>(s) * static_cast<double>(s));
-        });
-        return v.empty() ? 0.0 : std::sqrt(total / static_cast<double>(v.size()));
-    };
-    const double b = buffer_rms(*baseline);
-    const double o = buffer_rms(overridden);
-    ok &= check(b > 1.0e-3, "override: baseline has signal energy");
-    // 0.25 linear; allow generous tolerance for HRTF spectral coloration around the scalar.
-    ok &= check(o < b * 0.5, "override: -12 dB override clearly attenuates the output");
-    ok &= check(o > b * 0.1, "override: attenuation is the gain scalar, not silence");
-    return ok;
-}
-
-// GUI binaural monitoring drives AppleStream through its output-stage path. A mid-play gain edit
-// must therefore enter the AU as a sample-domain envelope: the first edited frame keeps the intact
-// old convolution state, then the input reaches the target over 20 ms.
-bool verify_apple_output_stage_live_gain_ramp() {
-    constexpr std::size_t k_boundary = 1024U;
-    const auto in = write_fixture(45.0F, 16384U, 1.0F, 0.0F, false);
-    FileGuard in_guard(in);
-
-    auto scene = mradm::io::import_scene(in.string());
-    if (!check(scene.has_value() && !scene->objects.empty(), "output-gain-ramp: import scene")) {
-        return false;
-    }
-    mradm::ScenePlan plan;
-    plan.input_path = in.string();
-    plan.output_layout = "binaural";
-    plan.scene = *scene;
-    plan.scene_handle = rust_scene(in);
-
-    auto renderer = mradm::create_apple_renderer();
-    mradm::NullLogSink logs;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!check(prepared.has_value(), "output-gain-ramp: prepare")) {
-        return false;
-    }
-    const auto baseline = render_apple_stream_full(*renderer, **prepared, plan, logs, {512});
-    auto stream = renderer->open_stream(**prepared, plan, logs);
-    if (!baseline || !check(stream.has_value() && (*stream)->renders_orientation_at_output(),
-                            "output-gain-ramp: open output-stage stream")) {
-        return false;
-    }
-
-    const uint32_t in_ch = (*stream)->intermediate_channels();
-    const uint32_t out_ch = (*stream)->out_channels();
-    const mradm::ListenerOrientation identity{};
-    std::vector<float> changed;
-    std::vector<float> intermediate;
-    std::vector<float> rendered;
-    std::size_t total = 0U;
-    while (true) {
-        constexpr std::size_t k_chunk = 512U;
-        intermediate.assign(k_chunk * in_ch, 0.0F);
-        auto produced = (*stream)->produce_intermediate(std::span<float>(intermediate), k_chunk);
-        if (!check(produced.has_value(), "output-gain-ramp: produce intermediate")) {
-            return false;
-        }
-        if (*produced == 0U) {
-            break;
-        }
-        if (total == k_boundary) {
-            mradm::LiveOverrides ov;
-            ov.revision = 1;
-            ov.objects.push_back(
-                {scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false});
-            (*stream)->set_overrides(ov);
-        }
-        rendered.assign(*produced * out_ch, 0.0F);
-        const std::size_t got = (*stream)->render_output(std::span<const float>(intermediate.data(), *produced * in_ch),
-                                                         std::span<float>(rendered),
-                                                         *produced,
-                                                         identity);
-        changed.insert(changed.end(), rendered.begin(), rendered.begin() + static_cast<std::ptrdiff_t>(got * out_ch));
-        total += got;
-    }
-
-    if (!check(changed.size() == baseline->size(), "output-gain-ramp: frame count unchanged")) {
-        return false;
-    }
-    bool ok = true;
-    for (uint32_t channel = 0; channel < out_ch; ++channel) {
-        const std::size_t index = (k_boundary * out_ch) + channel;
-        ok &= check(std::fabs(changed[index] - (*baseline)[index]) < 2.0e-4F,
-                    "output-gain-ramp: first edited frame preserves the old AU state");
-    }
-
-    const std::size_t settled_begin = k_boundary + 2048U;
-    const std::size_t settled_end = std::min<std::size_t>(settled_begin + 4096U, total);
-    double baseline_energy = 0.0;
-    double changed_energy = 0.0;
-    for (std::size_t frame = settled_begin; frame < settled_end; ++frame) {
-        for (uint32_t channel = 0; channel < out_ch; ++channel) {
-            const std::size_t index = (frame * out_ch) + channel;
-            baseline_energy += static_cast<double>((*baseline)[index]) * (*baseline)[index];
-            changed_energy += static_cast<double>(changed[index]) * changed[index];
-        }
-    }
-    ok &= check(changed_energy < baseline_energy * 0.03 && changed_energy > baseline_energy * 0.003,
-                "output-gain-ramp: settles near the -20 dB target");
-    return ok;
-}
+// END AUSpatialMixer HRTF probe
 
 } // namespace
 
 int main() try {
     bool ok = true;
     ok &= verify_capabilities();
-    ok &= verify_lfe_label_detection();
     ok &= verify_directional_sign();
     ok &= verify_zero_gain_is_silent();
     ok &= verify_speaker_panning();
@@ -2473,6 +1910,6 @@ int main() try {
     ok &= verify_listener_orientation();
     return ok ? 0 : 1;
 } catch (const std::exception& error) {
-    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    std::cerr << "apple smoke test exception: " << error.what() << '\n';
     return 1;
 }

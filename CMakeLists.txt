@@ -641,18 +641,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_engine_renderer_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_engine_renderer_test_support)
 
-    # The Apple backend as a C++ IRenderer for the tests (tests/support/apple_renderer); production
-    # calls it through the Apple islands.
-    if(APPLE)
-        add_library(mr_adm_apple_renderer_test_support STATIC tests/support/apple_renderer/apple_renderer.cpp)
-        target_include_directories(mr_adm_apple_renderer_test_support PRIVATE src/adm_render_common)
-        target_link_libraries(mr_adm_apple_renderer_test_support
-            PUBLIC MacinRender::ADMCore MacinRender::ADMRenderApple
-            PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-        mr_adm_core_apply_warnings(mr_adm_apple_renderer_test_support)
-        mr_adm_core_apply_static_analysis(mr_adm_apple_renderer_test_support)
-    endif()
-
     # One Scene stream renderer behind the C++ interface, outside the Rust stream engine: only the
     # manual benchmarks use it (the live renderer and trace tests are Rust, R3 B and D2).
     add_library(mr_adm_live_scene_test_support STATIC
@@ -941,21 +929,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(APPLE)
         add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
         target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
-            PRIVATE mr_adm_scene_test_support mr_adm_apple_renderer_test_support MacinRender::ADMEngine
-                MacinRender::ADMRenderApple MacinRender::ADMAudio)
+            PRIVATE MacinRender::ADMRenderApple MacinRender::ADMAudio MacinRender::ADMDsp)
         mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
         mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
 
-    # The island LFE pair recombination; on macOS also the Apple side bus (the EAR / VBAP routing
-    # is tested in mradm-engine tests/lfe_render.rs, R3 F2).
+    # The island LFE pair recombination; on macOS also the Apple backend through the C ABI and its
+    # island table (the EAR / VBAP routing is tested in mradm-engine tests/lfe_render.rs, R3 F2).
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
     target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderCommon)
     if(APPLE)
         target_link_libraries(mr_adm_lfe_routing_tests
-            PRIVATE mr_adm_scene_test_support mr_adm_apple_renderer_test_support MacinRender::ADMRenderApple
-                MacinRender::ADMEngine MacinRender::ADMIo MacinRender::ADMAudio)
+            PRIVATE MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio)
     endif()
     mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
     mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
@@ -1056,18 +1042,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_monitor_spatial_check PRIVATE MacinRender::ADMCAPI)
         mr_adm_core_apply_warnings(mr_monitor_spatial_check)
 
+        # The Apple backend through the C ABI and its island table, and the AUSpatialMixer HRTF probe
+        # (R3 F3: without the C++ SDK).
         add_executable(mr_adm_apple_smoke_tests tests/unit/apple_renderer_smoke_test.cpp)
         target_link_libraries(mr_adm_apple_smoke_tests
-            PRIVATE mr_adm_scene_test_support
-                mr_adm_apple_renderer_test_support
-                MacinRender::ADMEngine
-                MacinRender::ADMIo
-                MacinRender::ADMRenderApple
-                MacinRender::ADMRenderCommon
-                MacinRender::ADMAudio
-        )
-        target_link_libraries(mr_adm_apple_smoke_tests PRIVATE ${MR_ADM_AUDIOTOOLBOX_FW})
-        target_include_directories(mr_adm_apple_smoke_tests PRIVATE src/adm_io)
+            PRIVATE MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio
+                nlohmann_json::nlohmann_json ${MR_ADM_AUDIOTOOLBOX_FW})
         mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
