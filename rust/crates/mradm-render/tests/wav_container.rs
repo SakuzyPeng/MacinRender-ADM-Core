@@ -9,13 +9,13 @@
 //! into one digest per operation. The C++ test also compared AXML reads with the SDK's
 //! `io::get_axml`; that view is covered by the import tests and the C ABI query tests.
 use mradm_render::{
-    output,
+    output::{self, MetadataFields},
     postprocess::{self, Begin, ChnaEntry, Layout, Profile, Progress},
 };
-use mradm_wav::{AMBI_HOA3, BextFields, Chna, ChunkReader, append_bext, bext_payload, has_chunk};
+use mradm_wav::{Chna, ChunkReader, has_chunk};
 use std::{
     collections::BTreeMap,
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::BufReader,
     path::{Path, PathBuf},
 };
@@ -397,16 +397,6 @@ fn finalize_code(path: &Path, layout: &Layout) -> i32 {
     run(postprocess::finalize(text(path), layout)).map_or_else(|f| code(f.code), |_| 0)
 }
 
-/// `MetadataFields`: encoder, UTC date, renderer, output layout, loudness, true peak.
-#[derive(Default)]
-struct Metadata {
-    encoder: String,
-    date_utc: String,
-    renderer: String,
-    output_layout: String,
-    lufs: Option<f64>,
-    peak_dbtp: Option<f64>,
-}
 fn metadata(
     encoder: &str,
     date_utc: &str,
@@ -414,8 +404,8 @@ fn metadata(
     output_layout: &str,
     lufs: Option<f64>,
     peak_dbtp: Option<f64>,
-) -> Metadata {
-    Metadata {
+) -> MetadataFields {
+    MetadataFields {
         encoder: encoder.into(),
         date_utc: date_utc.into(),
         renderer: renderer.into(),
@@ -423,31 +413,6 @@ fn metadata(
         lufs,
         peak_dbtp,
     }
-}
-/// `write_wav_metadata`: the island's bext (and HOA3 ambi) append.
-fn write_metadata(path: &Path, meta: &Metadata) -> i32 {
-    let description = if meta.renderer.is_empty() {
-        String::new()
-    } else {
-        format!("renderer={} layout={}", meta.renderer, meta.output_layout)
-    };
-    let payload = bext_payload(&BextFields {
-        description: description.as_bytes(),
-        originator: meta.encoder.as_bytes(),
-        originator_reference: meta.output_layout.as_bytes(),
-        date_utc: meta.date_utc.as_bytes(),
-        loudness: meta.lufs,
-        true_peak: meta.peak_dbtp,
-    });
-    let result = (|| {
-        let mut file = OpenOptions::new().read(true).write(true).open(path)?;
-        append_bext(
-            &mut file,
-            &payload,
-            (meta.output_layout == "hoa3").then_some(&AMBI_HOA3),
-        )
-    })();
-    result.map_or_else(|e| code(e.code), |()| 0)
 }
 
 /// The AXML payload (empty when absent) and the import-side CHNA records.
@@ -581,7 +546,7 @@ fn layouts(channels: u16) -> Vec<(&'static str, Layout)> {
     out
 }
 
-fn metadata_cases() -> Vec<(&'static str, Metadata)> {
+fn metadata_cases() -> Vec<(&'static str, MetadataFields)> {
     vec![
         (
             "full",
@@ -594,7 +559,7 @@ fn metadata_cases() -> Vec<(&'static str, Metadata)> {
                 Some(-1.004),
             ),
         ),
-        ("empty", Metadata::default()),
+        ("empty", MetadataFields::default()),
         (
             "date-only",
             metadata("enc", "2026-05-22", "", "5.1", None, Some(0.005)),
@@ -698,12 +663,10 @@ fn container_passes_match_the_golden_digests() {
         for (name, meta) in metadata_cases() {
             // Applied twice so a second bext and an existing ambi are covered too.
             fs::write(&case, &fixture.bytes).unwrap();
-            let first = write_metadata(&case, &meta);
-            let result = if first != 0 {
-                first
-            } else {
-                write_metadata(&case, &meta)
-            };
+            let result = meta
+                .write_wav(&case)
+                .and_then(|()| meta.write_wav(&case))
+                .map_or_else(|e| code(e.code), |()| 0);
             let label = format!("metadata {} {name}", fixture.name);
             record(
                 &mut goldens,
@@ -822,11 +785,11 @@ fn rejected_edits_leave_the_file_unchanged() {
         0,
     );
     fs::write(&path, &bad_ambi).unwrap();
-    let hoa = Metadata {
+    let hoa = MetadataFields {
         output_layout: "hoa3".into(),
-        ..Metadata::default()
+        ..MetadataFields::default()
     };
-    assert_ne!(write_metadata(&path, &hoa), 0, "invalid ambi accepted");
+    assert!(hoa.write_wav(&path).is_err(), "invalid ambi accepted");
     assert_eq!(
         fs::read(&path).unwrap(),
         bad_ambi,
@@ -836,9 +799,8 @@ fn rejected_edits_leave_the_file_unchanged() {
     let mut trailing = fixtures().remove(0).bytes;
     trailing.push(0);
     fs::write(&path, &trailing).unwrap();
-    assert_ne!(
-        write_metadata(&path, &Metadata::default()),
-        0,
+    assert!(
+        MetadataFields::default().write_wav(&path).is_err(),
         "trailing garbage absorbed"
     );
     assert_eq!(fs::read(&path).unwrap(), trailing);

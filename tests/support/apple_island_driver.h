@@ -111,6 +111,8 @@ inline MradmSceneHandle* import_scene(const std::string& path, const std::vector
 // One island reply: the code (0 ok) and its message.
 struct Reply {
     int32_t code{0};
+    // Read by the smoke and matrix tests when an island call fails.
+    // cppcheck-suppress unusedStructMember
     std::string message;
     [[nodiscard]] bool ok() const { return code == 0; }
 };
@@ -133,7 +135,7 @@ class Prepared {
         const auto status = mradm_apple_islands()->prepare(&record, scene, &context, &handle_, &raw);
         reply = reply_of(status, raw);
     }
-    Prepared(const Settings& settings, const std::vector<std::string>& labels = {})
+    explicit Prepared(const Settings& settings, const std::vector<std::string>& labels = {})
         : Prepared(settings, import_scene(settings.input, labels)) {}
     ~Prepared() {
         if (handle_ != nullptr) {

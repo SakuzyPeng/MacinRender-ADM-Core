@@ -129,7 +129,7 @@ std::filesystem::path write_fixture(uint32_t sample_rate = 48000U, bool cartesia
     auto chna = std::make_shared<fixture::WaveChna>(
         std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
     auto axml = std::make_shared<fixture::WaveAxml>(buf.str());
-    auto writer = fixture::write_wave(path.string(), 1U, static_cast<uint16_t>(sample_rate), 24U, chna, axml);
+    auto writer = fixture::write_wave(path, 1U, static_cast<uint16_t>(sample_rate), 24U, chna, axml);
     const uint64_t k_frames = static_cast<uint64_t>(sample_rate) / 5U; // 0.2 s
     std::vector<float> samples(k_frames, 0.5F);
     writer->write(samples.data(), k_frames);

@@ -73,13 +73,13 @@ int32_t run_encoder(uint32_t island,
                     std::string_view layout,
                     Caller& caller,
                     MradmEngineIslandReply& reply) {
-    const auto s = src.string();
-    const auto d = dst.string();
+    const auto src_utf8 = src.u8string();
+    const auto dst_utf8 = dst.u8string();
     MradmEngineRenderEvent e{};
     e.kind = 3U;
     e.island = island;
-    e.src.utf8 = view(s);
-    e.dst.utf8 = view(d);
+    e.src.utf8 = {reinterpret_cast<const uint8_t*>(src_utf8.data()), src_utf8.size()};
+    e.dst.utf8 = {reinterpret_cast<const uint8_t*>(dst_utf8.data()), dst_utf8.size()};
     e.layout = view(layout);
     const MradmIslandContext context{&caller, &cancelled, &progress, nullptr};
     return mradm_audio_island(&e, &context, &reply);
@@ -99,8 +99,7 @@ bool verify_pre_cancelled_encoders(const fs::path& dir) {
             return check(false, "write a stereo source");
         }
         const std::vector<float> block(512, 0.25F);
-        writer->write(block.data(), 256);
-        if (!writer->finish()) {
+        if (writer->write(block.data(), 256) != 256U || !writer->finish()) {
             return check(false, "finish the stereo source");
         }
     }
@@ -121,7 +120,9 @@ bool verify_pre_cancelled_encoders(const fs::path& dir) {
 } // namespace
 
 int main() {
-    const auto dir = fs::temp_directory_path() / ("mr_adm_audio_island_" + std::to_string(std::random_device{}()));
+    // These native path bytes name different characters in UTF-8 and legacy Windows code pages.
+    const auto dir =
+        fs::temp_directory_path() / ("mr_adm_audio_island_\xC2\xA9_" + std::to_string(std::random_device{}()));
     fs::create_directories(dir);
     const auto src = dir / "in.wav";
     bool ok = check(write_source(src, uint64_t{48000U} * 30U), "write a 30 s float source");
@@ -130,7 +131,8 @@ int main() {
     MradmEngineIslandReply reply{};
     ok &= check(run_flac(src, dir / "plain.flac", plain, reply) == 0 && reply.code == 0, "FLAC island runs");
     ok &= check(plain.events.load() > 2 && plain.raw.load(), "FLAC island reports raw encoder progress");
-    ok &= check(fs::file_size(dir / "plain.flac") > 0U, "FLAC island writes the file");
+    const auto plain_output = dir / "plain.flac";
+    ok &= check(fs::is_regular_file(plain_output) && fs::file_size(plain_output) > 0U, "FLAC island writes the file");
 
     Caller before;
     before.cancel_after = 0;

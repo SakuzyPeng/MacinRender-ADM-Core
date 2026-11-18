@@ -3,7 +3,7 @@
   "areas": {
     "production": {
       "files": 50,
-      "lines": 8748
+      "lines": 8744
     },
     "islands": {
       "files": 6,
@@ -19,11 +19,11 @@
     },
     "tests": {
       "files": 109,
-      "lines": 22110
+      "lines": 22123
     },
     "rust": {
       "files": 377,
-      "lines": 147677
+      "lines": 147640
     },
     "rust-vendor": {
       "files": 175,
@@ -36,12 +36,12 @@
     "rust/crates/mradm-cli": 3514,
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 26881,
+    "rust/crates/mradm-engine": 26846,
     "rust/crates/mradm-ffi": 18101,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 2617,
-    "rust/crates/mradm-render": 24858,
+    "rust/crates/mradm-render": 24856,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5815,
     "rust/crates/mradm-testkit": 1890,
@@ -56,7 +56,7 @@
     "src/adm_apple/apple_backend.h": 218,
     "src/adm_apple/apple_island.cpp": 166,
     "src/adm_apple/apple_island.h": 14,
-    "src/adm_audio": 3575,
+    "src/adm_audio": 3571,
     "src/adm_audio/apac_worker_island.cpp": 23,
     "src/adm_audio/apac_worker_island.h": 15,
     "src/adm_audio/island.cpp": 117,
@@ -76,9 +76,9 @@
     "src/adm_render_room/cuda": 512,
     "src/adm_windows": 709,
     "tests/manual": 2480,
-    "tests/support": 10488,
+    "tests/support": 10489,
     "tests/tools": 1435,
-    "tests/unit": 7707
+    "tests/unit": 7719
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,

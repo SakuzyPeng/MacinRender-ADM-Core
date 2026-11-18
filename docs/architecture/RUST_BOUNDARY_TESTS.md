@@ -510,7 +510,8 @@ F 处理还依赖 C++ SDK（`RenderService`、`adm/io.h`、`tests/support/apple_
 - F2：split-power 增益改为 0.70（`routing.rs` 检出；`lfe_render.rs` 沿用 C++ 测试 2.5 % 的 RMS 容差，未检出）、直通模式 LFE 串扰、
   FLAC 接受 5.1.2、暂存文件不删、5.1 FLAC 掩码错误。
 - F3（建议在 macOS 上做）：去掉 ADM → SpatialMixer 的方位符号翻转、流表忽略 `set_overrides`、`apple_island.cpp` 的 `plan_of`
-  丢掉朝向或矩阵、跳过 22.2 的 LFEScreen 重标。
+  丢掉朝向或矩阵。22.2 的 LFE 由 `mix_lfe_side_buses` 写入 CICP 13 槽位；在 macOS 上把 LFE1 从声道 3 改送声道 0，
+  `mr_adm_apple_smoke_tests` 检出声道 3 静音和声道 0 泄漏。
 
 ### F 的验证
 

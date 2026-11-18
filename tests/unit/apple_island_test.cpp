@@ -82,7 +82,7 @@ void write_fixture(const fs::path& path, uint32_t frames) {
     auto chna = std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{
         fixture::WaveAudioId(1U, fixture::format_id(uid->get<fixture::AudioTrackUidId>()), "", "")});
     auto axml = std::make_shared<fixture::WaveAxml>(xml.str());
-    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto writer = fixture::write_wave(path, 1U, 48000U, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) / 48000.0F);

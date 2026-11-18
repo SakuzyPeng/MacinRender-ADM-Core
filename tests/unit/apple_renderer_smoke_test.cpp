@@ -556,7 +556,7 @@ std::filesystem::path write_mono(const std::shared_ptr<fixture::Document>& doc,
     fixture::write_xml(xml_buf, doc);
     auto chna = std::make_shared<fixture::WaveChna>(ids);
     auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
-    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
+    auto writer = fixture::write_wave(path, 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
@@ -764,6 +764,15 @@ std::optional<uint32_t> caf_channel_layout_tag(const std::filesystem::path& path
     return std::nullopt;
 }
 
+std::optional<std::vector<float>> read_rendered_wav(const std::filesystem::path& path, uint16_t channels) {
+    auto audio = apple_test::read_wav(path);
+    if (!audio || audio->channels != channels) {
+        std::cerr << "FAIL: expected " << channels << " channels in " << path << '\n';
+        return std::nullopt;
+    }
+    return std::move(audio->samples);
+}
+
 // A C ABI render of `input` with the Apple renderer to `layout` (peak limiting off) after
 // `configure`, read back when it has `channels` channels.
 std::optional<std::vector<float>> render_capi(const std::filesystem::path& input,
@@ -785,7 +794,7 @@ std::optional<std::vector<float>> render_capi(const std::filesystem::path& input
     const auto code =
         adm_render_file_ex(context, input.string().c_str(), out.string().c_str(), options, nullptr, nullptr, &result);
     if (code != ADM_ERROR_OK) {
-        std::cerr << "context: " << adm_context_last_error_message(context) << "\n";
+        std::cerr << adm_render_result_message(result) << '\n';
     }
     adm_destroy_render_result(result);
     adm_destroy_render_options(options);
@@ -793,11 +802,7 @@ std::optional<std::vector<float>> render_capi(const std::filesystem::path& input
     if (!check(code == ADM_ERROR_OK, "apple render succeeds")) {
         return std::nullopt;
     }
-    auto audio = apple_test::read_wav(out);
-    if (!check(audio.has_value() && audio->channels == channels, "apple output has the layout's channels")) {
-        return std::nullopt;
-    }
-    return std::move(audio->samples);
+    return read_rendered_wav(out, channels);
 }
 
 // A C ABI render of a one-object fixture.
@@ -833,11 +838,7 @@ std::optional<std::vector<float>> render_island(const Settings& settings, uint16
         std::cerr << "context: " << reply.message << "\n";
         return std::nullopt;
     }
-    auto audio = apple_test::read_wav(out);
-    if (!check(audio.has_value() && audio->channels == channels, "apple island output has the layout's channels")) {
-        return std::nullopt;
-    }
-    return std::move(audio->samples);
+    return read_rendered_wav(out, channels);
 }
 
 Settings settings_for(const std::filesystem::path& input, std::string layout = "binaural") {
@@ -880,9 +881,8 @@ bool verify_capabilities() {
     }
     const auto json = nlohmann::json::parse(text);
     const auto& backends = json.at("backends");
-    const auto apple = std::find_if(backends.begin(), backends.end(), [](const nlohmann::json& b) {
-        return b.value("renderer", std::string{}) == "apple";
-    });
+    const auto apple = std::ranges::find_if(
+        backends, [](const nlohmann::json& b) { return b.value("renderer", std::string{}) == "apple"; });
     if (!check(apple != backends.end(), "the macOS build publishes the apple backend")) {
         return false;
     }
@@ -896,7 +896,7 @@ bool verify_capabilities() {
     ok &= check(caps.at("supports_diffuse") == false, "diffuse unsupported");
     const auto has_layout = [&](const std::string& id, uint16_t channels, bool binaural) {
         const auto& layouts = caps.at("layouts");
-        return std::any_of(layouts.begin(), layouts.end(), [&](const nlohmann::json& l) {
+        return std::ranges::any_of(layouts, [&](const nlohmann::json& l) {
             return l.at("id") == id && l.at("channel_count") == channels && l.at("is_binaural") == binaural;
         });
     };
@@ -990,8 +990,8 @@ bool verify_binaural_container_tag() {
     const auto tag = caf_channel_layout_tag(out);
     constexpr uint32_t k_binaural = (106U << 16) | 2U;
     constexpr uint32_t k_stereo = (101U << 16) | 2U;
-    if (!check(tag.has_value(), "CAF has a chan chunk")) {
-        return false;
+    if (!tag) {
+        return check(false, "CAF has a chan chunk");
     }
     bool ok = check(*tag == k_binaural, "CAF tagged Binaural (106), not Stereo");
     ok &= check(*tag != k_stereo, "CAF not tagged plain Stereo for a binaural render");
@@ -1018,8 +1018,8 @@ bool verify_render_window_frame_count() {
         return false;
     }
     const auto audio = apple_test::read_wav(out);
-    if (!check(audio.has_value(), "apple render window output opens")) {
-        return false;
+    if (!audio) {
+        return check(false, "apple render window output opens");
     }
     bool ok = true;
     ok &= check(audio->channels == 2U, "apple render window output is binaural");
@@ -1036,8 +1036,8 @@ bool verify_spatial_presets_render_binaural() {
         auto settings = settings_for(in);
         settings.spatial_preset = preset;
         const auto rendered = render_island(settings, 2U, "mr_apple_spatial_preset");
-        if (!check(rendered.has_value(), "apple binaural factory preset renders")) {
-            ok = false;
+        if (!rendered) {
+            ok = check(false, "apple binaural factory preset renders");
             continue;
         }
         ok &= check(total_energy(*rendered, 2U) > 1.0e-5, "apple binaural factory preset output is not silent");
@@ -1136,10 +1136,8 @@ bool verify_bed_and_lfe_routing() {
     return ok;
 }
 
-// 22.2 (CICP_13) labels its two LFE channels LFE2/LFE3, not LFEScreen. AUSpatialMixer's bypass LFE
-// path only ever targets a channel labeled LFEScreen, so without the output-layout relabel in
-// set_output_layout_tag the bed LFE is dropped — and the mixer folds it into ch0 (Lw) at unity gain.
-// This guards both: the LFE lands on the LFE channel (ch3), and does NOT leak into ch0.
+// The 22.2 LFE side bus writes to the canonical CICP 13 output. LFE1 belongs
+// on channel 3. Channel 0 (Lw) must stay silent for this LFE-only input.
 bool verify_22_2_lfe_routing() {
     const auto lfe = render_ds(45.0F, -30.0F, "RC_LFE", "9+10+3", 24U, "mr_apple_lfe_222");
     if (!lfe) {
@@ -1235,8 +1233,8 @@ bool verify_direct_speakers_missing_position_fallback() {
         return false;
     }
     const auto audio = apple_test::read_wav(out);
-    if (!check(audio.has_value() && audio->channels == 6U, "Apple rear-label fallback output opens")) {
-        return false;
+    if (!audio || audio->channels != 6U) {
+        return check(false, "Apple rear-label fallback output opens");
     }
     const auto& samples = audio->samples;
     const double rear_left = channel_energy(samples, 6U, 4U);
@@ -1261,8 +1259,8 @@ bool verify_mixed_object_direct_and_lfe_paths() {
     const auto samples = render_capi(input, "mr_apple_mixed_paths", "9+10+3", k_channels, [](auto* o) {
         adm_render_options_set_direct_speakers_routing_mode(o, ADM_DIRECT_SPEAKERS_ROUTING_LABEL);
     });
-    if (!check(samples.has_value(), "Apple mixed Objects/DirectSpeakers/LFE render succeeds")) {
-        return false;
+    if (!samples) {
+        return check(false, "Apple mixed Objects/DirectSpeakers/LFE render succeeds");
     }
     double spatial_energy = 0.0;
     for (uint16_t channel = 0; channel < k_channels; ++channel) {
@@ -1336,11 +1334,7 @@ offline_reference(const Prepared& prepared, const Settings& settings, uint16_t c
     if (!check(apple_test::render(prepared, settings, out, caller).ok(), "apple island offline reference renders")) {
         return std::nullopt;
     }
-    auto audio = apple_test::read_wav(out);
-    if (!check(audio.has_value() && audio->channels == channels, "apple island offline reference opens")) {
-        return std::nullopt;
-    }
-    return std::move(audio->samples);
+    return read_rendered_wav(out, channels);
 }
 
 bool verify_apple_direct_stream_and_dynamic_blocks() {
@@ -1363,8 +1357,8 @@ bool verify_apple_direct_stream_and_dynamic_blocks() {
         return false;
     }
     const auto reference = offline_reference(prepared, settings, k_channels, "mr_apple_direct_stream_ref");
-    if (!reference) {
-        return false;
+    if (!reference || reference->size() != k_total_frames * k_channels) {
+        return check(false, "Apple direct bus reference has the full timeline");
     }
     const auto range_energy = [&](uint64_t begin, uint64_t end, uint16_t channel) {
         return channel_energy(*reference, k_channels, channel, begin, end);
@@ -1485,8 +1479,8 @@ bool verify_apple_output_stage_matches_process() {
     while (true) {
         interm.assign(k * in_ch, 0.0F);
         const auto got = stream.produce_intermediate(interm, k);
-        if (!check(got.has_value(), "output-stage: produce_intermediate succeeds")) {
-            return false;
+        if (!got) {
+            return check(false, "output-stage: produce_intermediate succeeds");
         }
         if (*got == 0) {
             break;
@@ -1553,8 +1547,8 @@ bool verify_apple_stream_listener_orientation() {
     }
     turned_stream.set_orientation(90.0F);
     const auto turned = turned_stream.pull_all({1024});
-    if (!check(turned.has_value(), "stream-orient: turned process succeeds")) {
-        return false;
+    if (!turned) {
+        return check(false, "stream-orient: turned process succeeds");
     }
     bool ok = true;
     ok &= check(rms_difference(*forward, *turned) > 1.0e-4, "stream live yaw changes the binaural output");
@@ -1751,8 +1745,8 @@ bool verify_apple_output_stage_live_gain_ramp() {
         constexpr std::size_t k_chunk = 512U;
         intermediate.assign(k_chunk * in_ch, 0.0F);
         const auto produced = stream.produce_intermediate(intermediate, k_chunk);
-        if (!check(produced.has_value(), "output-gain-ramp: produce intermediate")) {
-            return false;
+        if (!produced) {
+            return check(false, "output-gain-ramp: produce intermediate");
         }
         if (*produced == 0U) {
             break;

@@ -240,22 +240,22 @@ bool verify_apple(const std::filesystem::path& input_path,
         return false;
     }
     const auto reference = render_offline(prepared, settings, "mradm-matrix-Apple", k_5_1_channels);
-    if (!check(reference.has_value(), "Apple: matrix output opens")) {
-        return false;
+    if (!reference) {
+        return check(false, "Apple: matrix output opens");
     }
     bool ok = verify_dynamic_samples(*reference, input_samples);
     const auto uniform = apple_test::stream_all(prepared, settings, {1024U});
     const auto varied = apple_test::stream_all(prepared, settings, {333U, 1000U, 7U, 512U});
-    if (!check(uniform.has_value() && varied.has_value(), "Apple: matrix streams render")) {
-        return false;
+    if (!uniform || !varied) {
+        return check(false, "Apple: matrix streams render");
     }
     ok &= check(max_difference(*uniform, *reference) < 2.0e-6, "Apple: stream matches offline output");
     ok &= check(*uniform == *varied, "Apple: stream is independent of pull chunking");
 
     const auto gained = apple_test::stream_all(
         prepared, settings, {257U, 1024U}, {{k_object_id, -6.020599913F, false, std::nullopt, ""}});
-    if (!check(gained.has_value() && gained->size() == reference->size(), "Apple: gained matrix stream renders")) {
-        return false;
+    if (!gained || gained->size() != reference->size()) {
+        return check(false, "Apple: gained matrix stream renders");
     }
     std::vector<float> expected_gained(reference->size());
     std::ranges::transform(*reference, expected_gained.begin(), [](float sample) { return sample * 0.5F; });
@@ -274,8 +274,8 @@ bool verify_apple(const std::filesystem::path& input_path,
         return false;
     }
     const auto lfe_output = render_offline(lfe_prepared, lfe_settings, "mradm-matrix-lfe-Apple", 24U);
-    if (!check(lfe_output.has_value(), "Apple: matrix LFE output opens")) {
-        return false;
+    if (!lfe_output) {
+        return check(false, "Apple: matrix LFE output opens");
     }
     ok &= verify_lfe_samples(*lfe_output, input_samples);
     return ok;

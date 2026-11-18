@@ -135,9 +135,11 @@ RenderCapture render_case(const std::vector<std::string>& labels, const std::vec
     adm_render_options_set_input_channel_labels(options, csv.c_str());
     adm_render_options_set_lfe_routing_mode(options, split ? ADM_LFE_ROUTING_SPLIT_POWER : ADM_LFE_ROUTING_DIRECT);
     adm_render_options_set_peak_limit(options, 0);
+    adm_render_result_t* result = nullptr;
     capture.code = adm_render_file_ex(
-        context, input.string().c_str(), output.string().c_str(), options, nullptr, nullptr, nullptr);
-    capture.message = adm_context_last_error_message(context);
+        context, input.string().c_str(), output.string().c_str(), options, nullptr, nullptr, &result);
+    capture.message = adm_render_result_message(result);
+    adm_destroy_render_result(result);
     adm_destroy_render_options(options);
     adm_destroy_context(context);
     capture.output_exists = std::filesystem::exists(output);
@@ -245,15 +247,15 @@ bool verify_apple_side_bus_stream_and_override() {
         return false;
     }
     const auto audio = apple_test::read_wav(output);
-    if (!check(audio.has_value() && audio->channels == k_channels, "Apple LFE stream: reference is 24-channel")) {
-        return false;
+    if (!audio || audio->channels != k_channels || audio->frames != k_frames) {
+        return check(false, "Apple LFE stream: reference is 24-channel and full-length");
     }
     const auto& reference = audio->samples;
 
     const auto neutral = apple_test::stream_all(prepared, settings, {1024U});
     apple_test::Stream edited_stream(prepared, settings);
-    if (!check(neutral.has_value() && edited_stream.ok(), "Apple LFE stream: open realtime streams")) {
-        return false;
+    if (!neutral || !edited_stream.ok()) {
+        return check(false, "Apple LFE stream: open realtime streams");
     }
     // The override lands after the first 1024 frames.
     std::vector<float> edited;
@@ -261,7 +263,10 @@ bool verify_apple_side_bus_stream_and_override() {
     for (bool applied = false;;) {
         std::ranges::fill(block, 0.0F);
         const auto produced = edited_stream.process(block, 1024U);
-        if (!produced || *produced == 0U) {
+        if (!produced) {
+            return check(false, "Apple LFE stream: process edited audio");
+        }
+        if (*produced == 0U) {
             break;
         }
         edited.insert(edited.end(), block.begin(), block.begin() + static_cast<std::ptrdiff_t>(*produced * k_channels));
@@ -270,13 +275,14 @@ bool verify_apple_side_bus_stream_and_override() {
             applied = true;
         }
     }
-    bool ok = check(neutral->size() == reference.size() && edited.size() == reference.size(),
-                    "Apple LFE stream: stream/offline frame counts match");
+    if (neutral->size() != reference.size() || edited.size() != reference.size()) {
+        return check(false, "Apple LFE stream: stream/offline frame counts match");
+    }
     double max_diff = 0.0;
-    for (std::size_t index = 0; index < std::min(neutral->size(), reference.size()); ++index) {
+    for (std::size_t index = 0; index < reference.size(); ++index) {
         max_diff = std::max(max_diff, std::abs(static_cast<double>((*neutral)[index] - reference[index])));
     }
-    ok = check(max_diff < 1.0e-7, "Apple LFE stream: pure side bus matches the offline render") && ok;
+    bool ok = check(max_diff < 1.0e-7, "Apple LFE stream: pure side bus matches the offline render");
 
     constexpr std::size_t k_edit_frame = 1024U;
     if (edited.size() > (k_edit_frame * k_channels) + 9U) {
@@ -329,8 +335,8 @@ bool verify_apple_side_bus_stream_and_override() {
         return false;
     }
     const auto mixed = apple_test::read_wav(mixed_output);
-    if (!check(mixed.has_value() && mixed->channels == k_channels, "Apple mixed blocks: output is 24-channel")) {
-        return false;
+    if (!mixed || mixed->channels != k_channels) {
+        return check(false, "Apple mixed blocks: output is 24-channel");
     }
     double first_lfe_energy = 0.0;
     double later_lfe_energy = 0.0;

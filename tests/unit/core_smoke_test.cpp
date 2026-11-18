@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -170,11 +170,11 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
     while (offset + 12U <= bytes.size()) {
         const auto chunk_id = std::string_view{reinterpret_cast<const char*>(bytes.data() + offset), 4U};
         const uint64_t size = read_be64(bytes, offset + 4U);
+        if (size > bytes.size() - offset - 12U) {
+            break;
+        }
         if (chunk_id == id) {
             return offset;
-        }
-        if (size > bytes.size() || offset + 12U + static_cast<std::size_t>(size) > bytes.size()) {
-            break;
         }
         offset += 12U + static_cast<std::size_t>(size);
     }
@@ -245,16 +245,21 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
         return false;
     }
     if (!verify_wav_container_size(bytes, uint64_t{2} * sizeof(float), "WAV metadata") ||
-        read_le32(bytes, bext + 4U) != 602U) {
+        read_le32(bytes, bext + 4U) != 602U || bytes.size() - bext < 8U + 602U) {
         std::cerr << "WAV bext or container size mismatch\n";
         std::filesystem::remove(path);
         return false;
     }
     const auto payload = bext + 8U;
+    const std::string_view bext_fields{reinterpret_cast<const char*>(bytes.data() + payload), 602U};
+    const auto field_text = [&](std::size_t offset, std::size_t width) {
+        const auto field = bext_fields.substr(offset, width);
+        return field.substr(0U, field.find('\0'));
+    };
     const auto loudness = static_cast<int16_t>(read_le16(bytes, payload + 412U));
     const auto true_peak = static_cast<int16_t>(read_le16(bytes, payload + 416U));
-    if (!contains_blob(bytes, "renderer=ear layout=0+2+0") || !contains_blob(bytes, "MacinRender Test") ||
-        !contains_blob(bytes, "2026-05-22") || !contains_blob(bytes, "14-30-15") ||
+    if (field_text(0U, 256U) != "renderer=ear layout=0+2+0" || field_text(256U, 32U) != meta.encoder ||
+        field_text(288U, 32U) != meta.output_layout || bext_fields.substr(320U, 18U) != "2026-05-2214-30-15" ||
         read_le16(bytes, payload + 346U) != 2U || loudness != -2350 || true_peak != -100) {
         std::cerr << "WAV bext metadata fields mismatch\n";
         std::filesystem::remove(path);
@@ -588,34 +593,39 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
     in.close();
 
-    if (bytes.size() < 124U) {
-        std::cerr << "CAF file too small\n";
-        std::filesystem::remove(path);
-        return false;
-    }
-    if (std::string_view{reinterpret_cast<const char*>(bytes.data()), 4U} != "caff") {
+    if (bytes.size() < 8U || std::string_view{reinterpret_cast<const char*>(bytes.data()), 4U} != "caff") {
         std::cerr << "CAF magic mismatch\n";
         std::filesystem::remove(path);
         return false;
     }
+    const auto desc = find_caf_chunk(bytes, "desc");
+    if (desc == std::string::npos || read_be64(bytes, desc + 4U) != 32U ||
+        std::bit_cast<double>(read_be64(bytes, desc + 12U)) != 48000.0 ||
+        std::string_view{reinterpret_cast<const char*>(bytes.data() + desc + 20U), 4U} != "lpcm" ||
+        (read_be32(bytes, desc + 24U) & 3U) != 3U || read_be32(bytes, desc + 28U) != 8U ||
+        read_be32(bytes, desc + 32U) != 1U || read_be32(bytes, desc + 36U) != 2U ||
+        read_be32(bytes, desc + 40U) != 32U) {
+        std::cerr << "CAF desc must describe 48 kHz stereo little-endian float32 PCM\n";
+        std::filesystem::remove(path);
+        return false;
+    }
     constexpr uint32_t k_stereo_tag = (101U << 16U) | 2U;
-    if (read_be32(bytes, 64U) != k_stereo_tag) {
+    const auto chan = find_caf_chunk(bytes, "chan");
+    if (chan == std::string::npos || read_be64(bytes, chan + 4U) < 4U || read_be32(bytes, chan + 12U) != k_stereo_tag) {
         std::cerr << "CAF stereo channel layout tag mismatch\n";
         std::filesystem::remove(path);
         return false;
     }
-    if (read_be64(bytes, 80U) != 36U) {
+    const auto data = find_caf_chunk(bytes, "data");
+    if (data == std::string::npos || read_be64(bytes, data + 4U) != 36U) {
         std::cerr << "CAF data chunk size mismatch\n";
         std::filesystem::remove(path);
         return false;
     }
 
     // Interleaved float32 samples follow the data chunk's four-byte edit count, little-endian.
-    const auto sample = [&bytes](std::size_t index) {
-        const uint32_t bits = read_le32(bytes, 92U + (index * 4U));
-        float value{};
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
+    const auto sample = [&](std::size_t index) {
+        return std::bit_cast<float>(read_le32(bytes, data + 16U + (index * 4U)));
     };
     if (sample(2U) != 0.25F || sample(7U) != -0.75F) {
         std::cerr << "CAF sample mismatch\n";

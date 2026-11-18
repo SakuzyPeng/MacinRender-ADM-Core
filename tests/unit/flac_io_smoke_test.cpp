@@ -143,7 +143,7 @@ std::filesystem::path write_render_fixture() {
         std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
-    auto writer = fixture::write_wave(path.string(), k_ch, k_sr, 24U, chna, axml);
+    auto writer = fixture::write_wave(path, k_ch, k_sr, 24U, chna, axml);
     std::vector<float> samples(k_frames, 0.25F);
     writer->write(samples.data(), k_frames);
     return path;
@@ -535,7 +535,7 @@ bool verify_c_api_flac_final_pipeline() {
     const auto code = adm_render_file_ex(
         context, in_path.string().c_str(), out_path.string().c_str(), options, nullptr, nullptr, &result);
     if (code != ADM_ERROR_OK) {
-        std::cerr << adm_context_last_error_message(context) << "\n";
+        std::cerr << adm_render_result_message(result) << '\n';
     }
     adm_destroy_render_result(result);
     adm_destroy_render_options(options);

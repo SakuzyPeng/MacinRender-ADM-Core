@@ -217,7 +217,7 @@ int main() {
         for (const auto rate : {48000U, 96000U, 192000U}) {
             for (const auto bits : std::array<uint16_t, 3>{16, 24, 32}) {
                 const auto path = directory / (std::to_string(rate) + "-" + std::to_string(bits) + ".wav");
-                const int64_t top = bits == 16 ? 32767 : (bits == 24 ? 8388607 : 2147483647);
+                const int64_t top = (int64_t{1} << (bits - 1U)) - 1;
                 const std::vector<int64_t> input{-top - 1, -top, -top / 2, 0, top / 2, top, top};
                 save(path, integer_wave(rate, bits, input));
                 auto probe = mradm::audio::FloatWavReader::open(path.string());
@@ -241,7 +241,7 @@ int main() {
 #endif
         const auto short_path = directory / "short.wav";
         {
-            auto writer = fixture::write_wave(short_path.string());
+            auto writer = fixture::write_wave(short_path);
             writer->write(std::vector<float>(20000, 0.25F).data(), 20000);
         }
         auto reader = mradm::audio::RenderInputReader::open(short_path.string());

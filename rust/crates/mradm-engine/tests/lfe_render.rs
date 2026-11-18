@@ -198,10 +198,7 @@ fn split_power_on_another_layout_renders_and_warns() {
     let case = render_case(Selection::Ear, &["LFE1"], &[Tone(0.2, 80.)], true, "5.1");
     assert!(case.run.ok() && case.rms.len() == 6);
     assert!(
-        case.run
-            .logs
-            .iter()
-            .any(|(_, _, text)| text.contains("only applies to 22.2")),
+        case.run.warned("ear", "only applies to 22.2"),
         "the mode is ignored with a warning"
     );
 }
