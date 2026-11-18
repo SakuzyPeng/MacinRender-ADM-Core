@@ -580,9 +580,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
     add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
 
-    # Contract test for the stable C ABI. Links only the C ABI target (consumer
-    # view); the independent fixture author only uses the standard library.
-    add_executable(mr_adm_c_api_tests tests/unit/c_api_fixture_test.cpp)
+    # Consumer test for the stable C ABI: the checks that need the islands or a C++ caller, and one
+    # smoke call per family (the rest is tested in mradm-capi). Links only the C ABI target; the
+    # independent fixture author only uses the standard library.
+    add_executable(mr_adm_c_api_tests tests/unit/c_api_consumer_test.cpp)
     target_link_libraries(mr_adm_c_api_tests
         PRIVATE
             MacinRender::ADMCAPI
@@ -789,7 +790,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             mr_adm_core_apply_warnings(${target})
         endfunction()
         mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
-        mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_fixture_test.cpp)
+        mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_consumer_test.cpp)
         target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
         mr_adm_add_capi_consumer(mr_adm_scene_stream_c_api_consumer_tests tests/unit/scene_stream_c_api_test.cpp)
         add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests

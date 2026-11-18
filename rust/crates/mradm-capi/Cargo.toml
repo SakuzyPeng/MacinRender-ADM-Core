@@ -22,6 +22,9 @@ mradm-render = { path = "../mradm-render" }
 mradm-scene = { path = "../mradm-scene" }
 mradm-wav = { path = "../mradm-wav" }
 
+[dev-dependencies]
+mradm-testkit = { path = "../mradm-testkit" }
+
 [features]
 default = ["sofa"]
 sofa = ["mradm-ffi/sofa"]

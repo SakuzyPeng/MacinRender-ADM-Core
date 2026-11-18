@@ -67,12 +67,14 @@ pub(crate) mod islands {
     }
 }
 
-// Unit tests link without the C++ islands.
+// Unit tests link without the C++ islands: the platform reports no APAC, IAMF, Apple backend or
+// system spatial layouts, and every island request fails.
 #[cfg(test)]
 pub(crate) mod islands {
     use super::*;
+    static NO_PLATFORM: PlatformIslands = unsafe { std::mem::zeroed() };
     pub(crate) unsafe fn mradm_platform_islands() -> *const PlatformIslands {
-        ptr::null()
+        &NO_PLATFORM
     }
     pub(super) unsafe extern "C" fn mradm_audio_island(
         _: *const EngineRenderEvent,
@@ -116,14 +118,14 @@ pub type adm_progress_cb =
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_progress_event_v2_t {
-    struct_size: u32,
-    stage: i32,
-    operation: i32,
-    overall_fraction: f64,
-    stage_fraction: f64,
-    current_frame: u64,
-    total_frames: u64,
-    message: *const c_char,
+    pub(crate) struct_size: u32,
+    pub(crate) stage: i32,
+    pub(crate) operation: i32,
+    pub(crate) overall_fraction: f64,
+    pub(crate) stage_fraction: f64,
+    pub(crate) current_frame: u64,
+    pub(crate) total_frames: u64,
+    pub(crate) message: *const c_char,
 }
 
 type ProgressV2 = unsafe extern "C" fn(*const adm_progress_event_v2_t, *mut c_void);

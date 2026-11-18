@@ -322,6 +322,7 @@ dependencies = [
  "mradm-osc",
  "mradm-render",
  "mradm-scene",
+ "mradm-testkit",
  "mradm-wav",
 ]
 

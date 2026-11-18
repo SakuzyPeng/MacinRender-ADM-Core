@@ -26,3 +26,5 @@ mod version;
 
 #[cfg(test)]
 mod test_alloc;
+#[cfg(test)]
+mod tests;
