@@ -948,16 +948,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
 
+    # The island LFE pair recombination; on macOS also the Apple side bus (the EAR / VBAP routing
+    # is tested in mradm-engine tests/lfe_render.rs, R3 F2).
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
-    target_link_libraries(mr_adm_lfe_routing_tests
-        PRIVATE mr_adm_scene_test_support
-            MacinRender::ADMEngine
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
+    target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderCommon)
     if(APPLE)
-        target_link_libraries(mr_adm_lfe_routing_tests PRIVATE mr_adm_apple_renderer_test_support MacinRender::ADMRenderApple)
+        target_link_libraries(mr_adm_lfe_routing_tests
+            PRIVATE mr_adm_scene_test_support mr_adm_apple_renderer_test_support MacinRender::ADMRenderApple
+                MacinRender::ADMEngine MacinRender::ADMIo MacinRender::ADMAudio)
     endif()
     mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
     mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
@@ -1010,9 +1008,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
 
     add_executable(mr_adm_flac_io_smoke_tests tests/unit/flac_io_smoke_test.cpp)
+    # The FLAC writer, reader and metadata, and the final .flac pipeline through the C ABI.
     target_link_libraries(mr_adm_flac_io_smoke_tests
         PRIVATE
-            MacinRender::ADMEngine
+            MacinRender::ADMCAPI
             MacinRender::ADMAudio
             FLAC::FLAC
     )

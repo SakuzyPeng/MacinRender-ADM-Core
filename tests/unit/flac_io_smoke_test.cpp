@@ -32,8 +32,7 @@
 #include <FLAC/stream_decoder.h>
 
 #include "adm/audio_io.h"
-#include "adm/render.h"
-#include "adm/render_service.h"
+#include "adm/c_api.h"
 
 #include "../support/wav_fixture.h"
 
@@ -503,10 +502,12 @@ bool verify_flac_channel_mask_value() {
     return true;
 }
 
-// ── RenderService final .flac pipeline ───────────────────────────────────────
-// Render to a unique float32 temp WAV, encode final FLAC, clean temp, write final metadata.
+// ── Final .flac pipeline through the C ABI ───────────────────────────────────
+// Render to a unique float32 temp WAV, encode the final FLAC (the audio island), clean the temp
+// and write the final metadata. The request rules (height layouts, more than eight channels) are
+// tested in mradm-engine.
 
-bool verify_render_service_flac_final_pipeline() {
+bool verify_c_api_flac_final_pipeline() {
     const auto in_path = write_render_fixture();
     const FileGuard in_guard(in_path);
 
@@ -520,26 +521,29 @@ bool verify_render_service_flac_final_pipeline() {
     }
     const FileGuard stale_guard(fixed_old_tmp);
 
-    mradm::RenderRequest req;
-    req.input_path = in_path;
-    req.output_path = out_path;
-    req.options.renderer = mradm::RendererSelection::saf;
-    req.options.output_layout = "0+2+0";
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-    req.options.internal_allow_speaker_stereo = true;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    const auto res = service.render(req, progress, logs);
-    if (!check(res.success(), "RenderService .flac render failed")) {
+    adm_context_t* context = adm_create_context();
+    adm_render_options_t* options = adm_create_render_options();
+    if (!check(context != nullptr && options != nullptr, "C ABI context and options")) {
+        adm_destroy_render_options(options);
+        adm_destroy_context(context);
+        return false;
+    }
+    adm_render_options_set_renderer(options, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(options, "5.1");
+    adm_render_options_set_peak_limit(options, 0);
+    adm_render_result_t* result = nullptr;
+    const auto code = adm_render_file_ex(
+        context, in_path.string().c_str(), out_path.string().c_str(), options, nullptr, nullptr, &result);
+    if (code != ADM_ERROR_OK) {
+        std::cerr << adm_context_last_error_message(context) << "\n";
+    }
+    adm_destroy_render_result(result);
+    adm_destroy_render_options(options);
+    adm_destroy_context(context);
+    if (!check(code == ADM_ERROR_OK, "C ABI .flac render failed")) {
         return false;
     }
     if (!check(std::filesystem::exists(out_path), "final FLAC output missing")) {
-        return false;
-    }
-    if (!check(std::filesystem::exists(fixed_old_tmp), "legacy fixed temp path was touched")) {
         return false;
     }
     {
@@ -555,93 +559,14 @@ bool verify_render_service_flac_final_pipeline() {
     }
 
     auto rd = mradm::audio::FloatFlacReader::open(out_path.string());
-    if (!check(rd.has_value(), "RenderService final FLAC not readable")) {
+    if (!check(rd.has_value(), "final FLAC not readable")) {
         return false;
     }
-    if (!check(rd->channels() == 2U, "RenderService final FLAC channel count")) {
+    if (!check(rd->channels() == 6U, "final FLAC channel count")) {
         return false;
     }
-    if (!check(flac_has_tag(out_path.string(), "WAVEFORMATEXTENSIBLE_CHANNEL_MASK=0x00000003"),
-               "RenderService final FLAC channel mask metadata")) {
-        return false;
-    }
-    return true;
-}
-
-bool verify_render_service_flac_rejects_more_than_8_channels() {
-    const auto in_path = write_render_fixture();
-    const FileGuard in_guard(in_path);
-
-    const auto out_path = temp_path("mr_flac_engine_too_many_channels", ".flac");
-    const FileGuard out_guard(out_path);
-
-    mradm::RenderRequest req;
-    req.input_path = in_path;
-    req.output_path = out_path;
-    req.options.renderer = mradm::RendererSelection::saf;
-    req.options.output_layout = "7.1.4";
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    const auto res = service.render(req, progress, logs);
-    if (!check(!res.success(), "RenderService accepted >8ch FLAC layout")) {
-        return false;
-    }
-    if (!check(res.error.code == mradm::ErrorCode::unsupported, "RenderService >8ch FLAC error code")) {
-        return false;
-    }
-    if (!check(res.error.message.find("non-height layouts") != std::string::npos,
-               "RenderService >8ch FLAC error message")) {
-        return false;
-    }
-    if (!check(!std::filesystem::exists(out_path), "RenderService created unsupported FLAC output")) {
-        return false;
-    }
-    if (!check(!has_render_temp_sidecar(out_path), "RenderService created render temp for unsupported FLAC layout")) {
-        return false;
-    }
-    return true;
-}
-
-bool verify_render_service_flac_rejects_height_layouts() {
-    const auto in_path = write_render_fixture();
-    const FileGuard in_guard(in_path);
-
-    const auto out_path = temp_path("mr_flac_engine_height_layout", ".flac");
-    const FileGuard out_guard(out_path);
-
-    mradm::RenderRequest req;
-    req.input_path = in_path;
-    req.output_path = out_path;
-    req.options.renderer = mradm::RendererSelection::ear;
-    req.options.output_layout = "5.1.2";
-    req.options.peak_limit = false;
-    req.options.measure_loudness = false;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
-    const auto res = service.render(req, progress, logs);
-    if (!check(!res.success(), "RenderService accepted height FLAC layout")) {
-        return false;
-    }
-    if (!check(res.error.code == mradm::ErrorCode::unsupported, "RenderService height FLAC error code")) {
-        return false;
-    }
-    if (!check(res.error.message.find("non-height layouts") != std::string::npos,
-               "RenderService height FLAC error message")) {
-        return false;
-    }
-    if (!check(!std::filesystem::exists(out_path), "RenderService created unsupported height FLAC output")) {
-        return false;
-    }
-    if (!check(!has_render_temp_sidecar(out_path), "RenderService created temp for unsupported height FLAC layout")) {
-        return false;
-    }
-    return true;
+    return check(flac_has_tag(out_path.string(), "WAVEFORMATEXTENSIBLE_CHANNEL_MASK=0x0000003F"),
+                 "final FLAC channel mask metadata");
 }
 
 bool run_check(std::string_view name, bool (*fn)()) {
@@ -658,12 +583,10 @@ int main() {
     ok &= run_check("roundtrip", verify_flac_roundtrip);
     ok &= run_check("vorbis_comment", verify_flac_vorbis_comment);
     ok &= run_check("channel_mask", verify_flac_channel_mask_value);
-    ok &= run_check("render_service_final_pipeline", verify_render_service_flac_final_pipeline);
-    ok &= run_check("rejects_more_than_8_channels", verify_render_service_flac_rejects_more_than_8_channels);
-    ok &= run_check("rejects_height_layouts", verify_render_service_flac_rejects_height_layouts);
+    ok &= run_check("c_api_final_pipeline", verify_c_api_flac_final_pipeline);
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "FLAC I/O smoke tests passed (7/7)\n";
+    std::cout << "FLAC I/O smoke tests passed\n";
     return EXIT_SUCCESS;
 }

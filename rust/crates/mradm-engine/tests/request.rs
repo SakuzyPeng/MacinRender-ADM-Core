@@ -419,6 +419,14 @@ fn output_target_decisions() {
             "FLAC output supports only non-height layouts (binaural, 5.1, 7.1); layout '4+7+0' is not supported".into()
         )
     );
+    // A height layout within eight channels is refused as a height layout.
+    assert_eq!(
+        message(target(".flac", "2+5+0", |r| r.channels = Some(8))),
+        (
+            2,
+            "FLAC output supports only non-height layouts (binaural, 5.1, 7.1); layout '2+5+0' is not supported".into()
+        )
+    );
     assert_eq!(
         message(target(".flac", "wav71", |r| r.channels = Some(9))),
         (

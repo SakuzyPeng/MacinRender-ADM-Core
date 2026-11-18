@@ -149,6 +149,7 @@ fn path_text(path: &Path) -> PathText {
     }
 }
 
+const EAR: u32 = 1;
 const SAF: u32 = 2;
 const SAF_BINAURAL: u32 = 6;
 const TRIPLE_BALANCE: u32 = 7;
@@ -500,6 +501,40 @@ fn request_errors_keep_the_cpp_texts_and_logs() {
         )
     );
     assert_eq!(dir.names(), Vec::<String>::new());
+}
+
+/// FLAC refuses height layouts (EAR 5.1.2, eight channels) and layouts above eight channels
+/// (VBAP 7.1.4) before rendering: no output, no staging file, and a stale fixed-name staging file
+/// of the old implementation is left alone (from the C++ `flac_io_smoke_test`, R3 F2).
+#[test]
+fn flac_rejections_leave_no_output_or_staging() {
+    let dir = Dir::new("flac-rejections");
+    let input = dir.file("in.wav");
+    scene_wav("objects-point", &input, 4800);
+    std::fs::write(dir.file("out.render_tmp.wav"), b"stale").unwrap();
+    for (renderer, layout) in [(EAR, "5.1.2"), (SAF, "7.1.4")] {
+        let mut r = request(&input, &dir.file("out.flac"));
+        r.renderer = renderer;
+        r.output_layout = layout.into();
+        r.peak_limit = false;
+        let run = drive(r, Platform::default(), None);
+        let error = run.error().unwrap();
+        assert_eq!(error.code, 2, "{layout}");
+        assert!(
+            error.message.contains("non-height layouts"),
+            "{layout}: {}",
+            error.message
+        );
+        assert!(
+            !run.events.iter().any(|e| matches!(e, Event::Island(_))),
+            "{layout}: no encoder is asked"
+        );
+        assert_eq!(dir.names(), ["out.render_tmp.wav"], "{layout}");
+    }
+    assert_eq!(
+        std::fs::read(dir.file("out.render_tmp.wav")).unwrap(),
+        b"stale"
+    );
 }
 
 #[test]

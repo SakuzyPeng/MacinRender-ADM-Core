@@ -11,24 +11,31 @@
 #include <utility>
 #include <vector>
 
+#include "render_common.h"
+#ifdef __APPLE__
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
-#include "adm/render_service.h"
-#ifdef __APPLE__
 #include "adm/render_apple.h"
+#include "adm/render_service.h"
 
 #include "../support/apple_renderer/apple_renderer.h"
 #include "../support/direct_speakers_fixture.h"
 #include "adm_scene.h"
-#endif
-
-#include "render_common.h"
 #include "render_common_scene.h"
 #include "test_portable.h"
+#endif
 
 namespace {
 
+bool check(bool condition, const std::string& message) {
+    if (!condition) {
+        std::cerr << "FAIL: " << message << '\n';
+    }
+    return condition;
+}
+
+#ifdef __APPLE__
 class FileGuard {
   public:
     explicit FileGuard(std::filesystem::path path) : path_(std::move(path)) {}
@@ -44,151 +51,6 @@ class FileGuard {
   private:
     std::filesystem::path path_;
 };
-
-class CapturingLogSink final : public mradm::LogSink {
-  public:
-    void log(mradm::LogLevel level, std::string_view /*module*/, std::string_view message) override {
-        if (level == mradm::LogLevel::warning) {
-            warnings_.emplace_back(message);
-        }
-    }
-
-    [[nodiscard]] bool has_warning(std::string_view needle) const {
-        return std::ranges::any_of(warnings_,
-                                   [needle](const auto& warning) { return warning.find(needle) != std::string::npos; });
-    }
-
-  private:
-    std::vector<std::string> warnings_;
-};
-
-bool check(bool condition, const std::string& message) {
-    if (!condition) {
-        std::cerr << "FAIL: " << message << '\n';
-    }
-    return condition;
-}
-
-void append_lfe_block(mradm::ScenePlan& plan, mradm::SceneDirectSpeakersBlock block) {
-    if (plan.scene.objects.empty()) {
-        plan.scene.objects.emplace_back();
-        plan.scene.objects.back().tracks.emplace_back();
-    }
-    plan.scene.objects.back().tracks.back().ds_blocks.push_back(std::move(block));
-}
-
-bool verify_shared_semantics() {
-    using mradm::render_common::direct_speakers_lfe_target;
-    using mradm::render_common::LfeTarget;
-
-    bool ok = check(mradm::RenderOptions{}.lfe_routing_mode == mradm::LfeRoutingMode::direct,
-                    "RenderOptions defaults to direct LFE routing");
-    ok = check(mradm::ScenePlan{}.lfe_routing_mode == mradm::LfeRoutingMode::direct,
-               "RenderPlan defaults to direct LFE routing") &&
-         ok;
-
-    constexpr std::array<std::string_view, 8> k_lfe1_aliases{
-        "LFE", "LFE1", "LFEL", "RC_LFE", "RCLFE", "SUB", "Subwoofer", "low_frequency"};
-    for (const auto alias : k_lfe1_aliases) {
-        mradm::SceneDirectSpeakersBlock block;
-        block.speaker_labels = {std::string{alias}};
-        ok = check(direct_speakers_lfe_target(block) == LfeTarget::lfe1,
-                   std::string{"LFE1 alias classified: "} + std::string{alias}) &&
-             ok;
-    }
-    for (const auto alias : {std::string_view{"LFE2"}, std::string_view{"LFER"}}) {
-        mradm::SceneDirectSpeakersBlock block;
-        block.speaker_labels = {std::string{alias}};
-        ok = check(direct_speakers_lfe_target(block) == LfeTarget::lfe2,
-                   std::string{"LFE2 alias classified: "} + std::string{alias}) &&
-             ok;
-    }
-    mradm::SceneDirectSpeakersBlock layered_aliases;
-    layered_aliases.speaker_labels = {"LFE", "LFE2"};
-    ok = check(direct_speakers_lfe_target(layered_aliases) == LfeTarget::lfe2,
-               "explicit LFE2 wins over a generic LFE alias on the same metadata block") &&
-         ok;
-    mradm::SceneDirectSpeakersBlock low_pass_only;
-    low_pass_only.low_pass_hz = 120.0F;
-    ok = check(direct_speakers_lfe_target(low_pass_only) == LfeTarget::lfe1, "lowPass-only block classifies as LFE1") &&
-         ok;
-    mradm::SceneDirectSpeakersBlock non_lfe;
-    non_lfe.speaker_labels = {"M+030"};
-    ok = check(direct_speakers_lfe_target(non_lfe) == LfeTarget::none, "non-LFE block remains unclassified") && ok;
-
-    mradm::ScenePlan repeated;
-    repeated.output_layout = "9+10+3";
-    repeated.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
-    for (int i = 0; i < 2; ++i) {
-        mradm::SceneDirectSpeakersBlock block;
-        block.speaker_labels = {"LFE1"};
-        // Distinct starts: same-start blocks collapse to the last one (S08).
-        block.start_sample = static_cast<uint64_t>(i) * 1024U;
-        append_lfe_block(repeated, std::move(block));
-    }
-    CapturingLogSink repeated_logs;
-    const auto repeated_result = mradm::render_common::resolve_lfe_routing(repeated, repeated_logs, "test");
-    ok = check(repeated_result.has_value() && repeated_result->has_lfe1 && !repeated_result->has_lfe2,
-               "repeated LFE1 remains one semantic LFE") &&
-         ok;
-    mradm::ScenePlan direct = repeated;
-    direct.lfe_routing_mode = mradm::LfeRoutingMode::direct;
-    CapturingLogSink direct_logs;
-    const auto direct_result = mradm::render_common::resolve_lfe_routing(direct, direct_logs, "test");
-    ok = check(direct_result.has_value() && direct_result->gain(LfeTarget::lfe1, LfeTarget::lfe1) == 1.0F &&
-                   direct_result->gain(LfeTarget::lfe1, LfeTarget::lfe2) == 0.0F,
-               "direct routing uses an exact unity coefficient without crossfeed") &&
-         ok;
-
-    mradm::ScenePlan lfe2_only;
-    lfe2_only.output_layout = "9+10+3";
-    lfe2_only.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
-    mradm::SceneDirectSpeakersBlock lfe2_block;
-    lfe2_block.speaker_labels = {"LFER"};
-    append_lfe_block(lfe2_only, std::move(lfe2_block));
-    CapturingLogSink lfe2_logs;
-    const auto lfe2_result = mradm::render_common::resolve_lfe_routing(lfe2_only, lfe2_logs, "test");
-    ok = check(lfe2_result.has_value() && !lfe2_result->has_lfe1 && lfe2_result->has_lfe2,
-               "standalone LFE2 is valid for split-power") &&
-         ok;
-
-    mradm::ScenePlan dual = repeated;
-    // The second semantic LFE is another channel, not a block overwriting LFE1 at the same start.
-    dual.scene.objects.back().tracks.emplace_back();
-    mradm::SceneDirectSpeakersBlock second;
-    second.speaker_labels = {"LFE2"};
-    append_lfe_block(dual, std::move(second));
-    CapturingLogSink dual_logs;
-    const auto dual_result = mradm::render_common::resolve_lfe_routing(dual, dual_logs, "test");
-    ok = check(!dual_result && dual_result.error().code == mradm::ErrorCode::invalid_argument &&
-                   dual_result.error().message.find("both LFE1 and LFE2") != std::string::npos,
-               "dual semantic LFE split is rejected with the stable user error") &&
-         ok;
-
-    mradm::ScenePlan empty;
-    empty.output_layout = "9+10+3";
-    empty.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
-    CapturingLogSink empty_logs;
-    const auto empty_result = mradm::render_common::resolve_lfe_routing(empty, empty_logs, "test");
-    ok =
-        check(empty_result.has_value() && empty_logs.has_warning("no semantic LFE"), "split-power without LFE warns") &&
-        ok;
-
-    mradm::ScenePlan other_layout = lfe2_only;
-    other_layout.output_layout = "0+5+0";
-    CapturingLogSink other_logs;
-    const auto other_result = mradm::render_common::resolve_lfe_routing(other_layout, other_logs, "test");
-    ok = check(other_result.has_value() && !other_result->applies_to_22_2 &&
-                   other_logs.has_warning("only applies to 22.2"),
-               "split-power on another layout warns and does not apply") &&
-         ok;
-
-    if (repeated_result) {
-        const float split = repeated_result->gain(LfeTarget::lfe1, LfeTarget::lfe2);
-        ok = check(std::abs(split - std::sqrt(0.5F)) < 1.0e-7F, "split-power coefficient is sqrt(0.5)") && ok;
-    }
-    return ok;
-}
 
 struct SignalSpec {
     float amplitude{0.0F};
@@ -227,164 +89,6 @@ bool write_input(const std::filesystem::path& path, const std::vector<SignalSpec
     return writer->write(samples.data(), k_frames) == k_frames;
 }
 
-struct RenderCapture {
-    mradm::Error error;
-    std::vector<double> rms;
-    bool output_exists{false};
-};
-
-RenderCapture render_case(mradm::RendererSelection renderer,
-                          const std::vector<std::string>& labels,
-                          const std::vector<SignalSpec>& signals,
-                          mradm::LfeRoutingMode mode,
-                          std::string_view output_layout = "22.2",
-                          CapturingLogSink* capture_logs = nullptr) {
-    const auto input = unique_path("lfe_routing_input");
-    const auto output = unique_path("lfe_routing_output");
-    FileGuard input_guard(input);
-    FileGuard output_guard(output);
-    if (!write_input(input, signals)) {
-        return {{mradm::ErrorCode::io_error, "failed to write test input", {}}, {}, false};
-    }
-
-    mradm::RenderRequest request;
-    request.input_path = input;
-    request.output_path = output;
-    request.options.renderer = renderer;
-    request.options.output_layout = std::string{output_layout};
-    request.options.input_channel_labels = labels;
-    request.options.lfe_routing_mode = mode;
-    request.options.peak_limit = false;
-    request.options.measure_loudness = false;
-
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink null_logs;
-    mradm::LogSink& logs =
-        capture_logs != nullptr ? static_cast<mradm::LogSink&>(*capture_logs) : static_cast<mradm::LogSink&>(null_logs);
-    const auto result = service.render(request, progress, logs);
-
-    RenderCapture capture;
-    capture.error = result.error;
-    capture.output_exists = std::filesystem::exists(output);
-    if (!result.success()) {
-        return capture;
-    }
-    auto reader = mradm::audio::FloatWavReader::open(output.string());
-    if (!reader) {
-        capture.error = reader.error();
-        return capture;
-    }
-    std::vector<float> samples(reader->frame_count() * reader->channels(), 0.0F);
-    if (reader->read(samples.data(), reader->frame_count()) != reader->frame_count()) {
-        capture.error = {mradm::ErrorCode::io_error, "short read of rendered test output", {}};
-        return capture;
-    }
-    capture.rms.assign(reader->channels(), 0.0);
-    for (uint64_t frame = 0; frame < reader->frame_count(); ++frame) {
-        for (uint32_t channel = 0; channel < reader->channels(); ++channel) {
-            const double sample = samples[(frame * reader->channels()) + channel];
-            capture.rms[channel] += sample * sample;
-        }
-    }
-    std::ranges::transform(capture.rms, capture.rms.begin(), [frames = reader->frame_count()](double sum) {
-        return std::sqrt(sum / static_cast<double>(frames));
-    });
-    return capture;
-}
-
-bool near_ratio(double value, double reference, double ratio, double tolerance = 0.025) {
-    return reference > 1.0e-8 && std::abs((value / reference) - ratio) <= tolerance;
-}
-
-bool verify_backend(mradm::RendererSelection renderer, std::string_view name) {
-    constexpr SignalSpec k_lfe1{0.20F, 80.0F};
-    constexpr SignalSpec k_lfe2{0.10F, 160.0F};
-    constexpr double k_silence = 1.0e-7;
-    const auto direct_lfe1 = render_case(renderer, {"LFE1"}, {k_lfe1}, mradm::LfeRoutingMode::direct);
-    const auto direct_lfe2 = render_case(renderer, {"LFE2"}, {k_lfe2}, mradm::LfeRoutingMode::direct);
-    const auto split_lfe1 = render_case(renderer, {"LFE1"}, {k_lfe1}, mradm::LfeRoutingMode::split_power);
-    const auto split_lfe2 = render_case(renderer, {"LFE2"}, {k_lfe2}, mradm::LfeRoutingMode::split_power);
-    const auto direct_dual = render_case(renderer, {"LFE1", "LFE2"}, {k_lfe1, k_lfe2}, mradm::LfeRoutingMode::direct);
-    const auto split_dual =
-        render_case(renderer, {"LFE1", "LFE2"}, {k_lfe1, k_lfe2}, mradm::LfeRoutingMode::split_power);
-    const auto full_range_direct = render_case(renderer, {"M+000"}, {{0.12F, 1000.0F}}, mradm::LfeRoutingMode::direct);
-    const auto full_range_split =
-        render_case(renderer, {"M+000"}, {{0.12F, 1000.0F}}, mradm::LfeRoutingMode::split_power);
-
-    const auto all_success = [](const RenderCapture& capture) {
-        return capture.error.ok() && capture.rms.size() == 24U;
-    };
-    bool ok = check(all_success(direct_lfe1), std::string{name} + ": direct LFE1 renders 24 channels") &&
-              check(all_success(direct_lfe2), std::string{name} + ": direct LFE2 renders 24 channels") &&
-              check(all_success(split_lfe1), std::string{name} + ": split LFE1 renders 24 channels") &&
-              check(all_success(split_lfe2), std::string{name} + ": split LFE2 renders 24 channels") &&
-              check(all_success(direct_dual), std::string{name} + ": native dual LFE direct renders") &&
-              check(all_success(full_range_direct) && all_success(full_range_split),
-                    std::string{name} + ": full-range reference renders in both modes");
-    if (!ok) {
-        return false;
-    }
-
-    const auto only_lfe_slots_active = [&](const RenderCapture& capture) {
-        for (std::size_t channel = 0; channel < capture.rms.size(); ++channel) {
-            if (channel != 3U && channel != 9U && capture.rms[channel] >= k_silence) {
-                return false;
-            }
-        }
-        return true;
-    };
-
-    ok = check(direct_lfe1.rms[3] > 1.0e-4 && direct_lfe1.rms[9] < k_silence,
-               std::string{name} + ": direct LFE1 is unity on ch3 only");
-    ok = check(direct_lfe2.rms[3] < k_silence && direct_lfe2.rms[9] > 1.0e-4,
-               std::string{name} + ": direct LFE2 is unity on ch9 only") &&
-         ok;
-    ok = check(only_lfe_slots_active(direct_lfe1) && only_lfe_slots_active(direct_lfe2) &&
-                   only_lfe_slots_active(split_lfe1) && only_lfe_slots_active(split_lfe2) &&
-                   only_lfe_slots_active(direct_dual),
-               std::string{name} + ": LFE never leaks into any of the 22 full-range channels") &&
-         ok;
-    ok = check(near_ratio(split_lfe1.rms[3], direct_lfe1.rms[3], std::sqrt(0.5)) &&
-                   near_ratio(split_lfe1.rms[9], direct_lfe1.rms[3], std::sqrt(0.5)) &&
-                   std::abs(split_lfe1.rms[3] - split_lfe1.rms[9]) < 1.0e-6,
-               std::string{name} + ": split LFE1 reaches ch3/ch9 equally at sqrt(0.5)") &&
-         ok;
-    ok = check(near_ratio(split_lfe2.rms[3], direct_lfe2.rms[9], std::sqrt(0.5)) &&
-                   near_ratio(split_lfe2.rms[9], direct_lfe2.rms[9], std::sqrt(0.5)) &&
-                   std::abs(split_lfe2.rms[3] - split_lfe2.rms[9]) < 1.0e-6,
-               std::string{name} + ": split LFE2 reaches ch3/ch9 equally at sqrt(0.5)") &&
-         ok;
-    ok = check(near_ratio(direct_dual.rms[3], direct_lfe1.rms[3], 1.0) &&
-                   near_ratio(direct_dual.rms[9], direct_lfe2.rms[9], 1.0),
-               std::string{name} + ": native dual LFE stays independent without crosstalk") &&
-         ok;
-    ok = check(split_dual.error.code == mradm::ErrorCode::invalid_argument && !split_dual.output_exists &&
-                   split_dual.error.message.find("both LFE1 and LFE2") != std::string::npos,
-               std::string{name} + ": split dual LFE rejects before leaving an output file") &&
-         ok;
-    double full_range_energy = 0.0;
-    double full_range_max_delta = 0.0;
-    for (std::size_t channel = 0; channel < full_range_direct.rms.size(); ++channel) {
-        full_range_energy += full_range_direct.rms[channel] * full_range_direct.rms[channel];
-        full_range_max_delta =
-            std::max(full_range_max_delta, std::abs(full_range_direct.rms[channel] - full_range_split.rms[channel]));
-    }
-    ok = check(full_range_energy > 1.0e-8 && full_range_max_delta < 1.0e-7,
-               std::string{name} + ": split-power leaves all non-LFE routing unchanged") &&
-         ok;
-    return ok;
-}
-
-bool verify_non_22_2_warning() {
-    CapturingLogSink logs;
-    const auto result = render_case(
-        mradm::RendererSelection::ear, {"LFE1"}, {{0.2F, 80.0F}}, mradm::LfeRoutingMode::split_power, "5.1", &logs);
-    return check(result.error.ok() && result.rms.size() == 6U && logs.has_warning("only applies to 22.2"),
-                 "split-power on a non-22.2 layout preserves rendering and logs a warning");
-}
-
-#ifdef __APPLE__
 // NOLINTNEXTLINE(readability-function-size) -- one end-to-end side-bus lifecycle scenario.
 bool verify_apple_side_bus_stream_and_override() {
     const auto input = unique_path("apple_lfe_stream_input");
@@ -572,14 +276,9 @@ bool verify_lfe_pair_recombination() {
 }
 
 int main() {
-    bool ok = verify_shared_semantics();
-    ok = verify_lfe_pair_recombination() && ok;
-    ok = verify_backend(mradm::RendererSelection::ear, "EAR") && ok;
-    ok = verify_backend(mradm::RendererSelection::saf, "SAF VBAP") && ok;
+    bool ok = verify_lfe_pair_recombination();
 #ifdef __APPLE__
-    ok = verify_backend(mradm::RendererSelection::apple, "Apple") && ok;
     ok = verify_apple_side_bus_stream_and_override() && ok;
 #endif
-    ok = verify_non_22_2_warning() && ok;
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
