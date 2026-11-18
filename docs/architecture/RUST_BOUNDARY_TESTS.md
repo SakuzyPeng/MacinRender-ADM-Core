@@ -410,7 +410,7 @@ E 处理只经 `c_api.h` 或 `mradm` 可执行文件测公开契约的 7 个 C++
 | scene_output_c_api_test（242 行） | Scene LFE 路由（不经输出）→ `scene_stream.rs` `scene_lfe_routing_follows_the_layout`；null 设备上的输出会话（`MR_ADM_TEST_SYSTEM_SPATIAL=1` 时为系统空间）→ C 消费者测试。两项经 `src` 头调用 C++ 岛代码，移到岛测试：`mix_lfe_pair`（Windows sink）→ `lfe_routing_test.cpp`，`BufferedMediaTimeline`（只供 macOS 设备）→ `apple_island_test.cpp` |
 | adm_cli_smoke_test（753 行） | → `mradm-cli` `tests/binary.rs` 8 项：`backends` / `formats` / `layouts` / `input-layouts`、`render --help`、选项取值与退出码、渲染器名称与 Triple Balance 模式、DirectSpeakers 矩阵、WAV 与 FLAC 渲染（真实二进制带岛）、Apple 扬声器几何、inspect 与策略模板。参数直接传给进程，不经 shell |
 
-C 消费者测试为 1,514 行。删除的 CMake 目标：`mr_adm_scene_stream_c_api_tests`、`mr_adm_scene_stream_c_api_consumer_tests`、
+E4 提交中的 C 消费者测试为 1,514 行。删除的 CMake 目标包括 `mr_adm_scene_stream_c_api_tests`、`mr_adm_scene_stream_c_api_consumer_tests`、
 `mr_adm_room_tests`、`mr_adm_hptf_parameters_tests`、`mr_adm_osc_head_tracking_tests`、`mr_adm_scene_output_c_api_tests`，
 以及 C++ 的 `mr_adm_cli_smoke_tests` 可执行文件。`capi-capture.py` 的 `CONSUMER_TESTS` 只剩 `mr_adm_c_api_consumer_tests`。
 
@@ -451,3 +451,14 @@ E1 的提交说明写的是 32 项、1,011 行，实际为 26 项、1,010 行。
 
 **规模**：测试 C/C++ 由 31,322 行降到 24,780 行（`tests/unit` 16,252 → 9,710）。按棘轮计数，`mradm-capi` 由 8,655 行增到 13,700 行
 （几乎全是 `src/tests` 的 12 个文件），`mradm-cli` 由 2,822 行增到 3,500 行。生产 C/C++ 不变（9,432 行）。
+
+### E 的 macOS 与 Windows 原生复核（2026-11-18）
+
+审查修复提交为 `b73fb9c5`。修复后的测试 C/C++ 共 24,816 行，含 1,541 行共享库消费者测试。
+
+- macOS arm64 开启 SOFA，121 项 C ABI 单测、5 项定向 Release CTest 和共享库消费者测试通过。
+  临时移动源码中的房间包后，归档消费者可读取构建随附的夹具。更改其中一个资源的字节会触发摘要校验失败。
+- Windows x64 的 CP936 环境在默认和中文临时目录各通过 120 项 C ABI 单测。额外启用 SOFA 并使用中文数据集路径时，
+  30 项 Scene 测试通过。关闭 SOFA 的规范 Release 构建通过 3 项定向 CTest 和共享库消费者测试。
+- 交换 `probing` 与 `planning` 的返回值会触发阶段枚举断言。将 Scene 初始状态、元数据更新和输出格式中任一个
+  `struct_size` 移离偏移 0，公共 C 头测试都会编译失败。两个平台的共享库均导出 164 个 `adm_*` 函数。
