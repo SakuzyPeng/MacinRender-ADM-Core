@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -15,8 +16,6 @@
 #endif
 
 #include "adm/audio_io.h"
-
-#include "audio_reader.h"
 
 namespace {
 
@@ -549,9 +548,10 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
         return false;
     }
 
-    auto reader_res = mradm::audio::ReaderHandle::open(path.string());
-    if (!reader_res || reader_res->channels() != 2U || reader_res->frame_count() != 4U) {
-        std::cerr << "CAF reader failed after info chunk append\n";
+    // The appended info chunk follows the audio data, which keeps its four frames.
+    const auto data = find_caf_chunk(bytes, "data");
+    if (data == std::string::npos || data > info || read_be64(bytes, data + 4U) != 36U) {
+        std::cerr << "CAF data chunk changed after info chunk append\n";
         return false;
     }
     return true;
@@ -586,9 +586,9 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
-    in.close(); // 关闭后才能让下方 apply_gain_to_file 在 Windows 上 rename 顶替 path（Windows 不能替换打开的文件）
+    in.close();
 
-    if (bytes.size() < 92U) {
+    if (bytes.size() < 124U) {
         std::cerr << "CAF file too small\n";
         std::filesystem::remove(path);
         return false;
@@ -610,75 +610,17 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
         return false;
     }
 
-    {
-        auto reader_res = mradm::audio::ReaderHandle::open(path.string());
-        if (!reader_res) {
-            std::cerr << "CAF reader open failed: " << reader_res.error().message << "\n";
-            std::filesystem::remove(path);
-            return false;
-        }
-        auto& reader = *reader_res;
-        if (reader.channels() != 2U || reader.sample_rate() != 48000U || reader.frame_count() != 4U) {
-            std::cerr << "CAF reader metadata mismatch\n";
-            std::filesystem::remove(path);
-            return false;
-        }
-        std::vector<float> readback(8U);
-        if (reader.read(readback.data(), 4U) != 4U || readback[2] != 0.25F || readback[7] != -0.75F) {
-            std::cerr << "CAF reader sample mismatch\n";
-            std::filesystem::remove(path);
-            return false;
-        }
-    }
-
-    auto gain_res = mradm::audio::apply_gain_to_file(path.string(), 2.0F, "0+2+0");
-    if (!gain_res) {
-        std::cerr << "CAF apply_gain failed: " << gain_res.error().message << "\n";
+    // Interleaved float32 samples follow the data chunk's four-byte edit count, little-endian.
+    const auto sample = [&bytes](std::size_t index) {
+        const uint32_t bits = read_le32(bytes, 92U + (index * 4U));
+        float value{};
+        std::memcpy(&value, &bits, sizeof(value));
+        return value;
+    };
+    if (sample(2U) != 0.25F || sample(7U) != -0.75F) {
+        std::cerr << "CAF sample mismatch\n";
         std::filesystem::remove(path);
         return false;
-    }
-    const auto stale_tmp = path.parent_path() / (path.stem().string() + ".gain_tmp" + path.extension().string());
-    {
-        std::ofstream stale(stale_tmp, std::ios::binary);
-        stale << "stale";
-    }
-    gain_res = mradm::audio::apply_gain_to_file(path.string(), 0.5F, "0+2+0");
-    if (!gain_res) {
-        std::cerr << "CAF apply_gain with stale tmp failed: " << gain_res.error().message << "\n";
-        std::filesystem::remove(stale_tmp);
-        std::filesystem::remove(path);
-        return false;
-    }
-    if (!std::filesystem::exists(stale_tmp)) {
-        std::cerr << "CAF apply_gain reused legacy fixed tmp name\n";
-        std::filesystem::remove(path);
-        return false;
-    }
-    std::filesystem::remove(stale_tmp);
-    {
-        std::ifstream gained(path, std::ios::binary);
-        std::vector<unsigned char> gained_bytes((std::istreambuf_iterator<char>(gained)), {});
-        if (gained_bytes.size() < 4U ||
-            std::string_view{reinterpret_cast<const char*>(gained_bytes.data()), 4U} != "caff") {
-            std::cerr << "CAF apply_gain rewrote file as non-CAF\n";
-            std::filesystem::remove(path);
-            return false;
-        }
-    }
-    {
-        auto reader_res = mradm::audio::ReaderHandle::open(path.string());
-        if (!reader_res) {
-            std::cerr << "CAF reader reopen after gain failed: " << reader_res.error().message << "\n";
-            std::filesystem::remove(path);
-            return false;
-        }
-        std::vector<float> readback(8U);
-        auto& reader = *reader_res;
-        if (reader.read(readback.data(), 4U) != 4U || readback[2] != 0.25F || readback[7] != -0.75F) {
-            std::cerr << "CAF gain sample mismatch\n";
-            std::filesystem::remove(path);
-            return false;
-        }
     }
 
     auto bad_res = mradm::audio::FloatCafWriter::open(path.string(), 6U, 48000U, "0+2+0");

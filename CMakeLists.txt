@@ -552,33 +552,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_io_tests)
     add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests)
 
-    # WAVE container metadata golden digests (finalize, metadata, read, replace, scan).
-    add_executable(mr_adm_wav_container_tests tests/unit/wav_container_test.cpp)
-    target_include_directories(mr_adm_wav_container_tests PRIVATE src/adm_audio)
-    target_link_libraries(mr_adm_wav_container_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMIo)
-    mr_adm_core_apply_warnings(mr_adm_wav_container_tests)
-    add_test(NAME mr_adm_wav_container_tests COMMAND mr_adm_wav_container_tests)
-
-    # The format-erased reader is used only by test/consistency tools.
-    add_library(mr_adm_audio_test_support STATIC tests/support/audio_reader.cpp)
-    target_include_directories(mr_adm_audio_test_support PUBLIC tests/support)
-    target_link_libraries(mr_adm_audio_test_support PUBLIC MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_audio_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_audio_test_support)
-
     # The audio island's WAVE / CAF metadata and writer wrappers (R3 C4 removed its SDK checks).
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE mr_adm_audio_test_support)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
-
-    add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp tests/support/wav_output.cpp)
-    target_include_directories(mr_adm_wav_profile_tests PRIVATE tests/support src/adm_audio)
-    target_link_libraries(mr_adm_wav_profile_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_wav_profile_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
-    add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
 
     # Consumer test for the stable C ABI: the checks that need the islands or a C++ caller, and one
     # smoke call per family (the rest is tested in mradm-capi). Links only the C ABI target; the
@@ -1040,12 +1019,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_flac_io_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_flac_io_smoke_tests)
     add_test(NAME mr_adm_flac_io_smoke_tests COMMAND mr_adm_flac_io_smoke_tests)
-
-    add_executable(mr_adm_trim_file_smoke_tests tests/unit/trim_file_smoke_test.cpp)
-    target_link_libraries(mr_adm_trim_file_smoke_tests PRIVATE MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_trim_file_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_trim_file_smoke_tests)
-    add_test(NAME mr_adm_trim_file_smoke_tests COMMAND mr_adm_trim_file_smoke_tests)
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)

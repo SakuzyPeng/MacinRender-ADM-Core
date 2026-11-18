@@ -2,12 +2,12 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <stop_token>
 #include <string>
 #include <utility>
 #include <vector>
@@ -37,6 +37,44 @@ void write_float(const std::filesystem::path& path, uint32_t rate, const std::ve
     require(writer.has_value(), "float fixture open failed");
     require(writer->write(samples.data(), samples.size()) == samples.size(), "float fixture write failed");
 }
+void save(const std::filesystem::path& path, const std::vector<char>& bytes) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    require(output.good(), "fixture save failed");
+}
+// Mono integer PCM written directly: the reader integration is under test, not a converter.
+std::vector<char> integer_wave(uint32_t rate, uint16_t bits, const std::vector<int64_t>& values) {
+    const auto le = [](std::vector<char>& out, uint64_t value, int bytes) {
+        for (int i = 0; i < bytes; ++i) {
+            out.push_back(static_cast<char>((value >> (8 * i)) & 0xFFU));
+        }
+    };
+    const uint32_t align = bits / 8U;
+    const auto data = static_cast<uint32_t>(values.size()) * align;
+    std::vector<char> out{'R', 'I', 'F', 'F'};
+    le(out, 4U + 24U + 8U + data + (data & 1U), 4);
+    for (const char c : std::string{"WAVEfmt "}) {
+        out.push_back(c);
+    }
+    le(out, 16U, 4);
+    le(out, 1U, 2);
+    le(out, 1U, 2);
+    le(out, rate, 4);
+    le(out, uint64_t{rate} * align, 4);
+    le(out, align, 2);
+    le(out, bits, 2);
+    for (const char c : std::string{"data"}) {
+        out.push_back(c);
+    }
+    le(out, data, 4);
+    for (const auto value : values) {
+        le(out, static_cast<uint64_t>(value), static_cast<int>(align));
+    }
+    if ((data & 1U) != 0U) {
+        out.push_back('\0');
+    }
+    return out;
+}
 void verify_native_path_round_trip(const std::filesystem::path& directory) {
     // These bytes are valid in both UTF-8 and legacy Windows code pages, where
     // they name different files. All WAVE readers/writers must use the native
@@ -44,10 +82,10 @@ void verify_native_path_round_trip(const std::filesystem::path& directory) {
     const auto path = directory / "wave-\xC2\xA9.wav";
     write_float(path, 48000, {0.0F, 0.5F, -0.5F});
     require(std::filesystem::is_regular_file(path), "native-path fixture was not created");
-    require(mradm::audio::downconvert_to_int(path.string(), 24).has_value(), "native-path integer conversion failed");
+    save(path, integer_wave(48000, 24, {0, 4194303, -4194303}));
     auto probe = mradm::audio::FloatWavReader::open(path.string());
     require(probe && probe->is_linear_pcm() && probe->bits_per_sample() == 24,
-            "native-path conversion did not replace the original file");
+            "native-path integer file was not replaced");
     auto reader = mradm::audio::RenderInputReader::open(path.string());
     require(reader.has_value(), "native-path Rust reader open failed");
     std::array<float, 3> output{};
@@ -55,11 +93,6 @@ void verify_native_path_round_trip(const std::filesystem::path& directory) {
     require(got && *got == output.size(), "native-path integer read failed");
     require(output == std::array<float, 3>{0.0F, 4194303.0F / 8388608.0F, -4194303.0F / 8388608.0F},
             "native-path PCM mismatch");
-}
-void save(const std::filesystem::path& path, const std::vector<char>& bytes) {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-    require(output.good(), "fixture save failed");
 }
 std::vector<char> legacy_format_wave(uint16_t tag, uint16_t bits) {
     // Mono 48 kHz, two samples. Accepted by the replaced dr_wav reader, rejected by mradm-wav.
@@ -173,18 +206,6 @@ void verify_failed_finish_is_sticky(const std::filesystem::path& directory) {
 }
 #endif
 
-class CancelProgress final : public mradm::ProgressSink {
-  public:
-    explicit CancelProgress(std::stop_source& source) : source_(&source) {}
-    void on_progress(const mradm::ProgressEvent& progress) override {
-        if (progress.current_frame > 0) {
-            source_->request_stop();
-        }
-    }
-
-  private:
-    std::stop_source* source_;
-};
 } // namespace
 
 int main() {
@@ -196,9 +217,9 @@ int main() {
         for (const auto rate : {48000U, 96000U, 192000U}) {
             for (const auto bits : std::array<uint16_t, 3>{16, 24, 32}) {
                 const auto path = directory / (std::to_string(rate) + "-" + std::to_string(bits) + ".wav");
-                const std::vector<float> input{-2.0F, -1.0F, -0.5F, 0.0F, 0.5F, 1.0F, 2.0F};
-                write_float(path, rate, input);
-                require(mradm::audio::downconvert_to_int(path.string(), bits).has_value(), "integer conversion failed");
+                const int64_t top = bits == 16 ? 32767 : (bits == 24 ? 8388607 : 2147483647);
+                const std::vector<int64_t> input{-top - 1, -top, -top / 2, 0, top / 2, top, top};
+                save(path, integer_wave(rate, bits, input));
                 auto probe = mradm::audio::FloatWavReader::open(path.string());
                 require(probe && probe->sample_rate() == rate && probe->bits_per_sample() == bits,
                         "integer fmt mismatch");
@@ -218,22 +239,6 @@ int main() {
 #ifndef _WIN32
         verify_failed_finish_is_sticky(directory);
 #endif
-        const auto invalid = directory / "nan.wav";
-        write_float(invalid, 48000, {0.5F, std::numeric_limits<float>::quiet_NaN()});
-        const auto original = load(invalid);
-        const auto bad = mradm::audio::downconvert_to_int(invalid.string(), 24);
-        require(!bad && bad.error().code == mradm::ErrorCode::invalid_argument, "NaN must return invalid_argument");
-        require(load(invalid) == original, "failed conversion replaced original");
-
-        const auto cancelled = directory / "cancel.wav";
-        write_float(cancelled, 48000, std::vector<float>(12000, 0.25F));
-        const auto before = load(cancelled);
-        std::stop_source source;
-        CancelProgress progress{source};
-        const auto result = mradm::audio::downconvert_to_int(cancelled.string(), 24, source.get_token(), &progress);
-        require(!result && result.error().code == mradm::ErrorCode::cancelled, "conversion did not cancel");
-        require(load(cancelled) == before, "cancelled conversion replaced original");
-
         const auto short_path = directory / "short.wav";
         {
             auto writer = fixture::write_wave(short_path.string());
@@ -246,12 +251,8 @@ int main() {
         float value{};
         require(!(*reader)->read(&value, 1), "truncated file was treated as normal EOF");
         reader->reset();
-        for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-            require(entry.path().filename().string().find("bitdepth_tmp") == std::string::npos,
-                    "temporary output leaked");
-        }
         std::filesystem::remove_all(directory);
-        std::cout << "Rust WAVE integration, float RF64/BW64, high rates, cancellation and error preservation passed\n";
+        std::cout << "Rust WAVE integration, float RF64/BW64, high rates and truncation passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

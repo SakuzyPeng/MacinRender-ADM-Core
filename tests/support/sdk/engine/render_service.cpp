@@ -345,10 +345,6 @@ std::string RenderService::render_support_matrix_json() const {
     return engine::document(engine::Document::support_matrix);
 }
 
-Result<std::string> RenderService::axml(const std::string& input_path) const {
-    return io::get_axml(input_path);
-}
-
 Result<std::string> RenderService::policy_template_json(const std::string& input_path) const {
     auto scene = io::RenderScene::import(input_path, nullptr);
     if (!scene) {
@@ -370,23 +366,6 @@ Result<void> RenderService::write_policy_template(const std::filesystem::path& i
         return mradm::unexpected(json.error());
     }
     return io::write_policy_json(output_path, *json, "policy template");
-}
-
-Result<void> RenderService::export_file(const std::string& input_path,
-                                        const std::string& output_path,
-                                        const RenderOptions& options,
-                                        LogSink& logs) const {
-    auto scene = io::RenderScene::import(input_path, nullptr);
-    if (!scene) {
-        return mradm::unexpected(scene.error());
-    }
-    if (auto logged = log_import_warnings(*scene, logs); !logged) {
-        return mradm::unexpected(logged.error());
-    }
-    if (auto applied = apply_policy(*scene, input_path, options, logs); !applied) {
-        return applied;
-    }
-    return scene->write(output_path);
 }
 
 Result<PreparedScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,

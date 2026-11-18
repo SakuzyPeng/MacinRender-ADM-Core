@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #include "../../../src/adm_core/config_ffi.h"
-#include "adm_test_ffi.h"
+#include "../../../src/adm_metadata/adm_ffi.h"
 #include "room_test_ffi.h"
 
 #ifdef __cplusplus

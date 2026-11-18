@@ -338,42 +338,6 @@ bool verify_flac_roundtrip() {
                  "read moved decoder in short blocks");
 }
 
-// ── apply_gain_to_file on FLAC ────────────────────────────────────────────────
-// The gain rewrite only accepts WAV and CAF (PCM consistency 4.8): a FLAC file is left untouched.
-
-bool verify_flac_gain() {
-    constexpr uint32_t k_ch = 1U;
-    constexpr uint32_t k_sr = 44100U;
-    constexpr uint32_t k_frames = 512U;
-    constexpr float k_amp = 0.5F;
-    constexpr float k_gain = 0.5F;
-
-    const std::string path = temp_path("mr_flac_gain_test", ".flac").string();
-    FileGuard guard(path);
-
-    {
-        std::vector<float> samples(sample_count(k_ch, k_frames), k_amp);
-        auto wr = mradm::audio::FloatFlacWriter::open(path, k_ch, k_sr);
-        if (!check(wr.has_value(), "FloatFlacWriter::open (gain) failed")) {
-            return false;
-        }
-        wr->write(samples.data(), k_frames);
-    }
-    const auto read_bytes = [&path] {
-        std::ifstream input(path, std::ios::binary);
-        return std::vector<char>{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
-    };
-    const auto before = read_bytes();
-    if (!check(!before.empty(), "read FLAC before rejected gain")) {
-        return false;
-    }
-
-    auto res = mradm::audio::apply_gain_to_file(path, k_gain);
-    return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
-                 "apply_gain_to_file on FLAC is unsupported") &&
-           check(read_bytes() == before, "FLAC file unchanged after rejected gain");
-}
-
 // ── Vorbis Comment: single VC block, required tags present ───────────────────
 
 bool verify_flac_vorbis_comment() {
@@ -692,7 +656,6 @@ bool run_check(std::string_view name, bool (*fn)()) {
 int main() {
     bool ok = true;
     ok &= run_check("roundtrip", verify_flac_roundtrip);
-    ok &= run_check("gain", verify_flac_gain);
     ok &= run_check("vorbis_comment", verify_flac_vorbis_comment);
     ok &= run_check("channel_mask", verify_flac_channel_mask_value);
     ok &= run_check("render_service_final_pipeline", verify_render_service_flac_final_pipeline);

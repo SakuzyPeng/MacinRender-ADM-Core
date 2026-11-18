@@ -50,7 +50,7 @@ struct MeterWindow {
 // an internal warm-up pre-roll (enough to converge any finite-memory DSP state:
 // decorrelator overlap, compensation delay, etc.), then writes exactly the window —
 // the output file is already trimmed and the inline meter measures only the window,
-// bit-identical to a full render followed by trim_file_frames. Backends that do not
+// bit-identical to a full render followed by the trim pass. Backends that do not
 // support it ignore this field; RenderService then renders the full timeline and
 // trims afterward. Frames are on the output timeline, which equals the input
 // timeline. Set by RenderService in place of meter_window when the chosen backend

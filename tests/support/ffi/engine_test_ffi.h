@@ -11,8 +11,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../../../src/adm_metadata/adm_ffi.h"
 #include "../../../src/adm_render_common/engine_ffi.h"
-#include "adm_test_ffi.h"
 #include "config_test_ffi.h"
 #include "dsp_test_ffi.h"
 #include "routing_test_ffi.h"

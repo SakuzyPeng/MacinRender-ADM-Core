@@ -1,10 +1,8 @@
 #include "metadata.h"
 
 #include <algorithm>
-#include <array>
 #include <iterator>
 #include <limits>
-#include <memory>
 #include <span>
 #include <stdexcept>
 #include <utility>
@@ -27,18 +25,9 @@ void require(bool condition, std::string_view message) {
         throw Failure(ErrorCode::invalid_argument, std::string{message});
     }
 }
-void checked(int32_t code, const std::array<uint8_t, 1024>& error) {
-    if (code != 0) {
-        throw Failure(static_cast<ErrorCode>(code), reinterpret_cast<const char*>(error.data()));
-    }
-}
-MradmAdmText text(std::string_view value) {
-    return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
-}
 std::string copy(MradmAdmText value) {
     return value.len == 0 ? std::string{} : std::string{reinterpret_cast<const char*>(value.data), value.len};
 }
-using Buffer = std::unique_ptr<MradmAdmBuffer, decltype(&mradm_adm_buffer_destroy)>;
 // Bounds-checked reads of a borrowed record view (an ADM document or an imported render scene). The
 // view is a plain set of pointers; the records stay owned by its handle.
 struct Records {
@@ -274,57 +263,10 @@ AdmScene scene(const Records& p, bool provenance, const MradmSceneOverlay* overl
     }
     return output;
 }
-OutputMetadata output(Buffer buffer) {
-    std::array<uint8_t, 1024> error{};
-    MradmAdmText xml{};
-    const MradmAdmOutputChna* entries = nullptr;
-    std::size_t count = 0;
-    checked(mradm_adm_buffer_view(buffer.get(), &xml, &entries, &count, error.data(), error.size()), error);
-    OutputMetadata result{copy(xml), {}};
-    for (const auto& entry : std::span{entries, count}) {
-        result.chna.push_back({entry.track, copy(entry.uid), copy(entry.format), copy(entry.pack)});
-    }
-    return result;
-}
 } // namespace
 Result<AdmScene> scene_from_view(const MradmAdmView& view, bool adm_provenance, const MradmSceneOverlay* overlay) {
     try {
         return scene(Records{view}, adm_provenance, overlay);
-    } catch (const Failure& e) {
-        return make_error(e.code(), e.what());
-    }
-}
-Result<OutputMetadata>
-generate(uint32_t kind, std::string_view name, const std::vector<render_layouts::SpeakerSpec>& speakers) {
-    try {
-        std::vector<MradmAdmSpeaker> records;
-        std::vector<MradmAdmText> labels;
-        for (const auto& speaker : speakers) {
-            MradmAdmSpeaker s{};
-            s.label = static_cast<uint32_t>(labels.size());
-            s.azimuth = speaker.azimuth;
-            s.elevation = speaker.elevation;
-            s.lfe = static_cast<uint32_t>(speaker.is_lfe);
-            if (speaker.azimuth_range) {
-                s.ranges |= 1U;
-                s.azimuth_min = speaker.azimuth_range->first;
-                s.azimuth_max = speaker.azimuth_range->second;
-            }
-            if (speaker.elevation_range) {
-                s.ranges |= 2U;
-                s.elevation_min = speaker.elevation_range->first;
-                s.elevation_max = speaker.elevation_range->second;
-            }
-            records.push_back(s);
-            labels.push_back(text(speaker.label));
-        }
-        std::array<uint8_t, 1024> error{};
-        MradmAdmBuffer* raw = nullptr;
-        const auto code = mradm_adm_generate(
-            kind, text(name), records.data(), labels.data(), records.size(), &raw, error.data(), error.size());
-        Buffer buffer{raw, mradm_adm_buffer_destroy};
-        checked(code, error);
-        return output(std::move(buffer));
     } catch (const Failure& e) {
         return make_error(e.code(), e.what());
     }

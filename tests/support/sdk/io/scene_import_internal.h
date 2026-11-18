@@ -48,11 +48,6 @@ class RenderScene {
     // The `mradm inspect` summary after its `File:` line.
     [[nodiscard]] Result<std::string> inspect_text() const;
     [[nodiscard]] Result<SceneSummary> summary() const;
-    // Writes the source file with this scene's semantic edits patched into its AXML: PCM and every
-    // other chunk are copied byte for byte (a temporary file replaces `dst`). Positions, user levels
-    // and HOA pack gain or mute are not written back; edits to shared nodes that disagree and edits
-    // to common definitions are unsupported.
-    [[nodiscard]] Result<void> write(const std::string& dst) const;
     // Writes render-scene/offline.<stage>.i32 in diagnostic builds; a no-op otherwise.
     void checkpoint(const char* stage) const;
 
