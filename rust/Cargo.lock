@@ -334,6 +334,7 @@ dependencies = [
  "mradm-dsp",
  "mradm-engine",
  "mradm-scene",
+ "mradm-testkit",
 ]
 
 [[package]]

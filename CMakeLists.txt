@@ -1103,17 +1103,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     if(MR_ADM_CORE_BUILD_CLI)
-        add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)
-        target_compile_definitions(mr_adm_cli_smoke_tests PRIVATE
-            "MRADM_EXE_PATH=\"$<TARGET_FILE:mradm_exe>\""
-        )
-        target_link_libraries(mr_adm_cli_smoke_tests
-            PRIVATE
-                MacinRender::ADMIo
-        )
-        mr_adm_core_apply_warnings(mr_adm_cli_smoke_tests)
-        mr_adm_core_apply_static_analysis(mr_adm_cli_smoke_tests)
-        add_test(NAME mr_adm_cli_smoke_tests COMMAND mr_adm_cli_smoke_tests)
+        # The mradm executable as a user runs it: mradm-cli's tests/binary.rs (R3 E4), the Cargo test
+        # command and binaries of mr_adm_rust_unit_tests with MRADM_EXE_PATH naming the executable.
+        # The target of the same name builds that test binary (release.yml builds it by name).
+        add_custom_target(mr_adm_cli_smoke_tests
+            COMMAND ${_mr_rust_unit_test_command} --test binary --no-run
+            DEPENDS mradm_capi-static mradm_exe
+            USES_TERMINAL VERBATIM)
+        add_test(NAME mr_adm_cli_smoke_tests COMMAND ${_mr_rust_unit_test_command} --test binary)
+        set_tests_properties(mr_adm_cli_smoke_tests PROPERTIES
+            ENVIRONMENT "MRADM_EXE_PATH=$<TARGET_FILE:mradm_exe>"
+            TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
     endif()
 endif()
 

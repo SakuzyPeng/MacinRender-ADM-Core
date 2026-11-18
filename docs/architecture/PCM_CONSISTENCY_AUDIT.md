@@ -841,7 +841,11 @@ C 已完成：经 C++ SDK 做整段渲染的 18 个测试移植为 `mradm-engine
 
 D 已完成：经 C++ 外壳测 Monitor、Scene 输出与 OSC 协议的 6 个测试移植为直接驱动 `mradm-engine` / `mradm-osc` 的 Rust 测试，
 `hptf_parameters_test` 与 `osc_head_tracking_test` 缩为只经 C ABI；每个子批对易漏的移植项做故障注入。B / C 留下的无用头一并删除，
-`mradm-ffi` 入口 291 → 234。测试 C/C++ 36,402 → 31,322 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
+`mradm-ffi` 入口 291 → 234。测试 C/C++ 36,402 → 31,322 行。
+
+E 已完成：只经 C ABI 或 CLI 测公开契约的 7 个 C++ 测试中，不依赖岛的检查移植为 `mradm-capi` 的 Rust 测试（直接调用 `extern "C"` 入口，
+69 项），CLI 冒烟改为 `mradm-cli` 运行真实二进制的集成测试（ctest 名不变）；依赖岛的检查与每个家族一次冒烟调用合成唯一的 C 消费者测试
+`c_api_consumer_test.cpp`，即 `capi-capture.py tests` 运行的消费者。测试 C/C++ 31,322 → 24,780 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
 
 ## 每个迁移切片的验证
 

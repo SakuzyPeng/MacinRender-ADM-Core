@@ -11,3 +11,6 @@ clap = { workspace = true }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-engine = { path = "../mradm-engine" }
 mradm-scene = { path = "../mradm-scene" }
+
+[dev-dependencies]
+mradm-testkit = { path = "../mradm-testkit" }

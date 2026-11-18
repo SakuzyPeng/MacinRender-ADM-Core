@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），原生复核待维护者；E–G 待做。
+> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），E 已完成（2026-11-18，本机 Linux x64），D、E 的原生复核待维护者；F、G 待做。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -385,3 +385,69 @@ D 处理经 C++ 外壳测实时链路的 6 个测试：
 - `tests/support` 12,203 → 11,210。
 
 `mradm-ffi` 由 22,366 行降到 19,893 行。生产 C/C++ 不变（9,432 行）。
+
+## E C ABI 与 CLI 测试
+
+E 处理只经 `c_api.h` 或 `mradm` 可执行文件测公开契约的 7 个 C++ 测试（8,083 行）。E 计划的用户决定：
+- **C ABI**：不依赖岛的检查移植为 `mradm-capi` 的 Rust 测试（`src/tests`，`#[cfg(test)]`，crate 类型不变），直接调用 `extern "C"` 入口；
+  依赖岛的检查与每个 C ABI 家族一次冒烟调用合成一个精简的 C 消费者测试 `tests/unit/c_api_consumer_test.cpp`。
+  它沿用目标名 `mr_adm_c_api_tests`（ctest，链接 C ABI 目标）与 `mr_adm_c_api_consumer_tests`（只链接共享库），
+  是 `capi-capture.py tests` 在 6.6 A/B 中运行的唯一消费者。
+- **CLI**：`mradm-cli` 的集成测试 `tests/binary.rs` 运行 ctest 以 `MRADM_EXE_PATH` 传入的真实 `mradm`，未设置时跳过；
+  ctest 项沿用 `mr_adm_cli_smoke_tests`，同名 CMake 目标构建该 Cargo 测试二进制，`release.yml` 不用改。
+
+单元测试不链接 C++ 岛：编码器岛请求即失败，设备岛为空表。平台事实表由空指针改为「没有 APAC、IAMF、Apple 后端与系统空间布局」，
+这样渲染在单元测试中可以运行。Scene、房间与 OSC 的 C 记录对 crate 内测试开放字段（`pub(crate)`），`adm_progress_event_v2_t` 同样。
+除此之外生产代码不变。分四个子批提交：E1 渲染与查询、E2 Scene 流与 room、E3 HpTF / OSC / Scene 输出、E4 CLI 与收尾。
+
+| C++ 测试 | 去向 |
+|---|---|
+| c_api_fixture_test（3,156 行，66 项） | 不依赖岛的 49 项 → `mradm-capi` `src/tests`：`options.rs` 5 项（空 options 的无操作、每个 setter 的范围与文档取值、字符串清空、取消令牌、版本）、`render.rs` 13 项（错误与结果、progress v1 / v2、日志、布局、DirectSpeakers 矩阵、响度与终增益、trim、事前与跨线程取消、内存策略与晚期失败仍有报告、IAMF 层次单调、Triple Balance D）、`preview.rs` 3 项、`query.rs` 3 项（probe、inspect JSON / XML、策略模板、发现文档）、`monitor.rs` 2 项（不需设备的参数检查与创建失败）。依赖岛的 17 项（FLAC / Opus / APAC / IAMF、回调异常经进度跳板、Apple 岛、实时 Monitor 与 Triple Balance 监听、发现文档的平台行）→ C 消费者测试；`static_assert` 一并移过去 |
+| scene_stream_c_api_test（2,760 行，33 项） | 不依赖岛，整体 → `src/tests/scene_stream.rs` 29 项：创建与后端切换（含扬声器立体声在四个创建入口与两个切换入口被拒）、生产者时间线与帧校验、队列背压、拉取与状态、重采样、逐样本的增益 ramp（Live VBAP 样本逐位相同）、各角色与事件、头追踪的启动水位与 2048 帧 lookahead、语义策略与身份、DirectSpeakers 位置覆盖、双耳几何与姿态、参考系 ramp、Triple Balance；C 消费者测试加一次 Scene 流冒烟 |
+| room_render_test（314 行） | → `src/tests/room.rs` 5 项：房间加载与损坏的包、两档检查、屏幕与档位选项、距离集合与 SOFA、房间 Scene 会话（尾部、状态、声源距离、屏幕映射）、显式 HRIR 与 SOFA 冲突。合成包用已提交的 `tests/fixtures/room/synthetic`（与 `room_fixture.py` 的输出逐字节相同）；`room_fixture.py` 去掉运行入口，保留给 `room_96k_test.py` 与 `make_consistency_room.py`。C 消费者测试加一次房间加载与检查 |
+| hptf_parameters_test（344 行） | 文本解析进调用方缓冲 → `src/tests/hptf.rs` 2 项（尺寸查询、容量与步长失败不写任何输出、按原文的段、未来步长）；Scene 输出上的 setter 需要 null 输出设备（miniaudio 的 null 后端，属岛）→ C 消费者测试 |
+| osc_head_tracking_test（514 行） | → `src/tests/osc.rs` 6 项，经 `std::net::UdpSocket` 回环发送：遥测数值边界、实例排序、状态引用变化、接收器生命周期契约、自动绑定、参数检查。遥测 JSON 由 `mradm-json` 写出（与 nlohmann `dump()` 字节一致） |
+| scene_output_c_api_test（242 行） | Scene LFE 路由（不经输出）→ `scene_stream.rs` `scene_lfe_routing_follows_the_layout`；null 设备上的输出会话（`MR_ADM_TEST_SYSTEM_SPATIAL=1` 时为系统空间）→ C 消费者测试。两项经 `src` 头调用 C++ 岛代码，移到岛测试：`mix_lfe_pair`（Windows sink）→ `lfe_routing_test.cpp`，`BufferedMediaTimeline`（只供 macOS 设备）→ `apple_island_test.cpp` |
+| adm_cli_smoke_test（753 行） | → `mradm-cli` `tests/binary.rs` 8 项：`backends` / `formats` / `layouts` / `input-layouts`、`render --help`、选项取值与退出码、渲染器名称与 Triple Balance 模式、DirectSpeakers 矩阵、WAV 与 FLAC 渲染（真实二进制带岛）、Apple 扬声器几何、inspect 与策略模板。参数直接传给进程，不经 shell |
+
+C 消费者测试为 1,514 行。删除的 CMake 目标：`mr_adm_scene_stream_c_api_tests`、`mr_adm_scene_stream_c_api_consumer_tests`、
+`mr_adm_room_tests`、`mr_adm_hptf_parameters_tests`、`mr_adm_osc_head_tracking_tests`、`mr_adm_scene_output_c_api_tests`，
+以及 C++ 的 `mr_adm_cli_smoke_tests` 可执行文件。`capi-capture.py` 的 `CONSUMER_TESTS` 只剩 `mr_adm_c_api_consumer_tests`。
+
+`c_api_header_smoke.c` 保留：它是 C 语言的编译检查，不调用库，不能区分两个库。ctypes 的 `hptf_stereo_test.py`、
+`apple_render_trim_test.py` 保留。E 没有删除 `mradm-ffi` 入口（234 个），这些测试只调用 `adm_*`；`tests/support` 也没有新的孤立文件。
+
+**新增的 Rust 测试**：`mradm-capi` 69 项（`options` 5、`render` 13、`preview` 3、`query` 3、`monitor` 2、`scene_stream` 30、`room` 5、
+`osc` 6、`hptf` 2），`mradm-cli` `tests/binary.rs` 8 项。`mradm-testkit` 成为两者的 dev-dependency。
+
+**照搬时测不到的检查**：C++ CLI 测试用 `render --help --option value` 检查合法取值、用缺少 `-i` 的 `render --option value` 检查非法取值。
+`--help` 在校验之前退出，缺少输入本来就失败，所以两类检查都总能通过（把俯仰范围放宽到 ±91° 时测不出）。现在合法取值须到达引擎
+（退出码 1、「render request:」），非法取值须是 CLI11 的校验退出码 105 并点名该选项。
+
+**故障注入**（每项改动后恢复，全部能检出）：
+- E1：空操作的 `adm_cancel`、错误的 v2 `struct_size`、Opus 码率上限放宽一档、结束时间 ≤ 0 不清空（由原有的 `options` 单元测试检出）、
+  preview 不复用准备、矩阵优先级警告改字；
+- E2：输出记录写过调用方的 `struct_size`（原有单元测试触发 UB 检查使进程中止，新的前缀检查单独运行时也失败）、房间检查忽略档位、
+  头追踪 lookahead 改为 4096、不检查输入队列预算；
+- E3：心跳存活 6 s、不绑定首个姿态来源、解析忽略调用方步长、容量不足仍写出一段；
+- E4：俯仰范围放宽（见上）、去掉一个 Apple 预设取值、D 模式错误改字。
+
+E1 的提交说明写的是 32 项、1,011 行，实际为 26 项、1,010 行。
+
+### E 的验证
+
+- **Rust**：`mradm-capi` 单元测试 121 项全部通过；`MRADM_EXE_PATH` 指向 debug 构建的 `mradm` 时 `tests/binary.rs` 8 项通过，指向
+  `/bin/false` 时全部失败（确实在运行可执行文件）；workspace fmt 与 clippy `-D warnings` 通过。
+- **C++ 侧**：每个子批 debug 构建与 ctest 通过：E1 33 项，E2 31 项，E3 28 项，E4 28 项（`mr_adm_cli_smoke_tests` 为新的 Cargo 测试）。
+  - FFI 头校验通过：234 个函数、122 个结构体，`c_api.h` 的 164 个函数由 Rust 实现；
+  - `quality_scripts_test.py`、`boundary_tools_test.py`、许可证检查与 C/C++ 棘轮通过；
+  - 改动的 C++ 文件通过 clang-format 18。clang-tidy 对新增代码报的两处隐式加宽乘法已修正；本机没有 cppcheck。
+- **对照参照构建 `53c1fdf`**（main 在 E 开始时的提交，含 Triple Balance 的 ADM 增益修正；方法同 A，候选为 E4 之后的 `consistency-a`）：
+  - C ABI 采集：3,283 行、36 个文件，0 差异；
+  - CLI 记录：113 条命令，0 差异；
+  - 新的 C 消费者测试对候选库与参照库都通过（`capi-capture.py tests`）；
+  - 共享库恰好导出 164 个 `adm_*`；
+  - 完整 PCM 采集与参照完全相同：294 个输出、220 个 fixture、989 项比较、176 个重放、256 个产物、666 份日志。
+
+**规模**：测试 C/C++ 由 31,322 行降到 24,780 行（`tests/unit` 16,252 → 9,710）。按棘轮计数，`mradm-capi` 由 8,655 行增到 13,700 行
+（几乎全是 `src/tests` 的 12 个文件），`mradm-cli` 由 2,822 行增到 3,500 行。生产 C/C++ 不变（9,432 行）。

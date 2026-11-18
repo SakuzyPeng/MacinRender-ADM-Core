@@ -583,7 +583,7 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - 两个结构体都以 `struct_size` 打头，读侧沿用 `adm_monitor_set_overrides` 的 `has_field(offset,size)`
   惯例：`struct_size` 不含 `preamp_mode` 的老调用方按 `ADM_HPTF_PREAMP_WARN_ONLY` 处理，
   不含 `revision` 的按 0 处理。`reserved_v1_37` 复刻 `reserved_v1_29` 的做法占住尾部填充，
-  并由 `c_api_fixture_test.cpp` 的 `static_assert` 守护偏移。
+  并由 C 消费者测试的 `static_assert` 守护偏移（`c_api_fixture_test.cpp`，R3 E 起为 `c_api_consumer_test.cpp`）。
 - 状态经独立的 `*_get_hptf_info` 读取，而不是在 `adm_monitor_status_t` 上再做一次 `struct_size`
   迁移；顺带给 `max_response_db` / `auto_trim_db` 一个自然归宿，供 UI 提示曲线可能削波。
 - 作用域刻意限定在**设备绑定的双声道耳机馈送**：多声道扬声器输出与系统空间音频（多声道床交由 OS

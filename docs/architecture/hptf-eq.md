@@ -347,10 +347,13 @@ pulled sample still satisfies the guard's ceiling, and the device output stays
 bit-identical across pull partitions while HpTF targets change, which fails as
 soon as the stage moves downstream of the limiter.
 
-`mr_adm_hptf_parameters_tests` exercises the public text parser's sizing and buffer
-contracts, forward-compatible input/output strides, caller-memory ownership,
-invalid and disabled parameters, 32 enabled sections, preamp-only/bypass updates,
-and rapid memory-only updates through the headless Scene C ABI. `mradm-ffi`'s
+The public text parser's sizing and buffer contracts and forward-compatible
+output strides are Rust tests of `mradm-capi` (`src/tests/hptf.rs`); the C
+consumer test `mr_adm_c_api_tests` (`c_api_consumer_test.cpp`, formerly
+`mr_adm_hptf_parameters_tests`, R3 E3) covers forward-compatible input strides,
+caller-memory ownership, invalid and disabled parameters, 32 enabled sections,
+preamp-only/bypass updates, the file setter's owned errors and rapid memory-only
+updates through the headless Scene C ABI (the null output device is an island). `mradm-ffi`'s
 settings tests check that a ParametricEQ file and the same parameters given in
 memory design the same target, and that a publication never waits for the
 output's control lock.

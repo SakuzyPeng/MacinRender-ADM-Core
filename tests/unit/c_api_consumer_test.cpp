@@ -187,9 +187,10 @@ std::string owned(char* text) {
 // and cancel tokens, a render to WAV with its result and v1 progress, a preview window, probe and
 // inspect, a policy template, the discovery documents and an export.
 bool verify_family_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_major() == ADM_API_VERSION_MAJOR && adm_api_version_minor() == ADM_API_VERSION_MINOR &&
-                        adm_api_version_patch() == ADM_API_VERSION_PATCH,
-                    "the library version matches the header");
+    bool ok =
+        check(adm_api_version_major() == ADM_API_VERSION_MAJOR && adm_api_version_minor() == ADM_API_VERSION_MINOR &&
+                  adm_api_version_patch() == ADM_API_VERSION_PATCH,
+              "the library version matches the header");
     auto* opts = adm_create_render_options();
     auto* token = adm_create_cancel_token();
     ok = check(opts != nullptr && token != nullptr, "options and a cancel token are created") && ok;
@@ -216,7 +217,8 @@ bool verify_family_smoke(adm_context_t* ctx, const std::filesystem::path& input)
          ok;
     adm_destroy_render_result(result);
     adm_cancel(token);
-    ok = check(adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, nullptr) ==
+    ok = check(adm_render_file_ex(
+                   ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, nullptr) ==
                    ADM_ERROR_CANCELLED,
                "a cancelled token stops the render") &&
          ok;
@@ -258,11 +260,12 @@ bool verify_family_smoke(adm_context_t* ctx, const std::filesystem::path& input)
                "a policy template is written") &&
          ok;
     using Document = adm_error_code_t (*)(adm_context_t*, char**);
-    for (const auto& [document, schema] : {std::pair<Document, const char*>{adm_capabilities_json, "mradm.capabilities"},
-                                           {adm_layouts_json, "mradm.layouts"},
-                                           {adm_input_layouts_json, "mradm.input-layouts"},
-                                           {adm_output_formats_json, "mradm.output-formats"},
-                                           {adm_render_support_matrix_json, "mradm.render-support-matrix"}}) {
+    for (const auto& [document, schema] :
+         {std::pair<Document, const char*>{adm_capabilities_json, "mradm.capabilities"},
+          {adm_layouts_json, "mradm.layouts"},
+          {adm_input_layouts_json, "mradm.input-layouts"},
+          {adm_output_formats_json, "mradm.output-formats"},
+          {adm_render_support_matrix_json, "mradm.render-support-matrix"}}) {
         text = nullptr;
         ok = check(document(ctx, &text) == ADM_ERROR_OK && owned(text).find(schema) != std::string::npos,
                    "a discovery document carries its schema") &&
@@ -288,7 +291,7 @@ bool verify_scene_and_room_smoke(adm_context_t* ctx) {
     config.input_sample_rate = 48000U;
     config.output_sample_rate = 48000U;
     config.input_queue_samples = 4096U;
-    config.input_queue_bytes = 1024U * 1024U;
+    config.input_queue_bytes = 1024ULL * 1024ULL;
     config.output_ring_frames = 2048U;
     config.startup_watermark_frames = 1U;
     adm_scene_stream_t* stream = nullptr;
@@ -331,15 +334,16 @@ bool verify_scene_and_room_smoke(adm_context_t* ctx) {
     frame.initial_state_count = 1U;
     frame.initial_states = &initial;
     int32_t submitted = -1;
-    ok = check(adm_scene_stream_submit_frame(stream, &frame, 0U, &submitted) == ADM_ERROR_OK &&
-                   submitted == ADM_SCENE_SUBMIT_ACCEPTED && adm_scene_stream_signal_end(stream, 1U, 64) == ADM_ERROR_OK,
-               "a Scene frame is accepted and the epoch ends") &&
-         ok;
+    ok =
+        check(adm_scene_stream_submit_frame(stream, &frame, 0U, &submitted) == ADM_ERROR_OK &&
+                  submitted == ADM_SCENE_SUBMIT_ACCEPTED && adm_scene_stream_signal_end(stream, 1U, 64) == ADM_ERROR_OK,
+              "a Scene frame is accepted and the epoch ends") &&
+        ok;
     std::uint64_t frames = 0U;
     bool signal = false;
     bool eos = false;
     for (int attempt = 0; attempt < 5000 && !eos; ++attempt) {
-        std::array<float, 64U * 6U> output{};
+        std::array<float, static_cast<std::size_t>(64U) * 6U> output{};
         adm_scene_pull_result_t pulled{};
         pulled.struct_size = sizeof(pulled);
         if (adm_scene_stream_pull(stream, output.data(), 64U, &pulled) != ADM_ERROR_OK) {
