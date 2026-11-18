@@ -32,8 +32,15 @@ impl Dir {
     pub fn new(tag: &str) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("mradm-capi-{tag}-{}-{n}", std::process::id()));
+        // Exercise file paths and diagnostics in the caller's code page even with an ASCII TEMP.
+        let suffix = ["中文", "café"]
+            .into_iter()
+            .find(|name| native_path(name.as_bytes()).is_some())
+            .unwrap_or("ascii");
+        let path = std::env::temp_dir().join(format!(
+            "mradm-capi-{tag}-{}-{n}-{suffix}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         Self(path)
@@ -62,8 +69,12 @@ impl Drop for Dir {
     }
 }
 
-pub fn c(path: &Path) -> CString {
-    CString::new(path.to_str().unwrap()).unwrap()
+/// File rendering, preview, queries and Scene SOFA accept the caller's native narrow paths.
+pub fn native_c_path(path: &Path) -> CString {
+    let bytes = native_path(path.as_os_str().as_encoded_bytes()).unwrap_or_else(|| {
+        panic!("cannot represent fixture path in the native file code page: {path:?}")
+    });
+    CString::new(bytes).unwrap()
 }
 
 /// One channel of `ty` with `block` under object `name`Object, content and programme.
@@ -161,8 +172,9 @@ impl Context {
         Self(context)
     }
 
-    pub fn last_error(&self) -> String {
-        unsafe { text(crate::context::adm_context_last_error_message(self.0)) }.unwrap()
+    pub fn has_error(&self) -> bool {
+        let message = unsafe { crate::context::adm_context_last_error_message(self.0) };
+        !message.is_null() && unsafe { *message != 0 }
     }
 }
 
@@ -209,6 +221,10 @@ pub struct Log {
 }
 
 impl Res {
+    pub fn output_path(&self) -> Option<&CStr> {
+        let path = unsafe { adm_render_result_output_path(self.0) };
+        (!path.is_null()).then(|| unsafe { CStr::from_ptr(path) })
+    }
     pub fn code(&self) -> i32 {
         unsafe { adm_render_result_error_code(self.0) }
     }
@@ -274,8 +290,8 @@ pub fn render(
     let code = unsafe {
         adm_render_file_ex(
             context.0,
-            c(input).as_ptr(),
-            c(output).as_ptr(),
+            native_c_path(input).as_ptr(),
+            native_c_path(output).as_ptr(),
             options.map_or(ptr::null(), |o| o.0),
             None,
             ptr::null_mut(),

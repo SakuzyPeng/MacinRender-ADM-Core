@@ -11,7 +11,7 @@ use std::ptr;
 fn probes_report_the_input_shape() {
     let context = Context::new();
     let dir = Dir::new("probe");
-    let input = c(&object_input(&dir, 48000, false));
+    let input = native_c_path(&object_input(&dir, 48000, false));
     let mut info = ptr::null_mut();
     unsafe {
         assert_eq!(adm_probe_file(context.0, input.as_ptr(), &mut info), OK);
@@ -36,7 +36,7 @@ fn probes_report_the_input_shape() {
             adm_probe_file(context.0, c"".as_ptr(), ptr::null_mut()),
             INVALID_ARGUMENT
         );
-        let missing = c(&dir.file("missing.wav"));
+        let missing = native_c_path(&dir.file("missing.wav"));
         let mut info = ptr::null_mut();
         assert_ne!(adm_probe_file(context.0, missing.as_ptr(), &mut info), OK);
         assert!(info.is_null());
@@ -65,7 +65,7 @@ fn file_query(
     input: &std::path::Path,
     empty_rejected: bool,
 ) -> String {
-    let input = c(input);
+    let input = native_c_path(input);
     let mut out = ptr::null_mut();
     assert_eq!(unsafe { query(context.0, input.as_ptr(), &mut out) }, OK);
     let document = unsafe { taken(out) }.unwrap();
@@ -84,7 +84,7 @@ fn file_query(
         if empty_rejected {
             assert_eq!(query(context.0, c"".as_ptr(), &mut bad), INVALID_ARGUMENT);
         }
-        let missing = c(&dir.file("missing.wav"));
+        let missing = native_c_path(&dir.file("missing.wav"));
         assert_ne!(query(context.0, missing.as_ptr(), &mut bad), OK);
     }
     assert!(bad.is_null());

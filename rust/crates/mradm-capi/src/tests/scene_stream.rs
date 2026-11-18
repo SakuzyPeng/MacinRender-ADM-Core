@@ -7,6 +7,7 @@ use super::common::*;
 use crate::scene::*;
 use crate::string::adm_free_string;
 use std::ffi::{CStr, c_char};
+use std::path::PathBuf;
 use std::ptr;
 use std::time::{Duration, Instant};
 
@@ -174,7 +175,13 @@ impl Stream {
         forward.descriptor.position_y = 1.0;
         forward.descriptor.position_z = z;
         let code = unsafe {
-            adm_scene_stream_configure_generation(self.0, epoch, generation, &forward.descriptor, 1)
+            adm_scene_stream_configure_generation(
+                self.0,
+                epoch,
+                generation,
+                ptr::from_ref(&forward).cast(),
+                1,
+            )
         };
         assert_eq!(code, OK);
     }
@@ -815,7 +822,7 @@ fn generation_topologies_are_immutable_and_strided_by_the_first_element() {
     inconsistent[1].descriptor.element_id = 9;
     assert_eq!(
         unsafe {
-            adm_scene_stream_configure_generation(stream.0, 23, 7, &inconsistent[0].descriptor, 2)
+            adm_scene_stream_configure_generation(stream.0, 23, 7, inconsistent.as_ptr().cast(), 2)
         },
         INVALID_ARGUMENT
     );
@@ -1150,10 +1157,10 @@ fn binaural_streams_follow_the_object_state() {
     assert_eq!(binaural_at(&context, 36, -1.0), left);
 }
 
-fn sofa_source() -> Option<String> {
-    std::env::var("MR_ADM_TEST_SOFA_PATH")
-        .ok()
+fn sofa_source() -> Option<PathBuf> {
+    std::env::var_os("MR_ADM_TEST_SOFA_PATH")
         .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
 }
 
 /// A changed SOFA file is read again rather than served from the HRTF cache (with
@@ -1167,7 +1174,7 @@ fn a_changed_sofa_file_is_not_served_from_the_cache() {
     let dir = Dir::new("scene-sofa");
     let copy = dir.file("cached.sofa");
     std::fs::copy(&source, &copy).unwrap();
-    let path = c(&copy);
+    let path = native_c_path(&copy);
     let mut c = config();
     c.rendering = binaural(Some(&path));
     let original = Stream::new(&context, &c);
@@ -1221,7 +1228,7 @@ fn backend_hot_switches_are_continuous_and_keep_the_stream() {
         (0, 1, 71)
     );
     if let Some(sofa) = sofa_source() {
-        let sofa = std::ffi::CString::new(sofa).unwrap();
+        let sofa = native_c_path(&sofa);
         assert_eq!(stream.switch(&binaural(Some(&sofa))), OK);
         std::thread::sleep(Duration::from_millis(10));
         assert_eq!(stream.switch(&binaural(None)), OK);

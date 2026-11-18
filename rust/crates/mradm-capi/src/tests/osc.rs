@@ -544,7 +544,7 @@ fn the_receiver_keeps_its_contract_across_its_lifecycle() {
     future.pose.struct_size = size_of::<Future>() as u32;
     future.tail = 42;
     assert_eq!(
-        unsafe { adm_osc_head_tracking_get_pose(receiver.0, &mut future.pose) },
+        unsafe { adm_osc_head_tracking_get_pose(receiver.0, ptr::from_mut(&mut future).cast()) },
         OK
     );
     assert_eq!(future.tail, 42, "an unknown tail is left alone");

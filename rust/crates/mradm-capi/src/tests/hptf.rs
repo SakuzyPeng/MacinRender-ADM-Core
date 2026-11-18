@@ -193,7 +193,7 @@ fn parametric_eq_output_honours_a_future_stride() {
             &context,
             PROFILE,
             &mut preamp,
-            &mut bands[0].value,
+            bands.as_mut_ptr().cast(),
             3,
             &mut count
         ),

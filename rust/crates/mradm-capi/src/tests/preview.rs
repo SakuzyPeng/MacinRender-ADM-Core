@@ -21,7 +21,7 @@ fn window(session: &Session, start: f64, end: f64, output: &std::path::Path) -> 
             session.0,
             start,
             end,
-            c(output).as_ptr(),
+            native_c_path(output).as_ptr(),
             None,
             ptr::null_mut(),
             &mut result,
@@ -38,7 +38,7 @@ fn window(session: &Session, start: f64, end: f64, output: &std::path::Path) -> 
 fn preview_sessions_reject_bad_arguments() {
     let context = Context::new();
     let dir = Dir::new("preview-errors");
-    let input = c(&object_input_1s(&dir));
+    let input = native_c_path(&object_input_1s(&dir));
     let mut bad = ptr::null_mut();
     unsafe {
         assert_eq!(
@@ -108,7 +108,7 @@ fn preview_sessions_reject_bad_arguments() {
 fn preview_windows_reuse_the_prepared_backend() {
     let context = Context::new();
     let dir = Dir::new("preview");
-    let input = c(&object_input_1s(&dir));
+    let input = native_c_path(&object_input_1s(&dir));
     let mut session = ptr::null_mut();
     assert_eq!(
         unsafe { adm_create_preview_session(context.0, input.as_ptr(), ptr::null(), &mut session) },
@@ -138,7 +138,7 @@ fn preview_windows_reuse_the_prepared_backend() {
             session.0,
             0.0,
             0.25,
-            c(&v2).as_ptr(),
+            native_c_path(&v2).as_ptr(),
             Some(collect_v2),
             ptr::from_mut(&mut events).cast(),
             &mut result,
@@ -155,7 +155,7 @@ fn preview_windows_reuse_the_prepared_backend() {
 fn speaker_preview_sessions_render_their_layout() {
     let context = Context::new();
     let dir = Dir::new("preview-ear");
-    let input = c(&object_input_1s(&dir));
+    let input = native_c_path(&object_input_1s(&dir));
     let options = Options::new();
     unsafe {
         adm_render_options_set_renderer(options.0, 1);

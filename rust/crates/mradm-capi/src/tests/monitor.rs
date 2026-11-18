@@ -48,7 +48,7 @@ fn monitor_entries_reject_null_handles() {
 fn monitor_creation_checks_its_arguments_and_reports_failures() {
     let context = Context::new();
     let dir = Dir::new("monitor");
-    let input = c(&object_input(&dir, 48000, false));
+    let input = native_c_path(&object_input(&dir, 48000, false));
     let mut monitor = ptr::null_mut();
     unsafe {
         assert_eq!(
@@ -63,12 +63,12 @@ fn monitor_creation_checks_its_arguments_and_reports_failures() {
             adm_create_monitor(context.0, input.as_ptr(), ptr::null(), ptr::null_mut()),
             INVALID_ARGUMENT
         );
-        let missing = c(&dir.file("missing.wav"));
+        let missing = native_c_path(&dir.file("missing.wav"));
         assert_ne!(
             adm_create_monitor(context.0, missing.as_ptr(), ptr::null(), &mut monitor),
             OK
         );
     }
     assert!(monitor.is_null());
-    assert!(!context.last_error().is_empty());
+    assert!(context.has_error());
 }

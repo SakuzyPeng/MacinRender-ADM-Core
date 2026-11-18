@@ -521,12 +521,12 @@ fn result_of(outcome: Outcome, logs: Vec<Log>) -> Result<adm_render_result_t, Fa
 /// `path.string()` of a UTF-8 path: Windows converts to the code page `std::filesystem` uses
 /// (failing on unmappable characters as it did); elsewhere the bytes are unchanged.
 #[cfg(not(windows))]
-fn native_path(utf8: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn native_path(utf8: &[u8]) -> Option<Vec<u8>> {
     concat(&[utf8]).ok()
 }
 
 #[cfg(windows)]
-fn native_path(utf8: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn native_path(utf8: &[u8]) -> Option<Vec<u8>> {
     unsafe extern "system" {
         fn AreFileApisANSI() -> i32;
         fn MultiByteToWideChar(

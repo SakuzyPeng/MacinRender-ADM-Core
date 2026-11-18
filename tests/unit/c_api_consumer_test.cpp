@@ -280,9 +280,8 @@ bool verify_family_smoke(adm_context_t* ctx, const std::filesystem::path& input)
     return ok;
 }
 
-// The live Scene stream and the room families through the library: one SAF 5.1 object rendered to
-// EOS, and a room package loaded and inspected.
-bool verify_scene_and_room_smoke(adm_context_t* ctx) {
+// Render one SAF 5.1 object to EOS through the Scene stream C ABI.
+bool verify_scene_smoke(adm_context_t* ctx) {
     adm_scene_stream_config_t config{};
     config.struct_size = sizeof(config);
     config.rendering.struct_size = sizeof(config.rendering);
@@ -358,21 +357,45 @@ bool verify_scene_and_room_smoke(adm_context_t* ctx) {
     }
     ok = check(eos && frames == 64U && signal, "the Scene stream renders its frame to EOS") && ok;
     adm_destroy_scene_stream(stream);
+    return ok;
+}
 
+bool verify_room_smoke(adm_context_t* ctx, const std::filesystem::path& manifest) {
     adm_room_t* room = nullptr;
-    ok = check(adm_room_load(ctx, MR_ADM_TEST_ROOM_MANIFEST, &room) == ADM_ERROR_OK && room != nullptr,
-               "the synthetic room package loads") &&
-         ok;
+    const auto utf8 = manifest.u8string();
+    const std::string room_path(utf8.begin(), utf8.end());
+    if (!check(adm_room_load(ctx, room_path.c_str(), &room) == ADM_ERROR_OK && room != nullptr,
+               "the synthetic room package loads")) {
+        return false;
+    }
     adm_room_config_t room_config{};
     room_config.struct_size = sizeof(room_config);
     room_config.room = room;
     room_config.metres_per_unit = 1.5;
     char* report = nullptr;
-    ok = check(adm_room_inspect(ctx, &room_config, &report) == ADM_ERROR_OK &&
-                   owned(report).find("room-exact-v1") != std::string::npos,
-               "the room inspection names its processing policy") &&
-         ok;
+    const bool ok = check(adm_room_inspect(ctx, &room_config, &report) == ADM_ERROR_OK &&
+                              owned(report).find("room-exact-v1") != std::string::npos,
+                          "the room inspection names its processing policy");
     adm_room_destroy(room);
+    return ok;
+}
+
+bool verify_osc_receiver() {
+    adm_osc_head_tracking_config_t config{};
+    config.struct_size = sizeof(config);
+    adm_osc_head_tracking_t* receiver = nullptr;
+    if (!check(adm_create_osc_head_tracking(&config, &receiver) == ADM_ERROR_OK && receiver != nullptr,
+               "an OSC receiver is created")) {
+        return false;
+    }
+    adm_osc_head_tracking_status_t status{};
+    status.struct_size = sizeof(status);
+    status.state = ADM_OSC_HEAD_TRACKING_FAILED;
+    const bool ok =
+        check(adm_osc_head_tracking_get_status(receiver, &status) == ADM_ERROR_OK &&
+                  status.state == ADM_OSC_HEAD_TRACKING_IDLE && status.bound_port == 0 && status.has_pose == 0,
+              "a new OSC receiver is idle with no bound port or pose");
+    adm_destroy_osc_head_tracking(receiver);
     return ok;
 }
 
@@ -1000,18 +1023,18 @@ void test_concurrent_file_api_owns_errors() {
     require(scene.info().applied_revision == 71 && scene.info().band_count == 2, "concurrent setter applies profile");
     require(adm_scene_output_set_hptf_ex(scene.output(), &config, &error) == ADM_ERROR_IO && error != nullptr,
             "missing file returns an owned error");
-    const std::unique_ptr<char, decltype(&adm_free_string)> owned(error, adm_free_string);
-    const std::string message{owned.get()};
+    const std::unique_ptr<char, decltype(&adm_free_string)> owned_error(error, adm_free_string);
+    const std::string message{owned_error.get()};
     adm_scene_output_status_t status{};
     status.struct_size = sizeof(status);
     require(adm_scene_output_get_status(scene.output(), &status) == ADM_ERROR_OK, "status clears borrowed error");
     // Check the ABI ownership contract: a mistakenly borrowed error would be cleared by the call above.
     // cppcheck-suppress knownConditionTrueFalse
-    require(message == owned.get(), "status queries cannot invalidate the setter's error");
+    require(message == owned_error.get(), "status queries cannot invalidate the setter's error");
     require(scene.info().applied_revision == 71, "failed setter preserves the old profile");
     require(adm_scene_output_set_hptf_ex(scene.output(), &config, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
             "owned error slot is required");
-    error = owned.get();
+    error = owned_error.get();
     require(adm_scene_output_set_hptf_ex(nullptr, &config, &error) == ADM_ERROR_INVALID_ARGUMENT && error == nullptr,
             "invalid handle clears the error slot");
     config.profile_path = "";
@@ -1478,14 +1501,18 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     return ok;
 }
 
-int main() try {
+int main(int argc, char** argv) try {
+    const auto room_manifest = argc > 1 ? std::filesystem::path{argv[1]}
+                                        : std::filesystem::path{argv[0]}.parent_path() / "capi-room" / "room.json";
     adm_context_t* ctx = adm_create_context();
     if (!check(ctx != nullptr, "context creation should succeed")) {
         return EXIT_FAILURE;
     }
     const FileGuard fixture(write_fixture());
     bool ok = verify_family_smoke(ctx, fixture.path());
-    ok = verify_scene_and_room_smoke(ctx) && ok;
+    ok = verify_scene_smoke(ctx) && ok;
+    ok = verify_room_smoke(ctx, room_manifest) && ok;
+    ok = verify_osc_receiver() && ok;
     ok = verify_platform_documents(ctx) && ok;
     ok = passes(test_future_layouts_and_validation, "HpTF future layouts and validation") && ok;
     ok = passes(test_owned_snapshots_and_rapid_updates, "HpTF owned snapshots and rapid updates") && ok;

@@ -79,8 +79,8 @@ fn wav_renders_report_progress_and_a_stable_result() {
     let code = unsafe {
         adm_render_file(
             context.0,
-            c(&input).as_ptr(),
-            c(&output).as_ptr(),
+            native_c_path(&input).as_ptr(),
+            native_c_path(&output).as_ptr(),
             Some(collect_v1),
             ptr::from_mut(&mut state).cast(),
             &mut result,
@@ -91,8 +91,8 @@ fn wav_renders_report_progress_and_a_stable_result() {
     let message = unsafe { adm_render_result_message(result.0) };
     assert!(!message.is_null() && message == unsafe { adm_render_result_message(result.0) });
     assert_eq!(
-        unsafe { text(adm_render_result_output_path(result.0)) }.as_deref(),
-        output.to_str()
+        result.output_path(),
+        Some(native_c_path(&output).as_c_str())
     );
     assert!(std::fs::metadata(&output).unwrap().len() > 0);
     let known = [
@@ -124,8 +124,8 @@ fn wav_renders_report_progress_and_a_stable_result() {
         unsafe {
             adm_render_file(
                 context.0,
-                c(&input).as_ptr(),
-                c(&output).as_ptr(),
+                native_c_path(&input).as_ptr(),
+                native_c_path(&output).as_ptr(),
                 None,
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -149,8 +149,8 @@ fn progress_v2_walks_to_finish_through_post_processing() {
     let none = unsafe {
         adm_render_file_ex2(
             context.0,
-            c(&input).as_ptr(),
-            c(&dir.file("null.wav")).as_ptr(),
+            native_c_path(&input).as_ptr(),
+            native_c_path(&dir.file("null.wav")).as_ptr(),
             ptr::null(),
             None,
             ptr::null_mut(),
@@ -162,8 +162,8 @@ fn progress_v2_walks_to_finish_through_post_processing() {
     let code = unsafe {
         adm_render_file_ex2(
             context.0,
-            c(&input).as_ptr(),
-            c(&dir.file("v2.wav")).as_ptr(),
+            native_c_path(&input).as_ptr(),
+            native_c_path(&dir.file("v2.wav")).as_ptr(),
             ptr::null(),
             Some(collect_v2),
             ptr::from_mut(&mut events).cast(),
@@ -226,8 +226,8 @@ fn layouts_set_the_channel_count() {
         assert_eq!(code, OK);
         assert_eq!(wav_shape(&output).0, channels);
         assert_eq!(
-            unsafe { text(adm_render_result_output_path(result.0)) }.as_deref(),
-            output.to_str()
+            result.output_path(),
+            Some(native_c_path(&output).as_c_str())
         );
     }
 }
@@ -270,7 +270,10 @@ fn direct_speakers_matrices_render_from_a_file_or_memory() {
     let options = matrix_options(2, c"5.1", 3, None);
     unsafe {
         assert_eq!(
-            adm_render_options_set_direct_speakers_matrix_path(options.0, c(&matrix).as_ptr()),
+            adm_render_options_set_direct_speakers_matrix_path(
+                options.0,
+                native_c_path(&matrix).as_ptr()
+            ),
             OK
         );
         adm_render_options_set_peak_limit(options.0, 0);
@@ -415,8 +418,8 @@ fn a_cancel_from_another_thread_ends_the_render_cleanly() {
             let code = unsafe {
                 adm_render_file_ex(
                     context.0,
-                    c(&input).as_ptr(),
-                    c(&path).as_ptr(),
+                    native_c_path(&input).as_ptr(),
+                    native_c_path(&path).as_ptr(),
                     shared as *const adm_render_options_t,
                     None,
                     ptr::null_mut(),

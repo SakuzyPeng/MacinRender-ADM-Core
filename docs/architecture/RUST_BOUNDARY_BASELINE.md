@@ -165,9 +165,9 @@ render 家族另采集非空 options 上关闭峰值限制、关闭后恢复限�
 `record` 把采集工具和要测的库（默认是构建目录里的库，`--library` 指定候选）复制进同一个临时目录，库按加载名命名
 （Linux `libmradm_capi.so.1`、macOS `libmradm_capi.1.dylib`、Windows `mradm_capi.dll`）。可执行文件带 `$ORIGIN` / `@loader_path`
 rpath（Windows 先搜索可执行文件所在目录），并清除 `LD_LIBRARY_PATH`、`LD_PRELOAD` 与 `DYLD_*`，所以加载的就是复制进去的那份。
-`tests` 用同样的方式把 `mr_adm_c_api_consumer_tests`、`mr_adm_scene_stream_c_api_consumer_tests`（与原 ctest 目标同源，只链接共享库）
-放到候选库旁边运行；R3 E 起只有 `mr_adm_c_api_consumer_tests` 一个（精简的 C 消费者测试 `c_api_consumer_test.cpp`，
-其余 C ABI 检查移到 `mradm-capi` 的 Rust 测试）。`compare` 的前提与退出码同 CLI 记录；差异按行报告，带所在段名。
+`tests` 把共享库消费者 `mr_adm_c_api_consumer_tests` 放到候选库旁边运行。归档构建时应一并保留可执行文件旁的
+`capi-room/`。运行器将其中的合成房间包复制到临时工作目录，校验各文件的 SHA-256，并把清单路径传给消费者。
+`compare` 的前提与退出码同 CLI 记录，差异按行报告并附段名。
 
 ### 替换 CLI 的完整采集：`collect.py --tool mradm`
 

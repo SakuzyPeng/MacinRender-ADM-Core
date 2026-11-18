@@ -126,10 +126,13 @@ def run_tests(build, library=None):
         staged_dir = Path(temporary) / 'stage'
         stage(build, library, CONSUMER_TESTS, staged_dir)
         work = Path(temporary) / 'work'
-        work.mkdir()
+        room = build / 'capi-room'
+        if not room.is_dir():  # Builds from before the room pack was staged beside the consumer.
+            room = common.ROOT / common.ROOM_FIXTURE_DIR
+        boundary.stage_room(room, work / 'room')
         for name in CONSUMER_TESTS:
             print('test:', name, flush=True)
-            result = subprocess.run([str(boundary.exe(staged_dir, name))], cwd=work, env=clean_env(),
+            result = subprocess.run([str(boundary.exe(staged_dir, name)), 'room/room.json'], cwd=work, env=clean_env(),
                                     capture_output=True, timeout=TIMEOUT_SECONDS)
             report['tests'][name] = {'exit_code': result.returncode,
                                      'output_tail': (result.stdout + result.stderr).decode(errors='replace')[-2000:]}

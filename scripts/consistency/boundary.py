@@ -51,11 +51,18 @@ def files_under(directory):
     return {p.relative_to(directory).as_posix(): p for p in sorted(directory.rglob('*')) if p.is_file()}
 
 
+def stage_room(source, destination):
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in common.ROOM_FIXTURES:
+        shutil.copyfile(source / name, destination / name)
+    common.validate_room_fixtures(destination)
+
+
 def prepare_fixtures(root, build, adm=(), sofa=(), text=()):
     """Write the inputs under root/fixtures: generated ADM fixtures, the JSON fixtures, the synthetic room pack,
     the named SOFA fixtures and non-WAVE text files."""
     fixtures = root / 'fixtures'
-    for folder in ('adm', 'json', 'room', 'sofa', 'text'):
+    for folder in ('adm', 'json', 'sofa', 'text'):
         (fixtures / folder).mkdir(parents=True)
     for name in sorted(set(adm)):
         result = subprocess.run([str(exe(build, 'mr_adm_make_fixture')), name, str(fixtures / 'adm' / (name + '.wav'))],
@@ -64,9 +71,7 @@ def prepare_fixtures(root, build, adm=(), sofa=(), text=()):
             raise RuntimeError(f'fixture {name} failed: {result.stdout.decode(errors="replace")}'
                                f'{result.stderr.decode(errors="replace")}')
     common.write_json_fixtures(fixtures / 'json')
-    for name in common.ROOM_FIXTURES:
-        shutil.copyfile(common.ROOT / common.ROOM_FIXTURE_DIR / name, fixtures / 'room' / name)
-    common.validate_room_fixtures(fixtures / 'room', common.ROOM_FIXTURES)
+    stage_room(common.ROOT / common.ROOM_FIXTURE_DIR, fixtures / 'room')
     for name in sorted(set(sofa)):
         if name not in common.SOFA_FIXTURES:
             raise ValueError('unknown SOFA fixture: ' + name)

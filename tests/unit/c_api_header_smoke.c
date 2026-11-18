@@ -56,6 +56,10 @@ _Static_assert(offsetof(adm_hptf_parameters_t, revision) ==
                    offsetof(adm_hptf_parameters_t, reserved_v1_38) + sizeof(uint32_t),
                "HpTF parameters must reserve alignment padding");
 _Static_assert(ADM_HPTF_BAND_PEAKING == 0 && ADM_HPTF_BAND_NOTCH == 6, "HpTF band values are stable");
+_Static_assert(ADM_STAGE_UNKNOWN == 0 && ADM_STAGE_VALIDATING == 1 && ADM_STAGE_PROBING == 2 &&
+                   ADM_STAGE_IMPORTING_SCENE == 3 && ADM_STAGE_PLANNING == 4 && ADM_STAGE_RENDERING == 5 &&
+                   ADM_STAGE_POST_PROCESSING == 6 && ADM_STAGE_FINISHED == 7,
+               "render stage values are stable");
 _Static_assert(sizeof(adm_scene_element_role_t) == sizeof(int), "Scene role enum must remain int-sized");
 _Static_assert(sizeof(adm_scene_submit_status_t) == sizeof(int), "Scene submit enum must remain int-sized");
 _Static_assert(sizeof(adm_scene_stream_state_t) == sizeof(int), "Scene state enum must remain int-sized");
@@ -70,7 +74,12 @@ _Static_assert(offsetof(adm_scene_element_descriptor_t, struct_size) == 0,
                "Scene descriptor must start with struct_size");
 _Static_assert(offsetof(adm_scene_object_state_t, struct_size) == 0, "Scene state must start with struct_size");
 _Static_assert(offsetof(adm_scene_pcm_plane_t, struct_size) == 0, "Scene PCM must start with struct_size");
+_Static_assert(offsetof(adm_scene_initial_state_t, struct_size) == 0,
+               "Scene initial state must start with struct_size");
+_Static_assert(offsetof(adm_scene_metadata_update_t, struct_size) == 0, "Scene update must start with struct_size");
 _Static_assert(offsetof(adm_scene_frame_t, struct_size) == 0, "Scene frame must start with struct_size");
+_Static_assert(offsetof(adm_scene_output_format_t, struct_size) == 0,
+               "Scene output format must start with struct_size");
 _Static_assert(offsetof(adm_scene_pull_result_t, struct_size) == 0, "Scene pull result must start with struct_size");
 _Static_assert(offsetof(adm_scene_stream_status_t, struct_size) == 0, "Scene status must start with struct_size");
 _Static_assert(offsetof(adm_scene_diagnostic_t, struct_size) == 0, "Scene diagnostic must start with struct_size");

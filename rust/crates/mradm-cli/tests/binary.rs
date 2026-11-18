@@ -564,17 +564,31 @@ fn renders_write_wav_and_flac() {
         code != 0 && out.contains("expected one of"),
         "binaural is not a backend name"
     );
-    let sofa = [
-        "render",
-        "--renderer",
-        "saf-binaural",
-        "--sofa",
-        "/nonexistent_mr_cli_test_xyz.sofa",
-        "-o",
-    ];
-    let mut args = sofa.to_vec();
-    args.extend_from_slice(&[&wav, &input]);
-    assert_ne!(run(&exe, &args).0, 0);
+    let (code, formats) = run(&exe, &["formats"]);
+    assert_eq!(code, 0, "{formats}");
+    let expected_error = if formats.contains("sofa=yes") {
+        "SOFA file could not be opened"
+    } else {
+        assert!(formats.contains("sofa=no"), "{formats}");
+        "does not support user SOFA HRTFs"
+    };
+    let missing_sofa = dir.file("missing.sofa");
+    let (code, out) = run(
+        &exe,
+        &[
+            "render",
+            "--renderer",
+            "saf-binaural",
+            "--sofa",
+            &missing_sofa,
+            "-o",
+            &wav,
+            "-i",
+            &input,
+        ],
+    );
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains(expected_error), "{out}");
     let (code, out) = run(
         &exe,
         &[

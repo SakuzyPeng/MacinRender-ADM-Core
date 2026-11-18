@@ -73,4 +73,3 @@ def fixture(root):
     room["id"] = "bad"
     room["assets"]["eq"]["sha256"] = "0" * 64
     write("bad.json", room)
-

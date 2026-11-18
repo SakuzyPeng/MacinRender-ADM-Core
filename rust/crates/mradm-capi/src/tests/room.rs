@@ -20,6 +20,11 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures")
 }
 
+/// Room package and HRIR manifest paths are UTF-8 on every platform.
+fn utf8_c_path(path: &Path) -> CString {
+    CString::new(path.to_str().unwrap()).unwrap()
+}
+
 /// The synthetic bundle copied into `dir`, with `bad.json` (a corrupt asset hash) beside it.
 fn bundle(dir: &Dir) -> PathBuf {
     let source = fixtures().join("room/synthetic");
@@ -71,7 +76,7 @@ impl Room {
         let context = Context::new();
         let mut room = ptr::null_mut();
         assert_eq!(
-            unsafe { adm_room_load(context.0, c(manifest).as_ptr(), &mut room) },
+            unsafe { adm_room_load(context.0, utf8_c_path(manifest).as_ptr(), &mut room) },
             OK
         );
         Self { context, room }
@@ -136,7 +141,13 @@ fn rooms_load_and_options_check_screen_and_quality() {
     let context = Context::new();
     let mut bad = ptr::null_mut();
     assert_ne!(
-        unsafe { adm_room_load(context.0, c(&root.join("bad.json")).as_ptr(), &mut bad) },
+        unsafe {
+            adm_room_load(
+                context.0,
+                utf8_c_path(&root.join("bad.json")).as_ptr(),
+                &mut bad,
+            )
+        },
         OK
     );
     assert!(bad.is_null(), "a corrupt hash is rejected");
@@ -184,7 +195,7 @@ fn inspections_report_the_quality_and_hrir() {
     assert_eq!(number(&exact, "reflection_pose_update_frames"), 0.0);
     assert_eq!(number(&fast, "reflection_pose_limit_degrees"), 0.5);
     assert_eq!(number(&fast, "reflection_pose_update_frames"), 1024.0);
-    let collection = c(&fixtures().join("sofa/distance/distance_index.json"));
+    let collection = utf8_c_path(&fixtures().join("sofa/distance/distance_index.json"));
     let info = room.inspect(Some(&collection), EXACT);
     assert_eq!(
         get(get(&info, "hrtf_collection"), "radii_m")
@@ -193,7 +204,7 @@ fn inspections_report_the_quality_and_hrir() {
             .len(),
         2
     );
-    let sofa = c(&fixtures().join("sofa/simple.sofa"));
+    let sofa = utf8_c_path(&fixtures().join("sofa/simple.sofa"));
     assert_eq!(
         number(&room.inspect(Some(&sofa), EXACT), "hrir_directions"),
         6.0
@@ -205,7 +216,7 @@ fn inspections_report_the_quality_and_hrir() {
 /// rounded once, and the room status and source report the material, quality and real distance.
 fn scene(root: &Path, output_rate: u32, screen: bool, hrir: Option<&Path>, quality: i32) {
     let mut room = Room::load(&root.join("room.json"));
-    let hrir_text = hrir.map(c);
+    let hrir_text = hrir.map(utf8_c_path);
     let inspection = room.inspect(hrir_text.as_ref(), quality);
     let expected_quality = if quality == EXACT {
         "exact"
@@ -214,9 +225,15 @@ fn scene(root: &Path, output_rate: u32, screen: bool, hrir: Option<&Path>, quali
     };
     assert_eq!(string(&inspection, "quality"), expected_quality);
     let tail = number(&inspection, "tail_frames") as u64;
-    let is_sofa = hrir.is_some_and(|p| p.extension().is_some_and(|e| e == "sofa"));
-    let config = scene_config(output_rate, if is_sofa { hrir_text.as_ref() } else { None });
-    let room_config = room.config(if is_sofa { None } else { hrir_text.as_ref() });
+    let sofa = hrir
+        .filter(|p| p.extension().is_some_and(|e| e == "sofa"))
+        .map(native_c_path);
+    let config = scene_config(output_rate, sofa.as_ref());
+    let room_config = room.config(if sofa.is_some() {
+        None
+    } else {
+        hrir_text.as_ref()
+    });
     let mut stream = ptr::null_mut();
     unsafe {
         assert_eq!(
@@ -416,8 +433,8 @@ fn room_scene_sessions_render_with_a_sofa_and_reject_a_conflict() {
     );
 
     let room = Room::load(&root.join("room.json"));
-    let stored = c(&root.join("stored-hrir.json"));
-    let sofa = c(&sofa);
+    let stored = utf8_c_path(&root.join("stored-hrir.json"));
+    let sofa = native_c_path(&sofa);
     let config = scene_config(48000, Some(&sofa));
     let room_config = room.config(Some(&stored));
     let mut stream = ptr::null_mut();
