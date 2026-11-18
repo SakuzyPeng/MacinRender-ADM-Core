@@ -31,7 +31,7 @@ SCHEMA = 'mradm.consistency.capi-capture.v1'
 CAPTURE_TOOL = 'mr_adm_capi_capture'
 # The contract tests that use only c_api.h and call into the library (the header smoke test links no
 # function, so it cannot tell two libraries apart and keeps its ordinary ctest target only).
-CONSUMER_TESTS = ('mr_adm_c_api_consumer_tests', 'mr_adm_scene_stream_c_api_consumer_tests')
+CONSUMER_TESTS = ('mr_adm_c_api_consumer_tests',)
 FAMILIES = ('base', 'render', 'preview', 'scene', 'monitor')
 ADM_FIXTURES = ('objects-point', 'objects-extent', 'objects-extent-multi', 'objects-cartesian', 'objects-room',
                 'directspeakers', 'hoa', 'policy-objects')

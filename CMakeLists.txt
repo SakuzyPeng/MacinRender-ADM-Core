@@ -588,7 +588,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMCAPI
     )
-    target_compile_definitions(mr_adm_c_api_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
+    target_compile_definitions(mr_adm_c_api_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>
+        MR_ADM_TEST_ROOM_MANIFEST="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic/room.json")
     mr_adm_core_apply_warnings(mr_adm_c_api_tests)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_tests)
     add_test(NAME mr_adm_c_api_tests COMMAND mr_adm_c_api_tests)
@@ -623,11 +624,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_osc_head_tracking_probe PRIVATE MacinRender::ADMRealtime)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_probe)
 
-    add_executable(mr_adm_scene_stream_c_api_tests tests/unit/scene_stream_c_api_test.cpp)
-    target_link_libraries(mr_adm_scene_stream_c_api_tests PRIVATE MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_scene_stream_c_api_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
-    add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
 
     # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
     # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
@@ -792,9 +788,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
         mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_consumer_test.cpp)
         target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-        mr_adm_add_capi_consumer(mr_adm_scene_stream_c_api_consumer_tests tests/unit/scene_stream_c_api_test.cpp)
-        add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests
-            mr_adm_scene_stream_c_api_consumer_tests)
+        target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE
+            MR_ADM_TEST_ROOM_MANIFEST="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic/room.json")
+        add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests)
     endif()
 
     find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -802,13 +798,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_flac_reader_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
                 --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
-        add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
-        # The room Scene stream through the C ABI only (R3 C2); the file and switch checks are Rust.
-        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMCAPI nlohmann_json::nlohmann_json)
-        mr_adm_core_apply_warnings(mr_adm_room_tests)
-        add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
-        set_tests_properties(mr_adm_room_tests PROPERTIES TIMEOUT 120)
         add_test(NAME mr_adm_room_realtime_tools_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_realtime_tools_test.py")
         if(CMAKE_BUILD_TYPE STREQUAL "Release")

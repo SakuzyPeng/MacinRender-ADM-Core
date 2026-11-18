@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -270,6 +271,101 @@ bool verify_family_smoke(adm_context_t* ctx, const std::filesystem::path& input)
                    std::filesystem::exists(exported),
                "an ADM export is written") &&
          ok;
+    return ok;
+}
+
+// The live Scene stream and the room families through the library: one SAF 5.1 object rendered to
+// EOS, and a room package loaded and inspected.
+bool verify_scene_and_room_smoke(adm_context_t* ctx) {
+    adm_scene_stream_config_t config{};
+    config.struct_size = sizeof(config);
+    config.rendering.struct_size = sizeof(config.rendering);
+    config.rendering.renderer = ADM_RENDERER_SAF;
+    config.rendering.output_layout = "0+5+0";
+    config.input_sample_rate = 48000U;
+    config.output_sample_rate = 48000U;
+    config.input_queue_samples = 4096U;
+    config.input_queue_bytes = 1024U * 1024U;
+    config.output_ring_frames = 2048U;
+    config.startup_watermark_frames = 1U;
+    adm_scene_stream_t* stream = nullptr;
+    bool ok = check(adm_create_scene_stream(ctx, &config, &stream) == ADM_ERROR_OK && stream != nullptr,
+                    "a Scene stream is created");
+    adm_scene_element_descriptor_t descriptor{};
+    descriptor.struct_size = sizeof(descriptor);
+    descriptor.role = ADM_SCENE_ELEMENT_OBJECT;
+    descriptor.element_id = 7U;
+    descriptor.has_position = 1;
+    descriptor.position_y = 1.0F;
+    ok = check(adm_scene_stream_begin_epoch(stream, 1U, 0) == ADM_ERROR_OK &&
+                   adm_scene_stream_configure_generation(stream, 1U, 1U, &descriptor, 1U) == ADM_ERROR_OK,
+               "a Scene epoch and generation are configured") &&
+         ok;
+    std::vector<float> samples(64U, 0.25F);
+    adm_scene_pcm_plane_t plane{};
+    plane.struct_size = sizeof(plane);
+    plane.element_id = 7U;
+    plane.samples = samples.data();
+    plane.sample_count = static_cast<std::uint32_t>(samples.size());
+    plane.stride = 1U;
+    plane.has_signal = 1;
+    adm_scene_initial_state_t initial{};
+    initial.struct_size = sizeof(initial);
+    initial.element_id = 7U;
+    initial.state.struct_size = sizeof(initial.state);
+    initial.state.valid_fields = ADM_SCENE_STATE_ACTIVE | ADM_SCENE_STATE_LINEAR_GAIN | ADM_SCENE_STATE_POSITION;
+    initial.state.active = 1;
+    initial.state.linear_gain = 1.0F;
+    initial.state.position_y = 1.0F;
+    adm_scene_frame_t frame{};
+    frame.struct_size = sizeof(frame);
+    frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+    frame.epoch_id = 1U;
+    frame.generation_id = 1U;
+    frame.duration_samples = static_cast<std::uint32_t>(samples.size());
+    frame.pcm_count = 1U;
+    frame.pcm = &plane;
+    frame.initial_state_count = 1U;
+    frame.initial_states = &initial;
+    int32_t submitted = -1;
+    ok = check(adm_scene_stream_submit_frame(stream, &frame, 0U, &submitted) == ADM_ERROR_OK &&
+                   submitted == ADM_SCENE_SUBMIT_ACCEPTED && adm_scene_stream_signal_end(stream, 1U, 64) == ADM_ERROR_OK,
+               "a Scene frame is accepted and the epoch ends") &&
+         ok;
+    std::uint64_t frames = 0U;
+    bool signal = false;
+    bool eos = false;
+    for (int attempt = 0; attempt < 5000 && !eos; ++attempt) {
+        std::array<float, 64U * 6U> output{};
+        adm_scene_pull_result_t pulled{};
+        pulled.struct_size = sizeof(pulled);
+        if (adm_scene_stream_pull(stream, output.data(), 64U, &pulled) != ADM_ERROR_OK) {
+            break;
+        }
+        frames += pulled.media_frames;
+        signal = signal || std::ranges::any_of(output, [](float sample) { return sample != 0.0F; });
+        eos = (pulled.flags & ADM_SCENE_PULL_EOS) != 0U;
+        if (!eos && pulled.media_frames == 0U) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    ok = check(eos && frames == 64U && signal, "the Scene stream renders its frame to EOS") && ok;
+    adm_destroy_scene_stream(stream);
+
+    adm_room_t* room = nullptr;
+    ok = check(adm_room_load(ctx, MR_ADM_TEST_ROOM_MANIFEST, &room) == ADM_ERROR_OK && room != nullptr,
+               "the synthetic room package loads") &&
+         ok;
+    adm_room_config_t room_config{};
+    room_config.struct_size = sizeof(room_config);
+    room_config.room = room;
+    room_config.metres_per_unit = 1.5;
+    char* report = nullptr;
+    ok = check(adm_room_inspect(ctx, &room_config, &report) == ADM_ERROR_OK &&
+                   owned(report).find("room-exact-v1") != std::string::npos,
+               "the room inspection names its processing policy") &&
+         ok;
+    adm_room_destroy(room);
     return ok;
 }
 
@@ -988,6 +1084,7 @@ int main() try {
     }
     const FileGuard fixture(write_fixture());
     bool ok = verify_family_smoke(ctx, fixture.path());
+    ok = verify_scene_and_room_smoke(ctx) && ok;
     ok = verify_platform_documents(ctx) && ok;
     ok = verify_lossy_encode_failure_cleanup(ctx) && ok;
     ok = verify_progress_v2_flac_post(ctx, fixture.path()) && ok;

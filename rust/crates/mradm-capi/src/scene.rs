@@ -54,15 +54,15 @@ pub(crate) unsafe fn mradm_device_islands() -> *const DeviceIslands {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_renderer_config_t {
-    struct_size: u32,
-    renderer: i32,
-    output_layout: *const c_char,
-    sofa_path: *const c_char,
-    speaker_geometry: i32,
-    speaker_spread_mode: i32,
-    binaural_spread_mode: i32,
-    lfe_routing_mode: i32,
-    object_smoothing_frames: u32,
+    pub(crate) struct_size: u32,
+    pub(crate) renderer: i32,
+    pub(crate) output_layout: *const c_char,
+    pub(crate) sofa_path: *const c_char,
+    pub(crate) speaker_geometry: i32,
+    pub(crate) speaker_spread_mode: i32,
+    pub(crate) binaural_spread_mode: i32,
+    pub(crate) lfe_routing_mode: i32,
+    pub(crate) object_smoothing_frames: u32,
 }
 
 /// `adm_scene_stream_config_t`.
@@ -70,15 +70,15 @@ pub struct adm_scene_renderer_config_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_stream_config_t {
-    struct_size: u32,
-    rendering: adm_scene_renderer_config_t,
-    input_sample_rate: u32,
-    output_sample_rate: u32,
-    input_queue_samples: u32,
-    output_ring_frames: u32,
-    startup_watermark_frames: u32,
-    reserved_v1_35: u32,
-    input_queue_bytes: u64,
+    pub(crate) struct_size: u32,
+    pub(crate) rendering: adm_scene_renderer_config_t,
+    pub(crate) input_sample_rate: u32,
+    pub(crate) output_sample_rate: u32,
+    pub(crate) input_queue_samples: u32,
+    pub(crate) output_ring_frames: u32,
+    pub(crate) startup_watermark_frames: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) input_queue_bytes: u64,
 }
 
 /// `adm_scene_semantic_entity_t`.
@@ -86,10 +86,10 @@ pub struct adm_scene_stream_config_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_semantic_entity_t {
-    struct_size: u32,
-    reserved_v1_35: u32,
-    id: *const c_char,
-    name: *const c_char,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) id: *const c_char,
+    pub(crate) name: *const c_char,
 }
 
 /// `adm_scene_semantic_identity_t`.
@@ -97,19 +97,19 @@ pub struct adm_scene_semantic_entity_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_semantic_identity_t {
-    struct_size: u32,
-    reserved_v1_35: u32,
-    object_id: *const c_char,
-    object_name: *const c_char,
-    track_uid: *const c_char,
-    has_importance: i32,
-    importance: i32,
-    has_dialogue_id: i32,
-    dialogue_id: i32,
-    content_count: u32,
-    contents: *const adm_scene_semantic_entity_t,
-    programme_count: u32,
-    programmes: *const adm_scene_semantic_entity_t,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) object_id: *const c_char,
+    pub(crate) object_name: *const c_char,
+    pub(crate) track_uid: *const c_char,
+    pub(crate) has_importance: i32,
+    pub(crate) importance: i32,
+    pub(crate) has_dialogue_id: i32,
+    pub(crate) dialogue_id: i32,
+    pub(crate) content_count: u32,
+    pub(crate) contents: *const adm_scene_semantic_entity_t,
+    pub(crate) programme_count: u32,
+    pub(crate) programmes: *const adm_scene_semantic_entity_t,
 }
 
 /// `adm_scene_element_descriptor_t`.
@@ -117,17 +117,17 @@ pub struct adm_scene_semantic_identity_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_element_descriptor_t {
-    struct_size: u32,
-    role: i32,
-    element_id: u64,
-    speaker_label: *const c_char,
-    flags: u64,
-    has_position: i32,
-    reserved_v1_35: u32,
-    position_x: f32,
-    position_y: f32,
-    position_z: f32,
-    semantic_identity: *const adm_scene_semantic_identity_t,
+    pub(crate) struct_size: u32,
+    pub(crate) role: i32,
+    pub(crate) element_id: u64,
+    pub(crate) speaker_label: *const c_char,
+    pub(crate) flags: u64,
+    pub(crate) has_position: i32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) position_x: f32,
+    pub(crate) position_y: f32,
+    pub(crate) position_z: f32,
+    pub(crate) semantic_identity: *const adm_scene_semantic_identity_t,
 }
 
 /// `adm_scene_object_state_t`.
@@ -135,26 +135,26 @@ pub struct adm_scene_element_descriptor_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_object_state_t {
-    struct_size: u32,
-    reserved_v1_35: u32,
-    valid_fields: u64,
-    active: i32,
-    linear_gain: f32,
-    position_x: f32,
-    position_y: f32,
-    position_z: f32,
-    extent_width: f32,
-    extent_height: f32,
-    extent_depth: f32,
-    diffuse: f32,
-    divergence: f32,
-    channel_lock: i32,
-    screen_reference: i32,
-    head_locked: i32,
-    divergence_azimuth_range: f32,
-    divergence_position_range: f32,
-    has_channel_lock_max_distance: i32,
-    channel_lock_max_distance: f32,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) valid_fields: u64,
+    pub(crate) active: i32,
+    pub(crate) linear_gain: f32,
+    pub(crate) position_x: f32,
+    pub(crate) position_y: f32,
+    pub(crate) position_z: f32,
+    pub(crate) extent_width: f32,
+    pub(crate) extent_height: f32,
+    pub(crate) extent_depth: f32,
+    pub(crate) diffuse: f32,
+    pub(crate) divergence: f32,
+    pub(crate) channel_lock: i32,
+    pub(crate) screen_reference: i32,
+    pub(crate) head_locked: i32,
+    pub(crate) divergence_azimuth_range: f32,
+    pub(crate) divergence_position_range: f32,
+    pub(crate) has_channel_lock_max_distance: i32,
+    pub(crate) channel_lock_max_distance: f32,
 }
 
 /// `adm_scene_pcm_plane_t`.
@@ -162,14 +162,14 @@ pub struct adm_scene_object_state_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_pcm_plane_t {
-    struct_size: u32,
-    reserved_v1_35: u32,
-    element_id: u64,
-    samples: *const f32,
-    sample_count: u32,
-    stride: u32,
-    has_signal: i32,
-    reserved2_v1_35: u32,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) element_id: u64,
+    pub(crate) samples: *const f32,
+    pub(crate) sample_count: u32,
+    pub(crate) stride: u32,
+    pub(crate) has_signal: i32,
+    pub(crate) reserved2_v1_35: u32,
 }
 
 /// `adm_scene_initial_state_t`.
@@ -177,10 +177,10 @@ pub struct adm_scene_pcm_plane_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_initial_state_t {
-    struct_size: u32,
-    reserved_v1_35: u32,
-    element_id: u64,
-    state: adm_scene_object_state_t,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) element_id: u64,
+    pub(crate) state: adm_scene_object_state_t,
 }
 
 /// `adm_scene_metadata_update_t`.
@@ -188,15 +188,15 @@ pub struct adm_scene_initial_state_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_metadata_update_t {
-    struct_size: u32,
-    reserved_v1_35: u32,
-    element_id: u64,
-    offset_samples: u32,
-    ramp_duration_samples: u32,
-    jump_position: i32,
-    reserved2_v1_35: u32,
-    changed_fields: u64,
-    state: adm_scene_object_state_t,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) element_id: u64,
+    pub(crate) offset_samples: u32,
+    pub(crate) ramp_duration_samples: u32,
+    pub(crate) jump_position: i32,
+    pub(crate) reserved2_v1_35: u32,
+    pub(crate) changed_fields: u64,
+    pub(crate) state: adm_scene_object_state_t,
 }
 
 /// `adm_scene_frame_t`.
@@ -204,77 +204,77 @@ pub struct adm_scene_metadata_update_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_frame_t {
-    struct_size: u32,
-    flags: u32,
-    epoch_id: u64,
-    generation_id: u64,
-    media_sample_start: i64,
-    duration_samples: u32,
-    pcm_count: u32,
-    pcm: *const adm_scene_pcm_plane_t,
-    initial_state_count: u32,
-    metadata_update_count: u32,
-    initial_states: *const adm_scene_initial_state_t,
-    metadata_updates: *const adm_scene_metadata_update_t,
+    pub(crate) struct_size: u32,
+    pub(crate) flags: u32,
+    pub(crate) epoch_id: u64,
+    pub(crate) generation_id: u64,
+    pub(crate) media_sample_start: i64,
+    pub(crate) duration_samples: u32,
+    pub(crate) pcm_count: u32,
+    pub(crate) pcm: *const adm_scene_pcm_plane_t,
+    pub(crate) initial_state_count: u32,
+    pub(crate) metadata_update_count: u32,
+    pub(crate) initial_states: *const adm_scene_initial_state_t,
+    pub(crate) metadata_updates: *const adm_scene_metadata_update_t,
 }
 
 /// `adm_scene_output_format_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_scene_output_format_t {
-    struct_size: u32,
-    sample_format: i32,
-    sample_rate: u32,
-    channels: u32,
-    interleaved: i32,
-    reserved_v1_35: u32,
+    pub(crate) struct_size: u32,
+    pub(crate) sample_format: i32,
+    pub(crate) sample_rate: u32,
+    pub(crate) channels: u32,
+    pub(crate) interleaved: i32,
+    pub(crate) reserved_v1_35: u32,
 }
 
 /// `adm_scene_pull_result_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_scene_pull_result_t {
-    struct_size: u32,
-    flags: u32,
-    epoch_id: u64,
-    first_media_frame: u64,
-    media_frames: u32,
-    requested_frames: u32,
+    pub(crate) struct_size: u32,
+    pub(crate) flags: u32,
+    pub(crate) epoch_id: u64,
+    pub(crate) first_media_frame: u64,
+    pub(crate) media_frames: u32,
+    pub(crate) requested_frames: u32,
 }
 
 /// `adm_scene_stream_status_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_scene_stream_status_t {
-    struct_size: u32,
-    state: i32,
-    epoch_id: u64,
-    generation_id: u64,
-    queued_input_samples: u64,
-    queued_input_bytes: u64,
-    buffered_output_frames: u64,
-    media_frames_pulled: u64,
-    underruns: u64,
-    semantic_degradations: u64,
-    semantic_policy_revision: u64,
-    ring_fill: f32,
-    ended: i32,
-    failed: i32,
+    pub(crate) struct_size: u32,
+    pub(crate) state: i32,
+    pub(crate) epoch_id: u64,
+    pub(crate) generation_id: u64,
+    pub(crate) queued_input_samples: u64,
+    pub(crate) queued_input_bytes: u64,
+    pub(crate) buffered_output_frames: u64,
+    pub(crate) media_frames_pulled: u64,
+    pub(crate) underruns: u64,
+    pub(crate) semantic_degradations: u64,
+    pub(crate) semantic_policy_revision: u64,
+    pub(crate) ring_fill: f32,
+    pub(crate) ended: i32,
+    pub(crate) failed: i32,
 }
 
 /// `adm_scene_diagnostic_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_scene_diagnostic_t {
-    struct_size: u32,
-    level: i32,
-    code: i32,
-    reserved_v1_35: u32,
-    epoch_id: u64,
-    generation_id: u64,
-    element_id: u64,
-    field_mask: u64,
-    message: *const c_char,
+    pub(crate) struct_size: u32,
+    pub(crate) level: i32,
+    pub(crate) code: i32,
+    pub(crate) reserved_v1_35: u32,
+    pub(crate) epoch_id: u64,
+    pub(crate) generation_id: u64,
+    pub(crate) element_id: u64,
+    pub(crate) field_mask: u64,
+    pub(crate) message: *const c_char,
 }
 
 /// `adm_scene_output_config_t`.
@@ -282,29 +282,29 @@ pub struct adm_scene_diagnostic_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_scene_output_config_t {
-    struct_size: u32,
-    kind: i32,
-    output_layout: *const c_char,
-    device_id: *const c_char,
-    speaker_geometry: i32,
-    reserved_v1_36: u32,
+    pub(crate) struct_size: u32,
+    pub(crate) kind: i32,
+    pub(crate) output_layout: *const c_char,
+    pub(crate) device_id: *const c_char,
+    pub(crate) speaker_geometry: i32,
+    pub(crate) reserved_v1_36: u32,
 }
 
 /// `adm_scene_output_status_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_scene_output_status_t {
-    struct_size: u32,
-    state: i32,
-    epoch_id: u64,
-    consumed_frames: u64,
-    presented_frames: u64,
-    queued_frames: u64,
-    underruns: u64,
-    clock_kind: i32,
-    recovering: i32,
-    failed: i32,
-    ended: i32,
+    pub(crate) struct_size: u32,
+    pub(crate) state: i32,
+    pub(crate) epoch_id: u64,
+    pub(crate) consumed_frames: u64,
+    pub(crate) presented_frames: u64,
+    pub(crate) queued_frames: u64,
+    pub(crate) underruns: u64,
+    pub(crate) clock_kind: i32,
+    pub(crate) recovering: i32,
+    pub(crate) failed: i32,
+    pub(crate) ended: i32,
 }
 
 /// `adm_hptf_info_t`.
@@ -312,15 +312,15 @@ pub struct adm_scene_output_status_t {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct adm_hptf_info_t {
-    struct_size: u32,
-    enabled: i32,
-    band_count: u32,
-    sample_rate: u32,
-    preamp_db: f32,
-    auto_trim_db: f32,
-    max_response_db: f32,
-    reserved_v1_37: u32,
-    applied_revision: u64,
+    pub(crate) struct_size: u32,
+    pub(crate) enabled: i32,
+    pub(crate) band_count: u32,
+    pub(crate) sample_rate: u32,
+    pub(crate) preamp_db: f32,
+    pub(crate) auto_trim_db: f32,
+    pub(crate) max_response_db: f32,
+    pub(crate) reserved_v1_37: u32,
+    pub(crate) applied_revision: u64,
 }
 
 impl adm_hptf_info_t {
@@ -344,73 +344,73 @@ impl adm_hptf_info_t {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_hptf_stereo_info_t {
-    struct_size: u32,
-    reserved_v1_50: u32,
-    left: adm_hptf_info_t,
-    right: adm_hptf_info_t,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved_v1_50: u32,
+    pub(crate) left: adm_hptf_info_t,
+    pub(crate) right: adm_hptf_info_t,
 }
 
 /// `adm_hptf_band_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_hptf_band_t {
-    struct_size: u32,
+    pub(crate) struct_size: u32,
     r#type: i32,
-    enabled: i32,
-    reserved_v1_38: u32,
-    fc_hz: f64,
-    gain_db: f64,
-    q: f64,
+    pub(crate) enabled: i32,
+    pub(crate) reserved_v1_38: u32,
+    pub(crate) fc_hz: f64,
+    pub(crate) gain_db: f64,
+    pub(crate) q: f64,
 }
 
 /// `adm_hptf_config_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_hptf_config_t {
-    struct_size: u32,
-    profile_path: *const c_char,
-    preamp_mode: i32,
-    reserved_v1_37: u32,
-    revision: u64,
+    pub(crate) struct_size: u32,
+    pub(crate) profile_path: *const c_char,
+    pub(crate) preamp_mode: i32,
+    pub(crate) reserved_v1_37: u32,
+    pub(crate) revision: u64,
 }
 
 /// `adm_hptf_parameters_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_hptf_parameters_t {
-    struct_size: u32,
-    band_count: u32,
-    bands: *const adm_hptf_band_t,
-    preamp_db: f64,
-    preamp_mode: i32,
-    reserved_v1_38: u32,
-    revision: u64,
+    pub(crate) struct_size: u32,
+    pub(crate) band_count: u32,
+    pub(crate) bands: *const adm_hptf_band_t,
+    pub(crate) preamp_db: f64,
+    pub(crate) preamp_mode: i32,
+    pub(crate) reserved_v1_38: u32,
+    pub(crate) revision: u64,
 }
 
 /// `adm_hptf_stereo_config_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_hptf_stereo_config_t {
-    struct_size: u32,
-    preamp_mode: i32,
-    left_profile_path: *const c_char,
-    right_profile_path: *const c_char,
-    revision: u64,
+    pub(crate) struct_size: u32,
+    pub(crate) preamp_mode: i32,
+    pub(crate) left_profile_path: *const c_char,
+    pub(crate) right_profile_path: *const c_char,
+    pub(crate) revision: u64,
 }
 
 /// `adm_hptf_stereo_parameters_t`.
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_hptf_stereo_parameters_t {
-    struct_size: u32,
-    preamp_mode: i32,
-    left_band_count: u32,
-    right_band_count: u32,
-    left_bands: *const adm_hptf_band_t,
-    right_bands: *const adm_hptf_band_t,
-    left_preamp_db: f64,
-    right_preamp_db: f64,
-    revision: u64,
+    pub(crate) struct_size: u32,
+    pub(crate) preamp_mode: i32,
+    pub(crate) left_band_count: u32,
+    pub(crate) right_band_count: u32,
+    pub(crate) left_bands: *const adm_hptf_band_t,
+    pub(crate) right_bands: *const adm_hptf_band_t,
+    pub(crate) left_preamp_db: f64,
+    pub(crate) right_preamp_db: f64,
+    pub(crate) revision: u64,
 }
 
 impl adm_hptf_stereo_info_t {

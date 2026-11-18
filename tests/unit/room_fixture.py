@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-"""Run native room integration tests with a tiny, non-personal synthetic bundle."""
+"""A tiny, non-personal synthetic room bundle (tests/fixtures/room/synthetic holds its room.json and
+assets) and its variants, for the room tools and the 96 kHz test."""
 import hashlib
 import json
 import math
-from pathlib import Path
 import struct
-import subprocess
-import sys
-import tempfile
 
 
 def fixture(root):
@@ -77,9 +74,3 @@ def fixture(root):
     room["assets"]["eq"]["sha256"] = "0" * 64
     write("bad.json", room)
 
-
-if __name__ == "__main__":
-    with tempfile.TemporaryDirectory(prefix="mradm-room-test-") as directory:
-        root = Path(directory)
-        fixture(root)
-        subprocess.run([sys.argv[1], str(root), str(Path(__file__).resolve().parents[1] / "fixtures/sofa/simple.sofa")], check=True)

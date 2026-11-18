@@ -8,3 +8,5 @@ mod options;
 mod preview;
 mod query;
 mod render;
+mod room;
+mod scene_stream;

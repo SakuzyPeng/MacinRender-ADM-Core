@@ -34,11 +34,11 @@ pub(crate) fn room_failure(error: &mradm_dsp::Error) -> Failure {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct adm_room_config_t {
-    struct_size: u32,
-    reserved: u32,
-    room: *const adm_room_t,
-    hrir_manifest: *const c_char,
-    metres_per_unit: f64,
+    pub(crate) struct_size: u32,
+    pub(crate) reserved: u32,
+    pub(crate) room: *const adm_room_t,
+    pub(crate) hrir_manifest: *const c_char,
+    pub(crate) metres_per_unit: f64,
 }
 
 /// `adm_room_quality_t`.
