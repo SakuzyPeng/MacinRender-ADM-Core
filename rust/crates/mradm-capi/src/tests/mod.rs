@@ -3,8 +3,10 @@
 //! an encoder, an output device or the Apple backend; those checks stay in the C consumer test
 //! `tests/unit/c_api_consumer_test.cpp`.
 mod common;
+mod hptf;
 mod monitor;
 mod options;
+mod osc;
 mod preview;
 mod query;
 mod render;

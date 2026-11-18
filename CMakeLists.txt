@@ -604,18 +604,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
 
-    add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
-    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI)
-    target_include_directories(mr_adm_osc_head_tracking_tests SYSTEM PRIVATE
-        "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
-    )
-    if(WIN32)
-        target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE ws2_32)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_osc_head_tracking_tests)
-    add_test(NAME mr_adm_osc_head_tracking_tests COMMAND mr_adm_osc_head_tracking_tests)
-
     add_executable(mr_adm_osc_head_tracking_c_example EXCLUDE_FROM_ALL examples/head_tracking_consumer.c)
     target_link_libraries(mr_adm_osc_head_tracking_c_example PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_c_example)
@@ -679,11 +667,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_core_apply_warnings(mr_adm_apple_renderer_test_support)
         mr_adm_core_apply_static_analysis(mr_adm_apple_renderer_test_support)
     endif()
-
-    add_executable(mr_adm_scene_output_c_api_tests tests/unit/scene_output_c_api_test.cpp)
-    target_link_libraries(mr_adm_scene_output_c_api_tests PRIVATE MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_scene_output_c_api_tests)
-    add_test(NAME mr_adm_scene_output_c_api_tests COMMAND mr_adm_scene_output_c_api_tests)
 
     # One Scene stream renderer behind the C++ interface, outside the Rust stream engine: only the
     # manual benchmarks use it (the live renderer and trace tests are Rust, R3 B and D2).
@@ -950,12 +933,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_monitor_engine_test_support)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
-
-    add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
-    target_link_libraries(mr_adm_hptf_parameters_tests PRIVATE MacinRender::ADMCAPI Threads::Threads)
-    mr_adm_core_apply_warnings(mr_adm_hptf_parameters_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hptf_parameters_tests)
-    add_test(NAME mr_adm_hptf_parameters_tests COMMAND mr_adm_hptf_parameters_tests)
 
     if(Python3_Interpreter_FOUND AND TARGET mradm_capi_bundle)
         add_test(NAME mr_adm_hptf_stereo_c_api_tests

@@ -1994,3 +1994,58 @@ fn triple_balance_names_an_unsupported_field() {
     stream.wait(|s| s.failed != 0, "the worker failure");
     assert!(stream.count_messages("headLocked") > 0);
 }
+
+/// A Scene LFE element routes to LFE1 of an Apple-geometry layout at unity, or, split-power on
+/// 22.2-class layouts, to both LFE channels at -3 dB (from `scene_output_c_api_test`).
+#[test]
+fn scene_lfe_routing_follows_the_layout() {
+    let context = Context::new();
+    for (layout, channels, split) in [
+        (c"4+7+0", 12usize, false),
+        (c"9.1.6", 16, false),
+        (c"9+10+3", 24, true),
+    ] {
+        let mut c: adm_scene_stream_config_t = sized();
+        c.rendering = renderer(layout);
+        c.rendering.speaker_geometry = 1;
+        c.rendering.lfe_routing_mode = i32::from(split);
+        c.input_sample_rate = 48000;
+        c.output_sample_rate = 48000;
+        c.startup_watermark_frames = 1;
+        let stream = Stream::new(&context, &c);
+        assert_eq!(stream.begin(1, 0), OK);
+        assert_eq!(
+            stream.configure(1, 1, &[descriptor(ELEMENT_LFE, 9, Some(c"LFE1"))]),
+            OK
+        );
+        let mut initial: adm_scene_initial_state_t = sized();
+        initial.element_id = 9;
+        initial.state = sized();
+        initial.state.valid_fields = STATE_ACTIVE | STATE_LINEAR_GAIN;
+        initial.state.active = 1;
+        initial.state.linear_gain = 1.0;
+        let mut frame = Frame::elements(1, 1, 0, vec![(9, vec![1.0; 1024])], vec![initial]);
+        assert_eq!(stream.submit(frame.get(), 100), (OK, ACCEPTED));
+        stream.end(1, 1024);
+        let pcm = stream.take(channels as u32, 1024);
+        let gain = if split {
+            std::f32::consts::FRAC_1_SQRT_2
+        } else {
+            1.0
+        };
+        // After the 10 ms generation declick.
+        for frame in 512..1024 {
+            for ch in 0..channels {
+                let expected = if ch == 3 || (split && ch == 9) {
+                    gain
+                } else {
+                    0.0
+                };
+                assert!(
+                    (pcm[frame * channels + ch] - expected).abs() < 1.0e-6,
+                    "{layout:?} {frame} {ch}"
+                );
+            }
+        }
+    }
+}

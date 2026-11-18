@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub const OK: i32 = 0;
 pub const INVALID_ARGUMENT: i32 = 1;
 pub const UNSUPPORTED: i32 = 2;
+pub const IO: i32 = 3;
 pub const CANCELLED: i32 = 5;
 
 pub const STAGE_UNKNOWN: i32 = 0;

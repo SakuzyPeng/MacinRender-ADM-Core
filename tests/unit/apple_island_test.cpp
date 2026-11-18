@@ -20,6 +20,7 @@
 #include "adm/progress.h"
 
 #include "../../src/adm_apple/apple_island.h"
+#include "../../src/adm_realtime/buffered_media_timeline.h"
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
 #include "scene_test_ffi.h"
@@ -148,6 +149,21 @@ MradmAppleSettings settings(const std::string& input, std::string_view layout) {
     return s;
 }
 
+// The system-spatial device's PTS -> media mapping: padding and transport gaps never advance the
+// media cursor, and a reset drops stale media (moved here from scene_output_c_api_test, R3 E3).
+bool verify_buffered_media_timeline() {
+    mradm::realtime::BufferedMediaTimeline timeline;
+    timeline.enqueue(0, 33);
+    timeline.enqueue(1024, 0);
+    bool ok = check(timeline.advance(500) == 33, "padding does not advance the media cursor");
+    timeline.enqueue(2048, 20);
+    ok = check(timeline.advance(2000) == 33 && timeline.advance(2058) == 43 && timeline.advance(9000) == 53,
+               "PTS gaps map to media frames") &&
+         ok;
+    timeline.reset();
+    return check(timeline.advance(9000) == 0, "a reset drops stale media") && ok;
+}
+
 } // namespace
 
 int main() try {
@@ -159,6 +175,7 @@ int main() try {
     bool ok = check(apple != nullptr && apple->prepare != nullptr && apple->render != nullptr &&
                         apple->open_stream != nullptr && apple->destroy != nullptr,
                     "the macOS build has the Apple islands");
+    ok = verify_buffered_media_timeline() && ok;
     if (!ok) {
         return 1;
     }

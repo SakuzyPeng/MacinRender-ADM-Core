@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -17,6 +18,8 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -747,6 +750,400 @@ bool verify_iamf_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     return ok;
 }
 
+
+// ── Scene output and its HpTF (the null output device is an island) ─────────
+
+constexpr const char* k_text = "Preamp: -6 dB\n"
+                               "Filter 1: ON LSC Fc 105 Hz Gain 3 dB Q 0.7\n"
+                               "Filter 2: ON PK Fc 1000 Hz Gain -2 dB Q 1.5\n"
+                               "Filter 3: OFF HSC Fc 10000 Hz Gain 1 dB Q 0.7\n";
+
+void require(bool condition, const char* message) {
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+
+using ContextHandle = std::unique_ptr<adm_context_t, decltype(&adm_destroy_context)>;
+using Stream = std::unique_ptr<adm_scene_stream_t, decltype(&adm_destroy_scene_stream)>;
+using Output = std::unique_ptr<adm_scene_output_t, decltype(&adm_destroy_scene_output)>;
+
+adm_hptf_band_t band(double fc = 1000.0) {
+    return {sizeof(adm_hptf_band_t), ADM_HPTF_BAND_PEAKING, 1, 0, fc, 3.0, 1.0};
+}
+
+adm_hptf_parameters_t parameters(std::span<const adm_hptf_band_t> bands, uint64_t revision = 1) {
+    return {sizeof(adm_hptf_parameters_t),
+            static_cast<uint32_t>(bands.size()),
+            bands.data(),
+            -6.0,
+            ADM_HPTF_PREAMP_WARN_ONLY,
+            0,
+            revision};
+}
+
+class ApiScene {
+  public:
+    ApiScene() {
+        require(context_ != nullptr, "context creation");
+        adm_scene_stream_config_t config{};
+        config.struct_size = sizeof(config);
+        config.rendering.struct_size = sizeof(config.rendering);
+        config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+        config.rendering.output_layout = "binaural";
+        config.input_sample_rate = 48000;
+        config.output_sample_rate = 48000;
+        config.input_queue_samples = 96000;
+        config.startup_watermark_frames = 1;
+        adm_scene_stream_t* stream = nullptr;
+        require(adm_create_scene_stream(context_.get(), &config, &stream) == ADM_ERROR_OK, "create memory Scene");
+        stream_.reset(stream);
+        adm_scene_output_config_t device{};
+        device.struct_size = sizeof(device);
+        device.kind = ADM_SCENE_OUTPUT_NULL;
+        adm_scene_output_t* created = nullptr;
+        require(adm_create_scene_output(context_.get(), stream_.get(), &device, &created) == ADM_ERROR_OK,
+                "create headless stereo output");
+        output_.reset(created);
+    }
+
+    [[nodiscard]] adm_scene_output_t* output() const { return output_.get(); }
+    [[nodiscard]] adm_context_t* context() const { return context_.get(); }
+
+    void activate() {
+        require(adm_scene_output_begin_epoch(output(), ++epoch_, 0) == ADM_ERROR_OK, "activate pending parameters");
+    }
+
+    [[nodiscard]] adm_hptf_info_t info() const {
+        adm_hptf_info_t result{};
+        result.struct_size = sizeof(result);
+        require(adm_scene_output_get_hptf_info(output(), &result) == ADM_ERROR_OK, "read applied parameters");
+        return result;
+    }
+
+    void play_generated_signal() {
+        activate();
+        adm_scene_element_descriptor_t element{};
+        element.struct_size = sizeof(element);
+        element.element_id = 1;
+        element.role = ADM_SCENE_ELEMENT_LFE;
+        require(adm_scene_stream_configure_generation(stream_.get(), epoch_, 1, &element, 1) == ADM_ERROR_OK,
+                "configure generated signal");
+        std::vector<float> samples(48000, 0.05F);
+        adm_scene_pcm_plane_t plane{};
+        plane.struct_size = sizeof(plane);
+        plane.element_id = 1;
+        plane.samples = samples.data();
+        plane.sample_count = static_cast<uint32_t>(samples.size());
+        plane.stride = 1;
+        plane.has_signal = 1;
+        adm_scene_frame_t frame{};
+        frame.struct_size = sizeof(frame);
+        frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+        frame.epoch_id = epoch_;
+        frame.generation_id = 1;
+        frame.duration_samples = plane.sample_count;
+        frame.pcm_count = 1;
+        frame.pcm = &plane;
+        int32_t accepted = -1;
+        require(adm_scene_stream_submit_frame(stream_.get(), &frame, 100, &accepted) == ADM_ERROR_OK &&
+                    accepted == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit generated signal");
+        require(adm_scene_stream_signal_end(stream_.get(), epoch_, frame.duration_samples) == ADM_ERROR_OK,
+                "signal generated EOS");
+        require(adm_scene_output_play(output()) == ADM_ERROR_OK, "start null output");
+    }
+
+  private:
+    ContextHandle context_{adm_create_context(), adm_destroy_context};
+    Stream stream_{nullptr, adm_destroy_scene_stream};
+    Output output_{nullptr, adm_destroy_scene_output};
+    uint64_t epoch_{0};
+};
+
+struct FutureBand {
+    adm_hptf_band_t value{};
+    std::array<uint64_t, 2> tail{0x123456789abcdef0ULL, 0xfedcba9876543210ULL};
+};
+
+void test_future_layouts_and_validation() {
+    ApiScene scene;
+    std::array<FutureBand, 3> bands{};
+    for (auto& value : bands) {
+        value.value.struct_size = sizeof(FutureBand);
+    }
+    double preamp = 0;
+    uint32_t count = 0;
+    require(adm_hptf_parse_parametric_eq(scene.context(), k_text, &preamp, &bands[0].value, 3, &count) == ADM_ERROR_OK,
+            "parser accepts future output strides");
+    for (const auto& value : bands) {
+        require(value.value.struct_size == sizeof(FutureBand) && value.tail == FutureBand{}.tail,
+                "parser preserves caller size and extension bytes");
+    }
+    struct FutureParameters {
+        adm_hptf_parameters_t value;
+        uint64_t tail;
+    } request{{sizeof(FutureParameters), 3, &bands[0].value, preamp, ADM_HPTF_PREAMP_WARN_ONLY, 0, 10}, 123};
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request.value) == ADM_ERROR_OK,
+            "setter accepts future parameter and array layouts");
+    scene.activate();
+    const auto before = scene.info();
+    require(before.band_count == 2 && before.preamp_db == -6.0F && before.applied_revision == 10,
+            "future layout is read with the caller stride");
+    bands[1].value.q = std::numeric_limits<double>::quiet_NaN();
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request.value) == ADM_ERROR_INVALID_ARGUMENT,
+            "second element is validated at the future stride");
+    require(scene.info().applied_revision == 10, "invalid update preserves applied revision");
+    // cppcheck-suppress redundantAssignment; the previous NaN was read through request.value.bands.
+    bands[1].value.q = 1.5;
+    // cppcheck-suppress unreadVariable; the C ABI reads this through request.value.bands.
+    bands[2].value.type = 99;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request.value) == ADM_ERROR_INVALID_ARGUMENT,
+            "disabled bands still require valid types");
+    auto simple = parameters({});
+    simple.band_count = 1;
+    simple.bands = nullptr;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &simple) == ADM_ERROR_INVALID_ARGUMENT,
+            "null input array with a nonzero count rejected");
+    simple.band_count = 0;
+    simple.preamp_mode = 99;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &simple) == ADM_ERROR_INVALID_ARGUMENT,
+            "unknown preamp mode rejected");
+    simple.preamp_mode = ADM_HPTF_PREAMP_WARN_ONLY;
+    simple.preamp_db = 800;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &simple) == ADM_ERROR_INVALID_ARGUMENT,
+            "unrepresentable gain rejected before publication");
+    simple.struct_size = sizeof(uint32_t);
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &simple) == ADM_ERROR_INVALID_ARGUMENT,
+            "undersized parameters rejected");
+    require(adm_monitor_set_hptf_parameters(nullptr, &simple) == ADM_ERROR_INVALID_ARGUMENT,
+            "monitor memory entry point rejects null handle");
+}
+
+void test_owned_snapshots_and_rapid_updates() {
+    ApiScene scene;
+    std::vector<adm_hptf_band_t> bands{band(), band(2000.0)};
+    auto request = parameters(bands, 20);
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request) == ADM_ERROR_OK, "apply memory snapshot");
+    require(scene.info().applied_revision == 0, "accepted target is distinct from applied state");
+    bands.clear();
+    bands.shrink_to_fit();
+    request.preamp_db = 99;
+    scene.activate();
+    require(scene.info().band_count == 2 && scene.info().preamp_db == -6.0F && scene.info().applied_revision == 20,
+            "caller may release arrays and edit descriptors immediately after return");
+
+    bands.assign(33, band());
+    request = parameters(bands, 21);
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request) == ADM_ERROR_INVALID_ARGUMENT,
+            "more than 32 enabled bands rejected");
+    bands.back().enabled = 0;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request) == ADM_ERROR_OK,
+            "disabled bands do not consume the 32-section budget");
+    scene.activate();
+    require(scene.info().band_count == 32, "32 enabled bands applied");
+    request = parameters({}, 22);
+    request.preamp_db = -12;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request) == ADM_ERROR_OK, "preamp-only update");
+    scene.activate();
+    require(scene.info().enabled == 1 && scene.info().band_count == 0 && scene.info().preamp_db == -12,
+            "zero bands still apply preamp");
+    request.preamp_db = 0;
+    request.revision = 23;
+    require(adm_scene_output_set_hptf_parameters(scene.output(), &request) == ADM_ERROR_OK, "bypass update");
+    scene.activate();
+    require(scene.info().enabled == 0 && scene.info().applied_revision == 23, "memory bypass applied");
+
+    scene.play_generated_signal();
+    bands.assign(1, band());
+    request = parameters(bands);
+    for (uint64_t revision = 100; revision <= 180; ++revision) {
+        request.revision = revision;
+        request.preamp_db = -6.0 - static_cast<double>(revision % 4U);
+        bands[0].fc_hz = 700.0 + static_cast<double>(revision);
+        require(adm_scene_output_set_hptf_parameters(scene.output(), &request) == ADM_ERROR_OK,
+                "rapid live parameter updates accepted");
+        if (revision % 8U == 0U) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{2});
+        }
+    }
+    bands.clear();
+    bands.shrink_to_fit();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (scene.info().applied_revision != 180 && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{2});
+    }
+    require(scene.info().applied_revision == 180 && scene.info().preamp_db == -6,
+            "latest complete snapshot wins while the null output keeps playing");
+}
+
+void test_concurrent_file_api_owns_errors() {
+    ApiScene scene;
+    const auto serial = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() / ("mradm-hptf-ex-" + std::to_string(serial) + ".txt");
+    const auto name = path.string();
+    {
+        std::ofstream file(path);
+        file << k_text;
+        require(static_cast<bool>(file), "write concurrent import fixture");
+    }
+    adm_hptf_config_t config{sizeof(adm_hptf_config_t), name.c_str(), ADM_HPTF_PREAMP_WARN_ONLY, 0, 71};
+    char* error = nullptr;
+    const auto code = adm_scene_output_set_hptf_ex(scene.output(), &config, &error);
+    std::filesystem::remove(path);
+    require(code == ADM_ERROR_OK && error == nullptr, "concurrent setter accepts a file");
+    scene.activate();
+    require(scene.info().applied_revision == 71 && scene.info().band_count == 2, "concurrent setter applies profile");
+    require(adm_scene_output_set_hptf_ex(scene.output(), &config, &error) == ADM_ERROR_IO && error != nullptr,
+            "missing file returns an owned error");
+    const std::unique_ptr<char, decltype(&adm_free_string)> owned(error, adm_free_string);
+    const std::string message{owned.get()};
+    adm_scene_output_status_t status{};
+    status.struct_size = sizeof(status);
+    require(adm_scene_output_get_status(scene.output(), &status) == ADM_ERROR_OK, "status clears borrowed error");
+    // Check the ABI ownership contract: a mistakenly borrowed error would be cleared by the call above.
+    // cppcheck-suppress knownConditionTrueFalse
+    require(message == owned.get(), "status queries cannot invalidate the setter's error");
+    require(scene.info().applied_revision == 71, "failed setter preserves the old profile");
+    require(adm_scene_output_set_hptf_ex(scene.output(), &config, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+            "owned error slot is required");
+    error = owned.get();
+    require(adm_scene_output_set_hptf_ex(nullptr, &config, &error) == ADM_ERROR_INVALID_ARGUMENT && error == nullptr,
+            "invalid handle clears the error slot");
+    config.profile_path = "";
+    config.revision = 72;
+    require(adm_scene_output_set_hptf_ex(scene.output(), &config, &error) == ADM_ERROR_OK && error == nullptr,
+            "concurrent setter accepts bypass");
+    scene.activate();
+    require(scene.info().applied_revision == 72 && scene.info().enabled == 0, "bypass is acknowledged");
+}
+
+bool hptf_config_errors(adm_scene_output_t* output) {
+    adm_hptf_config_t config{};
+    config.struct_size = sizeof(config);
+    bool ok = true;
+    for (const int32_t mode : {-1, 2}) {
+        config.preamp_mode = mode;
+        ok &= check(adm_scene_output_set_hptf(output, &config) == ADM_ERROR_INVALID_ARGUMENT,
+                    "unknown HpTF preamp mode accepted");
+    }
+    config.struct_size = sizeof(uint32_t);
+    ok &= check(adm_scene_output_set_hptf(output, &config) == ADM_ERROR_INVALID_ARGUMENT,
+                "undersized HpTF request accepted");
+    config.struct_size = offsetof(adm_hptf_config_t, profile_path) + sizeof(config.profile_path);
+    ok &= check(adm_scene_output_set_hptf(output, &config) == ADM_ERROR_UNSUPPORTED,
+                "short HpTF config did not default absent fields before capability checking");
+    return ok;
+}
+
+// A Scene output session over the null device (or, with MR_ADM_TEST_SYSTEM_SPATIAL=1, the system
+// spatial device): one consumer, the device barrier, HpTF request checks, an exact short drain, a
+// seek and the volume checks (from scene_output_c_api_test).
+// NOLINTNEXTLINE(readability-function-size): end-to-end ownership and drain scenario.
+bool verify_scene_output(bool system_spatial, bool triple_balance) {
+    auto* context = adm_create_context();
+    adm_scene_stream_config_t config{};
+    config.struct_size = sizeof(config);
+    config.rendering.struct_size = sizeof(config.rendering);
+    config.rendering.renderer = triple_balance ? ADM_RENDERER_TRIPLE_BALANCE : ADM_RENDERER_SAF;
+    config.rendering.output_layout = "4+7+0";
+    config.rendering.speaker_geometry = triple_balance ? ADM_SPEAKER_GEOMETRY_STANDARD : ADM_SPEAKER_GEOMETRY_APPLE;
+    config.input_sample_rate = 48000;
+    config.output_sample_rate = 48000;
+    config.startup_watermark_frames = 1;
+    adm_scene_stream_t* stream = nullptr;
+    if (!check(adm_create_scene_stream(context, &config, &stream) == ADM_ERROR_OK, "stream creation failed")) {
+        adm_destroy_context(context);
+        return false;
+    }
+    adm_scene_output_config_t device{};
+    device.struct_size = sizeof(device);
+    device.kind = system_spatial ? ADM_SCENE_OUTPUT_SYSTEM_SPATIAL : ADM_SCENE_OUTPUT_NULL;
+    device.output_layout = "4+7+0";
+    device.speaker_geometry = ADM_SPEAKER_GEOMETRY_APPLE;
+    adm_scene_output_t* output = nullptr;
+    bool ok =
+        check(adm_create_scene_output(context, stream, &device, &output) == ADM_ERROR_OK, "output creation failed");
+    ok &= hptf_config_errors(output);
+    adm_scene_output_t* duplicate = nullptr;
+    ok &= check(adm_create_scene_output(context, stream, &device, &duplicate) == ADM_ERROR_INVALID_ARGUMENT,
+                "a second consumer was allowed");
+    adm_scene_pull_result_t pulled{};
+    pulled.struct_size = sizeof(pulled);
+    ok &= check(adm_scene_stream_pull(stream, nullptr, 0, &pulled) == ADM_ERROR_INVALID_ARGUMENT,
+                "direct pull bypassed output ownership");
+    ok &= check(adm_scene_stream_begin_epoch(stream, 1, 0) == ADM_ERROR_INVALID_ARGUMENT,
+                "direct reset bypassed the device barrier");
+    ok &= check(adm_scene_output_begin_epoch(output, 1, 0) == ADM_ERROR_OK, "output reset failed");
+    adm_scene_element_descriptor_t element{};
+    element.struct_size = sizeof(element);
+    element.role = triple_balance ? ADM_SCENE_ELEMENT_OBJECT : ADM_SCENE_ELEMENT_LFE;
+    element.element_id = 7;
+    ok &= check(adm_scene_stream_configure_generation(stream, 1, 0, &element, 1) == ADM_ERROR_OK, "configure failed");
+    adm_scene_initial_state_t state{};
+    state.struct_size = sizeof(state);
+    state.element_id = 7;
+    state.state.struct_size = sizeof(state.state);
+    state.state.valid_fields = ADM_SCENE_STATE_ACTIVE | ADM_SCENE_STATE_LINEAR_GAIN;
+    state.state.active = 1;
+    state.state.linear_gain = 1;
+    std::array<float, 33> samples{};
+    samples.fill(0.1F);
+    adm_scene_pcm_plane_t plane{};
+    plane.struct_size = sizeof(plane);
+    plane.element_id = 7;
+    plane.samples = samples.data();
+    plane.sample_count = samples.size();
+    plane.stride = 1;
+    plane.has_signal = 1;
+    adm_scene_frame_t frame{};
+    frame.struct_size = sizeof(frame);
+    frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+    frame.epoch_id = 1;
+    frame.duration_samples = samples.size();
+    frame.pcm_count = 1;
+    frame.pcm = &plane;
+    frame.initial_state_count = 1;
+    frame.initial_states = &state;
+    int32_t accepted = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream, &frame, 100, &accepted) == ADM_ERROR_OK &&
+                    accepted == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit failed");
+    ok &= check(adm_scene_stream_signal_end(stream, 1, 33) == ADM_ERROR_OK, "end failed");
+    ok &= check(adm_scene_output_set_volume(output, 0.0F) == ADM_ERROR_OK, "mute failed");
+    ok &= check(adm_scene_output_play(output) == ADM_ERROR_OK, "play failed");
+    adm_scene_output_status_t status{};
+    status.struct_size = sizeof(status);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < deadline) {
+        adm_scene_output_get_status(output, &status);
+        if (status.ended != 0 || status.failed != 0) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    ok &= check(status.ended != 0 && status.presented_frames == 33 && status.consumed_frames == 33,
+                "short EOS did not drain at its exact length");
+    ok &= check(adm_scene_output_begin_epoch(output, 2, 100) == ADM_ERROR_OK, "seek failed");
+    adm_scene_output_get_status(output, &status);
+    ok &= check(status.presented_frames == 0 && status.epoch_id == 2 && status.state == ADM_SCENE_OUTPUT_PAUSED,
+                "seek leaked old progress");
+    ok &= check(adm_scene_output_set_volume(output, -1.0F) == ADM_ERROR_INVALID_ARGUMENT, "invalid volume accepted");
+    adm_destroy_scene_stream(stream);
+    adm_destroy_scene_output(output);
+    adm_destroy_context(context);
+    return ok;
+}
+bool passes(void (*test)(), const char* name) {
+    try {
+        test();
+        return true;
+    } catch (const std::exception& error) {
+        std::cerr << "FAIL: " << name << ": " << error.what() << '\n';
+        return false;
+    }
+}
+
 } // namespace
 
 bool configure_monitor_hptf_memory(adm_monitor_t* monitor) {
@@ -1086,6 +1483,12 @@ int main() try {
     bool ok = verify_family_smoke(ctx, fixture.path());
     ok = verify_scene_and_room_smoke(ctx) && ok;
     ok = verify_platform_documents(ctx) && ok;
+    ok = passes(test_future_layouts_and_validation, "HpTF future layouts and validation") && ok;
+    ok = passes(test_owned_snapshots_and_rapid_updates, "HpTF owned snapshots and rapid updates") && ok;
+    ok = passes(test_concurrent_file_api_owns_errors, "HpTF file setter errors") && ok;
+    const char* system_spatial = std::getenv("MR_ADM_TEST_SYSTEM_SPATIAL");
+    ok = verify_scene_output(system_spatial != nullptr && std::string_view{system_spatial} == "1", false) && ok;
+    ok = verify_scene_output(false, true) && ok;
     ok = verify_lossy_encode_failure_cleanup(ctx) && ok;
     ok = verify_progress_v2_flac_post(ctx, fixture.path()) && ok;
     ok = verify_flac_callback_failures(ctx, fixture.path()) && ok;

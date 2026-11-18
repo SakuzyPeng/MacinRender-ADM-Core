@@ -355,7 +355,7 @@ pub struct adm_hptf_stereo_info_t {
 #[repr(C)]
 pub struct adm_hptf_band_t {
     pub(crate) struct_size: u32,
-    r#type: i32,
+    pub(crate) r#type: i32,
     pub(crate) enabled: i32,
     pub(crate) reserved_v1_38: u32,
     pub(crate) fc_hz: f64,
