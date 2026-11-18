@@ -19,7 +19,7 @@
     },
     "tests": {
       "files": 109,
-      "lines": 22123
+      "lines": 22124
     },
     "rust": {
       "files": 377,
@@ -78,7 +78,7 @@
     "tests/manual": 2480,
     "tests/support": 10489,
     "tests/tools": 1435,
-    "tests/unit": 7719
+    "tests/unit": 7720
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,

@@ -1008,7 +1008,8 @@ void test_concurrent_file_api_owns_errors() {
     ApiScene scene;
     const auto serial = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto path = std::filesystem::temp_directory_path() / ("mradm-hptf-ex-" + std::to_string(serial) + ".txt");
-    const auto name = path.string();
+    const auto utf8 = path.u8string();
+    const std::string name(utf8.begin(), utf8.end());
     {
         std::ofstream file(path);
         file << k_text;
