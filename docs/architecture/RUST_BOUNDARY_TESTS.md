@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），E 已完成（2026-11-18，本机 Linux x64），D、E 的原生复核待维护者；F、G 待做。
+> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），E 已完成（2026-11-18，本机 Linux x64）并已通过原生复核，D 的原生复核待维护者；F 已完成（2026-11-18，本机 Linux x64；Apple 部分盲写，待 macOS 复核）；G 待做。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -462,3 +462,74 @@ E1 的提交说明写的是 32 项、1,011 行，实际为 26 项、1,010 行。
   30 项 Scene 测试通过。关闭 SOFA 的规范 Release 构建通过 3 项定向 CTest 和共享库消费者测试。
 - 交换 `probing` 与 `planning` 的返回值会触发阶段枚举断言。将 Scene 初始状态、元数据更新和输出格式中任一个
   `struct_size` 移离偏移 0，公共 C 头测试都会编译失败。两个平台的共享库均导出 164 个 `adm_*` 函数。
+
+## F 岛测试去 SDK
+
+F 处理还依赖 C++ SDK（`RenderService`、`adm/io.h`、`tests/support/apple_renderer` 的 `IRenderer` 适配、`adm_scene`）的 7 个岛测试
+（5,740 行），以及只靠这些测试维持的生产 C++ 包装。F 计划的用户决定（2026-11-18）：
+- **没有生产调用者的 WAV 包装随 F 删除**：它们的检查移植为 Rust 测试，只测它们的 C++ 测试一并删除，生产 C/C++ 棘轮下降；
+- **自有后端与请求校验的检查移植为 Rust 测试**：C++ 只留真正需要岛的部分（FLAC 编码、Apple 后端），经 C ABI 或岛的窄 C 接口；
+- **Apple 测试由 Claude 在 Linux 上盲写，维护者在 macOS 复核后合并**。
+
+分四个子批提交：F1 WAV 包装、F2 FLAC 与自有后端、F3 Apple、F4 收尾。
+
+| C++ 测试 | 去向 |
+|---|---|
+| wav_container_test（677 行） | → `mradm-render` `tests/wav_container.rs`。布局收尾、元数据、读取、AXML 替换与容错扫描五组 golden 摘要（320 例）调用包装所调的同一批 Rust 函数，原值复现。拒绝的编辑不改文件、放弃的遍历不留临时文件、AXML 替换的别名（同文件、硬链接、符号链接）与失败恢复一并移植。与 SDK `io::get_axml` 的对照去掉（导入与 C ABI 查询测试覆盖该视图） |
+| wav_profile_test（167 行） | speaker re-render 与 ADM semantics 两种 profile → `wav_container.rs`；`tests/support/wav_output.*` 删除 |
+| trim_file_smoke_test（222 行） | 中段、起点越界、整文件三项 → `wav_container.rs`（钳位已由 `postprocess` 单元测试覆盖）；预先取消的 FLAC / Opus 编码属岛行为 → `audio_island_test.cpp`（不留输出、源文件保留） |
+| core_smoke_test | CAF 增益改写（含旧的固定名 sidecar）→ `wav_container.rs`。CAF 回读改为解析文件字节，`tests/support/audio_reader.*` 删除；`WriterHandle` 与 WAV / CAF 元数据作为岛测试保留 |
+| wav_io_test | 整数读取 fixture 改为直接写字节，不再调用 `downconvert_to_int`；整数转换的钳位、64 位 seek 与 NaN 拒绝 → `wav_container.rs` |
+| flac_io_smoke_test（706 → 592 行） | FLAC 增益拒绝 → `wav_container.rs`（以扩展名为 `.flac` 的 WAVE 文件验证）。超过 8 声道与高度布局的拒绝是请求规则：`mradm-engine` `tests/request.rs` 新增 5.1.2（8 声道内的高度布局），`tests/render.rs` 新增 EAR 5.1.2 与 VBAP 7.1.4 到 `.flac` 的整段渲染（不请求岛、不留输出与暂存文件、旧固定名暂存文件不动）。终稿 `.flac` 流水线需要编码器岛，改经 C ABI（VBAP 5.1、6 声道、掩码 0x3F、唯一暂存文件清理），测试改为链接 `ADMCAPI` |
+| lfe_routing_test（585 → 379 行） | 共享 LFE 语义 → `mradm-render` `tests/routing.rs`（路由 golden 没有的 SUB / Subwoofer / low_frequency / R-LFE 别名、同一块上 LFE2 优先、只有 lowPass 的块、22.2 split-power 规则与警告）；EAR / VBAP 的 22.2 渲染与非 22.2 警告 → 新的 `mradm-engine` `tests/lfe_render.rs`。留下岛的 LFE 对合成，以及 macOS 上 Apple 后端的 22.2 渲染（经 C ABI）、侧总线的离线与实时渲染及其上的实时覆盖、LFE 转全频的块切换（经岛表） |
+| direct_speakers_matrix_render_test（391 → 316 行，仅 macOS） | 矩阵由测试 FFI `mradm_scene_direct_matrix_parse` 解析后照引擎的做法放进岛设置；离线、文件流式与实时增益经岛表 |
+| apple_renderer_smoke_test（2,478 → 1,915 行，仅 macOS） | C ABI 带得了选项的整段渲染经 `adm_render_file_ex`（方位符号、零增益、扬声器声像与旗标、各布局、CAF 双耳标签、渲染窗口、extent 与 spread、channelLock、床与 LFE、DirectSpeakers 路由、混合路径）；工厂预设、离线听者朝向（C ABI 没有对应选项）与全部文件流式经岛表；能力记录改查 C ABI 的能力 JSON；AUSpatialMixer HRTF 探针不变。LFE 标签检查（只测测试支持）与对导入后 C++ 场景结构的断言去掉，后者是导入规则，由共享库 `macin-adm` 与 `mradm-scene` 的测试覆盖 |
+
+**Apple 的驱动**：`tests/support/apple_island_driver.h`（只含头）照引擎的方式驱动 `mradm_apple_islands()`：经测试 FFI 导入场景
+（ADM 或带标签的声道床）、`prepare` / `render` / `open_stream`、流表的 process / seek / 中间级与输出级 / 覆盖 / 朝向。它取代
+`tests/support/apple_renderer`（`mr_adm_apple_renderer_test_support`）。三个 Apple 目标不再链接 `ADMEngine`、`ADMIo` 或
+`mr_adm_scene_test_support`。
+
+**删除的生产代码**：`read_wav_adm_chunks`、`replace_wav_axml`、`wav_has_chunk`、`apply_gain_to_file`、`trim_file_frames`、
+`downconvert_to_int`、`finalize_wav_layout`、`finalize_wav_output`、`FloatCafReader`，以及只有它们用的 `wav_backend.h` 辅助
+（`run_output_pass`、`WavChunkReader`、`WavFileWriter`、`CafFileReader`）。计划原本把手动基准 `triple_balance_monitor_benchmark`
+调用的 `finalize_wav_layout` 留到 G；F1 改为让基准直接写出它的 ADM RIFF 输入，在 9.1.6 上完整运行通过。
+
+**删除的测试支持**：SDK 中没有测试调用的 `io::get_axml`、`RenderScene::write`、`RenderService::axml` / `export_file`，
+`adm_scene` 的 `metadata::generate` 与整个 `render_common_scene`（F 之后没有使用者）、`tests/support/ffi/adm_test_ffi.h`。
+`mradm-ffi` 入口 234 → 200：F1 24 个（WAV 写出、chunk 读取、`has_chunk`、AXML 替换、CAF 读取、后处理遍历、生成的 ADM 缓冲区、
+场景导出 AXML），F4 10 个（`mradm_render_label` / `is_lfe` / `lfe_target` / `target_index` / `label_position` / `matrix_*` /
+`lfe_routing` 与 `mradm_dsp_scene_cloud`）。`mradm-ffi` 自身的单元测试改用 Rust 写出 fixture，云分配检查直接调用 `math::cloud`。
+
+**新增的 Rust 测试**：`mradm-render` `tests/wav_container.rs` 7 项、`tests/routing.rs` 1 项；`mradm-engine` `tests/lfe_render.rs` 3 项、
+`tests/render.rs` 1 项，`tests/request.rs` 加一条断言。
+
+**故障注入**（每项改动后恢复）：
+- F1：忽略布局置换、trim 起点提前一帧、去掉 PCM fact、re-render profile 不写 RIFF、增益接受 FLAC。最后一项第一次未检出：
+  测试用的 `.flac` 不是合法 WAVE，退回 WAV 读取同样报 2；改为扩展名为 `.flac` 的 WAVE 文件后检出。
+- F2：split-power 增益改为 0.70（`routing.rs` 检出；`lfe_render.rs` 沿用 C++ 测试 2.5 % 的 RMS 容差，未检出）、直通模式 LFE 串扰、
+  FLAC 接受 5.1.2、暂存文件不删、5.1 FLAC 掩码错误。
+- F3（建议在 macOS 上做）：去掉 ADM → SpatialMixer 的方位符号翻转、流表忽略 `set_overrides`、`apple_island.cpp` 的 `plan_of`
+  丢掉朝向或矩阵、跳过 22.2 的 LFEScreen 重标。
+
+### F 的验证
+
+- **Rust**：新增与改动的测试通过；workspace fmt 与 clippy `-D warnings` 通过；`mradm-ffi` 单元测试 39 项通过。
+- **C++ 侧**：每个子批 debug 构建与 ctest 通过（25 项）。
+  - FFI 头校验通过：200 个函数、113 个结构体；
+  - `quality_scripts_test.py`、`boundary_tools_test.py`、许可证检查与 C/C++ 棘轮通过；
+  - 改动的 C++ 文件通过 clang-format 18 与 clang-tidy；本机没有 cppcheck。
+- **Apple 文件**：`apple_renderer_smoke_test.cpp`、`direct_speakers_matrix_render_test.cpp`、`lfe_routing_test.cpp` 的 Apple 分支与
+  `apple_island_driver.h` 在本机只做了 `clang++ -fsyntax-only -Wall -Wextra`（对照真实头文件；冒烟测试去掉了不变的 AudioToolbox 探针），
+  没有链接或运行。需要在 macOS 上运行 `mr_adm_apple_smoke_tests`、`mr_adm_lfe_routing_tests`、
+  `mr_adm_direct_speakers_matrix_render_tests` 与 `mr_adm_apple_island_tests`。
+- **对照参照构建 `b8914dc`**（main 在 F 开始时的提交；方法同 E，候选为各子批之后的 `consistency-a`）：
+  - F1：C ABI 采集 3,283 行、36 个文件 0 差异；CLI 记录 113 条命令 0 差异；消费者测试对两个库都通过；共享库恰好导出 164 个 `adm_*`；
+    完整 PCM 采集相同（220 个 fixture、989 项比较、176 个重放、256 个产物、666 份日志）。
+  - F2、F3 没有改生产代码。
+  - F4（删除 10 个 `mradm-ffi` 入口之后）：同 F1，C ABI 采集、CLI 记录 0 差异，消费者测试对两个库都通过，导出 164 个 `adm_*`，
+    完整 PCM 采集相同。只有链接 `mradm-ffi` 的 `mr_adm_repeat_render` 二进制摘要不同，比较前按 E 的做法中和。
+
+**规模**：生产 C/C++ 由 9,432 行降到 8,748 行；测试 C/C++ 由 24,816 行降到 22,110 行（`tests/unit` 9,746 → 7,707）。
+按棘轮计数，`mradm-ffi` 由 19,894 行降到 18,101 行，`mradm-render` 由 23,503 行增到 24,858 行，`mradm-engine` 由 26,631 行
+增到 26,881 行。SDK、`adm_scene` 与 `engine_renderer` 只剩 G 的手动探针与基准在用。

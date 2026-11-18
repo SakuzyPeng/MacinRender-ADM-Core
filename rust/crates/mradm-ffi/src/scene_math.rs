@@ -54,56 +54,6 @@ pub unsafe extern "C" fn mradm_dsp_scene_math(
     })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_cloud(
-    src: *const f32,
-    n: usize,
-    cartesian: u32,
-    binaural: u32,
-    dst: *mut CloudPoint,
-    capacity: usize,
-    count: *mut usize,
-    trace: *mut f32,
-    trace_len: usize,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, dst, capacity)?;
-        separate(src, n, count, 1)?;
-        separate(dst, capacity, count, 1)?;
-        separate(trace, trace_len, src, n)?;
-        separate(trace, trace_len, dst, capacity)?;
-        separate(trace, trace_len, count, 1)?;
-        if n != 7 || capacity < 17 || !matches!(trace_len, 0 | 238) {
-            return Err(invalid());
-        }
-        let cart = flag(cartesian)?;
-        let bin = flag(binaural & !256)?;
-        let contract = binaural & 256 != 0;
-        let s = input(src, n)?;
-        let mut points = [CloudPoint::default(); 17];
-        let mut traces = [[0f32; 14]; 17];
-        let len = math::cloud(
-            [s[0], s[1], s[2]],
-            cart,
-            [s[3], s[4], s[5]],
-            s[6],
-            bin,
-            contract,
-            &mut points,
-            if trace_len == 0 {
-                None
-            } else {
-                Some(&mut traces)
-            },
-        );
-        output(dst, capacity)?[..len].copy_from_slice(&points[..len]);
-        if trace_len != 0 {
-            output(trace, trace_len)?.copy_from_slice(traces.as_flattened());
-        }
-        *count = len;
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_scene_divergence(
     src: *const f32,
     n: usize,
@@ -297,22 +247,18 @@ mod tests {
             );
             let input = [0., 0., 1., 0.5, 0.5, 0.5, 1.];
             let mut points = [CloudPoint::default(); 17];
-            let mut count = 999;
             let mut result = [17f32; 7];
             COUNT.with(|c| c.set(Some(0)));
-            assert_eq!(
-                mradm_dsp_scene_cloud(
-                    input.as_ptr(),
-                    7,
-                    0,
-                    0,
-                    points.as_mut_ptr(),
-                    17,
-                    &mut count,
-                    std::ptr::null_mut(),
-                    0
-                ),
-                0
+            // The extent cloud (its C entry went with the C++ test helpers, R3 F4).
+            let count = math::cloud(
+                [input[0], input[1], input[2]],
+                false,
+                [input[3], input[4], input[5]],
+                input[6],
+                false,
+                false,
+                &mut points,
+                None,
             );
             assert_eq!(count, 16);
             assert_eq!(

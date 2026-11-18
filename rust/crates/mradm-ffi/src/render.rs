@@ -5,19 +5,13 @@
 //! context buffers (capacity in, length written out, NUL-terminated) with the C++ bytes.
 use crate::adm::Text;
 pub(crate) use mradm_engine::scene::renderer::Renderer as LiveRenderer;
-use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override, ResolvedRoute, Target};
+use mradm_render::routing::{self, Error, LfeTarget, MatrixRoute, Override};
 use mradm_render::{live, offline, triple_balance_stream};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
     sync::Arc,
 };
-
-#[repr(C)]
-pub struct RenderTarget {
-    label: Text,
-    is_lfe: u32,
-}
 
 #[repr(C)]
 pub struct RenderMatrixTarget {
@@ -31,27 +25,6 @@ pub struct RenderMatrixRoute {
     pub(crate) mute: u32,
     pub(crate) targets: *const RenderMatrixTarget,
     pub(crate) targets_len: usize,
-}
-
-#[repr(C)]
-pub struct RenderResolvedTarget {
-    output: usize,
-    gain: f32,
-}
-
-#[repr(C)]
-pub struct RenderResolvedRoute {
-    source_label: Text,
-    source_key: Text,
-    mute: u32,
-    targets: *const RenderResolvedTarget,
-    targets_len: usize,
-}
-
-#[repr(C)]
-pub struct RenderMatrixView {
-    routes: *const RenderResolvedRoute,
-    routes_len: usize,
 }
 
 #[repr(C)]
@@ -83,12 +56,6 @@ pub struct RenderLfeRouting {
 }
 
 /// A resolved DirectSpeakers matrix with the records its view points into.
-pub struct RenderMatrix {
-    routes: Vec<ResolvedRoute>,
-    _targets: Vec<Vec<RenderResolvedTarget>>,
-    records: Vec<RenderResolvedRoute>,
-}
-
 pub(crate) fn bad(message: &str) -> Error {
     Error {
         code: 1,
@@ -112,25 +79,6 @@ pub(crate) unsafe fn input<'a, T>(data: *const T, len: usize) -> Result<&'a [T],
 
 pub(crate) unsafe fn bytes<'a>(text: &Text) -> Result<&'a [u8], Error> {
     unsafe { input(text.data, text.len) }
-}
-
-unsafe fn texts<'a>(data: *const Text, len: usize) -> Result<Vec<&'a [u8]>, Error> {
-    unsafe { input(data, len)? }
-        .iter()
-        .map(|t| unsafe { bytes(t) })
-        .collect()
-}
-
-unsafe fn targets<'a>(data: *const RenderTarget, len: usize) -> Result<Vec<Target<'a>>, Error> {
-    unsafe { input(data, len)? }
-        .iter()
-        .map(|t| {
-            Ok(Target {
-                label: unsafe { bytes(&t.label)? },
-                is_lfe: t.is_lfe != 0,
-            })
-        })
-        .collect()
 }
 
 /// Copies `detail` into `out` (capacity `*len`), NUL-terminated, and stores the length written.
@@ -178,200 +126,6 @@ pub(crate) fn boundary(
         write(location, context, context_len);
     }
     error.map_or(0, |e| e.code)
-}
-
-/// Writes a label rule's result (kind 0 key, 1 canonical, 2 direct) into `output`, whose capacity
-/// `*output_len` must be at least `raw_len + 8`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_label(
-    kind: u32,
-    raw: *const u8,
-    raw_len: usize,
-    output: *mut u8,
-    output_len: *mut usize,
-) -> i32 {
-    boundary(
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            let raw = unsafe { input(raw, raw_len)? };
-            let result = match kind {
-                0 => routing::label_key(raw),
-                1 => routing::canonical_label(raw),
-                2 => routing::direct_label(raw),
-                _ => return Err(bad("无效标签规则")),
-            };
-            if output.is_null() || output_len.is_null() || unsafe { *output_len } <= result.len() {
-                return Err(bad("标签输出缓冲区不足"));
-            }
-            unsafe { write(&result, output, output_len) };
-            Ok(())
-        },
-    )
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_is_lfe(raw: *const u8, raw_len: usize) -> u32 {
-    catch_unwind(|| unsafe { input(raw, raw_len) }.is_ok_and(routing::is_lfe))
-        .is_ok_and(|v| v)
-        .into()
-}
-
-/// 0 none, 1 LFE1, 2 LFE2; invalid input is none.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_lfe_target(
-    labels: *const Text,
-    labels_len: usize,
-    low_pass: u32,
-) -> u32 {
-    catch_unwind(|| {
-        unsafe { texts(labels, labels_len) }
-            .map_or(LfeTarget::None, |l| routing::lfe_target(&l, low_pass != 0))
-    })
-    .unwrap_or(LfeTarget::None) as u32
-}
-
-/// 1 and the output index when a target matches the labels, else 0.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_target_index(
-    targets_ptr: *const RenderTarget,
-    targets_len: usize,
-    labels: *const Text,
-    labels_len: usize,
-    index: *mut usize,
-) -> u32 {
-    let found = catch_unwind(|| {
-        let t = unsafe { targets(targets_ptr, targets_len) }.ok()?;
-        let l = unsafe { texts(labels, labels_len) }.ok()?;
-        routing::target_index(&t, &l)
-    })
-    .ok()
-    .flatten();
-    match found {
-        Some(i) if !index.is_null() => {
-            unsafe { *index = i };
-            1
-        }
-        _ => 0,
-    }
-}
-
-/// 1 and the nominal direction when one of the labels is, or aliases, a BS.2051 label, else 0.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_label_position(
-    labels: *const Text,
-    labels_len: usize,
-    azimuth: *mut f32,
-    elevation: *mut f32,
-) -> u32 {
-    let found =
-        catch_unwind(|| routing::label_position(&unsafe { texts(labels, labels_len) }.ok()?))
-            .ok()
-            .flatten();
-    match found {
-        Some([a, e]) if !azimuth.is_null() && !elevation.is_null() => {
-            unsafe {
-                *azimuth = a;
-                *elevation = e;
-            }
-            1
-        }
-        _ => 0,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_matrix_resolve(
-    routes: *const RenderMatrixRoute,
-    routes_len: usize,
-    targets_ptr: *const RenderTarget,
-    targets_len: usize,
-    layout_id: Text,
-    output: *mut *mut RenderMatrix,
-    view: *mut RenderMatrixView,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        if output.is_null() || view.is_null() {
-            return Err(bad("无效 DirectSpeakers 矩阵输出"));
-        }
-        unsafe { *output = ptr::null_mut() };
-        let authored = unsafe { matrix_routes(routes, routes_len)? };
-        let t = unsafe { targets(targets_ptr, targets_len)? };
-        let resolved = routing::resolve_matrix(&authored, &t, unsafe { bytes(&layout_id)? })?;
-        let resolved_targets: Vec<Vec<RenderResolvedTarget>> = resolved
-            .iter()
-            .map(|r| {
-                r.targets
-                    .iter()
-                    .map(|t| RenderResolvedTarget {
-                        output: t.output,
-                        gain: t.gain,
-                    })
-                    .collect()
-            })
-            .collect();
-        let records = resolved
-            .iter()
-            .zip(&resolved_targets)
-            .map(|(r, t)| RenderResolvedRoute {
-                source_label: Text::bytes(&r.source_label),
-                source_key: Text::bytes(&r.source_key),
-                mute: u32::from(r.mute),
-                targets: t.as_ptr(),
-                targets_len: t.len(),
-            })
-            .collect();
-        let handle = Box::new(RenderMatrix {
-            routes: resolved,
-            _targets: resolved_targets,
-            records,
-        });
-        unsafe {
-            *view = RenderMatrixView {
-                routes: handle.records.as_ptr(),
-                routes_len: handle.records.len(),
-            };
-            *output = Box::into_raw(handle);
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_matrix_destroy(handle: *mut RenderMatrix) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-/// The index of the resolved row a DirectSpeakers block's labels select.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_matrix_route(
-    matrix: *const RenderMatrix,
-    labels: *const Text,
-    labels_len: usize,
-    index: *mut usize,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        if matrix.is_null() || index.is_null() {
-            return Err(bad("无效 DirectSpeakers 矩阵"));
-        }
-        let route = routing::matrix_route(unsafe { &(*matrix).routes }, &unsafe {
-            texts(labels, labels_len)?
-        })?;
-        unsafe { *index = route };
-        Ok(())
-    })
 }
 
 unsafe fn override_value<'a>(o: &RenderOverride) -> Result<Override<'a>, Error> {
@@ -426,71 +180,6 @@ pub unsafe extern "C" fn mradm_render_live_override(
         flags
     })
     .unwrap_or(0)
-}
-
-/// The 22.2 LFE routing for the LFE targets (0, 1, 2) of the in-effect DirectSpeakers blocks.
-/// `output` is filled even on failure: its log lines precede the error.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_lfe_routing(
-    split_power: u32,
-    output_layout: Text,
-    targets_ptr: *const u32,
-    targets_len: usize,
-    output: *mut RenderLfeRouting,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    boundary(
-        message,
-        message_len,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        || {
-            if output.is_null() {
-                return Err(bad("无效 LFE 路由输出"));
-            }
-            let blocks = unsafe { input(targets_ptr, targets_len)? }
-                .iter()
-                .map(|&t| match t {
-                    1 => LfeTarget::Lfe1,
-                    2 => LfeTarget::Lfe2,
-                    _ => LfeTarget::None,
-                });
-            let empty = RenderLogLine {
-                level: 0,
-                message: Text::bytes(&[]),
-            };
-            let mut logs = [empty; 2];
-            let mut logs_len = 0;
-            let result = routing::lfe_routing(
-                split_power != 0,
-                unsafe { bytes(&output_layout)? },
-                blocks,
-                &mut |level, text: &'static str| {
-                    logs[logs_len] = RenderLogLine {
-                        level: match level {
-                            routing::Level::Info => 1,
-                            routing::Level::Warning => 2,
-                        },
-                        message: Text::new(text),
-                    };
-                    logs_len += 1;
-                },
-            );
-            let routing = result.as_ref().copied().unwrap_or_default();
-            unsafe {
-                *output = RenderLfeRouting {
-                    applies_to_22_2: u32::from(routing.applies_to_22_2),
-                    split_power: u32::from(routing.split_power),
-                    has_lfe1: u32::from(routing.has_lfe1),
-                    has_lfe2: u32::from(routing.has_lfe2),
-                    logs,
-                    logs_len,
-                };
-            }
-            result.map(|_| ())
-        },
-    )
 }
 
 /// The gain from one LFE input target to one 22.2 LFE output (0, 1, 2) under `routing`.

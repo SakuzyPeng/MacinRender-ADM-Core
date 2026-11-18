@@ -847,6 +847,14 @@ E 已完成：只经 C ABI 或 CLI 测公开契约的 7 个 C++ 测试中，不�
 69 项），CLI 冒烟改为 `mradm-cli` 运行真实二进制的集成测试（ctest 名不变）；依赖岛的检查与每个家族一次冒烟调用合成唯一的 C 消费者测试
 `c_api_consumer_test.cpp`，即 `capi-capture.py tests` 运行的消费者。合并前复核后，测试 C/C++ 由 31,322 行降至 24,816 行。见 [R3 记录](RUST_BOUNDARY_TESTS.md)。
 
+F 已完成（Apple 部分在 Linux 上盲写，待 macOS 复核）：还依赖 C++ SDK 的 7 个岛测试去掉 SDK。
+- 没有生产调用者的 WAV 包装（布局收尾、AXML 读取与替换、chunk 探测、增益改写、trim、降位、CAF 读取）随测试删除，
+  WAVE 容器的 golden 摘要由 `mradm-render` `tests/wav_container.rs` 原值复现；
+- FLAC 请求规则与 EAR / VBAP 的 22.2 LFE 路由移植为 `mradm-engine` / `mradm-render` 的 Rust 测试，终稿 FLAC 流水线改经 C ABI；
+- Apple 测试经 C ABI 与 Apple 岛表（`tests/support/apple_island_driver.h`）驱动，`tests/support/apple_renderer` 删除。
+
+`mradm-ffi` 入口 234 → 200。生产 C/C++ 9,432 → 8,748 行，测试 C/C++ 24,816 → 22,110 行。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

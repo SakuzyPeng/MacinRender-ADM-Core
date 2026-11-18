@@ -600,12 +600,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
     # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
-    # ScenePlan, the C++ scene math and the routing / object-preprocessing wrappers over its blocks.
+    # ScenePlan and the C++ scene math.
     # Production reads the Rust render scene only; the tests and the frozen references read these.
     add_library(mr_adm_scene_test_support STATIC
         tests/support/adm_scene/adm_scene.cpp
         tests/support/adm_scene/metadata.cpp
-        tests/support/adm_scene/render_common_scene.cpp
         tests/support/adm_scene/scene_math.cpp)
     target_include_directories(mr_adm_scene_test_support PUBLIC
         tests/support/adm_scene src/adm_metadata src/adm_audio src/adm_render_common)
