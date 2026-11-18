@@ -562,8 +562,18 @@ bool verify_apple_side_bus_stream_and_override() {
 
 } // namespace
 
+// The Windows system-spatial sink folds a split-power 22.2 LFE pair back to unity (moved here from
+// scene_output_c_api_test, R3 E3).
+bool verify_lfe_pair_recombination() {
+    const float half = mradm::render_common::k_lfe_split_power_gain;
+    return check(std::abs(mradm::render_common::mix_lfe_pair(half, half, true) - 1.0F) < 1.0e-6F &&
+                     mradm::render_common::mix_lfe_pair(1.0F, 0.0F, false) == 1.0F,
+                 "dual-LFE recombination keeps unity gain");
+}
+
 int main() {
     bool ok = verify_shared_semantics();
+    ok = verify_lfe_pair_recombination() && ok;
     ok = verify_backend(mradm::RendererSelection::ear, "EAR") && ok;
     ok = verify_backend(mradm::RendererSelection::saf, "SAF VBAP") && ok;
 #ifdef __APPLE__

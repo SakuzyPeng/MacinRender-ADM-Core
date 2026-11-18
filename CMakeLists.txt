@@ -580,17 +580,25 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
     add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
 
-    # Contract test for the stable C ABI. Links only the C ABI target (consumer
-    # view); the independent fixture author only uses the standard library.
-    add_executable(mr_adm_c_api_tests tests/unit/c_api_fixture_test.cpp)
+    # Consumer test for the stable C ABI: the checks that need the islands or a C++ caller, and one
+    # smoke call per family (the rest is tested in mradm-capi). Links only the C ABI target; the
+    # independent fixture author only uses the standard library.
+    add_executable(mr_adm_c_api_tests tests/unit/c_api_consumer_test.cpp)
     target_link_libraries(mr_adm_c_api_tests
         PRIVATE
             MacinRender::ADMCAPI
     )
     target_compile_definitions(mr_adm_c_api_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
+    # Both consumers run against the same synthetic room, including from a relocated build.
+    add_custom_target(mr_adm_capi_room_fixture
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic"
+            "$<TARGET_FILE_DIR:mr_adm_c_api_tests>/capi-room"
+        VERBATIM)
+    add_dependencies(mr_adm_c_api_tests mr_adm_capi_room_fixture)
     mr_adm_core_apply_warnings(mr_adm_c_api_tests)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_tests)
-    add_test(NAME mr_adm_c_api_tests COMMAND mr_adm_c_api_tests)
+    add_test(NAME mr_adm_c_api_tests COMMAND mr_adm_c_api_tests capi-room/room.json
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:mr_adm_c_api_tests>")
 
     add_executable(mr_adm_c_api_header_smoke tests/unit/c_api_header_smoke.c)
     target_include_directories(mr_adm_c_api_header_smoke PRIVATE include)
@@ -602,18 +610,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
 
-    add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
-    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI)
-    target_include_directories(mr_adm_osc_head_tracking_tests SYSTEM PRIVATE
-        "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
-    )
-    if(WIN32)
-        target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE ws2_32)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_osc_head_tracking_tests)
-    add_test(NAME mr_adm_osc_head_tracking_tests COMMAND mr_adm_osc_head_tracking_tests)
-
     add_executable(mr_adm_osc_head_tracking_c_example EXCLUDE_FROM_ALL examples/head_tracking_consumer.c)
     target_link_libraries(mr_adm_osc_head_tracking_c_example PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_c_example)
@@ -622,11 +618,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_osc_head_tracking_probe PRIVATE MacinRender::ADMRealtime)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_probe)
 
-    add_executable(mr_adm_scene_stream_c_api_tests tests/unit/scene_stream_c_api_test.cpp)
-    target_link_libraries(mr_adm_scene_stream_c_api_tests PRIVATE MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_scene_stream_c_api_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
-    add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
 
     # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
     # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
@@ -682,11 +673,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_core_apply_warnings(mr_adm_apple_renderer_test_support)
         mr_adm_core_apply_static_analysis(mr_adm_apple_renderer_test_support)
     endif()
-
-    add_executable(mr_adm_scene_output_c_api_tests tests/unit/scene_output_c_api_test.cpp)
-    target_link_libraries(mr_adm_scene_output_c_api_tests PRIVATE MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_scene_output_c_api_tests)
-    add_test(NAME mr_adm_scene_output_c_api_tests COMMAND mr_adm_scene_output_c_api_tests)
 
     # One Scene stream renderer behind the C++ interface, outside the Rust stream engine: only the
     # manual benchmarks use it (the live renderer and trace tests are Rust, R3 B and D2).
@@ -789,11 +775,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
             mr_adm_core_apply_warnings(${target})
         endfunction()
         mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
-        mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_fixture_test.cpp)
+        mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_consumer_test.cpp)
         target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-        mr_adm_add_capi_consumer(mr_adm_scene_stream_c_api_consumer_tests tests/unit/scene_stream_c_api_test.cpp)
-        add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests
-            mr_adm_scene_stream_c_api_consumer_tests)
+        add_dependencies(mr_adm_c_api_consumer_tests mr_adm_capi_room_fixture)
+        add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests)
     endif()
 
     find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -801,13 +786,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_flac_reader_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
                 --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
-        add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
-        # The room Scene stream through the C ABI only (R3 C2); the file and switch checks are Rust.
-        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMCAPI nlohmann_json::nlohmann_json)
-        mr_adm_core_apply_warnings(mr_adm_room_tests)
-        add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
-        set_tests_properties(mr_adm_room_tests PROPERTIES TIMEOUT 120)
         add_test(NAME mr_adm_room_realtime_tools_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_realtime_tools_test.py")
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -960,12 +938,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_monitor_engine_test_support)
     target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
-
-    add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
-    target_link_libraries(mr_adm_hptf_parameters_tests PRIVATE MacinRender::ADMCAPI Threads::Threads)
-    mr_adm_core_apply_warnings(mr_adm_hptf_parameters_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_hptf_parameters_tests)
-    add_test(NAME mr_adm_hptf_parameters_tests COMMAND mr_adm_hptf_parameters_tests)
 
     if(Python3_Interpreter_FOUND AND TARGET mradm_capi_bundle)
         add_test(NAME mr_adm_hptf_stereo_c_api_tests
@@ -1136,17 +1108,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     if(MR_ADM_CORE_BUILD_CLI)
-        add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)
-        target_compile_definitions(mr_adm_cli_smoke_tests PRIVATE
-            "MRADM_EXE_PATH=\"$<TARGET_FILE:mradm_exe>\""
-        )
-        target_link_libraries(mr_adm_cli_smoke_tests
-            PRIVATE
-                MacinRender::ADMIo
-        )
-        mr_adm_core_apply_warnings(mr_adm_cli_smoke_tests)
-        mr_adm_core_apply_static_analysis(mr_adm_cli_smoke_tests)
-        add_test(NAME mr_adm_cli_smoke_tests COMMAND mr_adm_cli_smoke_tests)
+        # The mradm executable as a user runs it: mradm-cli's tests/binary.rs (R3 E4), the Cargo test
+        # command and binaries of mr_adm_rust_unit_tests with MRADM_EXE_PATH naming the executable.
+        # The target of the same name builds that test binary (release.yml builds it by name).
+        add_custom_target(mr_adm_cli_smoke_tests
+            COMMAND ${_mr_rust_unit_test_command} --test binary --no-run
+            DEPENDS mradm_capi-static mradm_exe
+            USES_TERMINAL VERBATIM)
+        add_test(NAME mr_adm_cli_smoke_tests COMMAND ${_mr_rust_unit_test_command} --test binary)
+        set_tests_properties(mr_adm_cli_smoke_tests PROPERTIES
+            ENVIRONMENT "MRADM_EXE_PATH=$<TARGET_FILE:mradm_exe>"
+            TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
     endif()
 endif()
 

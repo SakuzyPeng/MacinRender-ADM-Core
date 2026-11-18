@@ -495,10 +495,24 @@ mod tests {
 
     #[test]
     fn stage_names_map_to_their_values() {
-        let stage = |s: &std::ffi::CStr| unsafe { adm_render_stage_from_string(s.as_ptr()) };
-        assert_eq!(stage(c"validating"), 1);
-        assert_eq!(stage(c"finished"), 7);
-        assert_eq!(stage(c"Rendering"), 0);
+        for (name, expected) in [
+            (c"validating", 1),
+            (c"probing", 2),
+            (c"importing_scene", 3),
+            (c"planning", 4),
+            (c"rendering", 5),
+            (c"post_processing", 6),
+            (c"finished", 7),
+            (c"", 0),
+            (c"Rendering", 0),
+            (c"nonsense", 0),
+        ] {
+            assert_eq!(
+                unsafe { adm_render_stage_from_string(name.as_ptr()) },
+                expected,
+                "{name:?}"
+            );
+        }
         assert_eq!(unsafe { adm_render_stage_from_string(ptr::null()) }, 0);
     }
 

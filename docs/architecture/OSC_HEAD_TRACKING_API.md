@@ -85,8 +85,10 @@ config.source_id 为可选 UTF-8 字符串，create 时复制。JSON 原子复�
 - [真实 CLI 与动态库联调](../../tests/manual/osc_posebridge_check.py)。
 
 ```sh
-cmake --build --preset debug --target mr_adm_osc_head_tracking_tests mr_adm_c_api_header_smoke mr_adm_c_api_tests
-ctest --preset debug -R '(osc_head_tracking|c_api_header_smoke|^mr_adm_c_api_tests$)' --parallel "$(sysctl -n hw.ncpu)" --output-on-failure
+# 接收器契约经 C ABI 的回环 UDP 测试在 mradm-capi（src/tests/osc.rs，R3 E3）
+(cd rust && cargo test -p mradm-capi --lib tests::osc)
+cmake --build --preset debug --target mr_adm_c_api_header_smoke mr_adm_c_api_tests
+ctest --preset debug -R '(c_api_header_smoke|^mr_adm_c_api_tests$)' --parallel "$(sysctl -n hw.ncpu)" --output-on-failure
 cmake --build --preset release --target mradm_capi_bundle mr_adm_osc_head_tracking_c_example
 python3 tests/manual/osc_posebridge_check.py --library build/release/libmradm_capi.dylib --posebridge /path/to/posebridge
 ```
