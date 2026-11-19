@@ -607,7 +607,9 @@ FFT、后端记录、文档与 HpTF 设置的边界检查），行为由 `mradm-
   `mradm-ffi` 单元测试 29 项通过。
 - **C++ 侧**：debug 构建与 ctest 25 项通过；FFI 头校验通过（36 个函数、56 个结构体）；`quality_scripts_test.py` 与 C/C++ 棘轮通过；
   改动的 C/C++ 文件通过 clang-format 18 与 clang-tidy。
-- **对照参照构建 `21656e3`**（main 在 G 开始时的提交，方法同 F）：待补。
+- **对照参照构建 `21656e3`**（main 在 G 开始时的提交，方法同 F，候选为 G3 之后的 `consistency-a`）：C ABI 采集 3,283 行、36 个文件
+  0 差异；CLI 记录 113 条命令 0 差异；消费者测试对两个库都通过；共享库恰好导出 164 个 `adm_*`；完整 PCM 采集相同（220 个 fixture、
+  989 项比较、176 个重放、256 个产物、666 份日志）。只有链接 `mradm-ffi` 的 `mr_adm_repeat_render` 二进制摘要不同，比较前中和。
 
 生产 C/C++ 由 8,744 行降到 8,704 行，测试 C/C++ 由 22,124 行降到 11,319 行（`tests/support` 10,489 → 1,349、`tests/manual` 2,480 → 815）。
 按棘轮计数，`mradm-ffi` 由 18,101 行降到 14,547 行（含新增的 example）。
