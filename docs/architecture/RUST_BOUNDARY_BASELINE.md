@@ -12,9 +12,8 @@
 
 ## C ABI 清单
 
-`include/adm/c_api.h` 声明 164 个函数，按 6.3 的迁移家族划分如下；机器可读的清单是
-[`scripts/consistency/capi-families.json`](../../scripts/consistency/capi-families.json)，
-`tests/unit/boundary_tools_test.py` 校验它与头文件、GUI P/Invoke 列表和采集工具保持一致。
+`include/adm/c_api.h` 声明 164 个函数，按 6.3 的迁移家族划分如下。6.1 的测试校验清单与头文件、GUI P/Invoke 列表及采集工具一致。
+迁移家族清单保存在 [6.1 提交的 `capi-families.json`](https://github.com/SakuzyPeng/MacinRender-ADM-Core/blob/6b16a16a6978f6dc8af066ecf5312884ed9dc63f/scripts/consistency/capi-families.json)。
 
 | 家族 | 切片 | 内容 | 导出 | GUI 使用 |
 | --- | --- | --- | ---: | ---: |
@@ -77,8 +76,8 @@ C ABI 采集工具（见“对照工具”）引用了其中 163 个导出：
 按用户决定 1，6.4 的 Rust CLI 必须保持选项名、取值与默认值、stdout、输出文件、退出码与领域错误的中文消息；`--help` 的排版与
 参数解析错误的措辞可以变化，写进发布说明，退出码要按上表映射。
 
-固定命令表 [`scripts/consistency/cli-commands.json`](../../scripts/consistency/cli-commands.json) 有 102 条命令，
-覆盖全部 8 个公开子命令与 `__apac-encode`、`render` 的全部 43 个选项，以及上表的每个退出码。每条命令有一个类别：
+6.1 的固定命令表有 102 条命令，覆盖全部 8 个公开子命令与 `__apac-encode`、`render` 的全部 43 个选项，以及上表的每个退出码。
+命令表保存在 [6.1 提交的 `cli-commands.json`](https://github.com/SakuzyPeng/MacinRender-ADM-Core/blob/6b16a16a6978f6dc8af066ecf5312884ed9dc63f/scripts/consistency/cli-commands.json)。每条命令有一个类别：
 所有类别都比较退出码与工作目录内的文件变化；`contract` 还比较 stdout、stderr，`help` 与 `parse-error` 只豁免文字差异并单独列出。
 本机记录中 77 条是 contract（53 条成功、24 条领域错误），3 条 help，22 条 parse-error。
 

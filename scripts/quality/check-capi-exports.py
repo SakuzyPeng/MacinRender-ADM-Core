@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that the shared C ABI library exports exactly the functions declared in c_api.h.
+"""Check that the shared C ABI exports match c_api.h and retain the stable symbols.
 
 Private Rust (`mradm_*`), allocator, panic and C++ symbols must stay inside the shared library. Since
 6.6 rustc links it (the mradm-capi cdylib) and exports every `#[no_mangle]` function of the crate
@@ -20,6 +20,7 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 C_API_HEADER = REPO_ROOT / "include" / "adm" / "c_api.h"
+STABLE_EXPORTS = Path(__file__).resolve().with_name("capi-stable-exports.txt")
 
 
 def declared_functions(header: Path = C_API_HEADER) -> list[str]:
@@ -78,22 +79,30 @@ def main() -> int:
     parser.add_argument("library", type=Path, help="mradm_capi 共享库（.so/.dylib/.dll）")
     args = parser.parse_args()
 
-    declared = declared_functions()
+    declared = set(declared_functions())
+    stable = set(STABLE_EXPORTS.read_text(encoding="utf-8").split())
+    removed = sorted(stable - declared)
 
     library = args.library.resolve()
     exports = pe_exports(library) if library.suffix.lower() == ".dll" else nm_exports(library)
     # Linkers may add these marker symbols to ELF dynamic tables; they are not callable entry points.
-    exports = [name for name in exports if name not in ("_init", "_fini")]
-    missing = sorted(set(declared) - set(exports))
-    extra = sorted(set(exports) - set(declared))
+    exported = set(exports) - {"_init", "_fini"}
+    missing = sorted(declared - exported)
+    extra = sorted(exported - declared)
+    for name in removed:
+        print(f"error: c_api.h 缺少稳定 C ABI 基线中的符号 {name}", file=sys.stderr)
     for name in missing:
         print(f"error: {name} 在 c_api.h 中声明但未导出", file=sys.stderr)
     for name in extra[:50]:
         print(f"error: 导出了 c_api.h 之外的符号 {name}", file=sys.stderr)
     if len(extra) > 50:
         print(f"error: …以及另外 {len(extra) - 50} 个多余导出", file=sys.stderr)
-    if missing or extra:
-        print(f"C ABI 导出面校验失败：缺 {len(missing)} 个，多 {len(extra)} 个", file=sys.stderr)
+    if removed or missing or extra:
+        print(
+            f"C ABI 导出面校验失败（稳定符号缺 {len(removed)} 个，声明未导出 {len(missing)} 个，"
+            f"多余导出 {len(extra)} 个）",
+            file=sys.stderr,
+        )
         return 1
     print(f"C ABI 导出面校验通过：{library.name} 恰好导出 {len(declared)} 个 adm_* 函数")
     return 0

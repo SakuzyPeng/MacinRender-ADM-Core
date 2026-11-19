@@ -207,7 +207,7 @@ if(MR_ADM_CORE_BUILD_CLI)
     add_dependencies(mradm_exe mr_adm_rust)
 endif()
 
-# The C ABI as the C++ tests link it: c_api.h and the staticlib with the islands.
+# The C ABI as the C++ island tests link it: c_api.h and the staticlib with the islands.
 add_library(mr_adm_c_api INTERFACE)
 add_library(MacinRender::ADMCAPI ALIAS mr_adm_c_api)
 target_include_directories(mr_adm_c_api INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")

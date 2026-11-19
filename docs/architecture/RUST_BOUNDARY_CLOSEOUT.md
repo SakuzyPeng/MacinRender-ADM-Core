@@ -6,11 +6,8 @@
 
 ## 验收
 
-验收提交是 main `e40638c`：6.6 合入 `115afbd`，之后是维护者的两个 MSVC CRT 修正。
-本分支在它之上另有 6.7 的三个提交：
-- A：Quality 的 cppcheck 修正；
-- B：删除对照工具；
-- 本记录。
+Consistency 与 CI 的验收提交是 main `e40638c`。6.6 由 `115afbd` 合入，随后是维护者的两个 MSVC CRT 修正。
+6.7 分为 A（cppcheck 修正）、B（删除对照工具）和 C（结项与验收记录）。
 
 Consistency 与 CI 在 main 上运行。Quality 与 Release Build 用 6.7 A、B 之后的分支运行。原因有两个：
 - Quality 在 main 上从 `2029e31`（R3 G 合入）起失败。唯一的 cppcheck 发现在 R3 G2 加入的 `tests/manual/capture_tap.c`，由 6.7 A 修正。
@@ -26,11 +23,10 @@ Consistency 与 CI 在 main 上运行。Quality 与 Release Build 用 6.7 A、B 
 Reference tests 已随 R1 删除，六期不再运行。
 
 维护者实机检查（macOS arm64、Windows x64）见 [6.6 记录](RUST_BOUNDARY_CARGO.md#待维护者在-macos--windows-复核)。
-6.6 合入前，维护者已在两平台修正 Cargo 构建：
-- `faff0b0`：CLI 入口、编解码器链接依赖、版本化的库别名；
-- `2723730` 与 `e40638c`：MSVC Debug 与 vendored Opus 的 CRT。
+合入前的 `faff0b0` 补齐了 CLI 入口、编解码器链接依赖及版本化的库别名。合入后的 `2723730` 与 `e40638c` 修正了 MSVC Debug 与 vendored Opus 的 CRT。
 
-**退出条件**已满足：
+**自动化验收结果**
+
 - ABI 导出：`check-capi-exports.py` 在 CI 与 Release 中校验恰好 164 个 `adm_*`。
 - GUI P/Invoke：Release 的两个 GUI 包 smoke 通过。
 - CLI 输出与退出码：6.4 起由 CLI 记录对照，R3 E 起由 `mradm-cli` `tests/binary.rs` 守护。
@@ -53,10 +49,10 @@ Reference tests 已随 R1 删除，六期不再运行。
 
 行数是各切片最后一次合并后 `language-surface-baseline.json` 的值。
 - 6.2 与 6.3 之间相差 3 行，6.3 的记录从 21,121 行起算。
-- R1 与 R2 不改生产代码。
-- PCM 门禁六期保持 294 个 id，内核测量 255 份，全部设为门禁，六期没有有意的数值变化。
+- R1 与 R2 的生产 C/C++ 均保持 9,432 行。R2 将 C ABI 与 CLI 的 Rust 调用迁出私有 FFI。
+- PCM 门禁六期保持 294 个 id，255 份内核测量均设为门禁。同期主线 `53c1fdf9` 有意让 Triple Balance 的离线渲染与文件流式渲染应用原生对象／块增益与静音。见 [ADM 增益与静音](TRIPLE_BALANCE_RENDERER.md#adm-增益与静音)。
 
-各切片都是结构迁移，以同一构建上的新旧工具对照验收：
+各迁移切片以同一构建上的新旧工具对照验收：
 - `collect.py --tool` 与 `compare-collections.py`；
 - 6.1 的 CLI 记录与 C ABI 采集；
 - 删除前生成的黄金数据。
@@ -77,7 +73,7 @@ Reference tests 已随 R1 删除，六期不再运行。
 | CUDA 边界 | 512 | 512 |
 | C++ 测试 | 53,071 | 9,927 |
 | 冻结参考 | 12,026 | 0 |
-| Rust crate（不含 vendor） | 126,935 | 144,523 |
+| Rust crate（不含 vendor） | 126,935 | 144,607 |
 
 生产 C/C++ 的剩余部分（48 个文件）：
 
@@ -105,7 +101,7 @@ Reference tests 已随 R1 删除，六期不再运行。
 - **Windows 打包**：Windows 的 CLI 发布与 GUI 打包仍经顶层 CMake 树构建，DLL 与 exe 本身由 Cargo 产出。原因有两个：
   - 发布前要跑 fixture 测试；
   - GUI 包要检查可选的 CUDA 插件与 vcpkg 工具链。
-  
+
   见 [6.6 记录](RUST_BOUNDARY_CARGO.md)。
 - **macOS 签名**：直接 `cargo build` 得到的 `mradm` 要手动 `codesign --force --sign -` 后才能做 APAC 编码。cargo 没有链接后的步骤。
 - **进度回调跳板**：`adm_c_api.cpp` 的 27 行 C++ 把调用方回调抛出的 C++ 异常转为 `ADM_ERROR_INTERNAL`。
@@ -150,7 +146,7 @@ Reference tests 已随 R1 删除，六期不再运行。
 其他行为可以改，改了记进发布说明。
 
 **对照工具**：6.1 的 CLI 记录与 C ABI 采集工具已随 6.7 删除，git 历史可查。之后的边界改动由以下几处守护：
-- `mradm-cli` 的 `tests/binary.rs`；
-- `mradm-capi` 的 Rust 测试；
-- C 消费者测试 `mr_adm_c_api_tests`；
-- 导出检查 `check-capi-exports.py`。
+- `mradm-cli` 的 `tests/binary.rs` 驱动真实 CLI，覆盖公开子命令的输出和退出路径。
+- `mradm-capi` 的 Rust 测试覆盖 C ABI 行为。
+- `mr_adm_c_api_tests` 通过公开头文件链接并测试共享库，Windows 使用导入库。
+- `check-capi-exports.py` 比较共享库与当前头文件的符号，并检查稳定 C ABI 符号基线。

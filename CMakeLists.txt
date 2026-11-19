@@ -53,16 +53,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
 
-    # Consumer test for the stable C ABI: the checks that need the islands or a C++ caller, and one
-    # smoke call per family (the rest is tested in mradm-capi). Links only the C ABI target; the
-    # independent fixture author only uses the standard library.
+    # Exercise the public header and shared library as a downstream C++ consumer, including the
+    # import library on Windows. Island tests that need private symbols use the static library.
     add_executable(mr_adm_c_api_tests tests/unit/c_api_consumer_test.cpp)
-    target_link_libraries(mr_adm_c_api_tests
-        PRIVATE
-            MacinRender::ADMCAPI
-    )
+    target_include_directories(mr_adm_c_api_tests PRIVATE include)
+    target_link_libraries(mr_adm_c_api_tests PRIVATE mradm_capi_bundle)
+    if(MSVC)
+        target_compile_options(mr_adm_c_api_tests PRIVATE /utf-8)
+    elseif(APPLE)
+        set_target_properties(mr_adm_c_api_tests PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "@loader_path")
+    elseif(UNIX)
+        set_target_properties(mr_adm_c_api_tests PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
+    endif()
     target_compile_definitions(mr_adm_c_api_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-    # Both consumers run against the same synthetic room, including from a relocated build.
+    # Keep the synthetic room beside the consumer for relocated builds.
     add_custom_target(mr_adm_capi_room_fixture
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room/synthetic"
             "$<TARGET_FILE_DIR:mr_adm_c_api_tests>/capi-room"
