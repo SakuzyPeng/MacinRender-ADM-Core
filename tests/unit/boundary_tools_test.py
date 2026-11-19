@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Unit tests of the CLI record (scripts/consistency/cli-transcript.py and boundary.py), restored for the phase 7 island slices."""
+import contextlib
+import copy
+import io
 import json
 import os
 from pathlib import Path
@@ -51,12 +54,13 @@ def rf64_with_trailing_bext(samples, seconds):
     return b'RF64' + struct.pack('<I', 0xFFFFFFFF) + body
 
 
-def ebml(element_id, payload, unknown=False):
+def ebml(element_id, payload, unknown=False, width=None):
     raw_id = element_id.to_bytes((element_id.bit_length() + 7) // 8, 'big')
     if unknown:
         return raw_id + b'\x01\xff\xff\xff\xff\xff\xff\xff' + payload
-    assert len(payload) < 127
-    return raw_id + bytes([0x80 | len(payload)]) + payload
+    if width is None:
+        width = 1 if len(payload) < 127 else 2
+    return raw_id + ((1 << (7 * width)) | len(payload)).to_bytes(width, 'big') + payload
 
 
 def mp4_box(tag, payload, extended=False, to_end=False):
@@ -103,18 +107,38 @@ class NormalizationTests(unittest.TestCase):
                          b'wrote out.render_tmp.<token>.wav and out.trim_tmp.<token>.wav')
         self.assertEqual(boundary.normalize(line, manifest()), line)
         self.assertEqual(boundary.normalize(b'out.bitdepth_tmp.0001.wav', manifest(), text=True), b'out.bitdepth_tmp.0001.wav')
+        self.assertEqual(boundary.normalize(b'out.output_tmp.0123456789abcdef_rendered_id_42.wav', manifest(), text=True),
+                         b'out.output_tmp.<token>_rendered_id_42.wav')
 
     def test_matroska_track_uid_only_in_the_track_entry(self):
         uid = bytes(range(1, 9))
         header = ebml(0x1A45DFA3, ebml(0x4282, b'matroska'))
-        tracks = ebml(0x1654AE6B, ebml(0xAE, ebml(0xD7, b'\x01') + ebml(0x73C5, uid)))
         cluster = ebml(0x1F43B675, ebml(0xA3, b'\x73\xc5\x88' + uid))
-        data = header + ebml(0x18538067, ebml(0x1549A966, b'\x00') + tracks + cluster, unknown=True)
-        out = boundary.normalize(data, manifest())
-        self.assertEqual(len(out), len(data))
-        self.assertEqual(out.count(uid), 1)  # the Cluster's look-alike bytes are audio and stay
-        self.assertEqual(out.replace(bytes(8), uid, 1), data)
+
+        def matroska(track_uid):
+            tracks = ebml(0x1654AE6B, ebml(0xAE, ebml(0xD7, b'\x01') + ebml(0x73C5, track_uid)))
+            return header + ebml(0x18538067, ebml(0x1549A966, b'\x00') + tracks + cluster, unknown=True)
+
+        self.assertEqual(boundary.normalize(matroska(uid), manifest()), matroska(b'\0'))
         self.assertEqual(boundary.normalize(b'not ebml' + uid, manifest()), b'not ebml' + uid)
+
+    def test_matroska_uid_width_changes_the_parent_sizes(self):
+        header = ebml(0x1A45DFA3, ebml(0x4282, b'matroska'))
+        cluster = ebml(0x1F43B675, ebml(0xA3, b'audio'))
+
+        def matroska(uid, entry_width=None):
+            # The 7- and 8-byte UID payloads put the TrackEntry on either side of 127.
+            track_number = ebml(0xD7, b'\x01')
+            track_uid = ebml(0x73C5, uid) if uid is not None else b''
+            entry = ebml(0xAE, track_number + ebml(0xEC, bytes(111)) + track_uid, width=entry_width)
+            return header + ebml(0x18538067, ebml(0x1654AE6B, entry) + cluster)
+
+        expected = matroska(b'\0')
+        for uid in (b'\x11' * 7, b'\x22' * 8):
+            self.assertEqual(boundary.normalize(matroska(uid), manifest()), expected)
+        self.assertEqual(boundary.normalize(matroska(b'\x11' * 7, entry_width=2), manifest()),
+                         matroska(b'\0', entry_width=2))
+        self.assertNotEqual(boundary.normalize(matroska(None), manifest()), expected)
 
     def test_mp4_clocks_preserve_sample_data_and_other_header_fields(self):
         for version in (0, 1):
@@ -151,6 +175,97 @@ class NormalizationTests(unittest.TestCase):
                      prefix + mp4_box(b'mvhd', mp4_header(0, NOW + 1, NOW + 2))):
             with self.subTest(data=data):
                 self.assertEqual(boundary.normalize(data, manifest()), data)
+
+    def test_mp4_normalizes_the_gpac_iamf_sound_handler_token(self):
+        prefix = mp4_box(b'ftyp', b'mp42\0\0\0\1iamf')
+        name = b'render_tmp.0123456789abcdef.iamf@GPAC26.02\0'
+
+        def handler(name, kind=b'soun'):
+            return mp4_box(b'hdlr', bytes(8) + kind + bytes(12) + name)
+
+        def movie(name):
+            media = mp4_box(b'mdia', handler(name) + handler(name, b'vide'))
+            return mp4_box(b'moov', mp4_box(b'trak', media) + handler(name))
+
+        samples = mp4_box(b'mdat', handler(name))
+        data = prefix + movie(name) + samples
+        # The same text in a video handler, an unrelated box or the sample data is preserved.
+        expected = data.replace(name, name.replace(b'0123456789abcdef', b'0' * 16), 1)
+        self.assertEqual(boundary.normalize(data, manifest()), expected)
+
+    def test_iamf_log_keeps_diagnostics_and_groups_each_substream(self):
+        def log(stamp, thread, channels, substreams):
+            prefix = f'I0000 00:00:{stamp}.123456 {thread} '.encode()
+            summary = f'opus_decoder.cc:103] Opus decoded 960 samples per channel. With {channels} channels.'.encode()
+            lines = [prefix + summary]
+            for stream_id, size in substreams:
+                lines.extend([prefix + f'audio_frame.cc:91]   audio_substream_id= {stream_id}'.encode(),
+                              prefix + f'audio_frame.cc:98]   // size_of(audio_frame)= {size}'.encode()])
+            return b'\n'.join(lines) + b'\n[warning] preserved CLI diagnostic\n'
+
+        a = log(NOW, 1001, 2, [(0, 500), (1, 3)])
+        b = log(NOW + 1, 2001, 1, [(1, 3), (0, 500)])
+        normalized = boundary.normalize(a, manifest(), text=True)
+        self.assertEqual(boundary.normalize(b, manifest(), text=True), normalized)
+        self.assertIn(b'I0000 00:00:<clock> <thread> audio_frame.cc:98]   // size_of(audio_frame)= 500', normalized)
+        self.assertIn(b'[warning] preserved CLI diagnostic', normalized)
+        wrong_sizes = log(NOW + 1, 2001, 1, [(1, 500), (0, 3)])
+        self.assertNotEqual(boundary.normalize(wrong_sizes, manifest(), text=True), normalized)
+        stale = log(NOW - 100, 4001, 2, [(0, 500), (1, 3)])
+        self.assertEqual(boundary.normalize(stale, manifest(), text=True), stale)
+
+
+class RecordValidationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def write_record(self, name, platform, original_root):
+        folder = self.root / name
+        streams = folder / 'commands'
+        streams.mkdir(parents=True)
+        stdout = original_root.encode() + b'\n'
+        (streams / 'where.stdout').write_bytes(stdout)
+        (streams / 'where.stderr').write_bytes(b'')
+        empty = boundary.digest(b'')
+        data = {
+            **manifest(original_root),
+            'schema': cli.SCHEMA, 'complete': True, 'normalizations': list(boundary.NORMALIZATIONS),
+            'source': {'files': {}, 'sha256': common.json_digest({})}, 'table': empty,
+            'platform': {'system': platform, 'machine': 'test'},
+            'build_identity': {'configuration': empty, 'binaries': dict.fromkeys(cli.TOOLS, empty)},
+            'tool_override': None, 'cli_sha256': empty, 'fixtures': {},
+            'commands': {'where': {'class': 'contract', 'args': ['where'], 'exit_code': 0,
+                                   'stdout': boundary.digest(stdout), 'stderr': empty, 'files': {}, 'removed_files': []}},
+        }
+        common.save(folder / 'manifest.json', data)
+        return folder, data
+
+    def test_record_paths_use_the_capture_platform(self):
+        cases = [('Windows', r'C:\records\old', r'\\server\share\new'), ('Linux', '/records/old', '/records/new')]
+        for platform, old, new in cases:
+            with self.subTest(platform=platform):
+                a, _ = self.write_record(platform + '-a', platform, old)
+                b, _ = self.write_record(platform + '-b', platform, new)
+                self.assertTrue(cli.compare(a, b)['identical'])
+
+    def test_missing_record_fields_return_two(self):
+        a, _ = self.write_record('a', 'Linux', '/records/a')
+        b, valid = self.write_record('b', 'Linux', '/records/b')
+        for fields in (('build_identity',), ('tool_override',), ('commands', 'where', 'exit_code')):
+            with self.subTest(fields=fields):
+                damaged = copy.deepcopy(valid)
+                parent = damaged
+                for field in fields[:-1]:
+                    parent = parent[field]
+                del parent[fields[-1]]
+                common.save(b / 'manifest.json', damaged)
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
+                    self.assertEqual(cli.main(['compare', str(a), str(b)]), 2)
+                self.assertIn('invalid record', stderr.getvalue())
+                self.assertIn(fields[-1], stderr.getvalue())
 
 
 @unittest.skipIf(os.name == 'nt', 'fake tools are POSIX shell scripts')
@@ -275,10 +390,35 @@ class CliTranscriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'must be empty'):
             self.record('a')
 
+    def test_expected_output_when_build_feature_is_available(self):
+        common.save(self.table, {'schema': cli.TABLE_SCHEMA, 'commands': [
+            {'id': 'formats', 'args': ['formats']},
+            {'id': 'encode', 'args': ['render', '-o', '{out:out.mp4}'],
+             'expected_output': 'out.mp4', 'output_requires_feature': 'iamf_mp4_packager'},
+        ]})
+        self.tool(self.build / 'mradm',
+                  'case "$1" in formats) echo "Build features: iamf_mp4_packager=no";; render) exit 1;; esac')
+        self.assertEqual(self.record('unsupported')['commands']['encode']['exit_code'], 1)
+
+        for name, render in (('failed', 'exit 1'), ('empty', ': > "$3"'), ('success', 'echo media > "$3"')):
+            with self.subTest(name=name):
+                self.tool(self.build / 'mradm',
+                          'case "$1" in formats) echo "Build features: iamf_mp4_packager=yes";; '
+                          f'render) {render};; esac')
+                if name == 'success':
+                    self.assertIn('outputs/encode/out.mp4', self.record(name)['commands']['encode']['files'])
+                else:
+                    with self.assertRaisesRegex(ValueError, 'expected exit 0 and non-empty out.mp4'):
+                        self.record(name)
+                    self.assertFalse((self.root / name / 'manifest.json').exists())
+
     def test_table_validation(self):
         for commands, message in (([{'id': 'x', 'args': []}, {'id': 'x', 'args': []}], 'duplicate'),
                                   ([{'id': 'X', 'args': []}], 'invalid command id'),
                                   ([{'id': 'x', 'args': [], 'class': 'loose'}], 'unknown class'),
+                                  ([{'id': 'x', 'args': [], 'expected_output': 'out.mp4'}], 'expected_output'),
+                                  ([{'id': 'x', 'args': ['{out:out.mp4}'], 'expected_output': 'out.mp4',
+                                     'output_requires_feature': 'iamf_mp4_packager'}], 'earlier formats command'),
                                   ([{'id': 'x', 'args': ['{json:nope.json}']}], 'unknown JSON fixture'),
                                   ([{'id': 'x', 'args': ['{room:nope}']}], 'unknown room file')):
             common.save(self.table, {'schema': cli.TABLE_SCHEMA, 'commands': commands})

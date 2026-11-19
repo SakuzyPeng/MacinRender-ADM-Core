@@ -1,6 +1,6 @@
 # 七期 7.1：平台岛收缩的方向与基线
 
-> 状态：已完成（2026-11-19，本机 Linux x64）。七期的切片与用户决定见
+> 状态：已完成（2026-11-19，初稿在 Linux x64 自查，合并前在 macOS arm64 复核）。七期的切片与用户决定见
 > [PCM 一致性审计的七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，六期移交的规模与开放问题见[六期结项](RUST_BOUNDARY_CLOSEOUT.md)。
 
 七期按 [ADR 0021](../adr/0021-rust-primary-project.md) 收缩平台岛，退出条件是生产 C/C++ 只剩岛：
@@ -12,18 +12,16 @@
 
 ## 用户决定（2026-11-19）
 
-1. **顺序**：编码器（7.2）→ 输出设备（7.3）→ Apple 岛（7.4）→ Windows 岛（7.5）。编码器在 Linux 上可以完整对照，所以排在最前。
+1. **顺序**：编码器（7.2）→ 输出设备（7.3）→ Apple 岛（7.4）→ Windows 岛（7.5）。FLAC 和 Opus MKA 的对照可先于平台相关的验收。
 2. **C 库绑定**：libFLAC、libopus 与 IAMF bridge 在 Rust 中手写 `extern` 声明，与 `mradm-ffi/src/flac.rs` 现有的 libFLAC 解码器声明相同。
    - 库仍由岛的 CMake 工程（`src/CMakeLists.txt`）构建，vendored 只有一份；
    - 不引入 `audiopus_sys`、`libflac-sys` 等会再构建一份 C 库的 crate。
-3. **dr_flac 与 FLAC 读取链在 7.2 删除**，取代此前「dr_flac 暂缓」的决定。盘点发现，生产中没有读取 FLAC 输入的路径。下面这条链只被测试探针 `mr_adm_flac_reader_probe`（`flac_reader_test.py`）使用：
+3. **dr_flac 与 FLAC 读取链在 7.2 删除**，取代此前「dr_flac 暂缓」的决定。这条链的调用方是测试探针 `mr_adm_flac_reader_probe`（`flac_reader_test.py`）与 `flac_io_smoke_test.cpp`：
    - `FloatFlacReader`（dr_flac 解出 PCM）；
    - 它经函数表调用的 Rust `flac_validate`（`mradm-ffi/src/flac.rs` 的 libFLAC 严格校验）；
    - `mradm-wav` 的 `flac` 模块。
 
-   7.2 把它们与 dr_flac 依赖一起删除。
-
-   > 更正：征求这项决定时，我把这条链描述为「生产已改由 Rust 解码」。实际情况是生产完全不读 FLAC 输入，删除的结论不变。
+   7.2 移除这条测试用读取链和 dr_flac 依赖。FLAC 冒烟测试以测试端解码替代 `FloatFlacReader`，保留 PCM 往返及 C ABI 最终 FLAC 的声道数和标签断言。
 4. **miniaudio 暂不替换**（同日早些时候的决定）。cpal 是以后的候选，见六期结项的七期初拟。
 
 ## 逐岛清单
@@ -67,11 +65,15 @@
 | 使用者 | 头 |
 | --- | --- |
 | 编码器与 Apple 岛 | `audio_io.h`（333）、`errors.h`、`logging.h`、`progress.h` |
-| 只有 Apple 岛（含 Windows sink） | `render.h`、`render_apple.h`、`live_override.h`、`engine_records.h`、`routing_ffi.h`、`scene_handle.h`、`scene_ffi.h`、`scene_math.h`、`meter.h`、`direct_matrix_records.h`、`render_common.h`、`speaker_layouts.h`、`buffered_media_timeline.h` |
+| Apple 岛及与 Windows sink 共用的实现 | `render.h`、`render_apple.h`、`live_override.h`、`engine_records.h`、`routing_ffi.h`、`scene_handle.h`、`scene_ffi.h`、`scene_math.h`、`meter.h`、`direct_matrix_records.h`、`render_common.h`、`speaker_layouts.h`、`buffered_media_timeline.h` |
 | 引擎与岛表 | `engine_ffi.h`（277）、`audio_output_device.h`、`capability.h`、`options.h` |
-| 只被同目录或已无调用者 | `room.h`、`screen.h`、`config_ffi.h`、`layout_ffi.h`、`adm_ffi.h`、`gain.h`、`room_ffi.h` |
+| `options.h` | `room.h`、`screen.h` |
+| `engine_ffi.h` | `config_ffi.h`、`adm_ffi.h` |
+| `rust_services_ffi.h` | `layout_ffi.h` |
+| `render_common.h` | `gain.h` |
+| `engine_records.h` | `room_ffi.h` |
 
-最后一类在 7.2 前后逐个核实，没有调用者的随相应切片删除。
+各切片移除共用头前，同时检查直接包含方和经这些头使用记录的岛与测试。
 
 7.2 之后，`audio_io.h` 只剩 Apple 岛使用的 WAVE 读写包装。7.4 的结果决定其余头留在 Apple 岛内，还是随 Apple 岛迁入 Rust 后删除。
 
@@ -94,19 +96,23 @@
 
 **编码器（7.2）**：用 6.1 的 CLI 记录做新旧对照。
 - `cli-transcript.py`、`boundary.py` 与 `cli-commands.json` 已从 6.7 删除前的历史恢复，ctest 恢复 `mr_adm_boundary_tool_tests`，七期结项时再删除。C ABI 采集工具不恢复，七期不改 C ABI。
-- 命令表新增 20 条 `encode-*` 命令：
+- 命令表新增 21 条 `encode-*` 命令：
   - FLAC：binaural、5.1、7.1、96 kHz、DirectSpeakers、裁剪、响度归一化、峰值限制、`-v`，以及高度层与 HOA3 的拒绝路径；
-  - Opus MKA：2 / 6 / 8 / 12 / 16 / 24 声道（mapping family 0 / 1 / 255）、HOA3、6 与 320 kbps 每声道、裁剪、响度、`-v`，以及 96 kHz 的拒绝路径。
-  - 命令表共 133 条命令。
+  - Opus MKA：2 / 6 / 8 / 12 / 16 / 24 声道（mapping family 0 / 1 / 255）、HOA3（family 2）、6 与 320 kbps 每声道、裁剪、响度、`-v`，以及 96 kHz 的拒绝路径。HOA3 和 5.1 正例分别使用 `objects-cartesian` 和 `directspeakers-lfe` 覆盖各声道的非零数据。7.1.4 裁剪用例保留 312,240 帧，最后 240 帧在编码器关闭时补齐一包。
+  - IAMF-in-MP4：`5.1,7.1.4` 两层打包。`formats` 报告 `iamf_mp4_packager=yes` 时，采集要求命令退出 0 并生成非空 `.mp4`。命令表保留参数错误用例，也记录未启用 IAMF 时的拒绝结果。
+  - 命令表共 134 条命令。
 - `mradm-testkit` 新增 12 秒的 `objects-long` fixture：Matroska 每 5 秒开一个 cluster，覆盖 cluster 翻转与较长的 FLAC。它不是 PCM 门禁输入，字节由 `fixtures_golden` 锁定。
 
-**本机自我对照**：同一 Release（consistency-a）构建相隔两秒的两份记录，133 条命令 0 差异，MKA 的 track UID 由既有归一化处理。
+旧记录需要重新采集。Matroska 对照把随机 TrackUID 统一为一个零字节，调整受 UID 宽度影响的 EBML 元素长度，保留长度字段的额外填充与 Cluster 数据。
+IAMF 对照归一化暂存文件名中的随机值，包括 GPAC 写入音频 handler 的部分。Abseil 启动日志的时间、线程号、逐子流诊断顺序和首个解码器诊断中的声道数也做归一化，保留其余诊断与编码数据。
+比较器按采集平台解释根路径，两份同平台记录可移到另一台机器核对。损坏记录退出 2。
 
-APAC、MP4 元数据与 IAMF 在 Linux 上不可用：
-- APAC 与 MP4 元数据：只能在 macOS 运行；
-- IAMF：需要 AOM bridge SDK。
+**初稿自我对照**：Linux x64 上同一 Release（consistency-a）构建的 133 条命令 0 差异。
 
-7.2 会为 MP4 atom 写出补 Rust 单元测试，并请维护者在 macOS 与带 IAMF 的构建上用同一命令表对照。
+**合并前复核**：macOS arm64 使用与 `2beee89b` 相同的生产代码。关闭和启用 AOM bridge 的 Release 构建各采集两份，均为 134 条命令、0 差异。
+MP4Box（GPAC 26.02）产物可读出两组 IAMF stream group，并保留 `moov` 后缺少可用 `free` atom 时的元数据告警。APAC 的 MP4 产物包含写入的编码器及渲染标签。
+
+APAC 需 macOS。IAMF 需 AOM bridge SDK，验收 IAMF-in-MP4 时用 MP4Box 打包并检查流组。现有 FFmpeg 回退用 `-c copy`，在 FFmpeg 8.0.1 上只写出单条 Opus 流，IAMF 流组缺失；该产物可用于对照回退路径和 MP4 元数据写出。7.2 为共用的 MP4 atom 写出补 Rust 单元测试。
 
 **输出设备与 Apple / Windows 岛**：
 - 依靠岛测试、C 消费者测试与 Apple 冒烟测试；
@@ -126,6 +132,6 @@ APAC、MP4 元数据与 IAMF 在 Linux 上不可用：
 | C++ 测试 | 9,927 |
 
 七期结束时的预期：
-- 生产区域只剩 `c_api.h`，可能另有进度回调跳板（27 行，待 7.6 决定）；
+- 生产区域只剩 `c_api.h`，另在 7.6 评估进度回调跳板（27 行）的去留。保留将 C++ 回调异常转换为 `ADM_ERROR_INTERNAL` 的行为。
 - 编码器只剩 C 库本身，岛接口随编码器与设备迁入 Rust 而减少；
 - Apple / Windows 岛的行数取决于 7.4 / 7.5 的评估结果。

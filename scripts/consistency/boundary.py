@@ -6,7 +6,7 @@ NORMALIZATIONS is the complete list of rewrites compare applies; every other byt
 import datetime
 import hashlib
 import os
-from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 import re
 import shutil
 import subprocess
@@ -18,18 +18,32 @@ TEXT_FIXTURE = b'not a RIFF/RF64/BW64 file\n'
 ISO_UTC = re.compile(rb'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z')
 CLOCK_PLACEHOLDER = b'0000-00-00T00:00:00Z'
 BEXT_CLOCK_PLACEHOLDER = b'0000-00-0000-00-00'
-SIDECAR = re.compile(rb'\.((?:render|gain|trim)_tmp)\.[0-9a-f]{16}\.')
+SIDECAR = re.compile(rb'\.((?:render|gain|trim|output)_tmp)\.[0-9a-f]{16}(?=\.|_rendered_id_|\s|$)')
+EARLY_ABSL_LOG = re.compile(rb'^([IWEF]0000 00:00:)([0-9]{1,12})\.[0-9]{6} +[0-9]+'
+                            rb'(?= [^\r\n]+:[0-9]+\] )', re.MULTILINE)
+IAMF_INFO_LOG = rb'I0000 00:00:<clock> <thread> '
+IAMF_FIRST_DECODER = re.compile(rb'^(' + IAMF_INFO_LOG + rb'opus_decoder\.cc:[0-9]+\] Opus decoded '
+                                rb'[0-9]+ samples per channel\. With )[0-9]+(?= channels\.\r?$)', re.MULTILINE)
+IAMF_FRAME_LINE = IAMF_INFO_LOG + rb'audio_frame\.cc:[0-9]+\] '
+IAMF_FRAME_LINES = re.compile(rb'(?:^' + IAMF_FRAME_LINE + rb'[^\r\n]*(?:\r?\n|$))+', re.MULTILINE)
+IAMF_FRAME_START = re.compile(rb'^' + IAMF_FRAME_LINE + rb'  audio_substream_id= ', re.MULTILINE)
 NORMALIZATIONS = (
     'root: the absolute capture working directory (as recorded, with / and \\ separators) becomes <root>',
     'clock: an ISO 8601 UTC time YYYY-MM-DDTHH:MM:SSZ inside the record\'s own wall-clock window '
     '(start - 1 s to end + 1 s) becomes 0000-00-00T00:00:00Z, same length',
     'bext clock: in a RIFF/RF64/BW64 file, the bext OriginationDate and OriginationTime (payload bytes 320-338) '
     'inside the same window become 0000-00-0000-00-00',
-    'sidecar: in text, the random 16-hex token of a .render_tmp/.gain_tmp/.trim_tmp sidecar name becomes <token>',
-    'matroska uid: in a Matroska file, the payload of Segment/Tracks/TrackEntry/TrackUID (drawn at random per file) '
-    'becomes zero bytes, located by walking the EBML tree up to the first Cluster',
+    'sidecar: in text, the random 16-hex token of a .render_tmp/.gain_tmp/.trim_tmp/.output_tmp name becomes <token>, '
+    'including the IAMF bridge staging prefixes',
+    'matroska uid: replace Segment/Tracks/TrackEntry/TrackUID with a one-byte zero and adjust the EBML sizes '
+    'affected by the random UID width, preserving size padding and everything from the first Cluster onward',
     'mp4 clock: the creation and modification times in moov/mvhd, moov/trak/tkhd and moov/trak/mdia/mdhd '
     '(version 0 or 1, seconds since 1904) inside the same window become zero bytes; other fields and mdat stay intact',
+    'gpac iamf name: in the sound handler name of moov/trak/mdia/hdlr, zero the random token of the IAMF sidecar '
+    'copied by GPAC; keep the handler type and the rest of its name',
+    'iamf diagnostic log: in early Abseil log headers, normalize in-window clocks and thread IDs; '
+    'sort contiguous audio_frame.cc info records by complete substream record and normalize the arbitrary '
+    'channel count in the first opus_decoder.cc info message',
 )
 
 
@@ -89,11 +103,12 @@ def check_record_fixtures(root, manifest):
 
 def check_clock(manifest):
     clock = manifest['clock']
-    if not (isinstance(clock['start'], int) and isinstance(clock['end'], int) and clock['start'] <= clock['end']):
+    if not (type(clock['start']) is int and type(clock['end']) is int and clock['start'] <= clock['end']):
         raise ValueError('invalid wall-clock window')
     if manifest['normalizations'] != list(NORMALIZATIONS):
         raise ValueError('record was made with other normalization rules')
-    if not isinstance(manifest.get('root'), str) or not Path(manifest['root']).is_absolute():
+    path_type = PureWindowsPath if manifest['platform']['system'] == 'Windows' else PurePosixPath
+    if not isinstance(manifest.get('root'), str) or not path_type(manifest['root']).is_absolute():
         raise ValueError('missing original record root')
 
 
@@ -146,36 +161,67 @@ MATROSKA_PATH = (0x18538067, 0x1654AE6B, 0xAE)  # Segment, Tracks, TrackEntry
 MATROSKA_TRACK_UID, MATROSKA_CLUSTER = 0x73C5, 0x1F43B675
 
 
+def ebml_size_width(size):
+    # The all-ones value of a size VINT is reserved for unknown sizes.
+    return ((size + 1).bit_length() + 6) // 7
+
+
 def normalize_matroska(data):
-    """Zero the per-file random TrackUID of a Matroska file (Segment/Tracks/TrackEntry/TrackUID)."""
+    """Canonicalize TrackUID and the element sizes affected by its random width."""
     if not data.startswith(b'\x1a\x45\xdf\xa3'):
         return data
-    out = bytearray(data)
+    edits = []
 
     def walk(start, end, depth):
+        delta = 0
         offset = start
         while offset < end:
-            element, cursor = ebml_vint(data, offset, True)
-            size, payload = ebml_vint(data, cursor, False)
-            if element is None or size is None or element == MATROSKA_CLUSTER:
-                return
-            stop = end if size == -1 else min(payload + size, end)
-            if depth == len(MATROSKA_PATH) and element == MATROSKA_TRACK_UID:
-                out[payload:stop] = bytes(stop - payload)
+            element, size_at = ebml_vint(data, offset, True)
+            if element is None or element == MATROSKA_CLUSTER:
+                break
+            size, payload = ebml_vint(data, size_at, False)
+            if size is None or payload > end:
+                break
+            stop = end if size == -1 else payload + size
+            if stop > end:
+                break
+            change = 0
+            if depth == len(MATROSKA_PATH) and element == MATROSKA_TRACK_UID and 1 <= size <= 8:
+                # Keep a TrackUID element so an absent element still compares differently.
+                edits.append((payload, stop, b'\0'))
+                change = 1 - size
             elif depth < len(MATROSKA_PATH) and element == MATROSKA_PATH[depth]:
-                walk(payload, stop, depth + 1)
+                change = walk(payload, stop, depth + 1)
+            if change and size != -1:
+                # Remove any width change caused by the new size while preserving deliberate padding.
+                old_width = payload - size_at
+                padding = old_width - ebml_size_width(size)
+                new_size = size + change
+                width = ebml_size_width(new_size) + padding
+                encoded = ((1 << (7 * width)) | new_size).to_bytes(width, 'big')
+                edits.append((size_at, payload, encoded))
+                change += width - old_width
+            delta += change
             offset = stop
+        return delta
+
     walk(0, len(data), 0)
+    if not edits:
+        return data
+    out = bytearray(data)
+    for start, stop, replacement in sorted(edits, reverse=True):
+        out[start:stop] = replacement
     return bytes(out)
 
 
 MP4_EPOCH_OFFSET = 2_082_844_800  # Seconds between 1904-01-01 and the Unix epoch.
 MP4_CONTAINERS = {(): b'moov', (b'moov',): b'trak', (b'moov', b'trak'): b'mdia'}
 MP4_CLOCKS = {(b'moov',): b'mvhd', (b'moov', b'trak'): b'tkhd', (b'moov', b'trak', b'mdia'): b'mdhd'}
+GPAC_IAMF_NAME = re.compile(rb'(?:[^/\\\x00]+\.)?render_tmp\.([0-9a-f]{16})\.iamf@GPAC[^\x00]*\x00')
 
 
 def normalize_mp4(data, inside):
-    """Zero only in-window creation/modification times in the three MP4 full-box headers."""
+    """Normalize in-window full-box clocks and the GPAC audio handler's IAMF sidecar token."""
     if len(data) < 8 or data[4:8] != b'ftyp':
         return data
     out = bytearray(data)
@@ -204,10 +250,32 @@ def normalize_mp4(data, inside):
                         stamp = int.from_bytes(data[field:field + width], 'big') - MP4_EPOCH_OFFSET
                         if inside(stamp):
                             out[field:field + width] = bytes(width)
+            elif tag == b'hdlr' and path == (b'moov', b'trak', b'mdia'):
+                name_at = payload + 24
+                if name_at < stop and data[payload] == 0 and data[payload + 8:payload + 12] == b'soun':
+                    match = GPAC_IAMF_NAME.fullmatch(data[name_at:stop])
+                    if match:
+                        out[name_at + match.start(1):name_at + match.end(1)] = b'0' * 16
             offset = stop
 
     walk(0, len(data), ())
     return bytes(out)
+
+
+def normalize_iamf_diagnostics(data, inside):
+    def log_prefix(match):
+        return match[1] + b'<clock> <thread>' if inside(int(match[2])) else match[0]
+
+    def sort_substreams(match):
+        block = match[0]
+        starts = [m.start() for m in IAMF_FRAME_START.finditer(block)]
+        if not starts or starts[0] != 0:
+            return block
+        return b''.join(sorted(block[start:stop] for start, stop in zip(starts, starts[1:] + [len(block)])))
+
+    data = EARLY_ABSL_LOG.sub(log_prefix, data)
+    data = IAMF_FIRST_DECODER.sub(rb'\1<channels>', data)
+    return IAMF_FRAME_LINES.sub(sort_substreams, data)
 
 
 def normalize(data, manifest, text=False):
@@ -221,7 +289,7 @@ def normalize(data, manifest, text=False):
         return value is not None and low <= value <= high
     data = ISO_UTC.sub(lambda m: CLOCK_PLACEHOLDER if inside(utc(m.groups())) else m.group(0), data)
     if text:
-        return SIDECAR.sub(rb'.\1.<token>.', data)
+        return normalize_iamf_diagnostics(SIDECAR.sub(rb'.\1.<token>', data), inside)
     return normalize_mp4(normalize_matroska(normalize_bext(data, inside)), inside)
 
 

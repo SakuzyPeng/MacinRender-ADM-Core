@@ -118,7 +118,7 @@ C ABI 采集工具（见“对照工具”）引用了其中 163 个导出：
 3. **bext clock**：RIFF / RF64 / BW64 中 bext 的 OriginationDate 与 OriginationTime（载荷 320–338 字节），同样只在时间窗内替换；
 4. **sidecar**：文本里 `.render_tmp` / `.gain_tmp` / `.trim_tmp` 临时文件名中的 16 位随机十六进制换成 `<token>`；
 5. **matroska uid**：Matroska 文件 Segment/Tracks/TrackEntry/TrackUID 的载荷（`opus_mka_io.cpp` 每个文件随机抽取）清零，
-   沿 EBML 结构定位，到第一个 Cluster 为止，不扫描音频数据。
+   沿 EBML 结构定位，到第一个 Cluster 为止。七期恢复工具后，载荷统一为一个零字节，受 UID 宽度影响的元素长度同步调整，保留额外的长度填充。
 6. **MP4 clock**：`moov/mvhd`、`moov/trak/tkhd`、`moov/trak/mdia/mdhd` 的创建与修改时间，在上述运行时间窗内时清零；
    按 1904 年纪元解释 version 0 的 32 位或 version 1 的 64 位字段，保留其余头字段及 `mdat` 内容。
 
@@ -143,6 +143,7 @@ python3 scripts/consistency/cli-transcript.py compare /tmp/cli-old /tmp/cli-new 
 
 `compare` 先核验两份记录各自的完整性（夹具、stdout / stderr、输出清单与摘要）和前提（源码、命令表、平台、夹具、构建身份相同，
 CLI 摘要只能与声明的 `--tool mradm` 相符），不符时退出 2；再逐条比较，相同退出 0，不同退出 1。
+七期恢复后的命令表与新归一化规则见 [7.1 对照方法](RUST_ISLAND_BASELINE.md#对照方法)。
 
 ### C ABI 采集：`capi-capture.py`
 
