@@ -4,7 +4,7 @@
 # it writes mradm_native_link-<config>.txt: the archives in link order, then the platform libraries,
 # one `kind:value` line each, which the build script turns into Cargo link instructions. The islands
 # call Rust only through the services table (rust_services_ffi.h), so their archives follow the Rust
-# library on any link line.
+# library on any link line. They are always static: the C ABI is the only shared library.
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     cmake_minimum_required(VERSION 3.24)
     project(MacinRenderADMIslands DESCRIPTION "MacinRender ADM Core islands" LANGUAGES C CXX)
@@ -64,7 +64,7 @@ target_link_libraries(mr_adm_dsp INTERFACE mr_adm_rust_services)
 # Backend-agnostic object preprocessing and block timeline helpers used by
 # speaker renderers. No libear/SAF/Apple types may appear in this target.
 
-add_library(mr_adm_render_common)
+add_library(mr_adm_render_common STATIC)
 add_library(MacinRender::ADMRenderCommon ALIAS mr_adm_render_common)
 
 target_sources(
@@ -89,7 +89,7 @@ endif()
 # WAVE sample I/O goes through Rust mradm-wav (wav_backend.h). DR_FLAC_IMPLEMENTATION is
 # defined in flac_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
 
-add_library(mr_adm_audio)
+add_library(mr_adm_audio STATIC)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
 
 target_sources(
@@ -134,7 +134,7 @@ mr_adm_core_apply_static_analysis(mr_adm_audio)
 # macOS-only AUSpatialMixer backend. Apple framework types are confined here.
 
 if(APPLE)
-    add_library(mr_adm_apple)
+    add_library(mr_adm_apple STATIC)
     add_library(MacinRender::ADMRenderApple ALIAS mr_adm_apple)
 
     find_library(MR_ADM_AVFOUNDATION_FW AVFoundation REQUIRED)
@@ -175,7 +175,7 @@ endif()
 # types are confined here; the factory returns the third-party-free IAudioOutputDevice.
 
 if(WIN32)
-    add_library(mr_adm_windows)
+    add_library(mr_adm_windows STATIC)
     add_library(MacinRender::ADMRenderWindows ALIAS mr_adm_windows)
 
     target_sources(mr_adm_windows PRIVATE
@@ -198,7 +198,7 @@ endif()
 # facts (mradm_platform_islands) and the output devices (mradm_device_islands: miniaudio here, the
 # system-spatial sinks in adm_apple / adm_windows).
 
-add_library(mr_adm_islands)
+add_library(mr_adm_islands STATIC)
 add_library(MacinRender::ADMIslands ALIAS mr_adm_islands)
 target_sources(mr_adm_islands PRIVATE
     adm_engine/platform_island.cpp

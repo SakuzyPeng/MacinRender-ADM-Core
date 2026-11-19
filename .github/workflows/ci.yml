@@ -105,7 +105,6 @@ jobs:
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
-          -DMR_ADM_BUILD_CAPI_BUNDLE=ON
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -146,14 +145,15 @@ jobs:
           restore-keys: |
             rust-release-${{ runner.os }}-${{ runner.arch }}-
       # aarch64 Linux is not in the consistency matrix; run the Rust regressions with optimizations
-      # there. mradm-ffi / mradm-capi tests link CMake's libFLAC and run in the debug jobs.
+      # there. mradm-ffi / mradm-capi link the islands (mradm-islands-sys builds the C/C++ project)
+      # and run in the debug jobs.
       - name: Test optimized Rust crates
         working-directory: rust
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/build/rust-release
         run: >
           cargo test --release --locked --workspace
-          --exclude mradm-ffi --exclude mradm-capi --exclude mradm-room-cuda
+          --exclude mradm-ffi --exclude mradm-capi --exclude mradm-islands-sys --exclude mradm-room-cuda
 
   windows-debug:
     name: Windows debug
@@ -252,7 +252,6 @@ jobs:
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
-            -DMR_ADM_BUILD_CAPI_BUNDLE=ON ^
             -DMR_ADM_ENABLE_SOFA=ON
 
       - name: Build

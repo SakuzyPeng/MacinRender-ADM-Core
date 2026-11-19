@@ -4,9 +4,8 @@
 # 为什么要打包:CMHeadphoneMotionManager(AirPods 头部追踪)要拿数据,必须有 Info.plist 的
 # NSMotionUsageDescription + 代码签名(裸 exe 下 TCC 直接杀进程)。打包后该开关才真正可用。
 #
-# 前置:native dylib 与 APAC helper 已就位 —
-#   cmake --preset release -DMR_ADM_BUILD_CAPI_BUNDLE=ON && \
-#     cmake --build --preset release --target mradm_capi_bundle mradm_exe
+# 前置:native dylib 与 APAC helper 已就位(6.6 起由 Cargo 构建,CMake 目标 mr_adm_rust 把它们复制到构建目录)—
+#   cmake --preset release && cmake --build --preset release --target mr_adm_rust
 #   gui/copy-native.sh && gui/build-headtrack.sh
 # 用法:gui/package-macos-gui-dev-app.sh   产物:gui/dist/MacinRender.app(不入 git)
 set -euo pipefail
@@ -30,7 +29,7 @@ if [[ ! -x "$publish/MacinRender.Gui" ]]; then
 fi
 apac_helper="$repo/build/release/mradm"
 if [[ ! -x "$apac_helper" ]]; then
-    echo "找不到 APAC helper $apac_helper；请先构建 Release mradm_exe"; exit 1
+    echo "找不到 APAC helper $apac_helper；请先构建 Release 的 mr_adm_rust 目标"; exit 1
 fi
 
 # 2. 组装 bundle 结构
