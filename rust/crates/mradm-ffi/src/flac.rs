@@ -280,8 +280,7 @@ fn validate(path: &str) -> Result<Info> {
     Ok(state.info)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_flac_validate(
+pub(crate) unsafe extern "C" fn mradm_flac_validate(
     path: *const u8,
     length: usize,
     info: *mut Info,

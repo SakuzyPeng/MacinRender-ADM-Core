@@ -152,8 +152,7 @@ fn records(
 
 /// Prepares the Apple recipe. On success `*output` owns the records and `*view` points into them;
 /// on failure the error fills the message and context buffers (capacity in, length out).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_apple_prepare(
+pub(crate) unsafe extern "C" fn mradm_render_apple_prepare(
     request: *const RenderAppleRequest,
     output: *mut *mut RenderApplePlan,
     view: *mut RenderApplePlanView,
@@ -246,8 +245,7 @@ pub unsafe extern "C" fn mradm_render_apple_prepare(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_apple_plan_destroy(plan: *mut RenderApplePlan) {
+pub(crate) unsafe extern "C" fn mradm_render_apple_plan_destroy(plan: *mut RenderApplePlan) {
     if !plan.is_null() {
         drop(unsafe { Box::from_raw(plan) });
     }

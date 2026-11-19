@@ -12,6 +12,8 @@
 
 #include "adm/audio_io.h"
 
+#include "../support/rust_services_test.h"
+
 namespace {
 void put_u32(std::vector<uint8_t>& out, uint32_t v) {
     for (unsigned i = 0; i < 4; ++i) {
@@ -74,6 +76,7 @@ int extract(const std::string& input, const std::string& output) {
 } // namespace
 
 int main(int argc, char** argv) {
+    mradm_test::bind_rust_services();
     if (argc != 4 || std::string{argv[1]} != "extract") {
         std::cerr << "usage: mr_adm_flac_reader_probe extract <in.flac> <bits-out>\n";
         return 2;

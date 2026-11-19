@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "../support/rust_services_test.h"
 #include "render_common.h"
 #ifdef __APPLE__
 #include <atomic>
@@ -376,6 +377,7 @@ bool verify_lfe_pair_recombination() {
 }
 
 int main() {
+    mradm_test::bind_rust_services();
     bool ok = verify_lfe_pair_recombination();
 #ifdef __APPLE__
     ok = verify_apple_backend() && ok;

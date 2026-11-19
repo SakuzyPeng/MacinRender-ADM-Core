@@ -91,8 +91,7 @@ fn table(source: &'static [Layout]) -> Table {
 }
 
 /// Geometry 0 is the standard ADM nominal profile, 1 the Apple effective-position profile.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_layouts(
+pub(crate) unsafe extern "C" fn mradm_scene_layouts(
     geometry: u32,
     entries: *mut *const LayoutEntry,
     entries_len: *mut usize,
@@ -341,8 +340,7 @@ unsafe fn labels(data: *const Text, len: usize) -> mradm_scene::Result<Vec<Strin
 
 /// `routed` 0 imports ADM BW64 only; 1 routes to ADM or a channel bed by the options. `path` is
 /// UTF-8 (the boundary converts the native spelling first).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_import(
+pub(crate) unsafe extern "C" fn mradm_scene_import(
     path: *const u8,
     path_len: usize,
     routed: u32,
@@ -381,8 +379,7 @@ pub unsafe extern "C" fn mradm_scene_import(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_view(
+pub(crate) unsafe extern "C" fn mradm_scene_view(
     handle: *const SceneHandle,
     info: *mut SceneImportInfo,
     view: *mut View,
@@ -414,8 +411,7 @@ pub unsafe extern "C" fn mradm_scene_view(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_destroy(handle: *mut SceneHandle) {
+pub(crate) unsafe extern "C" fn mradm_scene_destroy(handle: *mut SceneHandle) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));
@@ -507,8 +503,7 @@ impl DirectMatrix {
 }
 
 /// Parses `mradm.direct-speakers-matrix.v1`; the caller attaches its source label to errors.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
+pub(crate) unsafe extern "C" fn mradm_scene_direct_matrix_parse(
     json: *const u8,
     json_len: usize,
     output: *mut *mut DirectMatrix,
@@ -534,8 +529,7 @@ pub unsafe extern "C" fn mradm_scene_direct_matrix_parse(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_direct_matrix_destroy(handle: *mut DirectMatrix) {
+pub(crate) unsafe extern "C" fn mradm_scene_direct_matrix_destroy(handle: *mut DirectMatrix) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));

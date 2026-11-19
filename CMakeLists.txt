@@ -163,6 +163,14 @@ if(MSVC)
     target_compile_options(mr_adm_core INTERFACE /utf-8)
 endif()
 
+# The Rust services table the islands call (6.6 A): Rust binds it (mradm_islands_bind) before it first
+# calls an island. After the Rust library on every link line, so single-pass linkers resolve the bind.
+add_library(mr_adm_rust_services STATIC src/adm_core/rust_services.cpp)
+target_link_libraries(mr_adm_rust_services PUBLIC MacinRender::ADMCore)
+mr_adm_core_apply_warnings(mr_adm_rust_services)
+mr_adm_core_apply_static_analysis(mr_adm_rust_services)
+target_link_libraries(mr_adm_dsp INTERFACE mr_adm_rust_services)
+
 # ── adm_render_common ─────────────────────────────────────────────────────────
 # Backend-agnostic object preprocessing and block timeline helpers used by
 # speaker renderers. No libear/SAF/Apple types may appear in this target.
@@ -216,7 +224,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus mradm_capi
+    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus MacinRender::ADMDsp
 )
 target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
 if(MR_ADM_ENABLE_IAMF)
@@ -364,7 +372,7 @@ set_target_properties(mr_adm_c_api PROPERTIES
 set(MR_ADM_CAPI_CALLBACK_LINK_OPTIONS)
 if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
     foreach(_mr_symbol mradm_capi_progress_v1 mradm_capi_progress_v2 mradm_platform_islands mradm_device_islands
-            mradm_audio_island mradm_audio_apac_child)
+            mradm_audio_island mradm_audio_apac_child mradm_islands_bind)
         list(APPEND MR_ADM_CAPI_CALLBACK_LINK_OPTIONS "LINKER:--undefined=${_mr_symbol}")
     endforeach()
 endif()
@@ -471,18 +479,19 @@ endif()
 if(MR_ADM_CORE_BUILD_TESTS)
     enable_testing()
 
-    # The island tests' private declarations (tests/support/ffi/island_test_ffi.h).
+    # The island tests' private declarations (tests/support/ffi/island_test_ffi.h). The island tests
+    # link the C ABI: one C ABI call binds the islands' Rust services (tests/support/rust_services_test.h).
     include_directories(tests/support/ffi)
 
     add_executable(mr_adm_wav_io_tests tests/unit/wav_io_test.cpp)
-    target_link_libraries(mr_adm_wav_io_tests PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_wav_io_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_wav_io_tests)
     mr_adm_core_apply_static_analysis(mr_adm_wav_io_tests)
     add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests)
 
     # The audio island's WAVE / CAF metadata and writer wrappers (R3 C4 removed its SDK checks).
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
@@ -586,7 +595,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     elseif(WIN32)
         list(APPEND _mr_island_libraries mr_adm_windows)
     endif()
-    list(APPEND _mr_island_libraries mr_adm_render_common mr_adm_audio Opus::opus FLAC::FLAC)
+    list(APPEND _mr_island_libraries mr_adm_render_common mr_adm_audio mr_adm_rust_services Opus::opus FLAC::FLAC)
     if(TARGET MacinRender::IamfAomBridge)
         list(APPEND _mr_island_libraries MacinRender::IamfAomBridge)
     endif()
@@ -651,7 +660,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         # Keep narrow argv and file APIs lossless on non-UTF-8 Windows hosts.
         target_sources(mr_adm_flac_reader_probe PRIVATE tests/unit/flac_reader_probe.manifest)
     endif()
-    target_link_libraries(mr_adm_flac_reader_probe PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_flac_reader_probe PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_flac_reader_probe)
     mr_adm_core_apply_static_analysis(mr_adm_flac_reader_probe)
 
@@ -798,7 +807,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
-    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
     mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
     add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
@@ -807,7 +816,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(APPLE)
         add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
         target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
-            PRIVATE MacinRender::ADMRenderApple MacinRender::ADMAudio MacinRender::ADMDsp)
+            PRIVATE MacinRender::ADMRenderApple MacinRender::ADMAudio MacinRender::ADMDsp MacinRender::ADMCAPI)
         mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
         mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
@@ -816,7 +825,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # The island LFE pair recombination; on macOS also the Apple backend through the C ABI and its
     # island table (the EAR / VBAP routing is tested in mradm-engine tests/lfe_render.rs, R3 F2).
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
-    target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderCommon)
+    target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMCAPI)
     if(APPLE)
         target_link_libraries(mr_adm_lfe_routing_tests
             PRIVATE MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio)
@@ -858,7 +867,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_room_trace_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
-    target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_meter_tests)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
@@ -866,7 +875,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
     # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
     add_executable(mr_adm_audio_island_tests tests/unit/audio_island_test.cpp)
-    target_link_libraries(mr_adm_audio_island_tests PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_audio_island_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_audio_island_tests)
     mr_adm_core_apply_static_analysis(mr_adm_audio_island_tests)
     add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
@@ -884,20 +893,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_flac_io_smoke_tests COMMAND mr_adm_flac_io_smoke_tests)
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
-    target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_opus_mka_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_opus_mka_smoke_tests)
     add_test(NAME mr_adm_opus_mka_smoke_tests COMMAND mr_adm_opus_mka_smoke_tests)
 
     add_executable(mr_adm_iamf_smoke_tests tests/unit/iamf_smoke_test.cpp)
-    target_link_libraries(mr_adm_iamf_smoke_tests PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_iamf_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     target_compile_definitions(mr_adm_iamf_smoke_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
     mr_adm_core_apply_warnings(mr_adm_iamf_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_iamf_smoke_tests)
     add_test(NAME mr_adm_iamf_smoke_tests COMMAND mr_adm_iamf_smoke_tests)
 
     add_executable(mr_adm_apac_smoke_tests tests/unit/apac_smoke_test.cpp)
-    target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     if(APPLE)
         target_link_libraries(mr_adm_apac_smoke_tests PRIVATE ${MR_ADM_AUDIOTOOLBOX_FW} "-framework CoreFoundation")
     endif()
@@ -931,7 +940,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
 
         add_executable(mr_adm_apple_island_tests tests/unit/apple_island_test.cpp)
-        target_link_libraries(mr_adm_apple_island_tests PRIVATE MacinRender::ADMRenderApple MacinRender::ADMDsp)
+        target_link_libraries(mr_adm_apple_island_tests PRIVATE MacinRender::ADMRenderApple MacinRender::ADMDsp MacinRender::ADMCAPI)
         mr_adm_core_apply_warnings(mr_adm_apple_island_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_island_tests)
         add_test(NAME mr_adm_apple_island_tests COMMAND mr_adm_apple_island_tests)

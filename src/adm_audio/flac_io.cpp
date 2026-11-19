@@ -324,11 +324,11 @@ Result<FloatFlacReader> FloatFlacReader::open(const std::string& path) {
     const auto utf8_path = wav_path_utf8(path);
     MradmWavInfo info{};
     std::array<uint8_t, 512> message{};
-    if (const auto code = mradm_flac_validate(reinterpret_cast<const uint8_t*>(utf8_path.data()),
-                                              utf8_path.size(),
-                                              &info,
-                                              message.data(),
-                                              message.size());
+    if (const auto code = mradm::rust().flac_validate(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                                      utf8_path.size(),
+                                                      &info,
+                                                      message.data(),
+                                                      message.size());
         code != 0) {
         return mradm::unexpected{wav_error(code, message, path)};
     }

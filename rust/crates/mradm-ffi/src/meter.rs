@@ -4,8 +4,7 @@ use mradm_dsp::{
     meter::{Meter, MeterChannel, MeterMode},
 };
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_meter_create(
+pub(crate) unsafe extern "C" fn mradm_dsp_meter_create(
     channels: u32,
     rate: u32,
     mode: u32,
@@ -40,8 +39,7 @@ pub unsafe extern "C" fn mradm_dsp_meter_create(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_meter_destroy(handle: *mut Meter) {
+pub(crate) unsafe extern "C" fn mradm_dsp_meter_destroy(handle: *mut Meter) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));
@@ -49,8 +47,7 @@ pub unsafe extern "C" fn mradm_dsp_meter_destroy(handle: *mut Meter) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_meter_add(
+pub(crate) unsafe extern "C" fn mradm_dsp_meter_add(
     handle: *mut Meter,
     input: *const f32,
     length: usize,
@@ -81,8 +78,7 @@ pub unsafe extern "C" fn mradm_dsp_meter_add(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_meter_reset(
+pub(crate) unsafe extern "C" fn mradm_dsp_meter_reset(
     handle: *mut Meter,
     message: *mut u8,
     capacity: usize,
@@ -96,8 +92,7 @@ pub unsafe extern "C" fn mradm_dsp_meter_reset(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_meter_query(
+pub(crate) unsafe extern "C" fn mradm_dsp_meter_query(
     handle: *const Meter,
     kind: u32,
     channel: u32,

@@ -13,6 +13,7 @@
 #include "adm/audio_io.h"
 
 #include "../../src/adm_audio/island_ffi.h"
+#include "../support/rust_services_test.h"
 
 namespace {
 
@@ -120,6 +121,7 @@ bool verify_pre_cancelled_encoders(const fs::path& dir) {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     // These native path bytes name different characters in UTF-8 and legacy Windows code pages.
     const auto dir =
         fs::temp_directory_path() / ("mr_adm_audio_island_\xC2\xA9_" + std::to_string(std::random_device{}()));

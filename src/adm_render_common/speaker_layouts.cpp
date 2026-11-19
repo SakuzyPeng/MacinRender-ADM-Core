@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "layout_ffi.h"
+#include "../adm_core/rust_services_ffi.h"
 
 namespace mradm::render_layouts {
 
@@ -28,7 +28,7 @@ std::vector<SpeakerLayout> load(SpeakerGeometry geometry) {
     size_t count = 0;
     std::array<uint8_t, 256> message{};
     const auto id = geometry == SpeakerGeometry::apple ? 1U : 0U;
-    if (mradm_scene_layouts(id, &entries, &count, message.data(), message.size()) != 0) {
+    if (mradm::rust().scene_layouts(id, &entries, &count, message.data(), message.size()) != 0) {
         throw std::runtime_error(std::string{"speaker layout table: "} + reinterpret_cast<const char*>(message.data()));
     }
     std::vector<SpeakerLayout> layouts;

@@ -21,6 +21,7 @@ mod query;
 mod render;
 mod room;
 mod scene;
+mod services;
 mod string;
 mod version;
 

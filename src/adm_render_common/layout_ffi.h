@@ -1,5 +1,5 @@
-// Private loudspeaker layout boundary; see mradm-scene `layouts`. The table
-// points at process-lifetime Rust data and is never freed. Status values follow adm::ErrorCode.
+// The loudspeaker layout records of the Rust services (rust_services_ffi.h, mradm-scene `layouts`).
+// The table points at process-lifetime Rust data and is never freed.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -27,10 +27,6 @@ typedef struct MradmLayoutEntry {
     const MradmLayoutSpeaker* speakers;
     size_t speakers_len;
 } MradmLayoutEntry;
-
-// geometry: 0 standard ADM nominal positions, 1 Apple effective positions.
-int32_t mradm_scene_layouts(
-    uint32_t geometry, const MradmLayoutEntry** entries, size_t* entries_len, uint8_t* message, size_t capacity);
 
 #ifdef __cplusplus
 }

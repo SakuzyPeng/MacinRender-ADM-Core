@@ -77,16 +77,16 @@ Result<void> write_caf_metadata(const std::string& path, const MetadataFields& m
     const auto comments = compact_metadata_comment(meta);
     std::array<uint8_t, 512> message{};
     const auto bytes = [](std::string_view text) { return reinterpret_cast<const uint8_t*>(text.data()); };
-    const auto code = mradm_caf_append_info(bytes(utf8_path),
-                                            utf8_path.size(),
-                                            bytes(meta.encoder),
-                                            meta.encoder.size(),
-                                            bytes(meta.date_utc),
-                                            meta.date_utc.size(),
-                                            bytes(comments),
-                                            comments.size(),
-                                            message.data(),
-                                            message.size());
+    const auto code = mradm::rust().caf_append_info(bytes(utf8_path),
+                                                    utf8_path.size(),
+                                                    bytes(meta.encoder),
+                                                    meta.encoder.size(),
+                                                    bytes(meta.date_utc),
+                                                    meta.date_utc.size(),
+                                                    bytes(comments),
+                                                    comments.size(),
+                                                    message.data(),
+                                                    message.size());
     if (code != 0) {
         return mradm::unexpected{wav_error(code, message, path)};
     }
@@ -167,7 +167,7 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     const auto utf8_path = wav_path_utf8(path);
     std::array<uint8_t, 512> message{};
     const auto code =
-        mradm_wav_append_bext(wav_bytes(utf8_path), utf8_path.size(), &fields, message.data(), message.size());
+        mradm::rust().wav_append_bext(wav_bytes(utf8_path), utf8_path.size(), &fields, message.data(), message.size());
     if (code != 0) {
         return mradm::unexpected{wav_error(code, message, path)};
     }

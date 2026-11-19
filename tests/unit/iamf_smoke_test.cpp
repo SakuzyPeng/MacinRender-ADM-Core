@@ -6,6 +6,7 @@
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
+#include "../support/rust_services_test.h"
 #include "test_portable.h"
 
 namespace {
@@ -20,6 +21,7 @@ bool check(bool condition, const char* msg) {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     bool ok = true;
 
 #if MR_ADM_ENABLE_IAMF

@@ -18,6 +18,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
+#include "../support/rust_services_test.h"
 #include "test_portable.h"
 
 namespace {
@@ -532,6 +533,7 @@ bool verify_apac_wrong_channelcount_rejected() {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
 #ifndef __APPLE__
     std::cout << "APAC smoke tests skipped (not macOS)\n";
     return EXIT_SUCCESS;

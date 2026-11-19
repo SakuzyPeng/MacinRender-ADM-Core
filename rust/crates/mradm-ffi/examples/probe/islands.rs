@@ -6,7 +6,7 @@
 #![allow(dead_code)]
 use mradm_ffi::api::islands::{
     AppleIslands, DeviceEnumeration, DeviceIslands, DevicePull, DeviceTable, EngineIslandError,
-    EngineSceneDeviceProgress, PlatformIslands, Text,
+    EngineSceneDeviceProgress, PlatformIslands, RustServices, Text, services,
 };
 use mradm_json::{Map, Value};
 use std::ffi::{CStr, c_char, c_void};
@@ -15,24 +15,34 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 unsafe extern "C" {
+    fn mradm_islands_bind(services: *const RustServices);
     fn mradm_device_islands() -> *const DeviceIslands;
     fn mradm_platform_islands() -> *const PlatformIslands;
     #[cfg(target_os = "macos")]
     fn mradm_apple_islands() -> *const AppleIslands;
 }
 
+/// Hands the islands their Rust services once, as the C ABI does before it first calls one.
+fn bind() {
+    static BIND: std::sync::Once = std::sync::Once::new();
+    BIND.call_once(|| unsafe { mradm_islands_bind(services()) });
+}
+
 /// The device island table (process lifetime).
 pub fn devices() -> *const DeviceIslands {
+    bind();
     unsafe { mradm_device_islands() }
 }
 
 /// The platform island table (process lifetime).
 pub fn platform() -> *const PlatformIslands {
+    bind();
     unsafe { mradm_platform_islands() }
 }
 
 /// The Apple island table on macOS, null elsewhere.
 pub fn apple() -> *const AppleIslands {
+    bind();
     #[cfg(target_os = "macos")]
     return unsafe { mradm_apple_islands() };
     #[cfg(not(target_os = "macos"))]

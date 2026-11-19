@@ -71,7 +71,7 @@ int32_t prepare(const MradmAppleSettings* settings,
     try {
         owned = std::make_shared<const detail::RenderSceneHandle>(scene);
     } catch (...) {
-        mradm_scene_destroy(scene);
+        mradm::rust().scene_destroy(scene);
         return replied(reply, [](MradmEngineIslandReply& r) {
             reply_error(r, {ErrorCode::internal_error, "render island failed", {}});
         });

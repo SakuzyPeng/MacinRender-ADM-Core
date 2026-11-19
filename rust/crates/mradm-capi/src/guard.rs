@@ -1,7 +1,7 @@
 //! Panics never cross the C ABI. A panic inside an export ends that call the way an exception
 //! does in the C++ exports (`catch (...)`): the export returns its fallback, normally
 //! `ADM_ERROR_INTERNAL`, NULL or nothing. Callback threads and reentrancy are the caller's, as
-//! before; the guard holds no state.
+//! before; the guard holds no state. It first binds the islands' Rust services (`services.rs`).
 //!
 //! Exports whose body cannot panic (a constant, a null check and a release) do without it.
 // Not every fallback has a caller yet; the remaining families bring them.
@@ -21,6 +21,7 @@ pub(crate) const INTERNAL: ErrorCode = 6;
 
 /// Runs one export body; a panic returns `fallback`.
 pub(crate) fn guard<T>(fallback: T, body: impl FnOnce() -> T) -> T {
+    crate::services::bind();
     catch_unwind(AssertUnwindSafe(body)).unwrap_or(fallback)
 }
 

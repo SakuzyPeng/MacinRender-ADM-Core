@@ -26,8 +26,8 @@
 #include "adm/logging.h"
 #include "adm/render.h"
 
+#include "../adm_core/rust_services_ffi.h"
 #include "../adm_dsp/gain.h"
-#include "routing_ffi.h"
 
 namespace mradm::render_common {
 

@@ -34,6 +34,7 @@
 #include "adm/audio_io.h"
 #include "adm/c_api.h"
 
+#include "../support/rust_services_test.h"
 #include "../support/wav_fixture.h"
 
 namespace {
@@ -579,6 +580,7 @@ bool run_check(std::string_view name, bool (*fn)()) {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     bool ok = true;
     ok &= run_check("roundtrip", verify_flac_roundtrip);
     ok &= run_check("vorbis_comment", verify_flac_vorbis_comment);
