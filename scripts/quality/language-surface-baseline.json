@@ -19,7 +19,7 @@
     },
     "tests": {
       "files": 26,
-      "lines": 11313
+      "lines": 11319
     },
     "rust": {
       "files": 380,
@@ -75,7 +75,7 @@
     "src/adm_render_common": 864,
     "src/adm_render_room/cuda": 512,
     "src/adm_windows": 709,
-    "tests/manual": 809,
+    "tests/manual": 815,
     "tests/support": 1349,
     "tests/tools": 1435,
     "tests/unit": 7720

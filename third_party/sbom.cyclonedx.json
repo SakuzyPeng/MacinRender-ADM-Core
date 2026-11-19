@@ -21,7 +21,7 @@
       "type": "library",
       "name": "nlohmann_json",
       "version": "v3.12.0",
-      "description": "JSON 解析/序列化（测试专用：测试 SDK、工具与冻结参考，6.5 C 起不进生产）",
+      "description": "JSON 解析/序列化（测试专用：Apple 冒烟测试读能力表 JSON，6.5 C 起不进生产）",
       "licenses": [
         {
           "license": {
@@ -30,30 +30,6 @@
         }
       ],
       "purl": "pkg:github/nlohmann/json@v3.12.0",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "test-only"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "fmt",
-      "version": "11.2.0",
-      "description": "格式化（测试专用：冻结参考与测试 SDK，6.5 C 起不进生产）",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:github/fmtlib/fmt@11.2.0",
       "properties": [
         {
           "name": "mradm:distribution",

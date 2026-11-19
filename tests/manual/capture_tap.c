@@ -8,18 +8,18 @@
 
 typedef void (*mr_probe_capture_fn)(void* user, const float* input, uint32_t frames);
 
-typedef struct mr_probe_capture {
+typedef struct ProbeCapture {
     ma_context context;
     ma_device device;
     ma_device_id id;
     mr_probe_capture_fn callback;
     void* user;
-} mr_probe_capture;
+} ProbeCapture;
 
 // The lowercase hex of the opaque id, as the device islands name output devices.
 static void token(const ma_device_id* id, char* out) {
     static const char digits[] = "0123456789abcdef";
-    const unsigned char* bytes = (const unsigned char*)id;
+    const unsigned char* bytes = (const unsigned char*) id;
     for (size_t i = 0; i < sizeof(*id); ++i) {
         out[i * 2] = digits[bytes[i] >> 4U];
         out[(i * 2) + 1] = digits[bytes[i] & 15U];
@@ -28,10 +28,10 @@ static void token(const ma_device_id* id, char* out) {
 }
 
 static void data(ma_device* device, void* output, const void* input, ma_uint32 frames) {
-    (void)output;
+    (void) output;
     if (input != NULL) {
-        const mr_probe_capture* self = (const mr_probe_capture*)device->pUserData;
-        self->callback(self->user, (const float*)input, frames);
+        const ProbeCapture* self = (const ProbeCapture*) device->pUserData;
+        self->callback(self->user, (const float*) input, frames);
     }
 }
 
@@ -45,11 +45,11 @@ int mr_probe_capture_open(const char* name,
                           uint32_t rate,
                           mr_probe_capture_fn callback,
                           void* user,
-                          mr_probe_capture** out,
+                          ProbeCapture** out,
                           char* device_name,
                           size_t device_name_len) {
     *out = NULL;
-    mr_probe_capture* self = (mr_probe_capture*)calloc(1, sizeof(mr_probe_capture));
+    ProbeCapture* self = (ProbeCapture*) calloc(1, sizeof(ProbeCapture));
     if (self == NULL) {
         return 6;
     }
@@ -76,8 +76,14 @@ int mr_probe_capture_open(const char* name,
         if ((!loopback && strcmp(name, devices[i].name) == 0) || (loopback && strcmp(hex, loopback_token) == 0)) {
             self->id = devices[i].id;
             if (device_name_len != 0) {
-                strncpy(device_name, devices[i].name, device_name_len - 1);
-                device_name[device_name_len - 1] = '\0';
+                size_t length = strlen(devices[i].name);
+                if (length >= device_name_len) {
+                    length = device_name_len - 1;
+                }
+                for (size_t c = 0; c < length; ++c) {
+                    device_name[c] = devices[i].name[c];
+                }
+                device_name[length] = '\0';
             }
             ++matches;
         }
@@ -110,7 +116,7 @@ int mr_probe_capture_open(const char* name,
 }
 
 // Stops the device (its callback has returned when this returns) and frees it; null is ignored.
-void mr_probe_capture_close(mr_probe_capture* self) {
+void mr_probe_capture_close(ProbeCapture* self) {
     if (self != NULL) {
         ma_device_uninit(&self->device);
         ma_context_uninit(&self->context);

@@ -856,6 +856,19 @@ F 已完成。原来依赖 C++ SDK 的 7 个岛测试已移除这项依赖，并
 
 `mradm-ffi` 入口由 234 个降至 200 个。合并前复核后，生产 C/C++ 由 9,432 行降至 8,744 行，测试 C/C++ 由 24,816 行降至 22,124 行。[F 的原生复核](RUST_BOUNDARY_TESTS.md#f-的-macos-与-windows-原生复核2026-11-18)
 
+G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SDK 的 5 个手动探针与基准改为 `mradm-ffi` 的 Rust example，
+测试 SDK 随即删除：
+
+- OSC 探针与两个 Triple Balance 基准只用 Rust 引擎，null 输出设备改为每 10 ms 拉取一次的 Rust 时钟线程；
+- `mr_adm_room_scene_benchmark` 与 `mr_adm_room_file_device_probe` 以 feature `islands` 静态链入 C++ 设备岛（用户决定 2026-11-19），
+  链接参数由 CMake 写出；输出回调经设备岛表的代理测量，采集与回环输入经 142 行的 C 垫片 `tests/manual/capture_tap.c`；
+- `tests/support` 的 SDK 与外壳（`sdk`、`adm_scene`、`engine_renderer`、`live_scene`、`scene_stream`、`realtime`、`dsp`）和
+  测试 FFI 头删除，只剩岛测试的 fixture 头、Apple 驱动与 `ffi/island_test_ffi.h`；fmt 移出构建；
+- `mradm-ffi` 中只被 SDK 调用的 164 个 `extern "C"` 入口删除（200 → 36），岛表记录改由 `check-ffi-headers.py` 按名单核对。
+
+测试 C/C++ 由 22,124 行降至 11,319 行，生产 C/C++ 由 8,744 行降至 8,704 行。设备探针在 macOS 与 Windows 的链接和运行待维护者复核。
+见 [R3 记录的 G 节](RUST_BOUNDARY_TESTS.md#g-手动探针与收尾)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：
