@@ -1,6 +1,6 @@
 # C++ 测试移植为 Rust（R3）
 
-> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），E 已完成（2026-11-18，本机 Linux x64）并已通过原生复核，D 的原生复核待维护者；F 已完成（2026-11-18，本机 Linux x64；Apple 部分盲写，待 macOS 复核）；G 待做。
+> 状态：进行中。A、B、C 已完成（2026-11-15），B、C 已通过 macOS arm64 / Windows x64 原生复核；D 已完成（2026-11-16，本机 Linux x64），E 已完成（2026-11-18，本机 Linux x64）并已通过原生复核，D 的原生复核待维护者；F 已完成（2026-11-18）并已通过 macOS / Windows 原生复核；G 已完成（2026-11-19，本机 Linux x64；两个房间设备探针在 macOS / Windows 的链接与运行待复核），R3 结束。
 > 依据：[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)（R3 由七期提前到 6.6 之前）与下文的用户决定 2026-11-15。
 
 R2 之后，C++ 测试代码共 57,767 行（`tests/unit` 38,055、`tests/support` 14,734、`tests/tools` 2,553、`tests/manual` 2,425）。
@@ -544,3 +544,73 @@ F1 到 F4 分别处理 WAV 包装、FLAC 与自有后端、Apple 和收尾。下
 合并时生产 C/C++ 由 9,432 行降到 8,744 行，测试 C/C++ 由 24,816 行降到 22,124 行（`tests/unit` 9,746 → 7,720）。
 按棘轮计数，`mradm-ffi` 由 19,894 行降到 18,101 行，`mradm-render` 由 23,503 行增到 24,856 行，`mradm-engine` 由 26,631 行
 增到 26,846 行。SDK、`adm_scene` 与 `engine_renderer` 只剩 G 的手动探针与基准在用。
+
+## G 手动探针与收尾
+
+G 处理依赖 C++ SDK 的 5 个手动探针与基准（`tests/manual`，2,480 行），随后删除不再有使用者的测试 SDK。
+用户决定（2026-11-19）：**需要真实设备的探针也改为 Rust example，静态链入 C++ 设备岛**，测量方法照旧，macOS / Windows 由维护者复核。
+G1 到 G4 分别处理无设备的工具、房间设备探针、SDK 删除和收尾。
+
+| C++ 工具 | 去向 |
+|---|---|
+| osc_head_tracking_probe（65 行） | → `mradm-ffi` example `osc_head_tracking_probe`：经 `mradm_ffi::api::osc`（Windows 的独占绑定）；参数、`PORT` 行、快照 JSON 与退出码 0 / 1 / 2 不变 |
+| triple_balance_scene_benchmark（217 行） | → example：`mradm-engine` 的 Scene 渲染器跑 1000 块求 RTF，再经 Scene 流与 Scene 输出会话播放；输出行与判定不变 |
+| triple_balance_monitor_benchmark（320 行） | → example：输入由 `mradm-wav` 写出、`mradm-scene` 导入，流由 `open_monitor` 打开，`mradm_engine::monitor::Monitor` 循环监听 60 秒；输出行与判定不变 |
+| room_scene_benchmark（695 行）+ room_probe_metrics.h（294 行） | → example（feature `islands`）：kernel / kernel-worker / latency 模式直接驱动房间 Scene 渲染器；stream / stream-cycles / stream-device 经 Scene 流与生产的 Scene 输出（`EngineSceneOutput`），设备由测量代理包装；OSC 经 `api::osc`；`--list-devices`、录音与 `recordings.json` 不变，`scripts/room/device-probe.py` 读取的 JSON 行不变 |
+| room_file_device_probe（216 行） | → example（feature `islands`）：经生产的监听会话 `EngineMonitorSession`（导入、文件流式、渲染与设备岛）；进度与报告 JSON 不变 |
+
+**null 设备**：两个 Triple Balance 基准使用 10 ms 周期的 Rust 时钟线程。播放期间按累计帧时钟拉取，唤醒迟到时补齐已到期的拉取。
+文件监听基准在顺序渲染后重开流，用新流测冷跳转，再测同一目标的缓存跳转。
+
+**链接岛**：两个房间设备探针在 `mradm-ffi` 的 `[[example]]` 中要求 feature `islands`，`cargo test --workspace` 与其它 example 因此不链接 C++。
+CMake 把岛及其依赖的库逐行写进 `generated/<config>/mr_adm_island_link.txt`，`mradm-ffi` 的构建脚本只在开启 feature 且设置
+`MR_ADM_ISLAND_LINK_FILE` 时把它们交给 example 的链接器。岛按名调用的 `mradm_*` 入口由 example 自带的 `mradm-ffi` 提供，不链接
+`mradm_capi` staticlib，因此需要不受归档顺序影响的链接器（ld64、link.exe、x86_64 Linux 上 Rust 默认的 lld）。`mr_adm_rust_quality`
+另以 feature `islands` 检查这些 example（检查不链接）。探针继承生产目标的 Rust 特性与所选的 CMake 优化配置。多配置生成器将
+可执行文件放在各自的配置目录中，共享库构建为房间探针写入设备岛的运行时搜索路径。
+
+**测量代理**：原 `MeasuredDevice` 包装 C++ `IAudioOutputDevice`。example 复用 `mradm-ffi` 的设备岛表，把代理表交给 Scene 输出。
+代理在设备启动前发布拉取回调，运行期间共享访问上下文，并记录回调间隔、拉取耗时与输出 PCM。
+
+**采集**：采集与回环输入需要 miniaudio 的采集设备，由 142 行的 C 垫片 `tests/manual/capture_tap.c`（`mr_adm_probe_capture`）在岛的
+miniaudio 实现上打开，example 经三个 C 函数调用。探针独占创建非空的录音目录后才打开采集设备。
+
+**删除的测试支持**（G3）：`tests/support/sdk`（`RenderService` / `PreviewSession`、`MonitorSession`、`OscHeadTrackingReceiver`、
+场景导入、房间、能力记录与 HpTF 辅助）、`adm_scene`、`engine_renderer`、`live_scene`、`scene_stream`、`realtime`、`dsp`、
+`render_test_ffi.h` 与 7 个 `tests/support/ffi/*_test_ffi.h`，以及 11 个 CMake 库。Apple 岛测试要的 3 个声明（带路由的场景导入、
+DirectSpeakers 矩阵解析）移到 `tests/support/ffi/island_test_ffi.h`。fmt 移出构建，nlohmann_json 只供 Apple 冒烟测试。
+
+**删除的 `mradm-ffi` 入口**：只被 SDK 调用的 164 个 `extern "C"` 入口，连同只为它们存在的记录、辅助与字段（200 → 36）。只测这些入口
+C 边界的单元测试一并删除（Monitor DSP 与实时 HpTF 入口、`render_live_test`、`render_room_control_test`、`render_stream_test`，
+FFT、后端记录、文档与 HpTF 设置的边界检查），行为由 `mradm-dsp`、`mradm-render`、`mradm-engine` 的 Rust 测试覆盖。房间浮点环境与
+房间测试改为直接调用 `render::room_polar`；Scene 输出的 HpTF 发布测试保留，为它加了仅测试用的 `Device::adopt`。`room_prepare_bench`
+改经 `mradm_ffi::api::room`。
+
+**FFI 头校验**：岛表的记录（设备、平台、Apple 岛表及其事件与回复）原本经测试入口的签名进入 cbindgen 的输出。Rust 以 `extern` 调用岛，
+导出签名里没有这些类型，因此 `cbindgen.toml` 按名导出这 21 个类型，`check-ffi-headers.py` 按 `ISLAND_RECORDS` 配对后逐字段核对。
+
+**删除的生产代码**：`live_override_records`、`screen_geometry`、`FloatWavReader::channel_mask` / `seek`（没有调用者）。
+
+**故障注入**（每项改动后恢复）：
+- G1：Scene 基准的生产端每块睡 20 ms，检出 986 次欠载、退出码 1；Monitor 基准的消费端每周期拉 100 倍实时，检出 5,998 次欠载、退出码 1。
+  消费端变慢的注入不构成失败（生产端只是等待），不计。
+- G2：不再请求换房，`applied_revision` 为 0、退出码 1；不应用姿态，`poses_applied` 为 0、退出码 1。代理把拉取帧数减半未检出：判定读的是
+  会话的消费帧数而不是设备回调的返回值，C++ 版相同。
+- G3：`MradmDeviceTable` 的一个字段改签名，FFI 头校验检出。
+
+### G1 到 G4 的验证
+
+- **对照 C++ 探针**（G2，`b8914dc` 构建的 C++ 版与 Rust 版，同一 fixture，本机 Linux）：latency 行逐字节相同；kernel、stream-cycles、
+  stream-device 与文件探针的报告键、结构和确定性字段（预期与呈现帧数、应用的修订、房间日志）相同，`recordings.json` 布局相同。
+  本机没有声卡，miniaudio 以硬件方式打开的 null 设备不按实时节奏回调，stream-device 与文件探针提前跑完、欠载并以 1 退出，C++ 与 Rust 版相同。
+- **Rust**：workspace fmt 与 clippy `-D warnings`（全部 target）通过；`mradm-ffi` 另按 diagnostics、room-cuda、islands 检查；
+  `x86_64-pc-windows-msvc` 与 `aarch64-apple-darwin` 的交叉 clippy 通过（只在这两个平台编译的 RSS、CPU 时钟与等待代码也在内）；
+  `mradm-ffi` 单元测试 29 项通过。
+- **C++ 侧**：debug 构建与 ctest 25 项通过；FFI 头校验通过（36 个函数、56 个结构体）；`quality_scripts_test.py` 与 C/C++ 棘轮通过；
+  改动的 C/C++ 文件通过 clang-format 18 与 clang-tidy。
+- **对照参照构建 `21656e3`**（main 在 G 开始时的提交，方法同 F，候选为 G3 之后的 `consistency-a`）：C ABI 采集 3,283 行、36 个文件
+  0 差异；CLI 记录 113 条命令 0 差异；消费者测试对两个库都通过；共享库恰好导出 164 个 `adm_*`；完整 PCM 采集相同（220 个 fixture、
+  989 项比较、176 个重放、256 个产物、666 份日志）。只有链接 `mradm-ffi` 的 `mr_adm_repeat_render` 二进制摘要不同，比较前中和。
+
+生产 C/C++ 由 8,744 行降到 8,704 行，测试 C/C++ 由 22,124 行降到 11,319 行（`tests/support` 10,489 → 1,349、`tests/manual` 2,480 → 815）。
+按棘轮计数，`mradm-ffi` 由 18,101 行降到 14,547 行（含新增的 example）。

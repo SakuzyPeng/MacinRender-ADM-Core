@@ -123,6 +123,8 @@ GUI 在“系统空间音频”的渲染床后端中提供 Triple Balance，布�
 Release 的 `mr_adm_triple_balance_monitor_benchmark [9.1.6|9+10+3]` 使用 13 路合成 PCM
 （7.1.2 bed、两个尺寸对象和一个点源）经 null 音频设备按实际时钟循环监听 60 秒，输出 RTF、
 首次／缓存跳转耗时、underrun 和 macOS 内存峰值。它不代替物理设备或高对象数素材的验收。
+R3 G 起它是 `mradm-ffi` 的 Rust example（`cmake --build <build> --target mr_adm_triple_balance_monitor_benchmark`
+在 Release 配置运行），null 设备由 Rust 时钟线程每 10 ms 拉取一次。迟到时按累计帧时钟补齐，冷跳转在新打开的流上计时。
 
 ## Scene 流（C ABI v1.44）
 
@@ -177,7 +179,7 @@ Rust 4 项、Windows x64 canonical Release 定向与 Rust 6 项均通过。新�
 60 秒 Release null 输出使用 7.1.2 bed、两个持续移动／变尺寸对象和一个点源，共 13 路输入。
 RTF 单独计量 10 秒等价 live renderer 输入的处理时间。macOS（M4 Pro）9.1.6／22.2 的渲染 RTF 分别约 0.030／0.057，Windows 9.1.6 约 0.066；均无 underrun，
 RSS 在预热后未持续增长。此合成基准不替代物理设备或更高对象数素材的实测。
-可复现命令为 `mr_adm_triple_balance_scene_benchmark [9.1.6|22.2] 60`，必须使用 Release。
+可复现命令为 `mr_adm_triple_balance_scene_benchmark [9.1.6|22.2] 60`，必须使用 Release（R3 G 起为 `mradm-ffi` 的 Rust example，null 输出同上为 10 ms 周期的 Rust 时钟线程）。
 来源哈希、PCM 哈希和详细结果见 [验证记录](evidence/live-triple-balance/validation.json)。
 
 ### Scene PCM 视图修正验证（2026-10-24）

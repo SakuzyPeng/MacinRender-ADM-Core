@@ -19,7 +19,7 @@
 #include "adm/audio_io.h"
 
 #include "../../src/adm_apple/apple_island.h"
-#include "scene_test_ffi.h"
+#include "island_test_ffi.h"
 
 namespace apple_test {
 

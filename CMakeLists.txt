@@ -471,80 +471,8 @@ endif()
 if(MR_ADM_CORE_BUILD_TESTS)
     enable_testing()
 
-    # ── The C++ SDK, kept for the tests (tests/support/sdk) ──────────────────────
-    # RenderService / PreviewSession, MonitorSession, OscHeadTrackingReceiver, the scene import,
-    # room profiles, screen and DirectSpeakers matrix loading, the capability records and the HpTF
-    # helpers: production uses the Rust C ABI and CLI. The test targets keep their former names.
-    # Every target made below sees the SDK headers.
-    include_directories(
-        tests/support/ffi
-        tests/support/sdk/include
-        tests/support/sdk/render_common
-        tests/support/sdk/dsp
-        tests/support/sdk/io
-        tests/support/sdk/room
-        tests/support/sdk/realtime
-    )
-    add_library(mr_adm_sdk_core STATIC
-        tests/support/sdk/core/direct_speakers_matrix.cpp
-        tests/support/sdk/core/screen.cpp)
-    target_include_directories(mr_adm_sdk_core PRIVATE src/adm_core)
-    target_link_libraries(mr_adm_sdk_core PUBLIC MacinRender::ADMCore MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_sdk_core)
-    mr_adm_core_apply_static_analysis(mr_adm_sdk_core)
-
-    add_library(mr_adm_sdk_render_common STATIC
-        tests/support/sdk/render_common/capability_records.cpp
-        tests/support/sdk/render_common/hptf_eq.cpp)
-    target_link_libraries(mr_adm_sdk_render_common
-        PUBLIC mr_adm_sdk_core MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    mr_adm_core_apply_warnings(mr_adm_sdk_render_common)
-    mr_adm_core_apply_static_analysis(mr_adm_sdk_render_common)
-
-    add_library(mr_adm_io STATIC tests/support/sdk/io/scene_importer.cpp)
-    add_library(MacinRender::ADMIo ALIAS mr_adm_io)
-    target_include_directories(mr_adm_io PRIVATE src/adm_metadata src/adm_audio)
-    target_link_libraries(mr_adm_io
-        PUBLIC mr_adm_sdk_core
-        PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp mradm_capi)
-    mr_adm_core_apply_warnings(mr_adm_io)
-    mr_adm_core_apply_static_analysis(mr_adm_io)
-
-    add_library(mr_adm_render_room STATIC tests/support/sdk/room/room.cpp)
-    add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
-    target_link_libraries(mr_adm_render_room
-        PUBLIC mr_adm_sdk_core
-        PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp Threads::Threads)
-    mr_adm_core_apply_warnings(mr_adm_render_room)
-    mr_adm_core_apply_static_analysis(mr_adm_render_room)
-
-    add_library(mr_adm_realtime STATIC tests/support/sdk/realtime/osc_head_tracking.cpp)
-    add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
-    target_link_libraries(mr_adm_realtime
-        PUBLIC mr_adm_sdk_core MacinRender::ADMIslands
-        PRIVATE Threads::Threads MacinRender::ADMDsp MacinRender::ADMRenderCommon)
-    target_include_directories(mr_adm_realtime PRIVATE src/adm_metadata)
-    mr_adm_core_apply_warnings(mr_adm_realtime)
-    mr_adm_core_apply_static_analysis(mr_adm_realtime)
-
-    add_library(mr_adm_engine STATIC
-        tests/support/sdk/engine/render_service.cpp
-        tests/support/sdk/engine/monitor_session.cpp
-        tests/support/sdk/engine/catalog.cpp)
-    add_library(MacinRender::ADMEngine ALIAS mr_adm_engine)
-    target_include_directories(mr_adm_engine PRIVATE src src/adm_engine src/adm_audio)
-    target_link_libraries(mr_adm_engine
-        PUBLIC mr_adm_sdk_core mr_adm_sdk_render_common MacinRender::ADMIo MacinRender::ADMRenderRoom
-            MacinRender::ADMRealtime MacinRender::ADMIslands MacinRender::ADMAudio
-        PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-    if(APPLE)
-        target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
-    endif()
-    # nlohmann/json reads the Rust discovery documents back (catalog.cpp).
-    target_include_directories(mr_adm_engine SYSTEM PRIVATE
-        "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>")
-    mr_adm_core_apply_warnings(mr_adm_engine)
-    mr_adm_core_apply_static_analysis(mr_adm_engine)
+    # The island tests' private declarations (tests/support/ffi/island_test_ffi.h).
+    include_directories(tests/support/ffi)
 
     add_executable(mr_adm_wav_io_tests tests/unit/wav_io_test.cpp)
     target_link_libraries(mr_adm_wav_io_tests PRIVATE MacinRender::ADMAudio)
@@ -593,81 +521,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_osc_head_tracking_c_example PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_c_example)
 
-    add_executable(mr_adm_osc_head_tracking_probe EXCLUDE_FROM_ALL tests/manual/osc_head_tracking_probe.cpp)
-    target_link_libraries(mr_adm_osc_head_tracking_probe PRIVATE MacinRender::ADMRealtime)
-    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_probe)
 
-
-    # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
-    # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
-    # ScenePlan and the C++ scene math.
-    # Production reads the Rust render scene only; the tests and the frozen references read these.
-    add_library(mr_adm_scene_test_support STATIC
-        tests/support/adm_scene/adm_scene.cpp
-        tests/support/adm_scene/metadata.cpp
-        tests/support/adm_scene/scene_math.cpp)
-    target_include_directories(mr_adm_scene_test_support PUBLIC
-        tests/support/adm_scene src/adm_metadata src/adm_audio src/adm_render_common)
-    target_include_directories(mr_adm_scene_test_support PRIVATE src/adm_io)
-    target_link_libraries(mr_adm_scene_test_support PUBLIC MacinRender::ADMCore MacinRender::ADMIo
-        MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp mradm_capi)
-    mr_adm_core_apply_warnings(mr_adm_scene_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_test_support)
-
-    # The backend IRenderer shells and the Rust backend drivers (tests/support/engine_renderer):
-    # the one preparation entry, the offline driver and the file stream of
-    # every Rust backend behind create_*_renderer. Production renders through mradm-engine directly;
-    # the remaining C++ tests and manual benchmarks drive the backends through these.
-    add_library(mr_adm_engine_renderer_test_support STATIC
-        tests/support/engine_renderer/binaural_renderer.cpp
-        tests/support/engine_renderer/ear_renderer.cpp
-        tests/support/engine_renderer/hoa_renderer.cpp
-        tests/support/engine_renderer/room_renderer.cpp
-        tests/support/engine_renderer/speaker_pcm.cpp
-        tests/support/engine_renderer/triple_balance_renderer.cpp
-        tests/support/engine_renderer/vbap_renderer.cpp)
-    target_include_directories(mr_adm_engine_renderer_test_support PUBLIC
-        tests/support/engine_renderer src/adm_render_common)
-    target_include_directories(mr_adm_engine_renderer_test_support PRIVATE
-        src/adm_render_room src/adm_audio src/adm_metadata)
-    target_link_libraries(mr_adm_engine_renderer_test_support PUBLIC mr_adm_scene_test_support mr_adm_sdk_render_common MacinRender::ADMRenderCommon
-        MacinRender::ADMRenderRoom MacinRender::ADMAudio MacinRender::ADMDsp)
-    target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE
-        MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
-    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        target_compile_definitions(mr_adm_engine_renderer_test_support PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_engine_renderer_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_engine_renderer_test_support)
-
-    # One Scene stream renderer behind the C++ interface, outside the Rust stream engine: only the
-    # manual benchmarks use it (the live renderer and trace tests are Rust, R3 B and D2).
-    add_library(mr_adm_live_scene_test_support STATIC
-        tests/support/live_scene/live_renderer.cpp
-        tests/support/live_scene/live_renderer_adapter.cpp
-        tests/support/live_scene/live_scene_trace.cpp
-        tests/support/live_scene/scene_renderer_request.cpp)
-    target_include_directories(mr_adm_live_scene_test_support PUBLIC tests/support/live_scene src/adm_render_room)
-    target_link_libraries(mr_adm_live_scene_test_support PUBLIC MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon
-        MacinRender::ADMDsp)
-    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        target_compile_definitions(mr_adm_live_scene_test_support PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_live_scene_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_live_scene_test_support)
-
-    # The C++ Scene stream and Scene output shells over the Rust engine (mradm-engine `scene`), not
-    # in production since the C ABI calls the engine from Rust: only the manual benchmarks drive the
-    # engine through them (the device, HpTF and allocation tests are Rust, R3 D2).
-    add_library(mr_adm_scene_stream_test_support STATIC
-        tests/support/scene_stream/scene_stream_engine.cpp
-        tests/support/scene_stream/scene_output_session.cpp)
-    target_include_directories(mr_adm_scene_stream_test_support PUBLIC
-        tests/support/scene_stream src/adm_realtime src/adm_render_common src/adm_render_room)
-    target_link_libraries(mr_adm_scene_stream_test_support PUBLIC MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_live_scene_test_support)
-    mr_adm_core_apply_warnings(mr_adm_scene_stream_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_scene_stream_test_support)
 
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.
@@ -709,6 +563,86 @@ if(MR_ADM_CORE_BUILD_TESTS)
             VERBATIM)
     endforeach()
     set(_mr_pcm_bits "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_pcm_bits${CMAKE_EXECUTABLE_SUFFIX}")
+
+    # Build the manual probes on request under their original names. Match the Rust profile to
+    # the native configuration so the Release-only benchmarks also reject a CMake Debug build.
+    set(_mr_probe_optimized "$<CONFIG:Release,RelWithDebInfo,MinSizeRel>")
+    set(_mr_probe_profile "$<IF:$<CONFIG:MinSizeRel>,minsizerel,$<IF:${_mr_probe_optimized},release,dev>>")
+    set(_mr_probe_cargo_dir "$<IF:${_mr_probe_optimized},${_mr_probe_profile},debug>")
+    set(_mr_probe_output_dir "${CMAKE_CURRENT_BINARY_DIR}")
+    if(CMAKE_CONFIGURATION_TYPES)
+        string(APPEND _mr_probe_output_dir "/$<CONFIG>")
+    endif()
+    # The room device probes (feature `islands`) also link the C++ islands: the libraries below in
+    # dependency order, then the platform libraries, one linker argument per line of a generated
+    # file their build script reads (MR_ADM_ISLAND_LINK_FILE). The islands call mradm-ffi by name,
+    # which the example provides itself, so the Rust C ABI staticlib is not linked. The capture
+    # shim is the probes' miniaudio input over the islands' miniaudio implementation.
+    add_library(mr_adm_probe_capture STATIC EXCLUDE_FROM_ALL tests/manual/capture_tap.c)
+    target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
+    set(_mr_island_libraries mr_adm_probe_capture mr_adm_islands)
+    if(APPLE)
+        list(APPEND _mr_island_libraries mr_adm_apple)
+    elseif(WIN32)
+        list(APPEND _mr_island_libraries mr_adm_windows)
+    endif()
+    list(APPEND _mr_island_libraries mr_adm_render_common mr_adm_audio Opus::opus FLAC::FLAC)
+    if(TARGET MacinRender::IamfAomBridge)
+        list(APPEND _mr_island_libraries MacinRender::IamfAomBridge)
+    endif()
+    set(_mr_island_link_lines)
+    foreach(_mr_library IN LISTS _mr_island_libraries)
+        string(APPEND _mr_island_link_lines "$<TARGET_LINKER_FILE:${_mr_library}>\n")
+    endforeach()
+    if(APPLE)
+        foreach(_mr_framework AudioToolbox AudioUnit CoreAudio CoreFoundation AVFoundation CoreMedia Foundation)
+            string(APPEND _mr_island_link_lines "-framework\n${_mr_framework}\n")
+        endforeach()
+        string(APPEND _mr_island_link_lines "-lc++\n-lobjc\n")
+        if(BUILD_SHARED_LIBS)
+            string(APPEND _mr_island_link_lines
+                "-Wl,-rpath,@loader_path\n-Xlinker\n-rpath\n-Xlinker\n$<TARGET_FILE_DIR:mr_adm_islands>\n")
+        endif()
+    elseif(WIN32)
+        string(APPEND _mr_island_link_lines "Ole32.lib\n")
+    else()
+        string(APPEND _mr_island_link_lines "-lstdc++\n-lpthread\n-ldl\n-lm\n")
+        if(BUILD_SHARED_LIBS)
+            string(APPEND _mr_island_link_lines
+                "-Wl,-rpath,$ORIGIN\n-Xlinker\n-rpath\n-Xlinker\n$<TARGET_FILE_DIR:mr_adm_islands>\n")
+        endif()
+    endif()
+    set(_mr_island_link_file "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/mr_adm_island_link.txt")
+    file(GENERATE OUTPUT "${_mr_island_link_file}" CONTENT "${_mr_island_link_lines}")
+    foreach(_mr_probe IN ITEMS osc_head_tracking_probe triple_balance_scene_benchmark
+            triple_balance_monitor_benchmark room_scene_benchmark room_file_device_probe)
+        set(_mr_probe_env)
+        set(_mr_probe_example_features --no-default-features ${_mr_consistency_feature_args})
+        set(_mr_probe_depends FLAC::FLAC)
+        if(_mr_probe MATCHES "^room_")
+            set(_mr_probe_env "MR_ADM_ISLAND_LINK_FILE=${_mr_island_link_file}")
+            list(APPEND _mr_probe_example_features --features islands)
+            list(APPEND _mr_probe_depends ${_mr_island_libraries})
+            if(MR_ADM_ENABLE_ROOM_CUDA)
+                list(APPEND _mr_probe_depends mr_adm_room_cuda)
+            endif()
+        endif()
+        add_custom_target(mr_adm_${_mr_probe}
+            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+                "${MR_ADM_RUST_NATIVE_ENV}" ${_mr_probe_env}
+                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked
+                --profile "${_mr_probe_profile}"
+                --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
+                --example ${_mr_probe} ${_mr_probe_example_features}
+                --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_mr_probe_output_dir}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/${_mr_probe_cargo_dir}/examples/${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+                "${_mr_probe_output_dir}/mr_adm_${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+            DEPENDS ${_mr_probe_depends}
+            USES_TERMINAL
+            VERBATIM)
+    endforeach()
 
     # The FLAC reader island's probe for flac_reader_test.py (the production reader: strict Rust
     # validation, then dr_flac PCM), writing the same canonical image as mr_adm_pcm_bits.
@@ -817,7 +751,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_io mr_adm_audio mr_adm_render_common)
+        foreach(_trace_target IN ITEMS mr_adm_audio mr_adm_render_common)
             target_compile_definitions(${_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
         endforeach()
     endif()
@@ -849,61 +783,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_quality_scripts_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/quality_scripts_test.py")
     endif()
-
-    # The C++ MonitorEngine shell over the Rust monitor (not in production): only the manual
-    # monitor benchmark drives the engine through it (the engine's tests are Rust, R3 D1).
-    add_library(mr_adm_monitor_engine_test_support STATIC
-        tests/support/realtime/monitor_engine.cpp tests/support/realtime/island_stream.cpp)
-    target_include_directories(mr_adm_monitor_engine_test_support PUBLIC
-        tests/support/realtime src/adm_realtime src/adm_render_common)
-    target_link_libraries(mr_adm_monitor_engine_test_support PUBLIC
-        MacinRender::ADMRealtime mr_adm_sdk_render_common MacinRender::ADMRenderCommon MacinRender::ADMDsp mr_adm_engine_renderer_test_support)
-    mr_adm_core_apply_warnings(mr_adm_monitor_engine_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_monitor_engine_test_support)
-
-    add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
-        tests/manual/triple_balance_scene_benchmark.cpp)
-    target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
-        MacinRender::ADMEngine MacinRender::ADMRealtime mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon mr_adm_live_scene_test_support mr_adm_scene_stream_test_support)
-    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine
-        src/adm_render_room)
-    if(WIN32)
-        target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE Psapi)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_scene_benchmark)
-
-    # The C++ room-worker wait (MMCSS and a high-resolution timer on Windows) for the manual room
-    # probes; production waits in Rust (mradm-ffi scene_worker).
-    add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp
-        tests/support/realtime/room_worker_wait.cpp)
-    target_link_libraries(mr_adm_room_scene_benchmark PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json miniaudio
-        mr_adm_live_scene_test_support mr_adm_scene_stream_test_support)
-    target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room
-        tests/support/realtime)
-    if(WIN32)
-        target_link_libraries(mr_adm_room_scene_benchmark PRIVATE Psapi avrt)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_room_scene_benchmark)
-
-    add_executable(mr_adm_room_file_device_probe EXCLUDE_FROM_ALL tests/manual/room_file_device_probe.cpp
-        tests/support/realtime/room_worker_wait.cpp)
-    target_link_libraries(mr_adm_room_file_device_probe PRIVATE mr_adm_scene_test_support MacinRender::ADMEngine MacinRender::ADMRealtime
-        MacinRender::ADMRenderRoom MacinRender::ADMIo nlohmann_json::nlohmann_json)
-    target_include_directories(mr_adm_room_file_device_probe PRIVATE tests/support/realtime)
-    if(WIN32)
-        target_link_libraries(mr_adm_room_file_device_probe PRIVATE Psapi avrt)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_room_file_device_probe)
-
-    add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
-        tests/manual/triple_balance_monitor_benchmark.cpp)
-    target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
-        mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo
-        mr_adm_monitor_engine_test_support)
-    target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
     if(Python3_Interpreter_FOUND AND TARGET mradm_capi_bundle)
         add_test(NAME mr_adm_hptf_stereo_c_api_tests

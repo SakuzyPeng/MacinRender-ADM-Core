@@ -1,5 +1,5 @@
 use crate::{boundary, checked::*};
-use mradm_dsp::scene_math::{self as math, CloudPoint, Rotation, Speaker};
+use mradm_dsp::scene_math::{self as math, Rotation};
 
 /// Scalar operations are batches of fixed strides. These are arithmetic helpers;
 /// unlike renderer commands, they retain IEEE nonfinite propagation.
@@ -49,111 +49,6 @@ pub unsafe extern "C" fn mradm_dsp_scene_math(
                 9 => d.copy_from_slice(&[s[0] + s[3], s[1] + s[4], s[2] + s[5]]),
                 _ => unreachable!(),
             }
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_divergence(
-    src: *const f32,
-    n: usize,
-    cartesian: u32,
-    dst: *mut CloudPoint,
-    capacity: usize,
-    count: *mut usize,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, dst, capacity)?;
-        separate(src, n, count, 1)?;
-        separate(dst, capacity, count, 1)?;
-        if n != 7 || capacity < 3 {
-            return Err(invalid());
-        }
-        let cart = flag(cartesian)?;
-        let s = input(src, n)?;
-        let mut points = [CloudPoint::default(); 3];
-        let len = math::divergence(
-            [s[0], s[1], s[2]],
-            cart,
-            s[3],
-            s[4],
-            s[5],
-            s[6],
-            &mut points,
-        );
-        output(dst, capacity)?[..len].copy_from_slice(&points[..len]);
-        *count = len;
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_nearest(
-    src: *const f32,
-    n: usize,
-    cartesian: u32,
-    speakers: *const Speaker,
-    speaker_count: usize,
-    index: *mut usize,
-    distance: *mut f32,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, index, 1)?;
-        separate(src, n, distance, 1)?;
-        separate(speakers, speaker_count, index, 1)?;
-        separate(speakers, speaker_count, distance, 1)?;
-        separate(index, 1, distance, 1)?;
-        if n != 3 {
-            return Err(invalid());
-        }
-        let cart = flag(cartesian & !256)?;
-        let contract = cartesian & 256 != 0;
-        let s = input(src, n)?;
-        let speakers = input(speakers, speaker_count)?;
-        if speakers.iter().any(|s| s.is_lfe > 1) {
-            return Err(invalid());
-        }
-        let result = math::nearest_compat([s[0], s[1], s[2]], cart, speakers, contract)
-            .unwrap_or((usize::MAX, f32::MAX));
-        *index = result.0;
-        *distance = result.1;
-        Ok(())
-    })
-}
-/// `src` is the position; `max_distance` applies when `has_max_distance != 0`. `locked`
-/// receives 1 and `dst` the polar position when the block locks to a speaker.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_channel_lock(
-    src: *const f32,
-    n: usize,
-    cartesian: u32,
-    has_max_distance: u32,
-    max_distance: f32,
-    speakers: *const Speaker,
-    speaker_count: usize,
-    dst: *mut f32,
-    m: usize,
-    locked: *mut u32,
-) -> i32 {
-    boundary(std::ptr::null_mut(), 0, || unsafe {
-        separate(src, n, dst, m)?;
-        separate(speakers, speaker_count, dst, m)?;
-        separate(dst, m, locked, 1)?;
-        separate(src, n, locked, 1)?;
-        separate(speakers, speaker_count, locked, 1)?;
-        if n != 3 || m != 3 {
-            return Err(invalid());
-        }
-        let cart = flag(cartesian)?;
-        let limit = flag(has_max_distance)?.then_some(max_distance);
-        let s = input(src, n)?;
-        let speakers = input(speakers, speaker_count)?;
-        if speakers.iter().any(|s| s.is_lfe > 1) {
-            return Err(invalid());
-        }
-        let result = math::channel_lock([s[0], s[1], s[2]], cart, limit, speakers);
-        *locked = u32::from(result.is_some());
-        if let Some(polar) = result {
-            output(dst, m)?.copy_from_slice(&polar);
         }
         Ok(())
     })
@@ -236,6 +131,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotation_apply(
 mod tests {
     use super::*;
     use crate::test_alloc::COUNT;
+    use mradm_dsp::scene_math::CloudPoint;
     #[test]
     fn first_calls_no_allocation_and_atomic_errors() {
         unsafe {

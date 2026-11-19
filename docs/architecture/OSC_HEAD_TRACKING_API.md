@@ -81,7 +81,7 @@ config.source_id 为可选 UTF-8 字符串，create 时复制。JSON 原子复�
 这些接口不用于音频回调；绑定端口失败会报告错误，不静默改用其他端口。
 
 - [C 控制线程示例](../../examples/head_tracking_consumer.c)：来源过滤、新采样、参考变化、失联停保活、快照释放。
-- [C++ 无 GUI 接收程序](../../tests/manual/osc_head_tracking_probe.cpp)：独占绑定、最新快照、停止释放；`[port] [seconds] [source_id]`。
+- [无 GUI 接收程序](../../rust/crates/mradm-ffi/examples/osc_head_tracking_probe.rs)（`mr_adm_osc_head_tracking_probe`，R3 G 起为 Rust example）：独占绑定、最新快照、停止释放；`[port] [seconds] [source_id]`。
 - [真实 CLI 与动态库联调](../../tests/manual/osc_posebridge_check.py)。
 
 ```sh

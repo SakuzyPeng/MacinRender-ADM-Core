@@ -285,6 +285,10 @@ python3 scripts/room/device-probe.py --probe build/release/mr_adm_room_scene_ben
   --device 'exact output device name or ID' --seconds 1800 --sources 32 --output /path/new-device-evidence
 ```
 
+R3 G 起探针是 `mradm-ffi` 的 Rust example（feature `islands`）。从 Release 配置构建探针，CMake 将可执行文件以原名复制到
+构建目录（多配置生成器使用 `<build>/Release`）。探针链接 C++ 设备岛与采集垫片（`tests/manual/capture_tap.c`），
+链接参数由 CMake 写在 `<build>/generated/Release/mr_adm_island_link.txt`。岛按名调用 Rust 入口，因此需要不受归档顺序影响的链接器
+（macOS 的 ld64、Windows 的 link.exe、x86_64 Linux 上 Rust 默认的 lld）。
 驱动器以 100 Hz 发送 PoseBridge v3 OSC 数据，探针使用实际接收器应用头姿，约每 5 秒切换
 一次房间。测试信号为确定性宽带噪声，会按会话音量实际播放；缺省 `--volume 0.1`，不改
 系统音量。名称/ID 必须唯一匹配当前设备，不会在选择失败时静默改用另一设备。
@@ -316,7 +320,7 @@ python3 scripts/room/analyze-loopback.py /path/new-device-evidence/recordings \
 重采样及调度误差仍未校准。虚拟回环、软件队列或内核 257 帧结果都不能作为传感器到耳机
 的物理延迟。回环设备若静音/电平为零，结果会缺少有效相关窗，不能算测量通过。
 
-文件流式渲染可通过独立的 Release 探针验证正式 `MonitorSession` 路径，包括 ADM 导入、
+文件流式渲染可通过独立的 Release 探针（R3 G 起同为 `mradm-ffi` 链接岛的 Rust example）验证正式 `MonitorSession` 路径，包括 ADM 导入、
 PCM 文件解码、后台渲染、监控处理和真实音频设备：
 
 ```sh

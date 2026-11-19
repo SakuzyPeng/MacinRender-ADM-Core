@@ -30,7 +30,4 @@ struct MatrixRecords {
     std::size_t label_bytes{0};
 };
 
-// A screen as the Rust room record.
-[[nodiscard]] MradmRoomScreenGeometry screen_geometry(const ScreenGeometry& screen);
-
 } // namespace mradm::render_common

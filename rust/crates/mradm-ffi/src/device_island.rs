@@ -13,9 +13,10 @@ pub(crate) type Pull = unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize)
 
 /// A device's pull and its user data (copied by `start`).
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct DevicePull {
-    user: *mut c_void,
-    pull: Option<unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize) -> usize>,
+    pub user: *mut c_void,
+    pub pull: Option<unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize) -> usize>,
 }
 
 /// One playback device per `each` call (`enumerate`).
@@ -29,8 +30,8 @@ pub struct DeviceEnumeration {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct DeviceTable {
-    ctx: *mut c_void,
-    start: Option<
+    pub ctx: *mut c_void,
+    pub start: Option<
         unsafe extern "C" fn(
             *mut c_void,
             u32,
@@ -39,16 +40,16 @@ pub struct DeviceTable {
             *const EngineIslandError,
         ) -> i32,
     >,
-    stop: Option<unsafe extern "C" fn(*mut c_void)>,
-    flush: Option<unsafe extern "C" fn(*mut c_void)>,
-    pause: Option<unsafe extern "C" fn(*mut c_void)>,
-    resume: Option<unsafe extern "C" fn(*mut c_void)>,
-    mark_end: Option<unsafe extern "C" fn(*mut c_void)>,
-    realtime: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
-    has_volume: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
-    set_volume: Option<unsafe extern "C" fn(*mut c_void, f32)>,
-    progress: Option<unsafe extern "C" fn(*mut c_void, *mut EngineSceneDeviceProgress)>,
-    destroy: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub stop: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub flush: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub pause: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub resume: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub mark_end: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub realtime: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
+    pub has_volume: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
+    pub set_volume: Option<unsafe extern "C" fn(*mut c_void, f32)>,
+    pub progress: Option<unsafe extern "C" fn(*mut c_void, *mut EngineSceneDeviceProgress)>,
+    pub destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 }
 
 /// The platform's output devices. `open` kind: 0 the system-spatial sink, 1 the hardware device,
@@ -126,7 +127,7 @@ impl Devices {
 }
 
 impl DeviceTable {
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             ctx: std::ptr::null_mut(),
             start: None,
@@ -154,7 +155,8 @@ unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
 impl Device {
-    /// Takes over a caller's table (a C++ device wrapped by `device_table`).
+    /// Takes over a test's table.
+    #[cfg(test)]
     pub(crate) unsafe fn adopt(table: &DeviceTable) -> Self {
         Self { table: *table }
     }

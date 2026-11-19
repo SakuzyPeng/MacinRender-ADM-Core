@@ -4,7 +4,7 @@
 //!
 //! The `mradm_*` entries serve the C++ islands and tests; Rust callers use only [`api`].
 
-use mradm_dsp::{Error, Result, fft::RealFft};
+use mradm_dsp::{Error, Result};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
@@ -18,7 +18,6 @@ mod engine_service;
 mod flac;
 mod hptf;
 mod meter;
-mod monitor;
 mod osc;
 mod output_dsp;
 mod render;
@@ -60,130 +59,9 @@ fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -
     code
 }
 
-/// A real FFT plan of `length` samples in `*output`, destroyed with `mradm_dsp_fft_destroy`.
-///
-/// # Safety
-///
-/// `output` must be null or writable; `message` must be null or hold `capacity` writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_fft_create(
-    length: usize,
-    output: *mut *mut RealFft,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if output.is_null() {
-            return Err(Error::InvalidArgument("Null FFT output handle"));
-        }
-        unsafe {
-            *output = ptr::null_mut();
-        }
-        let plan = RealFft::new(length)?;
-        unsafe {
-            *output = Box::into_raw(Box::new(plan));
-        }
-        Ok(())
-    })
-}
-
-/// # Safety
-///
-/// `handle` must be null or a plan from `mradm_dsp_fft_create` that is not used afterwards.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_fft_destroy(handle: *mut RealFft) {
-    if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
-    }
-}
-
-/// # Safety
-///
-/// `handle` must be null or a live plan used by one thread at a time; `input` and `output` must be
-/// null or hold `input_len` samples in, `output_len` interleaved bins out (not overlapping); `message` must be null or hold `capacity` writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_fft_forward(
-    handle: *mut RealFft,
-    input: *const f32,
-    input_len: usize,
-    output: *mut f32,
-    output_len: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if handle.is_null() || input.is_null() || output.is_null() {
-            return Err(Error::InvalidArgument("Null FFT argument"));
-        }
-        let plan = unsafe { &mut *handle };
-        if input_len != plan.len() || output_len != 2 * plan.bins() {
-            return Err(Error::InvalidArgument("FFT buffer length mismatch"));
-        }
-        plan.forward_interleaved(unsafe { slice::from_raw_parts(input, input_len) }, unsafe {
-            slice::from_raw_parts_mut(output, output_len)
-        })
-    })
-}
-
-/// # Safety
-///
-/// `handle` must be null or a live plan used by one thread at a time; `input` and `output` must be
-/// null or hold `input_len` interleaved bins in, `output_len` samples out (not overlapping); `message` must be null or hold `capacity` writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_fft_inverse(
-    handle: *mut RealFft,
-    input: *const f32,
-    input_len: usize,
-    output: *mut f32,
-    output_len: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if handle.is_null() || input.is_null() || output.is_null() {
-            return Err(Error::InvalidArgument("Null FFT argument"));
-        }
-        let plan = unsafe { &mut *handle };
-        if input_len != 2 * plan.bins() || output_len != plan.len() {
-            return Err(Error::InvalidArgument("Inverse FFT buffer length mismatch"));
-        }
-        plan.inverse_interleaved(unsafe { slice::from_raw_parts(input, input_len) }, unsafe {
-            slice::from_raw_parts_mut(output, output_len)
-        })
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn invalid_arguments_are_errors_and_failed_create_clears_output() {
-        let mut handle = ptr::dangling_mut();
-        let mut message = [0u8; 128];
-        unsafe {
-            assert_eq!(
-                mradm_dsp_fft_create(3, &mut handle, message.as_mut_ptr(), message.len()),
-                1
-            );
-            assert!(handle.is_null());
-            assert_ne!(message[0], 0);
-            assert_eq!(
-                mradm_dsp_fft_forward(
-                    handle,
-                    ptr::null(),
-                    0,
-                    ptr::null_mut(),
-                    0,
-                    ptr::null_mut(),
-                    0
-                ),
-                1
-            );
-            mradm_dsp_fft_destroy(handle);
-        }
-    }
     #[test]
     fn panics_do_not_cross_the_boundary() {
         assert_eq!(boundary(ptr::null_mut(), 0, || panic!("test panic")), 6);

@@ -31,8 +31,7 @@
 
 | 依赖 | 用途 | 许可证 (SPDX) | 默认发行可用性 | 备注 |
 |---|---|---|---|---|
-| `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（测试专用：测试 SDK、工具与冻结参考，6.5 C 起不进生产） | MIT | 测试专用（不进生产） |  |
-| `fmt` @ 11.2.0 | 格式化（测试专用：冻结参考与测试 SDK，6.5 C 起不进生产） | MIT | 测试专用（不进生产） | 若动态链接系统库，仍需记录版本与许可证 |
+| `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（测试专用：Apple 冒烟测试读能力表 JSON，6.5 C 起不进生产） | MIT | 测试专用（不进生产） |  |
 | `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | FLAC 解码（dr_flac） | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |

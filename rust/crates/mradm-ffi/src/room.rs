@@ -14,16 +14,8 @@ use mradm_render::room_runtime::{Config, Fault, Resources};
 use std::{
     ffi::CString,
     panic::{AssertUnwindSafe, catch_unwind},
-    ptr,
     sync::Arc,
 };
-
-fn boundary(message: *mut u8, capacity: usize, call: impl FnOnce() -> Result<()>) -> i32 {
-    #[cfg(windows)]
-    mradm_dsp::room::set_worker_start_hook(crate::room_environment::start_worker);
-    let _environment = crate::room_environment::Environment::enter();
-    crate::boundary(message, capacity, call)
-}
 
 /// One room call outside the C boundary: the room floating-point environment (and on Windows the
 /// worker start hook) around `call`. Panics are the caller's to catch.
@@ -68,21 +60,6 @@ pub(crate) fn scope(call: &mut dyn FnMut() -> Result<()>) -> std::result::Result
         Ok(Err(Error::RenderFailed(s))) => Err((4, s)),
         Err(_) => Err((6, "Rust DSP panic")),
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_validate_screens(
-    screens: *const RoomScreens,
-    count: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        for value in input(screens, count)? {
-            Mapping::new(*value)?;
-        }
-        Ok(())
-    })
 }
 
 pub struct RoomProfileHandle {
@@ -171,41 +148,6 @@ impl RoomPreparedHandle {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-#[repr(C)]
-pub struct RoomSourceInfo {
-    pub id: u64,
-    pub position: [f64; 3],
-    pub direction: [f64; 3],
-    pub distance: f64,
-    pub constrained: u32,
-    pub present: u32,
-}
-#[derive(Clone, Copy, Default)]
-#[repr(C)]
-pub struct RoomPreparedInfo {
-    latency_frames: u64,
-    tail_frames: u64,
-    preroll_frames: u64,
-    material_guard_frames: u64,
-    sample_rate: u32,
-    reflection_update_frames: u32,
-}
-
-// Polar metadata conversion is part of the room consistency boundary.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_polar(
-    azimuth: f32,
-    elevation: f32,
-    distance: f32,
-    out: *mut f32,
-) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        output(out, 3)?.copy_from_slice(&loading::polar(azimuth, elevation, distance)?);
-        Ok(())
-    })
-}
-
 pub(crate) fn description(
     prepared: &PreparedSet,
     metres: f64,
@@ -248,79 +190,6 @@ pub(crate) fn description(
     CString::new(value.to_string()).map_err(|_| invalid())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_profile_load(
-    name: *const u8,
-    length: usize,
-    out: *mut *mut RoomProfileHandle,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(name, length, out, 1)?;
-        *out = ptr::null_mut();
-        let package = Arc::new(loading::load_package(input(name, length)?)?);
-        let json = CString::new(package.manifest.clone()).map_err(|_| invalid())?;
-        *out = Box::into_raw(Box::new(RoomProfileHandle { package, json }));
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_profile_destroy(handle: *mut RoomProfileHandle) {
-    if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_profile_json(handle: *const RoomProfileHandle) -> *const u8 {
-    if handle.is_null() {
-        ptr::null()
-    } else {
-        unsafe { (*handle).json.as_ptr().cast() }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_prepare_quality(
-    profile: *const RoomProfileHandle,
-    hrir_name: *const u8,
-    hrir_length: usize,
-    sofa_name: *const u8,
-    sofa_length: usize,
-    reuse: *const RoomPreparedHandle,
-    quality: u32,
-    metres: f64,
-    out: *mut *mut RoomPreparedHandle,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || unsafe {
-        separate(profile, 1, out, 1)?;
-        separate(hrir_name, hrir_length, out, 1)?;
-        separate(sofa_name, sofa_length, out, 1)?;
-        *out = ptr::null_mut();
-        if !reuse.is_null() {
-            separate(reuse, 1, out, 1)?;
-        }
-        let (prepared, cuda, metadata) = prepare_set(
-            &(*profile).package,
-            input(hrir_name, hrir_length)?,
-            input(sofa_name, sofa_length)?,
-            (!reuse.is_null()).then(|| (&*(&*reuse).prepared, (&*reuse).cuda)),
-            quality,
-            metres,
-        )?;
-        let json = description(&prepared, metres, metadata)?;
-        *out = Box::into_raw(Box::new(RoomPreparedHandle {
-            prepared,
-            json,
-            cuda,
-        }));
-        Ok(())
-    })
-}
 /// `mradm_room_prepare_quality` after argument checks: the quality and scale, the CUDA selection,
 /// the room set and its CUDA binding. A room switch prepares through the same path.
 pub(crate) fn prepare_set(
@@ -367,49 +236,4 @@ pub(crate) fn prepare_switch(
         Ok(())
     })?;
     Ok(out.expect("prepared in scope"))
-}
-
-/// The package behind a profile handle.
-pub(crate) unsafe fn package(handle: *const RoomProfileHandle) -> Option<Arc<Package>> {
-    unsafe { handle.as_ref() }.map(|h| Arc::clone(&h.package))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_prepared_destroy(handle: *mut RoomPreparedHandle) {
-    if !handle.is_null() {
-        unsafe {
-            drop(Box::from_raw(handle));
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_prepared_json(handle: *const RoomPreparedHandle) -> *const u8 {
-    if handle.is_null() {
-        ptr::null()
-    } else {
-        unsafe { (*handle).json.as_ptr().cast() }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_room_prepared_info(
-    handle: *const RoomPreparedHandle,
-    out: *mut RoomPreparedInfo,
-) -> i32 {
-    boundary(ptr::null_mut(), 0, || unsafe {
-        separate(handle, 1, out, 1)?;
-        let p = &(*handle).prepared;
-        *out = RoomPreparedInfo {
-            latency_frames: mradm_dsp::room::BLOCK as u64,
-            tail_frames: p.tail_frames() as u64,
-            preroll_frames: p.preroll_frames() as u64,
-            material_guard_frames: p.room.profile.band_offset as u64,
-            sample_rate: p.room.profile.sample_rate,
-            reflection_update_frames: p
-                .room
-                .quality
-                .reflection_frames_at(p.room.profile.sample_rate)
-                as u32,
-        };
-        Ok(())
-    })
 }

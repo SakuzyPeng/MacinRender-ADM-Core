@@ -6,13 +6,11 @@
 //! `mradm_scene_destroy`.
 use crate::adm::{Text, View};
 use crate::boundary;
-use mradm_dsp::{Error, room::screen::RoomScreenGeometry};
+use mradm_dsp::Error;
 use mradm_scene::{
     Context, ImportOptions, RenderScene, SourceKind, direct_matrix,
-    input::{InputChannel, channel_catalog, input_layouts, resolve_input_channel_labels},
     layouts::{Geometry, Layout, layouts},
     policy::UserLevel,
-    report, screen,
 };
 use std::{
     borrow::Cow,
@@ -138,7 +136,6 @@ pub struct SceneHandle {
     labels: Vec<Text>,
     objects: Vec<SceneObjectState>,
     direct_blocks: Vec<SceneDirectState>,
-    output: String,
 }
 
 /// `user_mute`: 0 unset, 1 false, 2 true.
@@ -155,16 +152,6 @@ pub struct SceneDirectState {
     user_mute: u32,
     position_override: u32,
     has_position: u32,
-}
-
-/// The per-element state beside the records, aligned with the view's objects and DirectSpeakers
-/// blocks.
-#[repr(C)]
-pub struct SceneOverlay {
-    objects: *const SceneObjectState,
-    objects_len: usize,
-    direct_blocks: *const SceneDirectState,
-    direct_blocks_len: usize,
 }
 
 fn user_mute(user: UserLevel) -> u32 {
@@ -231,7 +218,6 @@ impl SceneHandle {
             scene,
             objects: Vec::new(),
             direct_blocks: Vec::new(),
-            output: String::new(),
         };
         handle.refresh();
         handle
@@ -261,32 +247,6 @@ impl SceneHandle {
             .collect();
     }
 }
-
-#[repr(C)]
-pub struct InputChannelRecord {
-    token: Text,
-    speaker_label: Text,
-    azimuth: f32,
-    elevation: f32,
-    is_lfe: u32,
-}
-
-#[repr(C)]
-pub struct InputLayoutRecord {
-    id: Text,
-    internal_id: Text,
-    display_name: Text,
-    wave_channel_mask: u32,
-    channels: *const InputChannelRecord,
-    channels_len: usize,
-    wave_mask_channels: *const InputChannelRecord,
-    wave_mask_channels_len: usize,
-}
-
-struct Static<T>(T);
-// The records only point at immutable process-lifetime data.
-unsafe impl<T> Send for Static<T> {}
-unsafe impl<T> Sync for Static<T> {}
 
 /// Like `boundary`, plus the locator kind: 0 none, 1 `input=<path>`, 2 `path=<path>`, 3 the
 /// caller's source label.
@@ -455,230 +415,12 @@ pub unsafe extern "C" fn mradm_scene_view(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_overlay(
-    handle: *const SceneHandle,
-    overlay: *mut SceneOverlay,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if handle.is_null() || overlay.is_null() {
-            return Err(invalid("无效场景 overlay 参数"));
-        }
-        let handle = unsafe { &*handle };
-        unsafe {
-            *overlay = SceneOverlay {
-                objects: handle.objects.as_ptr(),
-                objects_len: handle.objects.len(),
-                direct_blocks: handle.direct_blocks.as_ptr(),
-                direct_blocks_len: handle.direct_blocks.len(),
-            };
-        }
-        Ok(())
-    })
-}
-
-/// The neutral policy template of the scene (nlohmann `dump(2)` bytes, no trailing newline).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_template(
-    handle: *mut SceneHandle,
-    output: *mut Text,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if handle.is_null() || output.is_null() {
-            return Err(invalid("无效策略模板参数"));
-        }
-        let handle = unsafe { &mut *handle };
-        handle.output = report::template(&handle.scene);
-        unsafe {
-            *output = Text::new(&handle.output);
-        }
-        Ok(())
-    })
-}
-
-/// The scene inspect document `mradm.scene-inspect` v1 (nlohmann
-/// `dump(2)` bytes, no trailing newline) for the input `path` as the caller spelled it in UTF-8,
-/// held by the handle until the next report, template, inspect or export call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_inspect_json(
-    handle: *mut SceneHandle,
-    path: *const u8,
-    path_len: usize,
-    output: *mut Text,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if handle.is_null() || output.is_null() {
-            return Err(invalid("无效场景检查参数"));
-        }
-        let handle = unsafe { &mut *handle };
-        let path = unsafe {
-            lossy(Text {
-                data: path,
-                len: path_len,
-            })?
-        }
-        .into_owned();
-        handle.output = mradm_engine::scene_json::inspect_json(&handle.scene, &path);
-        unsafe {
-            *output = Text::new(&handle.output);
-        }
-        Ok(())
-    })
-}
-
-/// The `mradm inspect` summary after its `File:` line, held like the inspect JSON.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_inspect_text(
-    handle: *mut SceneHandle,
-    output: *mut Text,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if handle.is_null() || output.is_null() {
-            return Err(invalid("无效场景检查参数"));
-        }
-        let handle = unsafe { &mut *handle };
-        handle.output = mradm_engine::scene_json::inspect_text(&handle.scene);
-        unsafe {
-            *output = Text::new(&handle.output);
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_scene_destroy(handle: *mut SceneHandle) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));
         }
     }
-}
-
-/// Writes the version-1 render-scene checkpoint `render-scene/offline.<stage>.i32` of this scene
-/// (diagnostic builds only; a no-op otherwise).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_checkpoint(
-    handle: *const SceneHandle,
-    stage: Text,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if handle.is_null() {
-            return Err(invalid("无效场景句柄"));
-        }
-        let stage = unsafe { lossy(stage)? };
-        mradm_scene::checkpoint::dump(&stage, unsafe { &(*handle).scene })
-            .map_err(|e| mradm_scene::Error::io(e.to_string(), Context::None))
-    })
-}
-
-fn channel_record(channel: &InputChannel) -> InputChannelRecord {
-    InputChannelRecord {
-        token: Text::new(&channel.token),
-        speaker_label: Text::new(channel.speaker_label),
-        azimuth: channel.azimuth,
-        elevation: channel.elevation,
-        is_lfe: u32::from(channel.is_lfe),
-    }
-}
-
-/// Channel-bed presets in their documented order.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_input_layouts(
-    entries: *mut *const InputLayoutRecord,
-    entries_len: *mut usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    type Records = (Vec<Vec<InputChannelRecord>>, Vec<InputLayoutRecord>);
-    static TABLE: OnceLock<Static<Records>> = OnceLock::new();
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if entries.is_null() || entries_len.is_null() {
-            return Err(invalid("Null input layout table output"));
-        }
-        let table = TABLE.get_or_init(|| {
-            let channels: Vec<Vec<InputChannelRecord>> = input_layouts()
-                .iter()
-                .flat_map(|l| [&l.channels, &l.wave_mask_channels])
-                .map(|c| c.iter().map(channel_record).collect())
-                .collect();
-            let records = input_layouts()
-                .iter()
-                .zip(channels.chunks(2))
-                .map(|(l, c)| InputLayoutRecord {
-                    id: Text::new(l.id),
-                    internal_id: Text::new(l.internal_id),
-                    display_name: Text::new(l.display_name),
-                    wave_channel_mask: l.wave_channel_mask,
-                    channels: c[0].as_ptr(),
-                    channels_len: c[0].len(),
-                    wave_mask_channels: c[1].as_ptr(),
-                    wave_mask_channels_len: c[1].len(),
-                })
-                .collect();
-            Static((channels, records))
-        });
-        unsafe {
-            *entries = table.0.1.as_ptr();
-            *entries_len = table.0.1.len();
-        }
-        Ok(())
-    })
-}
-
-/// The custom-label catalog; `mradm_scene_resolve_labels` returns indices into it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_channel_catalog(
-    entries: *mut *const InputChannelRecord,
-    entries_len: *mut usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    static TABLE: OnceLock<Static<Vec<InputChannelRecord>>> = OnceLock::new();
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        if entries.is_null() || entries_len.is_null() {
-            return Err(invalid("Null channel catalog output"));
-        }
-        let table =
-            TABLE.get_or_init(|| Static(channel_catalog().iter().map(channel_record).collect()));
-        unsafe {
-            *entries = table.0.as_ptr();
-            *entries_len = table.0.len();
-        }
-        Ok(())
-    })
-}
-
-/// Resolves custom labels in file-channel order; `indices` must hold `labels_len` entries.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_resolve_labels(
-    input_labels: *const Text,
-    input_labels_len: usize,
-    indices: *mut u32,
-    indices_len: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    scene_boundary(ptr::null_mut(), message, capacity, || {
-        let labels = unsafe { labels(input_labels, input_labels_len)? };
-        if indices_len < labels.len() || (indices.is_null() && indices_len != 0) {
-            return Err(invalid("无效标签索引缓冲区"));
-        }
-        let resolved = resolve_input_channel_labels(&labels)?;
-        let out = unsafe { slice::from_raw_parts_mut(indices, resolved.len()) };
-        for (slot, index) in out.iter_mut().zip(resolved) {
-            *slot = index as u32;
-        }
-        Ok(())
-    })
 }
 
 #[repr(C)]
@@ -799,41 +541,6 @@ pub unsafe extern "C" fn mradm_scene_direct_matrix_destroy(handle: *mut DirectMa
             drop(Box::from_raw(handle));
         }
     }
-}
-
-#[repr(C)]
-pub struct ScreenConfigView {
-    pub has_reference: u32,
-    pub has_reproduction: u32,
-    pub reference: RoomScreenGeometry,
-    pub reproduction: RoomScreenGeometry,
-}
-
-/// Parses `mradm.screen-config` version 1 without validating the geometry; errors have no context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_scene_screen_parse(
-    json: *const u8,
-    json_len: usize,
-    output: *mut ScreenConfigView,
-    message: *mut u8,
-    message_len: *mut usize,
-) -> i32 {
-    let capacity = unsafe { message_len.as_ref() }.copied().unwrap_or(0);
-    scene_boundary_with_message_len(ptr::null_mut(), message, capacity, message_len, || {
-        if output.is_null() {
-            return Err(invalid("无效屏幕配置输出"));
-        }
-        let screens = screen::parse(unsafe { bytes(json, json_len)? })?;
-        unsafe {
-            *output = ScreenConfigView {
-                has_reference: u32::from(screens.reference.is_some()),
-                has_reproduction: u32::from(screens.reproduction.is_some()),
-                reference: screens.reference.unwrap_or_default(),
-                reproduction: screens.reproduction.unwrap_or_default(),
-            };
-        }
-        Ok(())
-    })
 }
 
 #[cfg(test)]
