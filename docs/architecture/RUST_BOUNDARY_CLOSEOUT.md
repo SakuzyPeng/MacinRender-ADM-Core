@@ -129,7 +129,7 @@ Reference tests 已随 R1 删除，六期不再运行。
 | --- | --- |
 | 7.1 | 方向与基线：逐岛清单（调用的第三方 API、岛接口、测试），objc2 / windows crate 的评估标准与原型范围，七期规模基线。 |
 | 7.2 | 编码器的 C++ 封装迁入 Rust，libFLAC / libopus / AOM bridge 保留为 C 库，由 Rust 经窄绑定直接调用：<br>• Opus MKA 的 Matroska 封装<br>• FLAC 写出<br>• IAMF 的 OBU 与 MP4 打包驱动<br>• MP4 元数据<br>• WAV 薄包装 |
-| 7.3 | 输出设备：miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛与 `audio_output_device.h` 删除。 |
+| 7.3 | 输出设备：miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛与 `audio_output_device.h` 删除。用户决定（2026-11-19）：暂不替换 miniaudio。cpal 是以后的候选，待评估的差异是 WASAPI 自动重采样、Linux 构建期链接 libasound、null 后端与设备 ID 格式。 |
 | 7.4 | Apple 岛：以 objc2 原型评估 AudioToolbox APAC 编码、AUSpatialMixer 后端与 AVSampleBufferAudioRenderer sink，据结果决定迁入或保留窄 C 接口。 |
 | 7.5 | Windows 岛：以 windows crate 评估 ISpatialAudioClient sink 与 MMCSS。 |
 | 7.6 | 收尾：岛共用的 C++ 头与私有 FFI 记录随调用方删除，C++ 岛测试与顶层 CMake 测试树随岛收缩，进度回调跳板与 Windows 打包路径另行决定。 |
