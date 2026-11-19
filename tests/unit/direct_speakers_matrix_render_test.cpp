@@ -24,6 +24,7 @@
 
 #include "../support/apple_island_driver.h"
 #include "../support/direct_speakers_fixture.h"
+#include "../support/rust_services_test.h"
 #include "island_test_ffi.h"
 
 namespace {
@@ -104,17 +105,17 @@ class Matrix {
     explicit Matrix(std::string_view json) {
         std::array<char, 1024> message{};
         std::size_t message_len = message.size();
-        if (mradm_scene_direct_matrix_parse(reinterpret_cast<const uint8_t*>(json.data()),
-                                            json.size(),
-                                            &handle_,
-                                            &view_,
-                                            message.data(),
-                                            &message_len) != 0) {
+        if (mradm::rust().tests->scene_direct_matrix_parse(reinterpret_cast<const uint8_t*>(json.data()),
+                                                           json.size(),
+                                                           &handle_,
+                                                           &view_,
+                                                           message.data(),
+                                                           &message_len) != 0) {
             std::cerr << "FAIL: matrix profile parse failed: " << std::string_view{message.data(), message_len} << '\n';
             handle_ = nullptr;
         }
     }
-    ~Matrix() { mradm_scene_direct_matrix_destroy(handle_); }
+    ~Matrix() { mradm::rust().tests->scene_direct_matrix_destroy(handle_); }
     Matrix(const Matrix&) = delete;
     Matrix& operator=(const Matrix&) = delete;
     Matrix(Matrix&&) = delete;
@@ -284,6 +285,7 @@ bool verify_apple(const std::filesystem::path& input_path,
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     const auto input_samples = make_input_samples();
     const auto input_path = temp_path("mradm-matrix-input");
     const auto lfe_input_path = temp_path("mradm-matrix-lfe-input");

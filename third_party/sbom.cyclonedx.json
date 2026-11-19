@@ -181,30 +181,6 @@
     },
     {
       "type": "library",
-      "name": "Corrosion",
-      "version": "v0.6.1",
-      "description": "CMake/Cargo 构建集成",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:github/corrosion-rs/corrosion@v0.6.1",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "saf-derived-rust-dsp",
       "version": "v1.3.4-subset",
       "description": "Rust afSTFT、去相关/OM 算法及 KEMAR/滤波器/HOA 数据来源",
@@ -405,6 +381,28 @@
     },
     {
       "type": "library",
+      "name": "rust-cc-1.11.2",
+      "version": "1.11.2",
+      "description": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/cc@1.11.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-clap-4.5.41",
       "version": "4.5.41",
       "description": "mradm 命令行的参数解析（mradm-cli）",
@@ -458,6 +456,28 @@
         }
       ],
       "purl": "pkg:cargo/clap_lex@0.7.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-cmake-0.1.58",
+      "version": "0.1.58",
+      "description": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/cmake@0.1.58",
       "properties": [
         {
           "name": "mradm:distribution",
@@ -526,6 +546,28 @@
         }
       ],
       "purl": "pkg:cargo/ebur128@0.1.10",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-find-msvc-tools-0.1.15",
+      "version": "0.1.15",
+      "description": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/find-msvc-tools@0.1.15",
       "properties": [
         {
           "name": "mradm:distribution",
@@ -1148,6 +1190,28 @@
         }
       ],
       "purl": "pkg:cargo/serde_json@1.0.140",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-shlex-2.0.1",
+      "version": "2.0.1",
+      "description": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/shlex@2.0.1",
       "properties": [
         {
           "name": "mradm:distribution",

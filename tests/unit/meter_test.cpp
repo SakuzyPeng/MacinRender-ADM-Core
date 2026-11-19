@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "../support/rust_services_test.h"
 #include "meter.h"
 
 namespace {
@@ -118,6 +119,7 @@ bool verify_channel_map() {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     const bool owners = verify_owner_and_errors();
     const bool measurement = verify_measurement_and_reset();
     const bool mapping = verify_channel_map();

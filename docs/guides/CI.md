@@ -27,9 +27,9 @@
 | `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | 生产构建无需 Boost；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
 
 三个构建 job 都先用 `rustup` 安装固定的 Rust 1.98.0（含 rustfmt / clippy），并显式使用
-`MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED`、`MR_ADM_ENABLE_IAMF=OFF`
-和 `MR_ADM_BUILD_CAPI_BUNDLE=ON`：减少系统包差异，避免普通 PR 构建 AOM `iamf-tools` bridge，
-同时验证 GUI 使用的自包含 C ABI bundle 可以链接。系统仍需安装 CMake、Ninja、
+`MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED` 与 `MR_ADM_ENABLE_IAMF=OFF`：减少系统包差异，
+避免普通 PR 构建 AOM `iamf-tools` bridge。6.6 起顶层树的 `mr_adm_rust` 目标总会用 Cargo 构建 GUI 使用的共享 `libmradm_capi`
+（rustc 链接的 cdylib）与 `mradm`，岛由同一棵树的 `src/` 构建（见 `docs/architecture/RUST_BOUNDARY_CARGO.md`）。系统仍需安装 CMake、Ninja、
 ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（FLAC、Opus、miniaudio 等）
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
@@ -79,7 +79,7 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 | `render-windows` | `windows-2025-vs2026` × config A/B | Windows 对应构建与渲染矩阵 |
 | `compare` | `ubuntu-24.04` | 汇总三平台结果，`scripts/consistency/compare-evidence.py` 校验、比较并上传 JSON 报告 |
 
-config A 使用与 `release.yml` 相同的构建选项（含 `MR_ADM_BUILD_CAPI_BUNDLE`，即全部目标位置无关编译；`consistency_build_test.py` 校验两者不漂移），config B 只在其上打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
+config A 使用与 `release.yml` 相同的构建选项（6.6 起全部目标总是位置无关编译；`consistency_build_test.py` 校验两者不漂移），config B 只在其上打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
 二期结项后的扩展继续使用 `collect.py`，当前收集 80 个离线场景、88 个 Scene 流式渲染配置（各含两个 epoch）、38 个文件流式重放（`mr_adm_consistency_stream`，三期 3.1 双耳、3.2 EAR、3.3 HOA、3.4 Triple Balance，四期 4.2 `room-binaural`、4.9 开平滑的 VBAP / HOA / EAR / 双耳，五期 5.7 96 kHz `room-binaural`）及
 255 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM、spreader、HpTF 设计与左右独立 HpTF、生产计量及其验收节目、离线后处理增益、文件流式/监听运算、EAR 增益、HOA 编解码、Triple Balance 声像、ADM 导入换算、十进制参数解析、秒到帧换算、整数 WAVE 量化与 `room-binaural` exact 档准备），再在原构建树启用诊断并验证 PCM 无扰动。`compare-evidence.py`
@@ -108,7 +108,7 @@ A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹�
 见 `docs/architecture/RUST_ORCHESTRATION_BASELINE.md`。五期 5.2 D 起 `mr_adm_consistency_render` 是 Rust（`mradm-ffi` example，与 `mr_adm_consistency_kernels` 同样由 Cargo 构建后复制进构建目录），切换前的对照见 `docs/architecture/RUST_ORCHESTRATION_OFFLINE.md`；5.3 B 起 `mr_adm_consistency_stream` 同样是 Rust example，对照见 `docs/architecture/RUST_ORCHESTRATION_STREAM.md`；5.4 D 起 `mr_adm_consistency_scene` 也是 Rust example，对照见 `docs/architecture/RUST_ORCHESTRATION_SCENE.md`，四个一致性工具都已是 Rust。
 六期 6.1 起 `--tool` 也接受 `mradm`；另有两种边界对照（同样只在本机、同一构建上运行）：`cli-transcript.py record|compare`
 按固定命令表记录并比较 CLI 的退出码、stdout、stderr 与写出的文件，`capi-capture.py record|compare|tests` 把 `mr_adm_capi_capture`
-或 C ABI consumer 测试（`mr_adm_capi_consumers` 目标，需 `MR_ADM_BUILD_CAPI_BUNDLE=ON`）放到候选 `libmradm_capi` 旁边运行并比较采集；
+或 C ABI consumer 测试（`mr_adm_capi_consumers` 目标）放到候选 `libmradm_capi` 旁边运行并比较采集；
 两者只做 `boundary.py` 列出的六条归一化（包括 MP4 头中的创建／修改时间）；CLI v2 记录全部工作目录文件变化，
 help / parse-error 只豁免文字差异。见 `docs/architecture/RUST_BOUNDARY_BASELINE.md`。
 原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
@@ -121,9 +121,9 @@ help / parse-error 只豁免文字差异。见 `docs/architecture/RUST_BOUNDARY_
 
 | Job | 触发 | 内容 |
 |---|---|---|
-| `release` | tag `v*`、手动触发 | 构建 `mradm_exe` + `mradm_capi_bundle`、打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
-| `release-linux-appimage` | 手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-linux-x86_64.AppImage` 与 `.sha256` |
-| `release-windows` | tag `v*`、手动触发 | `Release` 构建 `mradm_exe`，运行优化构建下的渲染 fixture（见下），打包并上传 `mradm-<version>-windows-x64.zip` 与 `.sha256` |
+| `release` | tag `v*`、手动触发 | 只配置顶层树并做许可证全量检查，`scripts/release/build-cargo-release.sh` 以 Cargo 构建 `mradm` 与 `libmradm_capi`，打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
+| `release-linux-appimage` | 手动触发 | 同上（Linux），打包并上传 `mradm-<version>-linux-x86_64.AppImage` 与 `.sha256` |
+| `release-windows` | tag `v*`、手动触发 | `Release` 构建顶层树的 `mr_adm_rust`（Cargo 构建 `mradm.exe` 与 `mradm_capi.dll`），运行优化构建下的渲染 fixture（见下），打包并上传 `mradm-<version>-windows-x64.zip` 与 `.sha256` |
 | `release-gui-macos` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-macos-arm64.tar.gz` 与 `.sha256` |
 | `release-gui-windows` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-windows-x64.zip` 与 `.sha256` |
 | `publish-github-release` | tag `v*` | 汇总各平台产物，创建或更新 GitHub Release |
@@ -178,7 +178,7 @@ CI 使用两层缓存，不缓存 CMake build tree。
 
 | 缓存 | 路径 | 用途 | key 依据 |
 |---|---|---|---|
-| FetchContent | `.fc-cache` | 缓存第三方源码 checkout（含 Corrosion），降低网络波动 | OS + `cmake/MRDependencies.cmake` + `CMakeLists.txt` + `CMakePresets.json` |
+| FetchContent | `.fc-cache` | 缓存第三方源码 checkout（Cargo 发布构建用其下的 `cargo/`），降低网络波动 | OS + `cmake/MRDependencies.cmake` + `CMakeLists.txt` + `CMakePresets.json` |
 | ccache | `.ccache` | macOS / Linux 缓存 C/C++ 编译产物 | OS + job 类型 + commit SHA，带 OS/job restore key |
 | sccache | `.sccache` | Windows 缓存 MSVC 编译产物 | commit SHA，带 restore key |
 | Cargo | `~/.cargo/registry/{index,cache}`、`~/.cargo/git/db`、`build/rust/` | 缓存 crates.io 下载与 Rust 依赖编译产物（ci / quality / consistency；单 OS 约 400 MB） | OS + 构建类别（`debug` 由 ci 与 quality 共用，`consistency` 为 Release profile）+ `rust/Cargo.lock` + `rust/rust-toolchain.toml`，带 restore key |

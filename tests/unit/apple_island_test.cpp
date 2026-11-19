@@ -22,6 +22,7 @@
 #include "../../src/adm_apple/apple_island.h"
 #include "../../src/adm_realtime/buffered_media_timeline.h"
 #include "../support/adm_fixture.h"
+#include "../support/rust_services_test.h"
 #include "../support/wav_fixture.h"
 #include "island_test_ffi.h"
 
@@ -94,17 +95,17 @@ MradmSceneHandle* import(const std::string& path) {
     MradmSceneHandle* scene = nullptr;
     uint32_t context = 0;
     std::vector<uint8_t> message(1024);
-    mradm_scene_import(reinterpret_cast<const uint8_t*>(path.data()),
-                       path.size(),
-                       0U,
-                       0U,
-                       {},
-                       nullptr,
-                       0U,
-                       &scene,
-                       &context,
-                       message.data(),
-                       message.size());
+    mradm::rust().tests->scene_import(reinterpret_cast<const uint8_t*>(path.data()),
+                                      path.size(),
+                                      0U,
+                                      0U,
+                                      {},
+                                      nullptr,
+                                      0U,
+                                      &scene,
+                                      &context,
+                                      message.data(),
+                                      message.size());
     return scene;
 }
 
@@ -167,6 +168,7 @@ bool verify_buffered_media_timeline() {
 } // namespace
 
 int main() try {
+    mradm_test::bind_rust_services();
     const auto dir = fs::temp_directory_path() / ("mr_adm_apple_island_" + std::to_string(std::random_device{}()));
     fs::create_directories(dir);
     const auto input = (dir / "in.wav").string();

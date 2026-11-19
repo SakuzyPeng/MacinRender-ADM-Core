@@ -9,7 +9,7 @@
 
 #include "adm/errors.h"
 
-#include "dsp_ffi.h"
+#include "../adm_core/rust_services_ffi.h"
 
 namespace mradm::dsp {
 
@@ -47,28 +47,28 @@ class Meter final {
         }
         std::array<char, 256> message{};
         void* handle = nullptr;
-        const auto status = mradm_dsp_meter_create(channels,
-                                                   sample_rate,
-                                                   static_cast<uint32_t>(mode),
-                                                   positions.data(),
-                                                   channel_map.size(),
-                                                   &handle,
-                                                   message.data(),
-                                                   message.size());
+        const auto status = mradm::rust().dsp_meter_create(channels,
+                                                           sample_rate,
+                                                           static_cast<uint32_t>(mode),
+                                                           positions.data(),
+                                                           channel_map.size(),
+                                                           &handle,
+                                                           message.data(),
+                                                           message.size());
         if (status != 0) {
             return make_error(static_cast<ErrorCode>(status), message.data(), "meter");
         }
         return Meter(handle, channels);
     }
 
-    ~Meter() { mradm_dsp_meter_destroy(handle_); }
+    ~Meter() { mradm::rust().dsp_meter_destroy(handle_); }
     Meter(const Meter&) = delete;
     Meter& operator=(const Meter&) = delete;
     Meter(Meter&& other) noexcept
         : handle_(std::exchange(other.handle_, nullptr)), channels_(std::exchange(other.channels_, 0U)) {}
     Meter& operator=(Meter&& other) noexcept {
         if (this != &other) {
-            mradm_dsp_meter_destroy(handle_);
+            mradm::rust().dsp_meter_destroy(handle_);
             handle_ = std::exchange(other.handle_, nullptr);
             channels_ = std::exchange(other.channels_, 0U);
         }
@@ -80,13 +80,14 @@ class Meter final {
             return make_error(ErrorCode::invalid_argument, "invalid meter frame count or moved-from meter");
         }
         std::array<char, 256> message{};
-        const auto status = mradm_dsp_meter_add(handle_, samples, frames * channels_, message.data(), message.size());
+        const auto status =
+            mradm::rust().dsp_meter_add(handle_, samples, frames * channels_, message.data(), message.size());
         return status_result(status, message.data());
     }
 
     [[nodiscard]] Result<void> reset() {
         std::array<char, 256> message{};
-        const auto status = mradm_dsp_meter_reset(handle_, message.data(), message.size());
+        const auto status = mradm::rust().dsp_meter_reset(handle_, message.data(), message.size());
         return status_result(status, message.data());
     }
 
@@ -107,7 +108,8 @@ class Meter final {
     [[nodiscard]] Result<double> query(uint32_t kind, uint32_t channel = 0U) const {
         std::array<char, 256> message{};
         double value = 0.0;
-        const auto status = mradm_dsp_meter_query(handle_, kind, channel, &value, message.data(), message.size());
+        const auto status =
+            mradm::rust().dsp_meter_query(handle_, kind, channel, &value, message.data(), message.size());
         if (status != 0) {
             return make_error(static_cast<ErrorCode>(status), message.data(), "meter");
         }

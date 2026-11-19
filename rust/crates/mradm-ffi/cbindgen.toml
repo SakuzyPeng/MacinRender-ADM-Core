@@ -7,8 +7,8 @@ documentation = false
 parse_deps = true
 include = ["mradm-dsp", "macin-adm", "macin-bwf", "mradm-wav", "mradm-ear"]
 
-# The C++ island tables and their records: Rust calls the islands through `extern` declarations,
-# so no export signature reaches these types (check-ffi-headers.py pairs them by ISLAND_RECORDS).
+# The C++ island tables and their records, and the Rust services table the islands call: no export
+# signature reaches these types (check-ffi-headers.py pairs them by ISLAND_RECORDS).
 [export]
 include = [
     "AppleIslands",
@@ -32,4 +32,6 @@ include = [
     "PlatformIslands",
     "RenderLiveOverride",
     "RoomScreenGeometry",
+    "RustServices",
+    "RustTestServices",
 ]

@@ -13,7 +13,7 @@ std::optional<float> resolve_live_channel_gain(const LiveOverrideView& overrides
                                                std::string_view channel_label_key) {
     float gain = 0.0F;
     const auto& records = overrides.records;
-    return (mradm_render_live_override(
+    return (mradm::rust().render_live_override(
                 records.data(), records.size(), text(object_id), text(channel_label_key), &gain, nullptr) &
             1U) != 0U
                ? std::optional{gain}
@@ -25,7 +25,7 @@ std::optional<bool> resolve_live_head_locked(const LiveOverrideView& overrides,
                                              std::string_view channel_label_key) {
     uint32_t head_locked = 0U;
     const auto& records = overrides.records;
-    return (mradm_render_live_override(
+    return (mradm::rust().render_live_override(
                 records.data(), records.size(), text(object_id), text(channel_label_key), nullptr, &head_locked) &
             2U) != 0U
                ? std::optional{head_locked != 0U}
@@ -67,7 +67,7 @@ namespace {
 
 float LfeRoutingPlan::gain(LfeTarget input, LfeTarget output) const noexcept {
     const auto record = lfe_record(*this);
-    return mradm_render_lfe_gain(&record, static_cast<uint32_t>(input), static_cast<uint32_t>(output));
+    return mradm::rust().render_lfe_gain(&record, static_cast<uint32_t>(input), static_cast<uint32_t>(output));
 }
 
 SerialWorker::SerialWorker() {

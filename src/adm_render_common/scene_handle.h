@@ -6,7 +6,7 @@
 
 #include "adm/render.h"
 
-#include "../adm_metadata/scene_ffi.h"
+#include "../adm_core/rust_services_ffi.h"
 
 namespace mradm::detail {
 // The imported Rust render scene (mradm-scene) behind RenderPlan::scene_handle; every backend,
@@ -17,7 +17,7 @@ struct RenderSceneHandle {
     RenderSceneHandle& operator=(const RenderSceneHandle&) = delete;
     RenderSceneHandle(RenderSceneHandle&&) = delete;
     RenderSceneHandle& operator=(RenderSceneHandle&&) = delete;
-    ~RenderSceneHandle() { mradm_scene_destroy(raw); }
+    ~RenderSceneHandle() { mradm::rust().scene_destroy(raw); }
     // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes): private adapter owning one Rust handle.
     MradmSceneHandle* raw;
 };
@@ -27,7 +27,7 @@ struct RenderSceneHandle {
     MradmSceneImportInfo info{};
     MradmAdmView view{};
     std::array<uint8_t, 256> message{};
-    if (mradm_scene_view(scene.raw, &info, &view, message.data(), message.size()) != 0) {
+    if (mradm::rust().scene_view(scene.raw, &info, &view, message.data(), message.size()) != 0) {
         return std::nullopt;
     }
     return info;

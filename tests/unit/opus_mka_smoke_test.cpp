@@ -13,6 +13,7 @@
 
 #include "adm/audio_io.h"
 
+#include "../support/rust_services_test.h"
 #include "test_portable.h"
 
 namespace {
@@ -319,6 +320,7 @@ bool verify_mka_wrong_sample_rate_rejected() {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     bool ok = true;
     ok &= verify_mka_stereo();
     ok &= verify_mka_multichannel_24();

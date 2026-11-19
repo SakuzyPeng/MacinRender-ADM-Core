@@ -120,7 +120,7 @@ jobs:
       - name: Build
         run: >
           cmake --build build/consistency-${{ matrix.config }}
-          --target mr_adm_consistency_tools mr_adm_fft_benchmark mradm_capi_bundle
+          --target mr_adm_consistency_tools mr_adm_fft_benchmark mr_adm_rust
 
       - name: C ABI exports
         run: python3 scripts/quality/check-capi-exports.py "build/consistency-${{ matrix.config }}/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
@@ -312,7 +312,6 @@ jobs:
             -DMR_ADM_ENABLE_IAMF=OFF ^
             -DMR_ADM_ENABLE_SOFA=ON ^
             -DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF ^
-            -DMR_ADM_BUILD_CAPI_BUNDLE=ON ^
             %NUMERIC_FLAGS%
 
       - name: Prepare original scalar FFT benchmark
@@ -326,7 +325,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/win-canon --target mr_adm_consistency_tools mr_adm_fft_benchmark mradm_capi_bundle
+          cmake --build build/win-canon --target mr_adm_consistency_tools mr_adm_fft_benchmark mr_adm_rust
 
       - name: C ABI exports
         shell: pwsh

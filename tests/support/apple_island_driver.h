@@ -92,17 +92,17 @@ inline MradmSceneHandle* import_scene(const std::string& path, const std::vector
     MradmSceneHandle* scene = nullptr;
     uint32_t context = 0U;
     std::array<uint8_t, 1024> message{};
-    if (mradm_scene_import(reinterpret_cast<const uint8_t*>(path.data()),
-                           path.size(),
-                           labels.empty() ? 0U : 1U,
-                           0U,
-                           {},
-                           texts.data(),
-                           texts.size(),
-                           &scene,
-                           &context,
-                           message.data(),
-                           message.size()) != 0) {
+    if (mradm::rust().tests->scene_import(reinterpret_cast<const uint8_t*>(path.data()),
+                                          path.size(),
+                                          labels.empty() ? 0U : 1U,
+                                          0U,
+                                          {},
+                                          texts.data(),
+                                          texts.size(),
+                                          &scene,
+                                          &context,
+                                          message.data(),
+                                          message.size()) != 0) {
         return nullptr;
     }
     return scene;

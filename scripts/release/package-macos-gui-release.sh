@@ -77,44 +77,27 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 native_build_dir="$repo_root/build/gui-native-package/$rid"
-native_helper="$native_build_dir/mradm"
+# The C ABI dylib and the APAC helper come from one Cargo build of mradm-capi (6.6).
+native_out="$native_build_dir/${osx_arch/arm64/aarch64}-apple-darwin/release"
+native_helper="$native_out/mradm"
 if [[ "$skip_native" -eq 0 ]]; then
-    cmake_args=(
-        -S "$repo_root"
-        -B "$native_build_dir"
-        -G Ninja
-        -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        -DCMAKE_OSX_ARCHITECTURES="$osx_arch"
-        -DMR_ADM_BUILD_CAPI_BUNDLE=ON
-        -DMR_ADM_CORE_BUILD_CLI=ON
-        -DMR_ADM_CORE_BUILD_TESTS=OFF
-        -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
-        -DMR_ADM_FLAC_PROVIDER=VENDORED
-        -DMR_ADM_OPUS_PROVIDER=VENDORED
-    )
-    if [[ -n "${FC_CACHE_DIR:-}" ]]; then
-        mkdir -p "$FC_CACHE_DIR"
-        cmake_args+=(-DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR")
-    fi
-    cmake "${cmake_args[@]}"
-    cmake --build "$native_build_dir" --target mradm_capi_bundle mradm_exe
+    "$repo_root/scripts/release/build-cargo-release.sh" --target-dir "$native_build_dir" \
+        --target "${osx_arch/arm64/aarch64}-apple-darwin" >/dev/null
 
-    native_lib="$native_build_dir/libmradm_capi.dylib"
+    native_lib="$native_out/libmradm_capi.dylib"
     native_dst="$repo_root/gui/MacinRender.Gui/runtimes/$rid/native/libmradm_capi.dylib"
     if [[ ! -e "$native_lib" ]]; then
-        echo "native C ABI bundle is missing: $native_lib" >&2
+        echo "native C ABI library is missing: $native_lib" >&2
         exit 1
     fi
-    python3 "$repo_root/scripts/quality/check-capi-exports.py" "$native_lib"
     mkdir -p "$(dirname "$native_dst")"
     cp -Lf "$native_lib" "$native_dst"
-    echo "copied native bundle: $native_dst ($(du -h "$native_dst" | cut -f1))"
+    echo "copied native library: $native_dst ($(du -h "$native_dst" | cut -f1))"
 fi
 
 if [[ ! -x "$native_helper" ]]; then
     echo "native APAC helper is missing: $native_helper" >&2
-    echo "rerun without --skip-native so mradm_exe is built beside the C ABI bundle" >&2
+    echo "rerun without --skip-native so mradm is built beside the C ABI library" >&2
     exit 1
 fi
 

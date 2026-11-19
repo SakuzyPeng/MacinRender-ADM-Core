@@ -9,15 +9,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
     endif()
 
     if(MR_ADM_CORE_USE_INSTALLED_DEPS AND NOT package_name STREQUAL "FLAC" AND NOT package_name STREQUAL "Opus")
-        if(package_name STREQUAL "Corrosion")
-            find_package(Corrosion 0.6.1 EXACT CONFIG QUIET)
-        else()
-            find_package(${package_name} CONFIG QUIET)
-        endif()
-    endif()
-    if(package_name STREQUAL "Corrosion" AND COMMAND corrosion_import_crate AND NOT TARGET Corrosion::Corrosion)
-        add_library(mr_adm_corrosion INTERFACE)
-        add_library(Corrosion::Corrosion ALIAS mr_adm_corrosion)
+        find_package(${package_name} CONFIG QUIET)
     endif()
     if(TARGET ${target_name})
         return()
@@ -27,16 +19,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         message(FATAL_ERROR "${package_name} was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
     endif()
 
-    if(package_name STREQUAL "Corrosion")
-        FetchContent_Declare(Corrosion
-            GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
-            GIT_TAG v0.6.1
-            GIT_SHALLOW TRUE)
-        FetchContent_MakeAvailable(Corrosion)
-        add_library(mr_adm_corrosion INTERFACE)
-        add_library(Corrosion::Corrosion ALIAS mr_adm_corrosion)
-        return()
-    elseif(package_name STREQUAL "nlohmann_json")
+    if(package_name STREQUAL "nlohmann_json")
         set(JSON_BuildTests OFF CACHE INTERNAL "")
         FetchContent_Declare(
             nlohmann_json

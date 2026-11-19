@@ -7,6 +7,7 @@
 
 #include "adm/options.h"
 
+#include "../support/rust_services_test.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -257,6 +258,7 @@ bool verify_live_gain_ramp() {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     const bool ok = verify_profile_inventory() && verify_profile_structure_and_ranges() &&
                     verify_expected_coordinates() && verify_live_head_locked_precedence() &&
                     verify_live_channel_gain() && verify_live_gain_ramp();

@@ -50,9 +50,7 @@
         "MR_ADM_STRICT_FP": "OFF",
         "MR_ADM_ENABLE_IAMF": "OFF",
         "MR_ADM_ENABLE_SOFA": "ON",
-        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
-        "MR_ADM_BUILD_CAPI_BUNDLE": "ON",
-        "CMAKE_DISABLE_FIND_PACKAGE_fmt": "TRUE"
+        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF"
       }
     },
     {

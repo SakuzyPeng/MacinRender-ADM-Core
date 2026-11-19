@@ -1,7 +1,5 @@
-// Private render-scene boundary (mradm-scene): the scene view the Apple island reads. A view is
-// borrowed until the next call that changes the scene or mradm_scene_destroy. Status values follow
-// adm::ErrorCode. The import, policy, report and export entries only tests call are in
-// tests/support/ffi/scene_test_ffi.h.
+// The render-scene records of the Rust services (rust_services_ffi.h, mradm-scene): the scene view the Apple
+// island reads. A view is borrowed until the next call that changes the scene or scene_destroy.
 #pragma once
 #include "adm_ffi.h"
 #ifdef __cplusplus
@@ -19,9 +17,6 @@ typedef struct MradmSceneImportInfo {
 } MradmSceneImportInfo;
 
 typedef struct MradmSceneHandle MradmSceneHandle;
-int32_t mradm_scene_view(
-    const MradmSceneHandle* handle, MradmSceneImportInfo* info, MradmAdmView* view, uint8_t* message, size_t capacity);
-void mradm_scene_destroy(MradmSceneHandle* handle);
 
 #ifdef __cplusplus
 }

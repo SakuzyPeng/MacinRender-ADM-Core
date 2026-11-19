@@ -7,7 +7,6 @@
 |---|---|---|---|
 | aom-iamf-tools-bridge | external-sdk | BSD-3-Clause-Clear AND AOM-PL-1.0 | `NOTICE.txt` |
 | apple-system-frameworks | platform-sdk | LicenseRef-Apple-SDK | `NOTICE.txt` |
-| Corrosion | v0.6.1 | MIT | `LICENSE` |
 | dr_libs | 47a4f08e777faddf59a8955c4ea84f69f41020d5 | Unlicense OR MIT-0 | `LICENSE` |
 | libadm-common-definitions | 0.14.0 | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libear-derived-rust-ear | 2db69f8f-subset | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
@@ -30,10 +29,12 @@
 | rust-bitflags-2.13.2 | 2.13.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-block-buffer-0.10.4 | 0.10.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bytemuck-1.25.2 | 1.25.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
+| rust-cc-1.11.2 | 1.11.2 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-cfg-if-1.0.5 | 1.0.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-clap-4.5.41 | 4.5.41 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-clap_builder-4.5.41 | 4.5.41 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-clap_lex-0.7.5 | 0.7.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-cmake-0.1.58 | 0.1.58 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-cpufeatures-0.2.17 | 0.2.17 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-crossbeam-deque-0.8.8 | 0.8.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-crossbeam-epoch-0.9.21 | 0.9.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -44,6 +45,7 @@
 | rust-digest-0.10.7 | 0.10.7 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-ebur128-0.1.10 | 0.1.10 | MIT | `LICENSE` |
 | rust-either-1.19.0 | 1.19.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-find-msvc-tools-0.1.15 | 0.1.15 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-generic-array-0.14.7 | 0.14.7 | MIT | `LICENSE` |
 | rust-glam-0.30.10 | 0.30.10 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.31.1 | 0.31.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -84,6 +86,7 @@
 | rust-serde_derive-1.0.229 | 1.0.229 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-serde_json-1.0.140 | 1.0.140 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-sha2-0.10.9 | 0.10.9 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-shlex-2.0.1 | 2.0.1 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-simba-0.10.2 | 0.10.2 | Apache-2.0 | `LICENSE` |
 | rust-smallvec-1.16.2 | 1.16.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-sofar-0.3.0 | 0.3.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE` |

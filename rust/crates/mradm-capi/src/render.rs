@@ -32,7 +32,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) mod islands {
     use super::*;
     unsafe extern "C" {
-        pub(crate) fn mradm_platform_islands() -> *const PlatformIslands;
+        #[link_name = "mradm_platform_islands"]
+        fn platform_islands() -> *const PlatformIslands;
         pub(super) fn mradm_audio_island(
             request: *const EngineRenderEvent,
             context: *const IslandContext,
@@ -43,7 +44,14 @@ pub(crate) mod islands {
     unsafe extern "C" {
         fn mradm_apple_islands() -> *const AppleIslands;
     }
+    /// The platform islands' table, after binding the islands' Rust services (as every accessor of
+    /// an island table does).
+    pub(crate) unsafe fn mradm_platform_islands() -> *const PlatformIslands {
+        crate::services::bind();
+        unsafe { platform_islands() }
+    }
     pub(crate) fn apple() -> *const AppleIslands {
+        crate::services::bind();
         #[cfg(target_os = "macos")]
         return unsafe { mradm_apple_islands() };
         #[cfg(not(target_os = "macos"))]

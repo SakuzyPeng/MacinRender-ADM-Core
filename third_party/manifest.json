@@ -127,24 +127,6 @@
       "notes": "macOS-only；Apple 平台 framework 不随本项目二进制再分发。bundle NOTICE.txt 为手写声明"
     },
     {
-      "name": "Corrosion",
-      "version": "v0.6.1",
-      "cmake_key": "Corrosion",
-      "purl": "pkg:github/corrosion-rs/corrosion@v0.6.1",
-      "license": "MIT",
-      "purpose": "CMake/Cargo 构建集成",
-      "distribution": "available",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "corrosion-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ]
-      },
-      "notes": "仅构建时使用。"
-    },
-    {
       "name": "saf-derived-rust-dsp",
       "version": "v1.3.4-subset",
       "cmake_key": null,
@@ -325,6 +307,26 @@
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
     },
     {
+      "name": "rust-cc-1.11.2",
+      "version": "1.11.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/cc@1.11.2",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "cc",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "仅构建时使用（build-dependency），不编入产物。"
+    },
+    {
       "name": "rust-clap-4.5.41",
       "version": "4.5.41",
       "cmake_key": null,
@@ -383,6 +385,26 @@
         ]
       },
       "notes": "经 clap 引入。"
+    },
+    {
+      "name": "rust-cmake-0.1.58",
+      "version": "0.1.58",
+      "cmake_key": null,
+      "purl": "pkg:cargo/cmake@0.1.58",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "cmake",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "仅构建时使用（build-dependency），不编入产物。"
     },
     {
       "name": "rust-dasp_frame-0.11.0",
@@ -446,6 +468,26 @@
         ]
       },
       "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）；K-weighting 的 tan/pow、门控系数的 pow 与 LUFS 换算的 log10 改用 libm，x86 不再设置 MXCSR flush-to-zero，所有架构统一在每次调用后清零低于 f64::EPSILON 的滤波器状态（二期 2.2）。"
+    },
+    {
+      "name": "rust-find-msvc-tools-0.1.15",
+      "version": "0.1.15",
+      "cmake_key": null,
+      "purl": "pkg:cargo/find-msvc-tools@0.1.15",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "find-msvc-tools",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "仅构建时使用（build-dependency），不编入产物。"
     },
     {
       "name": "rust-glam-0.30.10",
@@ -1009,6 +1051,26 @@
         ]
       },
       "notes": "开启 std 与 float_roundtrip，使浮点溢出判定与 C++ 快照重解析一致；使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision。"
+    },
+    {
+      "name": "rust-shlex-2.0.1",
+      "version": "2.0.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/shlex@2.0.1",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "shlex",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "仅构建时使用（build-dependency），不编入产物。"
     },
     {
       "name": "rust-simba-0.10.2",

@@ -23,8 +23,7 @@ unsafe fn output<'a>(data: *mut f32, length: usize) -> Result<&'a mut [f32]> {
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_gain_create(
+pub(crate) unsafe extern "C" fn mradm_dsp_gain_create(
     channels: usize,
     rate: u32,
     ramp_ms: u32,
@@ -46,16 +45,14 @@ pub unsafe extern "C" fn mradm_dsp_gain_create(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_gain_destroy(handle: *mut GainBank) {
+pub(crate) unsafe extern "C" fn mradm_dsp_gain_destroy(handle: *mut GainBank) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_gain_reset(
+pub(crate) unsafe extern "C" fn mradm_dsp_gain_reset(
     handle: *mut GainBank,
     message: *mut u8,
     capacity: usize,
@@ -66,8 +63,7 @@ pub unsafe extern "C" fn mradm_dsp_gain_reset(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_gain_set_targets(
+pub(crate) unsafe extern "C" fn mradm_dsp_gain_set_targets(
     handle: *mut GainBank,
     targets: *const f32,
     length: usize,
@@ -80,8 +76,7 @@ pub unsafe extern "C" fn mradm_dsp_gain_set_targets(
     })
 }
 /// mode 0 generates interleaved envelopes; mode 1 multiplies interleaved PCM in place.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_gain_process(
+pub(crate) unsafe extern "C" fn mradm_dsp_gain_process(
     handle: *mut GainBank,
     data: *mut f32,
     length: usize,

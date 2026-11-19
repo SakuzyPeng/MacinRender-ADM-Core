@@ -70,8 +70,7 @@ pub(crate) unsafe fn path<'a>(data: *const u8, len: usize) -> Result<&'a str> {
     Ok(text)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_reader_open(
+pub(crate) unsafe extern "C" fn mradm_wav_reader_open(
     name: *const u8,
     length: usize,
     output: *mut *mut ReadHandle,
@@ -108,16 +107,14 @@ pub unsafe extern "C" fn mradm_wav_reader_open(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_reader_destroy(handle: *mut ReadHandle) {
+pub(crate) unsafe extern "C" fn mradm_wav_reader_destroy(handle: *mut ReadHandle) {
     if !handle.is_null() {
         unsafe {
             drop(Box::from_raw(handle));
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_reader_read(
+pub(crate) unsafe extern "C" fn mradm_wav_reader_read(
     handle: *mut ReadHandle,
     output: *mut f32,
     samples: usize,
@@ -144,8 +141,7 @@ pub unsafe extern "C" fn mradm_wav_reader_read(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_reader_seek(
+pub(crate) unsafe extern "C" fn mradm_wav_reader_seek(
     handle: *mut ReadHandle,
     frame: u64,
     message: *mut u8,
@@ -185,8 +181,7 @@ pub struct WavBext {
     hoa3_ambi: u8,
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_wav_append_bext(
+pub(crate) unsafe extern "C" fn mradm_wav_append_bext(
     name: *const u8,
     length: usize,
     fields: *const WavBext,
@@ -228,8 +223,7 @@ pub struct OutputHandle {
 }
 
 /// `caf != 0` writes CAF with the `layout` channel layout tag; otherwise RF64 WAVE.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_output_writer_create(
+pub(crate) unsafe extern "C" fn mradm_output_writer_create(
     name: *const u8,
     length: usize,
     channels: u32,
@@ -261,14 +255,12 @@ pub unsafe extern "C" fn mradm_output_writer_create(
     })
 }
 /// Destroying an unfinished writer finishes it on a best-effort basis.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_output_writer_destroy(handle: *mut OutputHandle) {
+pub(crate) unsafe extern "C" fn mradm_output_writer_destroy(handle: *mut OutputHandle) {
     if !handle.is_null() {
         let _ = catch_unwind(AssertUnwindSafe(|| unsafe { drop(Box::from_raw(handle)) }));
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_output_writer_write(
+pub(crate) unsafe extern "C" fn mradm_output_writer_write(
     handle: *mut OutputHandle,
     input: *const f32,
     samples: usize,
@@ -283,8 +275,7 @@ pub unsafe extern "C" fn mradm_output_writer_write(
     })
 }
 /// Repeated calls return the first result.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_output_writer_finish(
+pub(crate) unsafe extern "C" fn mradm_output_writer_finish(
     handle: *mut OutputHandle,
     message: *mut u8,
     capacity: usize,
@@ -295,8 +286,7 @@ pub unsafe extern "C" fn mradm_output_writer_finish(
     })
 }
 /// Appends an `info` chunk with the non-empty encoder, date and comments values.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_caf_append_info(
+pub(crate) unsafe extern "C" fn mradm_caf_append_info(
     name: *const u8,
     length: usize,
     encoder: *const u8,

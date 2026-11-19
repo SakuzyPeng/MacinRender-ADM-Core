@@ -140,8 +140,7 @@ unsafe fn override_value<'a>(o: &RenderOverride) -> Result<Override<'a>, Error> 
 /// Objects and HOA channels). Bit 1: a gain multiplier was written; bit 2: an explicit head lock
 /// (0 or 1) was written; otherwise the channel inherits. Null output pointers skip that field.
 /// Valid queries borrow the records and do not allocate, even for noncanonical labels.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_live_override(
+pub(crate) unsafe extern "C" fn mradm_render_live_override(
     values: *const RenderOverride,
     values_len: usize,
     object_id: Text,
@@ -181,8 +180,7 @@ pub unsafe extern "C" fn mradm_render_live_override(
 }
 
 /// The gain from one LFE input target to one 22.2 LFE output (0, 1, 2) under `routing`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_render_lfe_gain(
+pub(crate) unsafe extern "C" fn mradm_render_lfe_gain(
     routing: *const RenderLfeRouting,
     input_target: u32,
     output_target: u32,

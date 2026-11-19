@@ -66,7 +66,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mr_adm_flac_io_smoke_tests
+          cmake --build build/windows --target mr_adm_rust mr_adm_flac_io_smoke_tests
 
       - name: Smoke
         shell: pwsh

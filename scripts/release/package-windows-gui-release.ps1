@@ -198,7 +198,6 @@ if (!$SkipNative) {
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_C_COMPILER=cl",
         "-DCMAKE_CXX_COMPILER=cl",
-        "-DMR_ADM_BUILD_CAPI_BUNDLE=ON",
         "-DMR_ADM_FLAC_PROVIDER=VENDORED",
         "-DMR_ADM_OPUS_PROVIDER=VENDORED",
         "-DMR_ADM_ENABLE_IAMF=OFF",
@@ -233,7 +232,11 @@ if (!$SkipNative) {
     }
 
     $configure = "cmake " + (($cmakeArgs | ForEach-Object { Quote-CmdArg $_ }) -join " ")
-    $build = "cmake --build " + (Quote-CmdArg $nativeBuildDir) + " --target mradm_capi_bundle --config Release"
+    # mr_adm_rust is the Cargo build of mradm-capi over this tree's islands (6.6); the tree also builds
+    # the optional ROOM CUDA plugin.
+    $buildTargets = "mr_adm_rust"
+    if ($RoomCuda) { $buildTargets += " mr_adm_room_cuda" }
+    $build = "cmake --build " + (Quote-CmdArg $nativeBuildDir) + " --target $buildTargets --config Release"
     Invoke-VcvarsCommand -CommandLines @($configure, $build)
 }
 

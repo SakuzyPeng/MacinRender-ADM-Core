@@ -33,6 +33,7 @@
 
 #include "../support/adm_fixture.h"
 #include "../support/apple_island_driver.h"
+#include "../support/rust_services_test.h"
 #include "../support/wav_fixture.h"
 
 namespace {
@@ -1871,6 +1872,7 @@ bool verify_spatial_mixer_hrtf_modes_probe() {
 } // namespace
 
 int main() try {
+    mradm_test::bind_rust_services();
     bool ok = true;
     ok &= verify_capabilities();
     ok &= verify_directional_sign();

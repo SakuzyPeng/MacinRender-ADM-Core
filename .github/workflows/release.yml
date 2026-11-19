@@ -26,7 +26,7 @@ jobs:
             artifact: mradm-macos-arm64
             platform: macos
             arch: arm64
-            binary: build/release/mradm
+            binary: build/cargo-release/release/mradm
             install: brew install cmake ninja ccache
 
     env:
@@ -62,27 +62,22 @@ jobs:
             ccache-${{ runner.os }}-release-
             ccache-${{ runner.os }}-
 
-      - name: Configure
+      # The products are built by Cargo (6.6); the CMake tree is only configured, so that the license
+      # check sees every fetched dependency and the Cargo metadata.
+      - name: Configure (license check only)
         run: >
           cmake --preset release
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
           -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
-          -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
-          -DMR_ADM_BUILD_CAPI_BUNDLE=ON
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build
-        run: cmake --build --preset release --target mradm_exe mradm_capi_bundle
 
       - name: License full-coverage check
         run: scripts/quality/check-licenses.sh --build-dir build/release --require-full
 
-      - name: C ABI exports
-        run: python3 scripts/quality/check-capi-exports.py "build/release/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
+      - name: Build (Cargo)
+        run: scripts/release/build-cargo-release.sh --target-dir build/cargo-release
 
       - name: Smoke
         run: |
@@ -95,7 +90,7 @@ jobs:
           --binary "${{ matrix.binary }}"
           --platform "${{ matrix.platform }}"
           --arch "${{ matrix.arch }}"
-          --cmake-options "release; fmt FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF"
+          --cmake-options "cargo release; islands via mradm-islands-sys; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF"
 
       - name: Package smoke
         run: |
@@ -156,37 +151,32 @@ jobs:
             ccache-${{ runner.os }}-release-
             ccache-${{ runner.os }}-
 
-      - name: Configure
+      # The products are built by Cargo (6.6); the CMake tree is only configured, so that the license
+      # check sees every fetched dependency and the Cargo metadata.
+      - name: Configure (license check only)
         run: >
           cmake --preset release
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
           -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
-          -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
-          -DMR_ADM_BUILD_CAPI_BUNDLE=ON
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build
-        run: cmake --build --preset release --target mradm_exe mradm_capi_bundle
 
       - name: License full-coverage check
         run: scripts/quality/check-licenses.sh --build-dir build/release --require-full
 
-      - name: C ABI exports
-        run: python3 scripts/quality/check-capi-exports.py "build/release/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
+      - name: Build (Cargo)
+        run: scripts/release/build-cargo-release.sh --target-dir build/cargo-release
 
       - name: Smoke
         run: |
-          build/release/mradm --version
-          build/release/mradm backends
+          build/cargo-release/release/mradm --version
+          build/cargo-release/release/mradm backends
 
       - name: Package AppImage
         run: >
           scripts/release/package-linux-cli-appimage-release.sh
-          --binary build/release/mradm
+          --binary build/cargo-release/release/mradm
           --arch x86_64
 
       - name: AppImage smoke
@@ -257,15 +247,16 @@ jobs:
             -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF ^
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
-            -DMR_ADM_ENABLE_IAMF=OFF ^
-            -DMR_ADM_BUILD_CAPI_BUNDLE=ON
+            -DMR_ADM_ENABLE_IAMF=OFF
 
       # Optimized render fixtures cover the release codegen of each renderer and the main encoders.
+      # mr_adm_rust is the Cargo build of mradm-capi over this tree's islands (6.6): mradm.exe and
+      # mradm_capi.dll, which the package takes, are the ones the fixtures test.
       - name: Build
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mradm_capi_bundle ^
+          cmake --build build/windows --target mr_adm_rust ^
             mr_adm_flac_io_smoke_tests mr_adm_opus_mka_smoke_tests mr_adm_cli_smoke_tests
 
       - name: C ABI exports
@@ -416,7 +407,7 @@ jobs:
         run: >
           .\scripts\release\package-windows-gui-release.ps1
           -Rid "win-x64"
-          -CmakeOptions "Release; MR_ADM_BUILD_CAPI_BUNDLE=ON; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
+          -CmakeOptions "Release; mradm_capi.dll by Cargo (mr_adm_rust); MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
 
       - name: Package smoke
         shell: pwsh

@@ -18,6 +18,8 @@ mradm-render = { path = "../mradm-render" }
 mradm-engine = { path = "../mradm-engine" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 mradm-room-cuda = { path = "../mradm-room-cuda", optional = true, default-features = false }
+# The C/C++ islands and C libraries this crate calls by name (6.6).
+mradm-islands-sys = { path = "../mradm-islands-sys" }
 serde_json.workspace = true
 libm.workspace = true
 
@@ -29,17 +31,7 @@ mradm-math = { path = "../mradm-math" }
 libc = "=0.2.190"
 
 [features]
-diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
+diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics", "mradm-islands-sys/diagnostics"]
 default = ["sofa"]
 sofa = ["mradm-dsp/sofa", "mradm-render/sofa"]
 room-cuda = ["dep:mradm-room-cuda"]
-# The room device probes link the C++ islands (MR_ADM_ISLAND_LINK_FILE, written by CMake).
-islands = []
-
-[[example]]
-name = "room_scene_benchmark"
-required-features = ["islands"]
-
-[[example]]
-name = "room_file_device_probe"
-required-features = ["islands"]

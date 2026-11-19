@@ -38,7 +38,6 @@
 | `libopus` @ v1.5.2 | Opus MKA 编码 | BSD-3-Clause | 可用 | 发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt） |
 | `aom-iamf-tools-bridge` @ external-sdk | IAMF raw OBU 编码（opt-in，MR_ADM_ENABLE_IAMF） | BSD-3-Clause-Clear AND AOM-PL-1.0 | opt-in（默认关闭） | 预构建 SDK 形式接入；启用时发行包须随实际 SDK 记录其内部依赖许可证。bundle NOTICE.txt 为手写声明，实际包须补全文本 |
 | `apple-system-frameworks` @ platform-sdk | APAC/CAF layout/Accelerate（AudioToolbox/CoreFoundation/Accelerate） | LicenseRef-Apple-SDK | 平台 SDK（不再分发） | macOS-only；Apple 平台 framework 不随本项目二进制再分发。bundle NOTICE.txt 为手写声明 |
-| `Corrosion` @ v0.6.1 | CMake/Cargo 构建集成 | MIT | 可用 | 仅构建时使用。 |
 | `saf-derived-rust-dsp` @ v1.3.4-subset | Rust afSTFT、去相关/OM 算法及 KEMAR/滤波器/HOA 数据来源 | ISC AND MIT | 可用 | 保留原作者及许可证；不链接 SAF。资源哈希由 check_cargo.py 校验。 |
 | `rust-adler2-2.0.1` @ 2.0.1 | Rust DSP 的锁定依赖 | 0BSD OR MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-anstyle-1.0.11` @ 1.0.11 | clap 帮助文本的样式描述 | MIT OR Apache-2.0 | 可用 | 经 clap 引入；未启用 color，不输出 ANSI 样式。 |
@@ -48,12 +47,15 @@
 | `rust-bitflags-1.3.2` @ 1.3.2 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 |
 | `rust-bitflags-2.13.2` @ 2.13.2 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-bytemuck-1.25.2` @ 1.25.2 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-cc-1.11.2` @ 1.11.2 | mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6） | Apache-2.0 OR MIT | 可用 | 仅构建时使用（build-dependency），不编入产物。 |
 | `rust-clap-4.5.41` @ 4.5.41 | mradm 命令行的参数解析（mradm-cli） | MIT OR Apache-2.0 | 可用 | 只用 builder API；关闭默认 features，只开 std、help、usage、error-context（不启用 derive、color、suggestions、wrap_help）。 |
 | `rust-clap_builder-4.5.41` @ 4.5.41 | clap 的解析与帮助实现 | MIT OR Apache-2.0 | 可用 | 经 clap 引入，features 同 clap。 |
 | `rust-clap_lex-0.7.5` @ 0.7.5 | clap 的命令行分词 | MIT OR Apache-2.0 | 可用 | 经 clap 引入。 |
+| `rust-cmake-0.1.58` @ 0.1.58 | mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6） | Apache-2.0 OR MIT | 可用 | 仅构建时使用（build-dependency），不编入产物。 |
 | `rust-dasp_frame-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-dasp_sample-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-ebur128-0.1.10` @ 0.1.10 | Rust 响度/True Peak 计量的锁定依赖 | MIT | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）；K-weighting 的 tan/pow、门控系数的 pow 与 LUFS 换算的 log10 改用 libm，x86 不再设置 MXCSR flush-to-zero，所有架构统一在每次调用后清零低于 f64::EPSILON 的滤波器状态（二期 2.2）。 |
+| `rust-find-msvc-tools-0.1.15` @ 0.1.15 | mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6） | Apache-2.0 OR MIT | 可用 | 仅构建时使用（build-dependency），不编入产物。 |
 | `rust-glam-0.30.10` @ 0.30.10 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.31.1` @ 0.31.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.32.1` @ 0.32.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
@@ -82,6 +84,7 @@
 | `rust-serde_core-1.0.229` @ 1.0.229 | serde 的核心 trait 依赖 | MIT OR Apache-2.0 | 可用 | 经 serde 引入。 |
 | `rust-serde_derive-1.0.229` @ 1.0.229 | serde 锁定版本的派生宏 | MIT OR Apache-2.0 | 可用 | serde 用永不成立的 target 条件把它锁在 Cargo.lock 中以保持版本同步；未启用 derive，不参与编译。 |
 | `rust-serde_json-1.0.140` @ 1.0.140 | PoseBridge 遥测 JSON 解析（mradm-osc） | MIT OR Apache-2.0 | 可用 | 开启 std 与 float_roundtrip，使浮点溢出判定与 C++ 快照重解析一致；使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision。 |
+| `rust-shlex-2.0.1` @ 2.0.1 | mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6） | Apache-2.0 OR MIT | 可用 | 仅构建时使用（build-dependency），不编入产物。 |
 | `rust-simba-0.10.2` @ 0.10.2 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-smallvec-1.16.2` @ 1.16.2 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 |
 | `rust-sofar-0.3.0` @ 0.3.0 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 0.3.0 最小本地补丁公开 RawHrtf；关闭 DSP/重采样 features；保留上游 NOTICE。 |

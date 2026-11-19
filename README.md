@@ -68,6 +68,16 @@ cmake --preset release
 cmake --build --preset release
 ```
 
+macOS 和 Linux 可用发布脚本通过 Cargo 构建 `libmradm_capi` 与 `mradm`。脚本为共享库创建版本化链接，
+并在 macOS 上为 APAC 编码所用的 `mradm` 补 ad-hoc 签名。
+
+```bash
+scripts/release/build-cargo-release.sh --target-dir build/rust   # 产物在 build/rust/release
+```
+
+Windows 也可在 MSVC 环境下从 `rust/` 运行 `cargo build --release --locked -p mradm-capi`，
+得到 `mradm.exe`、`mradm_capi.dll` 和导入库 `mradm_capi.dll.lib`。
+
 ### 查看场景与能力
 
 ```bash
@@ -81,11 +91,10 @@ cmake --build --preset release
 
 | 选项 | 说明 | 默认 |
 |---|---|---|
-| `MR_ADM_CORE_FETCH_DEPS` | 关闭后使用系统依赖，需另备 Corrosion 0.6.1 与 Cargo 依赖缓存 | `ON` |
+| `MR_ADM_CORE_FETCH_DEPS` | 关闭后使用系统依赖，需另备 Cargo 依赖缓存 | `ON` |
 | `MR_ADM_FLAC_PROVIDER` / `MR_ADM_OPUS_PROVIDER` | `AUTO`（Release 用 vendored static，Debug 优先系统库）/ `VENDORED` / `SYSTEM` | `AUTO` |
 | `MR_ADM_ENABLE_SOFA` | 双耳后端的用户 SOFA HRIR 支持 | `ON` |
 | `MR_ADM_ENABLE_IAMF` | IAMF 编码，需 `MR_ADM_IAMF_AOM_ROOT` 指向官方 AOM iamf-tools bridge SDK | `OFF` |
-| `MR_ADM_BUILD_CAPI_BUNDLE` | 生成自包含 `libmradm_capi` 共享库，供 GUI 加载 | `OFF` |
 
 ## 基础用法
 

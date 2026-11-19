@@ -47,12 +47,6 @@ fi
 # cannot be parsed as translation units on the macOS quality host.
 files=()
 while IFS= read -r -d '' file; do
-    # This consumer has a compile command only when the shared C ABI bundle is configured.
-    if [[ "$file" == */tests/tools/capi_capture.cpp ]]; then
-        if ! grep -q '^MR_ADM_BUILD_CAPI_BUNDLE:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
-            continue
-        fi
-    fi
     files+=("$file")
 done < <(
     find "$repo_root/src" "$repo_root/tests" \

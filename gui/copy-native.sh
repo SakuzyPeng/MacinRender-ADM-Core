@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 把已构建的自包含 C ABI dylib 拷到 GUI 工程的 runtimes 目录,供 P/Invoke 加载。
 #
-# 前置:先在仓库根构建 bundle 目标 —
-#   cmake --preset release -DMR_ADM_BUILD_CAPI_BUNDLE=ON
-#   cmake --build --preset release --target mradm_capi_bundle
+# 前置:先在仓库根构建 C ABI 共享库(6.6 起由 Cargo 构建,CMake 目标 mr_adm_rust 把它复制到构建目录)—
+#   cmake --preset release
+#   cmake --build --preset release --target mr_adm_rust
 #
 # 目前手动跑;Windows/Linux 产物与 CI 化留后。
 set -euo pipefail
@@ -23,7 +23,7 @@ dst_dir="$here/MacinRender.Gui/runtimes/$rid/native"
 
 # dylib 是带版本号实体 + symlink;cp -L 跟随 symlink 拷成实体文件,避免依赖 symlink 链。
 if [[ ! -e "$src_dir/$lib" ]]; then
-    echo "找不到 $src_dir/$lib —— 请先构建 mradm_capi_bundle 目标"; exit 1
+    echo "找不到 $src_dir/$lib —— 请先构建 mr_adm_rust 目标"; exit 1
 fi
 
 mkdir -p "$dst_dir"

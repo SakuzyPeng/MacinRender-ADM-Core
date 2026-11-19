@@ -2,7 +2,11 @@
 //! call. A mutable handle may only be used by one thread at a time. Each handle
 //! is destroyed by its matching Rust destructor, never by the caller's allocator.
 //!
-//! The `mradm_*` entries serve the C++ islands and tests; Rust callers use only [`api`].
+//! The `mradm_*` entries serve the C++ islands and tests through one table of function pointers
+//! (`services`, never by name since 6.6 A); Rust callers use only [`api`].
+
+// The islands and C libraries this crate calls by name: a crate nothing names is not linked.
+extern crate mradm_islands_sys;
 
 use mradm_dsp::{Error, Result};
 use std::{
@@ -29,6 +33,7 @@ mod scene;
 mod scene_math;
 #[cfg(windows)]
 mod scene_worker;
+mod services;
 mod spatial;
 #[cfg(test)]
 mod test_alloc;

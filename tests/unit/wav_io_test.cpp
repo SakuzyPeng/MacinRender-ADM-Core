@@ -20,6 +20,7 @@
 
 #include "adm/audio_io.h"
 
+#include "../support/rust_services_test.h"
 #include "../support/wav_fixture.h"
 
 namespace {
@@ -209,6 +210,7 @@ void verify_failed_finish_is_sticky(const std::filesystem::path& directory) {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     const auto directory =
         std::filesystem::temp_directory_path() /
         ("mradm-wav-rust-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));

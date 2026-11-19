@@ -3,8 +3,7 @@ use mradm_dsp::scene_math::{self as math, Rotation};
 
 /// Scalar operations are batches of fixed strides. These are arithmetic helpers;
 /// unlike renderer commands, they retain IEEE nonfinite propagation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_math(
+pub(crate) unsafe extern "C" fn mradm_dsp_scene_math(
     op: u32,
     src: *const f32,
     n: usize,
@@ -53,8 +52,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_math(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_rotation_create(
+pub(crate) unsafe extern "C" fn mradm_dsp_scene_rotation_create(
     pose: *const f32,
     n: usize,
     contract: u32,
@@ -71,16 +69,14 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotation_create(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_rotation_destroy(h: *mut Rotation) {
+pub(crate) unsafe extern "C" fn mradm_dsp_scene_rotation_destroy(h: *mut Rotation) {
     if !h.is_null() {
         unsafe {
             drop(Box::from_raw(h));
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_rotation_update(
+pub(crate) unsafe extern "C" fn mradm_dsp_scene_rotation_update(
     h: *mut Rotation,
     pose: *const f32,
     n: usize,
@@ -95,8 +91,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotation_update(
         Ok(())
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_scene_rotation_apply(
+pub(crate) unsafe extern "C" fn mradm_dsp_scene_rotation_apply(
     h: *const Rotation,
     src: *const f32,
     n: usize,

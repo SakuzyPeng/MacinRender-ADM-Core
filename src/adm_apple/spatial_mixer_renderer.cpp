@@ -22,9 +22,9 @@
 #include "adm/audio_io.h"
 #include "adm/render_apple.h"
 
+#include "../adm_core/rust_services_ffi.h"
 #include "apple_backend.h"
 #include "apple_layouts.h"
-#include "apple_plan_ffi.h"
 #include "engine_records.h"
 #include "meter.h"
 #include "render_common.h"
@@ -1243,10 +1243,10 @@ Result<std::shared_ptr<const apple::Prepared>> apple::prepare(const RenderPlan& 
     std::size_t context_len = context.size();
     MradmRenderApplePlan* raw = nullptr;
     MradmRenderApplePlanView view{};
-    const auto code =
-        mradm_render_apple_prepare(&request, &raw, &view, message.data(), &message_len, context.data(), &context_len);
-    const std::unique_ptr<MradmRenderApplePlan, decltype(&mradm_render_apple_plan_destroy)> recipe{
-        raw, &mradm_render_apple_plan_destroy};
+    const auto code = mradm::rust().render_apple_prepare(
+        &request, &raw, &view, message.data(), &message_len, context.data(), &context_len);
+    const std::unique_ptr<MradmRenderApplePlan, decltype(MradmRustServices::render_apple_plan_destroy)> recipe{
+        raw, mradm::rust().render_apple_plan_destroy};
     if (code != 0) {
         return make_error(static_cast<ErrorCode>(code),
                           std::string{reinterpret_cast<const char*>(message.data()), message_len},

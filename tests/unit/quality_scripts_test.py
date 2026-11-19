@@ -61,9 +61,9 @@ class AnalysisScopeTests(unittest.TestCase):
         (self.root / "README.md").write_text("Quality scope fixture.\n", encoding="utf-8")
         self.git("add", "README.md")
         self.git("commit", "-qm", "baseline")
-        self.sources = ("src/adm_core/module.cpp", "tests/support/unconditional.cpp")
-        self.capi_source = "tests/tools/capi_capture.cpp"
-        for name in (*self.sources, self.capi_source):
+        # The C ABI consumers are always configured since 6.6 (the shared library is always built).
+        self.sources = ("src/adm_core/module.cpp", "tests/support/unconditional.cpp", "tests/tools/capi_capture.cpp")
+        for name in self.sources:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("// Analysis fixture.\n", encoding="utf-8")
@@ -80,10 +80,8 @@ class AnalysisScopeTests(unittest.TestCase):
                         "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={self.root / 'no-hooks'}",
                         *args], cwd=self.root, check=True, capture_output=True, text=True)
 
-    def run_quality(self, script, bundle_enabled=False):
-        (self.build / "CMakeCache.txt").write_text(
-            f"MR_ADM_BUILD_CAPI_BUNDLE:BOOL={'ON' if bundle_enabled else 'OFF'}\n", encoding="utf-8",
-        )
+    def run_quality(self, script):
+        (self.build / "CMakeCache.txt").write_text("CMAKE_BUILD_TYPE:STRING=Debug\n", encoding="utf-8")
         self.log.unlink(missing_ok=True)
         args = ["--base", "HEAD^", "--build-dir", str(self.build)] if script == "check-changed.sh" else [str(self.build)]
         result = subprocess.run(["bash", str(self.root / "scripts/quality" / script), *args],
@@ -101,21 +99,6 @@ class AnalysisScopeTests(unittest.TestCase):
             self.assertIn(path, args, name)
             for tool in ("clang-format", "clang-tidy", "cppcheck"):
                 self.assertIn(path, calls[tool], name)
-
-    def test_full_tidy_analyzes_capi_consumer_only_with_bundle(self):
-        for enabled in (False, True):
-            with self.subTest(enabled=enabled):
-                calls = self.run_quality("clang-tidy.sh", bundle_enabled=enabled)
-                self.assertEqual(str(self.root / self.capi_source) in calls["clang-tidy"], enabled)
-
-    def test_changed_checks_format_capi_consumer_with_or_without_bundle(self):
-        for enabled in (False, True):
-            with self.subTest(enabled=enabled):
-                calls = self.run_quality("check-changed.sh", bundle_enabled=enabled)
-                source = str(self.root / self.capi_source)
-                self.assertIn(source, calls["clang-format"])
-                for tool in ("clang-tidy", "cppcheck"):
-                    self.assertEqual(source in calls[tool], enabled)
 
 
 class FfiArrayTests(unittest.TestCase):
@@ -291,13 +274,14 @@ class CapiPrivateEntryTests(unittest.TestCase):
         self.assertIn("mradm_capi_unlisted", "\n".join(self.compare(extra)))
         self.assertTrue(self.compare(self.GENERATED.replace("uintptr_t len);\nchar", "uint32_t len);\nchar")))
 
-    def test_the_repository_declares_every_private_entry(self):
-        # The one private entry is the command line's, called by the mradm executable's main; the
-        # imported C++ trampolines are not entries.
-        hand_text = "".join((REPO / relative).read_text(encoding="utf-8") for relative in ffi.CAPI_FFI_HEADERS)
-        generated = ("extern uint32_t mradm_capi_progress_v1(void (*callback)(double), double fraction);\n"
-                     "int mradm_cli_main(void);\n")
-        self.assertEqual(self.compare(generated, hand_text), [])
+    def test_the_repository_declares_no_private_entry(self):
+        # Since 6.6 the shared library is a Rust cdylib, which exports every #[no_mangle] function:
+        # mradm-capi has no private entry (the command line is the mradm executable's Rust main), and
+        # the imported C++ trampolines are not entries.
+        self.assertEqual(ffi.CAPI_FFI_HEADERS, [])
+        generated = "extern uint32_t mradm_capi_progress_v1(void (*callback)(double), double fraction);\n"
+        self.assertEqual(self.compare(generated, ""), [])
+        self.assertIn("mradm_cli_main", "\n".join(self.compare(generated + "int mradm_cli_main(void);\n", "")))
 
 
 class LanguageSurfaceTests(unittest.TestCase):

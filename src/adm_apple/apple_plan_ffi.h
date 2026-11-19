@@ -74,15 +74,8 @@ typedef struct MradmRenderApplePlanView {
     size_t lfe_len;
 } MradmRenderApplePlanView;
 // cppcheck-suppress-end unusedStructMember
-// On success *output owns the records *view points into, until mradm_render_apple_plan_destroy.
-int32_t mradm_render_apple_prepare(const MradmRenderAppleRequest* request,
-                                   MradmRenderApplePlan** output,
-                                   MradmRenderApplePlanView* view,
-                                   uint8_t* message,
-                                   size_t* message_len,
-                                   uint8_t* context,
-                                   size_t* context_len);
-void mradm_render_apple_plan_destroy(MradmRenderApplePlan* plan);
+// On success render_apple_prepare's *output owns the records *view points into, until
+// render_apple_plan_destroy.
 #ifdef __cplusplus
 }
 #endif

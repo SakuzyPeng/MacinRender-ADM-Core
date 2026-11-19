@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Check the hand-written private FFI headers against the Rust `mradm-ffi` exports, and the public
-`c_api.h` against the exports `mradm-capi` implements.
+"""Check the hand-written private FFI headers against the Rust `mradm-ffi` records and services
+table, and the public `c_api.h` against the exports `mradm-capi` implements.
 
 cbindgen renders the Rust side into a throwaway C header; both headers are then reduced to
 function signatures and struct field sequences and compared structurally. The generated header is
@@ -30,16 +30,14 @@ FFI_CRATE = RUST_ROOT / "crates" / "mradm-ffi"
 CBINDGEN_CONFIG = FFI_CRATE / "cbindgen.toml"
 CAPI_CRATE = RUST_ROOT / "crates" / "mradm-capi"
 CAPI_HEADER = "include/adm/c_api.h"
-# Headers of private mradm-capi entries called from C++ (types from c_api.h): the command line's
-# entry, called by the mradm executable's main. A new private entry must be declared in a header
-# listed here.
-CAPI_FFI_HEADERS = ["src/adm_cli/cli_ffi.h"]
+# Headers of private mradm-capi entries called from C++ (types from c_api.h). There are none since
+# 6.6: the shared library is a Rust cdylib, which would export any `#[no_mangle]` function, and the
+# command line is the mradm executable's Rust main. The check below fails on any private entry.
+CAPI_FFI_HEADERS: list[str] = []
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [
-    "src/adm_dsp/dsp_ffi.h",
     "src/adm_dsp/room_ffi.h",
-    "src/adm_dsp/scene_math_ffi.h",
     "src/adm_render_common/layout_ffi.h",
     "src/adm_metadata/adm_ffi.h",
     "src/adm_metadata/scene_ffi.h",
@@ -48,12 +46,14 @@ FFI_HEADERS = [
     "src/adm_render_common/routing_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
+    "src/adm_core/rust_services_ffi.h",
     "tests/support/ffi/island_test_ffi.h",
 ]
 
-# The records of the C++ island tables (hand-written name -> Rust name): Rust calls the islands
-# through `extern` declarations, so no Rust export signature reaches them. cbindgen.toml exports them
-# by name and they are compared field by field like the records the exports reach.
+# The records of the C++ island tables and the Rust services table the islands call (hand-written
+# name -> Rust name): since 6.6 A mradm-ffi exports no function by name (a Rust cdylib exports every
+# `#[no_mangle]` function of its crate graph), so no export signature reaches them. cbindgen.toml
+# exports them by name and they are compared field by field, function pointers by signature.
 ISLAND_RECORDS = {
     "MradmAppleIslands": "AppleIslands",
     "MradmAppleSettings": "AppleSettings",
@@ -76,7 +76,12 @@ ISLAND_RECORDS = {
     "MradmPlatformIslands": "PlatformIslands",
     "MradmRenderLiveOverride": "RenderLiveOverride",
     "MradmRoomScreenGeometry": "RoomScreenGeometry",
+    "MradmRustServices": "RustServices",
+    "MradmRustTestServices": "RustTestServices",
 }
+
+# C++ functions the Rust side imports (declared next to the records they take), not Rust exports.
+ISLAND_FUNCTIONS = {"mradm_islands_bind"}
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.
 # These pointer spellings are compatible only while the underlying array keeps this exact shape.
@@ -518,6 +523,8 @@ def main() -> int:
     hand = Header({}, {}, {}, {})
     for relative in FFI_HEADERS:
         parse_header((REPO_ROOT / relative).read_text(encoding="utf-8"), relative, hand)
+    for name in ISLAND_FUNCTIONS:
+        hand.functions.pop(name, None)
 
     checker = Checker(hand, gen)
     checker.run()

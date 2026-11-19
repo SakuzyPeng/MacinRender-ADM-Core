@@ -1,6 +1,6 @@
 //! The Rust interface of this crate: what `mradm-capi` (the C ABI and the CLI service) and the
 //! consistency examples call. Everything else in the crate is the private C boundary of the C++
-//! islands and tests, reached only through its `mradm_*` symbols.
+//! islands and tests, reached only through the services table (`islands::services`).
 //!
 //! Each group stays here, rather than in a safe crate, because it holds a C table, a callback that
 //! keeps an address, or a platform service.
@@ -11,12 +11,17 @@ pub mod islands {
     pub use crate::engine::{Facts, PlatformIslands, platform};
     pub use crate::render::apple_island::AppleIslands;
     pub use crate::render::device_island::{DeviceEnumeration, DeviceIslands};
-    #[cfg(feature = "islands")]
     pub use crate::render::device_island::{DevicePull, DeviceTable};
-    #[cfg(feature = "islands")]
     pub use crate::render::{
         engine_monitor::EngineIslandError, engine_scene_output::EngineSceneDeviceProgress,
     };
+    pub use crate::services::RustServices;
+
+    /// The Rust services the islands call: the C ABI hands this table to the islands
+    /// (`mradm_islands_bind`) before it first calls one.
+    pub fn services() -> *const RustServices {
+        &raw const crate::services::SERVICES
+    }
 }
 
 /// Offline render and preview: the engine state machine stepped over the islands, and the platform

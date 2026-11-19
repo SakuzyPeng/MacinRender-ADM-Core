@@ -38,7 +38,15 @@ use std::sync::{Mutex, MutexGuard};
 
 #[cfg(not(test))]
 unsafe extern "C" {
-    pub(crate) fn mradm_device_islands() -> *const DeviceIslands;
+    #[link_name = "mradm_device_islands"]
+    fn device_islands() -> *const DeviceIslands;
+}
+
+/// The device islands' table, after binding the islands' Rust services.
+#[cfg(not(test))]
+pub(crate) unsafe fn mradm_device_islands() -> *const DeviceIslands {
+    crate::services::bind();
+    unsafe { device_islands() }
 }
 
 // Unit tests link without the C++ device islands.

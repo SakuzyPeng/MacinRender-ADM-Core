@@ -17,6 +17,8 @@
 
 #include "adm/audio_io.h"
 
+#include "../support/rust_services_test.h"
+
 namespace {
 
 [[nodiscard]] uint32_t read_be32(const std::vector<unsigned char>& bytes, std::size_t offset) {
@@ -650,6 +652,7 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
 } // namespace
 
 int main() {
+    mradm_test::bind_rust_services();
     const auto run_check = [](const char* name, auto&& fn) {
         std::cerr << "RUN: " << name << "\n";
         const bool ok = fn();
