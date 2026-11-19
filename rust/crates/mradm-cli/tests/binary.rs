@@ -1,7 +1,7 @@
 //! The built `mradm` executable, run as a user would (formerly `tests/unit/adm_cli_smoke_test.cpp`):
 //! discovery output, help, option parsing and its exit codes, DirectSpeakers matrices, renders to
-//! WAV and FLAC, Apple speaker geometry, semantic policy templates, inspect and the rejected
-//! requests. ctest's `mr_adm_cli_smoke_tests` runs it with `MRADM_EXE_PATH` naming the executable;
+//! WAV and FLAC, Apple speaker geometry, inspect, semantic policy templates, export and room
+//! inspection. ctest's `mr_adm_cli_smoke_tests` runs it with `MRADM_EXE_PATH` naming the executable;
 //! without it (a plain `cargo test`) every test returns at once.
 use mradm_testkit::adm::*;
 use mradm_testkit::fixtures::wire_channel;
@@ -16,12 +16,37 @@ fn exe() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// The exit code and the combined stdout and stderr of `mradm args`.
-fn run(exe: &Path, args: &[&str]) -> (i32, String) {
+fn run_with_streams(exe: &Path, args: &[&str]) -> (i32, String, String) {
     let output = Command::new(exe).args(args).output().unwrap();
-    let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
-    text.push_str(&String::from_utf8_lossy(&output.stderr));
-    (output.status.code().unwrap_or(-1), text)
+    (
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// Combined output for checks that only match a diagnostic or a progress line.
+fn run(exe: &Path, args: &[&str]) -> (i32, String) {
+    let (code, mut stdout, stderr) = run_with_streams(exe, args);
+    stdout.push_str(&stderr);
+    (code, stdout)
+}
+
+fn success_stdout(exe: &Path, args: &[&str]) -> String {
+    let (code, stdout, stderr) = run_with_streams(exe, args);
+    assert_eq!(code, 0, "{args:?}:\n{stdout}{stderr}");
+    assert!(stderr.is_empty(), "{args:?} stderr:\n{stderr}");
+    stdout
+}
+
+fn assert_parse_error(exe: &Path, args: &[&str], expected: i32) {
+    let (code, stdout, stderr) = run_with_streams(exe, args);
+    assert_eq!(code, expected, "{args:?}:\n{stdout}{stderr}");
+    assert!(stdout.is_empty(), "{args:?} stdout:\n{stdout}");
+    assert!(
+        !stderr.is_empty(),
+        "{args:?} must report the error on stderr"
+    );
 }
 
 /// A directory unique to this call, removed with its contents on drop.
@@ -143,8 +168,7 @@ fn has_all(text: &str, needles: &[&str]) {
 #[test]
 fn discovery_lists_backends_formats_layouts_and_input_layouts() {
     let Some(exe) = exe() else { return };
-    let (code, out) = run(&exe, &["backends"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["backends"]);
     has_all(
         &out,
         &[
@@ -163,8 +187,7 @@ fn discovery_lists_backends_formats_layouts_and_input_layouts() {
     for absent in ["stereo", "0+7+0", "4+7+0"] {
         assert!(!out.contains(absent), "{absent}");
     }
-    let (code, out) = run(&exe, &["formats"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["formats"]);
     has_all(
         &out,
         &[
@@ -179,20 +202,18 @@ fn discovery_lists_backends_formats_layouts_and_input_layouts() {
             "bitrate (per channel): 6-320 kbps",
         ],
     );
+    assert_parse_error(&exe, &["formats", "extra"], 109);
 
     assert_ne!(run(&exe, &["layouts"]).0, 0, "layouts needs --format");
-    let (code, out) = run(&exe, &["layouts", "--format", "apac", "--layout", "7.1"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["layouts", "--format", "apac", "--layout", "7.1"]);
     has_all(&out, &["AudioUnit_7_1", "L R C LFE Ls Rs Rls Rrs"]);
-    let (code, out) = run(&exe, &["layouts", "--format", "wav", "--layout", "wav71"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["layouts", "--format", "wav", "--layout", "wav71"]);
     has_all(&out, &["L R C LFE Rls Rrs Ls Rs"]);
-    let (code, out) = run(&exe, &["layouts", "--format", "flac", "--renderer", "saf"]);
-    assert!(code == 0 && out.contains("Renderer: saf-vbap") && !out.contains("7.1.4"));
-    let (code, out) = run(&exe, &["layouts", "--format", "flac", "--renderer", "ear"]);
-    assert!(code == 0 && !out.contains("5.1.2"));
-    let (code, out) = run(&exe, &["layouts", "--format", "wav", "--renderer", "ear"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["layouts", "--format", "flac", "--renderer", "saf"]);
+    assert!(out.contains("Renderer: saf-vbap") && !out.contains("7.1.4"));
+    let out = success_stdout(&exe, &["layouts", "--format", "flac", "--renderer", "ear"]);
+    assert!(!out.contains("5.1.2"));
+    let out = success_stdout(&exe, &["layouts", "--format", "wav", "--renderer", "ear"]);
     has_all(&out, &["Renderer: libear", "9.1.4", "9.1.6"]);
     let (code, out) = run(
         &exe,
@@ -207,11 +228,10 @@ fn discovery_lists_backends_formats_layouts_and_input_layouts() {
         ],
     );
     assert!(code != 0 && out.contains("not supported"));
-    let (code, out) = run(
+    let out = success_stdout(
         &exe,
         &["layouts", "--format", "wav", "--renderer", "triple-balance"],
     );
-    assert_eq!(code, 0);
     has_all(&out, &["triple-balance", "7.1.4", "9.1.6", "22.2"]);
     let layout_51 = [
         "layouts",
@@ -228,8 +248,7 @@ fn discovery_lists_backends_formats_layouts_and_input_layouts() {
         "Triple Balance does not inherit SAF's 5.1"
     );
 
-    let (code, out) = run(&exe, &["input-layouts"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["input-layouts"]);
     has_all(
         &out,
         &[
@@ -240,8 +259,7 @@ fn discovery_lists_backends_formats_layouts_and_input_layouts() {
             "22.2 (24 channels",
         ],
     );
-    let (code, out) = run(&exe, &["input-layouts", "--format", "json"]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["input-layouts", "--format", "json"]);
     has_all(
         &out,
         &[
@@ -655,11 +673,9 @@ fn inspect_reads_the_scene_and_writes_a_policy_template() {
     let Some(exe) = exe() else { return };
     let dir = Dir::new("inspect");
     let input = object_input(&dir);
-    let (code, out) = run(&exe, &["inspect", &input]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["inspect", &input]);
     has_all(&out, &["48000", "Objects", "CliTestObj"]);
-    let (code, out) = run(&exe, &["inspect", "--xml", &input]);
-    assert_eq!(code, 0);
+    let out = success_stdout(&exe, &["inspect", "--xml", &input]);
     has_all(&out, &["<?xml", "audioObject", "CliTestObj"]);
     assert_ne!(
         run(&exe, &["inspect", "/nonexistent_mr_cli_test_xyz.wav"]).0,
@@ -689,4 +705,76 @@ fn inspect_reads_the_scene_and_writes_a_policy_template() {
             "\"diffuse\"",
         ],
     );
+}
+
+#[test]
+fn export_applies_the_policy_and_reports_failures() {
+    let Some(exe) = exe() else { return };
+    let dir = Dir::new("export");
+    let input = object_input(&dir);
+    let output = dir.file("export.wav");
+    let policy = dir.file("policy.json");
+    std::fs::write(
+        &policy,
+        r#"{"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}}"#,
+    )
+    .unwrap();
+    let out = success_stdout(
+        &exe,
+        &[
+            "export",
+            "-i",
+            &input,
+            "-o",
+            &output,
+            "--semantic-policy",
+            &policy,
+        ],
+    );
+    assert_eq!(out.trim_end(), format!("[info] wrote {output}"));
+    let axml = success_stdout(&exe, &["inspect", "--xml", &output]);
+    has_all(&axml, &["CliTestObj", ">0.5</gain>"]);
+
+    let missing = dir.file("missing.wav");
+    let failed_output = dir.file("failed.wav");
+    let (code, stdout, stderr) =
+        run_with_streams(&exe, &["export", "-i", &missing, "-o", &failed_output]);
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert!(stdout.starts_with("[error] "), "{stdout}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(!Path::new(&failed_output).exists());
+    assert_parse_error(&exe, &["export", "-i", &input], 106);
+}
+
+#[test]
+fn room_check_prints_a_json_report_and_reports_failures() {
+    let Some(exe) = exe() else { return };
+    let manifest = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../tests/fixtures/room/synthetic/room.json"
+    );
+    for (args, quality, policy) in [
+        (&["room-check", manifest][..], "exact", "room-exact-v1"),
+        (
+            &["room-check", manifest, "--quality", "realtime"][..],
+            "realtime",
+            "room-realtime-v2",
+        ),
+    ] {
+        let stdout = success_stdout(&exe, args);
+        let report = mradm_json::parse(stdout.as_bytes()).unwrap();
+        let report = report.as_object().unwrap();
+        assert_eq!(report["schema"].as_str(), Some("mradm.room-prepared"));
+        assert_eq!(report["id"].as_str(), Some("synthetic"));
+        assert_eq!(report["quality"].as_str(), Some(quality));
+        assert_eq!(report["processing_policy"].as_str(), Some(policy));
+    }
+
+    let dir = Dir::new("room-check");
+    let missing = dir.file("missing.json");
+    let (code, stdout, stderr) = run_with_streams(&exe, &["room-check", &missing]);
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert_eq!(stdout.trim_end(), "[error] Cannot inspect room resource");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert_parse_error(&exe, &["room-check", manifest, "--quality", "fast"], 105);
 }

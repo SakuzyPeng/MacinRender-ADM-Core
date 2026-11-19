@@ -639,7 +639,7 @@ CI 43058944168 与 Quality 43058944517 通过；main `2207538`（只多结项文
 | 6.4 | CLI 改为 Rust | 新 crate `mradm-cli` 产出 `mradm`：8 个公开子命令（`render`、`inspect`、`backends`、`layouts`、`input-layouts`、`formats`、`export`、`room-check`）与内部命令 `__apac-encode`，解析器用 clap，退出码映射为与 CLI11 相同，`-v` 日志改由 Rust 写出。CLI 只构造请求并调用 `mradm-engine`。验收：`collect.py --tool mradm=<新>` 与旧 CLI 0 差异、CLI 记录对照（覆盖全部公开子命令，补齐 `room-check` 的成功与错误路径）、`adm_cli_smoke_test` 与 macOS APAC smoke。 |
 | 6.5 | 删除 C++ 外壳与 SDK | 删除会话外壳（`RenderService`、`PreviewSession`、`MonitorSession`、`SceneOutputSession`、`SceneStreamEngine`、`OscHeadTrackingReceiver`）、`include/adm` 中 `c_api.h` 以外的头、`src/adm_core` / `adm_io` / `adm_metadata` 的残余与失去调用者的私有 FFI 头，以及 `mr_adm_c_api` 静态库、安装规则与 `MacinRenderADMCoreConfig`。测试仍要用的部分照 5.6 移到 `tests/support`，`RenderService` 改为直接调用 Rust 引擎的测试门面。CLI11、spdlog/fmt、nlohmann_json、tl-expected 移出生产，更新许可证清单。 |
 | 6.6 | 构建以 Cargo 为主 | `cargo build` 产出 `mradm` 与 `mradm_capi`（`mradm-capi` 改为 cdylib，核对导出、SONAME / install_name / `.def` 与 GUI 打包）；一个 `-sys` crate 的 `build.rs` 经 `cmake` crate 构建只含岛与第三方 C 库（libFLAC、libopus 等）的 CMake 工程；去掉 Corrosion。CMake 只保留岛、第三方 C 库与 R3 之后剩下的 C++ 测试（C++ 测试清退由七期提前到 R3，用户决定 2026-11-14），libFLAC、libopus 等第三方 C 库按 ADR 0021 保留在岛中。CI、Release、presets 与打包脚本随之切换。已完成（2026-11-19，本机 Linux x64；macOS / Windows 原生复核待维护者）：用户决定（2026-11-19）岛按名调用的 36 个 Rust 入口改为函数表、顶层 CMake 保留为测试与一致性树，见[构建以 Cargo 为主](RUST_BOUNDARY_CARGO.md)。 |
-| 6.7 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收，Consistency、CI、Quality 与 Release Build（Reference tests 随 R1 删除），两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化，准备七期。 |
+| 6.7 | 两平台验收与结项 | macOS arm64 + Windows x64 全矩阵验收，Consistency、CI、Quality 与 Release Build（Reference tests 随 R1 删除），两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化，准备七期。CI 验收通过（2026-11-19），维护者实机检查待完成，见[六期结项](RUST_BOUNDARY_CLOSEOUT.md)。 |
 
 用户决定（2026-11-12）：
 1. **CLI 契约**：选项名、取值与默认值、stdout、输出文件、退出码、领域错误的中文消息不变；`--help` 的排版与参数解析错误的措辞可以变化，写进发布说明。解析器用 clap（新依赖，登记许可证），退出码另行映射为与 CLI11 相同。
@@ -868,6 +868,18 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 
 测试 C/C++ 由 22,124 行降至 11,319 行，生产 C/C++ 由 8,744 行降至 8,704 行。设备探针在 macOS 与 Windows 的链接和运行待维护者复核。
 见 [R3 记录的 G 节](RUST_BOUNDARY_TESTS.md#g-手动探针与收尾)。
+
+**6.6 状态**：已完成并合入 main（`115afbd`，维护者另加 `faff0b0` 补全 Cargo 构建，`2723730` / `e40638c` 修正 MSVC CRT）。
+见 [6.6 记录](RUST_BOUNDARY_CARGO.md)。
+
+**6.7 状态**：CI 验收通过（2026-11-19），维护者实机检查待完成。
+- main `e40638c` 上 Consistency 44492349541 的四份报告都是 294 个 PCM id 相同、门禁失败 0，CI 44492349621 通过；
+- Quality 从 `2029e31` 起因 `tests/manual/capture_tap.c` 的一条 cppcheck 发现失败，由 6.7 A 修正；
+- 6.7 B 删除 C ABI 采集与 CLI 记录对照工具（`mr_adm_capi_capture`、`capi-capture.py`、`cli-transcript.py`、`boundary.py` 及其表与测试），
+  测试 C/C++ 11,361 → 9,927 行；
+- 分支 `8177028` 上 Quality（full）44494896493 与 Release Build 44494891324 通过，Release 的五个打包 job（含两个 GUI 包的 P/Invoke smoke）成功。
+
+六期生产 C/C++ 由 21,772 行降到 8,684 行（−60.1%）。七期初拟与开放问题见 [六期结项](RUST_BOUNDARY_CLOSEOUT.md)。
 
 ## 每个迁移切片的验证
 

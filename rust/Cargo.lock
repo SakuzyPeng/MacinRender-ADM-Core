@@ -358,6 +358,7 @@ dependencies = [
  "clap",
  "mradm-dsp",
  "mradm-engine",
+ "mradm-json",
  "mradm-scene",
  "mradm-testkit",
 ]

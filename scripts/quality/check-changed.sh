@@ -75,7 +75,8 @@ is_platform_excluded() {
 }
 
 source_files=()    # clang-format (all, platform-agnostic)
-analysis_files=()  # clang-tidy + cppcheck source/header inputs, minus platform-excluded sources
+cppcheck_c_files=()
+cppcheck_cxx_files=()
 tidy_files=()      # clang-tidy implementation units only
 for file in "${changed_files[@]}"; do
     [[ -f "$file" ]] || continue
@@ -88,8 +89,11 @@ for file in "${changed_files[@]}"; do
             esac
             if ! is_platform_excluded "$file"; then
                 case "$file" in
-                    *.h|*.hpp|*.c|*.cc|*.cpp|*.cxx)
-                        analysis_files+=("$repo_root/$file")
+                    *.c)
+                        cppcheck_c_files+=("$repo_root/$file")
+                        ;;
+                    *.h|*.hpp|*.cc|*.cpp|*.cxx)
+                        cppcheck_cxx_files+=("$repo_root/$file")
                         ;;
                 esac
                 case "$file" in
@@ -174,20 +178,25 @@ if ! command -v cppcheck >/dev/null 2>&1; then
     exit 127
 fi
 
-if [[ ${#analysis_files[@]} -eq 0 ]]; then
+cppcheck_count=$((${#cppcheck_c_files[@]} + ${#cppcheck_cxx_files[@]}))
+if [[ $cppcheck_count -eq 0 ]]; then
     echo "[INFO] cppcheck: no changed file(s) (after platform exclusions)"
     exit 0
 fi
 
-echo "[INFO] cppcheck: ${#analysis_files[@]} changed file(s)"
-cppcheck \
-    --enable=warning,style,performance,portability \
-    --language=c++ \
-    --std=c++20 \
-    --inline-suppr \
-    --error-exitcode=2 \
-    --suppressions-list="$repo_root/CppcheckSuppressions.txt" \
-    -I "$repo_root/include" \
-    -I "$repo_root/tests/support/ffi" \
-    -I "$repo_root/src/adm_core" \
-    "${analysis_files[@]}"
+echo "[INFO] cppcheck: $cppcheck_count changed file(s)"
+cppcheck_args=(
+    --enable=warning,style,performance,portability
+    --inline-suppr
+    --error-exitcode=2
+    --suppressions-list="$repo_root/CppcheckSuppressions.txt"
+    -I "$repo_root/include"
+    -I "$repo_root/tests/support/ffi"
+    -I "$repo_root/src/adm_core"
+)
+if [[ ${#cppcheck_c_files[@]} -gt 0 ]]; then
+    cppcheck --language=c --std=c11 "${cppcheck_args[@]}" "${cppcheck_c_files[@]}"
+fi
+if [[ ${#cppcheck_cxx_files[@]} -gt 0 ]]; then
+    cppcheck --language=c++ --std=c++20 "${cppcheck_args[@]}" "${cppcheck_cxx_files[@]}"
+fi
