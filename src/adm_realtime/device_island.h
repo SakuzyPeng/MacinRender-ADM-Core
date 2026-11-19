@@ -17,7 +17,7 @@ const MradmDeviceIslands* mradm_device_islands(void);
 }
 
 namespace mradm::realtime {
-// The table of a C++ device (the engine takes it over); also how tests inject theirs.
+// The table of a C++ device (the engine takes it over).
 [[nodiscard]] MradmDeviceTable device_table(std::unique_ptr<IAudioOutputDevice> device);
 } // namespace mradm::realtime
 #endif

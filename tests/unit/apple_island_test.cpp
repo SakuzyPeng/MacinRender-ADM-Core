@@ -23,7 +23,7 @@
 #include "../../src/adm_realtime/buffered_media_timeline.h"
 #include "../support/adm_fixture.h"
 #include "../support/wav_fixture.h"
-#include "scene_test_ffi.h"
+#include "island_test_ffi.h"
 
 namespace {
 

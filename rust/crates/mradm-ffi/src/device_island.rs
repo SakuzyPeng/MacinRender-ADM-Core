@@ -154,7 +154,8 @@ unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
 impl Device {
-    /// Takes over a caller's table (a C++ device wrapped by `device_table`).
+    /// Takes over a test's table.
+    #[cfg(test)]
     pub(crate) unsafe fn adopt(table: &DeviceTable) -> Self {
         Self { table: *table }
     }

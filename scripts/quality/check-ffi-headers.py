@@ -39,26 +39,44 @@ CBINDGEN_VERSION = "0.29.2"
 FFI_HEADERS = [
     "src/adm_dsp/dsp_ffi.h",
     "src/adm_dsp/room_ffi.h",
-    "tests/support/dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
     "src/adm_render_common/layout_ffi.h",
     "src/adm_metadata/adm_ffi.h",
     "src/adm_metadata/scene_ffi.h",
     "src/adm_audio/wav_ffi.h",
-    "tests/support/sdk/realtime/osc_ffi.h",
     "src/adm_core/config_ffi.h",
     "src/adm_render_common/routing_ffi.h",
-    "tests/support/render_test_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
-    "tests/support/ffi/config_test_ffi.h",
-    "tests/support/ffi/dsp_test_ffi.h",
-    "tests/support/ffi/room_test_ffi.h",
-    "tests/support/ffi/scene_math_test_ffi.h",
-    "tests/support/ffi/scene_test_ffi.h",
-    "tests/support/ffi/routing_test_ffi.h",
-    "tests/support/ffi/engine_test_ffi.h",
+    "tests/support/ffi/island_test_ffi.h",
 ]
+
+# The records of the C++ island tables (hand-written name -> Rust name): Rust calls the islands
+# through `extern` declarations, so no Rust export signature reaches them. cbindgen.toml exports them
+# by name and they are compared field by field like the records the exports reach.
+ISLAND_RECORDS = {
+    "MradmAppleIslands": "AppleIslands",
+    "MradmAppleSettings": "AppleSettings",
+    "MradmDeviceEnumeration": "DeviceEnumeration",
+    "MradmDeviceIslands": "DeviceIslands",
+    "MradmDevicePull": "DevicePull",
+    "MradmDeviceTable": "DeviceTable",
+    "MradmEngineBackend": "EngineBackend",
+    "MradmEngineIslandError": "EngineIslandError",
+    "MradmEngineIslandReply": "EngineIslandReply",
+    "MradmEngineIslandStream": "EngineIslandStream",
+    "MradmEngineLayout": "EngineLayout",
+    "MradmEngineMode": "EngineMode",
+    "MradmEnginePath": "EnginePath",
+    "MradmEngineProgress": "EngineProgress",
+    "MradmEngineRenderEvent": "EngineRenderEvent",
+    "MradmEngineSceneDeviceProgress": "EngineSceneDeviceProgress",
+    "MradmEngineSpatialLayout": "EngineSpatialLayout",
+    "MradmIslandContext": "IslandContext",
+    "MradmPlatformIslands": "PlatformIslands",
+    "MradmRenderLiveOverride": "RenderLiveOverride",
+    "MradmRoomScreenGeometry": "RoomScreenGeometry",
+}
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.
 # These pointer spellings are compatible only while the underlying array keeps this exact shape.
@@ -427,6 +445,10 @@ class Checker:
                     continue
                 if not self.same(h, g, where):
                     self.error(f"{where}: 第 {index + 1} 个参数 C++ `{h}` / Rust `{g}`")
+        if self.all_structs and not self.partial:
+            for hand_name, gen_name in ISLAND_RECORDS.items():
+                if hand_name in self.hand.structs and gen_name in self.gen.structs:
+                    self.pair(hand_name, gen_name, "ISLAND_RECORDS")
         checked: set[str] = set()
         while len(checked) < len(self.pairs):
             for hand_name, gen_name in list(self.pairs.items()):

@@ -39,7 +39,7 @@ class FloatWavWriter {
 };
 
 // Streaming reader for RIFF/RF64/BW64 WAVE files with PCM16/24/32 or float32 samples, decoded to float32.
-// read() returns 0 and seek() false on I/O failure.
+// read() returns 0 on I/O failure.
 class FloatWavReader {
   public:
     static Result<FloatWavReader> open(const std::string& path);
@@ -52,12 +52,10 @@ class FloatWavReader {
     uint32_t channels() const;
     uint32_t sample_rate() const;
     uint64_t frame_count() const;
-    uint32_t channel_mask() const;
     uint16_t bits_per_sample() const;
     bool is_linear_pcm() const;
     bool is_ieee_float() const;
     uint64_t read(float* out, uint64_t frames);
-    bool seek(uint64_t frame);
 
   private:
     FloatWavReader() = default;

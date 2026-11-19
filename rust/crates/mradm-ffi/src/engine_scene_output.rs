@@ -2,12 +2,11 @@
 //! the device (`device_island`), pulls it, and orders the device calls of play, pause, epochs,
 //! volume and status as the C++ `SceneOutputSession` did. Errors use the render boundary.
 use super::device_island::{
-    Device, DeviceIslands, DeviceTable, Devices, HARDWARE, NULL_BACKEND, SYSTEM_SPATIAL,
+    Device, DeviceIslands, Devices, HARDWARE, NULL_BACKEND, SYSTEM_SPATIAL,
 };
 use super::engine_scene::EngineSceneStream;
-use super::{Error, bad, boundary};
-use crate::adm::Text;
-use crate::hptf::{Coefficients, Snapshot, settings::Settings};
+use super::{Error, bad};
+use crate::hptf::settings::Settings;
 use mradm_engine::scene::output::Session;
 use mradm_scene::layouts::{self, Geometry};
 use std::ffi::c_void;
@@ -199,17 +198,6 @@ pub struct EngineSceneOutputStatus {
     pub ended: u32,
 }
 
-unsafe fn output<'a>(handle: *const EngineSceneOutput) -> Result<&'a EngineSceneOutput, Error> {
-    unsafe { handle.as_ref() }.ok_or_else(|| bad("无效 Scene 输出句柄"))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_destroy(handle: *mut EngineSceneOutput) {
-    if !handle.is_null() {
-        unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
 /// The device callback: pull the session, mark the device's end at EOS and release, as the
 /// former C++ callback did. Never waits or allocates.
 unsafe extern "C" fn pull(
@@ -274,201 +262,9 @@ fn invalid(message: &str) -> Error {
     }
 }
 
-/// Opens the device of `kind` (`SceneOutputKind`: 0 system spatial over `layout` in `geometry`,
-/// 1 the stereo hardware device `device_id`, 2 the null backend) and the session over it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_open(
-    stream: *const EngineSceneStream,
-    kind: u32,
-    layout: Text,
-    geometry: u32,
-    device_id: Text,
-    devices: *const DeviceIslands,
-    out: *mut *mut EngineSceneOutput,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let out = unsafe { out.as_mut() }.ok_or_else(|| bad("无效输出指针"))?;
-        *out = ptr::null_mut();
-        let stream = unsafe { stream.as_ref() }.ok_or_else(|| bad("无效 Scene 流句柄"))?;
-        let layout = unsafe { super::bytes(&layout)? };
-        let device_id = unsafe { super::bytes(&device_id)? };
-        let output =
-            unsafe { EngineSceneOutput::open(stream, kind, layout, geometry, device_id, devices)? };
-        // SAFETY: The C caller uses the output only through this pointer and releases it in place
-        // with `mradm_engine_scene_output_destroy`; it is never moved.
-        *out = Box::into_raw(unsafe { Pin::into_inner_unchecked(output) });
-        Ok(())
-    })
-}
-
-/// The session over a caller's opened device (taken over in every case).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_create(
-    stream: *const EngineSceneStream,
-    device: *const DeviceTable,
-    protect_stereo: u32,
-    out: *mut *mut EngineSceneOutput,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    let device = unsafe { device.as_ref() }.map(|d| unsafe { Device::adopt(d) });
-    boundary(message, message_len, context, context_len, || {
-        let out = unsafe { out.as_mut() }.ok_or_else(|| bad("无效输出指针"))?;
-        *out = ptr::null_mut();
-        let stream = unsafe { stream.as_ref() }.ok_or_else(|| bad("无效 Scene 流句柄"))?;
-        let device = device.ok_or_else(|| bad("无效设备"))?;
-        let output = start(stream, device, protect_stereo != 0)?;
-        // SAFETY: As in `mradm_engine_scene_output_open`: used only through the pointer and
-        // released in place, never moved.
-        *out = Box::into_raw(unsafe { Pin::into_inner_unchecked(output) });
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_pause(handle: *const EngineSceneOutput) {
-    if let Ok(h) = unsafe { output(handle) } {
-        let _control = h.lock();
-        h.park();
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_play(handle: *const EngineSceneOutput) {
-    if let Ok(h) = unsafe { output(handle) } {
-        let _control = h.lock();
-        h.session.play();
-        h.device.resume();
-    }
-}
-
-/// A stale epoch is rejected before the device queue is disturbed; otherwise park, flush the
-/// device and reset to `target`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_begin_epoch(
-    handle: *const EngineSceneOutput,
-    epoch: u64,
-    target: i64,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let h = unsafe { output(handle)? };
-        let _control = h.lock();
-        h.session.check_epoch(epoch)?;
-        h.park();
-        h.device.flush();
-        h.session.reset_epoch(epoch, target)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_set_volume(
-    handle: *const EngineSceneOutput,
-    gain: f32,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let h = unsafe { output(handle)? };
-        let _control = h.lock();
-        h.session.set_volume(gain)?;
-        h.device.set_volume(gain);
-        Ok(())
-    })
-}
-
-/// Publish designed coefficients, or the bypass when `coefficients` is null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_set_hptf(
-    handle: *const EngineSceneOutput,
-    coefficients: *const Coefficients,
-    revision: u64,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let h = unsafe { output(handle)? };
-        // Only serialises concurrent setters; the publish itself is lock-free.
-        let _control = h.lock();
-        let coefficients = unsafe { coefficients.as_ref() }.map(|&c| c.into());
-        h.session.set_hptf(coefficients, revision)
-    })
-}
-
-/// Design a prepared profile for the stream's rate and publish it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_set_hptf_settings(
-    handle: *const EngineSceneOutput,
-    settings: *const Settings,
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-) -> i32 {
-    boundary(message, message_len, context, context_len, || {
-        let s = &unsafe { output(handle)? }.session;
-        s.check_hptf_settings()?;
-        let settings = unsafe { settings.as_ref() }.ok_or_else(|| bad("HpTF:配置指针无效"))?;
-        let snapshot = settings
-            .design(s.sample_rate())
-            .map_err(|(code, message)| Error {
-                code,
-                message: message.into_bytes(),
-                context: Vec::new(),
-            })?;
-        s.publish_hptf(snapshot)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_hptf_snapshot(
-    handle: *const EngineSceneOutput,
-    out: *mut Snapshot,
-) {
-    if let (Ok(h), Some(out)) = (unsafe { output(handle) }, unsafe { out.as_mut() }) {
-        *out = h.session.hptf_snapshot().into();
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_scene_output_status(
-    handle: *const EngineSceneOutput,
-    out: *mut EngineSceneOutputStatus,
-) {
-    let (Ok(h), Some(out)) = (unsafe { output(handle) }, unsafe { out.as_mut() }) else {
-        return;
-    };
-    let _control = h.lock();
-    let v = h.session.status(h.device.progress());
-    *out = EngineSceneOutputStatus {
-        state: v.state as u32,
-        epoch: v.epoch,
-        consumed_frames: v.consumed_frames,
-        presented_frames: v.presented_frames,
-        queued_frames: v.queued_frames,
-        underruns: v.underruns,
-        media_clock: u32::from(v.media_clock),
-        recovering: u32::from(v.recovering),
-        failed: u32::from(v.failed),
-        ended: u32::from(v.ended),
-    };
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::device_island::DeviceTable;
     use super::*;
     use mradm_dsp::hptf as dsp;
     use mradm_dsp::room::screen::RoomScreenGeometry;

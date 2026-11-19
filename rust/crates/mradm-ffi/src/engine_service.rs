@@ -3,24 +3,17 @@
 //! inside the step, the others are returned and answered. Texts in events and results live until
 //! the next call on the handle.
 use crate::adm::Text;
-use crate::engine::{EngineLog, EngineStatus, Facts, PlatformIslands, platform};
-use crate::engine_render::{FfiHost, log_views};
+use crate::engine_render::FfiHost;
 use crate::render::RenderPrepared;
 use crate::render::apple_island::{Apple, AppleIslands, Preparation, Settings};
-use crate::room::RoomProfileHandle;
 use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
-use mradm_dsp::room::screen::RoomScreenGeometry;
-use mradm_engine::backend::Screens;
 use mradm_engine::offline::{Metrics, Progress};
-use mradm_engine::render::{
-    self, Event, Island, Outcome, PathText, Render, Reply, Request, Reuse, RoomOptions, SofaPath,
-};
+use mradm_engine::render::{self, Event, Island, Outcome, PathText, Render, Reply, Request, Reuse};
 use mradm_engine::request::{self, Packager};
 use mradm_scene::RenderScene;
 use std::{
     cell::{Cell, RefCell},
     ffi::c_void,
-    panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
     sync::Arc,
 };
@@ -31,72 +24,6 @@ use std::{
 pub struct EnginePath {
     pub utf8: Text,
     pub display: Text,
-}
-
-/// `RenderRequest` (`RenderOptions`); the enum fields are the C++ values. `room_profile` may be
-/// null.
-#[repr(C)]
-pub struct EngineRenderRequest {
-    pub input: EnginePath,
-    pub has_output: u32,
-    pub output: EnginePath,
-    pub renderer: u32,
-    pub output_layout: Text,
-    pub has_input_layout: u32,
-    pub input_layout: Text,
-    pub input_channel_labels: *const Text,
-    pub input_channel_labels_len: usize,
-    pub measure_loudness: u32,
-    pub loudness_target_lufs: f32,
-    pub peak_limit: u32,
-    pub peak_limit_dbtp: f32,
-    pub peak_normalize_to_limit: u32,
-    pub final_gain_db: f64,
-    pub output_bit_depth: u32,
-    pub opus_bitrate_per_ch_kbps: u32,
-    pub apac_bitrate_kbps: u32,
-    pub apac_drc_music: u32,
-    pub apac_caf: u32,
-    pub has_sofa: u32,
-    pub sofa: EnginePath,
-    pub sofa_file_name: Text,
-    pub has_policy_path: u32,
-    pub policy_path: EnginePath,
-    pub has_policy_json: u32,
-    pub policy_json: Text,
-    pub has_matrix_path: u32,
-    pub matrix_path: EnginePath,
-    pub has_matrix_json: u32,
-    pub matrix_json: Text,
-    pub has_report_path: u32,
-    pub report_path: EnginePath,
-    pub capture_report: u32,
-    pub default_interp_ms: u32,
-    pub object_smoothing_frames: u32,
-    pub apple_geometry: u32,
-    pub routing: u32,
-    pub speaker_spread: u32,
-    pub triple_balance_mode: u32,
-    pub binaural_spread: u32,
-    pub split_power: u32,
-    pub apple_spatial_preset: u32,
-    pub apple_speaker_rendering_flags: u32,
-    pub listener_orientation: [f32; 3],
-    pub render_start_sec: f64,
-    pub has_end: u32,
-    pub render_end_sec: f64,
-    pub room_profile: *const RoomProfileHandle,
-    pub room_hrir: Text,
-    pub room_metres: f64,
-    pub room_quality: u32,
-    pub has_reference: u32,
-    pub reference: RoomScreenGeometry,
-    pub has_reproduction: u32,
-    pub reproduction: RoomScreenGeometry,
-    pub internal_allow_speaker_stereo: u32,
-    pub iamf_mp4: u32,
-    pub iamf_layers: *const Text,
-    pub iamf_layers_len: usize,
 }
 
 /// A progress event (`ProgressEvent`).
@@ -164,47 +91,13 @@ pub struct EngineIslandReply {
     pub ffmpeg_major: i32,
 }
 
-/// `RenderResult`: `code` 0 on success; one log line per result (empty module).
-#[repr(C)]
-pub struct EngineRenderResult {
-    pub code: i32,
-    pub message: Text,
-    pub context: Text,
-    pub has_output: u32,
-    pub output_path: Text,
-    pub has_metrics: u32,
-    pub has_lufs: u32,
-    pub has_peak: u32,
-    pub lufs: f64,
-    pub peak_dbtp: f64,
-    pub logs: *const EngineLog,
-    pub logs_len: usize,
-    pub has_report: u32,
-    pub report: Text,
-}
-
-/// A render in progress, and what its last event points at.
+/// A render in progress over the islands of its runner.
 pub struct EngineRender {
     render: Render,
-    island: Option<Island>,
     islands: Option<IslandRunner>,
     /// The Apple preparation the caller cached or this render made (then `apple_made`).
     apple_prepared: RefCell<Option<Arc<Preparation>>>,
     apple_made: Cell<bool>,
-    texts: Vec<Text>,
-    matrix: Option<Box<DirectMatrix>>,
-    message: String,
-    logs: Vec<request::Log>,
-    log_views: Vec<EngineLog>,
-    result: Option<Retained>,
-}
-
-/// The result texts the result view borrows.
-struct Retained {
-    message: String,
-    context: String,
-    output_path: String,
-    report: String,
 }
 
 impl EngineRender {
@@ -224,16 +117,9 @@ impl EngineRender {
         };
         Box::new(Self {
             render: Render::new(request, platform, reuse),
-            island: None,
             islands: None,
             apple_prepared: RefCell::new(apple),
             apple_made: Cell::new(false),
-            texts: Vec::new(),
-            matrix: None,
-            message: String::new(),
-            logs: Vec::new(),
-            log_views: Vec::new(),
-            result: None,
         })
     }
 
@@ -260,14 +146,7 @@ impl EngineRender {
         if prepared.is_none() && apple.is_none() {
             return None;
         }
-        Some(Box::new(RenderPrepared {
-            logs: Vec::new(),
-            log_views: Vec::new(),
-            error: None,
-            report: None,
-            prepared,
-            apple,
-        }))
+        Some(Box::new(RenderPrepared { prepared, apple }))
     }
 }
 
@@ -339,152 +218,6 @@ unsafe fn bytes<'a>(t: &Text) -> Option<&'a [u8]> {
 
 unsafe fn string(t: &Text) -> Option<String> {
     unsafe { bytes(t) }.map(|b| String::from_utf8_lossy(b).into_owned())
-}
-
-unsafe fn path(p: &EnginePath) -> Option<PathText> {
-    let utf8 = std::str::from_utf8(unsafe { bytes(&p.utf8)? }).ok()?;
-    if utf8.contains('\0') {
-        return None;
-    }
-    Some(PathText {
-        utf8: utf8.to_owned(),
-        display: unsafe { string(&p.display)? },
-    })
-}
-
-unsafe fn strings(data: *const Text, len: usize) -> Option<Vec<String>> {
-    if len == 0 {
-        return Some(Vec::new());
-    }
-    if data.is_null() {
-        return None;
-    }
-    unsafe { slice::from_raw_parts(data, len) }
-        .iter()
-        .map(|t| unsafe { string(t) })
-        .collect()
-}
-
-pub(crate) unsafe fn request_of(r: &EngineRenderRequest) -> Option<Request> {
-    let flag = |v: u32| v != 0;
-    let opt_path = |has: u32, p: &EnginePath| -> Option<Option<PathText>> {
-        if has == 0 {
-            Some(None)
-        } else {
-            unsafe { path(p) }.map(Some)
-        }
-    };
-    let opt_bytes = |has: u32, t: &Text| -> Option<Option<Vec<u8>>> {
-        if has == 0 {
-            Some(None)
-        } else {
-            unsafe { bytes(t) }.map(|b| Some(b.to_vec()))
-        }
-    };
-    Some(Request {
-        input: unsafe { path(&r.input)? },
-        output: opt_path(r.has_output, &r.output)?,
-        renderer: r.renderer,
-        output_layout: unsafe { string(&r.output_layout)? },
-        input_layout: if r.has_input_layout != 0 {
-            Some(unsafe { string(&r.input_layout)? })
-        } else {
-            None
-        },
-        input_channel_labels: unsafe {
-            strings(r.input_channel_labels, r.input_channel_labels_len)?
-        },
-        measure_loudness: flag(r.measure_loudness),
-        loudness_target_lufs: r.loudness_target_lufs,
-        peak_limit: flag(r.peak_limit),
-        peak_limit_dbtp: r.peak_limit_dbtp,
-        peak_normalize_to_limit: flag(r.peak_normalize_to_limit),
-        final_gain_db: r.final_gain_db,
-        output_bit_depth: r.output_bit_depth,
-        opus_bitrate_per_ch_kbps: r.opus_bitrate_per_ch_kbps,
-        apac_bitrate_kbps: r.apac_bitrate_kbps,
-        apac_drc_music: flag(r.apac_drc_music),
-        apac_caf: flag(r.apac_caf),
-        sofa: if r.has_sofa != 0 {
-            Some(SofaPath {
-                path: unsafe { path(&r.sofa)? },
-                file_name: unsafe { bytes(&r.sofa_file_name)? }.to_vec(),
-            })
-        } else {
-            None
-        },
-        semantic_policy_path: opt_path(r.has_policy_path, &r.policy_path)?,
-        semantic_policy_json: opt_bytes(r.has_policy_json, &r.policy_json)?,
-        matrix_path: opt_path(r.has_matrix_path, &r.matrix_path)?,
-        matrix_json: opt_bytes(r.has_matrix_json, &r.matrix_json)?,
-        semantic_report_path: opt_path(r.has_report_path, &r.report_path)?,
-        capture_semantic_report: flag(r.capture_report),
-        default_interp_ms: r.default_interp_ms,
-        object_smoothing_frames: r.object_smoothing_frames,
-        apple_geometry: flag(r.apple_geometry),
-        routing: r.routing,
-        speaker_spread: r.speaker_spread,
-        triple_balance_mode: r.triple_balance_mode,
-        binaural_spread: r.binaural_spread,
-        split_power: flag(r.split_power),
-        apple_spatial_preset: r.apple_spatial_preset,
-        apple_speaker_rendering_flags: flag(r.apple_speaker_rendering_flags),
-        listener_orientation: r.listener_orientation,
-        render_start_sec: r.render_start_sec,
-        render_end_sec: (r.has_end != 0).then_some(r.render_end_sec),
-        room: RoomOptions {
-            package: unsafe { crate::room::package(r.room_profile) },
-            hrir: unsafe { bytes(&r.room_hrir)? }.to_vec(),
-            metres: r.room_metres,
-            quality: r.room_quality,
-        },
-        screens: Screens {
-            has_reference: r.has_reference != 0,
-            reference: r.reference,
-            has_reproduction: r.has_reproduction != 0,
-            reproduction: r.reproduction,
-        },
-        internal_allow_speaker_stereo: flag(r.internal_allow_speaker_stereo),
-        iamf_mp4: flag(r.iamf_mp4),
-        iamf_layers: unsafe { strings(r.iamf_layers, r.iamf_layers_len)? },
-    })
-}
-
-/// Starts a render. `preimported` (may be null) is a preview session's policy-applied scene, with
-/// a cached preparation `cached` (may be null; a Rust backend's or the Apple island's).
-/// Preparation reuse does not require a preimported scene. The handle copies what it needs.
-/// Returns 1 for invalid arguments, including paths not encoded as UTF-8 or containing NUL, and
-/// 6 for a panic.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_begin(
-    request: *const EngineRenderRequest,
-    islands: *const PlatformIslands,
-    preimported: *const SceneHandle,
-    cached: *const RenderPrepared,
-    output: *mut *mut EngineRender,
-) -> i32 {
-    let Some(out) = (unsafe { output.as_mut() }) else {
-        return 1;
-    };
-    *out = ptr::null_mut();
-    catch_unwind(AssertUnwindSafe(|| {
-        let (Some(r), Some(p)) = (unsafe { request.as_ref() }, unsafe { islands.as_ref() }) else {
-            return 1;
-        };
-        let (Some(request), Some(platform)) = (unsafe { request_of(r) }, unsafe {
-            platform(p, Facts::Render)
-        }) else {
-            return 1;
-        };
-        *out = Box::into_raw(EngineRender::create(
-            request,
-            platform,
-            unsafe { preimported.as_ref() },
-            unsafe { cached.as_ref() },
-        ));
-        0
-    }))
-    .unwrap_or(6)
 }
 
 fn progress_record(p: &Progress) -> EngineProgress {
@@ -560,15 +293,6 @@ fn empty_event() -> EngineRenderEvent {
 struct IslandStorage {
     texts: Vec<Text>,
     matrix: Option<Box<DirectMatrix>>,
-}
-
-/// Fills `e` with the pending island, borrowing the handle's copy of it.
-fn island_record(h: &mut EngineRender, e: &mut EngineRenderEvent) {
-    let island = h.island.as_ref().expect("pending island");
-    let mut storage = IslandStorage::default();
-    island_fields(island, &mut storage, e);
-    h.texts = storage.texts;
-    h.matrix = storage.matrix;
 }
 
 /// Fills `e` with `island`, borrowing it and `storage`.
@@ -677,62 +401,6 @@ fn island_fields(island: &Island, storage: &mut IslandStorage, e: &mut EngineRen
             e.peak_dbtp = fields.peak_dbtp.unwrap_or(0.);
         }
     }
-}
-
-/// The next event; `cancelled` is the caller's stop token now. Returns 1 for invalid arguments, 6
-/// for a panic (the render is then spent).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_next(
-    handle: *mut EngineRender,
-    cancelled: u32,
-    event: *mut EngineRenderEvent,
-) -> i32 {
-    let (Some(h), Some(e)) = (unsafe { handle.as_mut() }, unsafe { event.as_mut() }) else {
-        return 1;
-    };
-    *e = empty_event();
-    catch_unwind(AssertUnwindSafe(|| {
-        match h.step(cancelled != 0) {
-            Event::Continue => {}
-            Event::Progress(p) => {
-                e.kind = 1;
-                e.progress = progress_record(&p);
-            }
-            Event::Log(l) => {
-                h.message = l.message;
-                e.kind = 2;
-                e.level = l.level as u32;
-                e.module = Text::new(l.module);
-                e.message = Text::new(&h.message);
-            }
-            Event::Island(island) => {
-                h.island = Some(island);
-                island_record(h, e);
-            }
-            Event::Done => e.kind = 4,
-        }
-        0
-    }))
-    .unwrap_or(6)
-}
-
-/// Answers the pending island.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_resume(
-    handle: *mut EngineRender,
-    reply: *const EngineIslandReply,
-) -> i32 {
-    let (Some(h), Some(r)) = (unsafe { handle.as_mut() }, unsafe { reply.as_ref() }) else {
-        return 1;
-    };
-    catch_unwind(AssertUnwindSafe(|| {
-        let reply = unsafe { reply_of(r) };
-        h.island = None;
-        h.matrix = None;
-        h.render.resume(reply);
-        0
-    }))
-    .unwrap_or(6)
 }
 
 /// An island's reply, copying its texts.
@@ -929,20 +597,6 @@ impl render::Islands for Runner<'_> {
     }
 }
 
-/// Runs the islands `runner` accepts inside `mradm_engine_render_next` (copied); null returns
-/// every island to the caller again. Returns 1 for a null handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_set_islands(
-    handle: *mut EngineRender,
-    runner: *const IslandRunner,
-) -> i32 {
-    let Some(h) = (unsafe { handle.as_mut() }) else {
-        return 1;
-    };
-    h.islands = unsafe { runner.as_ref() }.copied();
-    0
-}
-
 /// `e` mapped by `map`; the message borrows `e`'s unless it was empty.
 fn mapped_progress(e: &EngineProgress, map: &dyn Fn(&Progress) -> Progress) -> EngineProgress {
     // The range only needs to know whether the message is empty: map with a static stand-in and
@@ -963,150 +617,9 @@ fn mapped_progress(e: &EngineProgress, map: &dyn Fn(&Progress) -> Progress) -> E
     out
 }
 
-/// The result after the done event; views live until the next call on the handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_result(
-    handle: *mut EngineRender,
-    output: *mut EngineRenderResult,
-) -> i32 {
-    let (Some(h), Some(out)) = (unsafe { handle.as_mut() }, unsafe { output.as_mut() }) else {
-        return 1;
-    };
-    let Some(o) = h.render.outcome().cloned() else {
-        return 1;
-    };
-    let Outcome {
-        error,
-        output_path,
-        metrics,
-        logs,
-        semantic_report,
-    } = o;
-    h.logs = logs
-        .into_iter()
-        .map(|(level, message)| request::Log {
-            level,
-            module: "",
-            message,
-        })
-        .collect();
-    h.log_views = log_views(&h.logs);
-    let retained = h.result.insert(Retained {
-        message: error.as_ref().map_or(String::new(), |e| e.message.clone()),
-        context: error.as_ref().map_or(String::new(), |e| e.context.clone()),
-        output_path: output_path.clone().unwrap_or_default(),
-        report: semantic_report.clone().unwrap_or_default(),
-    });
-    *out = EngineRenderResult {
-        code: error.as_ref().map_or(0, |e| e.code),
-        message: Text::new(&retained.message),
-        context: Text::new(&retained.context),
-        has_output: u32::from(output_path.is_some()),
-        output_path: Text::new(&retained.output_path),
-        has_metrics: u32::from(metrics.is_some()),
-        has_lufs: u32::from(metrics.is_some_and(|m| m.lufs.is_some())),
-        has_peak: u32::from(metrics.is_some_and(|m| m.peak_dbtp.is_some())),
-        lufs: metrics.and_then(|m| m.lufs).unwrap_or(0.),
-        peak_dbtp: metrics.and_then(|m| m.peak_dbtp).unwrap_or(0.),
-        logs: h.log_views.as_ptr(),
-        logs_len: h.log_views.len(),
-        has_report: u32::from(semantic_report.is_some()),
-        report: Text::new(&retained.report),
-    };
-    0
-}
-
-/// The preparation the render made, for the caller's cache (null when none); destroy with
-/// `mradm_render_prepared_destroy`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_take_prepared(
-    handle: *mut EngineRender,
-) -> *mut RenderPrepared {
-    let Some(h) = (unsafe { handle.as_mut() }) else {
-        return ptr::null_mut();
-    };
-    h.take().map_or(ptr::null_mut(), Box::into_raw)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_render_destroy(handle: *mut EngineRender) {
-    if !handle.is_null() {
-        let _ = catch_unwind(AssertUnwindSafe(|| unsafe { drop(Box::from_raw(handle)) }));
-    }
-}
-
-/// The render request's semantic policy applied to an imported scene (a preview session or an
-/// export): the in-memory JSON preferred over the file, with the warnings as log lines. Returns
-/// 0 when `*result` owns the status and views (`mradm_engine_result_destroy`), including a policy
-/// error; nonzero only for a broken boundary contract or panic.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_engine_apply_policy(
-    scene: *mut SceneHandle,
-    has_json: u32,
-    json: Text,
-    has_path: u32,
-    path_record: EnginePath,
-    input_display: Text,
-    result: *mut *mut crate::engine::EngineResult,
-    status: *mut EngineStatus,
-) -> i32 {
-    crate::engine::guarded(result, status, || {
-        let Some(handle) = (unsafe { scene.as_mut() }) else {
-            return 1;
-        };
-        let json = if has_json != 0 {
-            unsafe { bytes(&json) }
-        } else {
-            None
-        };
-        let policy_path = if has_path != 0 {
-            let Some(path) = (unsafe { path(&path_record) }) else {
-                crate::engine::finish(
-                    request::Outcome::<()> {
-                        logs: Vec::new(),
-                        result: Err(request::Error::new(
-                            request::code::INVALID_ARGUMENT,
-                            "semantic policy path must use UTF-8 without NUL",
-                            "",
-                        )),
-                    },
-                    result,
-                    status,
-                );
-                return 0;
-            };
-            Some(path)
-        } else {
-            None
-        };
-        let display = unsafe { string(&input_display) }.unwrap_or_default();
-        let outcome = render::apply_policy(&mut handle.scene, json, policy_path.as_ref(), &display);
-        handle.refresh();
-        crate::engine::finish(outcome, result, status);
-        0
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn filesystem_paths_reject_invalid_utf8_and_nul() {
-        for raw in [&b"out-\xff.wav"[..], &b"out\0.wav"[..]] {
-            let p = EnginePath {
-                utf8: Text::bytes(raw),
-                display: Text::bytes(raw),
-            };
-            assert!(unsafe { path(&p) }.is_none());
-        }
-        let raw = "out-\u{fffd}.wav";
-        let p = EnginePath {
-            utf8: Text::new(raw),
-            display: Text::new(raw),
-        };
-        assert_eq!(unsafe { path(&p) }.unwrap().utf8, raw);
-    }
 
     mod apple {
         use super::*;

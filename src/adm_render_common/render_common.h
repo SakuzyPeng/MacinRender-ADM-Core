@@ -38,8 +38,6 @@ struct ResolvedDirectSpeakersMatrixTarget {
 };
 
 [[nodiscard]] std::vector<MradmRenderOverride> override_records(const LiveOverrides& overrides);
-// The same records with the topology scales the file streams validate or apply.
-[[nodiscard]] std::vector<MradmRenderLiveOverride> live_override_records(const LiveOverrides& overrides);
 // Borrowed labels: rebuild after changing the owning LiveOverrides. Reuse across render queries.
 struct LiveOverrideView {
     // cppcheck-suppress noExplicitConstructor

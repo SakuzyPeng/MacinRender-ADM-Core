@@ -1,9 +1,8 @@
 //! Owned control-thread profiles. Public PODs are read only through their advertised sizes.
-use super::{Band, Snapshot, dsp};
+use super::dsp;
 use std::{
     ffi::{CStr, c_void},
     mem::{offset_of, size_of},
-    panic::{AssertUnwindSafe, catch_unwind},
     ptr,
 };
 
@@ -78,24 +77,6 @@ fn ear(index: usize, error: Failure) -> Failure {
 }
 fn dsp_error(error: mradm_dsp::Error) -> Failure {
     (1, error.to_string())
-}
-fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -> i32 {
-    let (code, detail) = match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(Ok(())) => (0, String::new()),
-        Ok(Err(e)) => e,
-        Err(_) => (6, "HpTF:参数准备失败".into()),
-    };
-    if !message.is_null() && capacity != 0 {
-        let mut len = detail.len().min(capacity - 1);
-        while !detail.is_char_boundary(len) {
-            len -= 1;
-        }
-        unsafe {
-            ptr::copy_nonoverlapping(detail.as_ptr(), message, len);
-            *message.add(len) = 0;
-        }
-    }
-    code
 }
 unsafe fn sized<T: Copy + Default>(source: *const c_void, minimum: usize) -> Result<T> {
     if source.is_null() {
@@ -327,100 +308,6 @@ impl Settings {
     }
 }
 
-/// source_kind: 0 legacy file config, 1 legacy parameters, 2 stereo file config, 3 stereo parameters.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_settings_create(
-    source: *const c_void,
-    source_kind: u32,
-    out: *mut *mut Settings,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if out.is_null() {
-            return Err(invalid("输出指针无效"));
-        }
-        unsafe {
-            *out = ptr::null_mut();
-        }
-        let value = unsafe { Settings::read(source, source_kind) }?;
-        unsafe {
-            *out = Box::into_raw(Box::new(value));
-        }
-        Ok(())
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_settings_destroy(settings: *mut Settings) {
-    if !settings.is_null() {
-        unsafe {
-            drop(Box::from_raw(settings));
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_settings_design(
-    settings: *const Settings,
-    rate: u32,
-    out: *mut Snapshot,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        let settings = unsafe { settings.as_ref() }.ok_or_else(|| invalid("配置指针无效"))?;
-        if out.is_null() {
-            return Err(invalid("输出指针无效"));
-        }
-        let value = settings.design(rate)?;
-        unsafe {
-            *out = value.into();
-        }
-        Ok(())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hptf_validate(
-    bands: *const Band,
-    count: usize,
-    preamp: f64,
-    invalid_band: *mut usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        let bands = unsafe { super::input(bands, count) }.map_err(dsp_error)?;
-        let bands = bands
-            .iter()
-            .map(|b| {
-                Ok(dsp::Band {
-                    kind: dsp::BandKind::try_from(b.kind).map_err(dsp_error)?,
-                    enabled: b.enabled != 0,
-                    frequency: b.frequency,
-                    gain_db: b.gain_db,
-                    q: b.q,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        if invalid_band.is_null() {
-            return Err(invalid("错误位置指针无效"));
-        }
-        unsafe {
-            *invalid_band = 0;
-        }
-        if let Some((index, message)) = profile_error(&dsp::Profile {
-            preamp_db: preamp,
-            bands,
-        }) {
-            unsafe {
-                *invalid_band = index;
-            }
-            return Err((1, message.into()));
-        }
-        Ok(())
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -552,59 +439,5 @@ mod tests {
         assert!(unsafe { Settings::read((&raw const c).cast(), 0) }.is_ok());
         c.struct_size = size_of::<Config>() as u32;
         assert!(unsafe { Settings::read((&raw const c).cast(), 0) }.is_err());
-    }
-    #[test]
-    fn failed_creation_clears_handle_and_failed_design_preserves_output() {
-        let mut handle = ptr::dangling_mut();
-        let mut message = [0u8; 256];
-        unsafe {
-            assert_eq!(
-                mradm_dsp_hptf_settings_create(
-                    ptr::null(),
-                    3,
-                    &mut handle,
-                    message.as_mut_ptr(),
-                    message.len()
-                ),
-                1
-            );
-            assert!(handle.is_null());
-            let request = StereoParameters {
-                struct_size: size_of::<StereoParameters>() as u32,
-                left_preamp: -3.0,
-                right_preamp: -9.0,
-                revision: 8,
-                ..StereoParameters::default()
-            };
-            assert_eq!(
-                mradm_dsp_hptf_settings_create(
-                    (&raw const request).cast(),
-                    3,
-                    &mut handle,
-                    message.as_mut_ptr(),
-                    message.len()
-                ),
-                0
-            );
-            let good = (*handle).design(48000).unwrap();
-            let mut output: Snapshot = good.into();
-            assert_eq!(
-                mradm_dsp_hptf_settings_design(
-                    handle,
-                    0,
-                    &mut output,
-                    message.as_mut_ptr(),
-                    message.len()
-                ),
-                1
-            );
-            assert_eq!(dsp::StereoSnapshot::from(output), good);
-            assert!(
-                std::str::from_utf8(&message[..message.iter().position(|v| *v == 0).unwrap()])
-                    .unwrap()
-                    .contains("左耳")
-            );
-            mradm_dsp_hptf_settings_destroy(handle);
-        }
     }
 }

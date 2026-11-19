@@ -24,7 +24,7 @@
 
 #include "../support/apple_island_driver.h"
 #include "../support/direct_speakers_fixture.h"
-#include "config_test_ffi.h"
+#include "island_test_ffi.h"
 
 namespace {
 

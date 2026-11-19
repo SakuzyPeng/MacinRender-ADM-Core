@@ -44,13 +44,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG v3.12.0
             GIT_SHALLOW TRUE
         )
-    elseif(package_name STREQUAL "fmt")
-        FetchContent_Declare(
-            fmt
-            GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-            GIT_TAG 11.2.0
-            GIT_SHALLOW TRUE
-        )
     elseif(package_name STREQUAL "dr_libs")
         FetchContent_Declare(
             dr_libs
@@ -319,9 +312,9 @@ function(mr_adm_core_find_or_fetch package_name target_name)
     FetchContent_MakeAvailable(${package_name})
 endfunction()
 
-# fmt and nlohmann_json are test-only since 6.5 C (test SDK and tools).
+# nlohmann_json is test-only (the Apple smoke test reads the capability JSON); fmt left the build
+# with the C++ test SDK (R3 G).
 if(MR_ADM_CORE_BUILD_TESTS)
-    mr_adm_core_find_or_fetch(fmt fmt::fmt)
     mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
 endif()
 mr_adm_core_find_or_fetch(dr_libs dr_flac::dr_flac)

@@ -123,9 +123,6 @@ uint32_t FloatWavReader::sample_rate() const {
 uint64_t FloatWavReader::frame_count() const {
     return impl_->reader->info().frames;
 }
-uint32_t FloatWavReader::channel_mask() const {
-    return impl_->reader->info().channel_mask;
-}
 uint16_t FloatWavReader::bits_per_sample() const {
     return impl_->reader->info().bits;
 }
@@ -139,10 +136,6 @@ bool FloatWavReader::is_ieee_float() const {
 uint64_t FloatWavReader::read(float* out, uint64_t frames) {
     auto read = impl_->reader->read(out, frames);
     return read ? *read : 0U;
-}
-
-bool FloatWavReader::seek(uint64_t frame) {
-    return impl_->reader->seek_frame(frame).has_value();
 }
 
 namespace {

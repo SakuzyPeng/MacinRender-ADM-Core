@@ -112,13 +112,10 @@ mod tests {
     #[test]
     fn room_normalizes_and_restores_the_callers_environment() {
         let _restore = Environment::enter();
-        let mut expected = [0f32; 3];
-        let mut actual = [0f32; 3];
+        let expected: [f32; 3];
+        let actual: [f32; 3];
         unsafe {
-            assert_eq!(
-                crate::room::mradm_room_polar(41.25, 15.75, 1.0e-38, expected.as_mut_ptr()),
-                0
-            );
+            expected = crate::render::room_polar(41.25, 15.75, 1.0e-38).unwrap();
             #[cfg(target_arch = "x86_64")]
             let changed = {
                 let mut value = 0u32;
@@ -135,10 +132,7 @@ mod tests {
                 core::arch::asm!("msr fpcr, {v}",v=in(reg)value,options(nostack,preserves_flags));
                 value
             };
-            assert_eq!(
-                crate::room::mradm_room_polar(41.25, 15.75, 1.0e-38, actual.as_mut_ptr()),
-                0
-            );
+            actual = crate::render::room_polar(41.25, 15.75, 1.0e-38).unwrap();
             assert_eq!(expected.map(f32::to_bits), actual.map(f32::to_bits));
             #[cfg(target_arch = "x86_64")]
             let restored = {

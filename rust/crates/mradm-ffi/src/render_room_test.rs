@@ -115,11 +115,7 @@ fn event_positions_preserve_the_room_environment_boundary() {
         },
         0
     );
-    let mut expected = [0.; 3];
-    assert_eq!(
-        unsafe { crate::room::mradm_room_polar(30., 0., 1., expected.as_mut_ptr()) },
-        0
-    );
+    let expected = room_polar(30., 0., 1.).unwrap();
     let expected = vec![expected.map(f32::to_bits)];
     let tiny = room_polar(41.25, 15.75, 1.0e-38).unwrap().map(f32::to_bits);
     let canonical = control();
