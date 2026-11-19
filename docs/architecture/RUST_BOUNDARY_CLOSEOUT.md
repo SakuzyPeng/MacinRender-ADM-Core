@@ -1,6 +1,6 @@
 # 六期结项（六期 6.7）
 
-> 状态：验收中（2026-11-19）。验收运行见下表，结论待各工作流完成与维护者实机检查。
+> 状态：CI 验收通过（2026-11-19）：Consistency、CI、Quality 与 Release Build 都已通过。维护者的 macOS / Windows 实机检查待完成。
 > 六期按 [ADR 0021](../adr/0021-rust-primary-project.md) 把边界迁入 Rust。切片与用户决定见
 > [PCM 一致性审计的六期一节](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，C ABI 家族、CLI 契约与规模基线见 [6.1 记录](RUST_BOUNDARY_BASELINE.md)。
 
@@ -20,8 +20,8 @@ Consistency 与 CI 在 main 上运行。Quality 与 Release Build 用 6.7 A、B 
 | --- | --- | --- | --- |
 | Consistency | main `e40638c` | 44492349541 | 通过；config A、B 的普通与诊断四份报告都是 294 个 PCM id 相同、0 个不同、平台集完整，门禁失败 0 |
 | CI | main `e40638c` | 44492349621 | 通过 |
-| Quality（full） | 分支 6.7 B `8177028` | 44494896493 | 待完成 |
-| Release Build | 分支 6.7 B `8177028` | 44494891324 | 待完成 |
+| Quality（full） | 分支 6.7 B `8177028` | 44494896493 | 通过（cppcheck、clang-tidy、格式、许可证、Rust fmt / clippy 与 FFI 头校验） |
+| Release Build | 分支 6.7 B `8177028` | 44494891324 | 通过；五个打包 job 成功：macOS CLI 与 Linux AppImage 经 Cargo 构建，Windows CLI 经顶层树并跑 fixture 与 Rust 渲染测试，macOS / Windows GUI 包的 P/Invoke smoke 也通过（Publish 只在 tag push 时运行，已跳过） |
 
 Reference tests 已随 R1 删除，六期不再运行。
 
@@ -30,9 +30,9 @@ Reference tests 已随 R1 删除，六期不再运行。
 - `faff0b0`：CLI 入口、编解码器链接依赖、版本化的库别名；
 - `2723730` 与 `e40638c`：MSVC Debug 与 vendored Opus 的 CRT。
 
-**退出条件**的状态（逐项待上表确认）：
+**退出条件**已满足：
 - ABI 导出：`check-capi-exports.py` 在 CI 与 Release 中校验恰好 164 个 `adm_*`。
-- GUI P/Invoke：由 Release 的两个 GUI 包 smoke 验证。
+- GUI P/Invoke：Release 的两个 GUI 包 smoke 通过。
 - CLI 输出与退出码：6.4 起由 CLI 记录对照，R3 E 起由 `mradm-cli` `tests/binary.rs` 守护。
 - 依赖：CLI11、spdlog、fmt、tl-expected 已移出构建。nlohmann_json 只在构建测试时获取，供 Apple 冒烟测试。
 
