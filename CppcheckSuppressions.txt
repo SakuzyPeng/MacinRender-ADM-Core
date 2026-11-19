@@ -1,74 +1,28 @@
 # Project-local cppcheck suppressions.
-#
 # Keep this file small. Prefer fixing warnings or narrowing the CMake target
 # scope before adding suppressions here.
 
 missingIncludeSystem
-functionStatic:*/src/adm_core/render_service.cpp
-functionStatic:*/tests/support/sdk/engine/render_service.cpp
 *:*/_deps/*
-# Public API structs are consumed across translation units; cppcheck sees the
+# Island-shared C++ structs are consumed across translation units; cppcheck sees the
 # header alone and reports false positives for metadata fields.
 unusedStructMember:*/src/adm_core/adm/audio_io.h
 unusedStructMember:*/src/adm_core/adm/errors.h
-unusedStructMember:*/tests/support/sdk/include/adm/render_service.h
-unusedStructMember:*/tests/support/sdk/include/adm/io.h
 unusedStructMember:*/src/adm_core/adm/options.h
 unusedStructMember:*/src/adm_core/adm/capability.h
 unusedStructMember:*/src/adm_core/adm/direct_speakers_matrix.h
 unusedStructMember:*/src/adm_core/adm/render.h
-unusedStructMember:*/tests/support/sdk/include/adm/monitor.h
-unusedStructMember:*/tests/support/sdk/include/adm/hptf.h
-unusedStructMember:*/tests/support/sdk/include/adm/head_tracking.h
 unusedStructMember:*/src/adm_core/adm/live_override.h
 unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h
 unusedStructMember:*/src/adm_render_common/speaker_layouts.h
+unusedStructMember:*/src/adm_render_common/engine_records.h
+unusedStructMember:*src/adm_audio/audio_io_internal.h
+unusedStructMember:*/src/adm_realtime/audio_output_device.h
 # Private FFI records are shared with Rust; cppcheck cannot see their foreign consumers.
 unusedStructMember:*/src/adm_render_common/engine_ffi.h
 unusedStructMember:*/src/adm_metadata/scene_ffi.h
-# Apple capability storage is consumed by catalog.cpp, outside the standalone header scan.
-unusedStructMember:*/tests/support/sdk/engine/catalog.h
-# Room geometry and per-object DSP state are consumed by their implementation
-# units; standalone header checks cannot see those uses.
-# HpTF coefficient/status aggregates and test cascade state cross translation units.
-unusedStructMember:*/tests/support/sdk/render_common/hptf_eq.h
-unusedStructMember:*/tests/support/dsp/hptf_cascade.h
-unusedStructMember:*src/adm_audio/audio_io_internal.h
-# ResolvedRenderer is built in renderer_factory.cpp and read in render_service.cpp.
-unusedStructMember:*/src/adm_renderer_factory/renderer_factory.h
-# MonitorStatus/MonitorLevels + engine members are written/read across monitor_engine.cpp
-# and consumers; cppcheck sees the header alone.
-unusedStructMember:*/src/adm_realtime/audio_output_device.h
-unusedStructMember:*/tests/support/realtime/monitor_engine.h
-// OSC protocol header is also analyzed alone; these fields are used by the parser, receiver and contract tests.
-unusedStructMember:*tests/support/osc/osc_head_tracking_protocol.h
-
-# Shared PCM timeline records are consumed by renderer and stream implementation units.
-unusedStructMember:*/src/adm_render_common/engine_records.h
-unusedStructMember:*/tests/support/engine_renderer/speaker_pcm.h
-
-# Test-only HRTF views and frozen mixer aggregates are consumed across translation units.
-
-# Private Rust transport PODs and renderer control mappings are read across the FFI / translation units.
-unusedStructMember:*/src/adm_render_triple_balance/render_state.h
-
-# HOA transport POD fields are consumed by Rust across the private FFI.
-unusedStructMember:*/tests/unit/hoa_ffi.h
-
-# Private ADM records are populated by Rust and copied across implementation units.
 unusedStructMember:*/src/adm_metadata/adm_ffi.h
-
-# The test-only part of the private FFI records (6.5 B) is read by Rust across the boundary.
+# The island tests' part of the private FFI records is read by Rust across the boundary.
 unusedStructMember:*/tests/support/ffi/*
-
-# The test-side AdmScene, its plan and the C++ routing wrappers over it (out of production, PCM
-# consistency 5.6 C) are consumed across the tests and the frozen references.
-unusedStructMember:*/tests/support/adm_scene/adm/scene.h
-unusedStructMember:*/tests/support/adm_scene/adm_scene.h
-unusedStructMember:*/tests/support/adm_scene/metadata.h
-unusedStructMember:*/tests/support/adm_scene/render_common_scene.h
-
-# SemanticReportOptions fields are read by scene_importer.cpp, outside the standalone header scan.
-unusedStructMember:*/tests/support/sdk/io/scene_import_internal.h

@@ -27,6 +27,8 @@ static void token(const ma_device_id* id, char* out) {
     out[sizeof(*id) * 2] = '\0';
 }
 
+// miniaudio's ma_device_data_proc fixes the non-const device parameter.
+// cppcheck-suppress constParameterCallback
 static void data(ma_device* device, void* output, const void* input, ma_uint32 frames) {
     (void) output;
     if (input != NULL) {
