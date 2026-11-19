@@ -73,7 +73,7 @@ inline void write_mono_direct_speakers(const std::filesystem::path& path,
     auto chna =
         std::make_shared<WaveChna>(std::vector<WaveAudioId>{{1U, format_id(uid->get<AudioTrackUidId>()), "", ""}});
     auto axml = std::make_shared<WaveAxml>(xml_buffer.str());
-    auto writer = write_wave(path.string(), 1U, sample_rate, 24U, chna, axml);
+    auto writer = write_wave(path, 1U, sample_rate, 24U, chna, axml);
     writer->write(samples.data(), samples.size());
 }
 

@@ -55,7 +55,6 @@ FFI_HEADERS = [
     "tests/support/ffi/dsp_test_ffi.h",
     "tests/support/ffi/room_test_ffi.h",
     "tests/support/ffi/scene_math_test_ffi.h",
-    "tests/support/ffi/adm_test_ffi.h",
     "tests/support/ffi/scene_test_ffi.h",
     "tests/support/ffi/routing_test_ffi.h",
     "tests/support/ffi/engine_test_ffi.h",

@@ -1,13 +1,10 @@
-#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
@@ -72,39 +69,6 @@ uint64_t FloatCafWriter::write(const float* samples, uint64_t frame_count) {
 
 Result<void> FloatCafWriter::finish() {
     return impl_->writer->finish();
-}
-
-// ── FloatCafReader ────────────────────────────────────────────────────────────
-
-struct FloatCafReader::Impl {
-    std::unique_ptr<CafFileReader> reader;
-};
-
-Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
-    auto reader = CafFileReader::open(path);
-    if (!reader) {
-        return mradm::unexpected{reader.error()};
-    }
-    FloatCafReader r;
-    r.impl_ = std::make_unique<Impl>(Impl{std::move(*reader)});
-    return r;
-}
-
-FloatCafReader::~FloatCafReader() = default;
-FloatCafReader::FloatCafReader(FloatCafReader&&) noexcept = default;
-FloatCafReader& FloatCafReader::operator=(FloatCafReader&&) noexcept = default;
-
-uint32_t FloatCafReader::channels() const {
-    return impl_->reader->info().channels;
-}
-uint32_t FloatCafReader::sample_rate() const {
-    return impl_->reader->info().rate;
-}
-uint64_t FloatCafReader::frame_count() const {
-    return impl_->reader->info().frames;
-}
-uint64_t FloatCafReader::read(float* out, uint64_t frames) {
-    return impl_->reader->read(out, frames);
 }
 
 // Appends a CAF info chunk with encodingapplication / date / comments.
@@ -181,9 +145,6 @@ bool FloatWavReader::seek(uint64_t frame) {
     return impl_->reader->seek_frame(frame).has_value();
 }
 
-// ── downconvert_to_int / finalize_wav_layout ─────────────────────────────────
-// Rust converts or rewrites into a sidecar and installs it with a backup.
-
 namespace {
 
 [[nodiscard]] const uint8_t* wav_bytes(std::string_view text) {
@@ -191,72 +152,6 @@ namespace {
 }
 
 } // namespace
-
-Result<void> downconvert_to_int(const std::string& path,
-                                uint16_t bit_depth,
-                                const std::stop_token& cancel_token,
-                                ProgressSink* progress,
-                                RenderOperation operation) {
-    if (cancel_token.stop_requested()) {
-        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-    }
-    const auto utf8_path = wav_path_utf8(path);
-    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
-        return mradm_output_bitdepth_begin(wav_bytes(utf8_path), utf8_path.size(), bit_depth, out...);
-    });
-}
-
-Result<void> finalize_wav_layout(const std::string& path,
-                                 const WavLayoutFinalization& layout,
-                                 const std::stop_token& cancel_token,
-                                 ProgressSink* progress,
-                                 RenderOperation operation) {
-    if (cancel_token.stop_requested()) {
-        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-    }
-    std::vector<MradmWavChnaTrack> chna(layout.chna.size());
-    std::ranges::transform(layout.chna, chna.begin(), [](const WavChnaEntry& entry) {
-        return MradmWavChnaTrack{wav_bytes(entry.track_uid),
-                                 entry.track_uid.size(),
-                                 wav_bytes(entry.track_format),
-                                 entry.track_format.size(),
-                                 wav_bytes(entry.pack_format),
-                                 entry.pack_format.size(),
-                                 entry.track_index};
-    });
-    const MradmWavLayoutOptions options{layout.output_channel_sources.data(),
-                                        layout.output_channel_sources.size(),
-                                        chna.data(),
-                                        chna.size(),
-                                        wav_bytes(layout.axml),
-                                        layout.axml.size(),
-                                        layout.channel_mask,
-                                        static_cast<uint8_t>(layout.force_extensible ? 1U : 0U),
-                                        static_cast<uint8_t>(layout.prefer_riff ? 1U : 0U),
-                                        static_cast<uint8_t>(layout.include_pcm_fact ? 1U : 0U)};
-    const auto utf8_path = wav_path_utf8(path);
-    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
-        return mradm_output_finalize_begin(wav_bytes(utf8_path), utf8_path.size(), nullptr, 0, 0, &options, 0, out...);
-    });
-}
-
-Result<void> finalize_wav_output(const std::string& path,
-                                 const std::string& output_layout,
-                                 bool speaker_rerender,
-                                 const std::stop_token& cancel_token,
-                                 ProgressSink* progress) {
-    const auto utf8_path = wav_path_utf8(path);
-    return run_output_pass(path, cancel_token, progress, RenderOperation::write_metadata, [&](auto... out) {
-        return mradm_output_finalize_begin(wav_bytes(utf8_path),
-                                           utf8_path.size(),
-                                           wav_bytes(output_layout),
-                                           output_layout.size(),
-                                           speaker_rerender ? 1U : 0U,
-                                           nullptr,
-                                           cancel_token.stop_requested() ? 1U : 0U,
-                                           out...);
-    });
-}
 
 // Append a BWF v2 bext chunk (EBU Tech 3285, 602-byte payload) to an existing RIFF/RF64/BW64 WAVE file;
 // HOA3 output also carries the AmbiX ambi marker. mradm-wav updates the container size.
@@ -284,61 +179,6 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
         return mradm::unexpected{wav_error(code, message, path)};
     }
     return {};
-}
-
-Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
-    auto reader = WavChunkReader::open(path);
-    if (!reader) {
-        return mradm::unexpected{reader.error()};
-    }
-    WavAdmChunks chunks;
-    auto axml = (*reader)->chunk("axml");
-    if (!axml) {
-        return mradm::unexpected{axml.error()};
-    }
-    chunks.axml = std::move(*axml).value_or(std::string{});
-    auto chna = (*reader)->chna();
-    if (!chna) {
-        return mradm::unexpected{chna.error()};
-    }
-    chunks.chna = std::move(*chna);
-    return chunks;
-}
-
-Result<void> replace_wav_axml(const std::string& source, const std::string& target, std::string_view axml) {
-    const auto utf8_source = wav_path_utf8(source);
-    const auto utf8_target = wav_path_utf8(target);
-    std::array<uint8_t, 512> message{};
-    std::array<uint8_t, 1024> context{};
-    const auto code = mradm_wav_replace_axml(wav_bytes(utf8_source),
-                                             utf8_source.size(),
-                                             wav_bytes(utf8_target),
-                                             utf8_target.size(),
-                                             wav_bytes(axml),
-                                             axml.size(),
-                                             message.data(),
-                                             message.size(),
-                                             context.data(),
-                                             context.size());
-    if (code != 0) {
-        return mradm::unexpected{post_error(code, message, context)};
-    }
-    return {};
-}
-
-Result<bool> wav_has_chunk(const std::string& path, std::string_view id) {
-    if (id.size() != 4U) {
-        return make_error(ErrorCode::invalid_argument, "WAVE chunk id must have four characters", "path=" + path);
-    }
-    const auto utf8_path = wav_path_utf8(path);
-    std::array<uint8_t, 512> message{};
-    uint8_t present = 0;
-    const auto code = mradm_wav_has_chunk(
-        wav_bytes(utf8_path), utf8_path.size(), wav_bytes(id), &present, message.data(), message.size());
-    if (code != 0) {
-        return mradm::unexpected{wav_error(code, message, path)};
-    }
-    return present != 0U;
 }
 
 } // namespace mradm::audio

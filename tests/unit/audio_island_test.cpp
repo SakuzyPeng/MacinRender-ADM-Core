@@ -7,6 +7,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "adm/audio_io.h"
@@ -66,22 +67,62 @@ bool write_source(const fs::path& path, uint64_t frames) {
     return writer->finish().has_value();
 }
 
-int32_t run_flac(const fs::path& src, const fs::path& dst, Caller& caller, MradmEngineIslandReply& reply) {
-    const auto s = src.string();
-    const auto d = dst.string();
+int32_t run_encoder(uint32_t island,
+                    const fs::path& src,
+                    const fs::path& dst,
+                    std::string_view layout,
+                    Caller& caller,
+                    MradmEngineIslandReply& reply) {
+    const auto src_utf8 = src.u8string();
+    const auto dst_utf8 = dst.u8string();
     MradmEngineRenderEvent e{};
     e.kind = 3U;
-    e.island = 4U;
-    e.src.utf8 = view(s);
-    e.dst.utf8 = view(d);
+    e.island = island;
+    e.src.utf8 = {reinterpret_cast<const uint8_t*>(src_utf8.data()), src_utf8.size()};
+    e.dst.utf8 = {reinterpret_cast<const uint8_t*>(dst_utf8.data()), dst_utf8.size()};
+    e.layout = view(layout);
     const MradmIslandContext context{&caller, &cancelled, &progress, nullptr};
     return mradm_audio_island(&e, &context, &reply);
+}
+
+int32_t run_flac(const fs::path& src, const fs::path& dst, Caller& caller, MradmEngineIslandReply& reply) {
+    return run_encoder(4U, src, dst, {}, caller, reply);
+}
+
+// A caller that has already cancelled: the FLAC and Opus encoders return at once and leave no output
+// and the source in place (moved from trim_file_smoke_test, R3 F1).
+bool verify_pre_cancelled_encoders(const fs::path& dir) {
+    const auto src = dir / "stereo.wav";
+    {
+        auto writer = mradm::audio::FloatWavWriter::open(src.string(), 2U, 48000U);
+        if (!writer) {
+            return check(false, "write a stereo source");
+        }
+        const std::vector<float> block(512, 0.25F);
+        if (writer->write(block.data(), 256) != 256U || !writer->finish()) {
+            return check(false, "finish the stereo source");
+        }
+    }
+    bool ok = true;
+    for (const auto& [island, name] : {std::pair<uint32_t, const char*>{4U, "pre.flac"}, {5U, "pre.mka"}}) {
+        Caller before;
+        before.cancel_after = 0;
+        MradmEngineIslandReply reply{};
+        const auto dst = dir / name;
+        ok &= check(run_encoder(island, src, dst, "0+2+0", before, reply) == 0 &&
+                        reply.code == static_cast<int32_t>(mradm::ErrorCode::cancelled),
+                    "a pre-cancelled encoder returns cancelled");
+        ok &= check(!fs::exists(dst), "a pre-cancelled encoder leaves no output");
+    }
+    return check(fs::exists(src), "a pre-cancelled encoder keeps the source") && ok;
 }
 
 } // namespace
 
 int main() {
-    const auto dir = fs::temp_directory_path() / ("mr_adm_audio_island_" + std::to_string(std::random_device{}()));
+    // These native path bytes name different characters in UTF-8 and legacy Windows code pages.
+    const auto dir =
+        fs::temp_directory_path() / ("mr_adm_audio_island_\xC2\xA9_" + std::to_string(std::random_device{}()));
     fs::create_directories(dir);
     const auto src = dir / "in.wav";
     bool ok = check(write_source(src, uint64_t{48000U} * 30U), "write a 30 s float source");
@@ -90,7 +131,8 @@ int main() {
     MradmEngineIslandReply reply{};
     ok &= check(run_flac(src, dir / "plain.flac", plain, reply) == 0 && reply.code == 0, "FLAC island runs");
     ok &= check(plain.events.load() > 2 && plain.raw.load(), "FLAC island reports raw encoder progress");
-    ok &= check(fs::file_size(dir / "plain.flac") > 0U, "FLAC island writes the file");
+    const auto plain_output = dir / "plain.flac";
+    ok &= check(fs::is_regular_file(plain_output) && fs::file_size(plain_output) > 0U, "FLAC island writes the file");
 
     Caller before;
     before.cancel_after = 0;
@@ -106,6 +148,8 @@ int main() {
                     reply.code == static_cast<int32_t>(mradm::ErrorCode::cancelled),
                 "a cancellation while the encoder runs stops it");
     ok &= check(during.events.load() < plain.events.load(), "the cancelled encoder stops early");
+
+    ok &= verify_pre_cancelled_encoders(dir);
 
     MradmEngineRenderEvent apple{};
     apple.island = 2U;

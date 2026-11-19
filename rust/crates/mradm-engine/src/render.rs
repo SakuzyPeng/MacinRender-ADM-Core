@@ -19,6 +19,7 @@ use crate::request::{self, BitDepth, DsRouting, Error, Level, Log, Packager, Sel
 use mradm_dsp::post_gain::{self, RenderGainRequest, Stage};
 use mradm_dsp::room::loading::Package;
 use mradm_render::offline::Window;
+pub use mradm_render::output::MetadataFields;
 use mradm_render::postprocess::{self, Begin, Failure, Pass, Profile};
 use mradm_scene::{Context, ImportOptions, RenderScene, direct_matrix, policy, report};
 use std::collections::VecDeque;
@@ -190,17 +191,6 @@ pub struct ApplePlan {
     pub meter_window: Option<Window>,
     pub matrix: Option<direct_matrix::Matrix>,
     pub options: AppleOptions,
-}
-
-/// `audio::MetadataFields`.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct MetadataFields {
-    pub encoder: String,
-    pub date_utc: String,
-    pub renderer: String,
-    pub output_layout: String,
-    pub lufs: Option<f64>,
-    pub peak_dbtp: Option<f64>,
 }
 
 /// What the caller executes; its progress events map through [`Render::map_progress`].
@@ -609,32 +599,10 @@ fn write_own_metadata(ext: &str, path: &PathText, m: &MetadataFields) -> Option<
             )
             .map_err(|e| wav_failure(e, &path.display)),
         ),
-        ".wav" => Some((|| {
-            let description = if m.renderer.is_empty() {
-                String::new()
-            } else {
-                format!("renderer={} layout={}", m.renderer, m.output_layout)
-            };
-            let payload = mradm_wav::bext_payload(&mradm_wav::BextFields {
-                description: description.as_bytes(),
-                originator: m.encoder.as_bytes(),
-                originator_reference: m.output_layout.as_bytes(),
-                date_utc: m.date_utc.as_bytes(),
-                loudness: m.lufs,
-                true_peak: m.peak_dbtp,
-            });
-            let mut file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(&path.utf8)
-                .map_err(|e| wav_failure(mradm_wav::Error::from(e), &path.display))?;
-            mradm_wav::append_bext(
-                &mut file,
-                &payload,
-                (m.output_layout == "hoa3").then_some(&mradm_wav::AMBI_HOA3),
-            )
-            .map_err(|e| wav_failure(e, &path.display))
-        })()),
+        ".wav" => Some(
+            m.write_wav(Path::new(&path.utf8))
+                .map_err(|e| wav_failure(e, &path.display)),
+        ),
         _ => None,
     }
 }

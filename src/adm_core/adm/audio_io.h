@@ -6,7 +6,6 @@
 #include <optional>
 #include <stop_token>
 #include <string>
-#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -85,27 +84,6 @@ class RenderInputReader {
     std::unique_ptr<Impl> impl_;
 };
 
-// ADM chunks of a WAVE file, read without decoding its sample format. axml is empty when absent;
-// chna holds each record's stored track index (one-based; 0 is passed through) and raw 12-byte UID.
-struct WavChnaUid {
-    uint16_t track_index{0};
-    std::string uid;
-};
-struct WavAdmChunks {
-    std::string axml;
-    std::vector<WavChnaUid> chna;
-};
-Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path);
-
-// Writes a temporary copy of source with the axml payload replaced, then installs it at target.
-// Source and target may refer to the same file. A failed rewrite leaves an existing target intact.
-// All other chunks, including PCM, keep their bytes; the RIFF size or ds64.bw64Size is recomputed.
-Result<void> replace_wav_axml(const std::string& source, const std::string& target, std::string_view axml);
-
-// Tolerant routing probe: whether a top-level chunk with this four-character id exists. Fails only when
-// the file cannot be opened or is not RIFF/RF64/BW64 WAVE; a truncated chunk table ends the scan.
-Result<bool> wav_has_chunk(const std::string& path, std::string_view id);
-
 // Streaming writer for CAF (Core Audio Format) files with IEEE float32 samples
 // and an Apple AudioChannelLayoutTag encoded in the 'chan' chunk.
 // layout_id must be one of the supported output layout identifiers:
@@ -130,29 +108,6 @@ class FloatCafWriter {
 
   private:
     FloatCafWriter() = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
-
-// Streaming reader for CAF files written by FloatCafWriter.
-// Validates format (float32 LE lpcm) and scans chunk headers to locate the
-// data payload; robust to any CAF chunk ordering including a trailing info chunk.
-class FloatCafReader {
-  public:
-    static Result<FloatCafReader> open(const std::string& path);
-    ~FloatCafReader();
-    FloatCafReader(FloatCafReader&&) noexcept;
-    FloatCafReader& operator=(FloatCafReader&&) noexcept;
-    FloatCafReader(const FloatCafReader&) = delete;
-    FloatCafReader& operator=(const FloatCafReader&) = delete;
-
-    uint32_t channels() const;
-    uint32_t sample_rate() const;
-    uint64_t frame_count() const;
-    uint64_t read(float* out, uint64_t frames);
-
-  private:
-    FloatCafReader() = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
@@ -255,41 +210,9 @@ class WriterHandle {
     std::variant<FloatWavWriter, FloatCafWriter, FloatFlacWriter> impl_;
 };
 
-// Apply a linear gain to all samples in path, rewriting the file in-place via a
-// temp file + rename. Supports WAV, CAF, and FLAC formats. layout_id is required
-// when the path is a CAF file; ignored for WAV and FLAC. No-op when |gain - 1| < 1e-6.
-Result<void> apply_gain_to_file(const std::string& path,
-                                float gain,
-                                const std::string& layout_id = {},
-                                const std::stop_token& cancel_token = {},
-                                ProgressSink* progress = nullptr,
-                                RenderOperation operation = RenderOperation::apply_gain);
-
-// Trim an existing audio file in-place to the frame range [start_frame,
-// start_frame + frame_count) via a temp file + rename. Supports WAV, CAF, and
-// FLAC formats. layout_id is required when the path is a CAF file; ignored for
-// WAV and FLAC. start_frame is clamped to the file length and frame_count to the
-// frames remaining after start_frame. No-op when the range already covers the
-// whole file. Returns invalid_argument when frame_count resolves to zero.
-Result<void> trim_file_frames(const std::string& path,
-                              uint64_t start_frame,
-                              uint64_t frame_count,
-                              const std::string& layout_id = {},
-                              const std::stop_token& cancel_token = {},
-                              ProgressSink* progress = nullptr,
-                              RenderOperation operation = RenderOperation::trim_output);
-
-// Convert an existing float32 WAV to integer PCM in-place (temp + rename).
-// bit_depth must be 16, 24, or 32. Preserves the legacy PCM quantization rules.
-Result<void> downconvert_to_int(const std::string& path,
-                                uint16_t bit_depth,
-                                const std::stop_token& cancel_token = {},
-                                ProgressSink* progress = nullptr,
-                                RenderOperation operation = RenderOperation::convert_bit_depth);
-
 // Encode a fully post-processed float32 WAV (src_path) to 24-bit FLAC (flac_path).
-// Use this as the final pipeline step for FLAC output — after apply_gain_to_file()
-// and downconvert_to_int() — so the float32 domain is preserved through all
+// Use this as the final pipeline step for FLAC output — after the gain and bit-depth
+// passes (Rust postprocess) — so the float32 domain is preserved through all
 // adjustments before quantisation.  FLAC channel count must be 1-8.
 Result<void> convert_to_flac(const std::string& src_path,
                              const std::string& flac_path,
@@ -337,8 +260,8 @@ Result<void> package_iamf_to_mp4(const std::string& iamf_path,
 // src_path must be 48000 Hz (Opus requirement). layout_id controls Opus channel
 // mapping where the format has standard semantics (5.1/7.1 Vorbis order,
 // hoa3 ambisonics); it is also mirrored into container metadata by the engine
-// layer. Use this as the final pipeline step after all apply_gain_to_file()
-// adjustments — re-encoding degrades lossy quality.
+// layer. Use this as the final pipeline step after all gain adjustments (Rust
+// postprocess) — re-encoding degrades lossy quality.
 // bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto.
 Result<void> convert_to_opus_mka(const std::string& src_path,
                                  const std::string& mka_path,

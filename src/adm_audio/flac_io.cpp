@@ -12,6 +12,7 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -60,24 +61,19 @@ void emit_flac_progress(ProgressSink* progress,
 }
 
 #ifdef _WIN32
-std::wstring utf8_to_wide(const std::string& path) {
-    if (path.empty()) {
+// The C++ audio entry points receive native narrow paths from the caller.
+std::wstring native_to_wide(const std::string& path) {
+    try {
+        return std::filesystem::path(path).wstring();
+    } catch (const std::system_error&) {
         return {};
     }
-    const int size =
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), static_cast<int>(path.size()), nullptr, 0);
-    if (size <= 0) {
-        return {};
-    }
-    std::wstring wide(static_cast<std::size_t>(size), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), static_cast<int>(path.size()), wide.data(), size);
-    return wide;
 }
 #endif
 
 FILE* open_binary_write(const std::string& path) {
 #ifdef _WIN32
-    const std::wstring wide = utf8_to_wide(path);
+    const std::wstring wide = native_to_wide(path);
     if (wide.empty()) {
         return nullptr;
     }
@@ -89,7 +85,7 @@ FILE* open_binary_write(const std::string& path) {
 
 FILE* open_binary_read(const std::string& path) {
 #ifdef _WIN32
-    const std::wstring wide = utf8_to_wide(path);
+    const std::wstring wide = native_to_wide(path);
     if (wide.empty()) {
         return nullptr;
     }
@@ -143,8 +139,8 @@ FLAC__int64 tell_binary_file(FILE* file) {
 
 bool replace_file(const std::string& src_path, const std::string& dst_path) {
 #ifdef _WIN32
-    const std::wstring src = utf8_to_wide(src_path);
-    const std::wstring dst = utf8_to_wide(dst_path);
+    const std::wstring src = native_to_wide(src_path);
+    const std::wstring dst = native_to_wide(dst_path);
     if (src.empty() || dst.empty()) {
         return false;
     }

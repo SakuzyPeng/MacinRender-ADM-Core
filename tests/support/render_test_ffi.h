@@ -1,38 +1,12 @@
-// Rust mradm-render entries only the C++ tests and the frozen references call (moved from
-// src/adm_render_common/routing_ffi.h in PCM consistency 5.6 C): the DirectSpeakers, speaker-label
-// and LFE routing rules behind tests/support/adm_scene/render_common_scene.h, the Scene stream
-// renderer outside the stream engine (tests/support/live_scene) and the binaural HRTF view
-// (tests/support/binaural). Conventions as in routing_ffi.h.
+// Rust mradm-render entries only the C++ tests call (moved from src/adm_render_common/routing_ffi.h in
+// PCM consistency 5.6 C): the Scene stream renderer outside the stream engine
+// (tests/support/live_scene). Conventions as in routing_ffi.h.
 #pragma once
 #include "routing_test_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 // cppcheck-suppress-begin unusedStructMember
-typedef struct MradmRenderMatrix MradmRenderMatrix;
-typedef struct MradmRenderTarget {
-    MradmAdmText label;
-    uint32_t is_lfe;
-} MradmRenderTarget;
-
-typedef struct MradmRenderResolvedTarget {
-    size_t output;
-    float gain;
-} MradmRenderResolvedTarget;
-
-typedef struct MradmRenderResolvedRoute {
-    MradmAdmText source_label;
-    MradmAdmText source_key;
-    uint32_t mute;
-    const MradmRenderResolvedTarget* targets;
-    size_t targets_len;
-} MradmRenderResolvedRoute;
-
-typedef struct MradmRenderMatrixView {
-    const MradmRenderResolvedRoute* routes;
-    size_t routes_len;
-} MradmRenderMatrixView;
-
 // A Scene stream renderer outside the stream engine (the test-support live_scene::ILiveSceneRenderer).
 typedef struct MradmRenderLive MradmRenderLive;
 typedef struct MradmRenderLiveElement {
@@ -67,48 +41,6 @@ typedef struct MradmRenderLiveDiagnostic {
     MradmAdmText message;
 } MradmRenderLiveDiagnostic;
 // cppcheck-suppress-end unusedStructMember
-
-// kind: 0 alphanumeric key, 1 canonical label, 2 canonical label with aliases resolved.
-// *output_len is the capacity in (at least raw_len + 8) and the length out.
-int32_t mradm_render_label(uint32_t kind, const uint8_t* raw, size_t raw_len, uint8_t* output, size_t* output_len);
-uint32_t mradm_render_is_lfe(const uint8_t* raw, size_t raw_len);
-// 0 none, 1 LFE1, 2 LFE2.
-uint32_t mradm_render_lfe_target(const MradmAdmText* labels, size_t labels_len, uint32_t low_pass);
-uint32_t mradm_render_target_index(const MradmRenderTarget* targets_ptr,
-                                   size_t targets_len,
-                                   const MradmAdmText* labels,
-                                   size_t labels_len,
-                                   size_t* index);
-uint32_t mradm_render_label_position(const MradmAdmText* labels, size_t labels_len, float* azimuth, float* elevation);
-int32_t mradm_render_matrix_resolve(const MradmRenderMatrixRoute* routes,
-                                    size_t routes_len,
-                                    const MradmRenderTarget* targets_ptr,
-                                    size_t targets_len,
-                                    MradmAdmText layout_id,
-                                    MradmRenderMatrix** output,
-                                    MradmRenderMatrixView* view,
-                                    uint8_t* message,
-                                    size_t* message_len,
-                                    uint8_t* context,
-                                    size_t* context_len);
-void mradm_render_matrix_destroy(MradmRenderMatrix* handle);
-int32_t mradm_render_matrix_route(const MradmRenderMatrix* matrix,
-                                  const MradmAdmText* labels,
-                                  size_t labels_len,
-                                  size_t* index,
-                                  uint8_t* message,
-                                  size_t* message_len,
-                                  uint8_t* context,
-                                  size_t* context_len);
-
-// output is filled even on failure: its log lines precede the error.
-int32_t mradm_render_lfe_routing(uint32_t split_power,
-                                 MradmAdmText output_layout,
-                                 const uint32_t* targets_ptr,
-                                 size_t targets_len,
-                                 MradmRenderLfeRouting* output,
-                                 uint8_t* message,
-                                 size_t* message_len);
 
 // Creates the renderer of the configuration: *sample_rate is the rate it renders at, *suffix its checkpoint
 // name suffix (valid while the handle lives).

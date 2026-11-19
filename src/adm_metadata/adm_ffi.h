@@ -1,5 +1,4 @@
-// Private ADM metadata boundary: the record view of a render scene (scene_ffi.h). The metadata
-// buffers and entries only tests call are in tests/support/ffi/adm_test_ffi.h.
+// Private ADM metadata boundary: the record view of a render scene (scene_ffi.h).
 #pragma once
 #include <stddef.h>
 #include <stdint.h>

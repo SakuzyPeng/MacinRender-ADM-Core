@@ -2,9 +2,9 @@
 //! Every writer takes the next number of one process-wide sequence when it opens, so the
 //! `writer/pass{N}-s{frame}.80-pcm.f32` checkpoints of WAVE and CAF outputs never share a name.
 use mradm_dsp::diagnostics::{ENABLED, Words, process};
-use mradm_wav::{Result, caf};
+use mradm_wav::{AMBI_HOA3, BextFields, Result, append_bext, bext_payload, caf};
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::BufWriter,
     path::Path,
     sync::atomic::{AtomicU64, Ordering},
@@ -15,6 +15,42 @@ static NEXT_TRACE: AtomicU64 = AtomicU64::new(0);
 /// Unit tests that create output writers take turns so sequence assertions remain isolated.
 #[cfg(test)]
 pub(crate) static TEST_WRITER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Metadata carried by a rendered output and its encoder islands.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MetadataFields {
+    pub encoder: String,
+    pub date_utc: String,
+    pub renderer: String,
+    pub output_layout: String,
+    pub lufs: Option<f64>,
+    pub peak_dbtp: Option<f64>,
+}
+
+impl MetadataFields {
+    /// Appends the BWF v2 bext fields and the HOA3 ambi marker to a rendered WAVE file.
+    pub fn write_wav(&self, path: &Path) -> Result<()> {
+        let description = if self.renderer.is_empty() {
+            String::new()
+        } else {
+            format!("renderer={} layout={}", self.renderer, self.output_layout)
+        };
+        let payload = bext_payload(&BextFields {
+            description: description.as_bytes(),
+            originator: self.encoder.as_bytes(),
+            originator_reference: self.output_layout.as_bytes(),
+            date_utc: self.date_utc.as_bytes(),
+            loudness: self.lufs,
+            true_peak: self.peak_dbtp,
+        });
+        let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+        append_bext(
+            &mut file,
+            &payload,
+            (self.output_layout == "hoa3").then_some(&AMBI_HOA3),
+        )
+    }
+}
 
 enum Sink {
     Wav(mradm_wav::Writer<File>),

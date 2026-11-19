@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <cstdint>
-#include <stop_token>
+#include <filesystem>
+#include <memory>
 #include <string>
 
 #include "adm/audio_io.h"
@@ -44,49 +46,6 @@ Result<uint64_t> RenderInputReader::read(float* out, uint64_t frames) {
 Result<void> RenderInputReader::seek_frame(uint64_t frame) {
     // The Rust reader clamps targets past the end to the final frame boundary.
     return impl_->reader->seek_frame(frame);
-}
-
-// ── apply_gain_to_file / trim_file_frames ───────────────────────────────────
-// Rust rewrites the file through the final-PCM writer and installs it.
-
-Result<void> apply_gain_to_file(const std::string& path,
-                                float gain,
-                                const std::string& layout_id,
-                                const std::stop_token& cancel_token,
-                                ProgressSink* progress,
-                                RenderOperation operation) {
-    const auto utf8_path = wav_path_utf8(path);
-    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
-        return mradm_output_gain_begin(reinterpret_cast<const uint8_t*>(utf8_path.data()),
-                                       utf8_path.size(),
-                                       gain,
-                                       reinterpret_cast<const uint8_t*>(layout_id.data()),
-                                       layout_id.size(),
-                                       cancel_token.stop_requested() ? 1U : 0U,
-                                       out...);
-    });
-}
-
-Result<void> trim_file_frames(const std::string& path,
-                              uint64_t start_frame,
-                              uint64_t frame_count,
-                              const std::string& layout_id,
-                              const std::stop_token& cancel_token,
-                              ProgressSink* progress,
-                              RenderOperation operation) {
-    if (cancel_token.stop_requested()) {
-        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
-    }
-    const auto utf8_path = wav_path_utf8(path);
-    return run_output_pass(path, cancel_token, progress, operation, [&](auto... out) {
-        return mradm_output_trim_begin(reinterpret_cast<const uint8_t*>(utf8_path.data()),
-                                       utf8_path.size(),
-                                       start_frame,
-                                       frame_count,
-                                       reinterpret_cast<const uint8_t*>(layout_id.data()),
-                                       layout_id.size(),
-                                       out...);
-    });
 }
 
 // ── WriterHandle ──────────────────────────────────────────────────────────────

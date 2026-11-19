@@ -286,3 +286,89 @@ fn routing_reproduces_the_cpp_goldens() {
     }
     assert_eq!(cases.len(), 4550);
 }
+
+/// The LFE semantics every backend shares (from the C++ `lfe_routing_test` and
+/// `apple_renderer_smoke_test`, R3 F2 / F3): the LFE1
+/// aliases, LFE2 / LFER winning over a generic LFE label on the same block, a lowPass-only block,
+/// and the 22.2 routing: one semantic LFE when it repeats, exact unity without crossfeed in
+/// direct mode, a standalone LFE2, both LFEs refused for split-power, the warnings and the
+/// sqrt(0.5) coefficient.
+#[test]
+fn lfe_aliases_and_the_22_2_routing_rules() {
+    for alias in [
+        "LFE",
+        "LFE1",
+        "LFEL",
+        "RC_LFE",
+        "RCLFE",
+        "R-LFE",
+        "SUB",
+        "Subwoofer",
+        "low_frequency",
+    ] {
+        assert_eq!(
+            routing::lfe_target(&[alias.as_bytes()], false),
+            LfeTarget::Lfe1,
+            "{alias}"
+        );
+    }
+    for alias in ["LFE2", "LFER"] {
+        assert_eq!(
+            routing::lfe_target(&[alias.as_bytes()], false),
+            LfeTarget::Lfe2,
+            "{alias}"
+        );
+    }
+    assert_eq!(
+        routing::lfe_target(&[b"LFE", b"LFE2"], false),
+        LfeTarget::Lfe2
+    );
+    assert_eq!(routing::lfe_target(&[], true), LfeTarget::Lfe1);
+    assert_eq!(routing::lfe_target(&[b"M+030"], false), LfeTarget::None);
+
+    let resolve = |split: bool, layout: &str, blocks: &[LfeTarget]| {
+        let mut logs = Vec::new();
+        let result = routing::lfe_routing(
+            split,
+            layout.as_bytes(),
+            blocks.iter().copied(),
+            &mut |l, t| logs.push((l, t)),
+        );
+        (result, logs)
+    };
+    let warned = |logs: &[(Level, &str)], needle: &str| {
+        logs.iter()
+            .any(|(level, text)| *level == Level::Warning && text.contains(needle))
+    };
+    use LfeTarget::{Lfe1, Lfe2, None as NoLfe};
+    let (repeated, _) = resolve(true, "9+10+3", &[Lfe1, Lfe1]);
+    let repeated = repeated.unwrap();
+    assert!(
+        repeated.has_lfe1 && !repeated.has_lfe2,
+        "a repeated LFE1 is one LFE"
+    );
+    assert_eq!(repeated.gain(Lfe1, Lfe2), std::f32::consts::FRAC_1_SQRT_2);
+    assert_eq!(repeated.gain(Lfe1, Lfe1), std::f32::consts::FRAC_1_SQRT_2);
+    let (direct, _) = resolve(false, "9+10+3", &[Lfe1, Lfe1]);
+    let direct = direct.unwrap();
+    assert_eq!((direct.gain(Lfe1, Lfe1), direct.gain(Lfe1, Lfe2)), (1., 0.));
+    assert_eq!(direct.gain(NoLfe, Lfe1), 0.);
+    let (lfe2, _) = resolve(true, "9+10+3", &[Lfe2]);
+    let lfe2 = lfe2.unwrap();
+    assert!(
+        !lfe2.has_lfe1 && lfe2.has_lfe2,
+        "a standalone LFE2 is valid for split-power"
+    );
+    let (dual, _) = resolve(true, "9+10+3", &[Lfe1, Lfe2]);
+    let dual = dual.unwrap_err();
+    assert_eq!(dual.code, 1);
+    assert!(String::from_utf8_lossy(&dual.message).contains("both LFE1 and LFE2"));
+    assert!(
+        resolve(false, "9+10+3", &[Lfe1, Lfe2]).0.is_ok(),
+        "direct keeps both"
+    );
+    let (empty, logs) = resolve(true, "9+10+3", &[]);
+    assert!(empty.is_ok() && warned(&logs, "no semantic LFE"));
+    let (other, logs) = resolve(true, "0+5+0", &[Lfe2]);
+    assert!(!other.unwrap().applies_to_22_2 && warned(&logs, "only applies to 22.2"));
+}

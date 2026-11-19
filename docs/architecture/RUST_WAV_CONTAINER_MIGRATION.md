@@ -127,3 +127,5 @@ Rust 返回的错误消息为中文，措辞与旧英文消息不同。
 [`tests/reference/retention.json`](../../tests/reference/retention.json)。冻结内容逐字复制自基线的 `wav_io.cpp`（`TempPathGuard`、进度辅助、chunk 扫描与写出辅助、`finalize_wav_layout`、`write_wav_metadata`）、`scene_importer.cpp`（`normalize_uid`、`read_wave_adm_metadata`、`rewrite_bwf_replacing_axml`）和 `channel_bed_importer.cpp`（`scan_axml` 及其读取辅助）；只加了按源文件划分的命名空间、`using` 声明和文件末尾供测试调用的导出包装，`finalize_wav_layout` 包装不传进度回调。
 
 **已退役（2026-11-14，R1）**：按[用户决定 2026-11-14](PCM_CONSISTENCY_AUDIT.md#六期边界迁入-rust)，单元 `wav_container` 在 `0bf8627` 删除，上文为历史记录。覆盖依据：`mr_adm_wav_container_tests` 的 golden 摘要（320 例，`48fbd0b` 记录时与冻结实现逐例相同）、整数 WAVE 量化门禁与 `final-*` PCM 用例。
+
+**R3 F1（2026-11-18）**：C++ 的 `mr_adm_wav_container_tests` 与它测的、没有生产调用者的 C++ 包装（`finalize_wav_layout`、`read_wav_adm_chunks`、`replace_wav_axml`、`wav_has_chunk` 等）删除；五组 golden 摘要由 `mradm-render` `tests/wav_container.rs` 调用同一批 Rust 函数原值复现（见 [R3 记录](RUST_BOUNDARY_TESTS.md#f-岛测试去-sdk)）。

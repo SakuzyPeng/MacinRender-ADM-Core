@@ -1,3 +1,7 @@
+// The Apple island's DirectSpeakers matrix rendering (R3 F3: without the C++ SDK). The matrix is
+// parsed by mradm-scene through the test FFI and handed to the island settings as the engine does;
+// prepare, the offline render and the monitor stream run on mradm_apple_islands(). The Rust
+// backends' matrix cases are Rust tests (mradm-render tests/vbap.rs and tests/ear.rs). macOS only.
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -18,15 +22,9 @@
 #include <utility>
 #include <vector>
 
-#include "adm/audio_io.h"
-#include "adm/direct_speakers_matrix.h"
-#include "adm/render.h"
-#include "adm/render_apple.h"
-#include "adm/render_service.h"
-
-#include "../support/apple_renderer/apple_renderer.h"
+#include "../support/apple_island_driver.h"
 #include "../support/direct_speakers_fixture.h"
-#include "adm_scene.h"
+#include "config_test_ffi.h"
 
 namespace {
 
@@ -36,6 +34,8 @@ constexpr uint64_t k_first_boundary = 4099U;
 constexpr uint64_t k_second_boundary = 8203U;
 constexpr uint32_t k_5_1_channels = 6U;
 constexpr float k_object_gain = 0.8F;
+// write_mono_direct_speakers authors one object, AO_1001 after reassign_ids.
+constexpr const char* k_object_id = "AO_1001";
 
 constexpr std::string_view k_dynamic_matrix_json = R"json({
   "schema":"mradm.direct-speakers-matrix.v1",
@@ -98,61 +98,53 @@ std::vector<float> make_input_samples() {
     return samples;
 }
 
-std::shared_ptr<const mradm::DirectSpeakersMatrix> parse_profile(std::string_view json) {
-    auto parsed = mradm::parse_direct_speakers_matrix(json);
-    if (!parsed) {
-        std::cerr << "FAIL: matrix profile parse failed: " << parsed.error().message << '\n';
-        return nullptr;
+// A matrix profile parsed by mradm-scene; the view borrows from the handle.
+class Matrix {
+  public:
+    explicit Matrix(std::string_view json) {
+        std::array<char, 1024> message{};
+        std::size_t message_len = message.size();
+        if (mradm_scene_direct_matrix_parse(reinterpret_cast<const uint8_t*>(json.data()),
+                                            json.size(),
+                                            &handle_,
+                                            &view_,
+                                            message.data(),
+                                            &message_len) != 0) {
+            std::cerr << "FAIL: matrix profile parse failed: " << std::string_view{message.data(), message_len} << '\n';
+            handle_ = nullptr;
+        }
     }
-    return std::make_shared<const mradm::DirectSpeakersMatrix>(std::move(*parsed));
-}
+    ~Matrix() { mradm_scene_direct_matrix_destroy(handle_); }
+    Matrix(const Matrix&) = delete;
+    Matrix& operator=(const Matrix&) = delete;
+    Matrix(Matrix&&) = delete;
+    Matrix& operator=(Matrix&&) = delete;
 
-std::optional<std::vector<float>> read_output(const std::filesystem::path& path, uint32_t channels) {
-    auto reader = mradm::audio::FloatWavReader::open(path.string());
-    if (!reader || reader->channels() != channels || reader->frame_count() != k_frames) {
+    [[nodiscard]] bool ok() const { return handle_ != nullptr; }
+    [[nodiscard]] const MradmDirectMatrixView& view() const { return view_; }
+
+  private:
+    MradmDirectMatrix* handle_{nullptr};
+    MradmDirectMatrixView view_{};
+};
+
+std::optional<std::vector<float>> render_offline(const apple_test::Prepared& prepared,
+                                                 const apple_test::Settings& settings,
+                                                 std::string_view stem,
+                                                 uint32_t channels) {
+    const auto output = temp_path(stem);
+    FileGuard output_guard{output};
+    apple_test::Caller caller;
+    const auto reply = apple_test::render(prepared, settings, output, caller);
+    if (!reply.ok()) {
+        std::cerr << "FAIL: matrix offline render failed: " << reply.message << '\n';
         return std::nullopt;
     }
-    std::vector<float> samples(static_cast<std::size_t>(k_frames) * channels);
-    reader->read(samples.data(), k_frames);
-    return samples;
-}
-
-std::optional<std::vector<float>> pull_stream(mradm::IRenderer& renderer,
-                                              const mradm::IPreparedRender& prepared,
-                                              const mradm::ScenePlan& plan,
-                                              const std::vector<std::size_t>& chunks,
-                                              const mradm::LiveOverrides* overrides = nullptr) {
-    mradm::NullLogSink logs;
-    auto stream = renderer.open_stream(prepared, plan, logs);
-    if (!stream) {
-        std::cerr << "FAIL: matrix stream open failed: " << stream.error().message << '\n';
+    auto audio = apple_test::read_wav(output);
+    if (!audio || audio->channels != channels || audio->frames != k_frames) {
         return std::nullopt;
     }
-    if (overrides != nullptr) {
-        (*stream)->set_overrides(*overrides);
-    }
-
-    const std::size_t channels = (*stream)->out_channels();
-    std::vector<float> output;
-    std::size_t chunk_index = 0U;
-    while (true) {
-        const std::size_t frames = chunks[chunk_index % chunks.size()];
-        ++chunk_index;
-        std::vector<float> buffer(frames * channels, 0.0F);
-        auto produced = (*stream)->process(std::span<float>{buffer}, frames);
-        if (!produced) {
-            std::cerr << "FAIL: matrix stream process failed: " << produced.error().message << '\n';
-            return std::nullopt;
-        }
-        if (*produced == 0U) {
-            break;
-        }
-        output.insert(output.end(), buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(*produced * channels));
-        if (output.size() > static_cast<std::size_t>(k_frames) * channels) {
-            return std::nullopt;
-        }
-    }
-    return output;
+    return std::move(audio->samples);
 }
 
 double max_difference(std::span<const float> lhs, std::span<const float> rhs) {
@@ -166,15 +158,11 @@ double max_difference(std::span<const float> lhs, std::span<const float> rhs) {
     return maximum;
 }
 
-bool verify_dynamic_samples(std::string_view backend,
-                            const std::vector<float>& rendered,
-                            const std::vector<float>& input,
-                            uint64_t direct_delay) {
+bool verify_dynamic_samples(const std::vector<float>& rendered, const std::vector<float>& input) {
     if (!check(rendered.size() == static_cast<std::size_t>(k_frames) * k_5_1_channels,
-               std::string{backend} + ": dynamic output dimensions")) {
+               "Apple: dynamic output dimensions")) {
         return false;
     }
-
     constexpr float k_split_left = 0.5F;
     constexpr float k_split_right = 0.8660254037844386F;
     double maximum_error = 0.0;
@@ -182,13 +170,11 @@ bool verify_dynamic_samples(std::string_view backend,
     bool mute_is_zero = true;
     for (uint64_t frame = 0U; frame < k_frames; ++frame) {
         std::array<float, k_5_1_channels> expected{};
-        const bool has_source_frame = frame >= direct_delay;
-        const uint64_t source_frame = has_source_frame ? frame - direct_delay : 0U;
-        if (has_source_frame && source_frame < k_first_boundary) {
-            expected[0] = input[source_frame] * k_object_gain * 0.5F * k_split_left;
-            expected[1] = input[source_frame] * k_object_gain * 0.5F * k_split_right;
-        } else if (has_source_frame && source_frame < k_second_boundary) {
-            expected[2] = input[source_frame] * k_object_gain * 0.25F;
+        if (frame < k_first_boundary) {
+            expected[0] = input[frame] * k_object_gain * 0.5F * k_split_left;
+            expected[1] = input[frame] * k_object_gain * 0.5F * k_split_right;
+        } else if (frame < k_second_boundary) {
+            expected[2] = input[frame] * k_object_gain * 0.25F;
         }
         for (std::size_t channel = 0U; channel < expected.size(); ++channel) {
             const float actual = rendered[(static_cast<std::size_t>(frame) * expected.size()) + channel];
@@ -197,39 +183,32 @@ bool verify_dynamic_samples(std::string_view backend,
             if (expected.at(channel) == 0.0F && actual != 0.0F) {
                 non_targets_are_zero = false;
             }
-            if (frame >= k_second_boundary + direct_delay && actual != 0.0F) {
+            if (frame >= k_second_boundary && actual != 0.0F) {
                 mute_is_zero = false;
             }
         }
     }
-
-    bool ok = check(maximum_error < 2.0e-6, std::string{backend} + ": matrix coefficients and gains are exact");
-    ok &= check(non_targets_are_zero, std::string{backend} + ": non-target channels have no leakage");
-    ok &= check(mute_is_zero, std::string{backend} + ": explicit mute is exact silence");
-    const uint64_t output_boundary = k_first_boundary + direct_delay;
-    ok &= check(rendered[(static_cast<std::size_t>(output_boundary - 1U) * k_5_1_channels)] != 0.0F &&
-                    rendered[(static_cast<std::size_t>(output_boundary) * k_5_1_channels) + 2U] != 0.0F,
-                std::string{backend} + ": route changes at the exact metadata boundary");
+    bool ok = check(maximum_error < 2.0e-6, "Apple: matrix coefficients and gains are exact");
+    ok &= check(non_targets_are_zero, "Apple: non-target channels have no leakage");
+    ok &= check(mute_is_zero, "Apple: explicit mute is exact silence");
+    ok &= check(rendered[(static_cast<std::size_t>(k_first_boundary - 1U) * k_5_1_channels)] != 0.0F &&
+                    rendered[(static_cast<std::size_t>(k_first_boundary) * k_5_1_channels) + 2U] != 0.0F,
+                "Apple: route changes at the exact metadata boundary");
     return ok;
 }
 
-bool verify_lfe_samples(std::string_view backend,
-                        const std::vector<float>& rendered,
-                        const std::vector<float>& input,
-                        uint64_t direct_delay) {
+bool verify_lfe_samples(const std::vector<float>& rendered, const std::vector<float>& input) {
     constexpr std::size_t k_channels = 24U;
     constexpr std::size_t k_lfe1 = 3U;
     constexpr std::size_t k_lfe2 = 9U;
     constexpr float k_expected_gain = 0.7F * 0.6F * 0.7071067811865475F;
-    if (!check(rendered.size() == static_cast<std::size_t>(k_frames) * k_channels,
-               std::string{backend} + ": LFE output dimensions")) {
+    if (!check(rendered.size() == static_cast<std::size_t>(k_frames) * k_channels, "Apple: LFE output dimensions")) {
         return false;
     }
-
     double maximum_error = 0.0;
     bool other_channels_zero = true;
     for (uint64_t frame = 0U; frame < k_frames; ++frame) {
-        const float expected = frame >= direct_delay ? input[frame - direct_delay] * k_expected_gain : 0.0F;
+        const float expected = input[frame] * k_expected_gain;
         for (std::size_t channel = 0U; channel < k_channels; ++channel) {
             const float actual = rendered[(static_cast<std::size_t>(frame) * k_channels) + channel];
             const float target = channel == k_lfe1 || channel == k_lfe2 ? expected : 0.0F;
@@ -240,112 +219,65 @@ bool verify_lfe_samples(std::string_view backend,
             }
         }
     }
-    bool ok =
-        check(maximum_error < 2.0e-6, std::string{backend} + ": LFE bypass keeps split-power routing in matrix mode");
-    ok &= check(other_channels_zero, std::string{backend} + ": LFE bypass never enters matrix/non-LFE targets");
+    bool ok = check(maximum_error < 2.0e-6, "Apple: LFE bypass keeps split-power routing in matrix mode");
+    ok &= check(other_channels_zero, "Apple: LFE bypass never enters matrix/non-LFE targets");
     return ok;
 }
 
-bool verify_backend(std::string_view name,
-                    std::unique_ptr<mradm::IRenderer> renderer,
-                    const std::filesystem::path& input_path,
-                    const std::filesystem::path& lfe_input_path,
-                    const std::vector<float>& input_samples,
-                    const std::shared_ptr<const mradm::DirectSpeakersMatrix>& dynamic_matrix,
-                    const std::shared_ptr<const mradm::DirectSpeakersMatrix>& lfe_matrix,
-                    uint64_t direct_delay = 0U) {
-    mradm::NullLogSink logs;
-    auto scene = mradm::RenderService{}.prepare_preview_scene(input_path, {}, logs);
-    if (!check(scene.has_value() && !mradm::adm_scene(*scene).objects.empty(), "matrix ADM fixture imports")) {
+bool verify_apple(const std::filesystem::path& input_path,
+                  const std::filesystem::path& lfe_input_path,
+                  const std::vector<float>& input_samples,
+                  const Matrix& dynamic_matrix,
+                  const Matrix& lfe_matrix) {
+    apple_test::Settings settings;
+    settings.input = input_path.string();
+    settings.layout = "0+5+0";
+    settings.routing = 3U; // matrix
+    settings.matrix = dynamic_matrix.view();
+    const apple_test::Prepared prepared(settings);
+    if (!prepared.ok()) {
+        std::cerr << "FAIL: Apple matrix prepare failed: " << prepared.reply.message << '\n';
         return false;
     }
-    mradm::ScenePlan plan;
-    plan.input_path = input_path.string();
-    plan.output_layout = "0+5+0";
-    plan.scene = mradm::adm_scene(*scene);
-    plan.scene_handle = scene->handle;
-    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
-    plan.direct_speakers_matrix = dynamic_matrix;
+    const auto reference = render_offline(prepared, settings, "mradm-matrix-Apple", k_5_1_channels);
+    if (!reference) {
+        return check(false, "Apple: matrix output opens");
+    }
+    bool ok = verify_dynamic_samples(*reference, input_samples);
+    const auto uniform = apple_test::stream_all(prepared, settings, {1024U});
+    const auto varied = apple_test::stream_all(prepared, settings, {333U, 1000U, 7U, 512U});
+    if (!uniform || !varied) {
+        return check(false, "Apple: matrix streams render");
+    }
+    ok &= check(max_difference(*uniform, *reference) < 2.0e-6, "Apple: stream matches offline output");
+    ok &= check(*uniform == *varied, "Apple: stream is independent of pull chunking");
 
-    const auto output_path = temp_path(std::string{"mradm-matrix-"} + std::string{name});
-    FileGuard output_guard{output_path};
-    plan.output_path = output_path.string();
+    const auto gained = apple_test::stream_all(
+        prepared, settings, {257U, 1024U}, {{k_object_id, -6.020599913F, false, std::nullopt, ""}});
+    if (!gained || gained->size() != reference->size()) {
+        return check(false, "Apple: gained matrix stream renders");
+    }
+    std::vector<float> expected_gained(reference->size());
+    std::ranges::transform(*reference, expected_gained.begin(), [](float sample) { return sample * 0.5F; });
+    ok &= check(max_difference(*gained, expected_gained) < 2.0e-6,
+                "Apple: live gain multiplies the prepared matrix result once");
 
-    mradm::NullProgressSink progress;
-    auto prepared = renderer->prepare(plan, logs);
-    if (!prepared) {
-        std::cerr << "FAIL: " << name << " matrix prepare failed: " << prepared.error().message << '\n';
+    apple_test::Settings lfe_settings;
+    lfe_settings.input = lfe_input_path.string();
+    lfe_settings.layout = "9+10+3";
+    lfe_settings.routing = 3U; // matrix
+    lfe_settings.matrix = lfe_matrix.view();
+    lfe_settings.split_power = true;
+    const apple_test::Prepared lfe_prepared(lfe_settings);
+    if (!lfe_prepared.ok()) {
+        std::cerr << "FAIL: Apple matrix LFE prepare failed: " << lfe_prepared.reply.message << '\n';
         return false;
     }
-    const auto rendered = renderer->render_window(**prepared, plan, progress, logs);
-    if (!rendered) {
-        std::cerr << "FAIL: " << name << " matrix offline render failed: " << rendered.error().message << '\n';
-        return false;
+    const auto lfe_output = render_offline(lfe_prepared, lfe_settings, "mradm-matrix-lfe-Apple", 24U);
+    if (!lfe_output) {
+        return check(false, "Apple: matrix LFE output opens");
     }
-    const auto reference = read_output(output_path, k_5_1_channels);
-    if (!reference.has_value()) {
-        check(false, std::string{name} + ": matrix output opens");
-        return false;
-    }
-    const auto& reference_samples = reference.value();
-
-    bool ok = verify_dynamic_samples(name, reference_samples, input_samples, direct_delay);
-    const auto uniform = pull_stream(*renderer, **prepared, plan, {1024U});
-    const auto varied = pull_stream(*renderer, **prepared, plan, {333U, 1000U, 7U, 512U});
-    if (!uniform.has_value() || !varied.has_value()) {
-        return false;
-    }
-    ok &= check(max_difference(uniform.value(), reference_samples) < 2.0e-6,
-                std::string{name} + ": stream matches offline output");
-    ok &= check(uniform.value() == varied.value(), std::string{name} + ": stream is independent of pull chunking");
-
-    mradm::LiveObjectOverride object_override;
-    object_override.object_id = plan.scene.objects.front().id;
-    object_override.gain_db = -6.020599913F;
-    mradm::LiveOverrides overrides;
-    overrides.revision = 1U;
-    overrides.objects.push_back(std::move(object_override));
-    const auto gained = pull_stream(*renderer, **prepared, plan, {257U, 1024U}, &overrides);
-    if (!gained.has_value() || gained->size() != reference_samples.size()) {
-        return false;
-    }
-    std::vector<float> expected_gained(reference_samples.size());
-    std::ranges::transform(reference_samples, expected_gained.begin(), [](float sample) { return sample * 0.5F; });
-    ok &= check(max_difference(gained.value(), expected_gained) < 2.0e-6,
-                std::string{name} + ": live gain multiplies the prepared matrix result once");
-
-    auto lfe_scene = mradm::RenderService{}.prepare_preview_scene(lfe_input_path, {}, logs);
-    if (!check(lfe_scene.has_value(), "matrix LFE ADM fixture imports")) {
-        return false;
-    }
-    mradm::ScenePlan lfe_plan;
-    lfe_plan.input_path = lfe_input_path.string();
-    lfe_plan.output_layout = "9+10+3";
-    lfe_plan.scene = mradm::adm_scene(*lfe_scene);
-    lfe_plan.scene_handle = lfe_scene->handle;
-    lfe_plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::matrix;
-    lfe_plan.direct_speakers_matrix = lfe_matrix;
-    lfe_plan.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
-    const auto lfe_output_path = temp_path(std::string{"mradm-matrix-lfe-"} + std::string{name});
-    FileGuard lfe_output_guard{lfe_output_path};
-    lfe_plan.output_path = lfe_output_path.string();
-
-    auto lfe_prepared = renderer->prepare(lfe_plan, logs);
-    if (!lfe_prepared) {
-        std::cerr << "FAIL: " << name << " matrix LFE prepare failed: " << lfe_prepared.error().message << '\n';
-        return false;
-    }
-    const auto lfe_rendered = renderer->render_window(**lfe_prepared, lfe_plan, progress, logs);
-    if (!lfe_rendered) {
-        std::cerr << "FAIL: " << name << " matrix LFE render failed: " << lfe_rendered.error().message << '\n';
-        return false;
-    }
-    const auto lfe_output = read_output(lfe_output_path, 24U);
-    if (!lfe_output.has_value()) {
-        check(false, std::string{name} + ": matrix LFE output opens");
-        return false;
-    }
-    ok &= verify_lfe_samples(name, lfe_output.value(), input_samples, direct_delay);
+    ok &= verify_lfe_samples(*lfe_output, input_samples);
     return ok;
 }
 
@@ -371,19 +303,12 @@ int main() {
                                         0.7F,
                                         {fixture::direct_speakers_block("RC_LFE", 0U, k_frames, k_sample_rate, 0.6F)},
                                         120.0F);
-
-    const auto dynamic_matrix = parse_profile(k_dynamic_matrix_json);
-    const auto lfe_matrix = parse_profile(k_lfe_matrix_json);
-    if (dynamic_matrix == nullptr || lfe_matrix == nullptr) {
+    const Matrix dynamic_matrix(k_dynamic_matrix_json);
+    const Matrix lfe_matrix(k_lfe_matrix_json);
+    if (!dynamic_matrix.ok() || !lfe_matrix.ok()) {
         return EXIT_FAILURE;
     }
-
-    // VBAP and EAR read only the Rust render scene (PCM consistency 4.5); see mradm-render
-    // tests/vbap.rs and tests/ear.rs.
-    const bool ok = verify_backend(
-        "Apple", mradm::create_apple_renderer(), input_path, lfe_input_path, input_samples, dynamic_matrix, lfe_matrix);
-
-    if (ok) {
+    if (verify_apple(input_path, lfe_input_path, input_samples, dynamic_matrix, lfe_matrix)) {
         std::cout << "DirectSpeakers matrix renderer test passed\n";
         return EXIT_SUCCESS;
     }

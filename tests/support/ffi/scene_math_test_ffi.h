@@ -26,15 +26,6 @@ typedef struct MradmSceneSpeaker {
     uint32_t is_lfe;
 } MradmSceneSpeaker;
 // cppcheck-suppress-end unusedStructMember
-int mradm_dsp_scene_cloud(const float* src,
-                          size_t n,
-                          uint32_t cartesian,
-                          uint32_t binaural,
-                          MradmSceneCloudPoint* dst,
-                          size_t capacity,
-                          size_t* count,
-                          float* trace,
-                          size_t trace_len);
 int mradm_dsp_scene_divergence(
     const float* src, size_t n, uint32_t cartesian, MradmSceneCloudPoint* dst, size_t capacity, size_t* count);
 int mradm_dsp_scene_nearest(const float* src,

@@ -43,7 +43,4 @@ const std::vector<InputLayoutDefinition>& input_layouts();
 const std::vector<InputChannelDefinition>& input_channel_catalog();
 Result<std::vector<InputChannelDefinition>> resolve_input_channel_labels(const std::vector<std::string>& labels);
 
-// Return the raw AXML chunk content as a UTF-8 string without parsing.
-Result<std::string> get_axml(const std::string& path);
-
 } // namespace mradm::io

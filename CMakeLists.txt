@@ -552,33 +552,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_io_tests)
     add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests)
 
-    # WAVE container metadata golden digests (finalize, metadata, read, replace, scan).
-    add_executable(mr_adm_wav_container_tests tests/unit/wav_container_test.cpp)
-    target_include_directories(mr_adm_wav_container_tests PRIVATE src/adm_audio)
-    target_link_libraries(mr_adm_wav_container_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMIo)
-    mr_adm_core_apply_warnings(mr_adm_wav_container_tests)
-    add_test(NAME mr_adm_wav_container_tests COMMAND mr_adm_wav_container_tests)
-
-    # The format-erased reader is used only by test/consistency tools.
-    add_library(mr_adm_audio_test_support STATIC tests/support/audio_reader.cpp)
-    target_include_directories(mr_adm_audio_test_support PUBLIC tests/support)
-    target_link_libraries(mr_adm_audio_test_support PUBLIC MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_audio_test_support)
-    mr_adm_core_apply_static_analysis(mr_adm_audio_test_support)
-
     # The audio island's WAVE / CAF metadata and writer wrappers (R3 C4 removed its SDK checks).
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE mr_adm_audio_test_support)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
-
-    add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp tests/support/wav_output.cpp)
-    target_include_directories(mr_adm_wav_profile_tests PRIVATE tests/support src/adm_audio)
-    target_link_libraries(mr_adm_wav_profile_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_wav_profile_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
-    add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
 
     # Consumer test for the stable C ABI: the checks that need the islands or a C++ caller, and one
     # smoke call per family (the rest is tested in mradm-capi). Links only the C ABI target; the
@@ -621,12 +600,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
     # scene rebuilt from the Rust view (metadata.cpp, formerly ADMMetadata), the test-side import,
-    # ScenePlan, the C++ scene math and the routing / object-preprocessing wrappers over its blocks.
+    # ScenePlan and the C++ scene math.
     # Production reads the Rust render scene only; the tests and the frozen references read these.
     add_library(mr_adm_scene_test_support STATIC
         tests/support/adm_scene/adm_scene.cpp
         tests/support/adm_scene/metadata.cpp
-        tests/support/adm_scene/render_common_scene.cpp
         tests/support/adm_scene/scene_math.cpp)
     target_include_directories(mr_adm_scene_test_support PUBLIC
         tests/support/adm_scene src/adm_metadata src/adm_audio src/adm_render_common)
@@ -661,18 +639,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
     mr_adm_core_apply_warnings(mr_adm_engine_renderer_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_engine_renderer_test_support)
-
-    # The Apple backend as a C++ IRenderer for the tests (tests/support/apple_renderer); production
-    # calls it through the Apple islands.
-    if(APPLE)
-        add_library(mr_adm_apple_renderer_test_support STATIC tests/support/apple_renderer/apple_renderer.cpp)
-        target_include_directories(mr_adm_apple_renderer_test_support PRIVATE src/adm_render_common)
-        target_link_libraries(mr_adm_apple_renderer_test_support
-            PUBLIC MacinRender::ADMCore MacinRender::ADMRenderApple
-            PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
-        mr_adm_core_apply_warnings(mr_adm_apple_renderer_test_support)
-        mr_adm_core_apply_static_analysis(mr_adm_apple_renderer_test_support)
-    endif()
 
     # One Scene stream renderer behind the C++ interface, outside the Rust stream engine: only the
     # manual benchmarks use it (the live renderer and trace tests are Rust, R3 B and D2).
@@ -962,23 +928,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(APPLE)
         add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
         target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
-            PRIVATE mr_adm_scene_test_support mr_adm_apple_renderer_test_support MacinRender::ADMEngine
-                MacinRender::ADMRenderApple MacinRender::ADMAudio)
+            PRIVATE MacinRender::ADMRenderApple MacinRender::ADMAudio MacinRender::ADMDsp)
         mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
         mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
 
+    # The island LFE pair recombination; on macOS also the Apple backend through the C ABI and its
+    # island table (the EAR / VBAP routing is tested in mradm-engine tests/lfe_render.rs, R3 F2).
     add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
-    target_link_libraries(mr_adm_lfe_routing_tests
-        PRIVATE mr_adm_scene_test_support
-            MacinRender::ADMEngine
-            MacinRender::ADMRenderCommon
-            MacinRender::ADMIo
-            MacinRender::ADMAudio
-    )
+    target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderCommon)
     if(APPLE)
-        target_link_libraries(mr_adm_lfe_routing_tests PRIVATE mr_adm_apple_renderer_test_support MacinRender::ADMRenderApple)
+        target_link_libraries(mr_adm_lfe_routing_tests
+            PRIVATE MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio)
     endif()
     mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
     mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
@@ -1031,21 +993,16 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
 
     add_executable(mr_adm_flac_io_smoke_tests tests/unit/flac_io_smoke_test.cpp)
+    # The FLAC writer, reader and metadata, and the final .flac pipeline through the C ABI.
     target_link_libraries(mr_adm_flac_io_smoke_tests
         PRIVATE
-            MacinRender::ADMEngine
+            MacinRender::ADMCAPI
             MacinRender::ADMAudio
             FLAC::FLAC
     )
     mr_adm_core_apply_warnings(mr_adm_flac_io_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_flac_io_smoke_tests)
     add_test(NAME mr_adm_flac_io_smoke_tests COMMAND mr_adm_flac_io_smoke_tests)
-
-    add_executable(mr_adm_trim_file_smoke_tests tests/unit/trim_file_smoke_test.cpp)
-    target_link_libraries(mr_adm_trim_file_smoke_tests PRIVATE MacinRender::ADMAudio)
-    mr_adm_core_apply_warnings(mr_adm_trim_file_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_trim_file_smoke_tests)
-    add_test(NAME mr_adm_trim_file_smoke_tests COMMAND mr_adm_trim_file_smoke_tests)
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)
@@ -1084,18 +1041,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_monitor_spatial_check PRIVATE MacinRender::ADMCAPI)
         mr_adm_core_apply_warnings(mr_monitor_spatial_check)
 
+        # The Apple backend through the C ABI and its island table, and the AUSpatialMixer HRTF probe
+        # (R3 F3: without the C++ SDK).
         add_executable(mr_adm_apple_smoke_tests tests/unit/apple_renderer_smoke_test.cpp)
         target_link_libraries(mr_adm_apple_smoke_tests
-            PRIVATE mr_adm_scene_test_support
-                mr_adm_apple_renderer_test_support
-                MacinRender::ADMEngine
-                MacinRender::ADMIo
-                MacinRender::ADMRenderApple
-                MacinRender::ADMRenderCommon
-                MacinRender::ADMAudio
-        )
-        target_link_libraries(mr_adm_apple_smoke_tests PRIVATE ${MR_ADM_AUDIOTOOLBOX_FW})
-        target_include_directories(mr_adm_apple_smoke_tests PRIVATE src/adm_io)
+            PRIVATE MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio
+                nlohmann_json::nlohmann_json ${MR_ADM_AUDIOTOOLBOX_FW})
         mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)

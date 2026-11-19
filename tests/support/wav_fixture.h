@@ -35,14 +35,13 @@ struct WaveAxml {
 
 class WaveWriter {
   public:
-    WaveWriter(const std::string& path,
+    WaveWriter(const std::filesystem::path& path,
                uint16_t channels,
                uint32_t rate,
                uint16_t bits,
                const std::shared_ptr<WaveChna>& chna,
                const std::shared_ptr<WaveAxml>& axml)
-        : output_(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary),
-          channels_(channels), bits_(bits) {
+        : output_(path, std::ios::binary), channels_(channels), bits_(bits) {
         output_.exceptions(std::ios::failbit | std::ios::badbit);
         if (channels == 0 || rate == 0 || (bits != 16 && bits != 24 && bits != 32)) {
             throw std::runtime_error("invalid fixture WAVE format");
@@ -158,7 +157,7 @@ class WaveWriter {
     uint64_t start_{};
     uint64_t length_{};
 };
-inline std::unique_ptr<WaveWriter> write_wave(const std::string& path,
+inline std::unique_ptr<WaveWriter> write_wave(const std::filesystem::path& path,
                                               uint16_t channels = 1,
                                               uint32_t rate = 48000,
                                               uint16_t bits = 24,

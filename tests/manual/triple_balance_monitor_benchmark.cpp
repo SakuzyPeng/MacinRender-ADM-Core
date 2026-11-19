@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -17,7 +18,6 @@
 #include "adm/audio_io.h"
 #include "adm/render_triple_balance.h"
 
-#include "../adm_audio/audio_io_internal.h"
 #include "adm_fixture.h"
 #include "adm_scene.h"
 #include "audio_output_device.h"
@@ -63,9 +63,20 @@ class InputFile {
     return std::chrono::duration<double>(Clock::now() - start).count();
 }
 
+struct ChnaTrack {
+    uint16_t index{0}; // one-based
+    std::string uid;
+    std::string track_format;
+    std::string pack_format;
+};
+struct AdmChunks {
+    std::string axml;
+    std::vector<ChnaTrack> chna;
+};
+
 // Author the same bed and motion as the original benchmark, then import them through the
 // production ADM path so both the public scene and its Rust handle describe the input file.
-mradm::audio::WavLayoutFinalization fixture_metadata() {
+AdmChunks fixture_metadata() {
     auto doc = fixture::Document::create();
     auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"benchmark"});
     auto content = fixture::AudioContent::create(fixture::AudioContentName{"benchmark"});
@@ -123,7 +134,7 @@ mradm::audio::WavLayoutFinalization fixture_metadata() {
     fixture::reassign_ids(doc);
     std::ostringstream xml;
     fixture::write_xml(xml, doc);
-    mradm::audio::WavLayoutFinalization metadata;
+    AdmChunks metadata;
     metadata.axml = xml.str();
     for (uint16_t channel = 0; channel < k_input_channels; ++channel) {
         const auto& uid = uids.at(channel);
@@ -135,31 +146,75 @@ mradm::audio::WavLayoutFinalization fixture_metadata() {
     return metadata;
 }
 
-[[maybe_unused]] mradm::Result<mradm::ScenePlan> make_plan(const std::string& input, const std::string& layout) {
-    {
-        auto writer = mradm::audio::FloatWavWriter::open(input, k_input_channels, k_sample_rate);
-        if (!writer) {
-            return mradm::unexpected{writer.error()};
-        }
-        std::vector<float> pcm(std::size_t{1024} * k_input_channels);
-        for (uint64_t start = 0; start < k_frames; start += 1024) {
-            const auto frames = std::min<uint64_t>(1024, k_frames - start);
-            for (std::size_t f = 0; f < frames; ++f) {
-                for (std::size_t ch = 0; ch < k_input_channels; ++ch) {
-                    pcm[(f * k_input_channels) + ch] =
-                        .025F * std::sin(static_cast<float>(start + f) * (.017F + .002F * static_cast<float>(ch)));
-                }
-            }
-            if (writer->write(pcm.data(), frames) != frames) {
-                return mradm::make_error(mradm::ErrorCode::io_error, "short benchmark input write");
-            }
-        }
-        if (auto finished = writer->finish(); !finished) {
-            return mradm::unexpected{finished.error()};
-        }
+void put_le(std::ostream& out, uint64_t value, int bytes) {
+    for (int i = 0; i < bytes; ++i) {
+        out.put(static_cast<char>((value >> (8 * i)) & 0xFFU));
     }
-    if (auto finalized = mradm::audio::finalize_wav_layout(input, fixture_metadata()); !finalized) {
-        return mradm::unexpected{finalized.error()};
+}
+
+// A float32 RIFF WAVE with the CHNA and AXML chunks of `adm` (the data stays below 4 GiB).
+mradm::Result<void> write_input(const std::string& input, const AdmChunks& adm) {
+    constexpr uint32_t k_align = uint32_t{k_input_channels} * 4U;
+    const uint64_t data_bytes = k_frames * k_align;
+    const auto chna_bytes = 4U + (40U * static_cast<uint32_t>(adm.chna.size()));
+    const auto axml_bytes = static_cast<uint32_t>(adm.axml.size());
+    const uint64_t riff =
+        4U + (8U + 16U) + (8U + chna_bytes) + (8U + data_bytes) + (8U + axml_bytes + (axml_bytes & 1U));
+    std::ofstream out(input, std::ios::binary | std::ios::trunc);
+    out.write("RIFF", 4);
+    put_le(out, riff, 4);
+    out.write("WAVEfmt ", 8);
+    put_le(out, 16U, 4);
+    put_le(out, 3U, 2); // IEEE float
+    put_le(out, k_input_channels, 2);
+    put_le(out, k_sample_rate, 4);
+    put_le(out, uint64_t{k_sample_rate} * k_align, 4);
+    put_le(out, k_align, 2);
+    put_le(out, 32U, 2);
+    out.write("chna", 4);
+    put_le(out, chna_bytes, 4);
+    put_le(out, adm.chna.size(), 2);
+    put_le(out, adm.chna.size(), 2);
+    for (const auto& track : adm.chna) {
+        put_le(out, track.index, 2);
+        const auto field = [&out](std::string text, std::size_t width) {
+            text.resize(width, '\0');
+            out.write(text.data(), static_cast<std::streamsize>(width));
+        };
+        field(track.uid, 12U);
+        field(track.track_format, 14U);
+        field(track.pack_format, 11U);
+        out.put('\0');
+    }
+    out.write("data", 4);
+    put_le(out, data_bytes, 4);
+    std::vector<float> pcm(std::size_t{1024} * k_input_channels);
+    for (uint64_t start = 0; start < k_frames; start += 1024) {
+        const auto frames = std::min<uint64_t>(1024, k_frames - start);
+        for (std::size_t f = 0; f < frames; ++f) {
+            for (std::size_t ch = 0; ch < k_input_channels; ++ch) {
+                pcm[(f * k_input_channels) + ch] =
+                    .025F * std::sin(static_cast<float>(start + f) * (.017F + .002F * static_cast<float>(ch)));
+            }
+        }
+        // Little-endian hosts only, like the benchmark's targets.
+        out.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(frames * k_align));
+    }
+    out.write("axml", 4);
+    put_le(out, axml_bytes, 4);
+    out.write(adm.axml.data(), static_cast<std::streamsize>(adm.axml.size()));
+    if ((axml_bytes & 1U) != 0U) {
+        out.put('\0');
+    }
+    if (!out.flush()) {
+        return mradm::make_error(mradm::ErrorCode::io_error, "short benchmark input write");
+    }
+    return {};
+}
+
+[[maybe_unused]] mradm::Result<mradm::ScenePlan> make_plan(const std::string& input, const std::string& layout) {
+    if (auto written = write_input(input, fixture_metadata()); !written) {
+        return mradm::unexpected{written.error()};
     }
     auto scene = mradm::io::RenderScene::import(input, nullptr);
     if (!scene) {
