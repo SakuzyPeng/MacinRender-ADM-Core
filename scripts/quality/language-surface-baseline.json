@@ -18,12 +18,12 @@
       "lines": 1057
     },
     "tests": {
-      "files": 106,
-      "lines": 21522
+      "files": 104,
+      "lines": 20453
     },
     "rust": {
-      "files": 381,
-      "lines": 148567
+      "files": 384,
+      "lines": 150593
     },
     "rust-vendor": {
       "files": 175,
@@ -37,7 +37,7 @@
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 26846,
-    "rust/crates/mradm-ffi": 19028,
+    "rust/crates/mradm-ffi": 21054,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
     "rust/crates/mradm-osc": 2617,
@@ -75,7 +75,7 @@
     "src/adm_render_common": 895,
     "src/adm_render_room/cuda": 512,
     "src/adm_windows": 709,
-    "tests/manual": 1878,
+    "tests/manual": 809,
     "tests/support": 10489,
     "tests/tools": 1435,
     "tests/unit": 7720

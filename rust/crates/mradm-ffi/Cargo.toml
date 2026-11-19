@@ -30,3 +30,13 @@ diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
 default = ["sofa"]
 sofa = ["mradm-dsp/sofa", "mradm-render/sofa"]
 room-cuda = ["dep:mradm-room-cuda"]
+# The room device probes link the C++ islands (MR_ADM_ISLAND_LINK_FILE, written by CMake).
+islands = []
+
+[[example]]
+name = "room_scene_benchmark"
+required-features = ["islands"]
+
+[[example]]
+name = "room_file_device_probe"
+required-features = ["islands"]

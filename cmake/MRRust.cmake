@@ -141,6 +141,12 @@ add_custom_target(mr_adm_rust_quality
         "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" clippy --locked --workspace --all-targets
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" -- -D warnings
+    # The room device probes need the `islands` feature (a check links nothing).
+    COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+        "${MR_ADM_RUST_NATIVE_ENV}"
+        "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" clippy --locked -p mradm-ffi --examples
+        --features islands --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
+        --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" -- -D warnings
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"
     DEPENDS FLAC::FLAC
     USES_TERMINAL
