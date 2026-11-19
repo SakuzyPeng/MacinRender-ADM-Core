@@ -61,8 +61,7 @@ class AnalysisScopeTests(unittest.TestCase):
         (self.root / "README.md").write_text("Quality scope fixture.\n", encoding="utf-8")
         self.git("add", "README.md")
         self.git("commit", "-qm", "baseline")
-        # The C ABI consumers are always configured since 6.6 (the shared library is always built).
-        self.sources = ("src/adm_core/module.cpp", "tests/support/unconditional.cpp", "tests/tools/capi_capture.cpp")
+        self.sources = ("src/adm_core/module.cpp", "tests/support/unconditional.cpp", "tests/unit/c_api_consumer_test.cpp")
         for name in self.sources:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)

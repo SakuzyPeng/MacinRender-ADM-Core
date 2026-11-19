@@ -2,8 +2,7 @@
 // Consumer test for the stable C ABI (include/adm/c_api.h): the checks that need the C++ islands
 // (encoders, output devices, the Apple backend and the platform facts) or a C++ caller, plus one
 // smoke call per C ABI family. Everything else about the C ABI is tested in Rust, next to its
-// implementation (`rust/crates/mradm-capi/src/tests`, R3 E). It also runs against the shared
-// library for the same-build comparison of two C ABI implementations (capi-capture.py tests).
+// implementation (`rust/crates/mradm-capi/src/tests`, R3 E).
 
 #include <algorithm>
 #include <array>

@@ -106,11 +106,7 @@ A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹�
 回放状态、内核与检查点和日志（日志按记录的原始 `collection_root` 换成 `<collection>`，支持采集目录移动），
 比较前核验实际文件与摘要、完整构建身份及日志清单；旧采集缺少这些新增字段时需重新采集。相同退出 0、不同退出 1、前提不符或证据损坏退出 2，
 见 `docs/architecture/RUST_ORCHESTRATION_BASELINE.md`。五期 5.2 D 起 `mr_adm_consistency_render` 是 Rust（`mradm-ffi` example，与 `mr_adm_consistency_kernels` 同样由 Cargo 构建后复制进构建目录），切换前的对照见 `docs/architecture/RUST_ORCHESTRATION_OFFLINE.md`；5.3 B 起 `mr_adm_consistency_stream` 同样是 Rust example，对照见 `docs/architecture/RUST_ORCHESTRATION_STREAM.md`；5.4 D 起 `mr_adm_consistency_scene` 也是 Rust example，对照见 `docs/architecture/RUST_ORCHESTRATION_SCENE.md`，四个一致性工具都已是 Rust。
-六期 6.1 起 `--tool` 也接受 `mradm`；另有两种边界对照（同样只在本机、同一构建上运行）：`cli-transcript.py record|compare`
-按固定命令表记录并比较 CLI 的退出码、stdout、stderr 与写出的文件，`capi-capture.py record|compare|tests` 把 `mr_adm_capi_capture`
-或 C ABI consumer 测试（`mr_adm_capi_consumers` 目标）放到候选 `libmradm_capi` 旁边运行并比较采集；
-两者只做 `boundary.py` 列出的六条归一化（包括 MP4 头中的创建／修改时间）；CLI v2 记录全部工作目录文件变化，
-help / parse-error 只豁免文字差异。见 `docs/architecture/RUST_BOUNDARY_BASELINE.md`。
+六期 6.1 起 `--tool` 也接受 `mradm`。六期的两种边界对照（`cli-transcript.py` 与 `capi-capture.py`，连同 `mr_adm_capi_capture`）在 6.6 验收后随 6.7 删除（git 历史可查，方法见 `docs/architecture/RUST_BOUNDARY_BASELINE.md`）；之后 CLI 与 C ABI 的回归由 `mradm-cli` 的 `tests/binary.rs`、`mradm-capi` 的 Rust 测试、C 消费者测试 `mr_adm_c_api_tests` 与导出检查守护。
 原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
 历史 SAF 清单保留原始边界；SAF 定位脚本与探针已随 R1 删除（git 历史可查）。
 

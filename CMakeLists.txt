@@ -171,30 +171,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_flac_reader_probe)
     mr_adm_core_apply_static_analysis(mr_adm_flac_reader_probe)
 
-    # C ABI consumers for the same-build comparison of two C ABI implementations (phase 6): they link the
-    # shared libmradm_capi and load whichever copy sits next to them (an $ORIGIN / @loader_path rpath; on
-    # Windows the executable's directory), so scripts/consistency/capi-capture.py can stage them beside
-    # either library. Built by mr_adm_capi_consumers.
-    function(mr_adm_add_capi_consumer target)
-        add_executable(${target} EXCLUDE_FROM_ALL ${ARGN})
-        target_include_directories(${target} PRIVATE include)
-        target_link_libraries(${target} PRIVATE mradm_capi_bundle)
-        if(APPLE)
-            set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "@loader_path")
-        elseif(UNIX)
-            set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
-        endif()
-        if(MSVC)
-            target_compile_options(${target} PRIVATE /utf-8)
-        endif()
-        mr_adm_core_apply_warnings(${target})
-    endfunction()
-    mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
-    mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_consumer_test.cpp)
-    target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-    add_dependencies(mr_adm_c_api_consumer_tests mr_adm_capi_room_fixture)
-    add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests)
-
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME mr_adm_flac_reader_tests
@@ -236,9 +212,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_test(NAME mr_adm_room_device_probe_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_device_probe_test.py")
-        # The CLI transcript and C ABI capture tools of the phase 6 boundary comparison.
-        add_test(NAME mr_adm_boundary_tool_tests
-            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/boundary_tools_test.py")
         if(TARGET mradm_exe)
             add_custom_target(mr_adm_consistency_tools
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"
