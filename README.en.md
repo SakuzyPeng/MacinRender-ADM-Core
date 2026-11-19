@@ -72,6 +72,14 @@ cmake --preset release
 cmake --build --preset release
 ```
 
+For the products alone (`libmradm_capi` and `mradm`), Cargo is enough; `mradm-islands-sys` builds the islands and C
+libraries through CMake. On macOS, APAC encoding needs `mradm` to carry an ad-hoc signature
+(`codesign --force --sign - mradm`):
+
+```bash
+cd rust && cargo build --release --locked -p mradm-capi   # products in build/rust/release
+```
+
 ### Inspect Scenes and Capabilities
 
 ```bash
@@ -85,11 +93,10 @@ cmake --build --preset release
 
 | Option | Description | Default |
 |---|---|---|
-| `MR_ADM_CORE_FETCH_DEPS` | Turn off to use system dependencies; also requires Corrosion 0.6.1 and a prepared Cargo cache | `ON` |
+| `MR_ADM_CORE_FETCH_DEPS` | Turn off to use system dependencies; also requires a prepared Cargo cache | `ON` |
 | `MR_ADM_FLAC_PROVIDER` / `MR_ADM_OPUS_PROVIDER` | `AUTO` (vendored static for Release, system libraries preferred for Debug) / `VENDORED` / `SYSTEM` | `AUTO` |
 | `MR_ADM_ENABLE_SOFA` | User SOFA HRIR support for the binaural backend | `ON` |
 | `MR_ADM_ENABLE_IAMF` | IAMF encoding; needs `MR_ADM_IAMF_AOM_ROOT` pointing at the official AOM iamf-tools bridge SDK | `OFF` |
-| `MR_ADM_BUILD_CAPI_BUNDLE` | Build the self-contained `libmradm_capi` shared library loaded by the GUI | `OFF` |
 
 ## Basic Usage
 

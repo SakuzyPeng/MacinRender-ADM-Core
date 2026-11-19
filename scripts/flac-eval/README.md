@@ -11,7 +11,7 @@
 python3 scripts/flac-eval/run.py
 ```
 
-报告默认写入 `local/flac-eval/selection.json`。Cargo 使用生产 Corrosion 路径对应的共享 target
+报告默认写入 `local/flac-eval/selection.json`。Cargo 使用顶层 CMake 树的 Cargo 命令共用的 target
 目录；不创建另一套 CMake 缓存。运行时夹具和 C++ 探针放入报告目录下的临时目录，完成后删除。
 Windows/MSVC 版 runner 尚未实现，不能以此工具代替规范 Windows 产品验证。
 

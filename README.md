@@ -68,6 +68,13 @@ cmake --preset release
 cmake --build --preset release
 ```
 
+只要产品（`libmradm_capi` 与 `mradm`）时可以直接用 Cargo，岛与 C 库由 `mradm-islands-sys` 经 CMake 构建；
+macOS 上 APAC 编码要求 `mradm` 先补 ad-hoc 签名（`codesign --force --sign - mradm`）：
+
+```bash
+cd rust && cargo build --release --locked -p mradm-capi   # 产物在 build/rust/release
+```
+
 ### 查看场景与能力
 
 ```bash
@@ -81,11 +88,10 @@ cmake --build --preset release
 
 | 选项 | 说明 | 默认 |
 |---|---|---|
-| `MR_ADM_CORE_FETCH_DEPS` | 关闭后使用系统依赖，需另备 Corrosion 0.6.1 与 Cargo 依赖缓存 | `ON` |
+| `MR_ADM_CORE_FETCH_DEPS` | 关闭后使用系统依赖，需另备 Cargo 依赖缓存 | `ON` |
 | `MR_ADM_FLAC_PROVIDER` / `MR_ADM_OPUS_PROVIDER` | `AUTO`（Release 用 vendored static，Debug 优先系统库）/ `VENDORED` / `SYSTEM` | `AUTO` |
 | `MR_ADM_ENABLE_SOFA` | 双耳后端的用户 SOFA HRIR 支持 | `ON` |
 | `MR_ADM_ENABLE_IAMF` | IAMF 编码，需 `MR_ADM_IAMF_AOM_ROOT` 指向官方 AOM iamf-tools bridge SDK | `OFF` |
-| `MR_ADM_BUILD_CAPI_BUNDLE` | 生成自包含 `libmradm_capi` 共享库，供 GUI 加载 | `OFF` |
 
 ## 基础用法
 
