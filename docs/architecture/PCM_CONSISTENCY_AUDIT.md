@@ -881,6 +881,41 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 
 六期生产 C/C++ 由 21,772 行降到 8,684 行（−60.1%）。七期初拟与开放问题见 [六期结项](RUST_BOUNDARY_CLOSEOUT.md)。
 
+## 七期：平台岛收缩
+
+> 初拟于 6.7 之后（2026-11-19），用户同日决定照此推进。总路线见[逆转路线](RUST_INVERSION_ROADMAP.md#各期目标五期起为初拟)，六期移交的规模与开放问题见[六期结项](RUST_BOUNDARY_CLOSEOUT.md)。
+
+七期收缩平台岛：
+- 编码器的 C++ 封装迁入 Rust；
+- 第三方 C 库（libFLAC、libopus、IAMF bridge、miniaudio）与平台框架只经窄接口调用；
+- Apple / Windows 岛评估 objc2 / windows crate。
+
+退出条件是生产 C/C++ 只剩岛。
+
+| 执行顺序 | 工作 | 具体范围与交付 |
+| --- | --- | --- |
+| 7.1 | 方向与基线 | 逐岛清单（第三方与平台 API、Rust 调用的接口与调用方、C++ 测试），岛共用头的使用者，Apple / Windows 评估标准，七期规模基线；恢复 CLI 记录并加入编码矩阵。已完成（2026-11-19），见 [7.1 记录](RUST_ISLAND_BASELINE.md)。 |
+| 7.2 | 编码器迁入 Rust | FLAC 写出与 Vorbis comment、Opus MKA 的 Matroska 封装、IAMF bridge 调用与 MP4 打包器探测和运行、MP4 元数据 atom、APAC worker 的子进程与心跳协议迁入 Rust。<br>libFLAC / libopus / IAMF bridge 由 Rust 经手写 `extern` 直接调用；APAC 的 AudioToolbox 编码移入 Apple 岛；`mradm_audio_island` 与 C++ 编码器删除。<br>同批删除 dr_flac 与没有生产调用者的 FLAC 读取链（`FloatFlacReader`、`flac_validate`、`mradm-wav` 的 `flac` 模块、探针与测试）。<br>验收：CLI 记录的 `encode-*` 与新旧构建 0 差异；APAC、MP4 元数据与 IAMF 由维护者在 macOS 与带 bridge 的构建上对照。 |
+| 7.3 | 输出设备 | miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛、`miniaudio_device.cpp` 与 `audio_output_device.h` 删除，Apple / Windows sink 直接提供设备表。 |
+| 7.4 | Apple 岛 | 以 objc2 原型评估 APAC 编码或 AVSampleBufferAudioRenderer sink，按 7.1 的标准决定 AUSpatialMixer 后端、sink 与 APAC 迁入 Rust 或保留窄接口。 |
+| 7.5 | Windows 岛 | 以 windows crate 原型评估 ISpatialAudioClient 的静态床与 MMCSS，同样按 7.1 的标准决定。 |
+| 7.6 | 收尾 | 岛共用的 C++ 头与私有 FFI 记录随调用方删除；C++ 岛测试与顶层 CMake 测试树随岛收缩；进度回调跳板、Windows 打包路径与 CLI 记录工具的删除。 |
+| 7.7 | 三平台验收与结项 | Consistency、CI、Quality 与 Release Build，两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化。 |
+
+用户决定（2026-11-19）：
+1. **顺序**：编码器 → 输出设备 → Apple 岛 → Windows 岛。
+2. **C 库绑定**：libFLAC、libopus 与 IAMF bridge 在 Rust 中手写 `extern` 声明（照 `mradm-ffi/src/flac.rs`），库仍由岛的 CMake 工程构建，vendored 只有一份。
+3. **dr_flac**：7.2 删除，取代此前的暂缓决定；生产不读 FLAC 输入，整条 FLAC 读取链只被测试探针使用。
+4. **miniaudio**：暂不替换，cpal 是以后的候选。
+
+**7.1 状态**：已完成（2026-11-19，本机 Linux x64）。
+- 逐岛清单、共用头的使用者、Apple / Windows 评估标准与规模基线记录在 7.1 记录；
+- `cli-transcript.py` / `boundary.py` / `cli-commands.json` 从 6.7 之前的历史恢复，命令表新增 20 条 `encode-*` 命令（共 133 条）；
+- 新增 12 秒的 `objects-long` fixture（不是门禁输入）；
+- 同一构建两份记录 0 差异。
+
+生产代码不变（8,684 行）。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

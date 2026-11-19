@@ -22,8 +22,8 @@
       "lines": 9927
     },
     "rust": {
-      "files": 384,
-      "lines": 144607
+      "files": 385,
+      "lines": 144619
     },
     "rust-vendor": {
       "files": 175,
@@ -32,7 +32,7 @@
   },
   "modules": {
     "include/adm": 2009,
-    "rust/crates/mradm-capi": 13835,
+    "rust/crates/mradm-capi": 13839,
     "rust/crates/mradm-cli": 3602,
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
@@ -45,7 +45,7 @@
     "rust/crates/mradm-render": 24856,
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5815,
-    "rust/crates/mradm-testkit": 1890,
+    "rust/crates/mradm-testkit": 1898,
     "rust/crates/mradm-wav": 1933,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,

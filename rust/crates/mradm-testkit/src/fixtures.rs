@@ -24,6 +24,8 @@
 //! - `policy-objects`: four named objects in two contents with importance, dialogue,
 //!   channelLock, divergence, jumpPosition, headLocked and a Cartesian screenRef object (the
 //!   semantic policy matrix and screen configuration, PCM consistency 4.2).
+//! - `objects-long`: `objects-point` for twelve seconds (the encoder records of the island
+//!   slices, phase 7; not a PCM gate input).
 use crate::adm::*;
 use crate::wave::{AudioId, Wave};
 use std::io;
@@ -33,10 +35,12 @@ pub const SAMPLE_RATE: u32 = 48000;
 /// One second, keeping CI artifacts small.
 pub const FRAMES: u32 = 48000;
 pub const HIGH_RATE: u32 = 96000;
+/// Twelve seconds: past two Matroska cluster boundaries (5 s) for the encoder records (phase 7).
+pub const LONG_FRAMES: u32 = 12 * SAMPLE_RATE;
 pub const BIT_DEPTH: u16 = 24;
 
 /// Every fixture kind, in the order of the generator's usage text.
-pub const KINDS: [&str; 12] = [
+pub const KINDS: [&str; 13] = [
     "objects-point",
     "objects-extent",
     "objects-extent-multi",
@@ -49,6 +53,7 @@ pub const KINDS: [&str; 12] = [
     "hoa",
     "hoa3",
     "policy-objects",
+    "objects-long",
 ];
 
 /// Numerical Recipes LCG: trivially reproducible, broadband and identical everywhere.
@@ -457,6 +462,7 @@ pub struct Fixture {
 pub fn fixture(kind: &str) -> Option<Fixture> {
     let (built, seed) = match kind {
         "objects-point" => (objects(false, 1), 0x1111_1111),
+        "objects-long" => (objects(false, 1), 0xCCCC_CCCC),
         "objects-extent" => (objects(true, 1), 0x2222_2222),
         "objects-extent-multi" => (objects(true, 3), 0x5555_5555),
         "objects-cartesian" => (objects_cartesian(), 0x6666_6666),
@@ -470,10 +476,10 @@ pub fn fixture(kind: &str) -> Option<Fixture> {
         _ => return None,
     };
     // The 96 kHz kind keeps the one-second duration, so its block times are those of objects-room.
-    let (rate, frames) = if kind == "objects-room-96k" {
-        (HIGH_RATE, HIGH_RATE)
-    } else {
-        (SAMPLE_RATE, FRAMES)
+    let (rate, frames) = match kind {
+        "objects-room-96k" => (HIGH_RATE, HIGH_RATE),
+        "objects-long" => (SAMPLE_RATE, LONG_FRAMES),
+        _ => (SAMPLE_RATE, FRAMES),
     };
     Some(Fixture {
         built,

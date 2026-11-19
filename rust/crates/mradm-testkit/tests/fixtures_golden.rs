@@ -9,7 +9,7 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
     })
 }
 
-const GOLDEN: [(&str, usize, u64); 12] = [
+const GOLDEN: [(&str, usize, u64); 13] = [
     ("objects-point", 145836, 0x4e333f76d22653ee),
     ("objects-extent", 145896, 0x38723293176bdc5c),
     ("objects-extent-multi", 436522, 0x0c2ffb35a9c6b9b1),
@@ -22,6 +22,8 @@ const GOLDEN: [(&str, usize, u64); 12] = [
     ("hoa", 580816, 0xd24c6aa7118cd380),
     ("hoa3", 2321236, 0x7bd17e042afdd165),
     ("policy-objects", 584166, 0xecaf90d0533baf4f),
+    // Not a gate input (phase 7 encoder records); pinned so the records stay comparable.
+    ("objects-long", 1729836, 0x6b3bd88d0c62c77b),
 ];
 
 #[test]
