@@ -27,27 +27,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG v3.12.0
             GIT_SHALLOW TRUE
         )
-    elseif(package_name STREQUAL "dr_libs")
-        FetchContent_Declare(
-            dr_libs
-            GIT_REPOSITORY https://github.com/mackron/dr_libs.git
-            GIT_TAG 47a4f08e777faddf59a8955c4ea84f69f41020d5
-        )
-        FetchContent_GetProperties(dr_libs)
-        if(NOT dr_libs_POPULATED)
-            cmake_policy(PUSH)
-            if(POLICY CMP0169)
-                cmake_policy(SET CMP0169 OLD)
-            endif()
-            FetchContent_Populate(dr_libs)
-            cmake_policy(POP)
-        endif()
-        if(NOT TARGET dr_flac::dr_flac)
-            add_library(mr_dr_flac INTERFACE)
-            add_library(dr_flac::dr_flac ALIAS mr_dr_flac)
-            target_include_directories(mr_dr_flac SYSTEM INTERFACE "${dr_libs_SOURCE_DIR}")
-        endif()
-        return()
     elseif(package_name STREQUAL "miniaudio")
         # Single-header realtime audio device I/O (mackron/miniaudio). One translation unit
         # defines MINIAUDIO_IMPLEMENTATION (src/adm_realtime/miniaudio_device.cpp); the
@@ -304,7 +283,6 @@ endfunction()
 if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
 endif()
-mr_adm_core_find_or_fetch(dr_libs dr_flac::dr_flac)
 mr_adm_core_find_or_fetch(FLAC FLAC::FLAC)
 mr_adm_core_find_or_fetch(Opus Opus::opus)
 mr_adm_core_find_or_fetch(miniaudio miniaudio)

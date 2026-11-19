@@ -164,22 +164,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
             VERBATIM)
     endforeach()
 
-    # The FLAC reader island's probe for flac_reader_test.py (the production reader: strict Rust
-    # validation, then dr_flac PCM), writing the same canonical image as mr_adm_pcm_bits.
-    add_executable(mr_adm_flac_reader_probe tests/unit/flac_reader_probe.cpp)
-    if(MSVC)
-        # Keep narrow argv and file APIs lossless on non-UTF-8 Windows hosts.
-        target_sources(mr_adm_flac_reader_probe PRIVATE tests/unit/flac_reader_probe.manifest)
-    endif()
-    target_link_libraries(mr_adm_flac_reader_probe PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_flac_reader_probe)
-    mr_adm_core_apply_static_analysis(mr_adm_flac_reader_probe)
-
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
-        add_test(NAME mr_adm_flac_reader_tests
-            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/flac_reader_test.py"
-                --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
         add_test(NAME mr_adm_room_realtime_tools_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_realtime_tools_test.py")
         if(TARGET mradm_exe AND CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -348,25 +334,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
 
-    # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
-    # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
+    # The C++ audio island entry: cancellation before an encoder runs and the declined islands.
     add_executable(mr_adm_audio_island_tests tests/unit/audio_island_test.cpp)
     target_link_libraries(mr_adm_audio_island_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_audio_island_tests)
     mr_adm_core_apply_static_analysis(mr_adm_audio_island_tests)
     add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
-
-    add_executable(mr_adm_flac_io_smoke_tests tests/unit/flac_io_smoke_test.cpp)
-    # The FLAC writer, reader and metadata, and the final .flac pipeline through the C ABI.
-    target_link_libraries(mr_adm_flac_io_smoke_tests
-        PRIVATE
-            MacinRender::ADMCAPI
-            MacinRender::ADMAudio
-            FLAC::FLAC
-    )
-    mr_adm_core_apply_warnings(mr_adm_flac_io_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_flac_io_smoke_tests)
-    add_test(NAME mr_adm_flac_io_smoke_tests COMMAND mr_adm_flac_io_smoke_tests)
 
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)

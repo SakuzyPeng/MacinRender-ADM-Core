@@ -49,7 +49,7 @@ class CMakeTests(Harness):
                 'include(MRStrictFp)\n')
         if deps:
             # Stub the packages so the real MRDependencies can run offline.
-            targets = 'nlohmann_json::nlohmann_json dr_flac::dr_flac FLAC::FLAC Opus::opus miniaudio'
+            targets = 'nlohmann_json::nlohmann_json FLAC::FLAC Opus::opus miniaudio'
             if flac:
                 targets = targets.replace(' FLAC::FLAC', '')
                 flac_dir = source / 'flac fixture'

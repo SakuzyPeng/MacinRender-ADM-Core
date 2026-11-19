@@ -110,48 +110,6 @@ class FloatCafWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-// Streaming writer for FLAC files. Accepts float32 input and encodes at 24-bit
-// integer depth (FLAC lossless compression). Channel count must be 1-8 (FLAC
-// format limit). WAVEFORMATEXTENSIBLE_CHANNEL_MASK is written later by
-// write_file_metadata() into the Vorbis Comment block.
-class FloatFlacWriter {
-  public:
-    static Result<FloatFlacWriter> open(const std::string& path, uint32_t channels, uint32_t sample_rate);
-    ~FloatFlacWriter();
-    FloatFlacWriter(FloatFlacWriter&&) noexcept;
-    FloatFlacWriter& operator=(FloatFlacWriter&&) noexcept;
-    FloatFlacWriter(const FloatFlacWriter&) = delete;
-    FloatFlacWriter& operator=(const FloatFlacWriter&) = delete;
-
-    uint64_t write(const float* samples, uint64_t frame_count);
-
-  private:
-    FloatFlacWriter() = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
-
-// Validates the complete FLAC stream on open; dr_flac supplies the float32 PCM.
-class FloatFlacReader {
-  public:
-    static Result<FloatFlacReader> open(const std::string& path);
-    ~FloatFlacReader();
-    FloatFlacReader(FloatFlacReader&&) noexcept;
-    FloatFlacReader& operator=(FloatFlacReader&&) noexcept;
-    FloatFlacReader(const FloatFlacReader&) = delete;
-    FloatFlacReader& operator=(const FloatFlacReader&) = delete;
-
-    uint32_t channels() const;
-    uint32_t sample_rate() const;
-    uint64_t frame_count() const;
-    Result<uint64_t> read(float* out, uint64_t frames);
-
-  private:
-    FloatFlacReader() = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
-
 // Streaming writer for Matroska Audio (.mka) files with Opus-encoded audio.
 // Accepts float32 input at 48000 Hz (the only rate Opus supports from external
 // input without resampling). Uses VBR at 128 kbps for stereo or 64 kbps × ch
@@ -183,10 +141,9 @@ class FloatOpusMkaWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-// Type-erased audio file writer.  Selects WAV, CAF, or FLAC automatically from
-// the output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter,
-// .flac → FloatFlacWriter). For CAF, layout_id must be a known output layout
-// identifier; it is ignored for WAV and FLAC.
+// Type-erased audio file writer: CAF for a .caf path (FloatCafWriter), WAV otherwise
+// (FloatWavWriter). For CAF, layout_id must be a known output layout identifier; it is
+// ignored for WAV.
 class WriterHandle {
   public:
     static Result<WriterHandle>
@@ -198,25 +155,14 @@ class WriterHandle {
     WriterHandle& operator=(const WriterHandle&) = delete;
 
     uint64_t write(const float* samples, uint64_t frame_count);
-    // Finalizes WAV and CAF output and reports failure; FLAC still finalizes on destruction.
+    // Finalizes the output and reports failure.
     Result<void> finish();
 
   private:
     explicit WriterHandle(FloatWavWriter w) : impl_(std::move(w)) {}
     explicit WriterHandle(FloatCafWriter w) : impl_(std::move(w)) {}
-    explicit WriterHandle(FloatFlacWriter w) : impl_(std::move(w)) {}
-    std::variant<FloatWavWriter, FloatCafWriter, FloatFlacWriter> impl_;
+    std::variant<FloatWavWriter, FloatCafWriter> impl_;
 };
-
-// Encode a fully post-processed float32 WAV (src_path) to 24-bit FLAC (flac_path).
-// Use this as the final pipeline step for FLAC output — after the gain and bit-depth
-// passes (Rust postprocess) — so the float32 domain is preserved through all
-// adjustments before quantisation.  FLAC channel count must be 1-8.
-Result<void> convert_to_flac(const std::string& src_path,
-                             const std::string& flac_path,
-                             const std::stop_token& cancel_token = {},
-                             ProgressSink* progress = nullptr,
-                             RenderOperation operation = RenderOperation::encode_flac);
 
 bool iamf_encoding_available();
 
@@ -321,8 +267,6 @@ struct MetadataFields {
 //           MaxTruePeakLevel (0x7FFF = not-indicated when value is absent).
 //   CAF  — appends an info chunk with encodingapplication / date / comments
 //           keys.  Comments encodes renderer, layout, loudness, peak.
-//   FLAC — inserts a Vorbis Comment block (ENCODER, DATE, COMMENT tags) and, for
-//           recognised layouts, a WAVEFORMATEXTENSIBLE_CHANNEL_MASK tag.
 //   M4A/MP4 — inserts iTunes-style metadata atoms (©too, ©day, ©cmt). Layout
 //             semantics such as "binaural" are stored in comments because APAC
 //             does not reliably preserve non-stereo CoreAudio layout tags.

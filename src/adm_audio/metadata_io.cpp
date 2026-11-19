@@ -303,9 +303,6 @@ Result<void> write_file_metadata(const std::string& path, const MetadataFields& 
     if (ext == ".wav") {
         return write_wav_metadata(path, meta);
     }
-    if (ext == ".flac") {
-        return write_flac_metadata(path, meta);
-    }
     if (ext == ".mka") {
         return write_mka_metadata(path, meta);
     }

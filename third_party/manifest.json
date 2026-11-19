@@ -22,24 +22,6 @@
       "notes": ""
     },
     {
-      "name": "dr_libs",
-      "version": "47a4f08e777faddf59a8955c4ea84f69f41020d5",
-      "cmake_key": "dr_libs",
-      "purl": "pkg:github/mackron/dr_libs@47a4f08e777faddf59a8955c4ea84f69f41020d5",
-      "license": "Unlicense OR MIT-0",
-      "purpose": "FLAC 解码（dr_flac）",
-      "distribution": "available",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "dr_libs-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ]
-      },
-      "notes": "header-only；本项目按 MIT-0/Unlicense 宽松使用"
-    },
-    {
       "name": "miniaudio",
       "version": "0.11.21",
       "cmake_key": "miniaudio",

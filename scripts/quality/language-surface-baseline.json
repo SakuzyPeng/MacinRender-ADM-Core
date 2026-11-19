@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 48,
-      "lines": 8684
+      "files": 47,
+      "lines": 8024
     },
     "islands": {
       "files": 6,
@@ -15,15 +15,15 @@
     },
     "island-interfaces": {
       "files": 12,
-      "lines": 1057
+      "lines": 1054
     },
     "tests": {
-      "files": 26,
-      "lines": 9927
+      "files": 24,
+      "lines": 9201
     },
     "rust": {
-      "files": 385,
-      "lines": 144619
+      "files": 384,
+      "lines": 145124
     },
     "rust-vendor": {
       "files": 175,
@@ -32,12 +32,12 @@
   },
   "modules": {
     "include/adm": 2009,
-    "rust/crates/mradm-capi": 13839,
+    "rust/crates/mradm-capi": 13906,
     "rust/crates/mradm-cli": 3602,
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 26846,
-    "rust/crates/mradm-ffi": 14699,
+    "rust/crates/mradm-ffi": 15417,
     "rust/crates/mradm-islands-sys": 203,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
@@ -46,7 +46,7 @@
     "rust/crates/mradm-room-cuda": 749,
     "rust/crates/mradm-scene": 5815,
     "rust/crates/mradm-testkit": 1898,
-    "rust/crates/mradm-wav": 1933,
+    "rust/crates/mradm-wav": 1653,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,
     "rust/vendor/realfft": 1225,
@@ -57,14 +57,14 @@
     "src/adm_apple/apple_backend.h": 218,
     "src/adm_apple/apple_island.cpp": 166,
     "src/adm_apple/apple_island.h": 14,
-    "src/adm_audio": 3550,
+    "src/adm_audio": 2948,
     "src/adm_audio/apac_worker_island.cpp": 23,
     "src/adm_audio/apac_worker_island.h": 15,
-    "src/adm_audio/island.cpp": 117,
+    "src/adm_audio/island.cpp": 114,
     "src/adm_audio/island_driver.h": 113,
     "src/adm_audio/island_ffi.h": 17,
     "src/adm_c_api": 27,
-    "src/adm_core": 1341,
+    "src/adm_core": 1283,
     "src/adm_dsp": 252,
     "src/adm_engine/platform_island.cpp": 176,
     "src/adm_engine/platform_island.h": 15,
@@ -77,7 +77,7 @@
     "src/adm_windows": 709,
     "tests/manual": 817,
     "tests/support": 1361,
-    "tests/unit": 7749
+    "tests/unit": 7023
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,
@@ -85,7 +85,7 @@
     "src/adm_apple/apple_island.h": 14,
     "src/adm_audio/apac_worker_island.cpp": 23,
     "src/adm_audio/apac_worker_island.h": 15,
-    "src/adm_audio/island.cpp": 117,
+    "src/adm_audio/island.cpp": 114,
     "src/adm_audio/island_driver.h": 113,
     "src/adm_audio/island_ffi.h": 17,
     "src/adm_engine/platform_island.cpp": 176,

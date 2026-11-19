@@ -1,4 +1,4 @@
-# The C/C++ islands and the third-party C libraries (libFLAC, libopus, dr_flac, miniaudio and the
+# The C/C++ islands and the third-party C libraries (libFLAC, libopus, miniaudio and the
 # optional IAMF bridge) that the Rust library links (6.6). Built standalone by the mradm-islands-sys
 # build script (through the cmake crate), or as a subdirectory of the top-level test tree. Either way
 # it writes mradm_native_link-<config>.txt: the archives in link order, then the platform libraries,
@@ -85,9 +85,9 @@ if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
 endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF/FLAC, Opus MKA, APAC, and metadata I/O.
-# WAVE sample I/O goes through Rust mradm-wav (wav_backend.h). DR_FLAC_IMPLEMENTATION is
-# defined in flac_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
+# Float32 WAV/CAF, Opus MKA, APAC, IAMF and metadata I/O. WAVE sample I/O goes through Rust
+# mradm-wav (wav_backend.h); FLAC output and its Vorbis comment are in Rust (mradm-ffi `flac`, 7.2 A),
+# which calls libFLAC directly (listed with the codec libraries below).
 
 add_library(mr_adm_audio STATIC)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
@@ -98,7 +98,6 @@ target_sources(
         adm_audio/apac_io.cpp
         adm_audio/apac_worker_island.cpp
         adm_audio/audio_handles.cpp
-        adm_audio/flac_io.cpp
         adm_audio/iamf_io.cpp
         adm_audio/island.cpp
         adm_audio/metadata_io.cpp
@@ -113,7 +112,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus MacinRender::ADMDsp
+    PRIVATE Opus::opus MacinRender::ADMDsp
 )
 target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
 if(MR_ADM_ENABLE_IAMF)

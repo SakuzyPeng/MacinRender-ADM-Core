@@ -33,8 +33,8 @@
 ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（FLAC、Opus、miniaudio 等）
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
-构建不获取 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64、libear 或 dr_wav
-（dr_libs 只为 dr_flac 获取）。这些旧库的对照测试、`MR_ADM_BUILD_*_REFERENCE_TESTS` 开关与手动的
+构建不获取 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64、libear、dr_wav 或 dr_libs
+（dr_flac 随七期 7.2 A 删除）。这些旧库的对照测试、`MR_ADM_BUILD_*_REFERENCE_TESTS` 开关与手动的
 `reference-tests.yml` 已随 R1 删除（用户决定 2026-11-14，见 `docs/architecture/RUST_REFERENCE_RETENTION.md`）。
 
 ### 第二阶段：质量 CI

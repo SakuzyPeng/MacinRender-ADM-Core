@@ -34,7 +34,7 @@
 - [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
 - [Rust 二期结项：验收范围与维护契约](architecture/RUST_PHASE2_CLOSEOUT.md)
 - [Rust 后续覆盖：高采样率、HRTF 与退化 OM](architecture/RUST_COVERAGE_EXTENSION.md)
-- [dr_flac 替换准备、风险验证与优先级](architecture/RUST_FLAC_DECODER_PLAN.md)
+- [dr_flac 替换准备、风险验证与优先级](architecture/RUST_FLAC_DECODER_PLAN.md)（历史：dr_flac 与 FLAC 读取链随七期 7.2 A 删除）
 - [Rust 二期基线与分歧定位](architecture/RUST_PHASE2_BASELINE.md)
 - [Rust 二期 FFT 收敛](architecture/RUST_PHASE2_FFT.md)
 - [Rust 二期重采样收敛](architecture/RUST_PHASE2_RESAMPLER.md)
