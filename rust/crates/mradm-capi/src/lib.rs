@@ -26,7 +26,7 @@ mod services;
 mod string;
 mod version;
 
-/// Runs the `mradm` command line of this process (`src/bin/mradm.rs`); the exit code.
+/// Runs the `mradm` command line of this process and returns its exit code.
 pub fn cli_main() -> i32 {
     cli::main()
 }

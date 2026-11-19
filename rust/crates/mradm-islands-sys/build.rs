@@ -1,9 +1,13 @@
 //! Links the islands' archives and platform libraries: from the link manifest of a tree that built
 //! them (`MRADM_NATIVE_LINK_FILE`, the top-level CMake test tree), or from a build of
 //! `src/CMakeLists.txt` through the `cmake` crate. The manifest has one `kind:value` line per library,
-//! in link order: `file:` an archive (or a shared or import library), `framework:` an Apple
-//! framework, `system:` a platform library.
+//! in link order. `file:`, `framework:` and `system:` identify paths and platform libraries.
+//! `link:` selects a codec target, and `target:Name=FILE;LINKS` records its evaluated CMake link
+//! interface and those of its dependencies.
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+type LinkTargets<'a> = HashMap<&'a str, (&'a str, &'a str)>;
 
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
@@ -13,6 +17,8 @@ fn main() {
         "MR_ADM_OPUS_PROVIDER",
         "MR_ADM_IAMF_AOM_ROOT",
         "MRADM_NATIVE_CMAKE_ARGS",
+        "MACOSX_DEPLOYMENT_TARGET",
+        "SDKROOT",
     ] {
         println!("cargo::rerun-if-env-changed={name}");
     }
@@ -24,6 +30,14 @@ fn main() {
     println!("cargo::metadata=manifest={}", manifest.display());
     let text = std::fs::read_to_string(&manifest)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", manifest.display()));
+    let targets: LinkTargets<'_> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("target:"))
+        .map(|value| {
+            let (name, spec) = value.split_once('=').expect("target:Name=FILE;LINKS");
+            (name, spec.split_once(';').expect("target:Name=FILE;LINKS"))
+        })
+        .collect();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let (kind, value) = line
             .split_once(':')
@@ -31,16 +45,55 @@ fn main() {
         match kind {
             "file" => file(Path::new(value)),
             "framework" => println!("cargo::rustc-link-lib=framework={value}"),
-            "system" => println!("cargo::rustc-link-lib=dylib={value}"),
+            "system" => system_library(value),
+            "link" => link_item(value, &targets, &mut Vec::new()),
+            "target" => {}
             _ => panic!("{}: unknown kind {kind}", manifest.display()),
         }
     }
 }
 
+fn link_item<'a>(item: &'a str, targets: &LinkTargets<'a>, parents: &mut Vec<&'a str>) {
+    if item.is_empty() || item.starts_with("::@") {
+        // CMake can annotate cross-directory target references with lookup-scope markers.
+        return;
+    }
+    if let Some((library, links)) = targets.get(item) {
+        assert!(
+            !parents.contains(&item),
+            "cyclic codec link dependency: {item}"
+        );
+        if !library.is_empty() {
+            file(Path::new(library));
+        }
+        parents.push(item);
+        for dependency in links.split(';') {
+            link_item(dependency, targets, parents);
+        }
+        parents.pop();
+    } else if Path::new(item).is_absolute() {
+        file(Path::new(item));
+    } else if let Some(framework) = item.strip_prefix("-framework ") {
+        println!("cargo::rustc-link-lib=framework={framework}");
+    } else if item == "-pthread" {
+        system_library("pthread");
+    } else {
+        let name = item.strip_prefix("-l").unwrap_or(item);
+        assert!(
+            !name.is_empty() && !name.starts_with('-') && !name.contains("::"),
+            "unsupported CMake codec link item: {item}"
+        );
+        system_library(name.strip_suffix(".lib").unwrap_or(name));
+    }
+}
+
+fn system_library(name: &str) {
+    println!("cargo::rustc-link-lib=dylib={name}");
+}
+
 /// One library file: an archive (or a Windows import library) links statically, without bundling
 /// it into the rlib, so that a staticlib of a dependent crate leaves it to the C++ link; a shared
-/// library links dynamically. The library name is the file name without the platform's prefix and
-/// suffix (`libFLAC.a`, `FLAC.lib`: `FLAC`), which every linker resolves on the search path.
+/// library links dynamically.
 fn file(path: &Path) {
     println!("cargo::rerun-if-changed={}", path.display());
     let dir = path.parent().expect("library directory");
@@ -49,8 +102,13 @@ fn file(path: &Path) {
         .expect("library name")
         .to_str()
         .expect("UTF-8 library name");
-    println!("cargo::rustc-link-search=native={}", dir.display());
     let windows = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows");
+    #[cfg(unix)]
+    if !windows && file.ends_with(".a") {
+        link_archive(path);
+        return;
+    }
+    println!("cargo::rustc-link-search=native={}", dir.display());
     let (kind, name) = if windows {
         ("static:-bundle", file.strip_suffix(".lib"))
     } else if let Some(stem) = file.strip_suffix(".a") {
@@ -66,17 +124,41 @@ fn file(path: &Path) {
     println!("cargo::rustc-link-lib={kind}={name}");
 }
 
+#[cfg(unix)]
+fn link_archive(path: &Path) {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    // With -bundle disabled Rust passes -l to the system linker. Give each archive a distinct
+    // name so the linker cannot pick a shared library with the same stem (e.g. system FLAC).
+    let dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR")).join("native-archives");
+    std::fs::create_dir_all(&dir).expect("native archive directory");
+    let mut hash = DefaultHasher::new();
+    path.hash(&mut hash);
+    let name = format!("mradm_native_{:016x}", hash.finish());
+    let link = dir.join(format!("lib{name}.a"));
+    if let Err(error) = std::os::unix::fs::symlink(path, &link)
+        && std::fs::read_link(&link).ok().as_deref() != Some(path)
+    {
+        panic!(
+            "cannot link {} to {}: {error}",
+            link.display(),
+            path.display()
+        );
+    }
+    println!("cargo::rustc-link-search=native={}", dir.display());
+    println!("cargo::rustc-link-lib=static:-bundle={name}");
+}
+
 /// Builds the islands' project in OUT_DIR, always optimized (the C++ islands do no numerical work
 /// that a debug build checks), with the dynamic C runtime on Windows like Rust.
 fn build() -> PathBuf {
-    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    // A shared Cargo target directory can reuse the compiled build script in another checkout.
+    let manifest_dir =
+        PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     for input in ["src", "include", "cmake", "tests/manual/capture_tap.c"] {
-        println!(
-            "cargo::rerun-if-changed={}",
-            repository.join(input).display()
-        );
+        println!("cargo::rerun-if-changed=../../../{input}");
     }
-    let root = repository.join("src");
+    let root = manifest_dir.join("../../../src");
     let mut config = cmake::Config::new(&root);
     config
         .profile("Release")

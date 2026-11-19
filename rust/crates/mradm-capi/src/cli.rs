@@ -1,4 +1,4 @@
-//! The `mradm` command line: `cli_main`, which the `mradm` executable (`src/bin/mradm.rs`) calls, runs
+//! The `mradm` command line: `cli_main`, which the `mradm` executable calls, runs
 //! `mradm-cli` with this crate's engine calls (the same render driver, scene import, AXML reader,
 //! export and room package calls the C ABI exports use), the APAC encode worker of the audio
 //! island and a SIGINT handler.

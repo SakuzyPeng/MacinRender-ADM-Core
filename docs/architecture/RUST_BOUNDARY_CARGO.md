@@ -24,9 +24,9 @@
 - `mradm-ffi` `services::RustServices`（`#[repr(C)]`）的 33 个字段就是原来的 33 个生产入口，去掉了 `mradm_` 前缀：
   - WAV / FLAC 读取、浮点写出端与容器元数据（11 个）；
   - 增益组与计量（10 个）、Scene 数学（5 个）；
-  - 布局表、场景视图与销毁、实时覆盖与 LFE 增益（6 个）；
+  - 布局表、场景视图与销毁、实时覆盖与 LFE 增益（5 个）；
   - Apple 总线计划（2 个）。
-  
+
   另有一个指向 `RustTestServices` 的指针，装着只供岛测试的 3 个入口：场景导入、DirectSpeakers 矩阵解析与销毁。
   两张表都是 `static`，`mradm-ffi` 不再有任何 `#[no_mangle]` 函数。
 - C++ 侧的表定义在 `src/adm_core/rust_services_ffi.h`（测试表在 `tests/support/ffi/island_test_ffi.h`）：
@@ -48,8 +48,8 @@
   libFLAC / libopus / dr_flac / miniaudio（和可选的 IAMF bridge）；
 - 岛的库一律为静态库，C ABI 是唯一的共享库；
 - 与顶层树共用的选项和编译设置在 `cmake/MRProject.cmake`（PIC 现在总是开启，因为 cdylib 要链接这些归档）；
-- 写出 `mradm_native_link-<config>.txt`：先按链接顺序列出归档（`file:`），再列平台库（`framework:` / `system:`），每行一个
-  `kind:value`；
+- 写出 `mradm_native_link-<config>.txt`。清单按链接顺序列出归档（`file:`）、编解码库（`link:`）与平台库
+  （`framework:` / `system:`），并记录编解码库在当前配置下的传递链接依赖（`target:`）。
 - `mr_adm_native` 以同样顺序把它们交给顶层树的 C++ 测试。
 
 **`rust/crates/mradm-islands-sys`**（`links = "mradm_islands"`），构建脚本有两种工作方式：
@@ -65,7 +65,7 @@
 `mradm-ffi` 原来的 FLAC 与岛链接文件处理和 feature `islands` 一并删除，房间探针与其他 `mradm-ffi` 目标的链接方式相同。
 
 **`mradm-capi`**：
-- `crate-type = ["cdylib", "staticlib", "rlib"]`，另有 bin `mradm`（`src/bin/mradm.rs`）；
+- `crate-type = ["cdylib", "staticlib", "rlib"]`，另有 bin `mradm`（`src/main.rs`）；
 - C++ 的 `src/adm_cli/main.cpp` 与 `cli_ffi.h` 删除，`mradm_cli_main` 改为 Rust 函数 `cli_main`；
 - cdylib 恰好导出 164 个 `adm_*`。版本脚本、导出列表、`.def` 与入口表的生成全部删除，`check-capi-exports.py` 只做检查。
 
@@ -84,7 +84,7 @@
   - `libmradm_capi` 带版本号的文件名与符号链接；
   - Windows 的导入库改名为 `mradm_capi.lib`；
   - `rust-static/` 下的 staticlib；
-  - `mradm`，macOS 上补完整的 ad-hoc 签名；
+  - 启用 `MR_ADM_CORE_BUILD_CLI` 时构建 `mradm`，macOS 上补完整的 ad-hoc 签名；
 - 以 IMPORTED 目标（`mradm_capi`、`mradm_capi_bundle`、`mradm_exe`、`MacinRender::ADMCAPI`）供测试链接与引用；
 - Rust staticlib 需要的系统库由 rustc 对空 crate 的 `--print native-static-libs` 得出；
 - 每个 Cargo 命令（工具、探针、测试、clippy）都带 `MRADM_NATIVE_LINK_FILE`，并依赖 `mradm_native`；
@@ -97,7 +97,7 @@
 - `scripts/release/build-cargo-release.sh` 是 CLI 发布与 macOS GUI 打包共用的构建：
   - 运行 `cargo build --release --locked -p mradm-capi`，libFLAC / libopus 用 vendored 版本，不用已安装的包；
   - FetchContent 缓存放在 `$FC_CACHE_DIR/cargo`；
-  - macOS 上给 `mradm` 补签名，最后检查导出。
+  - 检查导出并创建 SONAME 或 install name 对应的版本化符号链接，macOS 上给 `mradm` 补签名。
 - `release.yml`：
   - macOS 与 Linux 产物改用这个脚本构建；
   - 顶层树只配置不构建，供 `check-licenses.sh --require-full` 读取全部依赖与 Cargo 元数据；

@@ -68,12 +68,15 @@ cmake --preset release
 cmake --build --preset release
 ```
 
-只要产品（`libmradm_capi` 与 `mradm`）时可以直接用 Cargo，岛与 C 库由 `mradm-islands-sys` 经 CMake 构建；
-macOS 上 APAC 编码要求 `mradm` 先补 ad-hoc 签名（`codesign --force --sign - mradm`）：
+macOS 和 Linux 可用发布脚本通过 Cargo 构建 `libmradm_capi` 与 `mradm`。脚本为共享库创建版本化链接，
+并在 macOS 上为 APAC 编码所用的 `mradm` 补 ad-hoc 签名。
 
 ```bash
-cd rust && cargo build --release --locked -p mradm-capi   # 产物在 build/rust/release
+scripts/release/build-cargo-release.sh --target-dir build/rust   # 产物在 build/rust/release
 ```
+
+Windows 也可在 MSVC 环境下从 `rust/` 运行 `cargo build --release --locked -p mradm-capi`，
+得到 `mradm.exe`、`mradm_capi.dll` 和导入库 `mradm_capi.dll.lib`。
 
 ### 查看场景与能力
 

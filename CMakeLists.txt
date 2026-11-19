@@ -115,9 +115,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             set(_mr_tool_features --no-default-features ${_mr_consistency_feature_args})
         endif()
         add_custom_target(mr_adm_${_mr_tool_example} ${_mr_tool_all}
-            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-                "${MR_ADM_RUST_NATIVE_ENV}"
-                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+            COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked --release
                 --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p ${_mr_tool_package}
                 --example ${_mr_tool_example} ${_mr_tool_features}
                 --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
@@ -204,7 +202,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 --pcm-tool $<TARGET_FILE:mr_adm_flac_reader_probe>)
         add_test(NAME mr_adm_room_realtime_tools_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_realtime_tools_test.py")
-        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        if(TARGET mradm_exe AND CMAKE_BUILD_TYPE STREQUAL "Release")
             add_test(NAME mr_adm_room_96k_tests COMMAND "${Python3_EXECUTABLE}" -B
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_96k_test.py"
                 "$<TARGET_FILE:mradm_exe>" "$<TARGET_FILE:mradm_capi_bundle>")
@@ -226,8 +224,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         endif()
         foreach(_room_probe IN ITEMS room_hrir_check room_omni room_reflection_check)
             add_custom_target(mr_adm_${_room_probe}
-                COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-                    "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+                COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked --release
                     --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp --no-default-features
                     --example ${_room_probe} --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
                 COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -242,13 +239,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
         # The CLI transcript and C ABI capture tools of the phase 6 boundary comparison.
         add_test(NAME mr_adm_boundary_tool_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/boundary_tools_test.py")
-        add_custom_target(mr_adm_consistency_tools
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"
-                --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
-            DEPENDS mr_adm_rust mr_adm_make_fixture mr_adm_pcm_bits mr_adm_consistency_render
-                mr_adm_consistency_scene mr_adm_consistency_stream mr_adm_consistency_kernels mr_adm_repeat_render
-            USES_TERMINAL
-        )
+        if(TARGET mradm_exe)
+            add_custom_target(mr_adm_consistency_tools
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"
+                    --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
+                DEPENDS mr_adm_rust mr_adm_make_fixture mr_adm_pcm_bits mr_adm_consistency_render
+                    mr_adm_consistency_scene mr_adm_consistency_stream mr_adm_consistency_kernels mr_adm_repeat_render
+                USES_TERMINAL
+            )
+        endif()
         set(_mr_scene_checkpoint_args)
         if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
             list(APPEND _mr_scene_checkpoint_args --diagnostic-checkpoints)
@@ -339,21 +338,18 @@ if(MR_ADM_CORE_BUILD_TESTS)
         list(APPEND _mr_rust_test_features --features sofa)
     endif()
     set(_mr_rust_unit_test_command
-        "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-        "${MR_ADM_RUST_NATIVE_ENV}"
-        "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked --workspace
+        "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" test --locked --workspace
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" ${_mr_rust_test_features})
     set(_mr_room_trace_test_command
-        "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-        "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked
+        "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" test --locked
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp
         --no-default-features --features room-trace --test room_profile --test room_no_alloc
         --test rayon_sleep_no_alloc
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}")
 
     # Compile both Cargo test configurations during the build, outside CTest's execution
-    # timeouts. Reuse the exact test commands and Corrosion cache; finish the native Rust
+    # timeouts. Reuse the exact test commands and Cargo cache; finish the native Rust
     # library first so the two builds do not contend for Cargo's target-directory lock.
     add_custom_target(mr_adm_rust_test_binaries ALL
         COMMAND ${_mr_rust_unit_test_command} --no-run

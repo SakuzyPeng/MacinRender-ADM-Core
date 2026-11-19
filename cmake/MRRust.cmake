@@ -34,8 +34,16 @@ execute_process(COMMAND "${Rust_COMPILER_CACHED}" -vV OUTPUT_VARIABLE _mr_rustc_
 if(NOT _mr_status EQUAL 0 OR NOT _mr_rustc_version MATCHES "release: ${Rust_TOOLCHAIN}")
     message(FATAL_ERROR "Rust ${Rust_TOOLCHAIN} is required (rust/rust-toolchain.toml): ${Rust_COMPILER_CACHED}")
 endif()
-string(REGEX MATCH "host: ([^\n]+)" _mr_host "${_mr_rustc_version}")
-set(Rust_CARGO_TARGET_CACHED "${CMAKE_MATCH_1}" CACHE STRING "Cargo target triple of this tree")
+string(REGEX MATCH "host: ([^\r\n]+)" _mr_host "${_mr_rustc_version}")
+set(_mr_rust_target "${CMAKE_MATCH_1}")
+if(Rust_CARGO_TARGET)
+    set(_mr_rust_target "${Rust_CARGO_TARGET}")
+elseif(APPLE AND CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+    set(_mr_rust_target aarch64-apple-darwin)
+elseif(APPLE AND CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
+    set(_mr_rust_target x86_64-apple-darwin)
+endif()
+set(Rust_CARGO_TARGET_CACHED "${_mr_rust_target}" CACHE STRING "Cargo target triple of this tree" FORCE)
 
 # The system libraries a Rust staticlib needs (as rustc reports them for an empty crate), plus those
 # the crates name with #[link] (MMCSS, sockets), for the C++ programs that link the staticlib.
@@ -61,10 +69,18 @@ file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" _mr_rust_manifest)
 string(SHA1 _mr_rust_path_hash "${_mr_rust_manifest}")
 string(SUBSTRING "${_mr_rust_path_hash}" 0 5 _mr_rust_path_hash)
 set(MR_ADM_RUST_TARGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/rust/cargo/rust_${_mr_rust_path_hash}")
-# The environment of every Cargo command: the islands of this tree for mradm-islands-sys.
-set(MR_ADM_RUST_NATIVE_ENV "MRADM_NATIVE_LINK_FILE=${MR_ADM_NATIVE_LINK_FILE}")
-set(MR_ADM_CARGO_ENV "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0" "${MR_ADM_RUST_NATIVE_ENV}"
+# Keep the Cargo link on the same SDK and deployment target as the C++ islands.
+set(MR_ADM_CARGO_ENV "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+    "MRADM_NATIVE_LINK_FILE=${MR_ADM_NATIVE_LINK_FILE}"
     "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}")
+if(APPLE)
+    if(CMAKE_OSX_SYSROOT)
+        list(APPEND MR_ADM_CARGO_ENV "SDKROOT=${CMAKE_OSX_SYSROOT}")
+    endif()
+    if(CMAKE_OSX_DEPLOYMENT_TARGET)
+        list(APPEND MR_ADM_CARGO_ENV "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    endif()
+endif()
 
 set(_mr_consistency_features)
 if(MR_ADM_ENABLE_SOFA)
@@ -84,8 +100,8 @@ endif()
 # ── The C ABI and the command line ────────────────────────────────────────────
 # One Cargo build of mradm-capi gives the shared libmradm_capi (the product), its staticlib (for the
 # C++ tests, which call the islands directly and need the same copy of them as the C ABI that binds
-# their Rust services) and the mradm executable. They are copied into the build directory under the
-# names CMake used to give them, with the shared library's versioned name and links.
+# their Rust services) and, when enabled, the mradm executable. They are copied into the build
+# directory under the names CMake used to give them, with the shared library's versioned name and links.
 set(_mr_profile "$<IF:$<CONFIG:Debug>,dev,$<IF:$<CONFIG:MinSizeRel>,minsizerel,release>>")
 set(_mr_profile_dir "$<IF:$<CONFIG:Debug>,debug,$<IF:$<CONFIG:MinSizeRel>,minsizerel,release>>")
 set(_mr_cargo_out "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/${_mr_profile_dir}")
@@ -116,31 +132,34 @@ set(_mr_copy_commands
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_mr_cargo_out}/${_mr_static_name}"
         "${_mr_rust_out}/rust-static/${_mr_static_name}"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_mr_cargo_out}/${_mr_shared_cargo}"
-        "${_mr_rust_out}/${_mr_shared_name}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_mr_cargo_out}/mradm${CMAKE_EXECUTABLE_SUFFIX}"
-        "${_mr_rust_out}/mradm${CMAKE_EXECUTABLE_SUFFIX}")
+        "${_mr_rust_out}/${_mr_shared_name}")
+set(_mr_rust_byproducts "${_mr_rust_out}/rust-static/${_mr_static_name}" "${_mr_rust_out}/${_mr_shared_name}")
 foreach(_mr_link IN LISTS _mr_shared_links)
     list(APPEND _mr_copy_commands COMMAND "${CMAKE_COMMAND}" -E create_symlink "${_mr_shared_name}"
         "${_mr_rust_out}/${_mr_link}")
+    list(APPEND _mr_rust_byproducts "${_mr_rust_out}/${_mr_link}")
 endforeach()
 if(WIN32)
     list(APPEND _mr_copy_commands COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${_mr_cargo_out}/mradm_capi.dll.lib" "${_mr_rust_out}/mradm_capi.lib")
+    list(APPEND _mr_rust_byproducts "${_mr_rust_out}/mradm_capi.lib")
 endif()
-if(APPLE)
-    # AudioToolbox's APAC encoder rejects ClientDataFormat on current macOS when the helper only
-    # carries the linker's transient signature: give mradm the full ad-hoc signature of the GUI bundle.
-    list(APPEND _mr_copy_commands COMMAND /usr/bin/codesign --force --sign - "${_mr_rust_out}/mradm")
-endif()
-set(_mr_rust_byproducts "${_mr_rust_out}/rust-static/${_mr_static_name}" "${_mr_rust_out}/${_mr_shared_name}"
-    "${_mr_rust_out}/mradm${CMAKE_EXECUTABLE_SUFFIX}")
-if(CMAKE_CONFIGURATION_TYPES)
-    set(_mr_rust_byproducts)
+set(_mr_cargo_targets --lib)
+if(MR_ADM_CORE_BUILD_CLI)
+    list(APPEND _mr_cargo_targets --bin mradm)
+    set(_mr_executable "mradm${CMAKE_EXECUTABLE_SUFFIX}")
+    list(APPEND _mr_copy_commands COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${_mr_cargo_out}/${_mr_executable}" "${_mr_rust_out}/${_mr_executable}")
+    list(APPEND _mr_rust_byproducts "${_mr_rust_out}/${_mr_executable}")
+    if(APPLE)
+        # The APAC encoder requires a full ad-hoc signature on its helper.
+        list(APPEND _mr_copy_commands COMMAND /usr/bin/codesign --force --sign - "${_mr_rust_out}/${_mr_executable}")
+    endif()
 endif()
 add_custom_target(mr_adm_rust ALL
     COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV}
         "${Rust_CARGO_CACHED}" build --locked --profile "${_mr_profile}"
-        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-capi
+        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-capi ${_mr_cargo_targets}
         --no-default-features ${_mr_consistency_feature_args}
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
     ${_mr_copy_commands}
@@ -182,9 +201,11 @@ else()
 endif()
 add_dependencies(mradm_capi_bundle mr_adm_rust)
 
-add_executable(mradm_exe IMPORTED GLOBAL)
-mr_adm_rust_import(mradm_exe LOCATION "mradm${CMAKE_EXECUTABLE_SUFFIX}")
-add_dependencies(mradm_exe mr_adm_rust)
+if(MR_ADM_CORE_BUILD_CLI)
+    add_executable(mradm_exe IMPORTED GLOBAL)
+    mr_adm_rust_import(mradm_exe LOCATION "${_mr_executable}")
+    add_dependencies(mradm_exe mr_adm_rust)
+endif()
 
 # The C ABI as the C++ tests link it: c_api.h and the staticlib with the islands.
 add_library(mr_adm_c_api INTERFACE)
@@ -203,9 +224,7 @@ foreach(_mr_consistency_example IN ITEMS kernels render stream scene)
         set(_mr_consistency_all ALL)
     endif()
     add_custom_target(mr_adm_consistency_${_mr_consistency_example} ${_mr_consistency_all}
-        COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-            "${MR_ADM_RUST_NATIVE_ENV}"
-            "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+        COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked --release
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
             --example consistency_${_mr_consistency_example} --no-default-features ${_mr_consistency_feature_args}
             --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
@@ -237,9 +256,7 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/rust-dependencies.json" "${_mr_cargo_met
 
 add_custom_target(mr_adm_rust_quality
     COMMAND "${Rust_CARGO_CACHED}" fmt --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" --all -- --check
-    COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-        "${MR_ADM_RUST_NATIVE_ENV}"
-        "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" clippy --locked --workspace --all-targets
+    COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" clippy --locked --workspace --all-targets
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" -- -D warnings
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"

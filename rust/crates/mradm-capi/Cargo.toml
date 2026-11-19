@@ -12,7 +12,8 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [[bin]]
 name = "mradm"
-path = "src/bin/mradm.rs"
+path = "src/main.rs"
+test = false
 
 [dependencies]
 mradm-cli = { path = "../mradm-cli" }

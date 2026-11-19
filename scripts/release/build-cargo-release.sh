@@ -61,14 +61,22 @@ fi
         cargo build --release --locked -p mradm-capi --target-dir "$target_dir" ${target_args[@]+"${target_args[@]}"} >&2
 )
 
+product_version="$(python3 "$repo_root/scripts/release/version_metadata.py" --field product-version)"
+major="${product_version%%.*}"
 case "$(uname -s)" in
     Darwin)
-        library="$out_dir/libmradm_capi.dylib"
+        library="libmradm_capi.dylib"
+        runtime_library="libmradm_capi.$major.dylib"
         # AudioToolbox's APAC encoder rejects ClientDataFormat when the helper only carries the
         # linker's transient signature.
         /usr/bin/codesign --force --sign - "$out_dir/mradm" >&2
         ;;
-    *) library="$out_dir/libmradm_capi.so" ;;
+    *)
+        library="libmradm_capi.so"
+        runtime_library="libmradm_capi.so.$major"
+        ;;
 esac
-python3 "$repo_root/scripts/quality/check-capi-exports.py" "$library" >&2
+python3 "$repo_root/scripts/quality/check-capi-exports.py" "$out_dir/$library" >&2
+# Match the install name / SONAME recorded in consumers of the Cargo-built library.
+ln -sfn "$library" "$out_dir/$runtime_library"
 echo "$out_dir"

@@ -33,13 +33,14 @@ function(mr_adm_core_find_iamf_aom_bridge)
             "Set MR_ADM_IAMF_AOM_ROOT to an SDK directory containing bin/mr_iamf_aom_bridge.dll")
     endif()
 
-    add_library(MacinRender::IamfAomBridge UNKNOWN IMPORTED GLOBAL)
     if(WIN32)
+        add_library(MacinRender::IamfAomBridge SHARED IMPORTED GLOBAL)
         set_target_properties(MacinRender::IamfAomBridge PROPERTIES
             IMPORTED_IMPLIB "${MR_ADM_IAMF_AOM_BRIDGE_LIBRARY}"
             IMPORTED_LOCATION "${MR_ADM_IAMF_AOM_BRIDGE_RUNTIME}"
         )
     else()
+        add_library(MacinRender::IamfAomBridge UNKNOWN IMPORTED GLOBAL)
         set_target_properties(MacinRender::IamfAomBridge PROPERTIES
             IMPORTED_LOCATION "${MR_ADM_IAMF_AOM_BRIDGE_LIBRARY}"
         )

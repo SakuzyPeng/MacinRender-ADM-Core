@@ -115,6 +115,33 @@ class CMakeTests(Harness):
         self.configure(source, build, '-DMR_ADM_STRICT_FP=OFF')
         self.assertEqual((build / 'flac-options.txt').read_text(), baseline)
 
+    def test_native_link_manifest_retains_codec_dependencies(self):
+        source = self.project()
+        with (source / 'CMakeLists.txt').open('a', encoding='utf-8') as cmake:
+            cmake.write("""
+include(MRNativeLink)
+add_library(FLAC::FLAC STATIC IMPORTED)
+set_target_properties(FLAC::FLAC PROPERTIES IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/FLAC.a")
+add_library(FLAC::deps INTERFACE IMPORTED)
+add_library(Ogg::ogg STATIC IMPORTED)
+set_target_properties(Ogg::ogg PROPERTIES IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/lib with spaces/ogg.a")
+target_link_libraries(FLAC::FLAC INTERFACE "$<LINK_ONLY:FLAC::deps>")
+target_link_libraries(FLAC::deps INTERFACE "$<$<CONFIG:Release>:Ogg::ogg>")
+mr_adm_codec_link_manifest(links FLAC::FLAC)
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/link.txt" CONTENT "${links}")
+""")
+        build = self.root / 'codec links'
+        self.configure(source, build)
+        link_file = build / 'link.txt'
+        self.assertEqual(link_file.read_text().splitlines(), [
+            'link:FLAC::FLAC',
+            f'target:FLAC::FLAC={build.as_posix()}/FLAC.a;FLAC::deps',
+            'target:FLAC::deps=;Ogg::ogg',
+            f'target:Ogg::ogg={build.as_posix()}/lib with spaces/ogg.a;',
+        ])
+        self.configure(source, build, '-DCMAKE_BUILD_TYPE=Debug')
+        self.assertIn('target:FLAC::deps=;\n', link_file.read_text())
+
     def test_strict_fp_rejects_common_and_release_conflicts(self):
         source = self.project()
         build = self.root / 'strict-build'

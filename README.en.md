@@ -72,13 +72,15 @@ cmake --preset release
 cmake --build --preset release
 ```
 
-For the products alone (`libmradm_capi` and `mradm`), Cargo is enough; `mradm-islands-sys` builds the islands and C
-libraries through CMake. On macOS, APAC encoding needs `mradm` to carry an ad-hoc signature
-(`codesign --force --sign - mradm`):
+On macOS and Linux, the release script builds `libmradm_capi` and `mradm` with Cargo. It creates the versioned
+shared library symlink and ad-hoc signs the macOS executable for APAC encoding.
 
 ```bash
-cd rust && cargo build --release --locked -p mradm-capi   # products in build/rust/release
+scripts/release/build-cargo-release.sh --target-dir build/rust   # products in build/rust/release
 ```
+
+On Windows, run `cargo build --release --locked -p mradm-capi` from `rust/` in an MSVC environment
+to build `mradm.exe`, `mradm_capi.dll` and its import library `mradm_capi.dll.lib`.
 
 ### Inspect Scenes and Capabilities
 
