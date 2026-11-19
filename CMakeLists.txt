@@ -216,6 +216,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_test(NAME mr_adm_room_device_probe_tests
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_device_probe_test.py")
+        # The CLI record of the island slices (phase 7; restored from phase 6, deleted at 7.7).
+        add_test(NAME mr_adm_boundary_tool_tests
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/boundary_tools_test.py")
         if(TARGET mradm_exe)
             add_custom_target(mr_adm_consistency_tools
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"

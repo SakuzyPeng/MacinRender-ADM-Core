@@ -9,7 +9,7 @@ fn usage() -> ExitCode {
         "usage: mr_adm_make_fixture <kind> <out.wav>\n\
          kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n     \
          | objects-room | objects-room-96k | params | directspeakers | directspeakers-lfe\n     \
-         | hoa | hoa3 | policy-objects\n"
+         | hoa | hoa3 | policy-objects | objects-long\n"
     );
     ExitCode::from(2)
 }
