@@ -593,9 +593,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_osc_head_tracking_c_example PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_c_example)
 
-    add_executable(mr_adm_osc_head_tracking_probe EXCLUDE_FROM_ALL tests/manual/osc_head_tracking_probe.cpp)
-    target_link_libraries(mr_adm_osc_head_tracking_probe PRIVATE MacinRender::ADMRealtime)
-    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_probe)
 
 
     # The C++ AdmScene of the former SDK header (tests/support/adm_scene): the
@@ -709,6 +706,30 @@ if(MR_ADM_CORE_BUILD_TESTS)
             VERBATIM)
     endforeach()
     set(_mr_pcm_bits "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_pcm_bits${CMAKE_EXECUTABLE_SUFFIX}")
+
+    # The manual benchmarks and probes (R3 G, formerly C++ under tests/manual): `mradm-ffi` examples
+    # on the production engine host, built in Release on request and copied under their former names.
+    # None runs in CTest; see each example's header for its arguments and exit codes.
+    set(_mr_probe_features --no-default-features)
+    if(MR_ADM_ENABLE_SOFA)
+        list(APPEND _mr_probe_features --features sofa)
+    endif()
+    foreach(_mr_probe IN ITEMS osc_head_tracking_probe triple_balance_scene_benchmark
+            triple_balance_monitor_benchmark)
+        add_custom_target(mr_adm_${_mr_probe}
+            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+                "${MR_ADM_RUST_NATIVE_ENV}"
+                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+                --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
+                --example ${_mr_probe} ${_mr_probe_features}
+                --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+                "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+            DEPENDS FLAC::FLAC
+            USES_TERMINAL
+            VERBATIM)
+    endforeach()
 
     # The FLAC reader island's probe for flac_reader_test.py (the production reader: strict Rust
     # validation, then dr_flac PCM), writing the same canonical image as mr_adm_pcm_bits.
@@ -861,18 +882,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_monitor_engine_test_support)
     mr_adm_core_apply_static_analysis(mr_adm_monitor_engine_test_support)
 
-    add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
-        tests/manual/triple_balance_scene_benchmark.cpp)
-    target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
-        MacinRender::ADMEngine MacinRender::ADMRealtime mr_adm_engine_renderer_test_support MacinRender::ADMRenderRoom
-        MacinRender::ADMRenderCommon mr_adm_live_scene_test_support mr_adm_scene_stream_test_support)
-    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine
-        src/adm_render_room)
-    if(WIN32)
-        target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE Psapi)
-    endif()
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_scene_benchmark)
-
     # The C++ room-worker wait (MMCSS and a high-resolution timer on Windows) for the manual room
     # probes; production waits in Rust (mradm-ffi scene_worker).
     add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp
@@ -896,14 +905,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_room_file_device_probe PRIVATE Psapi avrt)
     endif()
     mr_adm_core_apply_warnings(mr_adm_room_file_device_probe)
-
-    add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
-        tests/manual/triple_balance_monitor_benchmark.cpp)
-    target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
-        mr_adm_engine_renderer_test_support MacinRender::ADMAudio MacinRender::ADMRealtime MacinRender::ADMIo
-        mr_adm_monitor_engine_test_support)
-    target_include_directories(mr_adm_triple_balance_monitor_benchmark PRIVATE tests/support)
-    mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
     if(Python3_Interpreter_FOUND AND TARGET mradm_capi_bundle)
         add_test(NAME mr_adm_hptf_stereo_c_api_tests
