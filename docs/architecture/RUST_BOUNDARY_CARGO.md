@@ -48,6 +48,7 @@
   libFLAC / libopus / dr_flac / miniaudio（和可选的 IAMF bridge）；
 - 岛的库一律为静态库，C ABI 是唯一的共享库；
 - 与顶层树共用的选项和编译设置在 `cmake/MRProject.cmake`（PIC 现在总是开启，因为 cdylib 要链接这些归档）；
+- MSVC 的 Debug 与 Release 都使用 `/MD`，让 C/C++ 岛、编解码库和 C ABI 消费者与 Rust 使用同一动态 CRT。
 - 写出 `mradm_native_link-<config>.txt`。清单按链接顺序列出归档（`file:`）、编解码库（`link:`）与平台库
   （`framework:` / `system:`），并记录编解码库在当前配置下的传递链接依赖（`target:`）。
 - `mr_adm_native` 以同样顺序把它们交给顶层树的 C++ 测试。
@@ -161,6 +162,6 @@ A 的两次采集之间我提交了 A，记录里的提交号与 dirty 标记因
 - 纯 Cargo 构建：
   - macOS 上 `cmake` crate 构建 Apple 岛（框架、`-lc++` / `-lobjc`），`install_name` 与 current / compatibility version，`mradm` 签名后 APAC 编码；
   - Windows 上用 MSVC 构建岛（动态 CRT），检查 `mradm_capi.dll` 的导出与 `mradm_capi.dll.lib`。
-- 顶层树：debug / release 构建与 ctest，Windows debug 下 Rust（`msvcrt`）与 C++ 岛（`/MDd`）的混合链接。
+- 顶层树的 Debug / Release 构建与 ctest。
 - 发布工作流 `release.yml`：三平台 CLI 包与两个 GUI 包的 P/Invoke smoke。
 - IAMF bridge 与 ROOM CUDA 插件的可选构建。

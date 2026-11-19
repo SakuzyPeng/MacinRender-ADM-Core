@@ -17,6 +17,11 @@ option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools 
 # every object in those archives must be built as PIC, so establish the default before FetchContent
 # and any island target is created.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    # Rust links the retail DLL CRT even in Debug. Use it for the islands, their dependencies
+    # and the C++ consumers of the Rust static library so they share the same CRT and C++ ABI.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
+endif()
 
 set(MR_ADM_IAMF_AOM_ROOT "" CACHE PATH "Root directory of the prebuilt AOM iamf-tools bridge SDK")
 set(MR_ADM_FLAC_PROVIDER "AUTO" CACHE STRING "libFLAC provider: AUTO, SYSTEM, or VENDORED")

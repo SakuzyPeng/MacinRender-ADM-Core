@@ -163,7 +163,6 @@ fn build() -> PathBuf {
     config
         .profile("Release")
         .build_target("mradm_native")
-        .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL")
         .define(
             "MR_ADM_CONSISTENCY_DIAGNOSTICS",
             on(cfg!(feature = "diagnostics")),
