@@ -51,7 +51,7 @@ fn run() -> Result<bool, String> {
         .find(|o| o.id == args[4])
         .ok_or("Select an exact current device ID; no default fallback is allowed")?;
     let input = &args[1];
-    let scene = SceneHandle::import(input.as_bytes(), true, None, &[]).map_err(|e| e.message)?;
+    let scene = SceneHandle::import(input.as_bytes(), false, None, &[]).map_err(|e| e.message)?;
     let info = scene.scene().info.clone();
     let objects = scene.scene().snapshot.objects.len();
     let load = |path: &str| RoomProfileHandle::load(path.as_bytes()).map_err(|e| e.to_string());

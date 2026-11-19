@@ -13,17 +13,15 @@ use mradm_engine::backend::{BinauralSpreadMode, RoomRequest, Screens, SpeakerSpr
 use mradm_engine::request::Selection;
 use mradm_engine::scene::output::{DeviceProgress, Session};
 use mradm_engine::scene::renderer;
-use mradm_engine::scene::stream::{
-    Config, Descriptor, FrameInput, PlaneView, Stream, Submit, frame_flag,
-};
+use mradm_engine::scene::stream::{Config, Descriptor, FrameInput, Stream, Submit, frame_flag};
 use mradm_ffi::api::render::FfiHost;
-use mradm_render::live::{self, Entry, FrameView, Plane, Role, State, Update, field};
+use mradm_render::live::{self, Entry, FrameView, Role, State, Update, field};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod probe;
-use probe::NullClock;
+use probe::{NullClock, Planes};
 
 const RATE: u32 = 48000;
 const BLOCK: u32 = 480;
@@ -129,6 +127,14 @@ impl Fixture {
         if self.first { &self.initial } else { &[] }
     }
 
+    fn planes(&self) -> Planes<'_> {
+        Planes {
+            pcm: &self.pcm,
+            first_id: 0,
+            frames: BLOCK,
+        }
+    }
+
     fn elements(&self) -> Vec<live::Element<'_>> {
         self.descriptors
             .iter()
@@ -201,20 +207,11 @@ fn run() -> Result<bool, String> {
     let start = Instant::now();
     for block in 0..1000 {
         fixture.update(block);
-        let planes: Vec<Plane<'_>> = fixture
-            .pcm
-            .iter()
-            .zip(0..)
-            .map(|(samples, element_id)| Plane {
-                element_id,
-                has_signal: true,
-                samples,
-            })
-            .collect();
+        let planes = fixture.planes();
         let frame = FrameView {
             generation: 1,
             duration: BLOCK,
-            planes: &planes[..],
+            planes: &planes,
             initial: fixture.initial(),
             updates: &fixture.updates,
             trace: b"",
@@ -256,25 +253,14 @@ fn run() -> Result<bool, String> {
             let started = Instant::now();
             for block in 0..seconds * 100 {
                 fixture.update(block);
-                let planes: Vec<PlaneView<'_>> = fixture
-                    .pcm
-                    .iter()
-                    .zip(0..)
-                    .map(|(samples, element_id)| PlaneView {
-                        element_id,
-                        sample_count: BLOCK,
-                        stride: 1,
-                        has_signal: true,
-                        samples: Some(samples),
-                    })
-                    .collect();
+                let planes = fixture.planes();
                 let frame = FrameInput {
                     epoch: 1,
                     generation: 1,
                     start: fixture.start,
                     duration: BLOCK,
                     flags: frame_flag::STATE_COMPLETE,
-                    planes: &planes[..],
+                    planes: &planes,
                     initial: fixture.initial(),
                     updates: &fixture.updates,
                 };

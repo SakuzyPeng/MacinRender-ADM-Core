@@ -383,6 +383,7 @@ dependencies = [
 name = "mradm-ffi"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "libm",
  "macin-adm",
  "mradm-dsp",

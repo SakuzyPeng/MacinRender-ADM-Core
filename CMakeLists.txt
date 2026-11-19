@@ -564,70 +564,81 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endforeach()
     set(_mr_pcm_bits "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_pcm_bits${CMAKE_EXECUTABLE_SUFFIX}")
 
-    # The manual benchmarks and probes (R3 G, formerly C++ under tests/manual): `mradm-ffi` examples
-    # on the production engine host, built in Release on request and copied under their former names.
-    # None runs in CTest; see each example's header for its arguments and exit codes.
-    set(_mr_probe_features --no-default-features)
-    if(MR_ADM_ENABLE_SOFA)
-        list(APPEND _mr_probe_features --features sofa)
+    # Build the manual probes on request under their original names. Match the Rust profile to
+    # the native configuration so the Release-only benchmarks also reject a CMake Debug build.
+    set(_mr_probe_optimized "$<CONFIG:Release,RelWithDebInfo,MinSizeRel>")
+    set(_mr_probe_profile "$<IF:$<CONFIG:MinSizeRel>,minsizerel,$<IF:${_mr_probe_optimized},release,dev>>")
+    set(_mr_probe_cargo_dir "$<IF:${_mr_probe_optimized},${_mr_probe_profile},debug>")
+    set(_mr_probe_output_dir "${CMAKE_CURRENT_BINARY_DIR}")
+    if(CMAKE_CONFIGURATION_TYPES)
+        string(APPEND _mr_probe_output_dir "/$<CONFIG>")
     endif()
-    # The room device probes (feature `islands`) also link the C++ islands: the archives below in
+    # The room device probes (feature `islands`) also link the C++ islands: the libraries below in
     # dependency order, then the platform libraries, one linker argument per line of a generated
     # file their build script reads (MR_ADM_ISLAND_LINK_FILE). The islands call mradm-ffi by name,
     # which the example provides itself, so the Rust C ABI staticlib is not linked. The capture
     # shim is the probes' miniaudio input over the islands' miniaudio implementation.
     add_library(mr_adm_probe_capture STATIC EXCLUDE_FROM_ALL tests/manual/capture_tap.c)
     target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
-    set(_mr_island_archives mr_adm_probe_capture mr_adm_islands)
+    set(_mr_island_libraries mr_adm_probe_capture mr_adm_islands)
     if(APPLE)
-        list(APPEND _mr_island_archives mr_adm_apple)
+        list(APPEND _mr_island_libraries mr_adm_apple)
     elseif(WIN32)
-        list(APPEND _mr_island_archives mr_adm_windows)
+        list(APPEND _mr_island_libraries mr_adm_windows)
     endif()
-    list(APPEND _mr_island_archives mr_adm_render_common mr_adm_audio Opus::opus FLAC::FLAC)
+    list(APPEND _mr_island_libraries mr_adm_render_common mr_adm_audio Opus::opus FLAC::FLAC)
     if(TARGET MacinRender::IamfAomBridge)
-        list(APPEND _mr_island_archives MacinRender::IamfAomBridge)
+        list(APPEND _mr_island_libraries MacinRender::IamfAomBridge)
     endif()
     set(_mr_island_link_lines)
-    foreach(_mr_archive IN LISTS _mr_island_archives)
-        string(APPEND _mr_island_link_lines "$<TARGET_LINKER_FILE:${_mr_archive}>\n")
+    foreach(_mr_library IN LISTS _mr_island_libraries)
+        string(APPEND _mr_island_link_lines "$<TARGET_LINKER_FILE:${_mr_library}>\n")
     endforeach()
     if(APPLE)
         foreach(_mr_framework AudioToolbox AudioUnit CoreAudio CoreFoundation AVFoundation CoreMedia Foundation)
             string(APPEND _mr_island_link_lines "-framework\n${_mr_framework}\n")
         endforeach()
         string(APPEND _mr_island_link_lines "-lc++\n-lobjc\n")
+        if(BUILD_SHARED_LIBS)
+            string(APPEND _mr_island_link_lines
+                "-Wl,-rpath,@loader_path\n-Xlinker\n-rpath\n-Xlinker\n$<TARGET_FILE_DIR:mr_adm_islands>\n")
+        endif()
     elseif(WIN32)
         string(APPEND _mr_island_link_lines "Ole32.lib\n")
     else()
         string(APPEND _mr_island_link_lines "-lstdc++\n-lpthread\n-ldl\n-lm\n")
+        if(BUILD_SHARED_LIBS)
+            string(APPEND _mr_island_link_lines
+                "-Wl,-rpath,$ORIGIN\n-Xlinker\n-rpath\n-Xlinker\n$<TARGET_FILE_DIR:mr_adm_islands>\n")
+        endif()
     endif()
-    set(_mr_island_link_file "${CMAKE_CURRENT_BINARY_DIR}/generated/mr_adm_island_link.txt")
+    set(_mr_island_link_file "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/mr_adm_island_link.txt")
     file(GENERATE OUTPUT "${_mr_island_link_file}" CONTENT "${_mr_island_link_lines}")
     foreach(_mr_probe IN ITEMS osc_head_tracking_probe triple_balance_scene_benchmark
             triple_balance_monitor_benchmark room_scene_benchmark room_file_device_probe)
         set(_mr_probe_env)
-        set(_mr_probe_example_features ${_mr_probe_features})
+        set(_mr_probe_example_features --no-default-features ${_mr_consistency_feature_args})
         set(_mr_probe_depends FLAC::FLAC)
         if(_mr_probe MATCHES "^room_")
             set(_mr_probe_env "MR_ADM_ISLAND_LINK_FILE=${_mr_island_link_file}")
-            if(MR_ADM_ENABLE_SOFA)
-                set(_mr_probe_example_features --no-default-features --features "sofa islands")
-            else()
-                set(_mr_probe_example_features --no-default-features --features islands)
+            list(APPEND _mr_probe_example_features --features islands)
+            list(APPEND _mr_probe_depends ${_mr_island_libraries})
+            if(MR_ADM_ENABLE_ROOM_CUDA)
+                list(APPEND _mr_probe_depends mr_adm_room_cuda)
             endif()
-            list(APPEND _mr_probe_depends ${_mr_island_archives})
         endif()
         add_custom_target(mr_adm_${_mr_probe}
             COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
                 "${MR_ADM_RUST_NATIVE_ENV}" ${_mr_probe_env}
-                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked
+                --profile "${_mr_probe_profile}"
                 --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
                 --example ${_mr_probe} ${_mr_probe_example_features}
                 --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_mr_probe_output_dir}"
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
-                "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+                "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/${_mr_probe_cargo_dir}/examples/${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
+                "${_mr_probe_output_dir}/mr_adm_${_mr_probe}${CMAKE_EXECUTABLE_SUFFIX}"
             DEPENDS ${_mr_probe_depends}
             USES_TERMINAL
             VERBATIM)

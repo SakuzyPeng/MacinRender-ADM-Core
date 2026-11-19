@@ -285,9 +285,9 @@ python3 scripts/room/device-probe.py --probe build/release/mr_adm_room_scene_ben
   --device 'exact output device name or ID' --seconds 1800 --sources 32 --output /path/new-device-evidence
 ```
 
-R3 G 起探针是 `mradm-ffi` 的 Rust example（feature `islands`），CMake 目标按 Release 构建并以原名复制到构建目录；
-它把 C++ 设备岛与采集垫片（`tests/manual/capture_tap.c`）静态链入，链接参数由 CMake 写在
-`<build>/generated/mr_adm_island_link.txt`。岛按名调用 Rust 入口，因此需要不受归档顺序影响的链接器
+R3 G 起探针是 `mradm-ffi` 的 Rust example（feature `islands`）。从 Release 配置构建探针，CMake 将可执行文件以原名复制到
+构建目录（多配置生成器使用 `<build>/Release`）。探针链接 C++ 设备岛与采集垫片（`tests/manual/capture_tap.c`），
+链接参数由 CMake 写在 `<build>/generated/Release/mr_adm_island_link.txt`。岛按名调用 Rust 入口，因此需要不受归档顺序影响的链接器
 （macOS 的 ld64、Windows 的 link.exe、x86_64 Linux 上 Rust 默认的 lld）。
 驱动器以 100 Hz 发送 PoseBridge v3 OSC 数据，探针使用实际接收器应用头姿，约每 5 秒切换
 一次房间。测试信号为确定性宽带噪声，会按会话音量实际播放；缺省 `--volume 0.1`，不改

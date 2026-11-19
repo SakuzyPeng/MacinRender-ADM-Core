@@ -23,16 +23,16 @@ use mradm_dsp::room::screen::RoomScreenGeometry;
 use mradm_engine::backend::{BinauralSpreadMode, Host, RoomRequest, Screens, SpeakerSpread};
 use mradm_engine::request::Selection;
 use mradm_engine::scene::renderer;
-use mradm_engine::scene::stream::{Config, Descriptor, FrameInput, PlaneView, Submit, frame_flag};
+use mradm_engine::scene::stream::{Config, Descriptor, FrameInput, Submit, frame_flag};
 use mradm_ffi::api::osc::receiver as osc_receiver;
 use mradm_ffi::api::render::FfiHost;
 use mradm_ffi::api::room::{RoomPreparedHandle, RoomProfileHandle, switch_config};
 use mradm_ffi::api::scene_stream::{EngineSceneOutput, create_stream};
 use mradm_json::Value;
 use mradm_osc::receiver::State as OscState;
-use mradm_render::live::{self, Entry, FrameView, Plane, State, Update, field};
+use mradm_render::live::{self, Entry, FrameView, State, Update, field};
 use mradm_render::room_runtime::{Config as RoomConfig, state};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -255,19 +255,15 @@ impl Fixture {
             .collect()
     }
 
-    fn planes(&self) -> Vec<Plane<'_>> {
-        self.pcm
-            .iter()
-            .zip(1..)
-            .map(|(samples, element_id)| Plane {
-                element_id,
-                has_signal: true,
-                samples,
-            })
-            .collect()
+    fn planes(&self, frames: u32) -> probe::Planes<'_> {
+        probe::Planes {
+            pcm: &self.pcm,
+            first_id: 1,
+            frames,
+        }
     }
 
-    fn frame<'a>(&'a self, planes: &'a [Plane<'a>]) -> FrameView<'a, [Plane<'a>]> {
+    fn frame<'a>(&'a self, planes: &'a probe::Planes<'a>) -> FrameView<'a, probe::Planes<'a>> {
         FrameView {
             generation: 1,
             duration: self.frames,
@@ -296,7 +292,7 @@ fn kernel(first: &Room, next: &Room, seconds: u32, quantum: u32) -> Result<(), S
             let mut output = vec![0f32; quantum as usize * 2];
             for block in 0..64 {
                 fixture.update(block)?;
-                let planes = fixture.planes();
+                let planes = fixture.planes(quantum);
                 r.render(&fixture.frame(&planes), &mut output)
                     .map_err(|e| message(&e))?;
             }
@@ -314,10 +310,10 @@ fn kernel(first: &Room, next: &Room, seconds: u32, quantum: u32) -> Result<(), S
                 if mode == 2 && block == 96 {
                     control.request(&next.switch()?).map_err(|e| message(&e))?;
                 }
+                let planes = fixture.planes(quantum);
+                let frame = fixture.frame(&planes);
                 let tick = Instant::now();
-                let planes = fixture.planes();
-                r.render(&fixture.frame(&planes), &mut output)
-                    .map_err(|e| message(&e))?;
+                r.render(&frame, &mut output).map_err(|e| message(&e))?;
                 *time = tick.elapsed().as_secs_f64();
                 if block % 64 == 0 {
                     peak_rss = peak_rss.max(probe::rss());
@@ -375,7 +371,7 @@ fn control_latency(room: &Room) -> Result<(), String> {
     let (mut a, mut b) = ([0f32; 512], [0f32; 512]);
     for block in 0..256 {
         fixture.update(block)?;
-        let planes = fixture.planes();
+        let planes = fixture.planes(256);
         reference
             .render(&fixture.frame(&planes), &mut a)
             .map_err(|e| message(&e))?;
@@ -387,7 +383,7 @@ fn control_latency(room: &Room) -> Result<(), String> {
     let mut first = None;
     for block in 0..8u64 {
         fixture.update(block + 256)?;
-        let planes = fixture.planes();
+        let planes = fixture.planes(256);
         reference
             .render(&fixture.frame(&planes), &mut a)
             .map_err(|e| message(&e))?;
@@ -434,6 +430,24 @@ fn reserve(values: &mut Vec<f64>, count: usize) {
     values.reserve_exact(count);
 }
 
+fn create_recordings_dir(dir: &Path) -> Result<(), String> {
+    if dir.file_name().is_none() {
+        return Err("Recordings directory requires a non-empty name".to_owned());
+    }
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Cannot create recordings directory: {e}"))?;
+    }
+    // Create the leaf exclusively so two probes cannot write into the same directory.
+    std::fs::create_dir(dir).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            "Recordings directory must not already exist".to_owned()
+        } else {
+            format!("Cannot create recordings directory: {e}")
+        }
+    })
+}
+
 // Keep preparation, bounded observation and joined teardown together in this manual probe.
 #[allow(clippy::too_many_lines)]
 fn streaming(
@@ -463,10 +477,8 @@ fn streaming(
     if capture && (!real_device || options.recordings.is_none()) {
         return Err("Capture requires --device and a new --recordings directory".to_owned());
     }
-    if let Some(dir) = &options.recordings
-        && (dir.exists() || std::fs::create_dir_all(dir).is_err())
-    {
-        return Err("Recordings directory must not already exist".to_owned());
+    if let Some(dir) = &options.recordings {
+        create_recordings_dir(dir)?;
     }
     let receiver = if options.osc_port >= 0 {
         let r = osc_receiver(options.osc_port as u16, b"room-probe");
@@ -635,18 +647,7 @@ fn streaming(
                 }
                 fixture.update(block)?;
                 let duration = (frames - sample).min(512) as u32;
-                let planes: Vec<PlaneView<'_>> = fixture
-                    .pcm
-                    .iter()
-                    .zip(1..)
-                    .map(|(samples, element_id)| PlaneView {
-                        element_id,
-                        sample_count: duration,
-                        stride: 1,
-                        has_signal: true,
-                        samples: Some(samples),
-                    })
-                    .collect();
+                let planes = fixture.planes(duration);
                 // The last material slice can be shorter than a canonical producer frame.
                 let keep = fixture
                     .updates
@@ -659,7 +660,7 @@ fn streaming(
                     start: sample as i64,
                     duration,
                     flags: frame_flag::STATE_COMPLETE,
-                    planes: &planes[..],
+                    planes: &planes,
                     initial: fixture.initial(),
                     updates: &fixture.updates[..keep],
                 };

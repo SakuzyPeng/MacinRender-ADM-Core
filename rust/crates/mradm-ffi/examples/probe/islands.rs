@@ -2,12 +2,11 @@
 //! devices, a measuring proxy over the device table, the capture shim (`tests/manual/capture_tap.c`)
 //! and the recordings, histograms and distributions of their reports.
 //!
-//! The device table records mirror `src/adm_render_common/engine_ffi.h` (`MradmDeviceIslands`,
-//! `MradmDeviceTable`, `MradmDevicePull`), the same layout `mradm-ffi` declares; a proxy table is
-//! passed to the Scene output where it expects the island table.
+//! The measuring proxy uses the same device table as the Scene output.
 #![allow(dead_code)]
 use mradm_ffi::api::islands::{
-    AppleIslands, DeviceEnumeration, DeviceIslands, PlatformIslands, Text,
+    AppleIslands, DeviceEnumeration, DeviceIslands, DevicePull, DeviceTable, EngineIslandError,
+    EngineSceneDeviceProgress, PlatformIslands, Text,
 };
 use mradm_json::{Map, Value};
 use std::ffi::{CStr, c_char, c_void};
@@ -295,68 +294,26 @@ impl OutputTrace {
 
 // ── The measuring device proxy ───────────────────────────────────────────────────
 
-type PullFn = unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize) -> usize;
-
-/// `MradmEngineIslandError`.
-#[repr(C)]
-pub struct IslandError {
-    message: *mut u8,
-    message_len: *mut usize,
-    context: *mut u8,
-    context_len: *mut usize,
-}
-
-/// `MradmDevicePull`.
-#[repr(C)]
-struct Pull {
-    user: *mut c_void,
-    pull: Option<PullFn>,
-}
-
-/// `MradmDeviceTable`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Table {
-    ctx: *mut c_void,
-    start:
-        Option<unsafe extern "C" fn(*mut c_void, u32, u32, *const Pull, *const IslandError) -> i32>,
-    stop: Option<unsafe extern "C" fn(*mut c_void)>,
-    flush: Option<unsafe extern "C" fn(*mut c_void)>,
-    pause: Option<unsafe extern "C" fn(*mut c_void)>,
-    resume: Option<unsafe extern "C" fn(*mut c_void)>,
-    mark_end: Option<unsafe extern "C" fn(*mut c_void)>,
-    realtime: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
-    has_volume: Option<unsafe extern "C" fn(*mut c_void) -> u32>,
-    set_volume: Option<unsafe extern "C" fn(*mut c_void, f32)>,
-    progress: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    destroy: Option<unsafe extern "C" fn(*mut c_void)>,
-}
-
-/// `MradmDeviceIslands`.
-#[repr(C)]
-struct Islands {
-    system_spatial: u32,
-    open: Option<unsafe extern "C" fn(u32, Text, u32, Text, *mut Table, *const IslandError) -> i32>,
-    enumerate: Option<unsafe extern "C" fn(*const DeviceEnumeration)>,
-}
-
 /// The trace the next opened device records into.
 static TRACE: OnceLock<Arc<Mutex<OutputTrace>>> = OnceLock::new();
 
 /// A proxied device: the island's table, the trace and the engine's pull.
 struct Measured {
-    real: Table,
+    real: DeviceTable,
     trace: Arc<Mutex<OutputTrace>>,
-    inner: Pull,
+    /// Published once before the device starts invoking callbacks.
+    inner: OnceLock<DevicePull>,
 }
 
-fn real() -> &'static Islands {
-    // SAFETY: the island table has the `Islands` layout and the process lifetime.
-    unsafe { &*mradm_device_islands().cast::<Islands>() }
+fn real() -> &'static DeviceIslands {
+    // SAFETY: the island returns its process-lifetime table.
+    unsafe { &*devices() }
 }
 
-unsafe fn measured<'a>(ctx: *mut c_void) -> &'a mut Measured {
-    unsafe { &mut *ctx.cast::<Measured>() }
+unsafe fn measured<'a>(ctx: *mut c_void) -> &'a Measured {
+    // The caller keeps the context alive until the device stops. Control calls and the
+    // audio callback share this reference, including when a pull reenters mark_end.
+    unsafe { &*ctx.cast::<Measured>() }
 }
 
 unsafe extern "C" fn measured_pull(
@@ -365,9 +322,13 @@ unsafe extern "C" fn measured_pull(
     len: usize,
     frames: usize,
 ) -> usize {
-    let m = unsafe { &*user.cast::<Measured>() };
+    let m = unsafe { measured(user) };
     let now = Instant::now();
-    let Some(inner) = m.inner.pull else {
+    let Some(DevicePull {
+        user,
+        pull: Some(inner),
+    }) = m.inner.get().copied()
+    else {
         return 0;
     };
     // The audio thread is the only writer while the device runs.
@@ -377,7 +338,7 @@ unsafe extern "C" fn measured_pull(
     }
     trace.previous = Some(now);
     trace.callbacks += 1;
-    let result = unsafe { inner(m.inner.user, out, len, frames) };
+    let result = unsafe { inner(user, out, len, frames) };
     trace.pull_duration.add(now.elapsed().as_secs_f64() * 1000.);
     trace.valid_frames += result as u64;
     if !out.is_null() && len != 0 {
@@ -394,19 +355,18 @@ unsafe extern "C" fn start(
     ctx: *mut c_void,
     channels: u32,
     rate: u32,
-    pull: *const Pull,
-    error: *const IslandError,
+    pull: *const DevicePull,
+    error: *const EngineIslandError,
 ) -> i32 {
     let m = unsafe { measured(ctx) };
     let Some(real_start) = m.real.start else {
         return 0;
     };
-    let pull = unsafe { &*pull };
-    m.inner = Pull {
-        user: pull.user,
-        pull: pull.pull,
-    };
-    let wrapped = Pull {
+    // A Scene output starts its device once and stops it even when start fails.
+    if m.inner.set(unsafe { *pull }).is_err() {
+        return mradm_engine::request::code::INVALID_ARGUMENT;
+    }
+    let wrapped = DevicePull {
         user: ctx,
         pull: Some(measured_pull),
     };
@@ -443,13 +403,14 @@ unsafe extern "C" fn set_volume(ctx: *mut c_void, gain: f32) {
         unsafe { f(m.real.ctx, gain) };
     }
 }
-unsafe extern "C" fn progress(ctx: *mut c_void, out: *mut c_void) {
+unsafe extern "C" fn progress(ctx: *mut c_void, out: *mut EngineSceneDeviceProgress) {
     let m = unsafe { measured(ctx) };
     if let Some(f) = m.real.progress {
         unsafe { f(m.real.ctx, out) };
     }
 }
 unsafe extern "C" fn destroy(ctx: *mut c_void) {
+    // Scene output stops and joins the native callbacks before destroying the device.
     let m = unsafe { Box::from_raw(ctx.cast::<Measured>()) };
     if let Some(f) = m.real.destroy {
         unsafe { f(m.real.ctx) };
@@ -461,13 +422,13 @@ unsafe extern "C" fn open(
     layout: Text,
     geometry: u32,
     device_id: Text,
-    out: *mut Table,
-    error: *const IslandError,
+    out: *mut DeviceTable,
+    error: *const EngineIslandError,
 ) -> i32 {
     let Some(real_open) = real().open else {
         return 6;
     };
-    let mut table = unsafe { *out };
+    let mut table = DeviceTable::empty();
     let status = unsafe { real_open(kind, layout, geometry, device_id, &mut table, error) };
     if status != 0 {
         return status;
@@ -479,14 +440,11 @@ unsafe extern "C" fn open(
     let ctx = Box::into_raw(Box::new(Measured {
         real: table,
         trace,
-        inner: Pull {
-            user: std::ptr::null_mut(),
-            pull: None,
-        },
+        inner: OnceLock::new(),
     }))
     .cast();
     unsafe {
-        *out = Table {
+        *out = DeviceTable {
             ctx,
             start: Some(start),
             stop: Some(stop),
@@ -504,17 +462,16 @@ unsafe extern "C" fn open(
     0
 }
 
-static PROXY: OnceLock<Islands> = OnceLock::new();
+static PROXY: OnceLock<DeviceIslands> = OnceLock::new();
 
 /// The island table with every device opened afterwards measured into `trace` (set once).
 pub fn measured_devices(trace: Arc<Mutex<OutputTrace>>) -> *const DeviceIslands {
     let _ = TRACE.set(trace);
-    let proxy = PROXY.get_or_init(|| Islands {
+    PROXY.get_or_init(|| DeviceIslands {
         system_spatial: real().system_spatial,
         open: Some(open),
         enumerate: real().enumerate,
-    });
-    std::ptr::from_ref(proxy).cast()
+    })
 }
 
 // ── The capture shim ─────────────────────────────────────────────────────────────

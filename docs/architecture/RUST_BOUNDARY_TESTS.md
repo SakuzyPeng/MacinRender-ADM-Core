@@ -559,20 +559,21 @@ G1 到 G4 分别处理无设备的工具、房间设备探针、SDK 删除和收
 | room_scene_benchmark（695 行）+ room_probe_metrics.h（294 行） | → example（feature `islands`）：kernel / kernel-worker / latency 模式直接驱动房间 Scene 渲染器；stream / stream-cycles / stream-device 经 Scene 流与生产的 Scene 输出（`EngineSceneOutput`），设备由测量代理包装；OSC 经 `api::osc`；`--list-devices`、录音与 `recordings.json` 不变，`scripts/room/device-probe.py` 读取的 JSON 行不变 |
 | room_file_device_probe（216 行） | → example（feature `islands`）：经生产的监听会话 `EngineMonitorSession`（导入、文件流式、渲染与设备岛）；进度与报告 JSON 不变 |
 
-**null 设备**：两个 Triple Balance 基准原经 miniaudio 的 null 后端拉取输出，改为每 10 ms（与该后端的周期相同）拉取一次的 Rust 时钟线程，
-不链接岛。
+**null 设备**：两个 Triple Balance 基准使用 10 ms 周期的 Rust 时钟线程。播放期间按累计帧时钟拉取，唤醒迟到时补齐已到期的拉取。
+文件监听基准在顺序渲染后重开流，用新流测冷跳转，再测同一目标的缓存跳转。
 
 **链接岛**：两个房间设备探针在 `mradm-ffi` 的 `[[example]]` 中要求 feature `islands`，`cargo test --workspace` 与其它 example 因此不链接 C++。
-CMake 把岛及其依赖的静态库与平台库逐行写进 `generated/mr_adm_island_link.txt`，`mradm-ffi` 的构建脚本只在开启 feature 且设置
+CMake 把岛及其依赖的库逐行写进 `generated/<config>/mr_adm_island_link.txt`，`mradm-ffi` 的构建脚本只在开启 feature 且设置
 `MR_ADM_ISLAND_LINK_FILE` 时把它们交给 example 的链接器。岛按名调用的 `mradm_*` 入口由 example 自带的 `mradm-ffi` 提供，不链接
 `mradm_capi` staticlib，因此需要不受归档顺序影响的链接器（ld64、link.exe、x86_64 Linux 上 Rust 默认的 lld）。`mr_adm_rust_quality`
-另以 feature `islands` 检查这些 example（检查不链接）。
+另以 feature `islands` 检查这些 example（检查不链接）。探针继承生产目标的 Rust 特性与所选的 CMake 优化配置。多配置生成器将
+可执行文件放在各自的配置目录中，共享库构建为房间探针写入设备岛的运行时搜索路径。
 
-**测量代理**：原 `MeasuredDevice` 包装 C++ `IAudioOutputDevice`。example 照 `engine_ffi.h` 镜像设备岛表的 `repr(C)` 记录，把代理表交给
-Scene 输出；代理转发真实的岛，只在 `start` 时包装拉取回调，记录回调间隔、拉取耗时与输出 PCM。`mradm-ffi` 不为此新增接口。
+**测量代理**：原 `MeasuredDevice` 包装 C++ `IAudioOutputDevice`。example 复用 `mradm-ffi` 的设备岛表，把代理表交给 Scene 输出。
+代理在设备启动前发布拉取回调，运行期间共享访问上下文，并记录回调间隔、拉取耗时与输出 PCM。
 
 **采集**：采集与回环输入需要 miniaudio 的采集设备，由 142 行的 C 垫片 `tests/manual/capture_tap.c`（`mr_adm_probe_capture`）在岛的
-miniaudio 实现上打开，example 经三个 C 函数调用。
+miniaudio 实现上打开，example 经三个 C 函数调用。探针独占创建非空的录音目录后才打开采集设备。
 
 **删除的测试支持**（G3）：`tests/support/sdk`（`RenderService` / `PreviewSession`、`MonitorSession`、`OscHeadTrackingReceiver`、
 场景导入、房间、能力记录与 HpTF 辅助）、`adm_scene`、`engine_renderer`、`live_scene`、`scene_stream`、`realtime`、`dsp`、

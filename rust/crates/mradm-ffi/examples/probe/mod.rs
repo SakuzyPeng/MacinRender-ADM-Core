@@ -1,6 +1,8 @@
 //! Shared by the manual benchmarks and probes (formerly C++ under `tests/manual`): the process's
 //! resident memory and a null output clock.
 #![allow(dead_code)]
+use mradm_engine::scene::stream;
+use mradm_render::live::{Plane, PlaneSource};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -127,14 +129,23 @@ mod platform {
 
 #[cfg(not(any(target_os = "macos", windows)))]
 mod platform {
-    /// The page size of the targets this runs on; `statm` counts pages.
-    const PAGE: u64 = 4096;
+    #[cfg(unix)]
     pub fn rss() -> u64 {
+        // SAFETY: sysconf takes the selector by value and returns the system page size in bytes.
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if page_size <= 0 {
+            return 0;
+        }
         std::fs::read_to_string("/proc/self/statm")
             .ok()
             .and_then(|s| s.split_whitespace().nth(1)?.parse::<u64>().ok())
-            .map_or(0, |pages| pages * PAGE)
+            .map_or(0, |pages| pages * page_size as u64)
     }
+    #[cfg(not(unix))]
+    pub fn rss() -> u64 {
+        0
+    }
+
     pub fn peak_rss() -> u64 {
         0
     }
@@ -166,23 +177,69 @@ impl NullClock {
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
     }
-    /// Runs on the calling thread until [`Self::stop`]: `pull(buffer, frames)` once per period.
+    /// Runs until [`Self::stop`], pulling once per elapsed period while playing.
     pub fn run(&self, channels: usize, sample_rate: u32, mut pull: impl FnMut(&mut [f32], usize)) {
         let frames = sample_rate as usize / 100;
         let period = Duration::from_secs_f64(frames as f64 / f64::from(sample_rate));
         let mut buffer = vec![0f32; frames * channels];
-        let mut next = Instant::now();
+        let mut next = Instant::now() + period;
         while !self.stop.load(Ordering::Acquire) {
-            next += period;
             if let Some(wait) = next.checked_duration_since(Instant::now()) {
                 std::thread::sleep(wait);
-            } else {
-                // Late: keep the clock instead of bursting to catch up.
-                next = Instant::now();
+            }
+            if self.stop.load(Ordering::Acquire) {
+                break;
             }
             if self.playing.load(Ordering::Acquire) {
                 pull(&mut buffer, frames);
+                // Keep the sample clock moving after a late wake, as miniaudio's null
+                // backend does.
+                next += period;
+            } else {
+                // Discard only time spent paused.
+                next = Instant::now() + period;
             }
         }
+    }
+}
+
+/// Consecutive fixture channels borrowed for one render or submission without allocating.
+pub struct Planes<'a> {
+    pub pcm: &'a [Vec<f32>],
+    pub first_id: u64,
+    pub frames: u32,
+}
+
+impl PlaneSource for Planes<'_> {
+    fn plane(&self, index: usize) -> Plane<'_> {
+        Plane {
+            element_id: self.first_id + index as u64,
+            has_signal: true,
+            samples: &self.pcm[index][..self.frames as usize],
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = Plane<'_>> + Clone {
+        (0..self.pcm.len()).map(|index| self.plane(index))
+    }
+}
+
+impl stream::PlaneInputs for Planes<'_> {
+    fn len(&self) -> usize {
+        self.pcm.len()
+    }
+
+    fn plane(&self, index: usize) -> stream::PlaneInput {
+        stream::PlaneInput {
+            element_id: self.first_id + index as u64,
+            sample_count: self.frames,
+            stride: 1,
+            has_signal: true,
+            has_samples: true,
+        }
+    }
+
+    fn sample(&self, plane: usize, index: usize) -> f32 {
+        self.pcm[plane][index]
     }
 }

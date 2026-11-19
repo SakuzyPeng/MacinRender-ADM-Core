@@ -235,6 +235,9 @@ fn run() -> Result<bool, String> {
         != 0
     {}
     let rtf = start.elapsed().as_secs_f64() / 70.;
+    drop(stream);
+    // A sequential render populates checkpoints. Use a fresh stream for the cold seek.
+    let mut stream = open(&path, &layout, &scene)?;
     let seek = |stream: &mut Native| -> Result<f64, String> {
         let start = Instant::now();
         stream

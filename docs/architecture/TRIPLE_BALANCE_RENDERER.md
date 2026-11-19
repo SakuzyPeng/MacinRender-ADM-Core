@@ -124,7 +124,7 @@ Release 的 `mr_adm_triple_balance_monitor_benchmark [9.1.6|9+10+3]` 使用 13 �
 （7.1.2 bed、两个尺寸对象和一个点源）经 null 音频设备按实际时钟循环监听 60 秒，输出 RTF、
 首次／缓存跳转耗时、underrun 和 macOS 内存峰值。它不代替物理设备或高对象数素材的验收。
 R3 G 起它是 `mradm-ffi` 的 Rust example（`cmake --build <build> --target mr_adm_triple_balance_monitor_benchmark`
-按 Release 构建），null 设备改为每 10 ms 拉取一次的 Rust 时钟线程，与 miniaudio null 后端的周期相同。
+在 Release 配置运行），null 设备由 Rust 时钟线程每 10 ms 拉取一次。迟到时按累计帧时钟补齐，冷跳转在新打开的流上计时。
 
 ## Scene 流（C ABI v1.44）
 
