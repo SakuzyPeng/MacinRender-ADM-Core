@@ -341,12 +341,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_audio_island_tests)
     add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
 
-    add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
-    target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_opus_mka_smoke_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_opus_mka_smoke_tests)
-    add_test(NAME mr_adm_opus_mka_smoke_tests COMMAND mr_adm_opus_mka_smoke_tests)
-
     add_executable(mr_adm_iamf_smoke_tests tests/unit/iamf_smoke_test.cpp)
     target_link_libraries(mr_adm_iamf_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     target_compile_definitions(mr_adm_iamf_smoke_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)

@@ -36,14 +36,14 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
         return 1;
     }
     const auto& e = *request;
-    if (e.island < 1U || e.island > 9U || (e.island >= 2U && e.island <= 4U)) {
-        return 2; // Not a C++ audio island (the Apple backend has its own; FLAC is in Rust).
+    if (e.island < 1U || e.island > 9U || (e.island >= 2U && e.island <= 5U)) {
+        return 2; // Not a C++ audio island (the Apple backend has its own; FLAC and Opus are in Rust).
     }
     try {
         *reply = {};
         reply->ffmpeg_major = -1;
         std::optional<Cancel> cancel; // The probe and the metadata take no stop token.
-        if (e.island >= 5U && e.island <= 8U) {
+        if (e.island >= 6U && e.island <= 8U) {
             cancel.emplace(*context);
         }
         const auto token = cancel ? cancel->token() : std::stop_token{};
@@ -58,9 +58,6 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
             reply->ffmpeg_major = packager.ffmpeg_major;
             break;
         }
-        case 5:
-            done(*reply, convert_to_opus_mka(src, dst, layout, e.bitrate, token));
-            break;
         case 6:
             done(*reply,
                  convert_to_apac(src,

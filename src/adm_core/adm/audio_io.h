@@ -110,37 +110,6 @@ class FloatCafWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-// Streaming writer for Matroska Audio (.mka) files with Opus-encoded audio.
-// Accepts float32 input at 48000 Hz (the only rate Opus supports from external
-// input without resampling). Uses VBR at 128 kbps for stereo or 64 kbps × ch
-// for multichannel (transparent for Opus VBR). Channel mapping: family 0 for
-// mono/stereo; family 1 for standard 5.1 / 7.1 after Vorbis-order permutation;
-// family 2 for HOA/ambisonics; family 255 for layouts without Opus semantics.
-// Call convert_to_opus_mka() rather than this class directly in the pipeline.
-class FloatOpusMkaWriter {
-  public:
-    // bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto
-    // (64 kbps/ch, minimum 128 kbps for stereo).
-    static Result<FloatOpusMkaWriter> open(const std::string& path,
-                                           uint32_t channels,
-                                           uint32_t sample_rate,
-                                           uint32_t bitrate_per_ch_kbps = 0,
-                                           const std::string& layout_id = {});
-    ~FloatOpusMkaWriter();
-    FloatOpusMkaWriter(FloatOpusMkaWriter&&) noexcept;
-    FloatOpusMkaWriter& operator=(FloatOpusMkaWriter&&) noexcept;
-    FloatOpusMkaWriter(const FloatOpusMkaWriter&) = delete;
-    FloatOpusMkaWriter& operator=(const FloatOpusMkaWriter&) = delete;
-
-    uint64_t write(const float* samples, uint64_t frame_count);
-    Result<void> close();
-
-  private:
-    FloatOpusMkaWriter() = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
-
 // Type-erased audio file writer: CAF for a .caf path (FloatCafWriter), WAV otherwise
 // (FloatWavWriter). For CAF, layout_id must be a known output layout identifier; it is
 // ignored for WAV.
@@ -198,19 +167,6 @@ bool iamf_mp4_packager_available();
 // Returns unsupported if no suitable packager is found in PATH.
 Result<void> package_iamf_to_mp4(const std::string& iamf_path,
                                  const std::string& mp4_path,
-                                 const std::stop_token& cancel_token = {});
-
-// Encode a fully post-processed float32 WAV (src_path) to Opus MKA (mka_path).
-// src_path must be 48000 Hz (Opus requirement). layout_id controls Opus channel
-// mapping where the format has standard semantics (5.1/7.1 Vorbis order,
-// hoa3 ambisonics); it is also mirrored into container metadata by the engine
-// layer. Use this as the final pipeline step after all gain adjustments (Rust
-// postprocess) — re-encoding degrades lossy quality.
-// bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto.
-Result<void> convert_to_opus_mka(const std::string& src_path,
-                                 const std::string& mka_path,
-                                 const std::string& layout_id = {},
-                                 uint32_t bitrate_per_ch_kbps = 0,
                                  const std::stop_token& cancel_token = {});
 
 enum class ApacContainer {

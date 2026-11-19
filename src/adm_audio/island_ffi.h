@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-// Runs request->island 1 (MP4 packager probe) or 5-9 (FLAC is Rust's) and returns 0 with any failure in
+// Runs request->island 1 (MP4 packager probe) or 6-9 (FLAC, Opus: Rust) and returns 0 with any failure in
 // reply; returns 2 for another island and 1 for NULL. context->cancelled may be called from any thread.
 int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
                            const MradmIslandContext* context,

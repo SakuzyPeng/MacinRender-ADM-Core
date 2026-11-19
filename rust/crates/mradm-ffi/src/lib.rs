@@ -22,6 +22,7 @@ mod engine_service;
 mod flac;
 mod hptf;
 mod meter;
+mod opus_mka;
 mod osc;
 mod output_dsp;
 mod render;

@@ -1,6 +1,6 @@
 # 七期 7.2：编码器迁入 Rust
 
-> 状态：A 已完成（2026-11-19，本机 Linux x64）；B（Opus MKA）、C（IAMF 与 MP4）、D（APAC 编排）待做。
+> 状态：A、B 已完成（2026-11-19，本机 Linux x64）；C（IAMF 与 MP4）、D（APAC 编排）待做。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单与对照方法见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.2 把编码器的 C++ 封装迁入 Rust：
@@ -11,7 +11,7 @@
 | 批 | 内容 | 状态 |
 | --- | --- | --- |
 | A | FLAC 写出与 Vorbis comment；删除 dr_flac 与没有生产调用者的 FLAC 读取链 | 已完成 |
-| B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装 | 待做 |
+| B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装与 Tags | 已完成 |
 | C | IAMF bridge 调用、MP4 打包器的探测与运行、MP4 元数据 atom | 待做 |
 | D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 待做 |
 
@@ -106,3 +106,88 @@ C++ 的 FLAC 检查移植为 Rust 测试。
 
 - macOS 与 Windows 上 Rust 直接链接 libFLAC 的符号，包括状态字符串表 `FLAC__StreamEncoderInitStatusString` / `FLAC__Metadata_ChainStatusString`。vendored 静态库在 Windows 上使用 `FLAC__NO_DLL`。
 - 在两平台上用同一命令表录参考与候选，对照 `encode-flac-*`。
+
+## B：Opus MKA
+
+### 迁入 Rust 的部分
+
+**`mradm-ffi` `opus_mka`** 取代 `opus_mka_io.cpp`（835 行），逐项照搬原岛的元素、字节布局、顺序与错误文字。
+
+编码器：
+- libopus 的 surround multistream 编码器，`OPUS_APPLICATION_AUDIO`；
+- mapping family：HOA（`hoa*` 且声道数为平方数）用 2，1–2 声道用 0，标准 5.1 / 7.1（或无布局且不超过 8 声道）用 1，其余用 255；
+- 5.1 / 7.1 按 Vorbis 顺序重排声道；
+- VBR，不限制 VBR；码率为每声道 64 kbps，1–2 声道用 128 kbps，另可指定 6–320 kbps 每声道；
+- lookahead 作为 preskip；
+- `ctl` 是 C 变参函数，Rust 按变参声明调用，aarch64 Apple 上的 ABI 也正确。
+
+Matroska 封装：
+- EBML 头、未知长度的 Segment；
+- Info 中先写占位的 Duration，关闭时回填；
+- Tracks：A_OPUS、CodecPrivate 为 OpusHead、CodecDelay、SeekPreRoll、DefaultDuration；
+- 每 20 ms 一帧写成 SimpleBlock，帧时刻距 cluster 起点超过 5 秒时开新 cluster，相对时间戳为 int16；
+- 关闭时最后一个不完整的帧补零编码，再回填 Duration。
+
+细节：
+- size vint 的宽度照原实现的边界：恰为全 1 标记的值进位到下一宽度；
+- track UID 是随机的 64 位数：原实现取自 `std::random_device`，现在取自标准库 `RandomState`，CLI 记录对它做归一化；
+- 元数据（原 `write_mka_metadata`）：Targets 后依次为 ENCODER、DATE_RECORDED、RENDERER、OUTPUT_LAYOUT、INTEGRATED_LOUDNESS（1 位小数）与 TRUE_PEAK（2 位小数），组成 Tags 插在第一个未知长度的 Cluster 之前；小数格式取 `mradm_engine::fmt::fixed`，与原 `std::fixed` 相同。
+
+`Runner::run` 接下 `Island::EncodeOpus` 与扩展名为 `.mka` 的 `Island::WriteMetadata`。原岛对 Opus 不报进度，现在也不报。C++ 岛对岛 5 返回 2。
+
+### 删除
+
+- `opus_mka_io.cpp`；
+- `audio_io.h` 的 `FloatOpusMkaWriter` 与 `convert_to_opus_mka`；
+- `write_mka_metadata` 与 `.mka` 元数据分派；
+- `island.cpp` 的岛 5；
+- `mr_adm_audio` 对 Opus 的链接：libopus 仍列在交给 Cargo 的编解码库清单中；
+- `opus_mka_smoke_test.cpp` 与 ctest `mr_adm_opus_mka_smoke_tests`。
+
+剩下的 C++ 编码器（APAC、IAMF）在 Linux 上不可用，`audio_island_test.cpp` 因此只检查不接的岛（2、3、4、5、0、10）与 NULL 请求。
+
+### 测试的去向
+
+`mradm-ffi` `opus_mka` 的 Rust 测试：
+- **OpusHead**：2 声道用 family 0；`wav71` 用 family 1，5 个流、3 个耦合流，mapping 为 0 6 1 2 3 4 5 7；`hoa3` 用 family 2，16 个流、0 个耦合流，mapping 为恒等；24 声道用 family 255；
+- **Duration**：4,800 帧回填为 100 ms；1,000 帧补零成 2 帧，回填为 40 ms；
+- **cluster**：12 秒的文件有 3 个 cluster（起于 0、5,020、10,040 ms）；
+- **Tags**：位于第一个 Cluster 之前，含各标签，负零保留符号；找不到 Cluster 时报错；
+- **检查**：44.1 kHz 源、5 kbps 码率被拒；开始前取消时不留输出、源文件保留；取消在每块之前检查；
+- **规则**：size vint 与 ID 的字节、扩展名判断。
+
+### 对照与故障注入
+
+**对照**：与迁移前的构建（同一参考 `mradm`）对照，删除 C++ 之前和之后各做一次，都是 134 条命令 0 差异。其中逐字节相同的 Opus MKA 输出共 12 个：
+- 2 / 6 / 8 / 10 / 12 / 16 / 24 声道与 HOA3；
+- 6 / 64 / 320 kbps 码率；
+- 12 秒长输入与裁剪；
+- 响度归一化后的 Tags；
+- `-v` 日志。
+
+96 kHz 的拒绝路径（不产生文件）的退出码与错误文字也相同。
+
+**故障注入**：两处植入的缺陷都被抓到。
+- cluster 间隔改为 4 秒：只有超过 4 秒的两个输出（`encode-mka-51-long`、`encode-mka-trim`）不同，符合预期；
+- 标签 `DATE_RECORDED` 改名为 `DATE`：12 个 MKA 输出全部不同。
+
+**其他检查**：
+- ctest 23/23；
+- Rust 质量检查、两个目标的交叉 clippy、FFI 头校验、许可证检查与 `check-changed.sh` 都通过。
+
+### 规模
+
+- 生产 C/C++ 8,024 → 7,141 行；
+- 岛接口 1,054 → 1,051 行；
+- C++ 测试 9,201 → 8,788 行。
+
+### 发布说明
+
+- Opus MKA 的字节、错误与日志不变（track UID 本来就是随机的）。
+- Windows 上的改进：原 C++ 用窄字符 `fopen` / `fstream` 打开路径，当前代码页表示不了的字符会失败；现在经 UTF-8 路径打开宽字符路径，同时修正了 `.mka` 元数据的同一问题。
+
+### 待维护者复核
+
+- macOS 与 Windows 上 Rust 直接链接 libopus，并经变参调用 `opus_multistream_encoder_ctl`（aarch64 的变参 ABI）。
+- 在两平台上用同一命令表对照 `encode-mka-*`。
+

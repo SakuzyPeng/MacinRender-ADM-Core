@@ -85,9 +85,9 @@ if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
 endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF, Opus MKA, APAC, IAMF and metadata I/O. WAVE sample I/O goes through Rust
-# mradm-wav (wav_backend.h); FLAC output and its Vorbis comment are in Rust (mradm-ffi `flac`, 7.2 A),
-# which calls libFLAC directly (listed with the codec libraries below).
+# Float32 WAV/CAF, APAC, IAMF and metadata I/O. WAVE sample I/O goes through Rust mradm-wav
+# (wav_backend.h); FLAC and Opus MKA output and their metadata are in Rust (mradm-ffi `flac` /
+# `opus_mka`, 7.2 A / B), which calls libFLAC and libopus directly (the codec libraries below).
 
 add_library(mr_adm_audio STATIC)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
@@ -101,7 +101,6 @@ target_sources(
         adm_audio/iamf_io.cpp
         adm_audio/island.cpp
         adm_audio/metadata_io.cpp
-        adm_audio/opus_mka_io.cpp
         adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -112,7 +111,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE Opus::opus MacinRender::ADMDsp
+    PRIVATE MacinRender::ADMDsp
 )
 target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
 if(MR_ADM_ENABLE_IAMF)
