@@ -5,8 +5,9 @@
 //!
 //! The exports call the Rust crates directly (R2); what needs a C table, a callback that keeps an
 //! address or a platform service comes from `mradm_ffi::api`, never from its `mradm_*` entries.
-//! This is also the staticlib CMake links: it carries mradm-ffi, whose private `mradm_*` entries
-//! the C++ islands and tests still call.
+//! Built as the shared `libmradm_capi` (a cdylib: rustc exports exactly the `adm_*` functions, as no
+//! other crate of the graph has a `#[no_mangle]` function), as the staticlib the C++ tests link, and
+//! as the library of the `mradm` executable (6.6).
 #![allow(clippy::missing_safety_doc)]
 
 mod cancel;
@@ -24,6 +25,11 @@ mod scene;
 mod services;
 mod string;
 mod version;
+
+/// Runs the `mradm` command line of this process (`src/bin/mradm.rs`); the exit code.
+pub fn cli_main() -> i32 {
+    cli::main()
+}
 
 #[cfg(test)]
 mod test_alloc;

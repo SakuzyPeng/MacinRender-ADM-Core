@@ -5,10 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-# The one Rust library CMake links: the public C ABI exports implemented in Rust, together with
-# every private `mradm_*` entry of mradm-ffi that the C++ shells and islands call.
+# The public C ABI: the shared libmradm_capi (cdylib), the staticlib the C++ tests of the CMake tree
+# link, and the library of the mradm executable (6.6).
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "mradm"
+path = "src/bin/mradm.rs"
 
 [dependencies]
 mradm-cli = { path = "../mradm-cli" }

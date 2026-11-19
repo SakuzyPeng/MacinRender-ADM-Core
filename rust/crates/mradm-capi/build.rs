@@ -2,15 +2,41 @@ use std::path::Path;
 
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
-    println!("cargo::rerun-if-env-changed=MR_ADM_FLAC_LINK_FILE");
-    // CMake owns the FLAC provider. Cargo-linked examples and tests need the same
-    // library, but must not bundle another copy into the production staticlib.
-    if let Some(library) = std::env::var_os("MR_ADM_FLAC_LINK_FILE") {
-        let library = Path::new(&library).display();
-        println!("cargo::rerun-if-changed={library}");
-        println!("cargo::rustc-link-arg={library}");
-    }
     version();
+    shared_library_name();
+}
+
+/// The shared library's name as its consumers record it, as CMake set it before 6.6: SONAME
+/// `libmradm_capi.so.<major>` on ELF; on macOS the install name `@rpath/libmradm_capi.<major>.dylib`
+/// with the product version as current version and `<major>.0.0` as compatibility version (the
+/// product version is `project(VERSION)` of the top-level CMakeLists.txt, as version_metadata.py
+/// reads it). Windows names the DLL by its file name.
+fn shared_library_name() {
+    let manifest = std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let cmake = Path::new(&manifest).join("../../../CMakeLists.txt");
+    println!("cargo::rerun-if-changed={}", cmake.display());
+    let text = std::fs::read_to_string(&cmake).expect("CMakeLists.txt");
+    let version = text
+        .split("project(")
+        .nth(1)
+        .and_then(|rest| rest.split(')').next())
+        .and_then(|args| {
+            args.split_whitespace()
+                .skip_while(|w| *w != "VERSION")
+                .nth(1)
+        })
+        .expect("project(... VERSION x.y.z) in CMakeLists.txt");
+    let major = version.split('.').next().expect("major version");
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if os == "macos" {
+        println!(
+            "cargo::rustc-cdylib-link-arg=-Wl,-install_name,@rpath/libmradm_capi.{major}.dylib"
+        );
+        println!("cargo::rustc-cdylib-link-arg=-Wl,-current_version,{version}");
+        println!("cargo::rustc-cdylib-link-arg=-Wl,-compatibility_version,{major}.0.0");
+    } else if os != "windows" {
+        println!("cargo::rustc-cdylib-link-arg=-Wl,-soname,libmradm_capi.so.{major}");
+    }
 }
 
 /// `adm_api_version_*` return the version macros of `c_api.h`, the one place they are set.

@@ -30,10 +30,10 @@ FFI_CRATE = RUST_ROOT / "crates" / "mradm-ffi"
 CBINDGEN_CONFIG = FFI_CRATE / "cbindgen.toml"
 CAPI_CRATE = RUST_ROOT / "crates" / "mradm-capi"
 CAPI_HEADER = "include/adm/c_api.h"
-# Headers of private mradm-capi entries called from C++ (types from c_api.h): the command line's
-# entry, called by the mradm executable's main. A new private entry must be declared in a header
-# listed here.
-CAPI_FFI_HEADERS = ["src/adm_cli/cli_ffi.h"]
+# Headers of private mradm-capi entries called from C++ (types from c_api.h). There are none since
+# 6.6: the shared library is a Rust cdylib, which would export any `#[no_mangle]` function, and the
+# command line is the mradm executable's Rust main. The check below fails on any private entry.
+CAPI_FFI_HEADERS: list[str] = []
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [

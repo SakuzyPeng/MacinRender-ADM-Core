@@ -11,9 +11,7 @@ pub mod islands {
     pub use crate::engine::{Facts, PlatformIslands, platform};
     pub use crate::render::apple_island::AppleIslands;
     pub use crate::render::device_island::{DeviceEnumeration, DeviceIslands};
-    #[cfg(feature = "islands")]
     pub use crate::render::device_island::{DevicePull, DeviceTable};
-    #[cfg(feature = "islands")]
     pub use crate::render::{
         engine_monitor::EngineIslandError, engine_scene_output::EngineSceneDeviceProgress,
     };

@@ -1,0 +1,22 @@
+[package]
+name = "mradm-islands-sys"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+links = "mradm_islands"
+build = "build.rs"
+
+# The C/C++ islands and third-party C libraries (src/CMakeLists.txt) that mradm-ffi calls by name: its
+# build script builds them through the cmake crate, or links a tree that already built them
+# (MRADM_NATIVE_LINK_FILE, set by the top-level CMake test tree). Nothing to call from Rust here.
+[lib]
+path = "src/lib.rs"
+
+[build-dependencies]
+cmake = { workspace = true }
+
+[features]
+# MR_ADM_CONSISTENCY_DIAGNOSTICS of the islands' project (measurement only).
+diagnostics = []

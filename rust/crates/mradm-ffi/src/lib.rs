@@ -5,6 +5,9 @@
 //! The `mradm_*` entries serve the C++ islands and tests through one table of function pointers
 //! (`services`, never by name since 6.6 A); Rust callers use only [`api`].
 
+// The islands and C libraries this crate calls by name: a crate nothing names is not linked.
+extern crate mradm_islands_sys;
+
 use mradm_dsp::{Error, Result};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},

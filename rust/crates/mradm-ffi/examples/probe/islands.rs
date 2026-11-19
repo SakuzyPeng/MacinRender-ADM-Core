@@ -1,4 +1,4 @@
-//! The C++ islands of the room device probes (feature `islands`): the island tables, the output
+//! The C++ islands of the room device probes (linked through mradm-islands-sys): the island tables, the output
 //! devices, a measuring proxy over the device table, the capture shim (`tests/manual/capture_tap.c`)
 //! and the recordings, histograms and distributions of their reports.
 //!

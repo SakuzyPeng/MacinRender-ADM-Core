@@ -9,469 +9,26 @@ project(
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
-option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
-option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
-option(MR_ADM_CORE_FETCH_DEPS "Fetch the C/C++ dependencies when not found" ON)
-option(MR_ADM_CORE_USE_INSTALLED_DEPS "Use installed CMake package configs before FetchContent dependencies" ON)
-option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when available" OFF)
-option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
-option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
-option(MR_ADM_ENABLE_ROOM_CUDA "Build the optional Windows ROOM CUDA runtime (opt-in only)" OFF)
-option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools prebuilt bridge" OFF)
-option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
+option(MR_ADM_BUILD_CAPI_BUNDLE "Accepted and ignored since 6.6: the shared libmradm_capi is always built" OFF)
 option(MR_ADM_BUILD_HEADMOTION "Build standalone AirPods motion shim (macOS)" OFF)
 
-# The C API bundle links the complete static dependency closure into one shared
-# library. On ELF platforms every object in those archives must be built as PIC,
-# so establish the default before FetchContent and any project targets are created.
-if(MR_ADM_BUILD_CAPI_BUNDLE)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-endif()
-
-set(MR_ADM_IAMF_AOM_ROOT "" CACHE PATH "Root directory of the prebuilt AOM iamf-tools bridge SDK")
-set(MR_ADM_FLAC_PROVIDER "AUTO" CACHE STRING "libFLAC provider: AUTO, SYSTEM, or VENDORED")
-set_property(CACHE MR_ADM_FLAC_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
-option(MR_ADM_USE_SYSTEM_FLAC "Shortcut for MR_ADM_FLAC_PROVIDER=SYSTEM" OFF)
-set(MR_ADM_OPUS_PROVIDER "AUTO" CACHE STRING "libopus provider: AUTO, SYSTEM, or VENDORED")
-set_property(CACHE MR_ADM_OPUS_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
-option(MR_ADM_USE_SYSTEM_OPUS "Shortcut for MR_ADM_OPUS_PROVIDER=SYSTEM" OFF)
-
-# 编译缓存：探测到 ccache/sccache 就接为编译启动器（找不到则优雅降级，不影响无缓存环境/CI）。
-# 显著加速全量与切分支重编；不改变编译产物。
-if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
-    find_program(MR_ADM_COMPILER_CACHE NAMES ccache sccache)
-    if(MR_ADM_COMPILER_CACHE)
-        set(CMAKE_C_COMPILER_LAUNCHER "${MR_ADM_COMPILER_CACHE}")
-        set(CMAKE_CXX_COMPILER_LAUNCHER "${MR_ADM_COMPILER_CACHE}")
-        message(STATUS "Compiler cache enabled: ${MR_ADM_COMPILER_CACHE}")
-    endif()
-endif()
-
-function(mr_adm_core_enable_fast_debug_flags)
-    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-        return()
-    endif()
-
-    foreach(lang IN ITEMS C CXX)
-        set(flags_var "CMAKE_${lang}_FLAGS_DEBUG")
-        set(flags "${${flags_var}}")
-
-        if(MSVC)
-            foreach(pattern IN ITEMS
-                    "(^| )[/-]Od( |$)"
-                    "(^| )[/-]RTC[^ ]*( |$)"
-                    "(^| )[/-]O[0-2dx]( |$)"
-                    "(^| )[/-]Ob[0-2]( |$)"
-                    "(^| )[/-]Z[7iI]( |$)"
-                    "(^| )-g( |$)"
-                    "(^| )-Og( |$)")
-                string(REGEX REPLACE "${pattern}" " " flags "${flags}")
-            endforeach()
-            # sccache/ccache 无法缓存 /Zi 产生的独立 PDB；当启用编译器启动器时改用 /Z7，
-            # 把调试信息内嵌进 .obj，使对象文件可被缓存（主要面向 CI 的增量构建提速）。
-            if(CMAKE_${lang}_COMPILER_LAUNCHER MATCHES "ccache|sccache")
-                string(APPEND flags " /Z7 /O1 /Ob1")
-            else()
-                string(APPEND flags " /Zi /O1 /Ob1")
-            endif()
-        elseif("${CMAKE_${lang}_COMPILER_ID}" MATCHES "Clang|GNU")
-            string(REGEX REPLACE "(^| )-Og( |$)" " " flags "${flags}")
-            string(APPEND flags " -Og")
-        endif()
-
-        string(REGEX REPLACE " +" " " flags "${flags}")
-        string(STRIP "${flags}" flags)
-        set(${flags_var} "${flags}" CACHE STRING "Flags used by the ${lang} compiler during Debug builds." FORCE)
-    endforeach()
-endfunction()
-mr_adm_core_enable_fast_debug_flags()
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-if(WIN32)
-    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
-endif()
-if(APPLE)
-    # Xcode 15+ ld64 warns "ignoring duplicate libraries" when a static lib appears both
-    # explicitly (a target links it for its headers) and transitively in the same link closure.
-    # It is benign — ld de-duplicates and links correctly — so suppress it where supported.
-    include(CheckLinkerFlag)
-    check_linker_flag(CXX "LINKER:-no_warn_duplicate_libraries" MR_ADM_LD_NO_WARN_DUPLICATE_LIBRARIES)
-    if(MR_ADM_LD_NO_WARN_DUPLICATE_LIBRARIES)
-        add_link_options("LINKER:-no_warn_duplicate_libraries")
-    endif()
-endif()
-if(NOT DEFINED MR_ADM_FLAC_AUTO_BUILD_TYPE)
-    set(MR_ADM_FLAC_AUTO_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE INTERNAL "Initial build type for FLAC AUTO provider")
-endif()
-if(NOT DEFINED MR_ADM_OPUS_AUTO_BUILD_TYPE)
-    set(MR_ADM_OPUS_AUTO_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE INTERNAL "Initial build type for Opus AUTO provider")
-endif()
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(MRProject)
 
-include(GNUInstallDirs)
-include(MRWarnings)
-# 受控数值构建的编译标志必须在依赖被 add_subdirectory() 进来之前设好，否则 FetchContent
-# 拉下来的第三方目录拿不到（路线图 §5.1 第 3 项）。
-include(MRStrictFp)
-include(MRDependencies)
-include(MRRoomCuda)
+# ── Islands ───────────────────────────────────────────────────────────────────
+# The C/C++ islands and third-party C libraries (src/CMakeLists.txt, the project mradm-islands-sys
+# builds on its own), then the Rust library and tools built by Cargo over them (cmake/MRRust.cmake).
+add_subdirectory(src)
 include(MRRust)
 mr_adm_core_write_dependency_record()
-include(MRStaticAnalysis)
-find_package(Threads REQUIRED)
-if(MR_ADM_ENABLE_IAMF)
-    include(MRIamfAomBridge)
-    mr_adm_core_find_iamf_aom_bridge()
-endif()
 
-# ── adm_core ──────────────────────────────────────────────────────────────────
-# The C++ domain headers the islands still use (errors, options, progress, logs, render records).
-# Header-only in production; the C++ SDK the tests use lives in tests/support/sdk.
-
-add_library(mr_adm_core INTERFACE)
-add_library(MacinRender::ADMCore ALIAS mr_adm_core)
-
-# The C++ types the islands share (errors, options, progress and logging, capability and render
-# records, the audio island API): private to the build since 6.5 C, not installed; only c_api.h
-# stays in include/adm.
-target_sources(
-    mr_adm_core
-    INTERFACE
-        FILE_SET HEADERS
-        BASE_DIRS src/adm_core
-        FILES
-            src/adm_core/adm/capability.h
-            src/adm_core/adm/direct_speakers_matrix.h
-            src/adm_core/adm/errors.h
-            src/adm_core/adm/live_override.h
-            src/adm_core/adm/logging.h
-            src/adm_core/adm/options.h
-            src/adm_core/adm/progress.h
-            src/adm_core/adm/render.h
-            src/adm_core/adm/room.h
-            src/adm_core/adm/screen.h
-)
-
-target_include_directories(mr_adm_core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core")
-if(MSVC)
-    # Shared headers and their consuming sources use UTF-8, regardless of the Windows code page.
-    target_compile_options(mr_adm_core INTERFACE /utf-8)
-endif()
-
-# The Rust services table the islands call (6.6 A): Rust binds it (mradm_islands_bind) before it first
-# calls an island. After the Rust library on every link line, so single-pass linkers resolve the bind.
-add_library(mr_adm_rust_services STATIC src/adm_core/rust_services.cpp)
-target_link_libraries(mr_adm_rust_services PUBLIC MacinRender::ADMCore)
-mr_adm_core_apply_warnings(mr_adm_rust_services)
-mr_adm_core_apply_static_analysis(mr_adm_rust_services)
-target_link_libraries(mr_adm_dsp INTERFACE mr_adm_rust_services)
-
-# ── adm_render_common ─────────────────────────────────────────────────────────
-# Backend-agnostic object preprocessing and block timeline helpers used by
-# speaker renderers. No libear/SAF/Apple types may appear in this target.
-
-add_library(mr_adm_render_common)
-add_library(MacinRender::ADMRenderCommon ALIAS mr_adm_render_common)
-
-target_sources(
-    mr_adm_render_common
-    PRIVATE
-        src/adm_render_common/engine_records.cpp
-        src/adm_render_common/render_common.cpp
-        src/adm_render_common/speaker_layouts.cpp
-)
-target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
-target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads
-    PRIVATE MacinRender::ADMAudio MacinRender::ADMDsp)
-mr_adm_core_apply_warnings(mr_adm_render_common)
-mr_adm_core_apply_static_analysis(mr_adm_render_common)
-
-if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
-    target_compile_definitions(mr_adm_render_common PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
-endif()
-
-# ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF/FLAC, Opus MKA, APAC, and metadata I/O.
-# WAVE sample I/O goes through Rust mradm-wav (wav_backend.h). DR_FLAC_IMPLEMENTATION is
-# defined in flac_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
-
-add_library(mr_adm_audio)
-add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
-
-target_sources(
-    mr_adm_audio
-    PRIVATE
-        src/adm_audio/apac_io.cpp
-        src/adm_audio/apac_worker_island.cpp
-        src/adm_audio/audio_handles.cpp
-        src/adm_audio/flac_io.cpp
-        src/adm_audio/iamf_io.cpp
-        src/adm_audio/island.cpp
-        src/adm_audio/metadata_io.cpp
-        src/adm_audio/opus_mka_io.cpp
-        src/adm_audio/wav_io.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS src/adm_core
-        FILES
-            src/adm_core/adm/audio_io.h
-)
-
-target_link_libraries(mr_adm_audio
-    PUBLIC MacinRender::ADMCore
-    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus MacinRender::ADMDsp
-)
-target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-if(MR_ADM_ENABLE_IAMF)
-    target_link_libraries(mr_adm_audio PRIVATE MacinRender::IamfAomBridge)
-endif()
-if(APPLE)
-    find_library(MR_ADM_AUDIOTOOLBOX_FW AudioToolbox REQUIRED)
-    find_library(MR_ADM_COREFOUNDATION_FW CoreFoundation REQUIRED)
-    target_link_libraries(mr_adm_audio PRIVATE
-        ${MR_ADM_AUDIOTOOLBOX_FW}
-        ${MR_ADM_COREFOUNDATION_FW}
-    )
-endif()
-mr_adm_core_apply_warnings(mr_adm_audio)
-mr_adm_core_apply_static_analysis(mr_adm_audio)
-
-# ── adm_apple ─────────────────────────────────────────────────────────────────
-# macOS-only AUSpatialMixer backend. Apple framework types are confined here.
-
-if(APPLE)
-    add_library(mr_adm_apple)
-    add_library(MacinRender::ADMRenderApple ALIAS mr_adm_apple)
-
-    find_library(MR_ADM_AVFOUNDATION_FW AVFoundation REQUIRED)
-    find_library(MR_ADM_COREMEDIA_FW CoreMedia REQUIRED)
-    find_library(MR_ADM_FOUNDATION_FW Foundation REQUIRED)
-
-    target_sources(
-        mr_adm_apple
-        PRIVATE
-            src/adm_apple/spatial_mixer_renderer.cpp
-            src/adm_apple/apple_island.cpp
-            src/adm_apple/avsamplebuffer_device.mm
-        PUBLIC
-            FILE_SET HEADERS
-            BASE_DIRS src/adm_core
-            FILES
-                src/adm_core/adm/render_apple.h
-    )
-    # ARC for the Objective-C++ AVSampleBufferAudioRenderer sink (manages the ObjC lifetimes).
-    set_source_files_properties(src/adm_apple/avsamplebuffer_device.mm
-        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
-
-    target_link_libraries(mr_adm_apple
-        PUBLIC MacinRender::ADMCore
-        PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio MacinRender::ADMRenderCommon
-                ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
-    )
-    # adm_apple consumes the realtime IAudioOutputDevice interface (third-party-free header) to
-    # provide the AVSampleBufferAudioRenderer monitor sink. Include-only, no link dependency —
-    # the device implements the pure interface; this keeps Apple frameworks confined here.
-    target_include_directories(mr_adm_apple PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
-    mr_adm_core_apply_warnings(mr_adm_apple)
-    mr_adm_core_apply_static_analysis(mr_adm_apple)
-endif()
-
-# ── adm_windows ───────────────────────────────────────────────────────────────
-# Windows-only system-spatial monitor sink (ISpatialAudioClient). Windows COM / SpatialAudio
-# types are confined here; the factory returns the third-party-free IAudioOutputDevice.
-
-if(WIN32)
-    add_library(mr_adm_windows)
-    add_library(MacinRender::ADMRenderWindows ALIAS mr_adm_windows)
-
-    target_sources(mr_adm_windows PRIVATE
-        src/adm_windows/spatialaudioclient_device.cpp
-    )
-    target_link_libraries(mr_adm_windows
-        PUBLIC MacinRender::ADMCore
-        PRIVATE Ole32 MacinRender::ADMRenderCommon
-    )
-    # adm_windows consumes the realtime IAudioOutputDevice interface (third-party-free header) to
-    # provide the ISpatialAudioClient monitor sink. Include-only, no link dependency — the device
-    # implements the pure interface; this keeps Windows COM headers confined here.
-    target_include_directories(mr_adm_windows PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
-    mr_adm_core_apply_warnings(mr_adm_windows)
-    mr_adm_core_apply_static_analysis(mr_adm_windows)
-endif()
-
-# ── islands ───────────────────────────────────────────────────────────────────
-# The C islands the Rust library calls by name besides the audio and Apple islands: the platform
-# facts (mradm_platform_islands) and the output devices (mradm_device_islands: miniaudio here, the
-# system-spatial sinks in adm_apple / adm_windows).
-
-add_library(mr_adm_islands)
-add_library(MacinRender::ADMIslands ALIAS mr_adm_islands)
-target_sources(mr_adm_islands PRIVATE
-    src/adm_engine/platform_island.cpp
-    src/adm_realtime/device_island.cpp
-    src/adm_realtime/miniaudio_device.cpp
-)
-target_include_directories(mr_adm_islands PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime")
-# miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
-target_link_libraries(mr_adm_islands
-    PUBLIC MacinRender::ADMCore
-    PRIVATE Threads::Threads miniaudio MacinRender::ADMAudio MacinRender::ADMDsp MacinRender::ADMRenderCommon
-)
-if(APPLE)
-    target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderApple)
-endif()
-if(WIN32)
-    # The ISpatialAudioClient sink and its layouts (make_spatialaudioclient_device /
-    # system_spatial_layouts) live in mr_adm_windows.
-    target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderWindows)
-endif()
-mr_adm_core_apply_warnings(mr_adm_islands)
-mr_adm_core_apply_static_analysis(mr_adm_islands)
-
-# ── adm_c_api ─────────────────────────────────────────────────────────────────
-# The public C ABI: the Rust mradm-capi implementation, with the C++ progress-callback trampolines and
-# the libraries of the islands it calls.
-
-add_library(mr_adm_c_api)
-add_library(MacinRender::ADMCAPI ALIAS mr_adm_c_api)
-
-target_sources(
-    mr_adm_c_api
-    PRIVATE
-        src/adm_c_api/adm_c_api.cpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS include
-        FILES
-            include/adm/c_api.h
-)
-
-target_link_libraries(mr_adm_c_api
-    PUBLIC MacinRender::ADMIslands MacinRender::ADMAudio
-    PRIVATE mradm_capi
-)
-if(APPLE)
-    target_link_libraries(mr_adm_c_api PRIVATE MacinRender::ADMRenderApple)
-endif()
-set_target_properties(mr_adm_c_api PROPERTIES
-    VERSION   ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-)
-# The Rust C ABI (libmradm_capi.a) calls back into C++ by name: the progress trampolines
-# (adm_c_api.cpp), the platform and device islands (mr_adm_islands), the audio island and the APAC
-# encode worker (adm_audio).
-# Those archives come before the Rust staticlib on the link line, so a single-pass linker (GNU ld,
-# lld) takes their objects only if the symbols are already undefined when it reaches them: for a
-# program linking the C ABI statically, and for the shared bundle, which would otherwise be linked
-# with the islands left undefined.
-set(MR_ADM_CAPI_CALLBACK_LINK_OPTIONS)
-if(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED)
-    foreach(_mr_symbol mradm_capi_progress_v1 mradm_capi_progress_v2 mradm_platform_islands mradm_device_islands
-            mradm_audio_island mradm_audio_apac_child mradm_islands_bind)
-        list(APPEND MR_ADM_CAPI_CALLBACK_LINK_OPTIONS "LINKER:--undefined=${_mr_symbol}")
-    endforeach()
-endif()
-get_target_property(_mr_c_api_type mr_adm_c_api TYPE)
-if(_mr_c_api_type STREQUAL "SHARED_LIBRARY" OR MR_ADM_BUILD_CAPI_BUNDLE)
-    # Keep every public Rust entry reachable in each shared C ABI target.
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    set(_mr_capi_references "${CMAKE_CURRENT_BINARY_DIR}/generated/mradm_capi_entries.c")
-    add_custom_command(
-        OUTPUT "${_mr_capi_references}"
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
-            --write-references "${_mr_capi_references}"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/adm/c_api.h"
-            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
-        COMMENT "Generating the C ABI entry table from c_api.h"
-        VERBATIM
-    )
-endif()
-if(_mr_c_api_type STREQUAL "STATIC_LIBRARY")
-    target_link_options(mr_adm_c_api INTERFACE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
-else()
-    target_sources(mr_adm_c_api PRIVATE "${_mr_capi_references}")
-endif()
-mr_adm_core_apply_warnings(mr_adm_c_api)
-mr_adm_core_apply_static_analysis(mr_adm_c_api)
-
-# ── adm_c_api bundle (self-contained shared lib for GUI / P-Invoke) ────────────
-# 默认 OFF,不影响常规构建。开启后产出单个自包含 libmradm_capi.dylib/.so/.dll,
-# 把 c_api 与其全部静态依赖(engine → renderers → 第三方)whole-archive 进同一动态库,
-# 供托管侧(Avalonia GUI)经 [LibraryImport("mradm_capi")] 直接加载。
-# core 源码完全不动:这里只是多一个可选的链接目标。
-if(MR_ADM_BUILD_CAPI_BUNDLE)
-    # 直接把 C ABI 源文件编进 SHARED 目标,让 Windows 导出扫描能看到 adm_* 入口。
-    add_library(mradm_capi_bundle SHARED src/adm_c_api/adm_c_api.cpp)
-    set_target_properties(mradm_capi_bundle PROPERTIES
-        OUTPUT_NAME mradm_capi
-        VERSION   ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR}
-    )
-    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMIslands MacinRender::ADMAudio mradm_capi)
-    target_link_options(mradm_capi_bundle PRIVATE ${MR_ADM_CAPI_CALLBACK_LINK_OPTIONS})
-    target_sources(mradm_capi_bundle PRIVATE "${_mr_capi_references}")
-    target_include_directories(mradm_capi_bundle PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-    # Keep Rust's allocator/panic machinery and every private DSP symbol inside
-    # this DSO. Consumers continue to see only the established adm_* C boundary.
-    # scripts/quality/check-capi-exports.py verifies the result on every platform.
-    if(WIN32)
-        set(_mr_capi_def "${CMAKE_CURRENT_BINARY_DIR}/generated/mradm_capi.def")
-        add_custom_command(
-            OUTPUT "${_mr_capi_def}"
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
-                --write-def "${_mr_capi_def}"
-            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/adm/c_api.h"
-                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
-            COMMENT "Generating mradm_capi.def from c_api.h"
-            VERBATIM
-        )
-        target_sources(mradm_capi_bundle PRIVATE "${_mr_capi_def}")
-    elseif(APPLE)
-        target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMRenderApple)
-        target_link_options(mradm_capi_bundle PRIVATE
-            "LINKER:-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/cmake/mradm-capi.exports")
-    elseif(UNIX)
-        target_link_options(mradm_capi_bundle PRIVATE
-            "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/mradm-capi.map")
-    endif()
-endif()
-
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# ── AirPods motion shim (GUI, macOS) ─────────────────────────────────────────
 if(APPLE AND MR_ADM_BUILD_HEADMOTION)
     enable_language(OBJC)
     add_library(mr_headtrack SHARED gui/native/mr_headtrack.m gui/native/mr_headmotion.m)
     target_compile_options(mr_headtrack PRIVATE -fobjc-arc)
     target_link_libraries(mr_headtrack PRIVATE "-framework CoreMotion" "-framework Foundation")
     set_target_properties(mr_headtrack PROPERTIES INSTALL_NAME_DIR "@rpath")
-endif()
-
-if(MR_ADM_CORE_BUILD_CLI)
-    # The command line is Rust (mradm-cli through mradm-capi's mradm_cli_main); the executable links
-    # the C ABI library for the islands and the progress trampolines the Rust render driver calls.
-    add_executable(mradm_exe)
-    set_target_properties(mradm_exe PROPERTIES OUTPUT_NAME mradm)
-    target_sources(mradm_exe PRIVATE src/adm_cli/main.cpp)
-    # A shared ADMCAPI does not reference the private CLI entry and may omit it from its Rust
-    # archive. Retain that entry in the executable without adding it to the public C ABI.
-    target_link_libraries(mradm_exe PRIVATE MacinRender::ADMCAPI MacinRender::ADMAudio mradm_capi)
-    if(APPLE)
-        target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
-        # AudioToolbox's APAC encoder rejects ClientDataFormat on current macOS when
-        # the helper only carries the linker's transient signature. Give standalone
-        # CLI/test builds the same full ad-hoc signature used by the GUI bundle.
-        add_custom_command(TARGET mradm_exe POST_BUILD
-            COMMAND /usr/bin/codesign --force --sign - "$<TARGET_FILE:mradm_exe>"
-            COMMENT "Ad-hoc signing mradm for APAC worker execution"
-            VERBATIM
-        )
-    endif()
-    mr_adm_core_apply_warnings(mradm_exe)
-    mr_adm_core_apply_static_analysis(mradm_exe)
 endif()
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -567,7 +124,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
                 "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/${_mr_tool_example}${CMAKE_EXECUTABLE_SUFFIX}"
                 "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_${_mr_tool_example}${CMAKE_EXECUTABLE_SUFFIX}"
-            DEPENDS FLAC::FLAC
+            DEPENDS mradm_native
             USES_TERMINAL
             VERBATIM)
     endforeach()
@@ -582,67 +139,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(CMAKE_CONFIGURATION_TYPES)
         string(APPEND _mr_probe_output_dir "/$<CONFIG>")
     endif()
-    # The room device probes (feature `islands`) also link the C++ islands: the libraries below in
-    # dependency order, then the platform libraries, one linker argument per line of a generated
-    # file their build script reads (MR_ADM_ISLAND_LINK_FILE). The islands call mradm-ffi by name,
-    # which the example provides itself, so the Rust C ABI staticlib is not linked. The capture
-    # shim is the probes' miniaudio input over the islands' miniaudio implementation.
-    add_library(mr_adm_probe_capture STATIC EXCLUDE_FROM_ALL tests/manual/capture_tap.c)
-    target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
-    set(_mr_island_libraries mr_adm_probe_capture mr_adm_islands)
-    if(APPLE)
-        list(APPEND _mr_island_libraries mr_adm_apple)
-    elseif(WIN32)
-        list(APPEND _mr_island_libraries mr_adm_windows)
-    endif()
-    list(APPEND _mr_island_libraries mr_adm_render_common mr_adm_audio mr_adm_rust_services Opus::opus FLAC::FLAC)
-    if(TARGET MacinRender::IamfAomBridge)
-        list(APPEND _mr_island_libraries MacinRender::IamfAomBridge)
-    endif()
-    set(_mr_island_link_lines)
-    foreach(_mr_library IN LISTS _mr_island_libraries)
-        string(APPEND _mr_island_link_lines "$<TARGET_LINKER_FILE:${_mr_library}>\n")
-    endforeach()
-    if(APPLE)
-        foreach(_mr_framework AudioToolbox AudioUnit CoreAudio CoreFoundation AVFoundation CoreMedia Foundation)
-            string(APPEND _mr_island_link_lines "-framework\n${_mr_framework}\n")
-        endforeach()
-        string(APPEND _mr_island_link_lines "-lc++\n-lobjc\n")
-        if(BUILD_SHARED_LIBS)
-            string(APPEND _mr_island_link_lines
-                "-Wl,-rpath,@loader_path\n-Xlinker\n-rpath\n-Xlinker\n$<TARGET_FILE_DIR:mr_adm_islands>\n")
-        endif()
-    elseif(WIN32)
-        string(APPEND _mr_island_link_lines "Ole32.lib\n")
-    else()
-        string(APPEND _mr_island_link_lines "-lstdc++\n-lpthread\n-ldl\n-lm\n")
-        if(BUILD_SHARED_LIBS)
-            string(APPEND _mr_island_link_lines
-                "-Wl,-rpath,$ORIGIN\n-Xlinker\n-rpath\n-Xlinker\n$<TARGET_FILE_DIR:mr_adm_islands>\n")
-        endif()
-    endif()
-    set(_mr_island_link_file "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/mr_adm_island_link.txt")
-    file(GENERATE OUTPUT "${_mr_island_link_file}" CONTENT "${_mr_island_link_lines}")
+    # The room device probes link the islands like every mradm-ffi target (mradm-islands-sys); only
+    # they reference the capture shim (tests/manual/capture_tap.c, in the islands' link manifest).
     foreach(_mr_probe IN ITEMS osc_head_tracking_probe triple_balance_scene_benchmark
             triple_balance_monitor_benchmark room_scene_benchmark room_file_device_probe)
-        set(_mr_probe_env)
-        set(_mr_probe_example_features --no-default-features ${_mr_consistency_feature_args})
-        set(_mr_probe_depends FLAC::FLAC)
-        if(_mr_probe MATCHES "^room_")
-            set(_mr_probe_env "MR_ADM_ISLAND_LINK_FILE=${_mr_island_link_file}")
-            list(APPEND _mr_probe_example_features --features islands)
-            list(APPEND _mr_probe_depends ${_mr_island_libraries})
-            if(MR_ADM_ENABLE_ROOM_CUDA)
-                list(APPEND _mr_probe_depends mr_adm_room_cuda)
-            endif()
+        set(_mr_probe_depends mradm_native)
+        if(_mr_probe MATCHES "^room_" AND MR_ADM_ENABLE_ROOM_CUDA)
+            list(APPEND _mr_probe_depends mr_adm_room_cuda)
         endif()
         add_custom_target(mr_adm_${_mr_probe}
-            COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
-                "${MR_ADM_RUST_NATIVE_ENV}" ${_mr_probe_env}
-                "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked
+            COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked
                 --profile "${_mr_probe_profile}"
                 --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
-                --example ${_mr_probe} ${_mr_probe_example_features}
+                --example ${_mr_probe} --no-default-features ${_mr_consistency_feature_args}
                 --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_mr_probe_output_dir}"
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -668,27 +177,25 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # shared libmradm_capi and load whichever copy sits next to them (an $ORIGIN / @loader_path rpath; on
     # Windows the executable's directory), so scripts/consistency/capi-capture.py can stage them beside
     # either library. Built by mr_adm_capi_consumers.
-    if(MR_ADM_BUILD_CAPI_BUNDLE)
-        function(mr_adm_add_capi_consumer target)
-            add_executable(${target} EXCLUDE_FROM_ALL ${ARGN})
-            target_include_directories(${target} PRIVATE include)
-            target_link_libraries(${target} PRIVATE mradm_capi_bundle)
-            if(APPLE)
-                set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "@loader_path")
-            elseif(UNIX)
-                set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
-            endif()
-            if(MSVC)
-                target_compile_options(${target} PRIVATE /utf-8)
-            endif()
-            mr_adm_core_apply_warnings(${target})
-        endfunction()
-        mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
-        mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_consumer_test.cpp)
-        target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-        add_dependencies(mr_adm_c_api_consumer_tests mr_adm_capi_room_fixture)
-        add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests)
-    endif()
+    function(mr_adm_add_capi_consumer target)
+        add_executable(${target} EXCLUDE_FROM_ALL ${ARGN})
+        target_include_directories(${target} PRIVATE include)
+        target_link_libraries(${target} PRIVATE mradm_capi_bundle)
+        if(APPLE)
+            set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "@loader_path")
+        elseif(UNIX)
+            set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
+        endif()
+        if(MSVC)
+            target_compile_options(${target} PRIVATE /utf-8)
+        endif()
+        mr_adm_core_apply_warnings(${target})
+    endfunction()
+    mr_adm_add_capi_consumer(mr_adm_capi_capture tests/tools/capi_capture.cpp)
+    mr_adm_add_capi_consumer(mr_adm_c_api_consumer_tests tests/unit/c_api_consumer_test.cpp)
+    target_compile_definitions(mr_adm_c_api_consumer_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
+    add_dependencies(mr_adm_c_api_consumer_tests mr_adm_capi_room_fixture)
+    add_custom_target(mr_adm_capi_consumers DEPENDS mr_adm_capi_capture mr_adm_c_api_consumer_tests)
 
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
@@ -698,17 +205,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_room_realtime_tools_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_realtime_tools_test.py")
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(_room_96k_capi mr_adm_c_api)
-            if(TARGET mradm_capi_bundle)
-                set(_room_96k_capi mradm_capi_bundle)
-            endif()
-            get_target_property(_room_96k_library_type ${_room_96k_capi} TYPE)
-            if(_room_96k_library_type STREQUAL "SHARED_LIBRARY")
-                add_test(NAME mr_adm_room_96k_tests COMMAND "${Python3_EXECUTABLE}" -B
-                    "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_96k_test.py"
-                    "$<TARGET_FILE:mradm_exe>" "$<TARGET_FILE:${_room_96k_capi}>")
-                set_tests_properties(mr_adm_room_96k_tests PROPERTIES TIMEOUT 120)
-            endif()
+            add_test(NAME mr_adm_room_96k_tests COMMAND "${Python3_EXECUTABLE}" -B
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_96k_test.py"
+                "$<TARGET_FILE:mradm_exe>" "$<TARGET_FILE:mradm_capi_bundle>")
+            set_tests_properties(mr_adm_room_96k_tests PROPERTIES TIMEOUT 120)
         endif()
         set(MR_ADM_ROOM_PREP_PYTHON "${Python3_EXECUTABLE}" CACHE FILEPATH
             "Existing Python environment with numpy, scipy and h5py for room preparation tests")
@@ -745,7 +245,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_custom_target(mr_adm_consistency_tools
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/collection.py"
                 --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
-            DEPENDS mradm_exe mr_adm_make_fixture mr_adm_pcm_bits mr_adm_consistency_render
+            DEPENDS mr_adm_rust mr_adm_make_fixture mr_adm_pcm_bits mr_adm_consistency_render
                 mr_adm_consistency_scene mr_adm_consistency_stream mr_adm_consistency_kernels mr_adm_repeat_render
             USES_TERMINAL
         )
@@ -858,7 +358,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_custom_target(mr_adm_rust_test_binaries ALL
         COMMAND ${_mr_rust_unit_test_command} --no-run
         COMMAND ${_mr_room_trace_test_command} --no-run
-        DEPENDS mradm_capi-static
+        DEPENDS mr_adm_rust
         USES_TERMINAL VERBATIM)
 
     add_test(NAME mr_adm_rust_unit_tests COMMAND ${_mr_rust_unit_test_command})
@@ -915,7 +415,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(TARGET mradm_exe)
         target_compile_definitions(mr_adm_apac_smoke_tests
             PRIVATE MRADM_EXE_PATH="$<TARGET_FILE:mradm_exe>")
-        add_dependencies(mr_adm_apac_smoke_tests mradm_exe)
+        add_dependencies(mr_adm_apac_smoke_tests mr_adm_rust)
     endif()
     mr_adm_core_apply_warnings(mr_adm_apac_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_apac_smoke_tests)
@@ -952,7 +452,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         # The target of the same name builds that test binary (release.yml builds it by name).
         add_custom_target(mr_adm_cli_smoke_tests
             COMMAND ${_mr_rust_unit_test_command} --test binary --no-run
-            DEPENDS mradm_capi-static mradm_exe
+            DEPENDS mr_adm_rust
             USES_TERMINAL VERBATIM)
         add_test(NAME mr_adm_cli_smoke_tests COMMAND ${_mr_rust_unit_test_command} --test binary)
         set_tests_properties(mr_adm_cli_smoke_tests PROPERTIES
@@ -962,14 +462,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
 endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
-# The public surface is the C ABI only: c_api.h, the shared libmradm_capi (MR_ADM_BUILD_CAPI_BUNDLE)
-# and the mradm command line. There is no C++ SDK or CMake package.
+# The public surface is the C ABI only: c_api.h, the shared libmradm_capi with its versioned name and
+# links (and the import library on Windows) and the mradm command line, all built by Cargo
+# (cmake/MRRust.cmake). There is no C++ SDK or CMake package.
 install(FILES include/adm/c_api.h DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/adm")
-if(TARGET mradm_capi_bundle)
-    install(TARGETS mradm_capi_bundle)
+if(WIN32)
+    install(FILES "$<TARGET_FILE:mradm_capi_bundle>" DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    install(FILES "$<TARGET_LINKER_FILE:mradm_capi_bundle>" DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+else()
+    foreach(_mr_name IN ITEMS "${_mr_shared_name}" ${_mr_shared_links})
+        install(FILES "$<TARGET_FILE_DIR:mradm_capi_bundle>/${_mr_name}" DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+    endforeach()
 endif()
-if(TARGET mradm_exe)
-    install(TARGETS mradm_exe)
+if(MR_ADM_CORE_BUILD_CLI)
+    install(PROGRAMS "$<TARGET_FILE:mradm_exe>" DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif()
 
 # Optional untracked local targets (developer scratch / experiments). The `local/`

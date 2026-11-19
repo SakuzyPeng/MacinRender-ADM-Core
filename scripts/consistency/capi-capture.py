@@ -61,7 +61,7 @@ def stage(build, library, executables, directory):
     for name in executables:
         source = boundary.exe(build, name)
         if not source.is_file():
-            raise ValueError(f'missing {source} (build target mr_adm_capi_consumers with MR_ADM_BUILD_CAPI_BUNDLE=ON)')
+            raise ValueError(f'missing {source} (build target mr_adm_capi_consumers)')
         shutil.copy2(source, directory / source.name)
         staged[name] = digest(source.read_bytes())
     if not library.is_file():

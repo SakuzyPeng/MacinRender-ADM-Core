@@ -1,4 +1,4 @@
-//! The `mradm` command line: `mradm_cli_main`, which the `mradm` executable's `main` calls, runs
+//! The `mradm` command line: `cli_main`, which the `mradm` executable (`src/bin/mradm.rs`) calls, runs
 //! `mradm-cli` with this crate's engine calls (the same render driver, scene import, AXML reader,
 //! export and room package calls the C ABI exports use), the APAC encode worker of the audio
 //! island and a SIGINT handler.
@@ -396,8 +396,7 @@ impl Service for Engine {
 }
 
 /// Runs the `mradm` command line of this process; the exit code (101 for a panic).
-#[unsafe(no_mangle)]
-pub extern "C" fn mradm_cli_main() -> c_int {
+pub(crate) fn main() -> c_int {
     crate::guard::guard(101, || {
         mradm_cli::run(&Engine, std::env::args_os().collect())
     })
