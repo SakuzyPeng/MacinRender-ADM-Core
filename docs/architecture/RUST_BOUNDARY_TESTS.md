@@ -471,7 +471,7 @@ F 处理还依赖 C++ SDK（`RenderService`、`adm/io.h`、`tests/support/apple_
 - **自有后端与请求校验的检查移植为 Rust 测试**：C++ 只留真正需要岛的部分（FLAC 编码、Apple 后端），经 C ABI 或岛的窄 C 接口；
 - **Apple 测试由 Claude 在 Linux 上盲写，维护者在 macOS 复核后合并**。
 
-分四个子批提交：F1 WAV 包装、F2 FLAC 与自有后端、F3 Apple、F4 收尾。
+F1 到 F4 分别处理 WAV 包装、FLAC 与自有后端、Apple 和收尾。下表行数取自 F4 提交 `842b1b8e`。
 
 | C++ 测试 | 去向 |
 |---|---|
@@ -509,21 +509,18 @@ F 处理还依赖 C++ SDK（`RenderService`、`adm/io.h`、`tests/support/apple_
   测试用的 `.flac` 不是合法 WAVE，退回 WAV 读取同样报 2；改为扩展名为 `.flac` 的 WAVE 文件后检出。
 - F2：split-power 增益改为 0.70（`routing.rs` 检出；`lfe_render.rs` 沿用 C++ 测试 2.5 % 的 RMS 容差，未检出）、直通模式 LFE 串扰、
   FLAC 接受 5.1.2、暂存文件不删、5.1 FLAC 掩码错误。
-- F3（建议在 macOS 上做）：去掉 ADM → SpatialMixer 的方位符号翻转、流表忽略 `set_overrides`、`apple_island.cpp` 的 `plan_of`
-  丢掉朝向或矩阵。22.2 的 LFE 由 `mix_lfe_side_buses` 写入 CICP 13 槽位；在 macOS 上把 LFE1 从声道 3 改送声道 0，
-  `mr_adm_apple_smoke_tests` 检出声道 3 静音和声道 0 泄漏。
+- macOS 上逐项去掉 ADM 到 SpatialMixer 的方位符号翻转、忽略实时覆盖、丢弃 `plan_of` 的朝向或矩阵，
+  均触发对应的 Apple 冒烟或 DirectSpeakers 矩阵测试。在 `mix_lfe_side_buses` 中把 LFE1 从声道 3 改送声道 0，
+  Apple 冒烟检出声道 3 静音和声道 0 泄漏。
 
-### F 的验证
+### F1 到 F4 的验证
 
 - **Rust**：新增与改动的测试通过；workspace fmt 与 clippy `-D warnings` 通过；`mradm-ffi` 单元测试 39 项通过。
 - **C++ 侧**：每个子批 debug 构建与 ctest 通过（25 项）。
   - FFI 头校验通过：200 个函数、113 个结构体；
   - `quality_scripts_test.py`、`boundary_tools_test.py`、许可证检查与 C/C++ 棘轮通过；
   - 改动的 C++ 文件通过 clang-format 18 与 clang-tidy；本机没有 cppcheck。
-- **Apple 文件**：`apple_renderer_smoke_test.cpp`、`direct_speakers_matrix_render_test.cpp`、`lfe_routing_test.cpp` 的 Apple 分支与
-  `apple_island_driver.h` 在本机只做了 `clang++ -fsyntax-only -Wall -Wextra`（对照真实头文件；冒烟测试去掉了不变的 AudioToolbox 探针），
-  没有链接或运行。需要在 macOS 上运行 `mr_adm_apple_smoke_tests`、`mr_adm_lfe_routing_tests`、
-  `mr_adm_direct_speakers_matrix_render_tests` 与 `mr_adm_apple_island_tests`。
+- F3 在 Linux 上对 Apple 文件做了语法检查。合并前的 macOS 验证包括 Apple 冒烟、LFE 路由、DirectSpeakers 矩阵和 Apple 岛四项原生测试。
 - **对照参照构建 `b8914dc`**（main 在 F 开始时的提交；方法同 E，候选为各子批之后的 `consistency-a`）：
   - F1：C ABI 采集 3,283 行、36 个文件 0 差异；CLI 记录 113 条命令 0 差异；消费者测试对两个库都通过；共享库恰好导出 164 个 `adm_*`；
     完整 PCM 采集相同（220 个 fixture、989 项比较、176 个重放、256 个产物、666 份日志）。
@@ -531,6 +528,19 @@ F 处理还依赖 C++ SDK（`RenderService`、`adm/io.h`、`tests/support/apple_
   - F4（删除 10 个 `mradm-ffi` 入口之后）：同 F1，C ABI 采集、CLI 记录 0 差异，消费者测试对两个库都通过，导出 164 个 `adm_*`，
     完整 PCM 采集相同。只有链接 `mradm-ffi` 的 `mr_adm_repeat_render` 二进制摘要不同，比较前按 E 的做法中和。
 
-**规模**：生产 C/C++ 由 9,432 行降到 8,748 行；测试 C/C++ 由 24,816 行降到 22,110 行（`tests/unit` 9,746 → 7,707）。
-按棘轮计数，`mradm-ffi` 由 19,894 行降到 18,101 行，`mradm-render` 由 23,503 行增到 24,858 行，`mradm-engine` 由 26,631 行
-增到 26,881 行。SDK、`adm_scene` 与 `engine_renderer` 只剩 G 的手动探针与基准在用。
+### F 的 macOS 与 Windows 原生复核（2026-11-18）
+
+复核的源码为 `82512280`，包含 `b142e6f9` 的修正。
+
+- macOS arm64 开启 SOFA。以静态库和共享库分别构建 Release，两种构建各通过 10 项定向 CTest，独立共享库消费者均通过。
+  Apple 的双 LFE 拒绝用例从 `adm_render_result_message` 读取原因，同时检查返回码和输出文件。
+- Windows x64 使用 CP936 和关闭 SOFA 的规范 Release 构建。默认及中文临时目录各通过 7 项定向 CTest 和共享库消费者测试，
+  覆盖 FLAC、Opus 的预取消、最终 FLAC 的读写和元数据、HpTF 配置文件导入。
+- 两个平台均通过 36 项定向渲染测试和 39 项 FFI 单测，共享库各导出 164 个公开 C ABI 函数。
+- WAVE 的 320 例摘要调用离线渲染使用的 `MetadataFields::write_wav`。分别清空 Rust 和 C++ 写入端的
+  `OriginatorReference`，Rust 摘要和 C++ 字段断言各自检出。将 CAF 采样率从 48 kHz 错写成 44.1 kHz 时，
+  C++ 测试从 `desc` 块检出。将 EAR 的非 22.2 split-power 警告降为 Info 时，整段渲染测试检出级别变化。
+
+合并时生产 C/C++ 由 9,432 行降到 8,744 行，测试 C/C++ 由 24,816 行降到 22,124 行（`tests/unit` 9,746 → 7,720）。
+按棘轮计数，`mradm-ffi` 由 19,894 行降到 18,101 行，`mradm-render` 由 23,503 行增到 24,856 行，`mradm-engine` 由 26,631 行
+增到 26,846 行。SDK、`adm_scene` 与 `engine_renderer` 只剩 G 的手动探针与基准在用。
