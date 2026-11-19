@@ -274,6 +274,10 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             # As FLAC: linked statically, nothing of its own installed (CMake 3.28+).
             EXCLUDE_FROM_ALL)
         FetchContent_MakeAvailable(Opus)
+        if(MSVC AND TARGET opus AND CMAKE_MSVC_RUNTIME_LIBRARY)
+            # Opus sets its own per-configuration CRT. Match the rest of the Cargo link.
+            set_property(TARGET opus PROPERTY MSVC_RUNTIME_LIBRARY "${CMAKE_MSVC_RUNTIME_LIBRARY}")
+        endif()
         if(_mr_adm_core_had_shared_opus)
             set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_opus}" CACHE BOOL "" FORCE)
         else()
