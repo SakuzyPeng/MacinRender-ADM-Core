@@ -59,10 +59,11 @@ clang-tidy 脚本已经包含 macOS SDK 参数处理，且项目当前主要开�
 同一目标再把 `mradm-capi` 渲染成第二个一次性头，与公开的 `include/adm/c_api.h` 单向比较：Rust 实现的每个 `adm_*`
 都须在 `c_api.h` 中以相同签名声明（枚举 typedef 按 `int`、回调 typedef 按签名比较），仍在 C++ 的函数交给下面的导出面检查。
 
-C ABI 导出面（`scripts/quality/check-capi-exports.py`）在 ci 的三个构建 job、release 的三个 CLI job 和两个 GUI
-打包脚本中检查 `mradm_capi` 共享库恰好导出 `include/adm/c_api.h` 声明的 `adm_*` 函数：ELF / Mach-O 用 `nm`，
-PE 直接读 DLL 导出表。Windows bundle 链接由同一脚本从 `c_api.h` 生成的 `.def`，不再使用
-`WINDOWS_EXPORT_ALL_SYMBOLS`。
+C ABI 导出检查（`scripts/quality/check-capi-exports.py`）要求 `mradm_capi` 共享库的导出与 `include/adm/c_api.h` 的 `adm_*`
+声明一致。ELF 与 Mach-O 用 `nm`，PE 直接读 DLL 导出表。检查还要求当前头文件保留 `scripts/quality/capi-stable-exports.txt`
+中的旧符号，防止声明与导出同步改名或删除。基线取自 `e40638ca` 的 C ABI v1.50.0，覆盖 v1.9.0 和 v1.9.1 产品版的所有符号。
+发布新增 C ABI 函数时，把新符号追加到基线并依照 [ADR 0007](../adr/0007-c-abi-stability-policy.md) 保留旧符号。
+`mr_adm_c_api_tests` 从公开头文件链接共享库，Windows 会走 `mradm_capi.lib` 导入库。
 
 许可证与 SBOM 校验（`scripts/quality/check-licenses.sh`）在必需 CI 的 macOS / Linux debug job 中运行：
 校验 `third_party/manifest.json` 与 `cmake/MRDependencies.cmake`、`rust/Cargo.lock` 覆盖、DSP/ADM 资源

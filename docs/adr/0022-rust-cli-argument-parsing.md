@@ -44,5 +44,4 @@
 - 已知边角：CLI11 先完成整行分词再处理 `--help`，clap 遇到 `--help` 即停止；只有在 `--help` 之后还有其它分词错误时才可能不同，
   行尾缺值已在预扫描中照 CLI11 报 114。
 - CLI11 与 spdlog 移出构建与许可证清单（日志格式 `[level] message` 由 Rust 写出，彩色终端上照 spdlog 着色；Windows 控制台不着色）。
-- 将来改选项必须同时改选项表与 `cli-commands.json` 的记录，并保持 `cli-transcript.py` 对照 0 差异。
-  （六期 6.7 起这两个对照工具已删除：改选项时同步改选项表与 `mradm-cli` 的 `tests/binary.rs`。）
+- 6.7 起由 `mradm-cli` 的 `tests/binary.rs` 验证 CLI 契约。改选项时同步更新选项表与对应测试，分别检查退出码、stdout、stderr 与适用的输出文件。

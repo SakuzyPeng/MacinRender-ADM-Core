@@ -61,8 +61,9 @@ class AnalysisScopeTests(unittest.TestCase):
         (self.root / "README.md").write_text("Quality scope fixture.\n", encoding="utf-8")
         self.git("add", "README.md")
         self.git("commit", "-qm", "baseline")
+        self.c_source = "tests/manual/capture_tap.c"
         self.sources = ("src/adm_core/module.cpp", "tests/support/unconditional.cpp", "tests/unit/c_api_consumer_test.cpp")
-        for name in self.sources:
+        for name in (*self.sources, self.c_source):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("// Analysis fixture.\n", encoding="utf-8")
@@ -86,18 +87,30 @@ class AnalysisScopeTests(unittest.TestCase):
         result = subprocess.run(["bash", str(self.root / "scripts/quality" / script), *args],
                                 cwd=self.root, env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return {Path(call[0]).name: call[1:] for call in
-                (json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines())}
+        calls = {}
+        for line in self.log.read_text(encoding="utf-8").splitlines():
+            executable, *args = json.loads(line)
+            calls.setdefault(Path(executable).name, []).append(args)
+        return calls
 
     def test_sources_are_analyzed_unconditionally(self):
-        args = self.run_quality("clang-tidy.sh")["clang-tidy"]
+        (args,) = self.run_quality("clang-tidy.sh")["clang-tidy"]
         calls = self.run_quality("check-changed.sh")
         self.run_quality("cppcheck.sh")
+        check_c, check_cxx = calls["cppcheck"]
+        self.assertEqual(check_c[:2], ["--language=c", "--std=c11"])
+        self.assertEqual(check_cxx[:2], ["--language=c++", "--std=c++20"])
+        c_path = str(self.root / self.c_source)
+        self.assertIn(c_path, calls["clang-format"][0])
+        self.assertIn(c_path, check_c)
+        self.assertNotIn(c_path, check_cxx)
         for name in self.sources:
             path = str(self.root / name)
             self.assertIn(path, args, name)
-            for tool in ("clang-format", "clang-tidy", "cppcheck"):
-                self.assertIn(path, calls[tool], name)
+            self.assertIn(path, check_cxx, name)
+            self.assertNotIn(path, check_c, name)
+            for tool in ("clang-format", "clang-tidy"):
+                self.assertIn(path, calls[tool][0], name)
 
 
 class FfiArrayTests(unittest.TestCase):
@@ -235,6 +248,35 @@ class PublicHeaderTests(unittest.TestCase):
         self.assertEqual(sorted(header.functions), sorted(exports.declared_functions()))
         ret, params, _ = header.functions["adm_render_options_set_renderer"]
         self.assertEqual((str(ret), [str(p) for p in params]), ("i32", ["adm_render_options_t*", "i32"]))
+
+
+class CapiExportTests(unittest.TestCase):
+    def setUp(self):
+        self.exports = load_check("check-capi-exports")
+
+    def check_matching_exports(self, names):
+        errors = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["check-capi-exports.py", "libmradm_capi.dylib"]),
+            mock.patch.object(self.exports, "declared_functions", return_value=names),
+            mock.patch.object(self.exports, "nm_exports", return_value=names),
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(errors),
+        ):
+            result = self.exports.main()
+        return result, errors.getvalue()
+
+    def test_rename_in_both_header_and_library_is_rejected(self):
+        old = "adm_monitor_room_source_json"
+        names = self.exports.declared_functions()
+        names[names.index(old)] = old + "_v2"
+        result, errors = self.check_matching_exports(names)
+        self.assertEqual(result, 1, errors)
+        self.assertIn(old, errors)
+
+    def test_additive_symbol_is_allowed(self):
+        names = [*self.exports.declared_functions(), "adm_example_new_export"]
+        self.assertEqual(self.check_matching_exports(names), (0, ""))
 
 
 class CapiPrivateEntryTests(unittest.TestCase):

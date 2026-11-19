@@ -13,4 +13,5 @@ mradm-engine = { path = "../mradm-engine" }
 mradm-scene = { path = "../mradm-scene" }
 
 [dev-dependencies]
+mradm-json = { path = "../mradm-json" }
 mradm-testkit = { path = "../mradm-testkit" }
