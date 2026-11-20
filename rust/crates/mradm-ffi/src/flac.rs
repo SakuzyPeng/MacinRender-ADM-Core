@@ -2,13 +2,14 @@
 //! (24-bit, compression level 5) and the Vorbis comment written through libFLAC's metadata chain,
 //! with the calls, order and bytes of the C++ island they replace (`flac_io.cpp`). libFLAC is
 //! built by the islands' CMake project (`mradm-islands-sys`), not by a second Cargo build.
+use crate::metadata_temp::MetadataTemp;
 use mradm_engine::offline::Progress;
 use mradm_engine::render::{MetadataFields, metadata_comment, operation, stage};
 use mradm_engine::request::Error;
 use mradm_wav::Reader;
-use std::ffi::{CStr, c_char, c_int, c_void};
+use std::ffi::{c_int, c_void};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::{ptr, slice};
@@ -47,9 +48,6 @@ struct IoCallbacks {
 
 // Stable public libFLAC ABI (FLAC/stream_encoder.h, FLAC/metadata.h).
 unsafe extern "C" {
-    static FLAC__StreamEncoderInitStatusString: [*const c_char; 0];
-    static FLAC__Metadata_ChainStatusString: [*const c_char; 0];
-
     fn FLAC__stream_encoder_new() -> *mut Encoder;
     fn FLAC__stream_encoder_delete(encoder: *mut Encoder);
     fn FLAC__stream_encoder_set_channels(encoder: *mut Encoder, value: u32) -> c_int;
@@ -114,18 +112,55 @@ unsafe extern "C" {
     ) -> c_int;
 }
 
-/// The libFLAC name of status `index` in one of its status string tables.
-fn status_text(table: *const [*const c_char; 0], index: c_int) -> String {
-    let Ok(index) = usize::try_from(index) else {
-        return String::new();
-    };
-    let entry = unsafe { *table.cast::<*const c_char>().add(index) };
-    if entry.is_null() {
-        return String::new();
+// Format the stable enum values in Rust. The C status tables are data imports when FLAC is a
+// Windows DLL, while the codec functions work with either a static or an import library.
+fn status_text(prefix: &str, names: &[&str], status: c_int) -> String {
+    match names.get(status as usize) {
+        Some(name) => format!("{prefix}{name}"),
+        None => format!("{prefix}UNKNOWN ({status})"),
     }
-    unsafe { CStr::from_ptr(entry) }
-        .to_string_lossy()
-        .into_owned()
+}
+
+fn encoder_init_status(status: c_int) -> String {
+    const NAMES: &[&str] = &[
+        "OK",
+        "ENCODER_ERROR",
+        "UNSUPPORTED_CONTAINER",
+        "INVALID_CALLBACKS",
+        "INVALID_NUMBER_OF_CHANNELS",
+        "INVALID_BITS_PER_SAMPLE",
+        "INVALID_SAMPLE_RATE",
+        "INVALID_BLOCK_SIZE",
+        "INVALID_MAX_LPC_ORDER",
+        "INVALID_QLP_COEFF_PRECISION",
+        "BLOCK_SIZE_TOO_SMALL_FOR_LPC_ORDER",
+        "NOT_STREAMABLE",
+        "INVALID_METADATA",
+        "ALREADY_INITIALIZED",
+    ];
+    status_text("FLAC__STREAM_ENCODER_INIT_STATUS_", NAMES, status)
+}
+
+fn chain_status(status: c_int) -> String {
+    const NAMES: &[&str] = &[
+        "OK",
+        "ILLEGAL_INPUT",
+        "ERROR_OPENING_FILE",
+        "NOT_A_FLAC_FILE",
+        "NOT_WRITABLE",
+        "BAD_METADATA",
+        "READ_ERROR",
+        "SEEK_ERROR",
+        "WRITE_ERROR",
+        "RENAME_ERROR",
+        "UNLINK_ERROR",
+        "MEMORY_ALLOCATION_ERROR",
+        "INTERNAL_ERROR",
+        "INVALID_CALLBACKS",
+        "READ_WRITE_MISMATCH",
+        "WRONG_WRITE_CALL",
+    ];
+    status_text("FLAC__METADATA_CHAIN_STATUS_", NAMES, status)
 }
 
 fn failure(code: i32, message: impl Into<String>, path: &str) -> Error {
@@ -229,7 +264,7 @@ impl Writer {
         };
         if status != 0 {
             unsafe { FLAC__stream_encoder_delete(encoder) };
-            let text = status_text(&raw const FLAC__StreamEncoderInitStatusString, status);
+            let text = encoder_init_status(status);
             return Err(failure(
                 IO_ERROR,
                 format!("FLAC encoder init failed: {text}"),
@@ -351,43 +386,48 @@ fn wav_code(code: i32) -> i32 {
 
 // ── The Vorbis comment ──────────────────────────────────────────────────────────
 
-/// A metadata I/O handle: the source read back and rewritten, or the temporary file written.
-/// `eof` follows `feof`: set by a short read, cleared by a seek.
-struct Handle {
-    file: Option<BufReader<File>>,
-    temp: Option<BufWriter<File>>,
+/// The source of a metadata rewrite. Only a read that reaches the end sets EOF.
+struct MetadataSource<R> {
+    file: R,
     eof: bool,
 }
 
-unsafe extern "C" fn io_read(out: *mut c_void, size: usize, count: usize, h: *mut c_void) -> usize {
-    let h = unsafe { &mut *h.cast::<Handle>() };
-    let Some(file) = h.file.as_mut() else {
-        return 0;
-    };
+unsafe extern "C" fn io_read<R: Read>(
+    out: *mut c_void,
+    size: usize,
+    count: usize,
+    h: *mut c_void,
+) -> usize {
+    let source = unsafe { &mut *h.cast::<MetadataSource<R>>() };
     let Some(want) = size.checked_mul(count) else {
         return 0;
     };
-    if want == 0 {
+    if want == 0 || want > isize::MAX as usize {
         return 0;
     }
-    let buffer = unsafe { slice::from_raw_parts_mut(out.cast::<u8>(), want) };
-    let result = catch_unwind(AssertUnwindSafe(|| {
+    // libFLAC supplies writable memory, which can be uninitialized. Read takes initialized bytes.
+    let buffer = unsafe {
+        ptr::write_bytes(out.cast::<u8>(), 0, want);
+        slice::from_raw_parts_mut(out.cast::<u8>(), want)
+    };
+    source.eof = false;
+    catch_unwind(AssertUnwindSafe(|| {
         let mut got = 0;
         while got < want {
-            match file.read(&mut buffer[got..]) {
-                Ok(0) => break,
+            match source.file.read(&mut buffer[got..]) {
+                Ok(0) => {
+                    source.eof = true;
+                    break;
+                }
                 Ok(n) => got += n,
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(_) => break,
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                // libFLAC detects a read error as zero items without EOF, even after partial I/O.
+                Err(_) => return 0,
             }
         }
-        got
-    }));
-    let got = result.unwrap_or(0);
-    if got < want {
-        h.eof = true;
-    }
-    got / size
+        got / size
+    }))
+    .unwrap_or(0)
 }
 
 unsafe extern "C" fn io_write(
@@ -396,10 +436,7 @@ unsafe extern "C" fn io_write(
     count: usize,
     h: *mut c_void,
 ) -> usize {
-    let h = unsafe { &mut *h.cast::<Handle>() };
-    let Some(file) = h.temp.as_mut() else {
-        return 0;
-    };
+    let file = unsafe { &mut *h.cast::<BufWriter<File>>() };
     let Some(len) = size.checked_mul(count) else {
         return 0;
     };
@@ -413,11 +450,8 @@ unsafe extern "C" fn io_write(
     }
 }
 
-unsafe extern "C" fn io_seek(h: *mut c_void, offset: i64, whence: c_int) -> c_int {
-    let h = unsafe { &mut *h.cast::<Handle>() };
-    let Some(file) = h.file.as_mut() else {
-        return -1;
-    };
+unsafe extern "C" fn io_seek<R: Seek>(h: *mut c_void, offset: i64, whence: c_int) -> c_int {
+    let source = unsafe { &mut *h.cast::<MetadataSource<R>>() };
     let target = match whence {
         0 => match u64::try_from(offset) {
             Ok(o) => SeekFrom::Start(o),
@@ -427,37 +461,34 @@ unsafe extern "C" fn io_seek(h: *mut c_void, offset: i64, whence: c_int) -> c_in
         2 => SeekFrom::End(offset),
         _ => return -1,
     };
-    match catch_unwind(AssertUnwindSafe(|| file.seek(target))) {
+    match catch_unwind(AssertUnwindSafe(|| source.file.seek(target))) {
         Ok(Ok(_)) => {
-            h.eof = false;
+            source.eof = false;
             0
         }
         _ => -1,
     }
 }
 
-unsafe extern "C" fn io_tell(h: *mut c_void) -> i64 {
-    let h = unsafe { &mut *h.cast::<Handle>() };
-    let Some(file) = h.file.as_mut() else {
-        return -1;
-    };
-    match catch_unwind(AssertUnwindSafe(|| file.stream_position())) {
+unsafe extern "C" fn io_tell<R: Seek>(h: *mut c_void) -> i64 {
+    let source = unsafe { &mut *h.cast::<MetadataSource<R>>() };
+    match catch_unwind(AssertUnwindSafe(|| source.file.stream_position())) {
         Ok(Ok(p)) => i64::try_from(p).unwrap_or(-1),
         _ => -1,
     }
 }
 
-unsafe extern "C" fn io_eof(h: *mut c_void) -> c_int {
-    c_int::from(unsafe { &*h.cast::<Handle>() }.eof)
+unsafe extern "C" fn io_eof<R>(h: *mut c_void) -> c_int {
+    c_int::from(unsafe { &*h.cast::<MetadataSource<R>>() }.eof)
 }
 
-fn source_callbacks() -> IoCallbacks {
+fn source_callbacks<R: Read + Seek>() -> IoCallbacks {
     IoCallbacks {
-        read: Some(io_read),
+        read: Some(io_read::<R>),
         write: None,
-        seek: Some(io_seek),
-        tell: Some(io_tell),
-        eof: Some(io_eof),
+        seek: Some(io_seek::<R>),
+        tell: Some(io_tell::<R>),
+        eof: Some(io_eof::<R>),
         close: None,
     }
 }
@@ -525,6 +556,16 @@ impl Drop for Objects {
 /// Replaces (or inserts after STREAMINFO) the Vorbis comment of the FLAC file at `path`
 /// (`write_flac_metadata`): ENCODER, DATE, COMMENT and, for recognised layouts, the channel mask.
 pub(crate) fn write_metadata(path: &str, m: &MetadataFields) -> Result<(), Error> {
+    let file = File::open(path)
+        .map_err(|_| failure(IO_ERROR, "failed to open FLAC file for metadata", path))?;
+    write_metadata_from(path, m, BufReader::new(file))
+}
+
+fn write_metadata_from<R: Read + Seek>(
+    path: &str,
+    m: &MetadataFields,
+    file: R,
+) -> Result<(), Error> {
     let mut objects = Objects {
         chain: unsafe { FLAC__metadata_chain_new() },
         iterator: ptr::null_mut(),
@@ -533,25 +574,14 @@ pub(crate) fn write_metadata(path: &str, m: &MetadataFields) -> Result<(), Error
     if objects.chain.is_null() {
         return Err(failure(IO_ERROR, "FLAC metadata chain alloc failed", path));
     }
-    let Ok(file) = File::open(path) else {
-        return Err(failure(
-            IO_ERROR,
-            "failed to open FLAC file for metadata",
-            path,
-        ));
-    };
-    let mut source = Box::new(Handle {
-        file: Some(BufReader::new(file)),
-        temp: None,
-        eof: false,
-    });
-    let source_ptr: *mut c_void = ptr::from_mut(source.as_mut()).cast();
+    let mut source = MetadataSource { file, eof: false };
+    let source_ptr = ptr::from_mut(&mut source).cast();
     if unsafe {
-        FLAC__metadata_chain_read_with_callbacks(objects.chain, source_ptr, source_callbacks())
+        FLAC__metadata_chain_read_with_callbacks(objects.chain, source_ptr, source_callbacks::<R>())
     } == 0
     {
         let status = unsafe { FLAC__metadata_chain_status(objects.chain) };
-        let text = status_text(&raw const FLAC__Metadata_ChainStatusString, status);
+        let text = chain_status(status);
         return Err(failure(
             IO_ERROR,
             format!("FLAC metadata chain read failed: {text}"),
@@ -618,45 +648,33 @@ pub(crate) fn write_metadata(path: &str, m: &MetadataFields) -> Result<(), Error
         objects.iterator = ptr::null_mut();
         FLAC__metadata_chain_sort_padding(objects.chain);
     }
-    let temp_path = format!("{path}.metadata_tmp");
-    let Ok(temp_file) = File::create(&temp_path) else {
-        return Err(failure(
-            IO_ERROR,
-            "failed to open FLAC metadata temp file",
-            &temp_path,
-        ));
-    };
-    let mut temp = Box::new(Handle {
-        file: None,
-        temp: Some(BufWriter::new(temp_file)),
-        eof: false,
-    });
-    let temp_ptr: *mut c_void = ptr::from_mut(temp.as_mut()).cast();
+    let output = Path::new(path);
+    let (temporary, temp_file) = MetadataTemp::create(output)
+        .map_err(|_| failure(IO_ERROR, "failed to open FLAC metadata temp file", path))?;
+    let mut temp = BufWriter::new(temp_file);
+    let temp_ptr = ptr::from_mut(&mut temp).cast();
     let ok = unsafe {
         FLAC__metadata_chain_write_with_callbacks_and_tempfile(
             objects.chain,
             1,
             source_ptr,
-            source_callbacks(),
+            source_callbacks::<R>(),
             temp_ptr,
             temp_callbacks(),
         )
     };
-    let status = unsafe { FLAC__metadata_chain_status(objects.chain) };
-    drop(objects);
-    let flushed = temp.temp.take().is_some_and(|mut w| w.flush().is_ok());
-    drop(source);
     if ok == 0 {
-        let _ = std::fs::remove_file(&temp_path);
-        let text = status_text(&raw const FLAC__Metadata_ChainStatusString, status);
+        let status = unsafe { FLAC__metadata_chain_status(objects.chain) };
+        let text = chain_status(status);
         return Err(failure(
             IO_ERROR,
             format!("FLAC metadata chain write failed: {text}"),
             path,
         ));
     }
-    if !flushed || std::fs::rename(&temp_path, path).is_err() {
-        let _ = std::fs::remove_file(&temp_path);
+    let flushed = temp.into_inner().is_ok();
+    drop(source);
+    if !flushed || temporary.install(output).is_err() {
         return Err(failure(
             IO_ERROR,
             "failed to replace FLAC file after metadata write",
@@ -677,7 +695,8 @@ pub(crate) fn is_flac(path: &str) -> bool {
 mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
-    use std::ffi::CString;
+    use std::ffi::{CString, c_char};
+    use std::io::{self, Cursor};
     use std::path::PathBuf;
 
     /// The leading fields of `FLAC__FrameHeader`.
@@ -903,9 +922,50 @@ mod tests {
                 "WAVEFORMATEXTENSIBLE_CHANNEL_MASK=0x00000003",
             ]
         );
-        assert!(!Path::new(&format!("{dst}.metadata_tmp")).exists());
+        assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 2);
         // The audio is untouched by the rewrite.
         assert_eq!(decode(Path::new(&dst)).samples.len(), 6000);
+    }
+
+    #[test]
+    fn a_read_error_during_metadata_copy_preserves_the_flac_file() {
+        struct FailingReader<'a> {
+            source: Cursor<&'a [u8]>,
+            fail_at: u64,
+        }
+        impl Read for FailingReader<'_> {
+            fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+                let remaining = self.fail_at.saturating_sub(self.source.position());
+                if remaining == 0 {
+                    return Err(io::Error::other("error reading audio frames"));
+                }
+                let count = output.len().min(remaining as usize);
+                self.source.read(&mut output[..count])
+            }
+        }
+        impl Seek for FailingReader<'_> {
+            fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+                self.source.seek(position)
+            }
+        }
+
+        let dir = Dir::new("copy-error");
+        let (src, dst) = (dir.file("in.wav"), dir.file("out.flac"));
+        source(&src, 3, 10_000);
+        encode(&src, &dst, &|| false, &|_| {}).unwrap();
+        let original = std::fs::read(&dst).unwrap();
+        let reader = FailingReader {
+            source: Cursor::new(&original),
+            fail_at: original.len() as u64 / 2,
+        };
+        let error = write_metadata_from(&dst, &fields("0+2+0"), reader).unwrap_err();
+        assert_eq!(error.code, IO_ERROR);
+        assert_eq!(
+            error.message,
+            "FLAC metadata chain write failed: FLAC__METADATA_CHAIN_STATUS_READ_ERROR"
+        );
+        assert_eq!(std::fs::read(&dst).unwrap(), original);
+        assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 2);
     }
 
     #[test]
@@ -956,11 +1016,17 @@ mod tests {
         assert_eq!(e.message, "failed to open FLAC file for metadata");
         std::fs::write(&missing, b"not a FLAC file").unwrap();
         let e = write_metadata(&missing, &fields("")).unwrap_err();
-        assert!(
-            e.message
-                .starts_with("FLAC metadata chain read failed: FLAC__METADATA_CHAIN_STATUS_"),
-            "{}",
-            e.message
+        assert_eq!(
+            e.message,
+            "FLAC metadata chain read failed: FLAC__METADATA_CHAIN_STATUS_NOT_A_FLAC_FILE"
+        );
+        let Err(e) = Writer::open(&dir.file("bad-rate.flac"), 2, u32::MAX) else {
+            panic!("invalid FLAC sample rate was accepted");
+        };
+        assert_eq!(e.code, IO_ERROR);
+        assert_eq!(
+            e.message,
+            "FLAC encoder init failed: FLAC__STREAM_ENCODER_INIT_STATUS_INVALID_SAMPLE_RATE"
         );
     }
 

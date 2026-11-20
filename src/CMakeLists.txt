@@ -281,9 +281,6 @@ file(GENERATE OUTPUT "${MR_ADM_NATIVE_LINK_FILE}" CONTENT "${_mr_native_lines}")
 add_library(mr_adm_native INTERFACE)
 target_link_libraries(mr_adm_native INTERFACE ${MR_ADM_NATIVE_LIBRARIES} ${_mr_codec_libraries})
 # The target the build script builds, and the one every Cargo invocation of the top-level tree depends on.
+# Cargo links the codecs directly, so their targets must be built before Rust uses the manifest.
 add_custom_target(mradm_native ALL)
-foreach(_mr_library IN LISTS MR_ADM_NATIVE_LIBRARIES)
-    if(_mr_library MATCHES "^mr_adm_")
-        add_dependencies(mradm_native ${_mr_library})
-    endif()
-endforeach()
+add_dependencies(mradm_native ${MR_ADM_NATIVE_LIBRARIES} ${_mr_codec_libraries})

@@ -2,6 +2,7 @@
 //! multistream encoder into a hand-written EBML / Matroska file, and its Tags inserted before the
 //! first Cluster, with the elements, byte layout, order and errors of the C++ island they replace
 //! (`opus_mka_io.cpp`). libopus is built by the islands' CMake project (`mradm-islands-sys`).
+use crate::metadata_temp::MetadataTemp;
 use mradm_engine::fmt::fixed;
 use mradm_engine::render::MetadataFields;
 use mradm_engine::request::Error;
@@ -10,7 +11,7 @@ use std::collections::hash_map::RandomState;
 use std::ffi::{CStr, c_char, c_int};
 use std::fs::File;
 use std::hash::{BuildHasher, Hasher};
-use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
+use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 const INVALID_ARGUMENT: i32 = 1;
@@ -708,43 +709,64 @@ fn tags(m: &MetadataFields) -> Vec<u8> {
 /// Inserts the Tags before the first (unknown-size) Cluster of the MKA file at `path`: tags after
 /// an unknown-size Cluster are commonly ignored by Matroska parsers.
 pub(crate) fn write_metadata(path: &str, m: &MetadataFields) -> Result<(), Error> {
-    let tags = tags(m);
-    let Ok(data) = std::fs::read(path) else {
-        return Err(failure(
-            IO_ERROR,
-            "cannot open MKA for metadata read",
-            at(path),
-        ));
-    };
+    let mut source = File::open(path)
+        .map_err(|_| failure(IO_ERROR, "cannot open MKA for metadata read", at(path)))?;
+    let read_error = |_| failure(IO_ERROR, "failed to read MKA for metadata update", at(path));
+    let cluster = first_cluster(&mut source)
+        .map_err(read_error)?
+        .ok_or_else(|| {
+            failure(
+                IO_ERROR,
+                "cannot locate MKA Cluster for metadata insertion",
+                at(path),
+            )
+        })?;
+    source.rewind().map_err(read_error)?;
+
+    let output = Path::new(path);
+    let (temporary, mut dest) = MetadataTemp::create(output)
+        .map_err(|_| failure(IO_ERROR, "cannot open MKA for metadata rewrite", at(path)))?;
+    let rewrite = (|| -> io::Result<()> {
+        if io::copy(&mut (&mut source).take(cluster), &mut dest)? != cluster {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        dest.write_all(&tags(m))?;
+        io::copy(&mut source, &mut dest)?;
+        Ok(())
+    })();
+    drop(dest);
+    drop(source);
+    let write_error = |_| failure(IO_ERROR, "failed to rewrite MKA metadata", at(path));
+    rewrite.map_err(write_error)?;
+    temporary.install(output).map_err(write_error)
+}
+
+fn first_cluster(source: &mut impl Read) -> io::Result<Option<u64>> {
     let mut needle = Vec::new();
     id(&mut needle, CLUSTER);
     unknown_size(&mut needle);
-    let Some(cluster) = data.windows(needle.len()).position(|w| w == needle) else {
-        return Err(failure(
-            IO_ERROR,
-            "cannot locate MKA Cluster for metadata insertion",
-            at(path),
-        ));
-    };
-    let mut out = Vec::with_capacity(data.len() + tags.len());
-    out.extend_from_slice(&data[..cluster]);
-    out.extend_from_slice(&tags);
-    out.extend_from_slice(&data[cluster..]);
-    let Ok(mut file) = File::create(path) else {
-        return Err(failure(
-            IO_ERROR,
-            "cannot open MKA for metadata rewrite",
-            at(path),
-        ));
-    };
-    if file.write_all(&out).is_err() {
-        return Err(failure(
-            IO_ERROR,
-            "failed to rewrite MKA metadata",
-            at(path),
-        ));
+    let mut buffer = [0; 8192];
+    let mut offset = 0;
+    let mut keep = 0;
+    loop {
+        let count = match source.read(&mut buffer[keep..]) {
+            Ok(0) => return Ok(None),
+            Ok(count) => count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        let end = keep + count;
+        if let Some(index) = buffer[..end]
+            .windows(needle.len())
+            .position(|w| w == needle)
+        {
+            return Ok(Some(offset + index as u64));
+        }
+        // Retain enough of this block to match a Cluster marker split across two reads.
+        keep = end.min(needle.len() - 1);
+        buffer.copy_within(end - keep..end, 0);
+        offset += (end - keep) as u64;
     }
-    Ok(())
 }
 
 /// Whether `path` names a Matroska audio file (the extension, ASCII case-insensitive).
@@ -877,13 +899,19 @@ mod tests {
             lufs: Some(-23.04),
             peak_dbtp: Some(-0.004),
         };
+        let original = std::fs::read(&dst).unwrap();
         write_metadata(&dst, &m).unwrap();
         let data = std::fs::read(&dst).unwrap();
         let tags_at = find(&data, &[0x12, 0x54, 0xC3, 0x67]).unwrap();
         let mut needle = Vec::new();
         id(&mut needle, CLUSTER);
         unknown_size(&mut needle);
-        assert!(tags_at < find(&data, &needle).unwrap());
+        let cluster_at = find(&data, &needle).unwrap();
+        let original_cluster = find(&original, &needle).unwrap();
+        assert_eq!(tags_at, original_cluster);
+        assert!(tags_at < cluster_at);
+        assert_eq!(data[..tags_at], original[..original_cluster]);
+        assert_eq!(data[cluster_at..], original[original_cluster..]);
         for text in [
             "ENCODER",
             "TestEncoder",
@@ -905,6 +933,17 @@ mod tests {
             e.message,
             "cannot locate MKA Cluster for metadata insertion"
         );
+        assert_eq!(std::fs::read(&dst).unwrap(), b"no clusters");
+        assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn finds_a_cluster_marker_split_across_reads() {
+        let mut bytes = vec![0; 8192 - 5];
+        let offset = bytes.len() as u64;
+        id(&mut bytes, CLUSTER);
+        unknown_size(&mut bytes);
+        assert_eq!(first_cluster(&mut bytes.as_slice()).unwrap(), Some(offset));
     }
 
     #[test]

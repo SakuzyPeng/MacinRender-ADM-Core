@@ -257,7 +257,7 @@ jobs:
         run: |
           call "%VCVARS64%"
           cmake --build build/windows --target mr_adm_rust ^
-            mr_adm_flac_io_smoke_tests mr_adm_opus_mka_smoke_tests mr_adm_cli_smoke_tests
+            mr_adm_encoder_tests mr_adm_cli_smoke_tests
 
       - name: C ABI exports
         shell: pwsh
@@ -273,8 +273,8 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          ctest --test-dir build/windows --output-on-failure -j %NUMBER_OF_PROCESSORS% ^
-            -R "^(mr_adm_flac_io_smoke_tests|mr_adm_opus_mka_smoke_tests|mr_adm_cli_smoke_tests)$"
+          ctest --test-dir build/windows --output-on-failure --no-tests=error -j %NUMBER_OF_PROCESSORS% ^
+            -R "^(mr_adm_encoder_tests|mr_adm_cli_smoke_tests)$"
 
       # The renderers are Rust: their whole-render tests (R3 C) run in the optimized profile.
       - name: Rust render tests

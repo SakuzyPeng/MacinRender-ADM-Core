@@ -328,13 +328,28 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_room_trace_tests COMMAND ${_mr_room_trace_test_command})
     set_tests_properties(mr_adm_room_trace_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
+    # The release workflows run the encoder tests with the product's profile and native libraries.
+    set(_mr_encoder_test_command
+        "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" test --locked
+        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
+        --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+        --profile "${_mr_profile}" --no-default-features ${_mr_consistency_feature_args}
+        --lib -p mradm-ffi -p mradm-capi)
+    add_custom_target(mr_adm_encoder_tests
+        COMMAND ${_mr_encoder_test_command} --no-run
+        DEPENDS mr_adm_rust
+        USES_TERMINAL VERBATIM)
+    add_test(NAME mr_adm_encoder_tests
+        COMMAND ${_mr_encoder_test_command} -- flac::tests:: opus_mka::tests:: flac_outputs_are_encoded_and_tagged)
+    set_tests_properties(mr_adm_encoder_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
+
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
     target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_meter_tests)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
 
-    # The C++ audio island entry: cancellation before an encoder runs and the declined islands.
+    # Island dispatch rejects null requests and leaves unrelated islands to their owners.
     add_executable(mr_adm_audio_island_tests tests/unit/audio_island_test.cpp)
     target_link_libraries(mr_adm_audio_island_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_audio_island_tests)

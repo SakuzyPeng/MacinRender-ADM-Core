@@ -66,14 +66,19 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mr_adm_rust mr_adm_flac_io_smoke_tests
+          cmake --build build/windows --target mr_adm_rust mr_adm_encoder_tests
 
       - name: Smoke
         shell: pwsh
         run: |
           .\build\windows\mradm.exe --version
           .\build\windows\mradm.exe backends
-          .\build\windows\mr_adm_flac_io_smoke_tests.exe
+
+      - name: Encoder tests
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          ctest --test-dir build/windows --output-on-failure --no-tests=error -R "^mr_adm_encoder_tests$"
 
       - name: Prepare artifact
         shell: pwsh

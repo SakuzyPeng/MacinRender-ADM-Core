@@ -5,7 +5,7 @@
 
 7.2 把编码器的 C++ 封装迁入 Rust：
 - C 库（libFLAC、libopus、IAMF bridge）由 Rust 经手写 `extern` 直接调用（用户决定 2026-11-19）；
-- 库仍由岛的 CMake 工程构建，vendored 只有一份；
+- 库仍由岛的 CMake 工程构建，vendored 只有一份。`mradm_native` 先构建链接清单中的编码库，再由 Cargo 链接；
 - 每批与迁移前的构建做逐字节对照，用 CLI 记录的 `encode-*` 矩阵与其他命令。
 
 | 批 | 内容 | 状态 |
@@ -33,8 +33,9 @@
 - 读 chain，新建 Vorbis comment；
 - 依次追加 ENCODER、DATE、COMMENT 与已知布局的 `WAVEFORMATEXTENSIBLE_CHANNEL_MASK`；
 - 替换已有的 VC 块，没有时插在 STREAMINFO 之后；
-- `sort_padding`，再经 `<path>.metadata_tmp` 用 tempfile 写回并改名；
-- IO 回调用 Rust 文件句柄，`eof` 照 `feof` 的语义：短读置位，seek 清除；
+- `sort_padding` 后用同目录的独占临时文件写回，成功后改名替换，失败时保留原文件；
+- I/O 读回调先初始化 libFLAC 提供的缓冲区，再交给 Rust 读入。实际到达文件末尾时设置 EOF，seek 清除该标记，读取失败交给 libFLAC 报错；
+- Rust 按 libFLAC 的枚举值格式化状态名，适用于 Windows 的静态库与 DLL 导入库；
 - COMMENT 的文本与 CAF 共用 `mradm_engine::render::metadata_comment`（原私有的 `comment`，与 C++ `compact_metadata_comment` 相同）。
 
 **派发**：`mradm-ffi` `engine_service.rs` 的 `Runner::run` 先由 `own_island` 接下 `Island::EncodeFlac` 与扩展名为 `.flac` 的 `Island::WriteMetadata`，其余岛仍交给 C++ `mradm_audio_island`。
@@ -63,7 +64,7 @@ C++ 的 FLAC 检查移植为 Rust 测试。
 - **进度**：事件序列（0、每块、`FLAC encoded`）；
 - **Vorbis comment**：写两次后仍只有一个 VC 块，标签与立体声掩码正确，临时文件不留，音频不变；
 - **取消**：开始前取消时不留输出、源文件保留；编码中取消在下一块停止；
-- **失败**：源缺失、9 声道、元数据目标缺失或不是 FLAC 时的错误码与文字；
+- **失败**：源缺失、9 声道、非法采样率、元数据目标缺失和非法 FLAC 的错误码与文字。复制音频时注入读取错误，验证原文件字节和目录内容；
 - **规则**：标签顺序与掩码、量化规则、扩展名判断。
 
 `mradm-capi` `tests/render.rs` `flac_outputs_are_encoded_and_tagged`（原 C ABI 终稿流程检查）：
@@ -102,11 +103,6 @@ C++ 的 FLAC 检查移植为 Rust 测试。
 - 删除的 FLAC 读取链不在任何公开路径上：CLI 与 C ABI 一直只接受 WAVE 输入。
 - 构建不再获取 dr_libs。
 
-### 待维护者复核
-
-- macOS 与 Windows 上 Rust 直接链接 libFLAC 的符号，包括状态字符串表 `FLAC__StreamEncoderInitStatusString` / `FLAC__Metadata_ChainStatusString`。vendored 静态库在 Windows 上使用 `FLAC__NO_DLL`。
-- 在两平台上用同一命令表录参考与候选，对照 `encode-flac-*`。
-
 ## B：Opus MKA
 
 ### 迁入 Rust 的部分
@@ -132,6 +128,7 @@ Matroska 封装：
 - size vint 的宽度照原实现的边界：恰为全 1 标记的值进位到下一宽度；
 - track UID 是随机的 64 位数：原实现取自 `std::random_device`，现在取自标准库 `RandomState`，CLI 记录对它做归一化；
 - 元数据（原 `write_mka_metadata`）：Targets 后依次为 ENCODER、DATE_RECORDED、RENDERER、OUTPUT_LAYOUT、INTEGRATED_LOUDNESS（1 位小数）与 TRUE_PEAK（2 位小数），组成 Tags 插在第一个未知长度的 Cluster 之前；小数格式取 `mradm_engine::fmt::fixed`，与原 `std::fixed` 相同。
+- 写标签时分块查找并复制 Cluster 前后的数据，以限制内存用量。临时文件写完后替换原文件。
 
 `Runner::run` 接下 `Island::EncodeOpus` 与扩展名为 `.mka` 的 `Island::WriteMetadata`。原岛对 Opus 不报进度，现在也不报。C++ 岛对岛 5 返回 2。
 
@@ -152,7 +149,7 @@ Matroska 封装：
 - **OpusHead**：2 声道用 family 0；`wav71` 用 family 1，5 个流、3 个耦合流，mapping 为 0 6 1 2 3 4 5 7；`hoa3` 用 family 2，16 个流、0 个耦合流，mapping 为恒等；24 声道用 family 255；
 - **Duration**：4,800 帧回填为 100 ms；1,000 帧补零成 2 帧，回填为 40 ms；
 - **cluster**：12 秒的文件有 3 个 cluster（起于 0、5,020、10,040 ms）；
-- **Tags**：位于第一个 Cluster 之前，含各标签，负零保留符号；找不到 Cluster 时报错；
+- **Tags**：验证第一个 Cluster 前后的字节、各标签及负零符号。Cluster 标记跨读取块时仍能找到，缺少标记时报错并保留原文件；
 - **检查**：44.1 kHz 源、5 kbps 码率被拒；开始前取消时不留输出、源文件保留；取消在每块之前检查；
 - **规则**：size vint 与 ID 的字节、扩展名判断。
 
@@ -186,8 +183,11 @@ Matroska 封装：
 - Opus MKA 的字节、错误与日志不变（track UID 本来就是随机的）。
 - Windows 上的改进：原 C++ 用窄字符 `fopen` / `fstream` 打开路径，当前代码页表示不了的字符会失败；现在经 UTF-8 路径打开宽字符路径，同时修正了 `.mka` 元数据的同一问题。
 
-### 待维护者复核
+## 维护者实机复核
 
-- macOS 与 Windows 上 Rust 直接链接 libopus，并经变参调用 `opus_multistream_encoder_ctl`（aarch64 的变参 ABI）。
-- 在两平台上用同一命令表对照 `encode-mka-*`。
+2026-11-20，macOS arm64 和 Windows x64 的 Release 构建均通过 15 项编码器及 C ABI FLAC 测试，也通过 CLI 冒烟。
+macOS 干净构建由 `mradm_native` 构建两个静态库。Windows 另外使用同版本 libFLAC 的 DLL 导入库，通过 9 项 FLAC 测试。
 
+用迁移前的 `c7544954` Release 构建对照，两个平台的 FLAC 与 Opus MKA 命令均无差异。
+Windows 的 134 条命令无契约差异。macOS 全表中曾出现一条 APAC 的容器字节差异。
+迁移前构建可产生两种 APAC 结果，在固定输入和输出路径下用两个版本复验，APAC 载荷逐字节一致。
